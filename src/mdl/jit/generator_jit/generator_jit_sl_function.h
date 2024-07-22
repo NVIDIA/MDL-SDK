@@ -121,6 +121,7 @@ protected:
     , m_bb(bb)
     , m_dfs_num(0)
     , m_low(0)
+    , m_depth(0)
     , m_flags(0)
     {
     }
@@ -334,6 +335,12 @@ public:
         return nullptr;
     }
 
+    /// Get the depth.
+    unsigned get_depth() const { return m_depth; }
+
+    /// Set the depth.
+    void set_depth(unsigned depth) { m_depth = depth; }
+
 protected:
     /// The (function) parent.
     StructuredFunction   *m_parent;
@@ -366,6 +373,9 @@ protected:
 
     /// Minimum DFS number over this node and successors.
     size_t                 m_low;
+
+    /// The depth of this region (from the root)i.e. distance from the root.
+    unsigned               m_depth;
 
     /// Node flags
     unsigned               m_flags;
@@ -923,8 +933,11 @@ public:
         m_body = body;
     }
 
+    /// Get the region of a basic block.
+    Region *getRegion(BasicBlock *bb) const;
+
     /// Get top-most region for a basic block.
-    Region *getTopRegion(BasicBlock *bb);
+    Region *getTopRegion(BasicBlock *bb) const;
 
     /// Create a new Basic region in the graph.
     ///

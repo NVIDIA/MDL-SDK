@@ -39,6 +39,7 @@ endif()
 set(PROJECT_SOURCES
     "example_cuda_shared.h"
     "example_shared.h"
+    "example_shared_backends.h"
     "texture_support_cuda.h"
     ${DUMMY_CPP}
     )

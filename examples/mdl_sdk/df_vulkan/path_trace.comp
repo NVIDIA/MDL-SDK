@@ -39,9 +39,9 @@
 //   BINDING_AUX_ALBEDO_BUFFER     : Binding index for uAuxAlbedoBuffer
 //   BINDING_AUX_NORMAL_BUFFER     : Binding index for uAuxNormalBuffer
 //
-//   BACKFACE_BSDF               : Only defined if backface.scattering is non-default and different than surface.scattering
-//   BACKFACE_EDF                : Only defined if backface.emission.emission is non-default and different than surface.emission.emission
-//   BACKFACE_EMISSION_INTENSITY : Only defined if backface.emission.intensity is non-default and different than surface.emission.intensity
+//   HAS_BACKFACE_BSDF               : Only defined if backface.scattering is non-default and different than surface.scattering
+//   HAS_BACKFACE_EDF                : Only defined if backface.emission.emission is non-default and different than surface.emission.emission
+//   HAS_BACKFACE_EMISSION_INTENSITY : Only defined if backface.emission.intensity is non-default and different than surface.emission.intensity
 
 #version 450
 #extension GL_GOOGLE_include_directive : require
@@ -71,7 +71,8 @@ layout(std140, set = 0, binding = BINDING_RENDER_PARAMS) uniform Render_params
     // Render params
     uint uMaxPathLength;
     uint uSamplesPerIteration;
-    uint uProgressiveIteration; 
+    uint uProgressiveIteration;
+    int uBsdfDataFlags;
 };
 
 layout(set = 0, binding = BINDING_ENV_MAP) uniform sampler2D uEnvironmentMap;
@@ -81,6 +82,7 @@ struct Environment_sample_data
     uint alias;
     float q;
 };
+
 layout(set = 0, binding = BINDING_ENV_MAP_SAMPLING_DATA)
 readonly restrict buffer Environment_sample_data_buffer
 {
@@ -142,7 +144,7 @@ void mdl_edf_pdf(inout Edf_pdf_data sret_ptr, in State state);
 void mdl_edf_auxiliary(inout Edf_auxiliary_data sret_ptr, inout State state);
 vec3 mdl_emission_intensity(in State state);
 
-#ifdef BACKFACE_BSDF
+#ifdef HAS_BACKFACE_BSDF
 void mdl_backface_bsdf_init(inout State state);
 void mdl_backface_bsdf_sample(inout Bsdf_sample_data sret_ptr, in State state);
 void mdl_backface_bsdf_evaluate(inout Bsdf_evaluate_data sret_ptr, in State state);
@@ -154,9 +156,9 @@ void mdl_backface_bsdf_auxiliary(inout Bsdf_auxiliary_data sret_ptr, in State st
 #define mdl_backface_bsdf_evaluate  mdl_bsdf_evaluate
 #define mdl_backface_bsdf_pdf       mdl_bsdf_pdf
 #define mdl_backface_bsdf_auxiliary mdl_bsdf_auxiliary
-#endif // BACKFACE_BSDF
+#endif // HAS_BACKFACE_BSDF
 
-#ifdef BACKFACE_EDF
+#ifdef HAS_BACKFACE_EDF
 void mdl_backface_edf_init(inout State state);
 void mdl_backface_edf_sample(inout Edf_sample_data sret_ptr, in State state);
 void mdl_backface_edf_evaluate(inout Edf_evaluate_data sret_ptr, in State state);
@@ -168,13 +170,13 @@ void mdl_backface_edf_auxiliary(inout Edf_auxiliary_data sret_ptr, inout State s
 #define mdl_backface_edf_evaluate  mdl_edf_evaluate
 #define mdl_backface_edf_pdf       mdl_edf_pdf
 #define mdl_backface_edf_auxiliary mdl_edf_auxiliary
-#endif // BACKFACE_EDF
+#endif // HAS_BACKFACE_EDF
 
-#ifdef BACKFACE_EMISSION_INTENSITY
+#ifdef HAS_BACKFACE_EMISSION_INTENSITY
 vec3 mdl_backface_emission_intensity(in State state);
 #else
 #define mdl_backface_emission_intensity mdl_emission_intensity
-#endif // BACKFACE_EMISSION_INTENSITY
+#endif // HAS_BACKFACE_EMISSION_INTENSITY
 
 vec3 mdl_absorption_coefficient(in State state);
 float mdl_cutout_opacity(in State state);
@@ -374,6 +376,10 @@ State make_state(Ray_hit_info hit_info, bool inside)
         /*text_coords[1]=*/         vec3[1](hit_info.tex_coord),
         /*tangent_u[1]=*/           vec3[1](hit_info.tangent_u),
         /*tangent_v[1]=*/           vec3[1](hit_info.tangent_v),
+        /*text_results[16]=*/       vec4[16](vec4(0), vec4(0), vec4(0), vec4(0),
+                                             vec4(0), vec4(0), vec4(0), vec4(0),
+                                             vec4(0), vec4(0), vec4(0), vec4(0),
+                                             vec4(0), vec4(0), vec4(0), vec4(0)),
         /*ro_data_segment_offset=*/ 0,
         /*world_to_object=*/        mat4(1.0),
         /*object_to_world=*/        mat4(1.0),
@@ -474,6 +480,7 @@ void trace_path(inout Ray_state ray_state, inout uint seed)
             bsdf_aux_data.ior1 = ior1;
             bsdf_aux_data.ior2 = ior2;
             bsdf_aux_data.k1 = -ray_state.dir;
+            bsdf_aux_data.flags = uBsdfDataFlags;
 
             if (is_backface)
                 mdl_backface_bsdf_auxiliary(bsdf_aux_data, state);
@@ -511,6 +518,7 @@ void trace_path(inout Ray_state ray_state, inout uint seed)
                 bsdf_eval_data.ior2 = ior2;
                 bsdf_eval_data.k1 = -ray_state.dir;
                 bsdf_eval_data.k2 = to_light;
+                bsdf_eval_data.flags = uBsdfDataFlags;
 
                 if (is_backface)
                     mdl_backface_bsdf_evaluate(bsdf_eval_data, state);
@@ -534,6 +542,7 @@ void trace_path(inout Ray_state ray_state, inout uint seed)
         bsdf_sample_data.ior2 = ior2;
         bsdf_sample_data.k1 = -ray_state.dir;
         bsdf_sample_data.xi = vec4(rnd(seed), rnd(seed), rnd(seed), rnd(seed));
+        bsdf_sample_data.flags = uBsdfDataFlags;
 
         if (is_backface)
             mdl_backface_bsdf_sample(bsdf_sample_data, state);

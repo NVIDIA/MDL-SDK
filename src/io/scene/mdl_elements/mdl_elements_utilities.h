@@ -41,6 +41,7 @@
 #include <mi/base/interface_implement.h>
 #include <mi/mdl/mdl_definitions.h>
 #include <mi/mdl/mdl_mdl.h>
+#include <mi/neuraylib/icompiled_material.h>
 #include <mi/neuraylib/ifunction_definition.h>
 #include <mi/neuraylib/imdl_loading_wait_handle.h>
 
@@ -54,9 +55,9 @@
 #include "i_mdl_elements_value.h"
 
 namespace mi {
-    namespace neuraylib { class IReader; }
-    namespace base      { struct Uuid; }
-    namespace mdl       { class IMDL; class IMDL_resource_reader; }
+namespace neuraylib { class IReader; }
+namespace base      { struct Uuid; }
+namespace mdl       { class IMDL; class IMDL_resource_reader; }
 }
 
 namespace MI {
@@ -125,10 +126,10 @@ std::string remove_qualifiers_if_from_module(
 /// Names without '$' are returned as is.
 std::string strip_deprecated_suffix( const std::string& name);
 
-/// Adds a "::" prefix for builtin enum/struct type names.
+/// Adds a "::" prefix for builtin enum/struct type names and struct category names.
 std::string prefix_builtin_type_name( const char* name);
 
-/// Removes the "::" prefix for builtin enum/struct type names.
+/// Removes the "::" prefix for builtin enum/struct type names and struct category names.
 ///
 /// \param check_string   Pass \p true if it is not known whether \p name is one of the builtin
 ///                       enum/struct type names. In this case the input is compared against the
@@ -258,31 +259,49 @@ std::string remove_slash_in_front_of_drive_letter( const std::string& input);
 //@}
 
 
-// ********** Conversion from mi::mdl to mi::neuraylib *********************************************
+// ********** Conversion of enum from mi::mdl to mi::neuraylib or vice versa ***********************
 
-/// Converts mi::mdl::IDefinition::Semantics to mi::neuraylib::IFunction_definition::Semantics.
+/// Converts core semantic to mi::neuraylib::IFunction_definition::Semantics.
 ///
 /// Some values cannot appear here. Such values are mapped to DS_UNKNOWN after an assertion.
-mi::neuraylib::IFunction_definition::Semantics mdl_semantics_to_ext_semantics(
+mi::neuraylib::IFunction_definition::Semantics core_semantics_to_ext_semantics(
     mi::mdl::IDefinition::Semantics semantic);
 
-/// Converts mi::neuraylib::IFunction_definition::Semantics to mi::mdl::IDefinition::Semantics.
-mi::mdl::IDefinition::Semantics ext_semantics_to_mdl_semantics(
+/// Converts mi::neuraylib::IFunction_definition::Semantics to core semantic.
+mi::mdl::IDefinition::Semantics ext_semantics_to_core_semantics(
     mi::neuraylib::IFunction_definition::Semantics);
 
-/// Converts mi::mdl::IDefinition::Semantics to mi::neuraylib::IAnnotation_definition::Semantics.
+/// Converts core semantic to mi::neuraylib::IAnnotation_definition::Semantics.
 ///
 /// Some values cannot appear here. Such values are mapped to DS_UNKNOWN after an assertion.
-mi::neuraylib::IAnnotation_definition::Semantics mdl_semantics_to_ext_annotation_semantics(
+mi::neuraylib::IAnnotation_definition::Semantics core_semantics_to_ext_annotation_semantics(
     mi::mdl::IDefinition::Semantics semantic);
+
+/// Converts core opacity to mi::neuraylib::Material_opacity.
+mi::neuraylib::Material_opacity core_opacity_to_ext_opacity(
+    mi::mdl::IMaterial_instance::Opacity opacity);
+
+/// Converts mi::neuraylib::Material_slot to core material instance slots.
+mi::mdl::IMaterial_instance::Slot ext_slot_to_core_lost(
+    mi::neuraylib::Material_slot slot);
 
 // ********** Conversion from mi::mdl to MI::MDL ***************************************************
 
 /// A vector of mi::mdl::DAG_node pointer.
-using Mdl_annotation_block = std::vector<const mi::mdl::DAG_node*>;
+using Core_annotation_block = std::vector<const mi::mdl::DAG_node*>;
 
 /// A vector of vectors of mi::mdl::DAG_node pointer.
-using Mdl_annotation_block_vector = std::vector<std::vector<const mi::mdl::DAG_node*> >;
+using Core_annotation_block_vector = std::vector<std::vector<const mi::mdl::DAG_node*> >;
+
+/// Converts mi::mdl::IStruct_category to MI::MDL::IStruct_category.
+///
+/// \param tf                   The type factory to use.
+/// \param struct_category      The struct_category to convert. Can be \c NULL.
+/// \param annotations          The annotations of the struct category. Can be \c NULL.
+const IStruct_category* core_struct_category_to_int_struct_category(
+    IType_factory* tf,
+    const mi::mdl::IStruct_category* struct_category,
+    const Core_annotation_block* annotations);
 
 /// Converts mi::mdl::IType to MI::MDL::IType.
 ///
@@ -292,24 +311,24 @@ using Mdl_annotation_block_vector = std::vector<std::vector<const mi::mdl::DAG_n
 ///                             otherwise \c NULL.
 /// \param member_annotations   For enums and structs the annotations of the values/fields,
 ///                             otherwise \c NULL.
-const IType* mdl_type_to_int_type(
+const IType* core_type_to_int_type(
     IType_factory* tf,
     const mi::mdl::IType* type,
-    const Mdl_annotation_block* annotations = nullptr,
-    const Mdl_annotation_block_vector* member_annotations = nullptr);
+    const Core_annotation_block* annotations = nullptr,
+    const Core_annotation_block_vector* member_annotations = nullptr);
 
 /// Converts mi::mdl::IType to MI::MDL::IType.
 ///
 /// Template version of the function above.
 template <class T>
-const T* mdl_type_to_int_type(
+const T* core_type_to_int_type(
     IType_factory* tf,
     const mi::mdl::IType* type,
-    const Mdl_annotation_block* annotations = nullptr,
-    const Mdl_annotation_block_vector* member_annotations = nullptr)
+    const Core_annotation_block* annotations = nullptr,
+    const Core_annotation_block_vector* member_annotations = nullptr)
 {
     mi::base::Handle<const IType> ptr_type(
-        mdl_type_to_int_type( tf, type, annotations, member_annotations));
+        core_type_to_int_type( tf, type, annotations, member_annotations));
     if( !ptr_type)
         return nullptr;
     return static_cast<const T*>( ptr_type->get_interface( typename T::IID()));
@@ -322,11 +341,11 @@ const T* mdl_type_to_int_type(
 /// \param type                 The type to convert.
 /// \param annotations          The annotations of the enum.
 /// \param member_annotations   The annotations of the values/fields.
-bool mdl_type_enum_to_int_type_test(
+bool core_type_enum_to_int_type_test(
     IType_factory* tf,
     const mi::mdl::IType_enum* type,
-    const Mdl_annotation_block* annotations = nullptr,
-    const Mdl_annotation_block_vector* member_annotations = nullptr);
+    const Core_annotation_block* annotations = nullptr,
+    const Core_annotation_block_vector* member_annotations = nullptr);
 
 /// Converts mi::mdl::IType_struct to MI::MDL::IType_struct and checks,
 /// if the type conflicts with an existing type.
@@ -335,11 +354,11 @@ bool mdl_type_enum_to_int_type_test(
 /// \param type                 The type to convert.
 /// \param annotations          The annotations of the enum.
 /// \param member_annotations   The annotations of the values/fields.
-bool mdl_type_struct_to_int_type_test(
+bool core_type_struct_to_int_type_test(
     IType_factory* tf,
     const mi::mdl::IType_struct* type,
-    const Mdl_annotation_block* annotations = nullptr,
-    const Mdl_annotation_block_vector* member_annotations = nullptr);
+    const Core_annotation_block* annotations = nullptr,
+    const Core_annotation_block_vector* member_annotations = nullptr);
 
 /// Converts mi::mdl::DAG_node to MI::MDL::IExpression and MI::MDL::IAnnotation
 class Mdl_dag_converter
@@ -373,7 +392,7 @@ public:
 
     /// Converts mi::mdl::IType to MI::MDL::IType.
     ///
-    /// Similar to MDL::mdl_type_to_int_type(), except that it caches the results for enums and
+    /// Similar to MDL::core_type_to_int_type(), except that it caches the results for enums and
     /// structs.
     ///
     /// \param type                 The type to convert.
@@ -381,22 +400,22 @@ public:
     ///                             otherwise \c NULL.
     /// \param member_annotations   For enums and structs the annotations of the values/fields,
     ///                             otherwise \c NULL.
-    const IType* mdl_type_to_int_type(
+    const IType* core_type_to_int_type(
         const mi::mdl::IType* type,
-        const Mdl_annotation_block* annotations = nullptr,
-        const Mdl_annotation_block_vector* member_annotations = nullptr) const;
+        const Core_annotation_block* annotations = nullptr,
+        const Core_annotation_block_vector* member_annotations = nullptr) const;
 
     /// Converts mi::mdl::IType to MI::MDL::IType.
     ///
     /// Template version of the function above.
     template <class T>
-    const T* mdl_type_to_int_type(
+    const T* core_type_to_int_type(
         const mi::mdl::IType* type,
-        const Mdl_annotation_block* annotations = nullptr,
-        const Mdl_annotation_block_vector* member_annotations = nullptr) const
+        const Core_annotation_block* annotations = nullptr,
+        const Core_annotation_block_vector* member_annotations = nullptr) const
     {
         mi::base::Handle<const IType> ptr_type(
-            mdl_type_to_int_type( type, annotations, member_annotations));
+            core_type_to_int_type( type, annotations, member_annotations));
         if( !ptr_type)
             return nullptr;
         return static_cast<const T*>( ptr_type->get_interface( typename T::IID()));
@@ -409,7 +428,7 @@ public:
     ///                   \c NULL, the type of \p value is used.
     /// \param value      The value to convert.
     /// \return           The converted value, or \c NULL in case of failures.
-    IValue* mdl_value_to_int_value(
+    IValue* core_value_to_int_value(
         const IType* type_int,
         const mi::mdl::IValue* value) const;
 
@@ -420,13 +439,13 @@ public:
     ///                   arguments are converted to immediate-sized or deferred-sized arrays. If
     ///                   \c NULL, the type of \p value is used.
     /// \return           The converted expression, or \c NULL in case of failures.
-    IExpression* mdl_dag_node_to_int_expr(
+    IExpression* core_dag_node_to_int_expr(
         const mi::mdl::DAG_node* node,
         const IType* type_int) const;
 
     /// Converts a vector of mi::mdl::DAG_node pointers to MI::MDL::IAnnotation_block.
-    IAnnotation_block* mdl_dag_node_vector_to_int_annotation_block(
-        const Mdl_annotation_block& mdl_annotations,
+    IAnnotation_block* core_dag_node_vector_to_int_annotation_block(
+        const Core_annotation_block& core_annotations,
         const char* qualified_name) const;
 
 private:
@@ -437,23 +456,23 @@ private:
 
     /// Converts mi::mdl::DAG_call to MI::MDL::IExpression.
     /// (creates IExpression_direct_call)
-    IExpression* mdl_call_to_int_expr_direct(
+    IExpression* core_call_to_int_expr_direct(
         const mi::mdl::DAG_call* call, bool use_parameter_type) const;
 
     /// Converts mi::mdl::DAG_call to MI::MDL::IExpression.
     /// (creates IExpression_call)
-    IExpression* mdl_call_to_int_expr_indirect(
+    IExpression* core_call_to_int_expr_indirect(
         const mi::mdl::DAG_call* call, bool use_parameter_type) const;
 
     /// Converts mi::mdl::DAG_call to MI::MDL::IAnnotation.
-    IAnnotation* mdl_dag_call_to_int_annotation(
+    IAnnotation* core_dag_call_to_int_annotation(
         const mi::mdl::DAG_call* call, const char* qualified_name) const;
 
     /// Converts mi::mdl::DAG_node string and string array annotations
     /// to MI::MDL::IExpression, thereby translating strings according to the
     /// current locale.
-    /// Identical to mdl_dag_node_to_int_expr() but for translation in the context of localization.
-    IExpression* mdl_dag_node_to_int_expr_localized(
+    /// Identical to core_dag_node_to_int_expr() but for translation in the context of localization.
+    IExpression* core_dag_node_to_int_expr_localized(
         const mi::mdl::DAG_node* argument,
         const mi::mdl::DAG_call* call,
         const IType* type_int,
@@ -477,10 +496,48 @@ private:
 
     bool m_resolve_resources;
 
+    /// The referenced user modules.
     mutable std::set<Mdl_tag_ident>* m_user_modules_seen;
 
-    /// Cache used by mdl_type_to_int_type().
+    /// Cache used by core_type_to_int_type().
     mutable robin_hood::unordered_map<const mi::mdl::IType*, const MDL::IType*> m_cached_types;
+};
+
+/// A simplified variant of Mdl_dag_converter.
+///
+/// This variant does not really convert anything, but just extracts referenced tags and user module
+/// identifiers.
+class Mdl_dag_converter_light
+{
+public:
+    /// Constructor.
+    ///
+    /// \param transaction            The DB transaction to use.
+    /// \param tagger                 The resource tagger to be used.
+    /// \param tag_set                An optional tag set to record the referenced tags.
+    /// \param user_modules_seen      An optional set of Mdl_tag_ident to record the referenced user
+    ///                               modules.
+    Mdl_dag_converter_light(
+        DB::Transaction* transaction,
+        mi::mdl::IResource_tagger* tagger,
+        DB::Tag_set* tag_set,
+        std::set<Mdl_tag_ident>* user_modules_seen);
+
+    /// Processes a core value.
+    void process_value( const mi::mdl::IValue* value);
+
+    /// Processes a core DAG node.
+    void process_dag_node( const mi::mdl::DAG_node* node);
+
+private:
+    DB::Transaction* m_transaction;
+    mi::mdl::IResource_tagger* m_tagger;
+
+    /// The referenced tags.
+    DB::Tag_set* m_tag_set;
+
+    /// The referenced user modules.
+    std::set<Mdl_tag_ident>* m_user_modules_seen;
 };
 
 /// Wrapper around mi::mdl::IGenerated_code_dag that dispatches between functions and materials.
@@ -499,6 +556,7 @@ public:
     /// Properties
     mi::mdl::IDefinition::Semantics get_semantics( mi::Size index);
     bool get_exported( mi::Size index);
+    bool get_declarative( mi::Size index);
     bool get_uniform( mi::Size index);
 
     /// Return type (nullptr for materials)
@@ -555,7 +613,7 @@ IExpression* int_expr_call_to_int_expr_direct_call(
     DB::Transaction* transaction,
     IExpression_factory* ef,
     const IExpression* expr,
-    const std::vector<mi::base::Handle<const IExpression>>& call_context,
+    const IExpression_list* call_context,
     Execution_context* context);
 
 /// Traverses an expression and replaces call expressions by direct call expressions.
@@ -566,7 +624,7 @@ IExpression* int_expr_call_to_int_expr_direct_call(
     IExpression_factory* ef,
     const IType* type,
     const Mdl_function_call* call,
-    const std::vector<mi::base::Handle<const IExpression>>& call_context,
+    const IExpression_list* call_context,
     Execution_context* context);
 
 // ********** Misc utility functions around MI::MDL ************************************************
@@ -596,13 +654,26 @@ bool argument_type_matches_parameter_type(
     bool &needs_cast);
 
 /// Returns \c true iff the return type of the called function definition is varying. This includes
-/// definitions where the \em effective return if varying, i.e., it is declared auto but the
+/// definitions where the \em effective return type is varying, i.e., it is declared auto but the
 /// function itself is varying.
 ///
 /// \pre argument->get_kind() does not return IExpression::EK_TEMPORARY
 ///
 /// Returns \c false if the referenced function call/definition has an unexpected class ID.
-bool return_type_is_varying( DB::Transaction* transaction, const IExpression* argument);
+bool return_type_is_varying( DB::Transaction* transaction, const IExpression* expr);
+
+/// Returns \c true iff the expression is a direct or indirect call of a declarative function.
+///
+/// Direct and indirect are meant in the sense of IExpression::EK_DIRECT_CALL and
+/// IExpression::EK_CALL (not indirect if the sense of traversing the call tree).
+///
+/// \pre argument->get_kind() does not return IExpression::EK_TEMPORARY or
+/// IExpression::EK_PARAMETER.
+bool is_declarative_call( DB::Transaction* transaction, const IExpression* expr);
+
+/// Returns \c true iff the type is (after skipping of aliases) a struct type from the predefined
+/// material category.
+bool is_from_material_category( const IType* type);
 
 /// Performs a deep copy of expressions.
 ///
@@ -618,7 +689,7 @@ IExpression* deep_copy(
     const IExpression_factory* ef,
     DB::Transaction* transaction,
     const IExpression* expr,
-    const std::vector<mi::base::Handle<const IExpression>>& call_context);
+    const IExpression_list* call_context);
 
 /// Returns a hash value for a resource (light profiles and BSDF measurements).
 ///
@@ -705,7 +776,7 @@ class Call_stack_guard
 {
 public:
     /// Adds \p frame to the end of the call stack.
-    Call_stack_guard( std::set<DB::Tag>& call_trace, DB::Tag frame)
+    Call_stack_guard( robin_hood::unordered_set<DB::Tag>& call_trace, DB::Tag frame)
       : m_call_trace( call_trace),
         m_frame( frame),
         m_has_cycle( !m_call_trace.insert( m_frame).second) { }
@@ -717,7 +788,7 @@ public:
     bool last_frame_creates_cycle() const { return m_has_cycle; }
 
 private:
-    std::set<DB::Tag>& m_call_trace;
+    robin_hood::unordered_set<DB::Tag>& m_call_trace;
     DB::Tag m_frame;
     bool m_has_cycle;
 };
@@ -762,9 +833,7 @@ const IExpression* lookup_sub_expression(
 
 /// Converts deferred-sized arrays into immediate-sized arrays of length \p size.
 const mi::mdl::IType_compound* convert_deferred_sized_into_immediate_sized_array(
-    mi::mdl::IValue_factory* vf,
-    const mi::mdl::IType_compound* mdl_type,
-    mi::Size size);
+    mi::mdl::IValue_factory* vf, const mi::mdl::IType_compound* core_type, mi::Size size);
 
 /// Creates an MDL AST qualified name for a given function/material signature.
 ///
@@ -815,12 +884,15 @@ private:
     mi::mdl::IExpression* post_visit( mi::mdl::IExpression_literal* expr);
     mi::mdl::IExpression* post_visit( mi::mdl::IExpression_call* expr);
 
-    DB::Transaction*              m_transaction;
+    DB::Transaction* m_transaction;
     mi::mdl::ICall_name_resolver& m_resolver;
     mi::mdl::IGenerated_code_dag* m_code_dag;
-    const char*                   m_module_filename;
-    const char*                   m_module_mdl_name;
-    Execution_context*            m_context;
+    const char* m_module_filename;
+    const char* m_module_mdl_name;
+    Execution_context* m_context;
+
+    /// Value of context option MDL_CTX_OPTION_RESOLVE_RESOURCES.
+    bool m_resolve_resources;
 
     /// Keep track of visited definitions to avoid retraversal.
     using Definition_set = std::set<const mi::mdl::IDefinition*>;
@@ -957,7 +1029,7 @@ mi::base::Uuid get_hash( mi::mdl::IMDL_resource_reader* reader);
 mi::base::Uuid get_hash( const mi::mdl::IMDL_resource_set* set);
 
 /// Generates a unique ID.
-Uint64 generate_unique_id();
+mi::Uint64 generate_unique_id();
 
 /// Returns in instance of mi::IString holding the string \p s (or the empty string if \p s is
 /// \c NULL).

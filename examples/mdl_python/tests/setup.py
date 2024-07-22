@@ -1,5 +1,6 @@
 import unittest
 import os
+import gc
 
 # local testing only
 import pymdlsdk
@@ -9,13 +10,12 @@ BindingModule = pymdlsdk
 # the unittest base class, in case testing system already needs a specializing
 UnittestFrameworkBase = unittest.TestCase
 
-
 class SDK():
     neuray: pymdlsdk.INeuray = None
     transaction: pymdlsdk.ITransaction = None
     mdlFactory: pymdlsdk.IMdl_factory = None
 
-    def _get_examples_search_path(self):
+    def get_examples_search_path(self):
         """Try to get the example search path or returns 'mdl' sub folder of the current directory if it failed."""
 
         # get the environment variable that is used in all MDL SDK examples
@@ -36,7 +36,8 @@ class SDK():
 
         return os.path.abspath(example_sp)
 
-    def load(self, addExampleSearchPath: bool = True, loadImagePlugins: bool = True, loadDistillerPlugin: bool = False):
+    def load(self, addExampleSearchPath: bool = True, addExampleResourcePath: bool = True, loadImagePlugins: bool = True, loadDistillerPlugin: bool = False,
+        enableTemporaryNames: bool = False, locale: str = ""):
         """Initialize the SDK and get some common interface for basic testing"""
 
         # load neuray
@@ -46,15 +47,19 @@ class SDK():
 
         # add MDL search paths
         with self.neuray.get_api_component(pymdlsdk.IMdl_configuration) as cfg:
+            cfg: pymdlsdk.IMdl_configuration = cfg
             # add default search paths
             cfg.add_mdl_system_paths()
             cfg.add_mdl_user_paths()
+            cfg.set_expose_names_of_let_expressions(enableTemporaryNames)
 
             # get the example search path that is used for all MDL SDK examples
             # falls back to `mdl` in the current working directory
+            example_sp: str = self.get_examples_search_path()
             if addExampleSearchPath:
-                example_sp: str = self._get_examples_search_path()
                 cfg.add_mdl_path(example_sp)
+            if addExampleResourcePath:
+                cfg.add_resource_path(example_sp)
 
         # Load plugins
         if loadImagePlugins:
@@ -66,6 +71,12 @@ class SDK():
         if loadDistillerPlugin:
             if not pymdlsdk.load_plugin(self.neuray, 'mdl_distiller'):
                 raise Exception('Failed to load the \'mdl_distiller\' plugin.')  # pragma: no cover
+
+        # localization
+        if locale:
+            i18n: pymdlsdk.IMdl_i18n_configuration = self.neuray.get_api_component(pymdlsdk.IMdl_i18n_configuration)
+            if i18n.set_locale(locale) != 0:
+                raise Exception(f"Failed to set locale to '{locale}'.")  # pragma: no cover
 
         # start neuray
         resultCode = self.neuray.start()
@@ -83,6 +94,8 @@ class SDK():
     def unload(self, commitTransaction: bool = True):
         """Release all components created in the 'load' function"""
         if commitTransaction:
+            # gc.collect()  # uncomment for better debugging experience in VS Code
+            # for automated test, don't run GC since it has to work without
             self.transaction.commit()
         self.transaction = None
         self.mdlFactory = None

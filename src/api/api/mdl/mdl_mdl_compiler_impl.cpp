@@ -40,7 +40,6 @@
 #include "neuray_impexp_utilities.h"
 
 #include "neuray_module_impl.h"
-#include "neuray_string_impl.h"
 #include "neuray_transaction_impl.h"
 #include "neuray_mdl_execution_context_impl.h"
 
@@ -75,7 +74,7 @@ Mdl_compiler_impl::Mdl_compiler_impl( Neuray_impl* neuray_impl)
 
 Mdl_compiler_impl::~Mdl_compiler_impl()
 {
-    m_neuray_impl = 0;
+    m_neuray_impl = nullptr;
 }
 
 mi::Sint32 Mdl_compiler_impl::add_builtin_module(

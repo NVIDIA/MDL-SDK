@@ -55,11 +55,11 @@ Rle_array<T, CONT, IND>::Rle_array()
 template <typename T, typename CONT, typename IND>
 inline
 void Rle_array<T, CONT, IND>::push_back(
-    const T& item,			// datum to be inserted
-    size_t n)				// number of insertions
+    const T& item,                      // datum to be inserted
+    size_t n)                           // number of insertions
 {
     if (n == 0)
-	return;
+        return;
 
     // handle special case, erm, special
     if (empty()) {
@@ -102,8 +102,8 @@ void Rle_array<T, CONT, IND>::pop_back()
     if (count == 1) {
 //         m_index.pop_back();
 //         m_data.pop_back();
-	m_index.remove(m_index.size()-1);
-	m_data.remove(m_data.size()-1);
+        m_index.remove(m_index.size()-1);
+        m_data.remove(m_data.size()-1);
     }
     else
         --m_index[m_index.size() - 1];
@@ -116,7 +116,7 @@ void Rle_array<T, CONT, IND>::pop_back()
 template <typename T, typename CONT, typename IND>
 inline
 const T& Rle_array<T, CONT, IND>::operator[](
-    size_t id) const			// index
+    size_t id) const                    // index
 {
     ASSERT(M_CONT, !empty());
 
@@ -127,21 +127,21 @@ const T& Rle_array<T, CONT, IND>::operator[](
     int m = 0;
     while (l <= h)
     {
-	m = (l + h) / 2;
-	if (m_index[m] == id)
-	{
-	    ASSERT(M_CONT, m < (int)m_index.size()-1);
-	    return m_data[m+1];
-	}
-	if (m_index[m] > id)
-	    h = m-1;
-	else
-	    l = m+1;
+        m = (l + h) / 2;
+        if (m_index[m] == id)
+        {
+            ASSERT(M_CONT, m < (int)m_index.size()-1);
+            return m_data[m+1];
+        }
+        if (m_index[m] > id)
+            h = m-1;
+        else
+            l = m+1;
     }
     // If we reached this point, l > h.
     // l should now be the right index.
     if (l > (int)m_index.size()-1) // Not sure, but this might never happen...
-	l = (int)m_index.size()-1;
+        l = (int)m_index.size()-1;
     ASSERT(M_CONT, m_index[l] > id);
     return m_data[l];
 }
@@ -284,8 +284,8 @@ template <typename T, typename CONT, typename IND>
 inline
 Rle_iterator<T, CONT, IND>::Rle_iterator(
     const Rle_array<T, CONT, IND>* array, // the array to work on
-    size_t index,			// start index into index array
-    size_t data)			// start index into data array
+    size_t index,                       // start index into index array
+    size_t data)                        // start index into data array
   : m_array(array), m_index(index), m_offset(data)
 {}
 
@@ -296,7 +296,7 @@ Rle_iterator<T, CONT, IND>::Rle_iterator(
 template <typename T, typename CONT, typename IND>
 inline
 Rle_iterator<T, CONT, IND>::Rle_iterator(
-    const Rle_iterator& other)		// the other
+    const Rle_iterator& other)          // the other
   : m_array(other.m_array), m_index(other.m_index), m_offset(other.m_offset)
 {}
 
@@ -307,12 +307,12 @@ Rle_iterator<T, CONT, IND>::Rle_iterator(
 template <typename T, typename CONT, typename IND>
 inline
 Rle_iterator<T, CONT, IND>& Rle_iterator<T, CONT, IND>::operator=(
-    const Rle_iterator& other)		// the other
+    const Rle_iterator& other)          // the other
 {
     if (&other != this) {
-	m_array = other.m_array;
-	m_index = other.m_index;
-	m_offset= other.m_offset;
+        m_array = other.m_array;
+        m_index = other.m_index;
+        m_offset= other.m_offset;
     }
     return *this;
 }
@@ -329,10 +329,10 @@ Rle_iterator<T, CONT, IND>& Rle_iterator<T, CONT, IND>::operator++()
     // speed vs safety - safety one for now.
     // TO DO: Parameterize this decision as a policy - SAFE vs UNSAFE
     if (!m_array)
-	return *this;
+        return *this;
 
     if (++m_offset >= m_array->m_index[m_index])
-	++m_index;
+        ++m_index;
     return *this;
 }
 
@@ -343,7 +343,7 @@ Rle_iterator<T, CONT, IND>& Rle_iterator<T, CONT, IND>::operator++()
 template <typename T, typename CONT, typename IND>
 inline
 const Rle_iterator<T, CONT, IND> Rle_iterator<T, CONT, IND>::operator++(
-    int)				// dummy
+    int)                                // dummy
 {
     Iterator tmp = *this;
     ++*this;
@@ -360,10 +360,10 @@ Rle_iterator<T, CONT, IND>& Rle_iterator<T, CONT, IND>::operator--()
 {
     // TO DO: Parameterize this decision as a policy - SAFE vs UNSAFE
     if (!m_array)
-	return *this;
+        return *this;
 
     if (--m_offset <= m_array->m_index[m_index])
-	--m_index;
+        --m_index;
     return *this;
 }
 
@@ -374,7 +374,7 @@ Rle_iterator<T, CONT, IND>& Rle_iterator<T, CONT, IND>::operator--()
 template <typename T, typename CONT, typename IND>
 inline
 const Rle_iterator<T, CONT, IND> Rle_iterator<T, CONT, IND>::operator--(
-    int)				// dummy
+    int)                                // dummy
 {
     Iterator tmp = *this;
     --*this;
@@ -416,7 +416,7 @@ bool Rle_iterator<T, CONT, IND>::operator==(
 {
     // TO DO: Parameterize this decision as a policy - SAFE vs UNSAFE
     if (!m_array || !other.m_array)
-	return  m_array == other.m_array;
+        return  m_array == other.m_array;
 
     // special handling for end
     if (m_index == m_array->get_index_size() ||
@@ -448,7 +448,7 @@ template <typename T, typename CONT, typename IND>
 inline
 Rle_chunk_iterator<T, CONT, IND>::Rle_chunk_iterator(
     const Rle_array<T, CONT, IND>& array, // the array to work on
-    size_t index)				// start index into index array
+    size_t index)                               // start index into index array
   : m_array(array), m_index(index)
 {}
 
@@ -473,7 +473,7 @@ template <typename T, typename CONT, typename IND>
 inline
 const Rle_chunk_iterator<T, CONT, IND>
 Rle_chunk_iterator<T, CONT, IND>::operator++(
-    int)				// dummy
+    int)                                // dummy
 {
     Iterator tmp = *this;
     ++*this;
@@ -501,7 +501,7 @@ template <typename T, typename CONT, typename IND>
 inline
 const Rle_chunk_iterator<T, CONT, IND>
 Rle_chunk_iterator<T, CONT, IND>::operator--(
-    int)				// dummy
+    int)                                // dummy
 {
     Iterator tmp = *this;
     --*this;
@@ -542,11 +542,11 @@ inline
 size_t Rle_chunk_iterator<T, CONT, IND>::count() const
 {
     if (m_array.empty())
-	return 0;
+        return 0;
     if (m_index == 0)
-	return m_array.m_index[0];
+        return m_array.m_index[0];
     else
-	return m_array.m_index[m_index] -  m_array.m_index[m_index-1];
+        return m_array.m_index[m_index] -  m_array.m_index[m_index-1];
 }
 
 

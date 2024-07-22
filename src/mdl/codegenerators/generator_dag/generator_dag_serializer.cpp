@@ -417,6 +417,25 @@ Generated_code_dag *DAG_deserializer::create_code_dag(
     return result;
 }
 
+/// Creates a new (empty) material instance for deserialization.
+Generated_code_dag::Material_instance *DAG_deserializer::create_material_instance(
+    IAllocator *alloc,
+    MDL *mdl,
+    size_t      material_index,
+    char const *internal_space,
+    bool        unsafe_math_optimizations,
+    char const *context_name)
+{
+    Generated_code_dag::Material_instance *result =
+        m_builder.create<Generated_code_dag::Material_instance>(
+            mdl,
+            m_builder.get_allocator(),
+            material_index,
+            internal_space,
+            unsafe_math_optimizations);
+    return result;
+}
+
 // Constructor.
 DAG_deserializer::DAG_deserializer(
     IDeserializer           *deserializer,

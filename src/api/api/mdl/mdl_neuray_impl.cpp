@@ -74,7 +74,6 @@
 
 #include "neuray_class_factory.h"
 #include "neuray_class_registration.h"
-#include "neuray_log_utilities.h"
 #include "neuray_scope_impl.h"
 
 #ifdef MI_PLATFORM_WINDOWS
@@ -93,7 +92,7 @@ std::atomic_uint32_t Neuray_impl::s_instance_count = 0;
 
 Neuray_impl::Neuray_impl()
   : m_status( PRE_STARTING),
-    m_database( 0)
+    m_database( nullptr)
 {
     pull_in_required_modules();
 
@@ -190,12 +189,12 @@ Neuray_impl::~Neuray_impl()
     ref_count = m_mdl_compiler_impl->release();             CHECK_RESULT;
     ref_count = m_factory_impl->release();                  CHECK_RESULT;
 
-    NEURAY::s_factory = 0;
+    NEURAY::s_factory = nullptr;
 
 #undef CHECK_RESULT
 
     delete m_class_factory;
-    NEURAY::s_class_factory = 0;
+    NEURAY::s_class_factory = nullptr;
 
 #ifdef ENABLE_ASSERT
     mi::Size alive_modules = SYSTEM::Module_registration_entry::count_alive_modules();
@@ -220,7 +219,7 @@ const char* Neuray_impl::get_version() const
 mi::Sint32 Neuray_impl::start( bool blocking)
 {
     if( PRE_STARTING != m_status && SHUTDOWN != m_status)
-    	return -1;
+        return -1;
 
     SYSTEM::Access_module<LOG::Log_module> log_module( false);
     log_module->emit_delayed_log_messages();
@@ -230,7 +229,9 @@ mi::Sint32 Neuray_impl::start( bool blocking)
 
     m_database = DBLIGHT::factory();
     NEURAY::Class_registration::register_classes_part2( m_class_factory, m_database);
-    SCENE::register_db_elements( m_database);
+
+    SYSTEM::Access_module<SCENE::Scene_module> scene_module( false);
+    scene_module->register_db_elements( m_database);
 
 #define CHECK_RESULT if( result) { m_status = FAILURE; return result; }
 
@@ -288,7 +289,7 @@ mi::Sint32 Neuray_impl::shutdown( bool blocking)
     m_status = SHUTTINGDOWN;
 
     SYSTEM::Access_module<IMAGE::Image_module> image_module( false);
-    image_module->set_mdl_container_callback( 0);
+    image_module->set_mdl_container_callback( nullptr);
 
     NEURAY::Class_registration::unregister_structure_declarations( m_class_factory);
 
@@ -344,9 +345,9 @@ mi::neuraylib::INeuray::Status Neuray_impl::get_status() const
 mi::base::IInterface* Neuray_impl::get_api_component( const mi::base::Uuid& uuid) const
 {
     mi::base::Lock::Block block( &m_api_components_lock);
-    Api_components_map::const_iterator it = m_api_components.find( uuid);
+    auto it = m_api_components.find( uuid);
     if( it == m_api_components.end())
-        return 0;
+        return nullptr;
 
     mi::base::IInterface* api_component = it->second;
     api_component->retain();
@@ -359,7 +360,7 @@ mi::Sint32 Neuray_impl::register_api_component(
     mi::base::Lock::Block block( &m_api_components_lock);
     if( !api_component)
         return -1;
-    Api_components_map::const_iterator it = m_api_components.find( uuid);
+    auto it = m_api_components.find( uuid);
     if( it != m_api_components.end())
         return -2;
 
@@ -371,7 +372,7 @@ mi::Sint32 Neuray_impl::register_api_component(
 mi::Sint32 Neuray_impl::unregister_api_component( const mi::base::Uuid& uuid)
 {
     mi::base::Lock::Block block( &m_api_components_lock);
-    Api_components_map::const_iterator it = m_api_components.find( uuid);
+    auto it = m_api_components.find( uuid);
     if( it == m_api_components.end())
         return -1;
 

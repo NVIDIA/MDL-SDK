@@ -68,8 +68,8 @@ bool Image_plugin_impl::init( mi::neuraylib::IPlugin_api* plugin_api)
 
 bool Image_plugin_impl::exit( mi::neuraylib::IPlugin_api* plugin_api)
 {
-    m_image_api = nullptr;
-    g_logger = nullptr;
+    m_image_api.reset();
+    g_logger.reset();
     return true;
 }
 
@@ -115,7 +115,7 @@ mi::neuraylib::IImage_file* Image_plugin_impl::open_for_writing(
     mi::Uint32 miplevels,
     bool is_cubemap,
     mi::Float32 gamma,
-    mi::Uint32 quality) const
+    const mi::IMap* export_options) const
 {
     if( !writer || !pixel_type)
         return nullptr;

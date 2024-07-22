@@ -54,10 +54,6 @@ class Config_module_impl : public Config_module
     /// Destructor.
     ~Config_module_impl();
 
-    /// Configure logging. Since now both the command line and the initrc are read, explicitly
-    /// tell the log module to use the read values to initialize itself finally.
-    virtual void configure_log_module();
-
     /// For command-line overrides. Variables set with this will be ignored in the config file
     /// (except that the file's help text is extracted). The string is parsed just like a
     /// config file line.
@@ -101,11 +97,11 @@ class Config_module_impl : public Config_module
     std::string get_product_name() const;
 
   private:
-    mutable mi::base::Lock m_lock;		    ///< for thread-safe access.
+    mutable mi::base::Lock m_lock;                  ///< for thread-safe access.
 
     /// \todo This variable should be dealt with in a mt-safe manner.
-    bool m_read_commandline_already_called;	    ///< was the member fct already called?
-    Config_registry_impl m_configuration;	    ///< collected config variables - NOT THREADSAFE
+    bool m_read_commandline_already_called;         ///< was the member fct already called?
+    Config_registry_impl m_configuration;           ///< collected config variables - NOT THREADSAFE
 };
 
 }

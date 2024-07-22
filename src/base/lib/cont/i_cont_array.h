@@ -52,46 +52,46 @@ class Array
     class Const_iterator;
 
     // Required typedefs to allow different allocators.
-    typedef typename Allocator::Pointer			Pointer;
-    typedef typename Allocator::Const_pointer		Const_pointer;
-    typedef typename Allocator::Reference		Reference;
-    typedef typename Allocator::Const_reference		Const_reference;
+    typedef typename Allocator::Pointer                 Pointer;
+    typedef typename Allocator::Const_pointer           Const_pointer;
+    typedef typename Allocator::Reference               Reference;
+    typedef typename Allocator::Const_reference         Const_reference;
 
     // STL-compliant typedefs
-    typedef T						value_type;
-    typedef Pointer					pointer;
-    typedef Const_pointer				const_pointer;
-    typedef Reference					reference;
-    typedef Const_reference				const_reference;
-    typedef Iterator					iterator;
-    typedef Const_iterator				const_iterator;
+    typedef T                                           value_type;
+    typedef Pointer                                     pointer;
+    typedef Const_pointer                               const_pointer;
+    typedef Reference                                   reference;
+    typedef Const_reference                             const_reference;
+    typedef Iterator                                    iterator;
+    typedef Const_iterator                              const_iterator;
 
     // Default constructor.
     explicit Array(
-	const Allocator& alloc=Allocator()); 		// allocator
+        const Allocator& alloc=Allocator());            // allocator
 
     // Constructor.
     explicit Array(
-	size_t count,					// number of elements to create
-	Const_reference value=T(),			// default value for those elements
-	const Allocator& alloc=Allocator()); 		// allocator
+        size_t count,                                   // number of elements to create
+        Const_reference value=T(),                      // default value for those elements
+        const Allocator& alloc=Allocator());            // allocator
 
     // Copy constructor.
     Array(
-	const Array& array);				// array to copy
+        const Array& array);                            // array to copy
 
     // Destructor - free all resources.
     ~Array();
 
     // Assignment operator.
-    Array& operator=(const Array& array); 		// array to assign
+    Array& operator=(const Array& array);               // array to assign
 
     // STL-style iterator access into the array. We use ordinary pointers as
     // iterators.
-    Pointer	  begin();
+    Pointer       begin();
     Const_pointer begin() const;
-    Pointer	  end();
-    Const_pointer end()	const;
+    Pointer       end();
+    Const_pointer end() const;
 
     // Return number of elements in array.
     size_t size() const;
@@ -102,63 +102,63 @@ class Array
     // Reserve enough memory to hold the given number of elements.
     // Note that this function never shrinks memory, just increases it.
     void reserve(
-	size_t count);					// number of elements
+        size_t count);                                  // number of elements
 
     // Resizes the vector to the specified number of elements.
     void resize(
-	size_t new_size,				// no. of elements vector will contain
-	Const_reference value=T());			// default value for new elements
+        size_t new_size,                                // no. of elements vector will contain
+        Const_reference value=T());                     // default value for new elements
 
     // Fast but unchecked access to element at index i.
     Reference operator[](
-	size_t i);					// element index
+        size_t i);                                      // element index
 
     // Fast but unchecked access to element at index i.
     Const_reference operator[](
-	size_t i) const;				// element index
+        size_t i) const;                                // element index
 
     // Insert value at index. Return false if index is out of range, and
     // true otherwise.
     bool put(
-	size_t index,					// index at which to put the value
-	Const_reference value);				// value to insert
+        size_t index,                                   // index at which to put the value
+        Const_reference value);                         // value to insert
 
     // Put the given value at array[index]. If required, increase the size of
     // the array appropriately and initialize the new elements with default.
     void put(
-	size_t index,					// index at which to put the value
-	Const_reference value,				// value to insert
-	Const_reference def_value);			// init value for new elements
+        size_t index,                                   // index at which to put the value
+        Const_reference value,                          // value to insert
+        Const_reference def_value);                     // init value for new elements
 
     // Get element from array at index. Return false if index is out of range,
     // and true otherwise. Value is only set when return value is true.
     bool get(
-	size_t index,					// index at which to put the value
-	Pointer value) const;				// pointer for retrieve value
+        size_t index,                                   // index at which to put the value
+        Pointer value) const;                           // pointer for retrieve value
 
     // Get element from array at index. Return NULL if index is out of range,
     // and a pointer to the element otherwise.
     Pointer get(
-	size_t index) const;				// index of element
+        size_t index) const;                            // index of element
 
     // Insert value at given index.
     // Note that this might imply shifting up all elements starting from index
     // and hence could result in run-time degradation. For inserting at the
     // end of the array the use of append() is preferable.
     void insert(
-	size_t index,					// index at which to insert value
-	Const_reference value);				// value to insert
+        size_t index,                                   // index at which to insert value
+        Const_reference value);                         // value to insert
 
     // Remove value at index, shifting down all elements above from index.
     // Return false if index  is out of range, and true otherwise.
     bool remove(
-	size_t index);					// index of element to be removed
+        size_t index);                                  // index of element to be removed
 
     // Insert value at the end of the array.
     // Note that this is a fast operation and should be the preferred way
     // to insert data into the array.
     void append(
-	Const_reference value);				// value to insert
+        Const_reference value);                         // value to insert
 
     // Insert a default constructed element at the end of the array.
     // Return a pointer to it. This is meant mainly for structures/classes
@@ -180,76 +180,76 @@ class Array
 
     // Fast data exchange of two Arrays.
     void swap(
-	Array<T, Allocator>& other);			// the other
+        Array<T, Allocator>& other);                    // the other
 
     // Iterator for traversing the elements.
     class Iterator
     {
     public:
-	// Convenient typedef.
-	typedef Array<T, Allocator> The_array;
+        // Convenient typedef.
+        typedef Array<T, Allocator> The_array;
 
-	// Constructor.
-	Iterator(
-	    The_array& array);				// the array to iterate over
-	// Destructor.
-	~Iterator();
+        // Constructor.
+        Iterator(
+            The_array& array);                          // the array to iterate over
+        // Destructor.
+        ~Iterator();
 
-	// Set iterator to the first element of the array if it exists.
-	void to_first();
-	// Set iterator to the last element of the array if it exists.
-	void to_last();
-	// Set iterator to the next element of the array if it exists.
-	void to_next();
-	// Set iterator to the previous element of the array if it exists.
-	void to_previous();
+        // Set iterator to the first element of the array if it exists.
+        void to_first();
+        // Set iterator to the last element of the array if it exists.
+        void to_last();
+        // Set iterator to the next element of the array if it exists.
+        void to_next();
+        // Set iterator to the previous element of the array if it exists.
+        void to_previous();
 
-	// Return true if iterator is exhausted, false otherwise.
-	bool at_end() const;
+        // Return true if iterator is exhausted, false otherwise.
+        bool at_end() const;
 
-	// Return reference to the current element.
-	typename The_array::Reference operator*();
-	// Apply member selection to the current element.
-	typename The_array::Pointer operator->();
+        // Return reference to the current element.
+        typename The_array::Reference operator*();
+        // Apply member selection to the current element.
+        typename The_array::Pointer operator->();
 
     private:
-	The_array& m_array;				// the corresponding array
-	size_t m_current;				// index of current element in array
+        The_array& m_array;                             // the corresponding array
+        size_t m_current;                               // index of current element in array
     };
 
     // The constant access iterator.
     class Const_iterator
     {
     public:
-	// Convenient typedef.
-	typedef Array<T, Allocator> The_array;
+        // Convenient typedef.
+        typedef Array<T, Allocator> The_array;
 
-	// Constructor.
-	Const_iterator(
-	    const The_array& array);			// the array to iterate over
-	// Destructor.
-	~Const_iterator();
+        // Constructor.
+        Const_iterator(
+            const The_array& array);                    // the array to iterate over
+        // Destructor.
+        ~Const_iterator();
 
-	// Set iterator to the first element of the array if it exists.
-	void to_first();
-	// Set iterator to the last element of the array if it exists.
-	void to_last();
-	// Set iterator to the next element of the array if it exists.
-	void to_next();
-	// Set iterator to the previous element of the array if it exists.
-	void to_previous();
+        // Set iterator to the first element of the array if it exists.
+        void to_first();
+        // Set iterator to the last element of the array if it exists.
+        void to_last();
+        // Set iterator to the next element of the array if it exists.
+        void to_next();
+        // Set iterator to the previous element of the array if it exists.
+        void to_previous();
 
-	// Return true if iterator is exhausted, false otherwise.
-	bool at_end() const;
+        // Return true if iterator is exhausted, false otherwise.
+        bool at_end() const;
 
-	// Return reference to the current element.
-	typename The_array::Const_reference operator*() const;
-	// Apply member selection to the current element.
-	typename The_array::Const_pointer operator->() const;
+        // Return reference to the current element.
+        typename The_array::Const_reference operator*() const;
+        // Apply member selection to the current element.
+        typename The_array::Const_pointer operator->() const;
 
     private:
-	const The_array& m_array;			// the corresponding array
-	size_t m_current;				// index of current element in array
+        const The_array& m_array;                       // the corresponding array
+        size_t m_current;                               // index of current element in array
     };
 
     // Return the internally allocated space in number of elements it can hold.
@@ -257,25 +257,25 @@ class Array
 
 
   private:
-    Allocator m_allocator;				// allocator in use
-    Pointer   m_array;					// the data elements
-    size_t m_count;					// number of elements
-    size_t m_reserved;					// size of allocated memory
+    Allocator m_allocator;                              // allocator in use
+    Pointer   m_array;                                  // the data elements
+    size_t m_count;                                     // number of elements
+    size_t m_reserved;                                  // size of allocated memory
 
     // Resizes the vector to the specified number of elements.
     void do_resize(
-	size_t new_size,				// no. of elements vector will contain
-	Const_reference val);				// value for new elements
+        size_t new_size,                                // no. of elements vector will contain
+        Const_reference val);                           // value for new elements
 
     // Insert value count times at given index.
     void insert_n(
-	size_t index,					// index at which to insert value
-	size_t count,					// how many times?
-	Const_reference value);				// value to insert
+        size_t index,                                   // index at which to insert value
+        size_t count,                                   // how many times?
+        Const_reference value);                         // value to insert
 
     // Pure allocation function returning new memory fitting the given size.
     Pointer allocate(
-	size_t new_count);				// no. of elements vector will contain
+        size_t new_count);                              // no. of elements vector will contain
 };
 
 
@@ -283,8 +283,8 @@ class Array
 // see Array::swap().
 template<typename T, typename Allocator>
 void swap(
-    Array<T, Allocator>& one,				// the one
-    Array<T, Allocator>& other);			// the other
+    Array<T, Allocator>& one,                           // the one
+    Array<T, Allocator>& other);                        // the other
 
 }
 }

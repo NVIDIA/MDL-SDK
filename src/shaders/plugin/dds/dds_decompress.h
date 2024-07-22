@@ -165,7 +165,7 @@ private:
     void decode_colors( const mi::Uint8* const color_block, mi::Uint8* pixels);
 
     /// Type of the decompressor methods.
-    typedef void (Dxt_decompressor::*FDecompress)(const mi::Uint8*, mi::Uint8*);
+    using FDecompress = void (Dxt_decompressor::*)(const mi::Uint8*, mi::Uint8*);
 
     /// Current decompressor method.
     FDecompress m_decompress_block;

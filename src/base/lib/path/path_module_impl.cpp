@@ -30,18 +30,23 @@
 
 #include "path_module_impl.h"
 
+#include <filesystem>
+
 #ifdef MI_PLATFORM_WINDOWS
 #include <boost/algorithm/string/replace.hpp>
 #endif
+
 #include <mi/base/config.h>
-#include <base/system/main/module_registration.h>
-#include <base/hal/disk/disk.h>
-#include <base/hal/hal/i_hal_ospath.h>
 
 #include <base/system/main/access_module.h>
+#include <base/system/main/module_registration.h>
+#include <base/hal/disk/disk_utils.h>
+#include <base/hal/hal/i_hal_ospath.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/config/config.h>
 #include <base/util/registry/i_config_registry.h>
+
+namespace fs = std::filesystem;
 
 namespace MI {
 
@@ -78,18 +83,22 @@ void Path_module_impl::exit()
 mi::Sint32 Path_module_impl::set_search_path( Kind kind, const Search_path& paths)
 {
     // Check for config option to allow non-existing directories as search paths
-    // as needed for some dedicated customer workflows.
+    // and/or skip normalization as needed for some dedicated customer workflows.
     SYSTEM::Access_module<CONFIG::Config_module> config_module( false);
     bool allow_invalid_search_paths = false;
     config_module->get_configuration().get_value(
         "allow_invalid_search_paths", allow_invalid_search_paths);
+    bool skip_normalizing_search_paths = false;
+    config_module->get_configuration().get_value(
+        "skip_normalizing_search_paths", skip_normalizing_search_paths);
 
     size_t n = paths.size();
     mi::Sint32 return_code = 0;
+    std::error_code ec;
     for( size_t i = 0; i < n; ++i) {
         if( paths[i].empty())
             return -2;
-        if( !DISK::is_directory( paths[i].c_str())) {
+        if( !fs::is_directory( fs::u8path( paths[i]), ec)) {
             if( !allow_invalid_search_paths)
                 return -2;
             else
@@ -101,7 +110,7 @@ mi::Sint32 Path_module_impl::set_search_path( Kind kind, const Search_path& path
     Search_path& search_path = m_search_paths[kind];
     search_path.resize( n);
     for( size_t i = 0; i < n; ++i)
-        search_path[i] = normalize( paths[i]);
+        search_path[i] = skip_normalizing_search_paths ? paths[i] : normalize( paths[i]);
     return return_code;
 }
 
@@ -126,16 +135,21 @@ size_t Path_module_impl::get_path_count( Kind kind) const
 mi::Sint32 Path_module_impl::set_path( Kind kind, size_t index, const Path& path)
 {
     // Check for config option to allow non-existing directories as search paths
-    // as needed for some dedicated customer workflows.
+    // and/or skip normalization as needed for some dedicated customer workflows.
     SYSTEM::Access_module<CONFIG::Config_module> config_module( false);
     bool allow_invalid_search_paths = false;
     config_module->get_configuration().get_value(
         "allow_invalid_search_paths", allow_invalid_search_paths);
+    bool skip_normalizing_search_paths = false;
+    config_module->get_configuration().get_value(
+        "skip_normalizing_search_paths", skip_normalizing_search_paths);
 
     if( path.empty())
         return -2;
+
     mi::Sint32 return_code = 0;
-    if( !DISK::is_directory( path.c_str())) {
+    std::error_code ec;
+    if( !fs::is_directory( fs::u8path( path), ec)) {
         if( !allow_invalid_search_paths)
             return -2;
         else
@@ -147,7 +161,7 @@ mi::Sint32 Path_module_impl::set_path( Kind kind, size_t index, const Path& path
     if( index >= search_path.size())
         return -3;
 
-    search_path[index] = normalize( path);
+    search_path[index] = skip_normalizing_search_paths ? path : normalize( path);
     return return_code;
 }
 
@@ -163,16 +177,21 @@ const Path_module::Path& Path_module_impl::get_path( Kind kind, size_t index) co
 mi::Sint32 Path_module_impl::add_path( Kind kind, const Path& path)
 {
     // Check for config option to allow non-existing directories as search paths
-    // as needed for some dedicated customer workflows.
+    // and/or skip normalization as needed for some dedicated customer workflows.
     SYSTEM::Access_module<CONFIG::Config_module> config_module( false);
     bool allow_invalid_search_paths = false;
     config_module->get_configuration().get_value(
         "allow_invalid_search_paths", allow_invalid_search_paths);
+    bool skip_normalizing_search_paths = false;
+    config_module->get_configuration().get_value(
+        "skip_normalizing_search_paths", skip_normalizing_search_paths);
 
     if( path.empty())
         return -2;
+
     mi::Sint32 return_code = 0;
-    if( !DISK::is_directory( path.c_str())) {
+    std::error_code ec;
+    if( !fs::is_directory( fs::u8path( path), ec)) {
         if( !allow_invalid_search_paths)
             return -2;
         else
@@ -180,18 +199,25 @@ mi::Sint32 Path_module_impl::add_path( Kind kind, const Path& path)
     }
 
     mi::base::Lock::Block block( &m_lock);
-    m_search_paths[kind].push_back( normalize( path));
+    m_search_paths[kind].push_back( skip_normalizing_search_paths ? path : normalize( path));
     return return_code;
 }
 
 mi::Sint32 Path_module_impl::remove_path( Kind kind, const Path& path)
 {
+    // Check for config option to allow non-existing directories as search paths
+    // and/or skip normalization as needed for some dedicated customer workflows.
+    SYSTEM::Access_module<CONFIG::Config_module> config_module( false);
+    bool skip_normalizing_search_paths = false;
+    config_module->get_configuration().get_value(
+        "skip_normalizing_search_paths", skip_normalizing_search_paths);
+
     mi::base::Lock::Block block( &m_lock);
 
     Search_path& search_path = m_search_paths[kind];
     size_t n = search_path.size();
 
-    const std::string normalized_path = normalize( path);
+    const std::string normalized_path = skip_normalizing_search_paths ? path : normalize( path);
     for( size_t i = 0; i < n; ++i)
         if( search_path[i] == normalized_path) {
             search_path.erase( search_path.begin() + i);
@@ -204,13 +230,15 @@ mi::Sint32 Path_module_impl::remove_path( Kind kind, const Path& path)
 std::string Path_module_impl::search(
     Kind kind, const std::string& file_name) const
 {
-    if (file_name.empty())
+    if( file_name.empty())
         return {};
 
     const std::string& normalized_file_name = normalize( file_name);
 
-    if( DISK::is_path_absolute( normalized_file_name))
-        return DISK::access( normalized_file_name.c_str()) ? normalized_file_name : s_empty_string;
+    fs::path path( fs::u8path( normalized_file_name));
+
+    if( path.is_absolute())
+        return DISK::access( path.u8string().c_str()) ? normalized_file_name : s_empty_string;
 
     mi::base::Lock::Block block( &m_lock);
 
@@ -218,13 +246,12 @@ std::string Path_module_impl::search(
     size_t n = search_path.size();
 
     for( size_t i = 0; i < n; ++i) {
-        const std::string& joined_file_name
-            = HAL::Ospath::join( search_path[i], normalized_file_name);
-        if( DISK::access( joined_file_name.c_str()))
-            return joined_file_name;
+        fs::path candidate = fs::u8path( search_path[i]) / path;
+        if( DISK::access( candidate.u8string().c_str()))
+            return candidate.u8string();
     }
 
-    return s_empty_string;
+    return {};
 }
 
 } // namespace PATH

@@ -398,6 +398,10 @@ struct Options
     mi::Float32_3 light_pos;
     mi::Float32_3 light_intensity;
 
+    // BSDF flags
+    bool enable_bsdf_flags;
+    mi::neuraylib::Df_flags allowed_scatter_mode;
+
     // Whether class compilation should be used for the materials.
     bool use_class_compilation;
 
@@ -428,6 +432,8 @@ struct Options
         , cam_fov(86.f)
         , light_pos(10.f, 5.f, 0.f)
         , light_intensity(1.0f, 0.902f, 0.502f)
+        , enable_bsdf_flags(false)
+        , allowed_scatter_mode(mi::neuraylib::DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT)
         , use_class_compilation(false)
         , use_custom_tex_runtime(false)
         , use_adapt_normal(false)
@@ -493,6 +499,7 @@ struct Render_context
     int max_ray_length;
     bool render_auxiliary;
     bool use_derivatives;
+    mi::neuraylib::Df_flags bsdf_data_flags;
 
     // scene data
     // environment color
@@ -618,6 +625,7 @@ struct Render_context
 
     Render_context(bool use_derivatives)
         : use_derivatives(use_derivatives)
+        , bsdf_data_flags(mi::neuraylib::DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT)
         , target_code(nullptr)
         , tex_handler(nullptr)
         , tex_handler_deriv(nullptr)
@@ -669,10 +677,12 @@ struct Render_context
     // Free resources owned by the render context.
     void uninit()
     {
-        if (env.alias_map) {
+        if (env.alias_map)
+        {
             free(env.alias_map);
             env.alias_map = nullptr;
         }
+        env.map = nullptr;
         target_code = nullptr;
     }
 
@@ -1006,6 +1016,7 @@ void create_material_instance(
 
 // Compiles the given material instance in the given compilation modes and stores it in the DB.
 void compile_material_instance(
+    mi::neuraylib::IMdl_factory *mdl_factory,
     mi::neuraylib::ITransaction* transaction,
     mi::neuraylib::IMdl_execution_context* context,
     const char* instance_name,
@@ -1021,6 +1032,14 @@ void compile_material_instance(
     mi::Uint32 flags = class_compilation
         ? mi::neuraylib::IMaterial_instance::CLASS_COMPILATION
         : mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS;
+
+    // convert to target type SID_MATERIAL
+    mi::base::Handle<mi::neuraylib::IType_factory> tf(
+        mdl_factory->create_type_factory(transaction));
+    mi::base::Handle<const mi::neuraylib::IType> standard_material_type(
+        tf->get_predefined_struct(mi::neuraylib::IType_struct::SID_MATERIAL));
+    context->set_option("target_type", standard_material_type.get());
+
     mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
         material_instance->create_compiled_material(flags, context));
     check_success(print_messages(context));
@@ -1048,7 +1067,8 @@ void generate_native(
     const char* compiled_material_name,
     bool use_custom_tex_runtime,
     bool use_adapt_normal,
-    bool enable_derivatives)
+    bool enable_derivatives,
+    bool enable_bsdf_flags)
 {
     Timing timing("generate target code");
 
@@ -1157,6 +1177,10 @@ void generate_native(
 
     if (use_adapt_normal)
         check_success(be_native->set_option("use_renderer_adapt_normal", "on") == 0);
+
+    // if enabled, the generated code will use the optional "flags" field in the BSDF data structs
+    if (enable_bsdf_flags)
+        check_success(be_native->set_option("libbsdf_flags_in_bsdf_data", "on") == 0);
 
 #ifdef ADD_EXTRA_TIMERS
     std::chrono::steady_clock::time_point t5 = std::chrono::steady_clock::now();
@@ -1556,6 +1580,7 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
                     aux_data.ior2 = mi::Float32_3(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR);
                 }
                 aux_data.k1 = -ray.dir;
+                aux_data.flags = rc.bsdf_data_flags;
 
                 ret_code = rc.target_code->execute_bsdf_auxiliary(
                     surface_bsdf_function_index + 3,    // bsdf_function_index corresponds to 'sample'
@@ -1609,6 +1634,7 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
                     eval_data.k2 = light_dir;
                     eval_data.bsdf_diffuse = mi::Float32_3(0.f);
                     eval_data.bsdf_glossy = mi::Float32_3(0.f);
+                    eval_data.flags = rc.bsdf_data_flags;
 
                     // evaluate material surface bsdf
                     ret_code = rc.target_code->execute_bsdf_evaluate(
@@ -1648,6 +1674,7 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
                 sample_data.xi.y = rnd(seed);
                 sample_data.xi.z = rnd(seed);
                 sample_data.xi.w = rnd(seed);
+                sample_data.flags = rc.bsdf_data_flags;
 
                 ret_code = rc.target_code->execute_bsdf_sample(
                     surface_bsdf_function_index,      // bsdf_function_index corresponds to 'sample'
@@ -1829,6 +1856,7 @@ static void save_screenshot(
     const unsigned int width,
     const unsigned int height,
     const std::string &filename,
+    mi::base::Handle<mi::neuraylib::IFactory> factory,
     mi::base::Handle<mi::neuraylib::IImage_api> image_api,
     mi::base::Handle<mi::neuraylib::IMdl_impexp_api> mdl_impexp_api)
 {
@@ -1836,7 +1864,14 @@ static void save_screenshot(
         image_api->create_canvas("Float32<3>", width, height));
     mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile());
     memcpy(tile->get_data(), image_buffer, width*height * sizeof(mi::Float32_3));
-    mdl_impexp_api->export_canvas(filename.c_str(), canvas.get(), 100U, true);
+
+    mi::base::Handle<mi::IBoolean> option_force_default_gamma(factory->create<mi::IBoolean>());
+    option_force_default_gamma->set_value(true);
+
+    mi::base::Handle<mi::IMap> export_options(factory->create<mi::IMap>("Map<Interface>"));
+    export_options->insert("force_default_gamma", option_force_default_gamma.get());
+
+    mdl_impexp_api->export_canvas(filename.c_str(), canvas.get(), export_options.get());
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1849,21 +1884,24 @@ void usage(char const *prog_name)
     std::cout
         << "Usage: " << prog_name << " [options] [<material_name>]\n"
         << "Options:\n"
-        << "  -h|--help              print this text and exit\n"
-        << "  -v|--version           print the MDL SDK version string and exit\n"
-        << "  --res <x> <y>          resolution (default: 700x520)\n"
-        << "  --hdr <filename>       environment map\n"
-        << "                         (default: nvidia/sdk_examples/resources/environment.hdr)\n"
-        << "  --cc                   use class compilation\n"
-        << "  --cr                   use custom texture runtime\n"
-        << "  --an                   use adapt normal function\n"
-        << "  -d                     enable use of derivatives\n"
-        << "  --nogui                don't open interactive display\n"
-        << "  --spp                  samples per pixel (default: 100) for output image when nogui\n"
-        << "  -o <outputfile>        image file to write result to\n"
-        << "                         (default: example_native.png)\n"
-        << "  -oaux                  output albedo and normal auxiliary buffers.\n"
-        << "  -p|--mdl_path <path>   mdl search path, can occur multiple times\n"
+        << "  -h|--help                  print this text and exit\n"
+        << "  -v|--version               print the MDL SDK version string and exit\n"
+        << "  --res <x> <y>              resolution (default: 700x520)\n"
+        << "  --hdr <filename>           environment map\n"
+        << "                             (default: nvidia/sdk_examples/resources/environment.hdr)\n"
+        << "  --cc                       use class compilation\n"
+        << "  --cr                       use custom texture runtime\n"
+        << "  --allowed_scatter_mode <m> limits the allowed scatter mode to \"none\", \"reflect\", "
+        << "\"transmit\" or \"reflect_and_transmit\" (default: restriction disabled)\n"
+        << "  --an                       use adapt normal function\n"
+        << "  -d                         enable use of derivatives\n"
+        << "  --nogui                    don't open interactive display\n"
+        << "  --spp                      samples per pixel (default: 100) for output image when "
+           "nogui\n"
+        << "  -o <outputfile>            image file to write result to\n"
+        << "                             (default: example_native.png)\n"
+        << "  -oaux                      output albedo and normal auxiliary buffers\n"
+        << "  -p|--mdl_path <path>       mdl search path, can occur multiple times\n"
         << "\n"
         << "Viewport controls:\n"
         << "  Mouse               Camera rotation, zoom\n"
@@ -1949,6 +1987,24 @@ int MAIN_UTF8(int argc, char *argv[])
             {
                 options.use_custom_tex_runtime = true;
             }
+            else if (strcmp(opt, "--allowed_scatter_mode") == 0 && i < argc - 1)
+            {
+                options.enable_bsdf_flags = true;
+                char const *mode = argv[++i];
+                if (strcmp(mode, "none") == 0) {
+                    options.allowed_scatter_mode = mi::neuraylib::DF_FLAGS_NONE;
+                } else if (strcmp(mode, "reflect") == 0) {
+                    options.allowed_scatter_mode = mi::neuraylib::DF_FLAGS_ALLOW_REFLECT;
+                } else if (strcmp(mode, "transmit") == 0) {
+                    options.allowed_scatter_mode = mi::neuraylib::DF_FLAGS_ALLOW_TRANSMIT;
+                } else if (strcmp(mode, "reflect_and_transmit") == 0) {
+                    options.allowed_scatter_mode =
+                        mi::neuraylib::DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT;
+                } else {
+                    std::cout << "Unknown allowed_scatter_mode: \"" << mode << "\"" << std::endl;
+                    usage(argv[0]);
+                }
+            }
             else if (strcmp(opt, "--an") == 0)
             {
                 options.use_adapt_normal = true;
@@ -2019,8 +2075,9 @@ int MAIN_UTF8(int argc, char *argv[])
     if (ret != 0)
         exit_failure("Failed to initialize the SDK. Result code: %d", ret);
 
-    // Enable/Disable auxiliary buffers
+    // Set some render flags
     rc.render_auxiliary = options.output_auxiliary;
+    rc.bsdf_data_flags = options.allowed_scatter_mode;
 
     {
         // Create a transaction
@@ -2028,6 +2085,9 @@ int MAIN_UTF8(int argc, char *argv[])
             neuray->get_api_component<mi::neuraylib::IDatabase>());
         mi::base::Handle<mi::neuraylib::IScope> scope(database->get_global_scope());
         mi::base::Handle<mi::neuraylib::ITransaction> transaction(scope->create_transaction());
+
+        mi::base::Handle<mi::neuraylib::IFactory> factory(
+            neuray->get_api_component<mi::neuraylib::IFactory>());
 
         // Acquire image API needed to prepare the textures
         mi::base::Handle<mi::neuraylib::IImage_api> image_api(
@@ -2063,6 +2123,7 @@ int MAIN_UTF8(int argc, char *argv[])
             std::string compilation_name
                 = std::string("compilation of ") + instance_name;
             compile_material_instance(
+                mdl_factory.get(),
                 transaction.get(),
                 context.get(),
                 instance_name.c_str(),
@@ -2078,7 +2139,8 @@ int MAIN_UTF8(int argc, char *argv[])
                 compilation_name.c_str(),
                 options.use_custom_tex_runtime,
                 options.use_adapt_normal,
-                options.enable_derivatives);
+                options.enable_derivatives,
+                options.enable_bsdf_flags);
         }
 
         // Setup custom texture handler, if requested
@@ -2285,14 +2347,14 @@ int MAIN_UTF8(int argc, char *argv[])
 
             // save screenshot
             save_screenshot(vp_buffers.accum_buffer, window_width, window_height,
-                filename_base + filename_ext, image_api, mdl_impexp_api);
+                filename_base + filename_ext, factory, image_api, mdl_impexp_api);
 
             if (options.output_auxiliary)
             {
                 save_screenshot(vp_buffers.albedo_buffer, window_width, window_height,
-                    filename_base + "_albedo" + filename_ext, image_api, mdl_impexp_api);
+                    filename_base + "_albedo" + filename_ext, factory, image_api, mdl_impexp_api);
                 save_screenshot(vp_buffers.normal_buffer, window_width, window_height,
-                    filename_base + "_normal" + filename_ext, image_api, mdl_impexp_api);
+                    filename_base + "_normal" + filename_ext, factory, image_api, mdl_impexp_api);
             }
         }
         else // interactive renderer
@@ -2389,14 +2451,16 @@ int MAIN_UTF8(int argc, char *argv[])
                 if (window_context.save_sreenshot && !ImGui::GetIO().WantCaptureMouse)
                 {
                     save_screenshot(vp_buffers.accum_buffer, window_width, window_height,
-                        filename_base + filename_ext, image_api, mdl_impexp_api);
+                        filename_base + filename_ext, factory, image_api, mdl_impexp_api);
 
                     if (options.output_auxiliary)
                     {
                         save_screenshot(vp_buffers.albedo_buffer, window_width, window_height,
-                            filename_base + "_albedo" + filename_ext, image_api, mdl_impexp_api);
+                            filename_base + "_albedo" + filename_ext, factory, image_api,
+                            mdl_impexp_api);
                         save_screenshot(vp_buffers.normal_buffer, window_width, window_height,
-                            filename_base + "_normal" + filename_ext, image_api, mdl_impexp_api);
+                            filename_base + "_normal" + filename_ext, factory, image_api,
+                            mdl_impexp_api);
                     }
                 }
 
@@ -2506,15 +2570,14 @@ int MAIN_UTF8(int argc, char *argv[])
             glfwTerminate();
         }
 
-
         // free environment image
         image = nullptr;
 
+        // Uninitialize the render context
+        rc.uninit();
+
         transaction->commit();
     }
-
-    // Uninitialize the render context
-    rc.uninit();
 
     // Shut down the MDL SDK
     if (neuray->shutdown() != 0)

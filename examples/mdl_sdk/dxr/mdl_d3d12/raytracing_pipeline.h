@@ -354,6 +354,13 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
         size_t get_ray_type_count() const { return m_ray_type_count;  }
 
+
+        /// Get the heap index of the top level acceleration structure.
+        /// The index can be used directly in the shader code.
+        virtual uint32_t get_resource_heap_index() const {
+            return m_top_level_structure_heap_index;
+        }
+
         ID3D12Resource* get_resource() { return m_top_level_structure.Get(); }
         bool get_shader_resource_view_description(D3D12_SHADER_RESOURCE_VIEW_DESC& desc) const;
 
@@ -372,6 +379,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         ComPtr<ID3D12Resource> m_instance_buffer;
         ComPtr<ID3D12Resource> m_top_level_structure;
         ComPtr<ID3D12Resource> m_scratch_resource;
+        Descriptor_heap_handle m_top_level_structure_heap_index;
 
         bool build_bottom_level_structure(D3DCommandList* command_list, size_t blas_index);
         bool build_top_level_structure(D3DCommandList* command_list, bool update);

@@ -83,7 +83,7 @@ struct Options {
 // Bake the material sub-expressions created with the PTX backend into an image with the given
 // resolution and the given number of samples for super-sampling and export it.
 void bake_expression_cuda_ptx(
-    std::vector<std::unique_ptr<Ptx_code> > const &target_codes,
+    std::vector<std::unique_ptr<Target_code> > const &target_codes,
     Options                                       &options,
     mi::Uint32                                    num_samples)
 {
@@ -226,10 +226,14 @@ int MAIN_UTF8(int argc, char* argv[])
     check_success(mdl_compiler);
 
     {
-        Material_ptx_compiler mc(
+        mi::Uint32 backend_options =
+            options.enable_derivatives ? BACKEND_OPTIONS_ENABLE_DERIVATIVES : BACKEND_OPTIONS_NONE;
+
+        Material_backend_compiler mc(
             mdl_compiler.get(),
+            /*target_backend*/ mi::mdl::ICode_generator::TL_PTX,
             /*num_texture_results=*/ 0,
-            options.enable_derivatives,
+            backend_options,
             /*df_handle_mode=*/ "none",
             /*handle_return_mode=*/ "default");
 
@@ -262,8 +266,8 @@ int MAIN_UTF8(int argc, char* argv[])
             mc.print_messages();
         } else {
             // Generate the CUDA PTX code for the link unit.
-            std::vector<std::unique_ptr<Ptx_code> > ptx_codes;
-            ptx_codes.push_back(std::unique_ptr<Ptx_code>(mc.generate_cuda_ptx()));
+            std::vector<std::unique_ptr<Target_code> > ptx_codes;
+            ptx_codes.push_back(std::unique_ptr<Target_code>(mc.generate_target_code()));
 
             // Bake the material sub-expressions into a canvas
             CUcontext cuda_context = init_cuda();

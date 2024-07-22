@@ -125,7 +125,7 @@ public:
         C_ERRTRACE,        ///< ??? (base/hal/msg, render/render/softshader)
         C_MISC,            ///< other
         C_DISKTRACE,       ///< opened files and directories (base/hal/disk)
-        C_COMPILER,        ///< MetaSL compiler
+        C_COMPILER,        ///< MDL compiler
         NUM_OF_CATEGORIES, ///< number of distinct categories
 
         /// All categories set.
@@ -420,9 +420,8 @@ protected:
     using Det = mi::base::Message_details;
 };
 
-/// This typedef is for backwards compatibility with old code that used MI::LOG::Mod_log to access
-/// the main ILogger instance.
-typedef ILogger Mod_log;
+/// For backwards compatibility.
+using Mod_log = ILogger;
 
 /// This variable is used to access the main ILogger instance.
 ///

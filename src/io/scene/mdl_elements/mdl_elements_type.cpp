@@ -36,11 +36,11 @@
 
 #include <cstring>
 #include <sstream>
+#include <utility>
 
 #include <boost/core/ignore_unused.hpp>
 
 #include <base/system/main/access_module.h>
-#include <base/system/stlext/i_stlext_likely.h>
 #include <base/util/string_utils/i_string_lexicographic_cast.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/mem/i_mem_consumption.h>
@@ -52,6 +52,170 @@
 namespace MI {
 
 namespace MDL {
+
+class Struct_category final : public mi::base::Interface_implement<IStruct_category>
+{
+public:
+    Struct_category(
+        Type_factory *owner,
+        const char* symbol,
+        IStruct_category::Predefined_id id,
+        const mi::base::Handle<const IAnnotation_block>& annotations)
+      : m_owner( owner, mi::base::DUP_INTERFACE),
+        m_symbol( symbol),
+        m_predefined_id( id),
+        m_annotations( annotations)
+    {
+    }
+
+    const char* get_symbol() const final { return m_symbol.c_str(); }
+
+    IStruct_category::Predefined_id get_predefined_id() const final { return m_predefined_id; }
+
+    const IAnnotation_block* get_annotations() const final
+    {
+        if( !m_annotations)
+            return nullptr;
+
+        m_annotations->retain();
+        return m_annotations.get();
+    }
+
+    mi::Uint32 release() const final
+    {
+        mi::Uint32 count = --refcount();
+        if( count > 0)
+            return count;
+
+        // TODO MDL-957 The remainder of this method is not thread-safe.
+        std::unique_lock<Type_factory> lock( *m_owner.get());
+        count = refcount();
+        if( count > 0)
+            return count;
+
+        m_owner->unregister_struct_category( this);
+
+        lock.unlock();
+        delete this;
+        return 0;
+    }
+
+    mi::Size get_memory_consumption() const final
+    {
+        mi::Size size = sizeof( *this)
+            + dynamic_memory_consumption( m_symbol)
+            + dynamic_memory_consumption( m_annotations);
+        return size;
+    }
+
+private:
+    mutable mi::base::Handle<Type_factory> m_owner;
+    const std::string m_symbol;
+    const IStruct_category::Predefined_id m_predefined_id;
+    const mi::base::Handle<const IAnnotation_block> m_annotations;
+};
+
+
+Struct_category_list::Struct_category_list( mi::Size initial_capacity)
+{
+    m_index_name.reserve( initial_capacity);
+    m_struct_categories.reserve( initial_capacity);
+}
+
+mi::Size Struct_category_list::get_size() const
+{
+    return m_struct_categories.size();
+}
+
+mi::Size Struct_category_list::get_index( const char* name) const
+{
+    if( !name)
+        return static_cast<mi::Size>( -1);
+
+    // For typical list sizes a linear search is much faster than maintaining a map from names to
+    // indices.
+    for( mi::Size i = 0; i < m_index_name.size(); ++i)
+        if( m_index_name[i] == name)
+            return i;
+
+    return static_cast<mi::Size>( -1);
+}
+
+const char* Struct_category_list::get_name( mi::Size index) const
+{
+    if( index >= m_index_name.size())
+        return nullptr;
+    return m_index_name[index].c_str();
+}
+
+const IStruct_category* Struct_category_list::get_struct_category( mi::Size index) const
+{
+    if( index >= m_struct_categories.size())
+        return nullptr;
+    m_struct_categories[index]->retain();
+    return m_struct_categories[index].get();
+}
+
+const IStruct_category* Struct_category_list::get_struct_category( const char* name) const
+{
+    if( !name)
+        return nullptr;
+    mi::Size index = get_index( name);
+    if( index == static_cast<mi::Size>( -1))
+        return nullptr;
+    return get_struct_category( index);
+}
+
+mi::Sint32 Struct_category_list::set_struct_category(
+    mi::Size index, const IStruct_category* struct_category)
+{
+    if( !struct_category)
+        return -1;
+    if( index >= m_struct_categories.size())
+        return -2;
+    m_struct_categories[index] = make_handle_dup( struct_category);
+    return 0;
+}
+
+mi::Sint32 Struct_category_list::set_struct_category(
+    const char* name, const IStruct_category* struct_category)
+{
+    if( !name || !struct_category)
+        return -1;
+    mi::Size index = get_index( name);
+    if( index == static_cast<mi::Size>( -1))
+        return -2;
+    m_struct_categories[index] = make_handle_dup( struct_category);
+    return 0;
+}
+
+mi::Sint32 Struct_category_list::add_struct_category(
+    const char* name, const IStruct_category* struct_category)
+{
+    if( !name || !struct_category)
+        return -1;
+    mi::Size index = get_index( name);
+    if( index != static_cast<mi::Size>( -1))
+        return -2;
+    m_struct_categories.push_back( make_handle_dup( struct_category));
+    m_index_name.push_back( name);
+    return 0;
+}
+
+void Struct_category_list::add_struct_category_unchecked(
+    const char* name, const IStruct_category* struct_category)
+{
+    m_struct_categories.push_back( make_handle_dup( struct_category));
+    m_index_name.push_back( name);
+}
+
+mi::Size Struct_category_list::get_memory_consumption() const
+{
+    return sizeof( *this)
+        + dynamic_memory_consumption( m_index_name)
+        + dynamic_memory_consumption( m_struct_categories);
+}
+
 
 namespace TYPES {
 
@@ -68,28 +232,28 @@ public:
     }
 
     /// Always returns 1.
-    virtual mi::Uint32 retain() const final { return 1; }
+    mi::Uint32 retain() const final { return 1; }
 
     /// Always returns 1.
-    virtual mi::Uint32 release() const final { return 1; }
+     mi::Uint32 release() const final { return 1; }
 
-    virtual const mi::base::IInterface* get_interface( const mi::base::Uuid& interface_id) const
+    const mi::base::IInterface* get_interface( const mi::base::Uuid& interface_id) const override
     {
         return I::get_interface_static( this, interface_id);
     }
 
-    virtual mi::base::IInterface* get_interface( const mi::base::Uuid& interface_id)
+    mi::base::IInterface* get_interface( const mi::base::Uuid& interface_id) override
     {
         return I::get_interface_static( this, interface_id);
     }
 
-    mi::base::Uuid get_iid() const
+    mi::base::Uuid get_iid() const override
     {
         return typename I::IID();
     }
 
 protected:
-    virtual ~Interface_implement_singleton() {}
+    virtual ~Interface_implement_singleton() = default;
 };
 
 
@@ -106,6 +270,8 @@ public:
         this->retain();
         return this;
     }
+
+    bool is_declarative() const override { return false; }
 };
 
 
@@ -123,7 +289,7 @@ public:
         return this;
     }
 
-    mi::Size get_memory_consumption() const final { return 0; }
+    bool is_declarative() const override { return false; }
 };
 
 
@@ -165,13 +331,6 @@ public:
         return m_symbol.empty() ? nullptr : m_symbol.c_str();
     }
 
-    mi::Size get_memory_consumption() const final
-    {
-        return sizeof( *this)
-            + dynamic_memory_consumption( m_aliased_type)
-            + dynamic_memory_consumption( m_symbol);
-    }
-
 private:
     const mi::base::Handle<const IType> m_aliased_type;
     const mi::Sint32 m_modifiers;
@@ -183,7 +342,7 @@ class Type_bool final : public Type_base_immutable<IType_bool>
 {
 public:
     // user defined default constructor required to be const-default-constructible
-    Type_bool() {}
+    Type_bool() = default;
 };
 
 
@@ -191,7 +350,7 @@ class Type_int final : public Type_base_immutable<IType_int>
 {
 public:
     // user defined default constructor required to be const-default-constructible
-    Type_int() {}
+    Type_int() = default;
 };
 
 
@@ -202,15 +361,15 @@ public:
         Type_factory* owner,
         const char* symbol,
         IType_enum::Predefined_id id,
-        const IType_enum::Values& values,
-        const mi::base::Handle<const IAnnotation_block>& annotations,
-        const IType_enum::Value_annotations& value_annotations)
+        IType_enum::Values values,
+        mi::base::Handle<const IAnnotation_block> annotations,
+        IType_enum::Value_annotations value_annotations)
       : m_owner( owner, mi::base::DUP_INTERFACE),
         m_symbol( symbol),
         m_predefined_id( id),
-        m_values( values),
-        m_annotations( annotations),
-        m_value_annotations( value_annotations)
+        m_values( std::move( values)),
+        m_annotations( std::move( annotations)),
+        m_value_annotations( std::move( value_annotations))
     {
         ASSERT( M_SCENE,
             m_value_annotations.size() == m_values.size() || m_value_annotations.empty());
@@ -280,13 +439,6 @@ public:
         return m_value_annotations[index].get();
     }
 
-    mi::Size get_memory_consumption() const final
-    {
-        return sizeof( *this)
-            + dynamic_memory_consumption( m_symbol)
-            + dynamic_memory_consumption( m_values);
-    }
-
     mi::Uint32 release() const final
     {
         mi::Uint32 count = --refcount();
@@ -320,7 +472,7 @@ class Type_float final : public Type_base_immutable<IType_float>
 {
 public:
     // user defined default constructor required to be const-default-constructible
-    Type_float() {}
+    Type_float() = default;
 };
 
 
@@ -328,7 +480,7 @@ class Type_double final : public Type_base_immutable<IType_double>
 {
 public:
     // user defined default constructor required to be const-default-constructible
-    Type_double() {}
+    Type_double() = default;
 };
 
 
@@ -336,7 +488,7 @@ class Type_string final : public Type_base_immutable<IType_string>
 {
 public:
     // user defined default constructor required to be const-default-constructible
-    Type_string() {}
+    Type_string() = default;
 };
 
 
@@ -445,6 +597,8 @@ public:
     {
     }
 
+    bool is_declarative() const override { return m_element_type->is_declarative(); }
+
     const IType* get_component_type( mi::Size index) const final
     {
         if( m_immediate_sized && index >= m_immediate_size)
@@ -467,13 +621,6 @@ public:
         return m_immediate_sized ? nullptr : m_deferred_size.c_str();
     }
 
-    mi::Size get_memory_consumption() const final
-    {
-        return sizeof( *this)
-            + dynamic_memory_consumption( m_element_type)
-            + dynamic_memory_consumption( m_deferred_size);
-    }
-
 private:
     const mi::base::Handle<const IType> m_element_type;
     const bool m_immediate_sized;
@@ -493,17 +640,24 @@ public:
         IType_struct::Predefined_id id,
         const IType_struct::Fields& fields,
         const mi::base::Handle<const IAnnotation_block>& annotations,
-        const IType_struct::Field_annotations& field_annotations)
+        IType_struct::Field_annotations field_annotations,
+        bool is_declarative,
+        const IStruct_category* struct_category)
       : m_owner( owner, mi::base::DUP_INTERFACE),
         m_symbol( symbol),
         m_predefined_id( id),
         m_fields( fields),
         m_annotations( annotations),
-        m_field_annotations( field_annotations)
+        m_field_annotations( std::move( field_annotations)),
+        m_is_declarative( is_declarative),
+        m_struct_category( struct_category, mi::base::DUP_INTERFACE)
     {
         ASSERT( M_SCENE,
             m_field_annotations.size() == m_fields.size() || m_field_annotations.empty());
+        ASSERT( M_SCENE, !m_struct_category || m_is_declarative);
     }
+
+    bool is_declarative() const override { return m_is_declarative; }
 
     const IType* get_component_type( mi::Size index) const final
     {
@@ -561,12 +715,15 @@ public:
         return m_field_annotations[index].get();
     }
 
-    mi::Size get_memory_consumption() const final
+    const IStruct_category* get_struct_category() const final
     {
-        return sizeof( *this)
-            + dynamic_memory_consumption( m_symbol)
-            + dynamic_memory_consumption( m_fields);
+        if( !m_struct_category)
+            return nullptr;
+
+        m_struct_category->retain();
+        return m_struct_category.get();
     }
+
 
     mi::Uint32 release() const final
     {
@@ -594,6 +751,8 @@ private:
     const IType_struct::Fields m_fields;
     const mi::base::Handle<const IAnnotation_block> m_annotations;
     const IType_struct::Field_annotations m_field_annotations;
+    const bool m_is_declarative;
+    const mi::base::Handle<const IStruct_category> m_struct_category;
 };
 
 
@@ -616,7 +775,7 @@ class Type_light_profile final : public Type_base_immutable<IType_light_profile>
 {
 public:
     // user defined default constructor required to be const-default-constructible
-    Type_light_profile() {}
+    Type_light_profile() = default;
 };
 
 
@@ -624,7 +783,7 @@ class Type_bsdf_measurement final : public Type_base_immutable<IType_bsdf_measur
 {
 public:
     // user defined default constructor required to be const-default-constructible
-    Type_bsdf_measurement() {}
+    Type_bsdf_measurement() = default;
 };
 
 
@@ -632,7 +791,7 @@ class Type_bsdf final : public Type_base_immutable<IType_bsdf>
 {
 public:
     // user defined default constructor required to be const-default-constructible
-    Type_bsdf() {}
+    Type_bsdf() = default;
 };
 
 
@@ -640,7 +799,7 @@ class Type_hair_bsdf final : public Type_base_immutable<IType_hair_bsdf>
 {
 public:
     // user defined default constructor required to be const-default-constructible
-    Type_hair_bsdf() {}
+    Type_hair_bsdf() = default;
 };
 
 
@@ -648,7 +807,7 @@ class Type_edf final : public Type_base_immutable<IType_edf>
 {
 public:
     // user defined default constructor required to be const-default-constructible
-    Type_edf() {}
+    Type_edf() = default;
 };
 
 
@@ -656,7 +815,7 @@ class Type_vdf final : public Type_base_immutable<IType_vdf>
 {
 public:
     // user defined default constructor required to be const-default-constructible
-    Type_vdf() {}
+    Type_vdf() = default;
 };
 
 
@@ -817,6 +976,79 @@ mi::Size Type_list::get_memory_consumption() const
         + dynamic_memory_consumption( m_types);
 }
 
+const IStruct_category* Type_factory::create_struct_category( const char* symbol) const
+{
+    if( !symbol)
+        return nullptr;
+
+    std::shared_lock<std::shared_mutex> lock( m_mutex);
+
+    auto it = m_struct_category_symbols.find( symbol);
+    if( it == m_struct_category_symbols.end())
+        return nullptr;
+
+    it->second->retain();
+    return it->second;
+}
+
+IStruct_category_list* Type_factory::create_struct_category_list( mi::Size initial_capacity) const
+{
+    return new Struct_category_list( initial_capacity);
+}
+
+const IStruct_category* Type_factory::get_predefined_struct_category(
+    IStruct_category::Predefined_id id) const
+{
+    std::shared_lock<std::shared_mutex> lock( m_mutex);
+
+    auto it = m_struct_category_ids.find( id);
+    if( it == m_struct_category_ids.end())
+        return nullptr;
+
+    it->second->retain();
+    return it->second;
+}
+
+IStruct_category_list* Type_factory::clone( const IStruct_category_list* list) const
+{
+    if( !list)
+        return nullptr;
+
+    mi::Size n = list->get_size();
+    IStruct_category_list* result = create_struct_category_list( n);
+    for( mi::Size i = 0; i < n; ++i) {
+        mi::base::Handle<const IStruct_category> sc( list->get_struct_category( i));
+        const char* name = list->get_name( i);
+        result->add_struct_category_unchecked( name, sc.get());
+    }
+    return result;
+}
+
+mi::Sint32 Type_factory::compare( const IStruct_category* lhs, const IStruct_category* rhs) const
+{
+    return compare_static( lhs, rhs);
+}
+
+mi::Sint32 Type_factory::compare(
+    const IStruct_category_list* lhs, const IStruct_category_list* rhs) const
+{
+    return compare_static( lhs, rhs);
+}
+
+const mi::IString* Type_factory::dump(
+    const IStruct_category* struct_category, mi::Size depth) const
+{
+    std::ostringstream s;
+    dump( struct_category, depth, s);
+    return create_istring( s.str().c_str());
+}
+
+const mi::IString* Type_factory::dump( const IStruct_category_list* list, mi::Size depth) const
+{
+    std::ostringstream s;
+    dump( list, depth, s);
+    return create_istring( s.str().c_str());
+}
 
 const IType_alias* Type_factory::create_alias(
     const IType* type, mi::Uint32 modifiers, const char* symbol) const
@@ -841,7 +1073,7 @@ const IType_enum* Type_factory::create_enum( const char* symbol) const
 
     std::shared_lock<std::shared_mutex> lock( m_mutex);
 
-    Weak_enum_symbol_map::const_iterator it = m_enum_symbols.find( symbol);
+    auto it = m_enum_symbols.find( symbol);
     if( it == m_enum_symbols.end())
         return nullptr;
 
@@ -995,7 +1227,7 @@ const IType_struct* Type_factory::create_struct( const char* symbol) const
 
     std::shared_lock<std::shared_mutex> lock( m_mutex);
 
-    Weak_struct_symbol_map::const_iterator it = m_struct_symbols.find( symbol);
+    auto it = m_struct_symbols.find( symbol);
     if( it == m_struct_symbols.end())
         return nullptr;
 
@@ -1058,7 +1290,7 @@ const IType_enum* Type_factory::get_predefined_enum(
 {
     std::shared_lock<std::shared_mutex> lock( m_mutex);
 
-    Weak_enum_id_map::const_iterator it = m_enum_ids.find( id);
+    auto it = m_enum_ids.find( id);
     if( it == m_enum_ids.end())
         return nullptr;
 
@@ -1071,7 +1303,7 @@ const IType_struct* Type_factory::get_predefined_struct(
 {
     std::shared_lock<std::shared_mutex> lock( m_mutex);
 
-    Weak_struct_id_map::const_iterator it = m_struct_ids.find( id);
+    auto it = m_struct_ids.find( id);
     if( it == m_struct_ids.end())
         return nullptr;
 
@@ -1104,67 +1336,95 @@ mi::Sint32 Type_factory::compare( const IType_list* lhs, const IType_list* rhs) 
     return compare_static( lhs, rhs);
 }
 
-mi::Sint32 Type_factory::is_compatible( const IType* src, const IType* dst) const
+mi::Sint32 Type_factory::is_compatible( const IType* lhs, const IType* rhs) const
 {
-    if( !src || !dst)
+    if( !lhs || !rhs)
         return -1;
 
-    if( compare_static( src, dst) == 0)
+    if( compare_static( lhs, rhs) == 0)
         return 1;
 
-    IType::Kind src_kind = src->get_kind();
-    IType::Kind dst_kind = dst->get_kind();
+    IType::Kind lhs_kind = lhs->get_kind();
+    IType::Kind rhs_kind = rhs->get_kind();
 
-    if( src_kind == IType::TK_STRUCT && dst_kind == IType::TK_STRUCT) {
+    if( lhs_kind == IType::TK_STRUCT && rhs_kind == IType::TK_STRUCT) {
 
-        mi::base::Handle<const IType_struct> src_str( src->get_interface<IType_struct>());
-        mi::base::Handle<const IType_struct> dst_str( dst->get_interface<IType_struct>());
+        mi::base::Handle<const IType_struct> lhs_str( lhs->get_interface<IType_struct>());
+        mi::base::Handle<const IType_struct> rhs_str( rhs->get_interface<IType_struct>());
 
-        // For compatibility, all field types need to be pairwise compatible.
+        // For compatibility, structs must be conventional and all field types need to be pairwise
+        // compatible.
 
-        if( src_str->get_size() != dst_str->get_size())
+        if( lhs_str->is_declarative() || rhs_str->is_declarative())
             return -1;
 
-        for( mi::Size i = 0, n = src_str->get_size(); i < n; ++i) {
-            mi::base::Handle<const IType> src_field_type( src_str->get_field_type( i));
-            mi::base::Handle<const IType> dst_field_type( dst_str->get_field_type( i));
-            if( is_compatible( src_field_type.get(), dst_field_type.get()) < 0)
+        if( lhs_str->get_size() != rhs_str->get_size())
+            return -1;
+
+        for( mi::Size i = 0, n = lhs_str->get_size(); i < n; ++i) {
+            mi::base::Handle<const IType> lhs_field_type( lhs_str->get_field_type( i));
+            mi::base::Handle<const IType> rhs_field_type( rhs_str->get_field_type( i));
+            if( is_compatible( lhs_field_type.get(), rhs_field_type.get()) < 0)
                 return -1;
         }
         return 0;
 
-    } else if( src_kind == IType::TK_ENUM && dst_kind == IType::TK_ENUM) {
+    } else if( lhs_kind == IType::TK_ENUM && rhs_kind == IType::TK_ENUM) {
 
-        mi::base::Handle<const IType_enum> src_e( src->get_interface<IType_enum>());
-        mi::base::Handle<const IType_enum> dst_e( dst->get_interface<IType_enum>());
+        mi::base::Handle<const IType_enum> lhs_e( lhs->get_interface<IType_enum>());
+        mi::base::Handle<const IType_enum> rhs_e( rhs->get_interface<IType_enum>());
 
         // For compatibility, the sets of value codes need to be equal.
 
-        std::set<mi::Uint32> src_codes;
-        for( mi::Size i = 0, n = src_e->get_size(); i < n; ++i)
-            src_codes.insert( src_e->get_value_code( i));
-        std::set<mi::Uint32> dst_codes;
-        for( mi::Size i = 0, n = dst_e->get_size(); i < n; ++i)
-            dst_codes.insert( dst_e->get_value_code( i));
-        return src_codes == dst_codes ? 0 : -1;
+        std::set<mi::Uint32> lhs_codes;
+        for( mi::Size i = 0, n = lhs_e->get_size(); i < n; ++i)
+            lhs_codes.insert( lhs_e->get_value_code( i));
+        std::set<mi::Uint32> rhs_codes;
+        for( mi::Size i = 0, n = rhs_e->get_size(); i < n; ++i)
+            rhs_codes.insert( rhs_e->get_value_code( i));
+        return lhs_codes == rhs_codes ? 0 : -1;
 
-    } else if( src_kind == IType::TK_ARRAY && dst_kind == IType::TK_ARRAY) {
+    } else if( lhs_kind == IType::TK_ARRAY && rhs_kind == IType::TK_ARRAY) {
 
-        mi::base::Handle<const IType_array> src_a( src->get_interface<IType_array>());
-        mi::base::Handle<const IType_array> dst_a( dst->get_interface<IType_array>());
+        mi::base::Handle<const IType_array> lhs_a( lhs->get_interface<IType_array>());
+        mi::base::Handle<const IType_array> rhs_a( rhs->get_interface<IType_array>());
 
         // For compatibility, both need to be either immediate-sized or deferred-sized,
         // sizes need to match and element types need to be compatible.
 
-        if( src_a->get_size() != dst_a->get_size())
+        if( lhs_a->get_size() != rhs_a->get_size())
             return -1;
 
-        mi::base::Handle<const IType> src_a_elem_type( src_a->get_element_type());
-        mi::base::Handle<const IType> dst_a_elem_type( dst_a->get_element_type());
-        return is_compatible( src_a_elem_type.get(), dst_a_elem_type.get());
+        mi::base::Handle<const IType> lhs_a_elem_type( lhs_a->get_element_type());
+        mi::base::Handle<const IType> rhs_a_elem_type( rhs_a->get_element_type());
+        return is_compatible( lhs_a_elem_type.get(), rhs_a_elem_type.get());
     }
 
     return -1;
+}
+
+mi::Sint32 Type_factory::from_same_struct_category( const IType* lhs, const IType* rhs) const
+{
+    mi::base::Handle<const IType_struct> lhs_struct( lhs->get_interface<IType_struct>());
+    if( !lhs_struct)
+        return -1;
+
+    mi::base::Handle<const IType_struct> rhs_struct( rhs->get_interface<IType_struct>());
+    if( !rhs_struct)
+        return -1;
+
+    mi::base::Handle<const IStruct_category> lhs_sc( lhs_struct->get_struct_category());
+    if( !lhs_sc)
+        return -1;
+
+    mi::base::Handle<const IStruct_category> rhs_sc( rhs_struct->get_struct_category());
+    if( !rhs_sc)
+        return -1;
+
+    if( lhs_struct.get() == rhs_struct.get())
+        return 1;
+
+    return compare_static( lhs_sc.get(), rhs_sc.get()) == 0 ? 0 : -1;
 }
 
 namespace {
@@ -1249,9 +1509,9 @@ const IType* Type_factory::create_from_mdl_type_name( const char* name) const
         if( !element_type)
             return nullptr;
         std::string size_name = s.substr( left_bracket+1, n-1-left_bracket-1);
-        STLEXT::Likely<mi::Size> size_likely = STRING::lexicographic_cast_s<mi::Size>( size_name);
-        if( size_likely.get_status())
-            return create_immediate_sized_array( element_type.get(), *size_likely.get_ptr());
+        std::optional<mi::Size> size_optional = STRING::lexicographic_cast_s<mi::Size>( size_name);
+        if( size_optional.has_value())
+            return create_immediate_sized_array( element_type.get(), size_optional.value());
         else
             return create_deferred_sized_array( element_type.get(), size_name.c_str());
     }
@@ -1345,6 +1605,62 @@ const IType* Type_factory::create_from_mdl_type_name( const char* name) const
     return nullptr;
 }
 
+const IStruct_category* Type_factory::create_struct_category(
+    const char* symbol,
+    IStruct_category::Predefined_id id,
+    mi::base::Handle<const IAnnotation_block>& annotations,
+    mi::Sint32* errors)
+{
+    if( !symbol) {
+        *errors = -1;
+        return nullptr;
+    }
+    if( !is_absolute( symbol)) {
+        *errors = -2;
+        return nullptr;
+    }
+
+    {
+        std::shared_lock<std::shared_mutex> lock( m_mutex);
+        const IStruct_category* result = lookup_struct_category( symbol, id, errors);
+        if( result || ( *errors != 0))
+            return result;
+    }
+    {
+        // Acquire unique lock in order to modify the maps.
+        std::unique_lock<std::shared_mutex> lock( m_mutex);
+        // Repeat lookup. Another thread might have modified the maps between release of the shared
+        // lock and acquisition of the unique lock.
+        const IStruct_category* result = lookup_struct_category( symbol, id, errors);
+        if( result || ( *errors != 0))
+            return result;
+
+        // Check that the symbol is not yet registered for an enum type.
+        if( m_enum_symbols.find( symbol) != m_enum_symbols.end()) {
+            *errors = -3;
+            return nullptr;
+        }
+
+        // Check that the symbol is not yet registered for a struct type.
+        if( m_struct_symbols.find( symbol) != m_struct_symbols.end()) {
+            *errors = -3;
+            return nullptr;
+        }
+
+        // Modify maps.
+        const IStruct_category* struct_category = new Struct_category(
+            this, symbol, id, annotations);
+        m_struct_category_symbols[symbol] = struct_category;
+        if( id != IStruct_category::CID_USER) {
+            ASSERT( M_SCENE, !m_struct_category_ids[id]);
+            m_struct_category_ids[id] = struct_category;
+        }
+
+        *errors = 0;
+        return struct_category;
+    }
+}
+
 const IType_enum* Type_factory::create_enum(
     const char* symbol,
     IType_enum::Predefined_id id,
@@ -1377,6 +1693,18 @@ const IType_enum* Type_factory::create_enum(
         if( result || ( *errors != 0))
             return result;
 
+        // Check that the symbol is not yet registered for a struct category.
+        if( m_struct_category_symbols.find( symbol) != m_struct_category_symbols.end()) {
+            *errors = -3;
+            return nullptr;
+        }
+
+        // Check that the symbol is not yet registered for a struct type.
+        if( m_struct_symbols.find( symbol) != m_struct_symbols.end()) {
+            *errors = -3;
+            return nullptr;
+        }
+
         // Modify maps.
         const IType_enum* type = new TYPES::Type_enum(
             this, symbol, id, values, annotations, value_annotations);
@@ -1397,9 +1725,11 @@ const IType_struct* Type_factory::create_struct(
     const IType_struct::Fields& fields,
     mi::base::Handle<const IAnnotation_block>& annotations,
     const IType_struct::Field_annotations& field_annotations,
+    bool is_declarative,
+    const IStruct_category* struct_category,
     mi::Sint32* errors)
 {
-    if( !symbol || fields.empty()) {
+    if( !symbol || (struct_category && !is_declarative)) {
         *errors = -1;
         return nullptr;
     }
@@ -1410,7 +1740,8 @@ const IType_struct* Type_factory::create_struct(
 
     {
         std::shared_lock<std::shared_mutex> lock( m_mutex);
-        const IType_struct* result = lookup_struct( symbol, id, fields, errors);
+        const IType_struct* result = lookup_struct(
+            symbol, id, fields, is_declarative, struct_category, errors);
         if( result || ( *errors != 0))
             return result;
     }
@@ -1419,13 +1750,33 @@ const IType_struct* Type_factory::create_struct(
         std::unique_lock<std::shared_mutex> lock( m_mutex);
         // Repeat lookup. Another thread might have modified the maps between release of the shared
         // lock and acquisition of the unique lock.
-        const IType_struct* result = lookup_struct( symbol, id, fields, errors);
+        const IType_struct* result = lookup_struct(
+            symbol, id, fields, is_declarative, struct_category, errors);
         if( result || ( *errors != 0))
             return result;
 
+        // Check that the symbol is not yet registered for a struct category.
+        if( m_struct_category_symbols.find( symbol) != m_struct_category_symbols.end()) {
+            *errors = -3;
+            return nullptr;
+        }
+
+        // Check that the symbol is not yet registered for an enum type.
+        if( m_enum_symbols.find( symbol) != m_enum_symbols.end()) {
+            *errors = -3;
+            return nullptr;
+        }
+
         // Modify maps.
         const IType_struct* type = new TYPES::Type_struct(
-            this, symbol, id, fields, annotations, field_annotations);
+            this,
+            symbol,
+            id,
+            fields,
+            annotations,
+            field_annotations,
+            is_declarative,
+            struct_category);
         m_struct_symbols[symbol] = type;
         if( id != IType_struct::SID_USER) {
             ASSERT( M_SCENE, !m_struct_ids[id]);
@@ -1435,6 +1786,70 @@ const IType_struct* Type_factory::create_struct(
         *errors = 0;
         return type;
     }
+}
+
+void Type_factory::serialize_struct_category(
+    SERIAL::Serializer* serializer, const IStruct_category* struct_category) const
+{
+    mi::base::Handle<IExpression_factory> ef( get_expression_factory());
+    SERIAL::write( serializer, std::string( struct_category->get_symbol()));
+    SERIAL::write( serializer, struct_category->get_predefined_id());
+    mi::base::Handle<const IAnnotation_block> annotations( struct_category->get_annotations());
+    ef->serialize_annotation_block( serializer, annotations.get());
+}
+
+const IStruct_category* Type_factory::deserialize_struct_category(
+    SERIAL::Deserializer* deserializer)
+{
+    mi::base::Handle<IExpression_factory> ef( get_expression_factory());
+
+    std::string symbol;
+    SERIAL::read( deserializer, &symbol);
+    mi::Uint32 id_uint32;
+    SERIAL::read( deserializer, &id_uint32);
+    auto id = static_cast<IStruct_category::Predefined_id>( id_uint32);
+    mi::base::Handle<const IAnnotation_block> annotations(
+        ef->deserialize_annotation_block( deserializer));
+
+    mi::Sint32 errors = 0;
+    const IStruct_category* result = create_struct_category(
+        symbol.c_str(), id, annotations, &errors);
+    if( errors != 0 || !result) {
+        ASSERT( M_SCENE, errors != 0 && !result);
+        LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
+            "Category mismatch for struct category \"%s\".", symbol.c_str());
+        return nullptr;
+    }
+    return result;
+}
+
+void Type_factory::serialize_struct_category_list(
+    SERIAL::Serializer* serializer, const IStruct_category_list* list) const
+{
+    const auto* list_impl = static_cast<const Struct_category_list*>( list);
+
+    write( serializer, list_impl->m_index_name);
+
+    mi::Size size = list_impl->m_struct_categories.size();
+    SERIAL::write( serializer, size);
+    for( mi::Size i = 0; i < size; ++i)
+        serialize_struct_category( serializer, list_impl->m_struct_categories[i].get());
+}
+
+IStruct_category_list* Type_factory::deserialize_struct_category_list(
+     SERIAL::Deserializer* deserializer)
+{
+    auto* list_impl = new Struct_category_list( /*initial_capacity*/ 0);
+
+    read( deserializer, &list_impl->m_index_name);
+
+    mi::Size size;
+    SERIAL::read( deserializer, &size);
+    list_impl->m_struct_categories.resize( size);
+    for( mi::Size i = 0; i < size; ++i)
+        list_impl->m_struct_categories[i] = deserialize_struct_category( deserializer);
+
+    return list_impl;
 }
 
 void Type_factory::serialize( SERIAL::Serializer* serializer, const IType* type) const
@@ -1532,6 +1947,13 @@ void Type_factory::serialize( SERIAL::Serializer* serializer, const IType* type)
                     type_struct->get_field_annotations( i));
                 ef->serialize_annotation_block( serializer, field_annotations.get());
             }
+            SERIAL::write( serializer, type_struct->is_declarative());
+            mi::base::Handle<const IStruct_category> struct_category(
+                type_struct->get_struct_category());
+            bool has_struct_category = !!struct_category;
+            SERIAL::write( serializer, has_struct_category);
+            if( has_struct_category)
+                serialize_struct_category( serializer, struct_category.get());
             return;
         }
 
@@ -1554,7 +1976,7 @@ const IType* Type_factory::deserialize( SERIAL::Deserializer* deserializer)
 {
     mi::Uint32 kind_as_uint32;
     SERIAL::read( deserializer, &kind_as_uint32);
-    IType::Kind kind = static_cast<IType::Kind>( kind_as_uint32);
+    auto kind = static_cast<IType::Kind>( kind_as_uint32);
 
     switch( kind) {
 
@@ -1591,7 +2013,7 @@ const IType* Type_factory::deserialize( SERIAL::Deserializer* deserializer)
             SERIAL::read( deserializer, &symbol);
             mi::Uint32 id_uint32;
             SERIAL::read( deserializer, &id_uint32);
-            IType_enum::Predefined_id id = static_cast<IType_enum::Predefined_id>( id_uint32);
+            auto id = static_cast<IType_enum::Predefined_id>( id_uint32);
             mi::Size count;
             SERIAL::read( deserializer, &count);
             IType_enum::Values values( count);
@@ -1663,7 +2085,7 @@ const IType* Type_factory::deserialize( SERIAL::Deserializer* deserializer)
             SERIAL::read( deserializer, &symbol);
             mi::Uint32 id_uint32;
             SERIAL::read( deserializer, &id_uint32);
-            IType_struct::Predefined_id id = static_cast<IType_struct::Predefined_id>( id_uint32);
+            auto id = static_cast<IType_struct::Predefined_id>( id_uint32);
             mi::Size count;
             SERIAL::read( deserializer, &count);
             IType_struct::Fields fields( count);
@@ -1676,10 +2098,24 @@ const IType* Type_factory::deserialize( SERIAL::Deserializer* deserializer)
             IType_struct::Field_annotations field_annotations( count);
             for( mi::Size i = 0; i < count; ++i)
                 field_annotations[i] = ef->deserialize_annotation_block( deserializer);
+            bool is_declarative = false;
+            SERIAL::read( deserializer, &is_declarative);
+            bool has_struct_category = false;
+            SERIAL::read( deserializer, &has_struct_category);
+            mi::base::Handle<const IStruct_category> struct_category;
+            if( has_struct_category)
+                struct_category = deserialize_struct_category( deserializer);
 
             mi::Sint32 errors = 0;
             const IType_struct* result = create_struct(
-                symbol.c_str(), id, fields, annotations, field_annotations, &errors);
+                symbol.c_str(),
+                id,
+                fields,
+                annotations,
+                field_annotations,
+                is_declarative,
+                struct_category.get(),
+                &errors);
             if( errors != 0 || !result) {
                 ASSERT( M_SCENE, errors != 0 && !result);
                 LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
@@ -1692,7 +2128,7 @@ const IType* Type_factory::deserialize( SERIAL::Deserializer* deserializer)
         case IType::TK_TEXTURE: {
             mi::Uint32 shape_as_uint32;
             SERIAL::read( deserializer, &shape_as_uint32);
-            IType_texture::Shape shape = static_cast<IType_texture::Shape>( shape_as_uint32);
+            auto shape = static_cast<IType_texture::Shape>( shape_as_uint32);
             return create_texture( shape);
         }
 
@@ -1707,7 +2143,7 @@ const IType* Type_factory::deserialize( SERIAL::Deserializer* deserializer)
 
 void Type_factory::serialize_list( SERIAL::Serializer* serializer, const IType_list* list) const
 {
-    const Type_list* list_impl = static_cast<const Type_list*>( list);
+    const auto* list_impl = static_cast<const Type_list*>( list);
 
     write( serializer, list_impl->m_index_name);
 
@@ -1719,7 +2155,7 @@ void Type_factory::serialize_list( SERIAL::Serializer* serializer, const IType_l
 
 IType_list* Type_factory::deserialize_list( SERIAL::Deserializer* deserializer)
 {
-    Type_list* list_impl = new Type_list( /*initial_capacity*/ 0);
+    auto* list_impl = new Type_list( /*initial_capacity*/ 0);
 
     read( deserializer, &list_impl->m_index_name);
 
@@ -1730,6 +2166,54 @@ IType_list* Type_factory::deserialize_list( SERIAL::Deserializer* deserializer)
         list_impl->m_types[i] = deserialize( deserializer);
 
     return list_impl;
+}
+
+mi::Sint32 Type_factory::compare_static( const IStruct_category* lhs, const IStruct_category* rhs)
+{
+    if( lhs == rhs)
+        return 0;
+
+    if( !lhs && !rhs) return  0;
+    if( !lhs &&  rhs) return -1;
+    if(  lhs && !rhs) return +1;
+    ASSERT( M_SCENE, lhs && rhs);
+
+    mi::Sint32 result = strcmp( lhs->get_symbol(), rhs->get_symbol());
+    if( result < 0) return -1;
+    if( result > 0) return +1;
+    return 0;
+}
+
+mi::Sint32 Type_factory::compare_static(
+    const IStruct_category_list* lhs, const IStruct_category_list* rhs)
+{
+    if( lhs == rhs)
+        return 0;
+
+    if( !lhs && !rhs) return  0;
+    if( !lhs &&  rhs) return -1;
+    if(  lhs && !rhs) return +1;
+    ASSERT( M_SCENE, lhs && rhs);
+
+    mi::Size lhs_n = lhs->get_size(); //-V522 PVS
+    mi::Size rhs_n = rhs->get_size(); //-V522 PVS
+    if( lhs_n < rhs_n) return -1;
+    if( lhs_n > rhs_n) return +1;
+
+    for( mi::Size i = 0; i < lhs_n; ++i) {
+        const char* lhs_name = lhs->get_name( i);
+        const char* rhs_name = rhs->get_name( i);
+        mi::Sint32 result = strcmp( lhs_name, rhs_name);
+        if( result < 0) return -1;
+        if( result > 0) return +1;
+        mi::base::Handle<const IStruct_category> lhs_sc( lhs->get_struct_category( i));
+        mi::base::Handle<const IStruct_category> rhs_sc( rhs->get_struct_category( i));
+        result = compare_static( lhs_sc.get(), rhs_sc.get());
+        if( result != 0)
+            return result;
+    }
+
+    return 0;
 }
 
 mi::Sint32 Type_factory::compare_static( const IType* lhs, const IType* rhs)
@@ -1915,7 +2399,7 @@ std::string Type_factory::get_dump_type_name( const IType* type, bool include_al
     }
 
     ASSERT( M_SCENE, false);
-    return std::string();
+    return {};
 }
 
 std::string Type_factory::get_mdl_type_name_static( const IType* type)
@@ -1968,12 +2452,12 @@ std::string Type_factory::get_mdl_type_name_static( const IType* type)
                 case IType_enum::EID_TEX_GAMMA_MODE:
                     return symbol;
                 case IType_enum::EID_INTENSITY_MODE:
-                    return remove_prefix_for_builtin_type_name( symbol, /*compare_string*/ false);
+                    return remove_prefix_for_builtin_type_name( symbol, /*check_string*/ false);
                 case IType_enum::EID_FORCE_32_BIT:
                     break;
             }
             ASSERT( M_SCENE, false);
-            return std::string();
+            return {};
         }
         case IType::TK_VECTOR: {
             mi::base::Handle<const IType_vector> type_vector(
@@ -2009,12 +2493,12 @@ std::string Type_factory::get_mdl_type_name_static( const IType* type)
                 case IType_struct::SID_MATERIAL_VOLUME:
                 case IType_struct::SID_MATERIAL_GEOMETRY:
                 case IType_struct::SID_MATERIAL:
-                    return remove_prefix_for_builtin_type_name( symbol, /*compare_string*/ false);
+                    return remove_prefix_for_builtin_type_name( symbol, /*check_string*/ false);
                 case IType_struct::SID_FORCE_32_BIT:
                     break;
             }
             ASSERT( M_SCENE, false);
-            return std::string();
+            return {};
         }
         case IType::TK_ARRAY: {
             mi::base::Handle<const IType_array> type_array(
@@ -2040,20 +2524,26 @@ std::string Type_factory::get_mdl_type_name_static( const IType* type)
                 case IType_texture::TS_CUBE: return "texture_cube";
                 case IType_texture::TS_PTEX: return "texture_ptex";
                 case IType_texture::TS_BSDF_DATA:
-                    ASSERT( M_SCENE, false); return std::string();
+                    ASSERT( M_SCENE, false); return {};
                 case IType_texture::TS_FORCE_32_BIT:
-                    ASSERT( M_SCENE, false); return std::string();
+                    ASSERT( M_SCENE, false); return {};
             }
             ASSERT( M_SCENE, false);
-            return std::string();
+            return {};
         }
         case IType::TK_FORCE_32_BIT:
             ASSERT( M_SCENE, false);
-            return std::string();
+            return {};
     }
 
     ASSERT( M_SCENE, false);
-    return std::string();
+    return {};
+}
+
+void Type_factory::unregister_struct_category( const IStruct_category* struct_category)
+{
+    m_struct_category_symbols.erase( struct_category->get_symbol());
+    m_struct_category_ids.erase( struct_category->get_predefined_id());
 }
 
 void Type_factory::unregister_enum_type( const IType_enum* type)
@@ -2141,8 +2631,8 @@ mi::Sint32 Type_factory::compare_static(
         const char* lhs_deferred_size = lhs->get_deferred_size();
         const char* rhs_deferred_size = rhs->get_deferred_size();
         mi::Sint32 result = strcmp( lhs_deferred_size, rhs_deferred_size);
-        if( result != 0)
-            return result;
+        if( result < 0) return -1;
+        if( result > 0) return +1;
     }
 
     mi::base::Handle<const IType> lhs_component_type( lhs->get_component_type( 0));
@@ -2164,7 +2654,35 @@ mi::Sint32 Type_factory::compare_static(
 }
 
 void Type_factory::dump(
-    const IType* type, mi::Size depth, std::ostringstream& s)
+    const IStruct_category* struct_category, mi::Size depth, std::ostringstream& s)
+{
+    if( !struct_category)
+        return;
+
+    s << "\"" << struct_category->get_symbol() << "\"";
+}
+
+void Type_factory::dump( const IStruct_category_list* list, mi::Size depth, std::ostringstream& s)
+{
+    if( !list)
+        return;
+
+    mi::Size n = list->get_size();
+    s << "struct_category_list [";
+    s << (n > 0 ? '\n' : ' ');
+
+    const std::string& prefix = get_prefix( depth);
+    for( mi::Size i = 0; i < n; ++i) {
+        mi::base::Handle<const IStruct_category> struct_category( list->get_struct_category( i));
+        s << prefix << "    "  << i << ": " << list->get_name( i) << " = ";
+        dump( struct_category.get(), depth + 1, s);
+        s << '\n';
+    }
+
+    s << (n > 0 ? prefix : "") << ']';
+}
+
+void Type_factory::dump( const IType* type, mi::Size depth, std::ostringstream& s)
 {
     if( !type)
         return;
@@ -2219,7 +2737,16 @@ void Type_factory::dump(
         case IType::TK_STRUCT: {
             mi::base::Handle<const IType_struct> type_struct(
                 type->get_interface<IType_struct>());
-            s << name << " {\n";
+            if( type_struct->is_declarative())
+                s << "declarative ";
+            s << name;
+            mi::base::Handle<const IStruct_category> struct_category(
+                type_struct->get_struct_category());
+            if( struct_category) {
+                s << " in ";
+                dump( struct_category.get(), depth, s);
+            }
+            s << " {\n";
             mi::Size n = type_struct->get_size();
             const std::string& prefix = get_prefix( depth);
             for( mi::Size i = 0; i < n; ++i) {
@@ -2240,8 +2767,7 @@ void Type_factory::dump(
     ASSERT( M_SCENE, false);
 }
 
-void Type_factory::dump(
-    const IType_list* list, mi::Size depth, std::ostringstream& s)
+void Type_factory::dump( const IType_list* list, mi::Size depth, std::ostringstream& s)
 {
     if( !list)
         return;
@@ -2261,18 +2787,35 @@ void Type_factory::dump(
     s << (n > 0 ? prefix : "") << ']';
 }
 
+const IStruct_category* Type_factory::lookup_struct_category(
+    const char* symbol,
+    IStruct_category::Predefined_id id,
+    mi::Sint32* errors)
+{
+    auto it = m_struct_category_symbols.find( symbol);
+    if( m_struct_category_symbols.find( symbol) == m_struct_category_symbols.end()) {
+        *errors = 0;
+        return nullptr;
+    }
+
+    const IStruct_category* struct_category = it->second;
+    if( !equivalent_struct_categories( struct_category, id)) {
+        *errors = -4;
+        return nullptr;
+    }
+
+    *errors = 0;
+    struct_category->retain();
+    return struct_category;
+}
+
 const IType_enum* Type_factory::lookup_enum(
     const char* symbol,
     IType_enum::Predefined_id id,
     const IType_enum::Values& values,
     mi::Sint32* errors)
 {
-    if( m_struct_symbols.find( symbol) != m_struct_symbols.end()) {
-        *errors = -3;
-        return nullptr;
-    }
-
-    Weak_enum_symbol_map::const_iterator it = m_enum_symbols.find( symbol);
+    auto it = m_enum_symbols.find( symbol);
     if( m_enum_symbols.find( symbol) == m_enum_symbols.end()) {
         *errors = 0;
         return nullptr;
@@ -2293,21 +2836,18 @@ const IType_struct* Type_factory::lookup_struct(
     const char* symbol,
     IType_struct::Predefined_id id,
     const IType_struct::Fields& fields,
+    bool is_declarative,
+    const IStruct_category* struct_category,
     mi::Sint32* errors)
 {
-    if( m_enum_symbols.find( symbol) != m_enum_symbols.end()) {
-        *errors = -3;
-        return nullptr;
-    }
-
-    Weak_struct_symbol_map::const_iterator it = m_struct_symbols.find( symbol);
+    auto it = m_struct_symbols.find( symbol);
     if( it == m_struct_symbols.end()) {
         *errors = 0;
         return nullptr;
     }
 
     const IType_struct* type_struct = it->second;
-    if( !equivalent_struct_types( type_struct, id, fields)) {
+    if( !equivalent_struct_types( type_struct, id, fields, is_declarative, struct_category)) {
         *errors = -4;
         return nullptr;
     }
@@ -2315,6 +2855,15 @@ const IType_struct* Type_factory::lookup_struct(
     *errors = 0;
     type_struct->retain();
     return type_struct;
+}
+
+bool Type_factory::equivalent_struct_categories(
+    const IStruct_category* struct_category, IStruct_category::Predefined_id id)
+{
+    if( id != struct_category->get_predefined_id())
+        return false;
+
+    return true;
 }
 
 bool Type_factory::equivalent_enum_types(
@@ -2338,13 +2887,28 @@ bool Type_factory::equivalent_enum_types(
 }
 
 bool Type_factory::equivalent_struct_types(
-    const IType_struct* type, IType_struct::Predefined_id id, const IType_struct::Fields& fields)
+    const IType_struct* type,
+    IType_struct::Predefined_id id,
+    const IType_struct::Fields& fields,
+    bool is_declarative,
+    const IStruct_category* struct_category)
 {
     mi::Size size = type->get_size();
     if( fields.size() != size)
         return false;
 
     if( id != type->get_predefined_id())
+        return false;
+
+    if( is_declarative != type->is_declarative())
+        return false;
+
+    mi::base::Handle<const IStruct_category> type_struct_category(
+        type->get_struct_category());
+    if( !!struct_category ^ !!type_struct_category)
+        return false;
+    if( struct_category
+        && strcmp( struct_category->get_symbol(), type_struct_category->get_symbol()) != 0)
         return false;
 
     for( mi::Size i = 0; i < size; ++i) {

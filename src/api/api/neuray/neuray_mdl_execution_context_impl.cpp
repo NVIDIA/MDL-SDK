@@ -36,6 +36,8 @@
 
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
 
+#include <utility>
+
 
 namespace MI {
 
@@ -88,7 +90,7 @@ class Message_impl
 {
 public:
 
-    Message_impl(const MDL::Message& message) : m_message(message) { }
+    Message_impl( MDL::Message  message) : m_message( std::move( message)) { }
 
     // public API methods
 
@@ -122,7 +124,7 @@ public:
         if (index >= m_message.m_notes.size())
             return nullptr;
 
-        Message_impl* note = new Message_impl(m_message.m_notes[index]);
+        auto* note = new Message_impl(m_message.m_notes[index]);
         return note;
     }
 
@@ -157,7 +159,7 @@ const mi::neuraylib::IMessage* Mdl_execution_context_impl::get_message(mi::Size 
      if (index >= m_context->get_messages_count())
             return nullptr;
 
-    Message_impl* msg = new Message_impl(m_context->get_message(index));
+    auto* msg = new Message_impl(m_context->get_message(index));
     return msg;
 }
 
@@ -166,7 +168,7 @@ const mi::neuraylib::IMessage* Mdl_execution_context_impl::get_error_message(mi:
      if (index >= m_context->get_error_messages_count())
             return nullptr;
 
-    Message_impl* msg = new Message_impl(m_context->get_error_message(index));
+    auto* msg = new Message_impl(m_context->get_error_message(index));
     return msg;
 }
 
@@ -209,7 +211,7 @@ const char* Mdl_execution_context_impl::get_option_name(mi::Size index) const
 
 const char* Mdl_execution_context_impl::get_option_type(const char* name) const
 {
-    boost::any option;
+    std::any option;
     if (m_context->get_option(name, option) == -1)
         return nullptr;
 
@@ -219,6 +221,8 @@ const char* Mdl_execution_context_impl::get_option_type(const char* name) const
         return "String";
     if (option.type() == typeid(mi::Float32))
         return "Float32";
+    if (option.type() == typeid(mi::Sint32))
+        return "Sint32";
     if (option.type() == typeid(mi::base::Handle<const mi::base::IInterface>))
         return "IInterface";
     return nullptr;
@@ -229,14 +233,14 @@ namespace {
 template<typename T>
 mi::Sint32 get_option_value(MDL::Execution_context* context, const char* name, T& value)
 {
-    boost::any option;
+    std::any option;
     if (context->get_option(name, option) == -1)
         return -1;
 
     if (option.type() != typeid(T))
         return -2;
 
-    value = boost::any_cast<T>(option);
+    value = std::any_cast<T>(option);
     return 0;
 }
 
@@ -259,13 +263,14 @@ mi::Sint32 Mdl_execution_context_impl::get_option(const char* name, bool& value)
 
 mi::Sint32 Mdl_execution_context_impl::get_option(const char* name, const char*& value) const
 {
-    boost::any option;
-    if (m_context->get_option(name, option) == -1)
+    const MI::MDL::Option* option = m_context->get_option(name);
+    if (!option)
         return -1;
-    if (option.type() != typeid(std::string))
+    const std::any& option_value = option->get_value();
+    if (option_value.type() != typeid(std::string))
         return -2;
 
-    const std::string& str_ref = boost::any_cast<const std::string&>(option);
+    const auto& str_ref = std::any_cast<const std::string&>(option_value);
     value = str_ref.c_str();
     return 0;
 }
@@ -273,14 +278,14 @@ mi::Sint32 Mdl_execution_context_impl::get_option(const char* name, const char*&
 mi::Sint32 Mdl_execution_context_impl::get_option(
     const char* name, const mi::base::IInterface** value) const
 {
-    boost::any option;
+    std::any option;
     if (m_context->get_option(name, option) == -1)
         return -1;
     if (option.type() != typeid(mi::base::Handle<const mi::base::IInterface>))
         return -2;
 
-    mi::base::Handle<const mi::base::IInterface> handle
-        = boost::any_cast<const mi::base::Handle<const mi::base::IInterface>>(option);
+    auto handle
+        = std::any_cast<const mi::base::Handle<const mi::base::IInterface>>(option);
 
     if (handle)
     {
@@ -329,7 +334,7 @@ MDL::Execution_context* unwrap_context(
     if( !context)
         return &default_context;
 
-    Mdl_execution_context_impl* context_impl
+    auto* context_impl
         = static_cast<Mdl_execution_context_impl*>(context);
     MDL::Execution_context& wrapped_context = context_impl->get_context();
     return &wrapped_context;
@@ -342,7 +347,7 @@ const MDL::Execution_context* unwrap_context(
     if( !context)
         return &default_context;
 
-    const Mdl_execution_context_impl* context_impl
+    const auto* context_impl
         = static_cast<const Mdl_execution_context_impl*>(context);
     const MDL::Execution_context& wrapped_context = context_impl->get_context();
     return &wrapped_context;

@@ -619,9 +619,9 @@ static void initialize_carpaint_flakes(
 
     // compare with other slices' average intensity to approximate intensity falloff
     // based on theta_f
-    flake_orientation_falloff.resize(flake_btf_num_theta_f, 1.0f);
+    flake_orientation_falloff.resize(flake_btf_num_theta_f, 0.0f);
     if (sum_l > 0.0f) {
-        for (int i_f = 0; i_f < flake_btf_num_theta_f; ++i_f) {
+        for (int i_f = 0; i_f < flake_btf_slice_lut[1]; ++i_f) {
             const float *f = slice_data + i_f * width * height * 3;
 
             float sum_l_i = 0.0f;
@@ -3154,6 +3154,7 @@ unsigned int Axf_reader::handle_collected_variants(
              /*annotations*/ annos.get(),
              /*return_annotations*/ nullptr,
              /*is_exported*/ true,
+             /*is_declarative*/ false,
              context.get());
         if (result < 0) {
             Axf_importer::report_message(6019, mi::base::MESSAGE_SEVERITY_ERROR,

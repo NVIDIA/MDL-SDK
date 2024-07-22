@@ -25,15 +25,17 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
+
 #include "content/common.hlsl"
+#include "content/environment.hlsl"
 
 // ------------------------------------------------------------------------------------------------
 // defined in the global root signature
 // ------------------------------------------------------------------------------------------------
 
 // Environment map and sample data for importance sampling
-Texture2D<float4> environment_texture : register(t0,space1);
-StructuredBuffer<Environment_sample_data> environment_sample_buffer : register(t1,space1);
+// Texture2D<float4> environment_texture : register(t0,space1);
+// StructuredBuffer<Environment_sample_data> environment_sample_buffer : register(t1,space1);
 
 // ------------------------------------------------------------------------------------------------
 // miss program for RayType::Radiance
@@ -44,13 +46,11 @@ void RadianceMissProgram(inout RadianceHitInfo payload : SV_RayPayload)
 {
     float light_pdf;
     float3 radiance = environment_evaluate( // (see common.hlsl)
-        environment_texture,                // assuming lat long map
-        environment_sample_buffer,          // importance sampling data of the environment map
         WorldRayDirection(),                // assuming WorldRayDirection() to be normalized
         light_pdf);
 
     // to incorporate the point light selection probability
-    if (point_light_enabled == 1)
+    if (scene_constants.point_light_enabled == 1)
         light_pdf *= 0.5f;
 
     // MIS weight for non-specular BSDF events

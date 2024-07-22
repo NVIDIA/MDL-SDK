@@ -68,6 +68,7 @@ endif()
 
 #--------------------------------------------------------------------------------------------------
 # configuration options
+option(MDL_BUILD_SDK "Build the MDL SDK, otherwise only Core." ON)
 option(MDL_BUILD_SDK_EXAMPLES "Adds MDL SDK examples to the build." ON)
 option(MDL_BUILD_CORE_EXAMPLES "Adds MDL Core examples to the build." ON)
 option(MDL_BUILD_ARNOLD_PLUGIN "Enable the build of the MDL Arnold plugin." OFF)
@@ -92,16 +93,25 @@ endif()
 # general setup
 include(${MDL_BASE_FOLDER}/cmake/setup.cmake)
 
+# if the SDK is not build, also disable...
+if(NOT MDL_BUILD_SDK)
+    set(MDL_BUILD_SDK_EXAMPLES OFF CACHE BOOL "" FORCE) # the SDK examples
+    set(MDL_ENABLE_PYTHON_BINDINGS OFF CACHE BOOL "" FORCE) # the SDK Bindings
+    set(MDL_BUILD_ARNOLD_PLUGIN OFF CACHE BOOL "" FORCE) # the Arnold Plugin
+endif()
+
 if(MDL_LOG_PLATFORM_INFOS)
+    MESSAGE(STATUS "[INFO] MDL_BUILD_SDK:                        ${MDL_BUILD_SDK}")
     MESSAGE(STATUS "[INFO] MDL_BUILD_SDK_EXAMPLES:               ${MDL_BUILD_SDK_EXAMPLES}")
     MESSAGE(STATUS "[INFO] MDL_BUILD_CORE_EXAMPLES:              ${MDL_BUILD_CORE_EXAMPLES}")
     MESSAGE(STATUS "[INFO] MDL_BUILD_ARNOLD_PLUGIN:              ${MDL_BUILD_ARNOLD_PLUGIN}")
     MESSAGE(STATUS "[INFO] MDL_BUILD_OPENIMAGEIO_PLUGIN:         ${MDL_BUILD_OPENIMAGEIO_PLUGIN}")
     MESSAGE(STATUS "[INFO] MDL_BUILD_DDS_PLUGIN:                 ${MDL_BUILD_DDS_PLUGIN}")
+    MESSAGE(STATUS "[INFO] MDL_ENABLE_PYTHON_BINDINGS:           ${MDL_ENABLE_PYTHON_BINDINGS}")
 endif()
 
 # enable CTest if requested
-if(MDL_ENABLE_TESTS OR MDL_ENABLE_UNIT_TESTS)
+if(MDL_ENABLE_UNIT_TESTS)
     enable_testing()
 endif()
 
@@ -137,7 +147,9 @@ if (MDL_BUILD_SDK_EXAMPLES OR MDL_BUILD_CORE_EXAMPLES)
 endif()
 
 # Shared code used by MDL SDK examples, Python bindings, and other tools
-add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/shared)
+if(MDL_BUILD_SDK)
+    add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/shared)
+endif()
 
 # MDL SDK
 if(MDL_BUILD_SDK_EXAMPLES)
@@ -177,11 +189,7 @@ if(MDL_BUILD_SDK_EXAMPLES)
         if(MDL_ENABLE_OPENGL_EXAMPLES)
             add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/df_cuda)
             if(MDL_ENABLE_OPTIX7_EXAMPLES)
-                if(WINDOWS)
-                    add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/optix7)
-                else()
-                    message(WARNING "The OptiX 7 example is currently only available for Windows.")
-                endif()
+                add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/optix7)
             endif()
         endif()
     endif()
@@ -199,6 +207,7 @@ endif()
 if(MDL_BUILD_CORE_EXAMPLES)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_core/shared)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_core/calls)
+    add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_core/code_gen)
     if(MDL_ENABLE_CUDA_EXAMPLES)
         add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_core/execution_cuda)
         if(MDL_ENABLE_OPENGL_EXAMPLES)
@@ -236,14 +245,20 @@ if(MDL_BUILD_DOCUMENTATION)
     add_subdirectory(${MDL_DOC_FOLDER}/mdl_sdkapi ${CMAKE_BINARY_DIR}/doc/mdl_sdkapi)
     add_custom_target(doc ALL DEPENDS doc-mdl_coreapi doc-mdl_sdkapi)
     set_target_properties(doc PROPERTIES PROJECT_LABEL "ALL" FOLDER "doc")
+    install(DIRECTORY ${MDL_DOC_FOLDER}/mdl_coreapi/html DESTINATION doc/mdl_coreapi)
+    install(DIRECTORY ${MDL_DOC_FOLDER}/mdl_sdkapi/html DESTINATION doc/mdl_sdkapi)
 endif()
+
+install(FILES ${MDL_DOC_FOLDER}/index.html DESTINATION doc)
+foreach(_DIRECTORY base_module core_definitions css images js specification)
+    install(DIRECTORY ${MDL_DOC_FOLDER}/${_DIRECTORY} DESTINATION doc)
+endforeach()
 
 
 # add tests with the POST option; there require all regular targets to be defined already
 foreach(_TEST_POST ${MDL_TEST_LIST_POST})
     add_subdirectory(${_TEST_POST})
 endforeach()
-
 
 # Config
 #--------------------------------------------------------------------------------------------------

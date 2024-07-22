@@ -46,7 +46,6 @@
 #include <base/data/serial/serial.h>
 #include <base/data/thread_pool/i_thread_pool_thread_pool.h>
 #include <base/hal/host/i_host.h>
-#include <base/hal/thread/i_thread_block.h>
 #include <base/lib/config/config.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/util/registry/i_config_registry.h>
@@ -59,13 +58,13 @@ namespace DBLIGHT {
 
 Database_impl::Database_impl()
   : m_info_manager( new Info_manager( this)),
+    m_scope_manager( new Scope_manager( this)),
     m_transaction_manager( new Transaction_manager( this)),
-    m_global_scope( new Scope_impl( this)),
     m_next_tag( 1)
 {
     SYSTEM::Access_module<HOST::Host_module> host_module( false);
     int number_of_cpus = host_module->get_number_of_cpus();
-    float cpu_load_limit = static_cast<float>( number_of_cpus);
+    auto cpu_load_limit = static_cast<float>( number_of_cpus);
     m_thread_pool = std::make_unique<THREAD_POOL::Thread_pool>(
         cpu_load_limit, /*gpu_load_limit*/ 0.0f, /*nr_of_worker_threads*/ 0);
 
@@ -73,22 +72,37 @@ Database_impl::Database_impl()
 
     SYSTEM::Access_module<CONFIG::Config_module> config_module( false);
     const CONFIG::Config_registry& registry = config_module->get_configuration();
+
     CONFIG::update_value( registry, "check_serializer_store", m_check_serialization_store);
     if( m_check_serialization_store)
         LOG::mod_log->info( M_DB, LOG::Mod_log::C_DATABASE,
             "Testing of serialization for database elements during store enabled.");
+
     CONFIG::update_value( registry, "check_serializer_edit", m_check_serialization_edit);
     if( m_check_serialization_edit)
         LOG::mod_log->info( M_DB, LOG::Mod_log::C_DATABASE,
             "Testing of serialization for database elements after edits enabled.");
+
+    CONFIG::update_value( registry, "check_privacy_levels", m_check_privacy_levels);
+#ifdef NDEBUG
+    if( m_check_privacy_levels)
+        LOG::mod_log->info( M_DB, LOG::Mod_log::C_DATABASE,
+            "Testing of privacy levels of references during store and after edits enabled.");
+#endif
+
+#if defined( DBLIGHT_NO_SHARED_LOCK)
+    LOG::mod_log->info( M_DB, LOG::Mod_log::C_DATABASE,
+        "Using THREAD::Lock class for main database lock.");
+#elif defined( DBLIGHT_NO_BLOCK_SHARED)
+    LOG::mod_log->info( M_DB, LOG::Mod_log::C_DATABASE,
+        "Using THREAD::Shared_lock exclusively with THREAD::Block for main database lock.");
+#endif
 }
 
 Database_impl::~Database_impl()
 {
-    m_global_scope->unpin();
-
-    // Clearing the transaction manager first will trigger assertions if there are infos left which
-    // (incorrectly) still reference transactions.
+    // Removing all scopes should leave no transactions or infos behind.
+    m_scope_manager.reset();
     m_transaction_manager.reset();
     m_info_manager.reset();
 
@@ -101,17 +115,24 @@ Database_impl::~Database_impl()
 
 DB::Scope* Database_impl::get_global_scope()
 {
-    return m_global_scope;
+    return lookup_scope( 0);
 }
 
 DB::Scope* Database_impl::lookup_scope( DB::Scope_id id)
 {
-    return id == 0 ? m_global_scope : nullptr;
+    THREAD::Block block( &m_lock);
+    return m_scope_manager->lookup_scope( id);
 }
 
 DB::Scope* Database_impl::lookup_scope( const std::string& name)
 {
-    return name.empty() ? m_global_scope : nullptr;
+    THREAD::Block block( &m_lock);
+    return m_scope_manager->lookup_scope( name);
+}
+
+bool Database_impl::remove_scope( DB::Scope_id id)
+{
+    return m_scope_manager->remove_scope( id);
 }
 
 void Database_impl::garbage_collection( int priority)
@@ -186,8 +207,10 @@ mi::Sint32 Database_impl::execute_fragmented(
 {
     if( !job || count == 0)
         return -1;
-    if( !transaction && (job->get_scheduling_mode() != DB::Fragmented_job::LOCAL))
+    if( job->get_scheduling_mode() != DB::Fragmented_job::LOCAL)
         return -2;
+    if( job->get_priority() < 0)
+        return -3;
 
     mi::base::Handle<DBLIGHT::Fragmented_job> wrapped_job(
         new DBLIGHT::Fragmented_job( transaction, count, job, /*listener*/ nullptr));
@@ -205,6 +228,8 @@ mi::Sint32 Database_impl::execute_fragmented_async(
         return -1;
     if( job->get_scheduling_mode() != DB::Fragmented_job::LOCAL)
         return -2;
+    if( job->get_priority() < 0)
+        return -3;
 
     mi::base::Handle<DBLIGHT::Fragmented_job> wrapped_job(
         new DBLIGHT::Fragmented_job( transaction, count, job, listener));
@@ -221,6 +246,7 @@ void Database_impl::dump( std::ostream& s, bool mask_pointer_values)
 {
     THREAD::Block_shared block( &m_lock);
 
+    m_scope_manager->dump( s, mask_pointer_values);
     m_transaction_manager->dump( s, mask_pointer_values);
     m_info_manager->dump( s, mask_pointer_values);
 }

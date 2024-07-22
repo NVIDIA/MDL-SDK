@@ -79,57 +79,75 @@ enum Distiller_extended_node_semantics {
     DS_DIST_BSDF_MIX_1 = 0x10020,                    ///< normalized_mix with one component
     DS_DIST_BSDF_MIX_2,                              ///< normalized_mix with two components
     DS_DIST_BSDF_MIX_3,                              ///< normalized_mix with three components
+    DS_DIST_BSDF_MIX_4,                              ///< normalized_mix with four components
     DS_DIST_BSDF_CLAMPED_MIX_1,                      ///< clamped_mix with one component
     DS_DIST_BSDF_CLAMPED_MIX_2,                      ///< clamped_mix with two components
     DS_DIST_BSDF_CLAMPED_MIX_3,                      ///< clamped_mix with three components
+    DS_DIST_BSDF_CLAMPED_MIX_4,                      ///< clamped_mix with four components
     DS_DIST_BSDF_UNBOUNDED_MIX_1,                    ///< unbounded_mix with one component
     DS_DIST_BSDF_UNBOUNDED_MIX_2,                    ///< unbounded_mix with two components
     DS_DIST_BSDF_UNBOUNDED_MIX_3,                    ///< unbounded_mix with three components
+    DS_DIST_BSDF_UNBOUNDED_MIX_4,                    ///< unbounded_mix with four components
     DS_DIST_BSDF_COLOR_MIX_1 = 0x10030,              ///< color_normalized_mix with one component
     DS_DIST_BSDF_COLOR_MIX_2,                        ///< color_normalized_mix with two components
     DS_DIST_BSDF_COLOR_MIX_3,                        ///< color_normalized_mix with three components
+    DS_DIST_BSDF_COLOR_MIX_4,                        ///< color_normalized_mix with four components
     DS_DIST_BSDF_COLOR_CLAMPED_MIX_1,                ///< color_clamped_mix with one component
     DS_DIST_BSDF_COLOR_CLAMPED_MIX_2,                ///< color_clamped_mix with two components
     DS_DIST_BSDF_COLOR_CLAMPED_MIX_3,                ///< color_clamped_mix with three components
+    DS_DIST_BSDF_COLOR_CLAMPED_MIX_4,                ///< color_clamped_mix with four components
     DS_DIST_BSDF_COLOR_UNBOUNDED_MIX_1,              ///< color_unbounded_mix with one component
     DS_DIST_BSDF_COLOR_UNBOUNDED_MIX_2,              ///< color_unbounded_mix with two components
     DS_DIST_BSDF_COLOR_UNBOUNDED_MIX_3,              ///< color_unbounded_mix with three components
+    DS_DIST_BSDF_COLOR_UNBOUNDED_MIX_4,              ///< color_unbounded_mix with four components
     DS_DIST_EDF_MIX_1 = 0x10040,                     ///< normalized_mix with one component
     DS_DIST_EDF_MIX_2,                               ///< normalized_mix with two components
     DS_DIST_EDF_MIX_3,                               ///< normalized_mix with three components
+    DS_DIST_EDF_MIX_4,                               ///< normalized_mix with four components
     DS_DIST_EDF_CLAMPED_MIX_1,                       ///< clamped_mix with one component
     DS_DIST_EDF_CLAMPED_MIX_2,                       ///< clamped_mix with two components
     DS_DIST_EDF_CLAMPED_MIX_3,                       ///< clamped_mix with three components
+    DS_DIST_EDF_CLAMPED_MIX_4,                       ///< clamped_mix with four components
     DS_DIST_EDF_UNBOUNDED_MIX_1,                     ///< unbounded_mix with one component
     DS_DIST_EDF_UNBOUNDED_MIX_2,                     ///< unbounded_mix with two components
     DS_DIST_EDF_UNBOUNDED_MIX_3,                     ///< unbounded_mix with three components
+    DS_DIST_EDF_UNBOUNDED_MIX_4,                     ///< unbounded_mix with four components
     DS_DIST_EDF_COLOR_MIX_1 = 0x10050,               ///< color_normalized_mix with one component
     DS_DIST_EDF_COLOR_MIX_2,                         ///< color_normalized_mix with two components
     DS_DIST_EDF_COLOR_MIX_3,                         ///< color_normalized_mix with three components
+    DS_DIST_EDF_COLOR_MIX_4,                         ///< color_normalized_mix with four components
     DS_DIST_EDF_COLOR_CLAMPED_MIX_1,                 ///< color_clamped_mix with one component
     DS_DIST_EDF_COLOR_CLAMPED_MIX_2,                 ///< color_clamped_mix with two components
     DS_DIST_EDF_COLOR_CLAMPED_MIX_3,                 ///< color_clamped_mix with three components
+    DS_DIST_EDF_COLOR_CLAMPED_MIX_4,                 ///< color_clamped_mix with four components
     DS_DIST_EDF_COLOR_UNBOUNDED_MIX_1,               ///< color_unbounded_mix with one component
     DS_DIST_EDF_COLOR_UNBOUNDED_MIX_2,               ///< color_unbounded_mix with two components
     DS_DIST_EDF_COLOR_UNBOUNDED_MIX_3,               ///< color_unbounded_mix with three components
+    DS_DIST_EDF_COLOR_UNBOUNDED_MIX_4,               ///< color_unbounded_mix with four components
     DS_DIST_VDF_MIX_1 = 0x10060,                     ///< normalized_mix with one component
     DS_DIST_VDF_MIX_2,                               ///< normalized_mix with two components
     DS_DIST_VDF_MIX_3,                               ///< normalized_mix with three components
+    DS_DIST_VDF_MIX_4,                               ///< normalized_mix with four components
     DS_DIST_VDF_CLAMPED_MIX_1,                       ///< clamped_mix with one component
     DS_DIST_VDF_CLAMPED_MIX_2,                       ///< clamped_mix with two components
     DS_DIST_VDF_CLAMPED_MIX_3,                       ///< clamped_mix with three components
+    DS_DIST_VDF_CLAMPED_MIX_4,                       ///< clamped_mix with four components
     DS_DIST_VDF_UNBOUNDED_MIX_1,                     ///< unbounded_mix with one component
     DS_DIST_VDF_UNBOUNDED_MIX_2,                     ///< unbounded_mix with two components
     DS_DIST_VDF_UNBOUNDED_MIX_3,                     ///< unbounded_mix with three components
+    DS_DIST_VDF_UNBOUNDED_MIX_4,                     ///< unbounded_mix with four components
     DS_DIST_VDF_COLOR_MIX_1 = 0x10070,               ///< color_normalized_mix with one component
     DS_DIST_VDF_COLOR_MIX_2,                         ///< color_normalized_mix with two components
     DS_DIST_VDF_COLOR_MIX_3,                         ///< color_normalized_mix with three components
+    DS_DIST_VDF_COLOR_MIX_4,                         ///< color_normalized_mix with four components
     DS_DIST_VDF_COLOR_CLAMPED_MIX_1,                 ///< color_clamped_mix with one component
     DS_DIST_VDF_COLOR_CLAMPED_MIX_2,                 ///< color_clamped_mix with two components
     DS_DIST_VDF_COLOR_CLAMPED_MIX_3,                 ///< color_clamped_mix with three components
+    DS_DIST_VDF_COLOR_CLAMPED_MIX_4,                 ///< color_clamped_mix with four components
     DS_DIST_VDF_COLOR_UNBOUNDED_MIX_1,               ///< color_unbounded_mix with one component
     DS_DIST_VDF_COLOR_UNBOUNDED_MIX_2,               ///< color_unbounded_mix with two components
     DS_DIST_VDF_COLOR_UNBOUNDED_MIX_3,               ///< color_unbounded_mix with three components
+    DS_DIST_VDF_COLOR_UNBOUNDED_MIX_4,               ///< color_unbounded_mix with four components
     DS_DIST_MATERIAL_CONDITIONAL_OPERATOR = 0x10100, ///< ternary ?: operator on material type
     DS_DIST_BSDF_CONDITIONAL_OPERATOR,               ///< ternary ?: operator on bsdf type
     DS_DIST_EDF_CONDITIONAL_OPERATOR,                ///< ternary ?: operator on edf type

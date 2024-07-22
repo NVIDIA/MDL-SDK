@@ -342,7 +342,7 @@ bool Mdl_generator::generate(Mdl_sdk& mdl_sdk, Mdl_generator_result& inout_resul
     // Clear user data on the generator.
     generator_context.clearUserData();
 
-// Specify the MDL target version, WIP for MaterialX 1.38.9
+// Specify the MDL target version, for MaterialX 1.38.9
 #if (MATERIALX_MAJOR_VERSION >= 1 && MATERIALX_MINOR_VERSION >= 38 && MATERIALX_BUILD_VERSION >= 9)
     mx::GenMdlOptionsPtr genMdlOptions = std::make_shared<mx::GenMdlOptions>();
 

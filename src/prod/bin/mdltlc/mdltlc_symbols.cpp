@@ -66,7 +66,7 @@ Symbol *Symbol_table::lookup_symbol(char const *name) const
     MDL_ASSERT(name != NULL);
     Symbol_map::const_iterator it = m_symbol_map.find(name);
     if (it == m_symbol_map.end()) {
-	return NULL;
+        return NULL;
     }
     return it->second;
 }
@@ -75,7 +75,7 @@ Symbol *Symbol_table::lookup_symbol(char const *name) const
 Symbol *Symbol_table::get_symbol(char const *name)
 {
     if (Symbol *ret = lookup_symbol(name))
-	return ret;
+        return ret;
 
     name = internalize(name);
     return enter_symbol(name);
@@ -96,7 +96,7 @@ char const *Symbol_table::internalize(char const *s)
     void *p = m_string_arena.allocate(l + 1, 1);
 
     if (p != NULL) {
-	memcpy(p, s, l + 1);
+        memcpy(p, s, l + 1);
     }
     return reinterpret_cast<const char *>(p);
 }

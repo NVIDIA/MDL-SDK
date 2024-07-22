@@ -156,7 +156,7 @@ MI_TEST_AUTO_FUNCTION( test_neuray )
     run_tests( neuray.get());
     run_tests( neuray.get());
 
-    neuray = 0;
+    neuray = nullptr;
     MI_CHECK( unload());
 }
 

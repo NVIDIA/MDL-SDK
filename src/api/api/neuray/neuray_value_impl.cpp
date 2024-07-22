@@ -78,7 +78,7 @@ const MDL::IValue_list* get_internal_value_list( const mi::neuraylib::IValue_lis
 }
 
 template <class E, class I, class T>
-Value_base<E, I, T>::~Value_base() { }
+Value_base<E, I, T>::~Value_base() = default;
 
 template <class E, class I, class T>
 const T* Value_base<E, I, T>::get_type() const
@@ -208,7 +208,7 @@ mi::Sint32 Value_struct::set_field( const char* name, mi::neuraylib::IValue* val
 
 const char* Value_texture::get_value() const
 {
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
+    auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     DB::Tag tag = m_value->get_value();
     return db_transaction->tag_to_name( tag);
@@ -221,7 +221,7 @@ mi::Sint32 Value_texture::set_value( const char* value)
         return 0;
     }
 
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
+    auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     DB::Tag tag = db_transaction->name_to_tag( value);
     if( !tag)
@@ -235,14 +235,15 @@ mi::Sint32 Value_texture::set_value( const char* value)
 
 const char* Value_texture::get_file_path() const
 {
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
+    auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
-    return m_value->get_file_path( db_transaction);
+    m_cached_file_path = m_value->get_file_path( db_transaction);
+    return !m_cached_file_path.empty() ? m_cached_file_path.c_str() : nullptr;
 }
 
 mi::Float32 Value_texture::get_gamma() const
 {
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
+    auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     DB::Tag texture_tag = m_value->get_value();
     if( !texture_tag) {
@@ -259,7 +260,7 @@ mi::Float32 Value_texture::get_gamma() const
 
 const char* Value_texture::get_selector() const
 {
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
+    auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     DB::Tag texture_tag = m_value->get_value();
     if( !texture_tag) {
@@ -282,7 +283,7 @@ const char* Value_texture::get_owner_module() const
 
 const char* Value_light_profile::get_value() const
 {
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
+    auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     DB::Tag tag = m_value->get_value();
     return db_transaction->tag_to_name( tag);
@@ -295,7 +296,7 @@ mi::Sint32 Value_light_profile::set_value( const char* value)
         return 0;
     }
 
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
+    auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     DB::Tag tag = db_transaction->name_to_tag( value);
     if( !tag)
@@ -309,9 +310,10 @@ mi::Sint32 Value_light_profile::set_value( const char* value)
 
 const char* Value_light_profile::get_file_path() const
 {
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
+    auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
-    return m_value->get_file_path( db_transaction);
+    m_cached_file_path = m_value->get_file_path( db_transaction);
+    return !m_cached_file_path.empty() ? m_cached_file_path.c_str() : nullptr;
 }
 
 const char* Value_light_profile::get_owner_module() const
@@ -321,7 +323,7 @@ const char* Value_light_profile::get_owner_module() const
 
 const char* Value_bsdf_measurement::get_value() const
 {
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
+    auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     DB::Tag tag = m_value->get_value();
     return db_transaction->tag_to_name( tag);
@@ -334,7 +336,7 @@ mi::Sint32 Value_bsdf_measurement::set_value( const char* value)
         return 0;
     }
 
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
+    auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     DB::Tag tag = db_transaction->name_to_tag( value);
     if( !tag)
@@ -348,9 +350,10 @@ mi::Sint32 Value_bsdf_measurement::set_value( const char* value)
 
 const char* Value_bsdf_measurement::get_file_path() const
 {
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
+    auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
-    return m_value->get_file_path( db_transaction);
+    m_cached_file_path = m_value->get_file_path( db_transaction);
+    return !m_cached_file_path.empty() ? m_cached_file_path.c_str() : nullptr;
 }
 
 const char* Value_bsdf_measurement::get_owner_module() const
@@ -767,7 +770,7 @@ DB::Transaction* Value_factory::get_db_transaction() const
     if( !m_transaction)
         return nullptr;
 
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
+    auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     return transaction_impl->get_db_transaction();
 }
 

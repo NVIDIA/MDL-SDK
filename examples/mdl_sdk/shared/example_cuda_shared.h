@@ -1367,6 +1367,7 @@ public:
         bool enable_auxiliary,
         bool enable_pdf,
         bool use_adapt_normal,
+        bool enable_bsdf_flags,
         const std::string& df_handle_mode,
         const std::string& lambda_return_mode);
 
@@ -1481,6 +1482,7 @@ Material_compiler::Material_compiler(
         bool enable_auxiliary,
         bool enable_pdf,
         bool use_adapt_normal,
+        bool enable_bsdf_flags,
         const std::string& df_handle_mode,
         const std::string& lambda_return_mode)
     : m_mdl_impexp_api(mdl_impexp_api, mi::base::DUP_INTERFACE)
@@ -1554,6 +1556,13 @@ Material_compiler::Material_compiler(
         check_success(m_be_cuda_ptx->set_option("use_renderer_adapt_normal", "on") == 0);
     }
 
+    if (enable_bsdf_flags) {
+        // Option "libbsdf_flags_in_bsdf_data": Default is "off".
+        // If enabled, the generated code will use the optional "flags" field
+        // in the BSDF data structures.
+        check_success(m_be_cuda_ptx->set_option("libbsdf_flags_in_bsdf_data", "on") == 0);
+    }
+
     // force experimental to true for now
     m_context->set_option("experimental", true);
 
@@ -1615,6 +1624,14 @@ mi::neuraylib::ICompiled_material *Material_compiler::compile_material_instance(
     mi::neuraylib::IFunction_call* material_instance,
     bool class_compilation)
 {
+    // convert to target type SID_MATERIAL
+    mi::base::Handle<mi::neuraylib::IType_factory> tf(
+        m_mdl_factory->create_type_factory(m_transaction.get()));
+    mi::base::Handle<const mi::neuraylib::IType> standard_material_type(
+        tf->get_predefined_struct(mi::neuraylib::IType_struct::SID_MATERIAL));
+    m_context->set_option("target_type", standard_material_type.get());
+
+
     mi::Uint32 flags = class_compilation
         ? mi::neuraylib::IMaterial_instance::CLASS_COMPILATION
         : mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS;

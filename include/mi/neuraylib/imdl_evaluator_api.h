@@ -57,7 +57,7 @@ public:
     /// \param[in]  fact   the expression factory to create the result value
     /// \param[in]  call   the function call
     /// \param[in]  index  the index of the material instance parameter
-    /// \param[out] error  An optional pointer to an #mi::Sint32 to which an error code will be
+    /// \param[out] errors An optional pointer to an #mi::Sint32 to which an error code will be
     ///                    written. The error codes have the following meaning:
     ///                    -  0: Success.
     ///                    - -1: An input parameter is \c NULL.
@@ -72,7 +72,7 @@ public:
         IValue_factory* fact,
         const IFunction_call* call,
         Size index,
-        Sint32* error) const = 0;
+        Sint32* errors) const = 0;
 };
 
 /**@}*/ // end group mi_neuray_mdl_misc

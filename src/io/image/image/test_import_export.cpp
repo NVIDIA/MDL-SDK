@@ -34,13 +34,18 @@
 #include <base/system/test/i_test_auto_driver.h>
 #include <base/system/test/i_test_auto_case.h>
 
+#include <filesystem>
+
 #include "i_image.h"
 
 #include <mi/base/handle.h>
 #include <mi/math.h>
 #include <mi/neuraylib/ibuffer.h>
 #include <mi/neuraylib/icanvas.h>
+#include <mi/neuraylib/imap.h>
+#include <mi/neuraylib/inumber.h>
 #include <mi/neuraylib/itile.h>
+#include <mi/neuraylib/istring.h>
 
 #include <base/system/main/access_module.h>
 #include <base/hal/disk/disk_file_reader_writer_impl.h>
@@ -48,12 +53,13 @@
 #include <base/lib/mem/mem.h>
 #include <base/lib/log/i_log_module.h>
 #include <base/lib/plug/i_plug.h>
+#include <base/data/idata/i_idata_factory.h>
 #include <base/data/serial/i_serial_buffer_serializer.h>
 
 #include "test_shared.h"
 #include <prod/lib/neuray/test_shared.h>
 
-#include <boost/filesystem.hpp>
+namespace fs = std::filesystem;
 
 const std::string DIR_PREFIX = "output_test_import_export";
 
@@ -71,7 +77,8 @@ public:
         m_reader = make_handle_dup( reader);
     }
 
-    mi::neuraylib::IReader* get_reader( const char* container_filename, const char* member_filename)
+    mi::neuraylib::IReader* get_reader(
+        const char* container_filename, const char* member_filename) final
     {
         MI_CHECK_EQUAL_CSTR( m_container_filename.c_str(), container_filename);
         MI_CHECK_EQUAL_CSTR( m_member_filename.c_str(), member_filename);
@@ -89,6 +96,7 @@ private:
 
 SYSTEM::Access_module<IMAGE::Image_module> g_image_module;
 mi::base::Handle<Mdl_container_callback> g_mdl_container_callback;
+mi::base::Handle<mi::IMap> g_export_options;
 
 mi::neuraylib::ICanvas* serialize_deserialize( mi::neuraylib::ICanvas* canvas)
 {
@@ -102,9 +110,6 @@ mi::neuraylib::ICanvas* serialize_deserialize( mi::neuraylib::ICanvas* canvas)
 void test_import(
     const char* file, const char* export_format, const char* reference_format = nullptr)
 {
-    const mi::Uint32 quality       = 100;
-    const bool force_default_gamma = true;
-
     std::string root_path  = TEST::mi_src_path( "io/image/image/tests/");
     std::string input_path = root_path + file;
 
@@ -124,7 +129,7 @@ void test_import(
         std::string output_path = DIR_PREFIX + "/export1_of_" + file + "." + export_format;
 
         bool result = g_image_module->export_canvas(
-            canvas.get(), output_path.c_str(), quality, force_default_gamma);
+            canvas.get(), output_path.c_str(), g_export_options.get());
         MI_CHECK( result);
 
         std::string reference_path
@@ -149,7 +154,7 @@ void test_import(
         std::string output_path = DIR_PREFIX + "/export2_of_" + file + "." + export_format;
 
         result = g_image_module->export_canvas(
-            canvas.get(), output_path.c_str(), quality, force_default_gamma);
+            canvas.get(), output_path.c_str(), g_export_options.get());
         MI_CHECK( result);
 
         std::string reference_path
@@ -177,7 +182,7 @@ void test_import(
         std::string output_path = DIR_PREFIX + "/export3_of_" + file + "." + export_format;
 
         result = g_image_module->export_canvas(
-            canvas.get(), output_path.c_str(), quality, force_default_gamma);
+            canvas.get(), output_path.c_str(), g_export_options.get());
         MI_CHECK( result);
 
         std::string reference_path
@@ -191,9 +196,6 @@ void test_import(
 
 void test_export( const char* file, const char* export_format)
 {
-    const mi::Uint32 quality       = 100;
-    const bool force_default_gamma = true;
-
     std::cout << "\nTesting export of " << file << " to " << export_format << std::endl;
 
     std::string root_path  = TEST::mi_src_path( "io/image/image/tests/");
@@ -209,7 +211,7 @@ void test_export( const char* file, const char* export_format)
     std::string output_path = DIR_PREFIX + "/export_of_" + file + "." + export_format;
 
     bool result = g_image_module->export_canvas(
-        canvas.get(), output_path.c_str(), quality, force_default_gamma);
+        canvas.get(), output_path.c_str(), g_export_options.get());
     MI_CHECK( result);
 
     // re-import and export as PNG
@@ -222,7 +224,7 @@ void test_export( const char* file, const char* export_format)
         = DIR_PREFIX + "/export_of_export_of_" + file + "." + export_format + ".png";
 
     result = g_image_module->export_canvas(
-        canvas.get(), png_path.c_str(), quality, force_default_gamma);
+        canvas.get(), png_path.c_str(), g_export_options.get());
     MI_CHECK( result);
 
     std::string reference_path
@@ -234,9 +236,6 @@ void test_selector( const char* file, const char* selector)
 {
     std::string root_path  = TEST::mi_src_path( "io/image/image/tests/");
     std::string input_path = root_path + file;
-
-    const mi::Uint32 quality       = 100;
-    const bool force_default_gamma = true;
 
     const char* safe_selector = selector ? selector : "null";
 
@@ -251,7 +250,7 @@ void test_selector( const char* file, const char* selector)
         std::string output_path = DIR_PREFIX + "/export_of_" + file + "_" + safe_selector + ".png";
 
         bool result = g_image_module->export_canvas(
-            canvas.get(), output_path.c_str(), quality, force_default_gamma);
+            canvas.get(), output_path.c_str(), g_export_options.get());
         MI_CHECK( result);
 
         std::string reference_path
@@ -276,10 +275,161 @@ void test_selector_fail( const char* file, const char* selector)
     }
 }
 
+void test_exr_data_type()
+{
+    const char* file = "test_simple_oiio.exr";
+
+    std::string root_path  = TEST::mi_src_path( "io/image/image/tests/");
+    std::string input_path = root_path + file;
+
+    IDATA::Factory factory( nullptr);
+    mi::base::Handle exr_data_type( factory.create<mi::IString>());
+    exr_data_type->set_c_str( "Float16");
+
+    mi::base::Handle local_options( factory.clone<mi::IMap>( g_export_options.get()));
+    local_options->insert( "exr:data_type", exr_data_type.get());
+
+    {
+        std::cout << "\nTesting exr:data_type" << std::endl;
+
+        mi::base::Handle<mi::neuraylib::ICanvas> canvas(
+            g_image_module->create_canvas( IMAGE::File_based(), input_path, /*selector*/ nullptr));
+        MI_CHECK( canvas);
+        MI_CHECK_NOT_EQUAL( canvas->get_resolution_x(), 1);
+
+        // Set red channel of lower left pixel to a value that cannot be represent in Float16
+        // (65504 is the largest value that can be represented).
+        mi::base::Handle<mi::neuraylib::ITile> tile( canvas->get_tile( 0));
+        float* data = static_cast<float*>( tile->get_data());
+        data[0] = 65505.0f;
+
+        std::string output_path = DIR_PREFIX + "/export_of_" + file + "_exr_data_type.exr";
+
+        bool result = g_image_module->export_canvas(
+            canvas.get(), output_path.c_str(), local_options.get());
+        MI_CHECK( result);
+
+        std::string reference_path
+            = root_path + "reference/export_of_" + file + "_exr_data_type.exr";
+        MI_CHECK_IMG_DIFF( output_path, reference_path);
+    }
+}
+
+void test_exr_create_multipart_for_alpha()
+{
+    const char* file = "test_simple_alpha_oiio.exr";
+
+    std::string root_path  = TEST::mi_src_path( "io/image/image/tests/");
+    std::string input_path = root_path + file;
+
+    IDATA::Factory factory( nullptr);
+    mi::base::Handle exr_create_multipart_for_alpha( factory.create<mi::IBoolean>());
+    exr_create_multipart_for_alpha->set_value( true);
+
+    mi::base::Handle local_options( factory.clone<mi::IMap>( g_export_options.get()));
+    local_options->insert( "exr:create_multipart_for_alpha", exr_create_multipart_for_alpha.get());
+
+    {
+        std::cout << "\nTesting exr:create_multipart_for_alpha" << std::endl;
+
+        mi::base::Handle<mi::neuraylib::ICanvas> canvas(
+            g_image_module->create_canvas( IMAGE::File_based(), input_path, /*selector*/ nullptr));
+        MI_CHECK( canvas);
+        MI_CHECK_NOT_EQUAL( canvas->get_resolution_x(), 1);
+
+        std::string output_path
+            = DIR_PREFIX + "/export_of_" + file + "_exr_create_multipart_for_alpha.exr";
+
+        bool result = g_image_module->export_canvas(
+            canvas.get(), output_path.c_str(), local_options.get());
+        MI_CHECK( result);
+
+        std::string reference_path
+            = root_path + "reference/export_of_" + file + "_exr_create_multipart_for_alpha.exr";
+        MI_CHECK_IMG_DIFF( output_path, reference_path);
+
+        // no selector defaults to first subimage
+        mi::base::Handle<mi::neuraylib::ICanvas> reimport(
+            g_image_module->create_canvas( IMAGE::File_based(), output_path, /*selector*/ nullptr));
+        MI_CHECK( reimport);
+        MI_CHECK_NOT_EQUAL( reimport->get_resolution_x(), 1);
+
+        mi::base::Handle<mi::neuraylib::ICanvas> subimage00(
+            g_image_module->create_canvas( IMAGE::File_based(), output_path, "rgb"));
+        MI_CHECK( subimage00);
+        MI_CHECK_NOT_EQUAL( subimage00->get_resolution_x(), 1);
+
+        mi::base::Handle<mi::neuraylib::ICanvas> subimage01(
+            g_image_module->create_canvas( IMAGE::File_based(), output_path, "alpha"));
+        MI_CHECK( subimage01);
+        MI_CHECK_NOT_EQUAL( subimage01->get_resolution_x(), 1);
+    }
+}
+
+void test_exr_data_type_and_create_multipart_for_alpha()
+{
+    const char* file = "test_simple_alpha_oiio.exr";
+
+    std::string root_path  = TEST::mi_src_path( "io/image/image/tests/");
+    std::string input_path = root_path + file;
+
+    IDATA::Factory factory( nullptr);
+    mi::base::Handle exr_data_type( factory.create<mi::IString>());
+    exr_data_type->set_c_str( "Float16");
+    mi::base::Handle exr_create_multipart_for_alpha( factory.create<mi::IBoolean>());
+    exr_create_multipart_for_alpha->set_value( true);
+
+    mi::base::Handle local_options( factory.clone<mi::IMap>( g_export_options.get()));
+    local_options->insert( "exr:data_type", exr_data_type.get());
+    local_options->insert( "exr:create_multipart_for_alpha", exr_create_multipart_for_alpha.get());
+
+    {
+        std::cout << "\nTesting exr:data_type and exr:create_multipart_for_alpha" << std::endl;
+
+        mi::base::Handle<mi::neuraylib::ICanvas> canvas(
+            g_image_module->create_canvas( IMAGE::File_based(), input_path, /*selector*/ nullptr));
+        MI_CHECK( canvas);
+        MI_CHECK_NOT_EQUAL( canvas->get_resolution_x(), 1);
+
+        // Set red channel of lower left pixel to a value that cannot be represent in Float16
+        // (65504 is the largest value that can be represented).
+        mi::base::Handle<mi::neuraylib::ITile> tile( canvas->get_tile( 0));
+        float* data = static_cast<float*>( tile->get_data());
+        data[0] = 65505.0f;
+
+        std::string output_path = DIR_PREFIX + "/export_of_" + file
+            + "_exr_data_type_and_create_multipart_for_alpha.exr";
+
+        bool result = g_image_module->export_canvas(
+            canvas.get(), output_path.c_str(), local_options.get());
+        MI_CHECK( result);
+
+        std::string reference_path = root_path + "reference/export_of_" + file
+            + "_exr_data_type_and_create_multipart_for_alpha.exr";
+        MI_CHECK_IMG_DIFF( output_path, reference_path);
+
+        // no selector defaults to first subimage
+        mi::base::Handle<mi::neuraylib::ICanvas> reimport(
+            g_image_module->create_canvas( IMAGE::File_based(), output_path, /*selector*/ nullptr));
+        MI_CHECK( reimport);
+        MI_CHECK_NOT_EQUAL( reimport->get_resolution_x(), 1);
+
+        mi::base::Handle<mi::neuraylib::ICanvas> subimage00(
+            g_image_module->create_canvas( IMAGE::File_based(), output_path, "rgb"));
+        MI_CHECK( subimage00);
+        MI_CHECK_NOT_EQUAL( subimage00->get_resolution_x(), 1);
+
+        mi::base::Handle<mi::neuraylib::ICanvas> subimage01(
+            g_image_module->create_canvas( IMAGE::File_based(), output_path, "alpha"));
+        MI_CHECK( subimage01);
+        MI_CHECK_NOT_EQUAL( subimage01->get_resolution_x(), 1);
+    }
+}
+
 MI_TEST_AUTO_FUNCTION( test_import_export )
 {
-    boost::filesystem::remove_all( DIR_PREFIX);
-    boost::filesystem::create_directory( DIR_PREFIX);
+    fs::remove_all( fs::u8path( DIR_PREFIX));
+    fs::create_directory( fs::u8path( DIR_PREFIX));
 
     SYSTEM::Access_module<MEM::Mem_module> mem_module( false);
     SYSTEM::Access_module<LOG::Log_module> log_module( false);
@@ -293,6 +443,13 @@ MI_TEST_AUTO_FUNCTION( test_import_export )
     g_image_module.set();
 
     g_mdl_container_callback = new Mdl_container_callback();
+
+    IDATA::Factory factory( nullptr);
+    mi::base::Handle force_default_gamma( factory.create<mi::IBoolean>());
+    force_default_gamma->set_value( true);
+
+    g_export_options = factory.create<mi::IMap>( nullptr, "Map<Interface>");
+    g_export_options->insert( "force_default_gamma", force_default_gamma.get());
 
     // Note that there are different tests for importing and exporting a certain file format (even
     // though the export test re-imports that file format again)
@@ -350,6 +507,9 @@ MI_TEST_AUTO_FUNCTION( test_import_export )
     // output file) different from canvas gamma (1.0 for Rgb_fp in input file).
     test_export( "test_gamma.exr", "png");
 
+    // Test an EXR image with luminance-chroma channels with different sampling rates.
+    test_import( "test_exr_luminance_chroma.exr", "png");
+    test_import( "test_exr_luminance_chroma_alpha.exr", "png");
 
 
     // Test images with a gray and alpha channel.
@@ -456,6 +616,9 @@ MI_TEST_AUTO_FUNCTION( test_import_export )
     test_selector( "test_simple_multipart_non_unique.exr", "left");
     test_selector( "test_simple_multipart_non_unique.exr", "right");
     test_selector( "test_simple_multipart_non_unique.exr", "left.B");
+
+    // EXR export options exr:data_type and/or exr:create_multipart_for_alpha.
+    test_exr_data_type();
 
     g_mdl_container_callback = nullptr;
 

@@ -33,6 +33,7 @@
 
 #include <mi/base/interface_declare.h>
 #include <mi/neuraylib/type_traits.h>
+#include <mi/neuraylib/version.h>
 
 namespace mi {
 
@@ -63,6 +64,7 @@ class IScope;
 /// #mi::neuraylib::IMdl_factory::create_module_builder(). \else argument. \endif
 ///
 /// \par Concurrent accesses to database elements within a transaction
+///
 /// Access to database elements is provided by #access() (read-only) and #edit() (for modification).
 /// The interface pointers returned by these methods must be released when you are done, in
 /// particular before the transaction is committed or aborted. Releasing the last interface pointer
@@ -96,6 +98,7 @@ class IScope;
 /// which internally calls #access().
 ///
 /// \par Concurrent transactions
+///
 /// If the same database element is edited in multiple overlapping transactions, the changes from
 /// the transaction created last survive, independent of the order in which the transactions are
 /// committed. \ifnot MDL_SDK_API If needed, the lifetime of transactions can be serialized across
@@ -434,10 +437,14 @@ public:
 
     /// Marks the element with the name \p name for removal from the database.
     ///
-    /// Note that the element continues to be stored in the database as long as it is referenced by
-    /// other elements. If it is no longer referenced, and the last transaction were it was
-    /// referenced has been committed, it will be lazily removed by the garbage collection of the
-    /// DB. There is no guarantee when this will happen.
+    /// \par Global removals
+    ///
+    /// The purpose of global removals is to mark all versions of a database element for garbage
+    /// collection. Such a marker has no effect while the element is still referenced (in any scope)
+    /// by other elements or while the transaction where the removal request was made is still open.
+    /// When these conditions do no longer apply, the element becomes eligible for garbage
+    /// collection and must no longer be used in any way. There is no guarantee when the garbage
+    /// collection will actually remove the element.
     ///
     /// This implies that a #remove() call might actually remove an element that was stored later
     /// under the same name. This can potentially lead to invalid tag accesses. Those cases can be
@@ -449,18 +456,30 @@ public:
     /// See also \ref mi_neuray_database_reuse_of_names for more details and correct usage patterns.
     /// \endif
     ///
-    /// \param name           The name of the element in the database to mark for removal.
-    /// \param only_localized \if MDL_SDK_API Unused. \else If \c true, the element is only removed
-    ///                       if it exists in the scope of the transaction; parent scopes are not
-    ///                       considered. \endif
-    /// \return
-    ///                       -  0: Success.
-    ///                       - -1: There is no DB element named \p name visible in this
-    ///                             transaction (\p only_localize is \c false) or there is no
-    ///                             DB element named \p name in the scope of this transaction
-    ///                             (\p only_localized is \c true).
-    ///                       - -2: Invalid parameters (\c NULL pointer).
-    ///                       - -3: The transaction is not open.
+    /// \par Local removals
+    ///
+    /// The purpose of local removals is to undo the effects of an earlier localization via
+    /// #mi::neuraylib::ITransaction::copy(). A local removal request requires that the element
+    /// exists in the scope of the transaction, and at least one more version of that element
+    /// exists in one of the parent scopes. The effect of a local removal request is to immediately
+    /// hide the version the scope of the transaction (the \em local copy), and to make the next
+    /// version in one of the parent scopes accessible from the very same transaction. The hidden
+    /// local copy will be lazily removed by the garbage collection of the DB. There is no
+    /// guarantee when this will happen.
+    ///
+    /// \param name                The name of the element in the database to mark for removal.
+    /// \param only_localized      \c false for global removals (the default) or \c true for local
+    ///                            removals. The flag is ignored in favor of global removals if the
+    ///                            transaction belongs to the global scope.
+    /// \return                    -  0: Success (including subsequent global removals on elements
+    ///                                  already marked for global removal).
+    ///                            - -1: For global removals: there is no DB element named \p name
+    ///                                  visible in this transaction. For local removals: there is
+    ///                                  no DB element named \p name in the scope of this
+    ///                                  transaction or there is no version of that DB element in
+    ///                                  one of the parent scopes.
+    ///                            - -2: Invalid parameters (\c NULL pointer).
+    ///                            - -3: The transaction is not open.
     virtual Sint32 remove( const char* name, bool only_localized = false) = 0;
 
     /// Returns the name of a database element.

@@ -35,22 +35,22 @@
 /// Helper macro. Checks whether the expression is true and if not prints a message and exits.
 #define check_success3(expr, error_code /* See I18N_ERROR_CODE */, extra_optional_error_string) \
 do { \
-	if( !(expr)) { \
-		fprintf( \
+        if( !(expr)) { \
+                fprintf( \
             stderr, \
             "Error in file %s, line %u: \"%s\".\n", \
             __FILE__, __LINE__, #expr); \
         i18n::Errors::ouput_error(error_code, extra_optional_error_string);\
-		exit( EXIT_FAILURE); \
-	} \
+                exit( EXIT_FAILURE); \
+        } \
 } while( false)
 #else
 #define check_success3(expr, error_code /* See I18N_ERROR_CODE */, extra_optional_error_string) \
 do { \
-	if( !(expr)) { \
+        if( !(expr)) { \
         i18n::Errors::ouput_error(error_code, extra_optional_error_string);\
-		exit( EXIT_FAILURE); \
-	} \
+                exit( EXIT_FAILURE); \
+        } \
 } while( false)
 #endif
 

@@ -42,6 +42,38 @@ namespace MI {
 
 namespace NEURAY {
 
+mi::neuraylib::IStruct_category::Predefined_id int_struct_category_id_to_ext_struct_category_id(
+    MDL::IStruct_category::Predefined_id struct_category_id)
+{
+    switch( struct_category_id) {
+        case MDL::IStruct_category::CID_USER:
+            return mi::neuraylib::IStruct_category::CID_USER;
+        case MDL::IStruct_category::CID_MATERIAL_CATEGORY:
+            return mi::neuraylib::IStruct_category::CID_MATERIAL_CATEGORY;
+        case MDL::IStruct_category::IStruct_category::CID_FORCE_32_BIT:
+            return mi::neuraylib::IStruct_category::CID_FORCE_32_BIT;
+    }
+
+    ASSERT( M_SCENE, false);
+    return mi::neuraylib::IStruct_category::CID_FORCE_32_BIT;
+}
+
+MDL::IStruct_category::Predefined_id ext_struct_category_id_to_int_struct_category_id(
+    mi::neuraylib::IStruct_category::Predefined_id struct_category_id)
+{
+    switch( struct_category_id) {
+        case mi::neuraylib::IStruct_category::CID_USER:
+            return MDL::IStruct_category::CID_USER;
+        case mi::neuraylib::IStruct_category::CID_MATERIAL_CATEGORY:
+            return MDL::IStruct_category::CID_MATERIAL_CATEGORY;
+        case mi::neuraylib::IStruct_category::CID_FORCE_32_BIT:
+            return MDL::IStruct_category::CID_FORCE_32_BIT;
+    }
+
+    ASSERT( M_SCENE, false);
+    return MDL::IStruct_category::CID_USER;
+}
+
 mi::Uint32 int_modifiers_to_ext_modifiers( mi::Uint32 modifiers)
 {
     ASSERT( M_SCENE, (modifiers
@@ -192,6 +224,30 @@ MDL::IType_texture::Shape ext_shape_to_int_shape( mi::neuraylib::IType_texture::
     return MDL::IType_texture::TS_2D;
 }
 
+const MDL::IStruct_category* get_internal_struct_category(
+    const mi::neuraylib::IStruct_category* struct_category)
+{
+    if( !struct_category)
+        return nullptr;
+    mi::base::Handle<const IStruct_category_wrapper> struct_category_wrapper(
+        struct_category->get_interface<IStruct_category_wrapper>());
+    if( !struct_category_wrapper)
+        return nullptr;
+    return struct_category_wrapper->get_internal_struct_category();
+}
+
+const MDL::IStruct_category_list* get_internal_struct_category_list(
+    const mi::neuraylib::IStruct_category_list* struct_category_list)
+{
+    if( !struct_category_list)
+        return nullptr;
+    mi::base::Handle<const IStruct_category_list_wrapper> struct_category_list_wrapper(
+        struct_category_list->get_interface<IStruct_category_list_wrapper>());
+    if( !struct_category_list_wrapper)
+        return nullptr;
+    return struct_category_list_wrapper->get_internal_struct_category_list();
+}
+
 const MDL::IType* get_internal_type( const mi::neuraylib::IType* type)
 {
     if( !type)
@@ -213,8 +269,78 @@ const MDL::IType_list* get_internal_type_list( const mi::neuraylib::IType_list* 
     return type_list_wrapper->get_internal_type_list();
 }
 
+const char* Struct_category::get_symbol() const
+{
+    return m_struct_category->get_symbol();
+}
+
+mi::neuraylib::IStruct_category::Predefined_id Struct_category::get_predefined_id() const
+{
+    return int_struct_category_id_to_ext_struct_category_id(
+        m_struct_category->get_predefined_id());
+}
+
+const mi::neuraylib::IAnnotation_block* Struct_category::get_annotations() const
+{
+    mi::base::Handle<const MDL::IAnnotation_block> result_int(
+        m_struct_category->get_annotations());
+    mi::base::Handle<Expression_factory> ef(
+        s_class_factory->create_expression_factory( m_transaction.get()));
+    return ef->create_annotation_block( result_int.get(), m_owner.get());
+}
+
+const MDL::IStruct_category* Struct_category::get_internal_struct_category() const
+{
+    m_struct_category->retain();
+    return m_struct_category.get();
+}
+
+const mi::neuraylib::IStruct_category* Struct_category_list::get_struct_category( mi::Size index) const
+{
+    mi::base::Handle<const MDL::IStruct_category> result_int(
+        m_struct_category_list->get_struct_category( index));
+    return m_tf->create_struct_category( result_int.get(), m_owner.get());
+}
+
+const mi::neuraylib::IStruct_category* Struct_category_list::get_struct_category( const char* name) const
+{
+    mi::base::Handle<const MDL::IStruct_category> result_int(
+        m_struct_category_list->get_struct_category( name));
+    return m_tf->create_struct_category( result_int.get(), m_owner.get());
+}
+
+mi::Sint32 Struct_category_list::set_struct_category(
+    mi::Size index, const mi::neuraylib::IStruct_category* struct_category)
+{
+    mi::base::Handle<const MDL::IStruct_category> struct_category_int(
+        get_internal_struct_category( struct_category));
+    return m_struct_category_list->set_struct_category( index, struct_category_int.get());
+}
+
+mi::Sint32 Struct_category_list::set_struct_category(
+    const char* name, const mi::neuraylib::IStruct_category* struct_category)
+{
+    mi::base::Handle<const MDL::IStruct_category> struct_category_int(
+        get_internal_struct_category( struct_category));
+    return m_struct_category_list->set_struct_category( name, struct_category_int.get());
+}
+
+mi::Sint32 Struct_category_list::add_struct_category(
+    const char* name, const mi::neuraylib::IStruct_category* struct_category)
+{
+    mi::base::Handle<const MDL::IStruct_category> struct_category_int(
+        get_internal_struct_category( struct_category));
+    return m_struct_category_list->add_struct_category( name, struct_category_int.get());
+}
+
+const MDL::IStruct_category_list* Struct_category_list::get_internal_struct_category_list() const
+{
+    m_struct_category_list->retain();
+    return m_struct_category_list.get();
+}
+
 template <class T, class I>
-Type_base<T, I>::~Type_base() { }
+Type_base<T, I>::~Type_base() = default;
 
 template <class E, class I>
 mi::Uint32 Type_base<E, I>::get_all_type_modifiers() const
@@ -343,6 +469,15 @@ const mi::neuraylib::IAnnotation_block* Type_struct::get_field_annotations( mi::
     return ef->create_annotation_block( result_int.get(), m_owner.get());
 }
 
+const mi::neuraylib::IStruct_category* Type_struct::get_struct_category() const
+{
+    mi::base::Handle<const MDL::IStruct_category> result_int(
+        m_type->get_struct_category());
+    mi::base::Handle<Type_factory> tf(
+        s_class_factory->create_type_factory( m_transaction.get()));
+    return tf->create_struct_category( result_int.get(), m_owner.get());
+}
+
 mi::neuraylib::IType_texture::Shape Type_texture::get_shape() const
 {
     return int_shape_to_ext_shape( m_type->get_shape());
@@ -382,6 +517,79 @@ const MDL::IType_list* Type_list::get_internal_type_list() const
 {
     m_type_list->retain();
     return m_type_list.get();
+}
+
+const mi::neuraylib::IStruct_category* Type_factory::create_struct_category(
+    const char* symbol) const
+{
+    mi::base::Handle<const MDL::IStruct_category> result_int(
+        m_tf->create_struct_category( symbol));
+    return create_struct_category( result_int.get(), /*owner*/ nullptr);
+}
+
+mi::neuraylib::IStruct_category_list* Type_factory::create_struct_category_list() const
+{
+    mi::base::Handle<MDL::IStruct_category_list> result_int(
+        m_tf->create_struct_category_list( /*initial_capacity*/ 0));
+    return create_struct_category_list( result_int.get(), /*owner*/ nullptr);
+}
+
+const mi::neuraylib::IStruct_category* Type_factory::get_predefined_struct_category(
+    mi::neuraylib::IStruct_category::Predefined_id id) const
+{
+    MDL::IStruct_category::Predefined_id id_int
+        = ext_struct_category_id_to_int_struct_category_id( id);
+    mi::base::Handle<const MDL::IStruct_category> result_int(
+        m_tf->get_predefined_struct_category( id_int));
+    return create_struct_category( result_int.get(), /*owner*/ nullptr);
+}
+
+mi::neuraylib::IStruct_category_list* Type_factory::clone(
+    const mi::neuraylib::IStruct_category_list* struct_category_list) const
+{
+    mi::base::Handle<const MDL::IStruct_category_list> struct_category_list_int(
+        get_internal_struct_category_list( struct_category_list));
+    mi::base::Handle<MDL::IStruct_category_list> result_int( m_tf->clone(
+        struct_category_list_int.get()));
+    return create_struct_category_list( result_int.get(), /*owner*/ nullptr);
+}
+
+mi::Sint32 Type_factory::compare(
+    const mi::neuraylib::IStruct_category* lhs,
+    const mi::neuraylib::IStruct_category* rhs) const
+{
+    mi::base::Handle<const MDL::IStruct_category> lhs_int(
+        get_internal_struct_category( lhs));
+    mi::base::Handle<const MDL::IStruct_category> rhs_int(
+        get_internal_struct_category( rhs));
+    return m_tf->compare( lhs_int.get(), rhs_int.get());
+}
+
+mi::Sint32 Type_factory::compare(
+    const mi::neuraylib::IStruct_category_list* lhs,
+    const mi::neuraylib::IStruct_category_list* rhs) const
+{
+    mi::base::Handle<const MDL::IStruct_category_list> lhs_int(
+        get_internal_struct_category_list( lhs));
+    mi::base::Handle<const MDL::IStruct_category_list> rhs_int(
+        get_internal_struct_category_list( rhs));
+    return m_tf->compare( lhs_int.get(), rhs_int.get());
+}
+
+const mi::IString* Type_factory::dump(
+    const mi::neuraylib::IStruct_category* struct_category, mi::Size depth) const
+{
+    mi::base::Handle<const MDL::IStruct_category> struct_category_int(
+        get_internal_struct_category( struct_category));
+    return m_tf->dump( struct_category_int.get(), depth);
+}
+
+const mi::IString* Type_factory::dump(
+    const mi::neuraylib::IStruct_category_list* list, mi::Size depth) const
+{
+    mi::base::Handle<const MDL::IStruct_category_list> list_int(
+        get_internal_struct_category_list( list));
+    return m_tf->dump( list_int.get(), depth);
 }
 
 const mi::neuraylib::IType_alias* Type_factory::create_alias(
@@ -578,11 +786,19 @@ mi::Sint32 Type_factory::compare(
 }
 
 mi::Sint32 Type_factory::is_compatible(
-    const mi::neuraylib::IType* src, const mi::neuraylib::IType* dst) const
+    const mi::neuraylib::IType* lhs, const mi::neuraylib::IType* rhs) const
 {
-    mi::base::Handle<const MDL::IType> src_int( get_internal_type(src));
-    mi::base::Handle<const MDL::IType> dst_int( get_internal_type(dst));
-    return m_tf->is_compatible( src_int.get(), dst_int.get());
+    mi::base::Handle<const MDL::IType> lhs_int( get_internal_type( lhs));
+    mi::base::Handle<const MDL::IType> rhs_int( get_internal_type( rhs));
+    return m_tf->is_compatible( lhs_int.get(), rhs_int.get());
+}
+
+mi::Sint32 Type_factory::from_same_struct_category(
+    const mi::neuraylib::IType* lhs, const mi::neuraylib::IType* rhs) const
+{
+    mi::base::Handle<const MDL::IType> lhs_int( get_internal_type( lhs));
+    mi::base::Handle<const MDL::IType> rhs_int( get_internal_type( rhs));
+    return m_tf->from_same_struct_category( lhs_int.get(), rhs_int.get());
 }
 
 const mi::IString* Type_factory::dump( const mi::neuraylib::IType* type, mi::Size depth) const
@@ -612,6 +828,36 @@ const mi::IString* Type_factory::get_mdl_module_name( const mi::neuraylib::IType
     mi::base::Handle<const MDL::IType> type_int( get_internal_type( type));
     const std::string& s = MDL::get_mdl_module_name( type_int.get());
     return new String_impl( s.c_str());
+}
+
+const mi::neuraylib::IStruct_category* Type_factory::create_struct_category(
+    const MDL::IStruct_category* struct_category, const mi::base::IInterface* owner) const
+{
+    if( !struct_category)
+        return nullptr;
+
+    return new Struct_category( this, m_transaction.get(), struct_category, owner);
+}
+
+mi::neuraylib::IStruct_category_list* Type_factory::create_struct_category_list(
+    MDL::IStruct_category_list* struct_category_list,
+    const mi::base::IInterface* owner) const
+{
+    if( !struct_category_list)
+        return nullptr;
+
+    return new Struct_category_list( this, struct_category_list, owner);
+}
+
+const mi::neuraylib::IStruct_category_list* Type_factory::create_struct_category_list(
+    const MDL::IStruct_category_list* struct_category_list,
+    const mi::base::IInterface* owner) const
+{
+    if( !struct_category_list)
+        return nullptr;
+
+    return create_struct_category_list(
+        const_cast<MDL::IStruct_category_list*>( struct_category_list), owner);
 }
 
 const mi::neuraylib::IType* Type_factory::create(
@@ -693,7 +939,7 @@ const mi::neuraylib::IType* Type_factory::create(
         case MDL::IType::TK_HAIR_BSDF: {
             mi::base::Handle<const MDL::IType_hair_bsdf> t(
                 type->get_interface<MDL::IType_hair_bsdf>());
-            return new Type_hair_bsdf(this, t.get(), owner);
+            return new Type_hair_bsdf( this, t.get(), owner);
         }
         case MDL::IType::TK_EDF: {
             mi::base::Handle<const MDL::IType_edf> t( type->get_interface<MDL::IType_edf>());

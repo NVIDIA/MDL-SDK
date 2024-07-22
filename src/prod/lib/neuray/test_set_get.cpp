@@ -44,8 +44,8 @@
 #include <mi/neuraylib/ineuray.h>
 #include <mi/neuraylib/set_get.h>
 
+#include <mi/neuraylib/iattribute_container.h>
 #include <mi/neuraylib/idatabase.h>
-#include <mi/neuraylib/iimage.h>
 #include <mi/neuraylib/iscope.h>
 #include <mi/neuraylib/itransaction.h>
 
@@ -62,8 +62,9 @@ void run_tests( mi::neuraylib::INeuray* neuray)
         mi::base::Handle<mi::neuraylib::IScope> global_scope( database->get_global_scope());
         mi::base::Handle<mi::neuraylib::ITransaction> transaction( global_scope->create_transaction());
 
-        mi::base::Handle<mi::neuraylib::IImage> image( transaction->create<mi::neuraylib::IImage>( "Image"));
-        transaction->store( image.get(), "dummy");
+        mi::base::Handle<mi::neuraylib::IAttribute_container> dummy(
+            transaction->create<mi::neuraylib::IAttribute_container>( "Attribute_container"));
+        transaction->store( dummy.get(), "dummy");
 
         mi::base::Handle<mi::neuraylib::IFactory> factory(
             neuray->get_api_component<mi::neuraylib::IFactory>());
@@ -129,7 +130,7 @@ void run_tests( mi::neuraylib::INeuray* neuray)
             const char* value = "foo";
             result = get_value( data.get(), value);
             MI_CHECK_EQUAL( result, 0);
-            MI_CHECK_EQUAL( value, 0);
+            MI_CHECK_EQUAL( value, nullptr);
             result = set_value( data.get(), "dummy");
             MI_CHECK_EQUAL( result, 0);
             result = get_value( data.get(), value);
@@ -139,7 +140,7 @@ void run_tests( mi::neuraylib::INeuray* neuray)
             MI_CHECK_EQUAL( result, 0);
             result = get_value( data.get(), value);
             MI_CHECK_EQUAL( result, 0);
-            MI_CHECK_EQUAL( value, 0);
+            MI_CHECK_EQUAL( value, nullptr);
         }
         {
             // IFloat32_2 via explicit method
@@ -201,6 +202,204 @@ void run_tests( mi::neuraylib::INeuray* neuray)
             MI_CHECK_EQUAL( result, 0);
             MI_CHECK_EQUAL( value, 42.0f);
         }
+        {
+            // IArray via T*/mi::Size
+            mi::base::Handle<mi::IData> data( factory->create<mi::IData>( "Sint32[3]"));
+            mi::Sint32 value[3];
+            result = get_value( data.get(), value, 3);
+            MI_CHECK_EQUAL( result, 0);
+            mi::Sint32 input[3] = { 0, 0, 0 };
+            MI_CHECK_EQUAL_COLLECTIONS( value, value+3, input, input+3);
+
+            mi::Sint32 input2[3] = { 43, 44, 45 };
+            result = set_value( data.get(), input2, 3);
+            MI_CHECK_EQUAL( result, 0);
+            result = get_value( data.get(), value, 3);
+            MI_CHECK_EQUAL( result, 0);
+            MI_CHECK_EQUAL_COLLECTIONS( value, value+3, input2, input2+3);
+
+            mi::Sint32 input3[4] = { 43, 44, 45, 46 };
+            result = set_value( data.get(), input3, 4);
+            MI_CHECK_EQUAL( result, -5);
+
+            mi::Sint32 value2[4];
+            result = get_value( data.get(), value2, 4);
+            MI_CHECK_EQUAL( result, -5);
+        }
+        {
+            // IArray via std::vector
+            mi::base::Handle<mi::IData> data( factory->create<mi::IData>( "Sint32[3]"));
+            std::vector<mi::Sint32> value;
+            result = get_value( data.get(), value);
+            MI_CHECK_EQUAL( result, 0);
+            std::vector<mi::Sint32> input { 0, 0, 0 };
+            MI_CHECK_EQUAL_COLLECTIONS(
+                value.data(), value.data()+value.size(), input.data(), input.data()+input.size());
+
+            std::vector<mi::Sint32> input2 { 43, 44, 45 };
+            result = set_value( data.get(), input2);
+            MI_CHECK_EQUAL( result, 0);
+            result = get_value( data.get(), value);
+            MI_CHECK_EQUAL( result, 0);
+            MI_CHECK_EQUAL_COLLECTIONS(
+                value.data(), value.data()+value.size(), input2.data(), input2.data()+input2.size());
+
+            std::vector<mi::Sint32> input3 { 43, 44, 45, 46 };
+            result = set_value( data.get(), input3);
+            MI_CHECK_EQUAL( result, -5);
+
+            std::vector<mi::Sint32> value2( 4);
+            result = get_value( data.get(), value2);
+            MI_CHECK_EQUAL( result, 0);
+            MI_CHECK_EQUAL_COLLECTIONS(
+                value.data(), value.data()+value.size(), input2.data(), input2.data()+input2.size());
+        }
+        {
+            // IDynamic_array via T*/mi::Size
+            mi::base::Handle<mi::IData> data( factory->create<mi::IData>( "Sint32[]"));
+            mi::Sint32 value[3];
+            result = get_value( data.get(), value, 0);
+            MI_CHECK_EQUAL( result, 0);
+
+            mi::Sint32 input2[3] = { 43, 44, 45 };
+            result = set_value( data.get(), input2, 3);
+            MI_CHECK_EQUAL( result, 0);
+            result = get_value( data.get(), value, 3);
+            MI_CHECK_EQUAL( result, 0);
+            MI_CHECK_EQUAL_COLLECTIONS( value, value+3, input2, input2+3);
+
+            mi::Sint32 value2[4];
+            result = get_value( data.get(), value2, 4);
+            MI_CHECK_EQUAL( result, -5);
+        }
+        {
+            // IDynamic_array via std::vector
+            mi::base::Handle<mi::IData> data( factory->create<mi::IData>( "Sint32[]"));
+            std::vector<mi::Sint32> value( 1);
+            result = get_value( data.get(), value);
+            MI_CHECK_EQUAL( result, 0);
+            MI_CHECK_EQUAL( value.size(), 0);
+
+            std::vector<mi::Sint32> input2 { 43, 44, 45 };
+            result = set_value( data.get(), input2);
+            MI_CHECK_EQUAL( result, 0);
+            result = get_value( data.get(), value);
+            MI_CHECK_EQUAL( result, 0);
+            MI_CHECK_EQUAL_COLLECTIONS(
+                value.data(), value.data()+value.size(), input2.data(), input2.data()+input2.size());
+
+            std::vector<mi::Sint32> value2( 4);
+            result = get_value( data.get(), value2);
+            MI_CHECK_EQUAL( result, 0);
+            MI_CHECK_EQUAL( value2.size(), 3);
+        }
+        {
+            // IArray attribute via T*/mi::Size
+            mi::base::Handle<mi::neuraylib::IAttribute_set> attr_set(
+                transaction->create<mi::neuraylib::IAttribute_set>( "Attribute_container"));
+            mi::base::Handle<mi::IData> attr( attr_set->create_attribute( "attr", "Sint32[3]"));
+            attr.reset();
+
+            mi::Sint32 value[3];
+            result = mi::get_value( attr_set.get(), "attr", value, 3);
+            MI_CHECK_EQUAL( result, 0);
+            mi::Sint32 input[3] = { 0, 0, 0 };
+            MI_CHECK_EQUAL_COLLECTIONS( value, value+3, input, input+3);
+
+            mi::Sint32 input2[3] = { 43, 44, 45 };
+            result = mi::set_value( attr_set.get(), "attr", input2, 3);
+            MI_CHECK_EQUAL( result, 0);
+            result = mi::get_value( attr_set.get(), "attr", value, 3);
+            MI_CHECK_EQUAL( result, 0);
+            MI_CHECK_EQUAL_COLLECTIONS( value, value+3, input2, input2+3);
+
+            mi::Sint32 input3[4] = { 43, 44, 45, 46 };
+            result = mi::set_value( attr_set.get(), "attr", input3, 4);
+            MI_CHECK_EQUAL( result, -5);
+
+            mi::Sint32 value2[4];
+            result = mi::get_value( attr_set.get(), "attr", value2, 4);
+            MI_CHECK_EQUAL( result, -5);
+        }
+        {
+            // IArray attribute via std::vector
+            mi::base::Handle<mi::neuraylib::IAttribute_set> attr_set(
+                transaction->create<mi::neuraylib::IAttribute_set>( "Attribute_container"));
+            mi::base::Handle<mi::IData> attr( attr_set->create_attribute( "attr", "Sint32[3]"));
+            attr.reset();
+
+            std::vector<mi::Sint32> value;
+            result = mi::get_value( attr_set.get(), "attr", value);
+            MI_CHECK_EQUAL( result, 0);
+            std::vector<mi::Sint32> input { 0, 0, 0 };
+            MI_CHECK_EQUAL_COLLECTIONS(
+                value.data(), value.data()+value.size(), input.data(), input.data()+input.size());
+
+            std::vector<mi::Sint32> input2 { 43, 44, 45 };
+            result = mi::set_value( attr_set.get(), "attr", input2);
+            MI_CHECK_EQUAL( result, 0);
+            result = mi::get_value( attr_set.get(), "attr", value);
+            MI_CHECK_EQUAL( result, 0);
+            MI_CHECK_EQUAL_COLLECTIONS(
+                value.data(), value.data()+value.size(), input2.data(), input2.data()+input2.size());
+
+            std::vector<mi::Sint32> input3 { 43, 44, 45, 46 };
+            result = mi::set_value( attr_set.get(), "attr", input3);
+            MI_CHECK_EQUAL( result, -5);
+
+            std::vector<mi::Sint32> value2( 4);
+            result = mi::get_value( attr_set.get(), "attr", value2);
+            MI_CHECK_EQUAL( result, 0);
+            MI_CHECK_EQUAL_COLLECTIONS(
+                value.data(), value.data()+value.size(), input2.data(), input2.data()+input2.size());
+        }
+        {
+            // IDynamic_array attribute via T*/mi::Size
+            mi::base::Handle<mi::neuraylib::IAttribute_set> attr_set(
+                transaction->create<mi::neuraylib::IAttribute_set>( "Attribute_container"));
+            mi::base::Handle<mi::IData> attr( attr_set->create_attribute( "attr", "Sint32[]"));
+            attr.reset();
+
+            mi::Sint32 value[3];
+            result = mi::get_value( attr_set.get(), "attr", value, 0);
+            MI_CHECK_EQUAL( result, 0);
+
+            mi::Sint32 input2[3] = { 43, 44, 45 };
+            result = mi::set_value( attr_set.get(), "attr", input2, 3);
+            MI_CHECK_EQUAL( result, 0);
+            result = mi::get_value( attr_set.get(), "attr", value, 3);
+            MI_CHECK_EQUAL( result, 0);
+            MI_CHECK_EQUAL_COLLECTIONS( value, value+3, input2, input2+3);
+
+            mi::Sint32 value2[4];
+            result = mi::get_value( attr_set.get(), "attr", value2, 4);
+            MI_CHECK_EQUAL( result, -5);
+        }
+        {
+            // IDynamic_array attribute via std::vector
+            mi::base::Handle<mi::neuraylib::IAttribute_set> attr_set(
+                transaction->create<mi::neuraylib::IAttribute_set>( "Attribute_container"));
+            mi::base::Handle<mi::IData> attr( attr_set->create_attribute( "attr", "Sint32[]"));
+            attr.reset();
+
+            std::vector<mi::Sint32> value;
+            result = mi::get_value( attr_set.get(), "attr", value);
+            MI_CHECK_EQUAL( result, 0);
+            MI_CHECK_EQUAL( value.size(), 0);
+
+            std::vector<mi::Sint32> input2 { 43, 44, 45 };
+            result = mi::set_value( attr_set.get(), "attr", input2);
+            MI_CHECK_EQUAL( result, 0);
+            result = mi::get_value( attr_set.get(), "attr", value);
+            MI_CHECK_EQUAL( result, 0);
+            MI_CHECK_EQUAL_COLLECTIONS(
+                value.data(), value.data()+value.size(), input2.data(), input2.data()+input2.size());
+
+            std::vector<mi::Sint32> value2( 4);
+            result = mi::get_value( attr_set.get(), "attr", value2);
+            MI_CHECK_EQUAL( result, 0);
+            MI_CHECK_EQUAL( value2.size(), 3);
+        }
 
         MI_CHECK_EQUAL( 0, transaction->commit());
     }
@@ -218,7 +417,7 @@ MI_TEST_AUTO_FUNCTION( test_set_get )
         run_tests( neuray.get());
     }
 
-    neuray = 0;
+    neuray = nullptr;
     MI_CHECK( unload());
 }
 

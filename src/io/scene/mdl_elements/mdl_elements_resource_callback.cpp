@@ -34,17 +34,19 @@
 
 #include "i_mdl_elements_resource_callback.h"
 
-#include <sstream>
 #include <cassert>
+#include <filesystem>
+#include <sstream>
+
 #include <mi/mdl/mdl_modules.h>
 #include <mi/neuraylib/ibsdf_isotropic_data.h>
 #include <mi/neuraylib/ibuffer.h>
 #include <mi/neuraylib/icanvas.h>
 #include <mi/neuraylib/iexport_result.h>
 #include <mi/neuraylib/istring.h>
+
 #include <base/data/db/i_db_access.h>
 #include <base/data/db/i_db_transaction.h>
-#include <base/hal/disk/disk.h>
 #include <base/hal/hal/i_hal_ospath.h>
 #include <io/image/image/i_image.h>
 #include <io/image/image/i_image_mipmap.h>
@@ -54,6 +56,8 @@
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
 #include <io/scene/texture/i_texture.h>
+
+namespace fs = std::filesystem;
 
 namespace MI {
 
@@ -83,9 +87,10 @@ Resource_callback::Resource_callback(
     m_transaction->pin();
 
     if( module_filename) {
-        m_module_filename = module_filename;
-        if( !DISK::is_path_absolute( m_module_filename))
-            m_module_filename = HAL::Ospath::join_v2( DISK::get_cwd(), m_module_filename);
+        std::error_code ec;
+        fs::path path( fs::u8path( module_filename));
+        path = fs::absolute( path, ec);
+        m_module_filename = path.u8string();
         m_module_filename_c_str = m_module_filename.c_str();
         mi::Size length = m_module_filename.length();
         ASSERT( M_NEURAY_API, length >= 4 && m_module_filename.substr( length-4) == ".mdl");
@@ -156,15 +161,14 @@ const char* Resource_callback::get_resource_name(
         if( module_tag) {
 
             SERIAL::Class_id class_id = m_transaction->get_class_id( module_tag);
-            if( class_id != Mdl_module::id) {
+            if( class_id != ID_MDL_MODULE) {
                 add_error_resource_type( 6010, "module", module_tag);
                 return nullptr;
             }
 
             mi::Float32 res_gamma = 0.0f;
             std::string res_selector;
-            const mi::mdl::IValue_texture* texture
-                = mi::mdl::as<mi::mdl::IValue_texture>( resource);
+            const auto* texture = mi::mdl::as<mi::mdl::IValue_texture>( resource);
             if( texture) {
                 res_gamma    = convert_gamma_enum_to_float( texture->get_gamma_mode());
                 res_selector = texture->get_selector();
@@ -232,7 +236,7 @@ std::string Resource_callback::handle_texture(
     SERIAL::Class_id class_id = m_transaction->get_class_id( texture_tag);
     if( class_id != TEXTURE::Texture::id) {
         add_error_resource_type( 6010, "texture", texture_tag);
-        return std::string();
+        return {};
     }
 
     DB::Access<TEXTURE::Texture> texture( texture_tag, m_transaction);
@@ -245,7 +249,7 @@ std::string Resource_callback::handle_texture(
     else if( volume_tag)
         return handle_texture_volume( volume_tag, supports_strict_relative_path, buffer_callback);
     else
-        return std::string();
+        return {};
 }
 
 std::string Resource_callback::handle_texture_image(
@@ -256,7 +260,7 @@ std::string Resource_callback::handle_texture_image(
     SERIAL::Class_id class_id = m_transaction->get_class_id( image_tag);
     if( class_id != DBIMAGE::Image::id) {
         add_error_resource_type( 6010, "image", image_tag);
-        return std::string();
+        return {};
     }
 
     DB::Access<DBIMAGE::Image> image( image_tag, m_transaction);
@@ -295,14 +299,14 @@ std::string Resource_callback::handle_texture_image(
         // export).
         if( m_module_filename.empty()) {
             add_error_string_based( 6011, "file-based", "image", image_tag);
-            return std::string();
+            return {};
         }
 
         // Otherwise export the image.
         std::string new_filename  = export_texture_image( image.get_ptr(), buffer_callback);
         if( new_filename.empty()) {
             add_error_export_failed( 6013, "file-based", "image", image_tag);
-            return std::string();
+            return {};
         }
 
         return make_relative( new_filename, supports_strict_relative_path);
@@ -339,14 +343,14 @@ std::string Resource_callback::handle_texture_image(
         // export).
         if( m_module_filename.empty()) {
             add_error_string_based( 6015, "container-based", "image", image_tag);
-            return std::string();
+            return {};
         }
 
         // Export canvas(es) with a generated filename and return that filename.
         std::string new_filename = export_texture_image( image.get_ptr(), buffer_callback);
         if( new_filename.empty()) {
             add_error_string_based( 6016, "container-based", "image", image_tag);
-            return std::string();
+            return {};
         }
 
         return make_relative( new_filename, supports_strict_relative_path);
@@ -358,14 +362,14 @@ std::string Resource_callback::handle_texture_image(
         // export).
         if( m_module_filename.empty()) {
             add_error_string_based( 6012, "memory-based", "image", image_tag);
-            return std::string();
+            return {};
         }
 
         // Export canvas(es) with a generated filename and return that filename.
         std::string new_filename = export_texture_image( image.get_ptr(), buffer_callback);
         if( new_filename.empty()) {
             add_error_string_based( 6014, "memory-based", "image", image_tag);
-            return std::string();
+            return {};
         }
 
         return make_relative( new_filename, supports_strict_relative_path);
@@ -378,7 +382,7 @@ std::string Resource_callback::handle_texture_volume(
     Buffer_callback* buffer_callback)
 {
     ASSERT( M_NEURAY_API, false);
-    return std::string();
+    return {};
 }
 
 std::string Resource_callback::handle_light_profile(
@@ -389,7 +393,7 @@ std::string Resource_callback::handle_light_profile(
     SERIAL::Class_id class_id = m_transaction->get_class_id( tag);
     if( class_id != LIGHTPROFILE::Lightprofile::id) {
         add_error_resource_type( 6010, "light profile", tag);
-        return std::string();
+        return {};
     }
 
     DB::Access<LIGHTPROFILE::Lightprofile> lp( tag, m_transaction);
@@ -412,14 +416,14 @@ std::string Resource_callback::handle_light_profile(
         // export).
         if( m_module_filename.empty()) {
             add_error_string_based( 6011, "file-based", "light profile", tag);
-            return std::string();
+            return {};
         }
 
         // Otherwise export the light profile.
         std::string new_filename  = export_light_profile( lp.get_ptr(), buffer_callback);
         if( new_filename.empty()) {
             add_error_export_failed( 6013, "file-based", "light profile", tag);
-            return std::string();
+            return {};
         }
 
         return make_relative( new_filename, supports_strict_relative_path);
@@ -447,14 +451,14 @@ std::string Resource_callback::handle_light_profile(
         // export).
         if( m_module_filename.empty()) {
             add_error_string_based( 6015, "container-based", "light profile", tag);
-            return std::string();
+            return {};
         }
 
         // Otherwise export the light profile.
         const std::string new_filename = export_light_profile( lp.get_ptr(), buffer_callback);
         if( new_filename.empty()) {
             add_error_export_failed( 6016, "container-based", "light profile", tag);
-            return std::string();
+            return {};
         }
 
         return make_relative( new_filename, supports_strict_relative_path);
@@ -466,14 +470,14 @@ std::string Resource_callback::handle_light_profile(
         // export).
         if( m_module_filename.empty()) {
             add_error_string_based( 6012, "memory-based", "light profile", tag);
-            return std::string();
+            return {};
         }
 
         // Otherwise export the light profile.
         const std::string new_filename = export_light_profile( lp.get_ptr(), buffer_callback);
         if( new_filename.empty()) {
             add_error_export_failed( 6014, "memory-based", "light profile", tag);
-            return std::string();
+            return {};
         }
 
         return make_relative( new_filename, supports_strict_relative_path);
@@ -488,7 +492,7 @@ std::string Resource_callback::handle_bsdf_measurement(
     SERIAL::Class_id class_id = m_transaction->get_class_id( tag);
     if( class_id != BSDFM::Bsdf_measurement::id) {
         add_error_resource_type( 6010, "BSDF measurement", tag);
-        return std::string();
+        return {};
     }
 
     DB::Access<BSDFM::Bsdf_measurement> bsdfm( tag, m_transaction);
@@ -511,14 +515,14 @@ std::string Resource_callback::handle_bsdf_measurement(
         // export).
         if( m_module_filename.empty()) {
             add_error_string_based( 6011, "file-based", "BSDF measurement", tag);
-            return std::string();
+            return {};
         }
 
         // Otherwise export the BSDF measurement.
         const std::string new_filename = export_bsdf_measurement( bsdfm.get_ptr(), buffer_callback);
         if( new_filename.empty()) {
             add_error_export_failed( 6013, "container-based", "BSDF measurement", tag);
-            return std::string();
+            return {};
         }
 
         return make_relative( new_filename, supports_strict_relative_path);
@@ -546,14 +550,14 @@ std::string Resource_callback::handle_bsdf_measurement(
         // export).
         if( m_module_filename.empty()) {
             add_error_string_based( 6015, "container-based", "BSDF measurement", tag);
-            return std::string();
+            return {};
         }
 
         // Otherwise export the BSDF measurement.
         const std::string new_filename = export_bsdf_measurement( bsdfm.get_ptr(), buffer_callback);
         if( new_filename.empty()) {
             add_error_export_failed( 6016, "container-based", "BSDF measurement", tag);
-            return std::string();
+            return {};
         }
 
         return make_relative( new_filename, supports_strict_relative_path);
@@ -565,14 +569,14 @@ std::string Resource_callback::handle_bsdf_measurement(
         // export).
         if( m_module_filename.empty()) {
             add_error_string_based( 6012, "memory-based", "BSDF measurement", tag);
-            return std::string();
+            return {};
         }
 
         // Otherwise export the BSDF measurement.
         const std::string new_filename = export_bsdf_measurement( bsdfm.get_ptr(), buffer_callback);
         if( new_filename.empty()) {
             add_error_export_failed( 6014, "memory-based", "BSDF measurement", tag);
-            return std::string();
+            return {};
         }
 
         return make_relative( new_filename, supports_strict_relative_path);
@@ -607,9 +611,7 @@ std::string Resource_callback::export_texture_image(
         mi::Size m = image->get_frame_length( i);
         for( mi::Size j = 0; copy_all && (j < m); ++j) {
             const std::string& old_filename_fuv = image->get_filename( i, j);
-            if( old_filename_fuv.empty())
-                copy_all = false;
-            if( !DISK::is_file( old_filename_fuv.c_str()))
+            if( !fs::is_regular_file( fs::u8path( old_filename_fuv)))
                 copy_all = false;
         }
     }
@@ -663,7 +665,9 @@ std::string Resource_callback::export_texture_image(
                 }
             } else if( copy_all) {
                 // copy the file
-                success &= DISK::file_copy( old_filename_fuv.c_str(), new_filename_fuv.c_str());
+                std::error_code ec;
+                success &= fs::copy_file(
+                    fs::u8path( old_filename_fuv), fs::u8path( new_filename_fuv), ec);
             } else {
                 // export to file
                 assert( !copy_all);
@@ -700,12 +704,16 @@ std::string Resource_callback::export_light_profile(
             new_filename = (*buffer_callback)( buffer.get(), new_filename.c_str());
             success = !new_filename.empty();
         }
-    } else if( !old_filename.empty() && DISK::is_file( old_filename.c_str())) {
-        // copy the file
-        success = DISK::file_copy( old_filename.c_str(), new_filename.c_str());
     } else {
-        // export to file
-        success = LIGHTPROFILE::export_to_file( m_transaction, profile, new_filename);
+        fs::path old_path( fs::u8path( old_filename));
+        std::error_code ec;
+        if( fs::is_regular_file( old_path, ec)) {
+            // copy the file
+            success = fs::copy_file( old_path, fs::u8path( new_filename), ec);
+        } else {
+            // export to file
+            success = LIGHTPROFILE::export_to_file( m_transaction, profile, new_filename);
+        }
     }
 
     return success ? new_filename : std::string();
@@ -739,12 +747,16 @@ std::string Resource_callback::export_bsdf_measurement(
             new_filename = (*buffer_callback)( buffer.get(), new_filename.c_str());
             success = !new_filename.empty();
         }
-    } else if( !old_filename.empty() && DISK::is_file( old_filename.c_str())) {
-        // copy the file
-        success = DISK::file_copy( old_filename.c_str(), new_filename.c_str());
     } else {
-        // export to file
-        success = BSDFM::export_to_file( refl.get(), trans.get(), new_filename);
+        fs::path old_path( fs::u8path( old_filename));
+        std::error_code ec;
+        if( fs::is_regular_file( old_path, ec)) {
+            // copy the file
+            success = fs::copy_file( old_path, fs::u8path( new_filename), ec);
+        } else {
+            // export to file
+            success = BSDFM::export_to_file( refl.get(), trans.get(), new_filename);
+        }
     }
 
     return success ? new_filename : std::string();
@@ -758,13 +770,14 @@ std::string Resource_callback::get_new_resource_filename(
 
     std::string s, old_extension;
 
+    std::error_code ec;
     std::string old_root;
     if( old_filename) {
         HAL::Ospath::splitext( strip_directories( old_filename), old_root, old_extension);
         s = m_path_prefix;
         s += old_root;
         s += use_new_extension ? std::string( new_extension) : old_extension;
-        if( !DISK::is_file( s.c_str()))
+        if( !fs::exists( fs::u8path( s), ec))
             return s;
     }
 
@@ -774,7 +787,7 @@ std::string Resource_callback::get_new_resource_filename(
         ss << (old_filename ? old_root.c_str() : "resource") << "_" << m_counter++;
         ss << (use_new_extension ? std::string( new_extension) : old_extension);
         s = ss.str();
-    }  while( DISK::is_file( s.c_str()));
+    }  while( fs::exists( fs::u8path( s), ec));
 
     return s;
 }

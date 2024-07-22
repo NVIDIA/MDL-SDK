@@ -3032,6 +3032,7 @@ void MDL_resource_set::parse_name_mapping(
                 }
                 break;
             }
+            n += info.get_length(i + 1);
         } else {
             break;
         }
@@ -3276,6 +3277,7 @@ IInput_stream *MDL_import_result::open(IThread_context *context) const
                 ctx->access_messages_impl().add_error_message(
                     INVALID_MDL_ARCHIVE, 'A', 0, &zero, msg.c_str());
             }
+            break;
         case EC_INVALID_PASSWORD:
             {
                 string arc_name(archive_name(m_os_file_name));

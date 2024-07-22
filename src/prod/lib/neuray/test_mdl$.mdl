@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  ******************************************************************************/
 
-mdl 1.7;
+mdl 1.9;
 
 import ::df::*;
 using ::anno import *;
@@ -112,7 +112,8 @@ in material(
 export int fd_0() { return 42; }
 
 // A function with a single parameter with default.
-export int fd_1(int param0 = 42) [[ description("not to be copied into the variant") ]] { return param0; }
+export int fd_1(int param0 = 42) [[ description("not to be copied into the variant") ]]
+{ return param0; }
 
 // A variant of the fd_1 function.
 export int fd_1_44(*) = fd_1(44);
@@ -214,6 +215,16 @@ export int fd_overloaded(state::coordinate_space param0 = state::coordinate_inte
 export int fd_overloaded(int[3] param0 = int[3]() [[ unused() ]]) { return 0; }
 export int fd_overloaded(int[<N>] param0 = int[42]()) { return N; }
 
+// An overloaded function where a call an argument for param0 succeeds.
+export int fd_overloaded2(int param0 = 0 [[ unused() ]]) { return 42; }
+export int fd_overloaded2(int param0 = 0 [[ unused() ]], int param1 = 0 [[ unused() ]])
+{ return 42; }
+
+// An overloaded function where a call an argument for param0 remains ambiguous.
+export int fd_overloaded3(int param0 = 0 [[ unused() ]], int param1 = 0 [[ unused() ]])
+{ return 42; }
+export int fd_overloaded3(int param0 = 0 [[ unused() ]], float param1 = 0.0f [[ unused() ]])
+{ return 42; }
 
 // A material taking another material as an argument.
 export material md_thin_walled(material material0 = md_0())
@@ -540,7 +551,8 @@ export material md_jit(
        t3 = texture_2d("/mdl_elements/resources/test1002.png", ::tex::gamma_linear, "G");
 } in material(
     geometry: material_geometry(
-        displacement: state::normal() * color_weight(s) * lookup(int(state::normal().x) + tex::width(tex))
+        displacement: state::normal() * color_weight(s) * lookup(int(state::normal().x)
+                      + tex::width(tex))
     ),
     surface: material_surface(
         scattering: df::normalized_mix(
@@ -554,7 +566,9 @@ export material md_jit(
                    0.3,
                    df::diffuse_reflection_bsdf(
                        tint:
-                           base::file_texture(t2).tint * base::file_texture(t3).tint * color_weight(t1, lp))
+                           base::file_texture(t2).tint
+                           * base::file_texture(t3).tint
+                           * color_weight(t1, lp))
                 ),
                 df::bsdf_component(
                    0.3,
@@ -603,7 +617,8 @@ export material md_light_profile(
 
 // Test material with BSDF measurement parameter.
 export material md_bsdf_measurement(
-    uniform bsdf_measurement b = bsdf_measurement("/mdl_elements/resources/test.mbsdf") [[ unused() ]]
+    uniform bsdf_measurement b = bsdf_measurement("/mdl_elements/resources/test.mbsdf")
+        [[ unused() ]]
 ) = material();
 
 
@@ -618,7 +633,8 @@ export const int some_constant = 42;
 // A material for baking.
 export material md_baking()
 = let {
-    color color_expr = color(1.0, 1.0, 1.0) - base::file_texture( texture_2d( "./test_cube.png")).tint;
+    color color_expr
+        = color(1.0, 1.0, 1.0) - base::file_texture( texture_2d( "./test_cube.png")).tint;
     float float_expr = float3( color_expr).x;
 } in material(
     surface: material_surface(scattering: df::diffuse_reflection_bsdf(
@@ -644,6 +660,7 @@ export struct top_struct
     sub_struct d;
     float e;
 };
+
 
 // A material for baking with class compilation.
 export material md_class_baking(
@@ -680,7 +697,8 @@ export material md_class_baking(
         math::lerp(e, f, uvw.x),
         math::lerp(g, h, uvw.y));
 
-    color color_expr = color(1) - base::file_texture( texture_2d( "./test_cube.png")).tint + params_res * math::sin(uvw.x * math::PI * 8);
+    color color_expr = color(1) - base::file_texture( texture_2d( "./test_cube.png")).tint
+                       + params_res * math::sin(uvw.x * math::PI * 8);
     float float_expr = float3( color_expr).x;
 } in material(
     surface: material_surface(scattering: df::diffuse_reflection_bsdf(
@@ -688,6 +706,7 @@ export material md_class_baking(
     backface: material_surface(scattering: df::diffuse_reflection_bsdf(
         tint: color(float_expr, 0.0, 0.0)))
 );
+
 
 // A material with various let expressions which should remain as named
 // temporaries.
@@ -742,6 +761,7 @@ export int fd_identity(int x) = x;
 // temporaries.
 export int fd_named_temporaries(int x) = let { int a = 42; } in fd_identity(x + a);
 
+
 // A function with parameter references (direct and indirect).
 export float fd_parameter_references(
     float a = 0.0f,
@@ -749,6 +769,33 @@ export float fd_parameter_references(
     float c = ::math::sin(a)
 ) { return a + b + c; }
 
-/// Test that the global scope operator is not lost on export.
+
+// Test that the global scope operator is not lost on export.
 export int fd_global_scope_reference_test(int fd_identity)
 { return ::fd_identity(fd_identity); }
+
+
+// Custom struct category.
+export struct_category bar_struct_category [[ description("struct category annotation") ]];
+
+// A simple struct in a custom struct category.
+export struct bar_struct in bar_struct_category [[ description("struct annotation") ]] {
+    int param_int [[ description("param_int annotation") ]];
+    float param_float = 0.0;
+};
+
+// A declarative function that returns an int.
+export int fd_bar_struct_to_int( bar_struct param0 = bar_struct()) = param0.param_int;
+
+// An imperative function that accepts an int.
+export int fd_accepts_int(int param0) { return param0; }
+
+
+// A custom material type in the standard material category.
+export struct aov_material in material_category [[ description("struct annotation") ]] {
+    float aov = 0.0f;
+};
+
+// A material of our custom material type.
+export aov_material md_aov(float aov0 = 0.0f, float aov1 = 1.0f)
+= aov_material((aov0 + aov1) / 2.0f);

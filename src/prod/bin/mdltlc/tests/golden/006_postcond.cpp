@@ -112,7 +112,10 @@ bool Postcond::checker_0(
     mi::mdl::DAG_node const *node)
 {
     int selector = e.get_selector(node);
-    return selector != mi::mdl::DS_DIST_BSDF_TINT;
+    bool result = selector != mi::mdl::DS_DIST_BSDF_TINT;
+
+    return result;
+
 }
 
 bool Postcond::postcond(

@@ -997,10 +997,5 @@ void Resource_handler::bm_albedos(
         o->albedos(*reinterpret_cast<mi::Float32_2 const *>(theta_phi));
 }
 
-// Destructor.
-Resource_handler::~Resource_handler()
-{
-}
-
 }  // MDLRT
 }  // MI

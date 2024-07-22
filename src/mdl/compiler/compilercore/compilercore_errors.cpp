@@ -121,11 +121,19 @@ char const *get_error_template(
         case POSSIBLE_ABSOLUTE_IMPORT:
             return "did you mean '$0'?";
         case PARAMETERS_ARE_RVALUES_HERE:
-            return "parameter '$0' is a rvalue inside let-expressions and declarative functions";
+            return "parameter '$0' is an rvalue inside let-expressions and declarative functions";
         case SIDE_EFFECT_EXPRESSION_IN_RETURN:
             return "'$0' expression with side effect used in return expression";
         case ASSIGNMENT_EXPRESSION_IN_RETURN:
             return "'$0' assignment expression used in return expression";
+        case VOID_RETURN:
+            return "'$0' returns always a void value of type '$1' and might be removed";
+        case PROMOTED_TO_DECLARATIVE:
+            return "'$0' was marked declarative because it uses declarative types or functions";
+        case FUNC_DECL_NOT_DECLARATIVE:
+            return "mark function declaration '$0' as declarative to allow declarative types";
+        case DEF_ARG_OF_NOT_DECLARATIVE_FUNC:
+            return "declarative default arguments of non-declarative functions not allowed";
 
         case SYNTAX_ERROR:
             return "syntax error: $0";
@@ -650,7 +658,27 @@ char const *get_error_template(
             return "invalid universal character name '\\$0$1'";
         case UTF8_DECODER_ERROR:
             return "invalid UTF-8 encoding";
-
+        case NOT_A_STRUCT_CATEGORY:
+            return "'$0' is not defined as a struct category";
+        case DECLARATIVE_NOT_ALLOWED:
+            return "'declarative' is only allowed on struct and function definitions";
+        case DECLARATIVE_FUNCTION_REQUIRES_EXPR_BODY:
+            return "function '$0' is declared as declarative but not defined with an expression";
+        case DECLARATIVE_FUNCTION_CALLED_IN_NON_DECL_FUNCTION:
+            return "declarative function '$0' called from non-declarative function '$1'";
+        case DECLARATIVE_FUNCTION_CALLED_IN_NON_DECL_CONTEXT:
+            return "declarative function '$0' called from non-declarative context";
+        case DECLARATIVE_TYPE_USED_IN_NON_DECL_CONTEXT:
+            return "declarative type '$0' used in non-declarative context";
+        case MATERIAL_FUNCTION_OVERLOADED:
+            return "material definition '$0' can not be overloaded";
+        case CAST_ON_DECLARATIVE_STRUCT:
+            return "cast operator cannot be used on declarative type '$0'";
+        case MEMBER_OF_SAME_CATEGORY:
+            return "struct '$0' may not contain a field in the same struct category";
+        case DECLARATIVE_INDEX_NOT_UNIFORM:
+            return "index expression for declarative array must be uniform";
+        
         // ------------------------------------------------------------- //
         case EXTERNAL_APPLICATION_ERROR:
             return "external application error: $.";
@@ -824,9 +852,12 @@ char const *get_error_template(
         case STATE_MODULE_IS_INCOMPLETE:
             return "user-specified state module is incomplete";
         case GLSL_SSBO_UNAVAILABLE:
-            return "Shader shared buffer objects are not available in the current GLSL context";
+            return "shader shared buffer objects are not available in the current GLSL context";
         case SPECTRUM_CONVERTED_TO_RGB:
             return "a color spectrum is converted to RGB";
+        case SCENE_DATA_CALL_IN_ENVIRONMENT_FUNCTION:
+            return "calls to scene data functions are currently not supported in environment "
+                "functions";
         case INTERNAL_JIT_UNSUPPORTED_PTR_TYPE:
             return "internal JIT backend error: Unsupported pointer type";
         case INTERNAL_JIT_UNSUPPORTED_VECTOR_TYPE:
@@ -914,6 +945,8 @@ char const *get_error_template(
             return "the archive version of '$0' is higher then of '$1'";
         case ARCHIVE_DOES_NOT_CONTAIN_MODULE:
             return "module '$0' was removed from archive";
+        case STRUCT_CATEGORY_DOES_NOT_EXIST:
+            return "category '$0' does not exist in $1";
 
         // ------------------------------------------------------------- //
         case INTERNAL_COMPARATOR_ERROR:
@@ -1179,11 +1212,14 @@ int Error_params::get_pos_arg(size_t index) const
 }
 
 // Add a function signature (including return type).
-Error_params &Error_params::add_signature(IDefinition const *def)
+Error_params &Error_params::add_signature(
+    IDefinition const *def,
+    bool              force_declarative)
 {
     Entry e;
-    e.kind  = EK_SIGNATURE;
-    e.u.sig = def;
+    e.kind              = EK_SIGNATURE;
+    e.u.sig.def         = def;
+    e.u.sig.forced_decl = force_declarative;
 
     m_args.push_back(e);
     return *this;
@@ -1194,7 +1230,8 @@ Error_params &Error_params::add_signature_no_rt(IDefinition const *def)
 {
     Entry e;
     e.kind = EK_SIGNATURE_NO_RT;
-    e.u.sig = def;
+    e.u.sig.def         = def;
+    e.u.sig.forced_decl = false;
 
     m_args.push_back(e);
     return *this;
@@ -1206,7 +1243,16 @@ IDefinition const *Error_params::get_signature_arg(size_t index) const
     Entry const &e = m_args.at(index);
 
     MDL_ASSERT(e.kind == EK_SIGNATURE || e.kind == EK_SIGNATURE_NO_RT);
-    return e.u.sig;
+    return e.u.sig.def;
+}
+
+// Return true if the signature argument of given index is forced to declarative.
+bool Error_params::is_signature_forced_decl(size_t index) const
+{
+    Entry const &e = m_args.at(index);
+
+    MDL_ASSERT(e.kind == EK_SIGNATURE);
+    return e.u.sig.forced_decl;
 }
 
 // Add a value argument.
@@ -1462,7 +1508,7 @@ Error_params &Error_params::add_entity_kind(IDefinition::Kind kind)
     switch (kind) {
     default:
         MDL_ASSERT(!"Unsupported definition kind");
-        // fall through
+        MDL_FALLTHROUGH
     case IDefinition::DK_ERROR:
         // should not happen
         e.u.string = "<ERROR>";
@@ -1728,12 +1774,12 @@ static void print_error_param(
     case Error_params::EK_SIGNATURE:
     case Error_params::EK_SIGNATURE_NO_RT:
         {
-            IDefinition const *def = params.get_signature_arg(idx);
-            IDefinition::Kind kind = def->get_kind();
+            IDefinition const *def   = params.get_signature_arg(idx);
+            IDefinition::Kind kind   = def->get_kind();
+            Definition const  *f_def = impl_cast<Definition>(def);
 
             if (kind == IDefinition::DK_MEMBER) {
                 // print type_name::member_name
-                Definition const *f_def = impl_cast<Definition>(def);
                 Scope const *scope = f_def->get_def_scope();
 
                 if (scope->get_owner_definition()->has_flag(Definition::DEF_IS_IMPORTED)) {
@@ -1759,9 +1805,15 @@ static void print_error_param(
             bool is_material = false;
             if (kind == Definition::DK_FUNCTION) {
                 IType const *ret_type = func_type->get_return_type();
-                if (IType_struct const *s_type = as<IType_struct>(ret_type)) {
-                    if (s_type->get_predefined_id() == IType_struct::SID_MATERIAL) {
-                        is_material = true;
+                if (is_material_category_type(ret_type)) {
+                    is_material = true;
+                }
+
+                if (!is_material_type(ret_type)) {
+                    // do not write "declarative material"
+                    if (f_def->has_flag(Definition::DEF_IS_DECLARATIVE) ||
+                        params.is_signature_forced_decl(idx)) {
+                        printer->print("declarative ");
                     }
                 }
 
@@ -1781,8 +1833,9 @@ static void print_error_param(
                     }
                     printer->print(" ");
                 }
-            } else if (kind == Definition::DK_ANNOTATION)
+            } else if (kind == Definition::DK_ANNOTATION) {
                 printer->print("annotation ");
+            }
 
             printer->print(def->get_symbol());
 
@@ -1793,8 +1846,9 @@ static void print_error_param(
                     ISymbol const *p_sym;
                     func_type->get_parameter(i, p_type, p_sym);
 
-                    if (i > 0)
+                    if (i > 0) {
                         printer->print(", ");
+                    }
                     printer->print(p_type);
                 }
                 printer->print(")");
@@ -1880,6 +1934,7 @@ static void print_error_param(
             case IMDL::MDL_VERSION_1_6: s = "1.6"; break;
             case IMDL::MDL_VERSION_1_7: s = "1.7"; break;
             case IMDL::MDL_VERSION_1_8: s = "1.8"; break;
+            case IMDL::MDL_VERSION_1_9: s = "1.9"; break;
             case IMDL::MDL_VERSION_EXP: s = "99.99"; break;
             }
             printer->print(s);

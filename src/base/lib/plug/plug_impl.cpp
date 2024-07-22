@@ -87,8 +87,7 @@ bool Plug_module_impl::load_library( const char* path)
     LOG::mod_log->info( M_PLUG, LOG::Mod_log::C_PLUGIN, "Loaded library \"%s\".", path_str.c_str());
 
     // Retrieve factory symbol
-    mi::base::Plugin_factory* factory
-        = (mi::base::Plugin_factory*) library->get_symbol( "mi_plugin_factory");
+    auto* factory = (mi::base::Plugin_factory*) library->get_symbol( "mi_plugin_factory");
     if( !factory) {
         LOG::mod_log->error( M_PLUG, LOG::Mod_log::C_PLUGIN, 1,
             "Library %s: symbol \"mi_plugin_factory\" not found.", path_str.c_str());
@@ -98,7 +97,8 @@ bool Plug_module_impl::load_library( const char* path)
     // Invoke plugin factory for all plugins
     for( size_t i = 0; true; ++i) {
 
-    	Plugin_descriptor_impl::Plugin_ptr plugin(factory( i, nullptr),[](mi::base::Plugin* p) { if (p) p->release(); });
+        Plugin_descriptor_impl::Plugin_ptr plugin(
+            factory( i, nullptr), []( mi::base::Plugin* p) { if( p) p->release(); });
         if( !plugin)
             break;
 
@@ -110,8 +110,7 @@ bool Plug_module_impl::load_library( const char* path)
             continue;
         }
 
-        m_plugins.emplace_back( new Plugin_descriptor_impl(
-                library, std::move(plugin), path_str));
+        m_plugins.emplace_back( new Plugin_descriptor_impl( library, std::move( plugin), path_str));
     }
 
     return true;
@@ -126,10 +125,10 @@ size_t Plug_module_impl::get_plugin_count()
 mi::base::IPlugin_descriptor* Plug_module_impl::get_plugin( const char* name)
 {
     mi::base::Lock::Block block( &m_lock);
-    for( size_t i = 0; i < m_plugins.size(); ++i)
-        if( strcmp( m_plugins[i]->get_plugin()->get_name(), name) == 0) {
-            m_plugins[i]->retain();
-            return m_plugins[i].get();
+    for( auto& plugin : m_plugins)
+        if( strcmp( plugin->get_plugin()->get_name(), name) == 0) {
+            plugin->retain();
+            return plugin.get();
         }
     return 0;
 }

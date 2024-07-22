@@ -35,6 +35,15 @@ create_from_python_preset(
     SOURCES
         "__init__.py"
         "setup.py"
+        "test_binding.py"
+        "test_database.py"
+        "test_distill_and_bake.py"
+        "test_inspection_based.py"
         "test_mi_idata.py"
+        "test_mi_neuraylib_ivalue.py"
+        "test_module_builder.py"
+        "test_modules.py"
+        "test_resolve.py"
+        "unittest_base.py"
     CREATE_COVERAGE_REPORT
     )

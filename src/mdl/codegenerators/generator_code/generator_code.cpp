@@ -64,16 +64,15 @@ bool equal_coordinate_space(
                     return true;
                 int coordinate_internal = -1;
                 int coordinate_target = -1;
-                int count = at->get_value_count();
-                for (int i = 0; i < count; ++i) {
-                    ISymbol const*es;
-                    int ec;
-                    at->get_value(i,es,ec);
-                    char const *name = es->get_name();
-                    if (strcmp(name, "coordinate_internal") == 0)
-                        coordinate_internal = ec;
-                    else if (strcmp(name, internal_space) == 0)
-                        coordinate_target = ec;
+                size_t count = at->get_value_count();
+                for (size_t i = 0; i < count; ++i) {
+                    IType_enum::Value const *e_val = at->get_value(i);
+                    char const *name = e_val->get_symbol()->get_name();
+                    if (strcmp(name, "coordinate_internal") == 0) {
+                        coordinate_internal = e_val->get_code();
+                    } else if (strcmp(name, internal_space) == 0) {
+                        coordinate_target = e_val->get_code();
+                    }
                 }
                 if (coordinate_internal < 0 || coordinate_target < 0)
                     return false;

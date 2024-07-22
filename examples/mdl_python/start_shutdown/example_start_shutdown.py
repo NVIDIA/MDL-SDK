@@ -104,8 +104,8 @@ if __name__ == "__main__":
 
         # optional binding debugging:
         # some more simple memory debugging output
-        unreachable = gc.collect()
-        print("\n%d unreachable objects detected during garbage collection.\n" % unreachable)
+        # unreachable = gc.collect()
+        # print("\n%d unreachable objects detected during garbage collection.\n" % unreachable)
         pymdlsdk._print_open_handle_statistic()
 
         # sleep to be able to read the output when starting from VS

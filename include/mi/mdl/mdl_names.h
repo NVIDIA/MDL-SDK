@@ -151,7 +151,7 @@ public:
 
     /// Set a size name.
     ///
-    /// \param sname  the defered size array name
+    /// \param sname  the deferred size array name
     virtual void set_size_name(ISimple_name const *sname) = 0;
 
     /// Access the position.

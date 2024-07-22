@@ -65,6 +65,11 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
     void set_log_level(Log_level level);
 
+    void log(Log_level level,
+        const std::string& message,
+        const std::string& file = "",
+        int line = 0);
+
     void log_verbose(
         const std::string& message,
         const std::string& file = "",
@@ -109,6 +114,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
     // flushes all ongoing async logging tasks. has to be called before closing the app.
     void flush_loggers();
+
+    // enable console output colors for warnings and errors
+    void enable_color_output(bool value);
 
     // set a log file to use or \c nullptr in order disable file logging when active.
     // has to be called with a nullptr before closing the app.
@@ -293,7 +301,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         Diagnostics();
     public:
 
-        static void list_loaded_libraries();
+        static void list_loaded_libraries(Log_level level);
     };
 
 }}} // mi::examples::mdl_d3d12

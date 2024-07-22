@@ -48,10 +48,10 @@ namespace mi { namespace neuraylib { class ITransaction; } }
 namespace MI {
 
 namespace ATTR { class Attribute_set; class Attribute; class Type; }
+namespace IDATA { class IAttribute_context; }
 
 namespace NEURAY {
 
-class IAttribute_context;
 class IDb_element;
 
 /// The static methods of this class contain the actual implementation of IAttribute_set.
@@ -128,7 +128,7 @@ public:
     ///                         of the attribute.
     /// \return                 The attribute, or \c NULL in case of failure.
     static mi::IData* get_attribute(
-        const IAttribute_context* owner, const std::string& attribute_name);
+        const IDATA::IAttribute_context* owner, const std::string& attribute_name);
 
     /// The mill variant re-uses get_attribute(), get_attribute_type(), and
     /// get_attribute_type_name() from this class.

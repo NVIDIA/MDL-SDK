@@ -68,7 +68,6 @@ set(PROJECT_LIB_HEADERS
     "mdltlc_symbols.h"
     "mdltlc_types.h"
     "mdltlc_values.h"
-    "mdltlc_union_find_map.h"
     )
 
 set(PROJECT_LIB_SOURCES
@@ -201,6 +200,8 @@ add_custom_command(
         ${MDL_SRC_FOLDER}/mdl/compiler/compilercore/generate_stdmodule.py
         ${CMAKE_CURRENT_SOURCE_DIR}/gen_mdltl_enum_names.py
         ${_STANDARD_MDL}
+        ${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_expressions.h
+        ${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_definitions.h
     VERBATIM
     )
 # -------------------------------------------------------------------------------------------------

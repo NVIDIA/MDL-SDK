@@ -32,13 +32,13 @@ import df::*;
 
 export material diffuse_material(color tint) = material(
         surface: material_surface( 
-		scattering: df::diffuse_reflection_bsdf(tint: tint)
+                scattering: df::diffuse_reflection_bsdf(tint: tint)
         )
 );
 
 export material diffuse_light(color tint) = material(
        surface: material_surface( 
-		emission: material_emission(
+                emission: material_emission(
                         emission: df::diffuse_edf(),
                         intensity: tint
                 )

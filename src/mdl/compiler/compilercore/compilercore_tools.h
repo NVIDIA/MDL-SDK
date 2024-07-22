@@ -195,6 +195,25 @@ inline T const *cast(F const *arg) {
     return static_cast<T const *>(arg);
 }
 
+/// Check if the given type is a declarative struct in the
+/// category "material_category".
+///
+/// \param type  the type to check
+static inline bool is_material_category_type(IType const *type)
+{
+    if (IType_struct const *s_type = as<IType_struct>(type)) {
+        if (s_type->get_predefined_id() == IType_struct::SID_MATERIAL) {
+            return true;
+        }
+        if (IStruct_category const *s_cat = s_type->get_category()) {
+            if (s_cat->get_predefined_id() == IStruct_category::CID_MATERIAL_CATEGORY) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 /// Check if the given type is the material type.
 ///
 /// \param type  the type to check

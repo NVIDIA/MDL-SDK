@@ -58,12 +58,13 @@ public:
 
     /// Returns the element held by this info.
     ///
-    /// Returns \c NULL if the info holds a job, or if the element is still serialized.
+    /// Returns \c NULL if the info holds a job that has not yet been executed, or if the element
+    /// is still serialized.
     virtual Element_base* get_element() const = 0;
 
     /// Returns the job held by this info.
     ///
-    /// Returns \c NULL if the info holds a job, or if the element is still serialized.
+    /// Returns \c NULL if the info does not hold a job, or if the job is still serialized.
     virtual SCHED::Job* get_job() const = 0;
 
     /// Returns the tag.

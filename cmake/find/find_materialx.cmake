@@ -30,34 +30,67 @@ function(FIND_MATERIALX)
 
     set(MATERIALX_DIR "NOT-SPECIFIED" CACHE PATH "Path to a downloaded and extracted MaterialX pre-built package.")
 
-    # check if the dependencies are available, if not disable
-    #-----------------------------------------------------------------------------------------------
-    if(NOT EXISTS ${MATERIALX_DIR})
-        message(FATAL_ERROR "The dependency \"MaterialX\" could not be resolved. Please specify 'MATERIALX_DIR' or disable 'MDL_ENABLE_MATERIALX'")
-        return()
+    if(EXISTS ${MATERIALX_DIR})
+        # collect information required for the build from MATERIALX_DIR
+        #-----------------------------------------------------------------------------------------------
+
+        # set include dir
+        set(_MX_INCLUDE ${MATERIALX_DIR}/include)
+        
+        # set libs
+        set(_MX_LIBS
+            ${MATERIALX_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}MaterialXCore$<$<CONFIG:Debug>:d>${CMAKE_STATIC_LIBRARY_SUFFIX}
+            ${MATERIALX_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}MaterialXFormat$<$<CONFIG:Debug>:d>${CMAKE_STATIC_LIBRARY_SUFFIX}
+            ${MATERIALX_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}MaterialXGenShader$<$<CONFIG:Debug>:d>${CMAKE_STATIC_LIBRARY_SUFFIX}
+            ${MATERIALX_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}MaterialXGenMdl$<$<CONFIG:Debug>:d>${CMAKE_STATIC_LIBRARY_SUFFIX}
+        )
+
+        # base dir to reference the standard libraries
+        set(_MX_BASE_DIR ${MATERIALX_DIR})
+
+    else()
+        # try if we can find it without the MATERIALX_DIR, e.g. because it's installed by vcpkg
+        #-----------------------------------------------------------------------------------------------
+
+        find_package(MaterialX)
+        if(NOT ${MaterialX_FOUND})
+            # Failure
+            message(FATAL_ERROR "The dependency \"MaterialX\" could not be resolved. Please install using `vcpkg`, specify 'MATERIALX_DIR' or disable 'MDL_ENABLE_MATERIALX'")
+            return()
+        endif()
+
+        # collect information required for the build from imported targets
+        get_target_property(_MX_INCLUDE MaterialXCore INTERFACE_INCLUDE_DIRECTORIES)
+
+        get_target_property(MaterialXCore_DEBUG MaterialXCore IMPORTED_LOCATION_DEBUG)
+        get_target_property(MaterialXCore_RELEASE MaterialXCore IMPORTED_LOCATION_RELEASE)
+        get_target_property(MaterialXFormat_DEBUG MaterialXFormat IMPORTED_LOCATION_DEBUG)
+        get_target_property(MaterialXFormat_RELEASE MaterialXFormat IMPORTED_LOCATION_RELEASE)
+        get_target_property(MaterialXGenShader_DEBUG MaterialXGenShader IMPORTED_LOCATION_DEBUG)
+        get_target_property(MaterialXGenShader_RELEASE MaterialXGenShader IMPORTED_LOCATION_RELEASE)
+        get_target_property(MaterialXGenMdl_DEBUG MaterialXGenMdl IMPORTED_LOCATION_DEBUG)
+        get_target_property(MaterialXGenMdl_RELEASE MaterialXGenMdl IMPORTED_LOCATION_RELEASE)
+
+        set(_MX_LIBS
+            $<IF:$<CONFIG:Debug>,${MaterialXCore_DEBUG},${MaterialXCore_RELEASE}>
+            $<IF:$<CONFIG:Debug>,${MaterialXFormat_DEBUG},${MaterialXFormat_RELEASE}>
+            $<IF:$<CONFIG:Debug>,${MaterialXGenShader_DEBUG},${MaterialXGenShader_RELEASE}>
+            $<IF:$<CONFIG:Debug>,${MaterialXGenMdl_DEBUG},${MaterialXGenMdl_RELEASE}>
+        )
+
+        set(_MX_BASE_DIR ${MATERIALX_BASE_DIR})
     endif()
-
-    # collect information required for the build
-    #-----------------------------------------------------------------------------------------------
-
-    # set include dir
-    set(_MX_INCLUDE ${MATERIALX_DIR}/include)
-    
-    # set libs
-    set(_MX_LIBS
-        ${MATERIALX_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}MaterialXCore$<$<CONFIG:Debug>:d>${CMAKE_STATIC_LIBRARY_SUFFIX}
-        ${MATERIALX_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}MaterialXFormat$<$<CONFIG:Debug>:d>${CMAKE_STATIC_LIBRARY_SUFFIX}
-        ${MATERIALX_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}MaterialXGenShader$<$<CONFIG:Debug>:d>${CMAKE_STATIC_LIBRARY_SUFFIX}
-        ${MATERIALX_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}MaterialXGenMdl$<$<CONFIG:Debug>:d>${CMAKE_STATIC_LIBRARY_SUFFIX}
-    )
     
     # store paths that are later used in the add_materialx.cmake
     set(MDL_DEPENDENCY_MATERIALX_INCLUDE ${_MX_INCLUDE} CACHE INTERNAL "materialx headers" FORCE)
     set(MDL_DEPENDENCY_MATERIALX_LIBS ${_MX_LIBS} CACHE INTERNAL "materialx libs" FORCE)
+    set(MDL_DEPENDENCY_MATERIALX_BASE_DIR ${_MX_BASE_DIR} CACHE INTERNAL "materialx base dir" FORCE)
   
     if(MDL_LOG_DEPENDENCIES)
         message(STATUS "[INFO] MDL_DEPENDENCY_MATERIALX_INCLUDE:     ${MDL_DEPENDENCY_MATERIALX_INCLUDE}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_MATERIALX_INCLUDE:     ${MDL_DEPENDENCY_MATERIALX_INCLUDE}")
         message(STATUS "[INFO] MDL_DEPENDENCY_MATERIALX_LIBS:        ${MDL_DEPENDENCY_MATERIALX_LIBS}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_MATERIALX_BASE_DIR:    ${MDL_DEPENDENCY_MATERIALX_BASE_DIR}")
     endif()
 
 endfunction()

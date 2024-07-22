@@ -58,7 +58,7 @@ namespace NEURAY {
 class Mdle_resource_mapper : public MDL::Resource_callback
                            , public mi::mdl::IEncapsulate_tool_resource_collector
 {
-    typedef MDL::Resource_callback Base;
+    using Base = MDL::Resource_callback;
 public:
 
     explicit Mdle_resource_mapper(

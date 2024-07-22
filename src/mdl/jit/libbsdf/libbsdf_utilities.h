@@ -57,6 +57,14 @@ BSDF_INLINE BSDF_pdf_data to_pdf_data(const BSDF_sample_data* sample_data)
     res.ior2 = sample_data->ior2;
     res.k1 = sample_data->k1;
     res.k2 = sample_data->k2;
+    if (is_bsdf_flags_enabled()) {
+        res.flags = sample_data->flags;
+    } else {
+        // TODO: Could this cause problems in HLSL, when this is not optimized away
+        //   as the field may not exist in the renderer defined type?
+        //   Would it work, if this is left out? Or would LLVM complain?
+        res.flags = DF_FLAGS_NONE;
+    }
     return res;
 }
 
@@ -278,7 +286,7 @@ BSDF_INLINE Thin_film_color_fresnel_ior process_ior_thin_film_color_fresnel_laye
 
 // uniformly sample projected hemisphere
 BSDF_INLINE float3 cosine_hemisphere_sample(
-    const float2 &v)	// uniform numbers in [0, 1]
+    const float2 &v)    // uniform numbers in [0, 1]
 {
     if((v.x == 0.0f) && (v.y == 0.0f))
         return make_float3(0.0f, 1.0f, 0.0f); // Origin (prevent 0/0)
@@ -315,9 +323,9 @@ BSDF_INLINE float3 cosine_hemisphere_sample(
 
 // Oren-Nayar diffuse component evaluation
 BSDF_INLINE float eval_oren_nayar(
-    const float3 	&k1,
-    const float3	&k2,
-    const float3 	&normal,
+    const float3        &k1,
+    const float3        &k2,
+    const float3        &normal,
     const float         roughness)
 {
     const float nk1 = math::dot(k1, normal);
@@ -394,7 +402,8 @@ BSDF_INLINE float f1m(const float ui, const float uo, const float c)
     const float l = -0.05890107167021953f * c - 0.004740543453386809f * c * c;
 
     return (float)(2.0 / M_PI) *
-        (-(((c*(64.0f + 45.0f * ui * uo)) / 48.0f - (15.0f * (1.0f + 0.44f * c) * c * ui * uo * H1(ui, c) *H1(uo, c)) / 16.0f - (4.0f * c * (1.0f + l * ui) * (1.0f + l * uo) * H1(ui, c) *H1(uo, c)) /3.0f)) / (8.0f * (ui + uo)));
+        (-(((c*(64.0f + 45.0f * ui * uo)) / 48.0f - (15.0f * (1.0f + 0.44f * c) * c * ui * uo * H1(ui, c) *H1(uo, c)) / 16.0f
+            - (4.0f * c * (1.0f + l * ui) * (1.0f + l * uo) * H1(ui, c) *H1(uo, c)) /3.0f)) / (8.0f * (ui + uo)));
 }
 
 BSDF_INLINE float3 lambert_sphere_brdf(
@@ -432,7 +441,7 @@ BSDF_INLINE float3 lambert_sphere_brdf(
 
 // Fresnel equation for an equal mix of polarization
 BSDF_INLINE float ior_fresnel(
-    const float eta,	// refracted / reflected ior
+    const float eta,    // refracted / reflected ior
     const float kh)     // cosine between of angle normal/half-vector and direction
 {
     float costheta = 1.0f - (1.0f - kh * kh) / (eta * eta);
@@ -452,7 +461,7 @@ BSDF_INLINE float ior_fresnel(
 }
 
 BSDF_INLINE float3 ior_fresnel(
-    const float3 &eta,	// refracted / reflected ior
+    const float3 &eta,  // refracted / reflected ior
     const float kh)     // cosine between of angle normal/half-vector and direction
 {
     float3 result;
@@ -541,8 +550,8 @@ BSDF_INLINE float3 custom_curve_factor(
 BSDF_INLINE float3 refract(
     const float3 &k,    // direction (pointing from surface)
     const float3 &n,    // normal
-    const float b,	// (reflected side IOR) / (transmitted side IOR)
-    const float nk,	// dot(n, k)
+    const float b,      // (reflected side IOR) / (transmitted side IOR)
+    const float nk,     // dot(n, k)
     bool &total_reflection)
 {
     const float refract = b * b * (1.0f - nk * nk);
@@ -1265,7 +1274,7 @@ BSDF_INLINE float3 thin_film_factor(
                 const float R_s = (R01.x + R12.x + tmp_s) / (1.0f + R01R12_s + tmp_s);
 
                 const float cos_phi_p = phi_c * phi12_cos.y - phi_s * phi12_sin.y; // cos(a+b) = cos(a) * cos(b) - sin(a) * sin(b)
-            	const float tmp_p = 2.0f * r01r12_p * cos_phi_p;
+                const float tmp_p = 2.0f * r01r12_p * cos_phi_p;
                 const float R_p = (R01.y + R12.y + tmp_p) / (1.0f + R01R12_p + tmp_p);
 
                 xyz += cie_xyz[i] * (0.5f * (R_s + R_p));

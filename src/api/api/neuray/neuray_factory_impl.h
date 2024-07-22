@@ -130,94 +130,6 @@ public:
     mi::Sint32 shutdown();
 
 private:
-    /*@{*/
-    /// Assign the value from \p source to \p target.
-    ///
-    /// See #assign_from_to(IData,IData) for the meaning of \p options and the return value.
-    mi::Uint32 assign_from_to(
-        const mi::IData_simple* source, mi::IData_simple* target, mi::Uint32 options);
-
-    mi::Uint32 assign_from_to(
-        const mi::IData_collection* source, mi::IData_collection* target, mi::Uint32 options);
-
-    mi::Uint32 assign_from_to( const mi::INumber* source, mi::INumber* target);
-
-    mi::Uint32 assign_from_to( const mi::IString* source, mi::IString* target);
-
-    mi::Uint32 assign_from_to( const mi::IRef* source, mi::IRef* target);
-
-    mi::Uint32 assign_from_to(
-        const mi::IEnum* source, mi::IEnum* target, mi::Uint32 options);
-
-    mi::Uint32 assign_from_to(
-        const mi::IEnum* source, mi::ISint32* target, mi::Uint32 options);
-
-    mi::Uint32 assign_from_to( const mi::IUuid* source, mi::IUuid* target);
-
-    mi::Uint32 assign_from_to(
-        const mi::IPointer* source, mi::IPointer* target, mi::Uint32 options);
-
-    mi::Uint32 assign_from_to(
-        const mi::IConst_pointer* source, mi::IPointer* target, mi::Uint32 options);
-
-    mi::Uint32 assign_from_to(
-        const mi::IConst_pointer* source, mi::IConst_pointer* target, mi::Uint32 options);
-
-    mi::Uint32 assign_from_to(
-        const mi::IPointer* source, mi::IConst_pointer* target, mi::Uint32 options);
-
-    /*@}*/
-
-    /*@{*/
-    /// Clones the value \p source.
-    ///
-    /// See #assign_from_to(IData,IData) for the meaning of \p options.
-    mi::IData_simple* clone( const mi::IData_simple* source, mi::Uint32 options);
-
-    mi::IData_collection* clone( const mi::IData_collection* source, mi::Uint32 options);
-
-    mi::IRef* clone( const mi::IRef* source, mi::Uint32 options);
-
-    mi::IPointer* clone( const mi::IPointer* source, mi::Uint32 options);
-
-    mi::IConst_pointer* clone( const mi::IConst_pointer* source, mi::Uint32 options);
-
-    mi::ICompound* clone( const mi::ICompound* source, mi::Uint32 options);
-
-    mi::IDynamic_array* clone( const mi::IDynamic_array* source, mi::Uint32 options);
-
-    mi::IArray* clone( const mi::IArray* source, mi::Uint32 options);
-
-    mi::IStructure* clone( const mi::IStructure* source, mi::Uint32 options);
-
-    mi::IMap* clone( const mi::IMap* source, mi::Uint32 options);
-
-    /*@}*/
-
-    /*@{*/
-    /// Compares \p lhs and \p rhs.
-    ///
-    /// See #compare(IData,IData) for details.
-    mi::Sint32 compare( const mi::IData_simple* lhs, const mi::IData_simple* rhs);
-
-    mi::Sint32 compare( const mi::IData_collection* lhs, const mi::IData_collection* rhs);
-
-    mi::Sint32 compare( const mi::INumber* lhs, const mi::INumber* target);
-
-    mi::Sint32 compare( const mi::IString* lhs, const mi::IString* target);
-
-    mi::Sint32 compare( const mi::IRef* lhs, const mi::IRef* target);
-
-    mi::Sint32 compare( const mi::IEnum* lhs, const mi::IEnum* rhs);
-
-    mi::Sint32 compare( const mi::IUuid* lhs, const mi::IUuid* target);
-
-    mi::Sint32 compare( const mi::IPointer* lhs, const mi::IPointer* rhs);
-
-    mi::Sint32 compare( const mi::IConst_pointer* lhs, const mi::IConst_pointer* rhs);
-
-    /*@}*/
-
     /// Dumps \p data.
     ///
     /// See #dump(IData,const char*,Size) and #dump(ITransaction,IData,const char*,Size) for
@@ -246,10 +158,6 @@ private:
         mi::Size depth,
         std::ostringstream& s);
 
-    /// Returns the transaction that is embedded in references, arrays, or calls (or in collections
-    /// containing such types), or \c NULL in case of failure.
-    mi::neuraylib::ITransaction* get_transaction( const mi::IData* data);
-
     /// Convenience wrapper around create() for interfaces that need a transaction.
     ///
     /// First calls #create(). If that fails, extracts the transaction from \p prototype, and calls
@@ -263,7 +171,7 @@ private:
     /// Convenience wrapper around create() for interfaces that need a transaction.
     ///
     /// First calls #create(). If that fails, extracts the transaction from \p prototype, and calls
-    /// #mi::neuraylib::ITransaction::create() (if it succeeded to extract the transaction)..
+    /// #mi::neuraylib::ITransaction::create() (if it succeeded to extract the transaction).
     template<class T>
     T* create_with_transaction(
         const char* type_name,

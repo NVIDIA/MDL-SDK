@@ -41,22 +41,15 @@
 // Command line options structure.
 struct Options {
     // Materials to use.
-    std::string material_name;
+    std::string material_name
+        = "::nvidia::sdk_examples::tutorials::example_compilation(color)";
 
     // Expression path to compile.
-    std::string expr_path;
+    std::string expr_path = "backface.scattering.tint";
 
     // If true, changes the arguments of the instantiated material.
     // Will be set to false if the material name or expression path is changed.
-    bool change_arguments;
-
-    // The constructor.
-    Options()
-        : material_name("::nvidia::sdk_examples::tutorials::example_compilation(color)")
-        , expr_path("backface.scattering.tint")
-        , change_arguments(true)
-    {
-    }
+    bool change_arguments = true;
 };
 
 // Utility function to dump the hash, arguments, temporaries, and fields of a compiled material.
@@ -123,8 +116,8 @@ void create_material_instance(
     // split module and material name
     std::string module_name, material_simple_name;
     if (!mi::examples::mdl::parse_cmd_argument_material_name(
-        material_name, module_name, material_simple_name, true))
-        exit_failure();
+            material_name, module_name, material_simple_name, true))
+        exit_failure("Provided material name '%s' is invalid.", material_name);
 
     // Load the module.
     mdl_impexp_api->load_module(transaction, module_name.c_str(), context);
@@ -134,10 +127,19 @@ void create_material_instance(
     // Get the database name for the module we loaded
     mi::base::Handle<const mi::IString> module_db_name(
         mdl_factory->get_db_module_name(module_name.c_str()));
+    mi::base::Handle<const mi::neuraylib::IModule> module(
+        transaction->access<mi::neuraylib::IModule>(module_db_name->get_c_str()));
+    if (!module)
+        exit_failure("Failed to access the loaded module.");
 
-    // attach the material name
+    // Construct the material name
     std::string material_db_name
         = std::string(module_db_name->get_c_str()) + "::" + material_simple_name;
+    material_db_name = mi::examples::mdl::add_missing_material_signature(
+        module.get(), material_db_name);
+    if (material_db_name.empty())
+        exit_failure("Failed to find the material %s in the module %s.",
+            material_simple_name.c_str(), module_name.c_str());
 
     // Get the material definition from the database
     mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
@@ -167,6 +169,12 @@ void compile_material_instance(
 {
     mi::base::Handle<const mi::neuraylib::IMaterial_instance> material_instance(
        transaction->access<mi::neuraylib::IMaterial_instance>( instance_name));
+
+    // convert to target type SID_MATERIAL
+    mi::base::Handle<mi::neuraylib::IType_factory> tf(mdl_factory->create_type_factory(transaction));
+    mi::base::Handle<const mi::neuraylib::IType> standard_material_type(
+        tf->get_predefined_struct(mi::neuraylib::IType_struct::SID_MATERIAL));
+    context->set_option("target_type", standard_material_type.get());
 
     mi::Uint32 flags = class_compilation
         ? mi::neuraylib::IMaterial_instance::CLASS_COMPILATION
@@ -352,7 +360,7 @@ int MAIN_UTF8(int argc, char* argv[])
         char const *opt = argv[i];
         if (opt[0] == '-') {
             if (strcmp(opt, "--mdl_path") == 0 && i < argc - 1) {
-                configure_options.additional_mdl_paths.push_back(argv[++i]);
+                configure_options.additional_mdl_paths.emplace_back(argv[++i]);
             }
             else if (strcmp(opt, "--expr_path") == 0 && i < argc - 1) {
                 options.expr_path = argv[++i];

@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 /// \file
-/// \brief      Source for building MDL AST from neuray expressions/types
+/// \brief      Source for building MDL AST from integration expressions/types
 
 #include "pch.h"
 
@@ -55,9 +55,6 @@
 #include "i_mdl_elements_utilities.h"
 #include "mdl_elements_ast_builder.h"
 
-// Disable false positives (claiming expressions involving "class_id" always being true or false)
-//-V:class_id:547 PVS
-
 namespace MI {
 namespace MDL {
 
@@ -85,7 +82,7 @@ Mdl_ast_builder::Mdl_ast_builder(
 , m_ef(*m_owner->get_expression_factory())
 , m_tf(*m_owner->get_type_factory())
 , m_st(m_owner->get_symbol_table())
-, m_mdl_tf(MDL::get_type_factory())
+, m_int_tf(MDL::get_type_factory())
 , m_tmp_idx(0u)
 , m_args(args, mi::base::DUP_INTERFACE)
 , m_owner_version(m_owner->get_mdl_version())
@@ -220,7 +217,7 @@ mi::mdl::IType_name* type_to_type_name(
         break;
     case mi::mdl::IType::TK_VECTOR:
         {
-            const mi::mdl::IType_vector* v_type = as<mi::mdl::IType_vector>(type);
+            const auto* v_type = as<mi::mdl::IType_vector>(type);
             const mi::mdl::IType_atomic* a_type = v_type->get_element_type();
             int size = v_type->get_size();
 
@@ -260,7 +257,7 @@ mi::mdl::IType_name* type_to_type_name(
         break;
     case mi::mdl::IType::TK_MATRIX:
         {
-            const mi::mdl::IType_matrix *m_type = as<mi::mdl::IType_matrix>(type);
+            const auto *m_type = as<mi::mdl::IType_matrix>(type);
             const mi::mdl::IType_vector *e_type = m_type->get_element_type();
             const mi::mdl::IType_atomic *a_type = e_type->get_element_type();
 
@@ -274,7 +271,7 @@ mi::mdl::IType_name* type_to_type_name(
         break;
     case mi::mdl::IType::TK_ARRAY:
         {
-            const mi::mdl::IType_array *a_type = as<mi::mdl::IType_array>(type);
+            const auto *a_type = as<mi::mdl::IType_array>(type);
 
             mi::mdl::IType_name* tn
                 = type_to_type_name(module, a_type->get_element_type(), name_mangler);
@@ -299,7 +296,7 @@ mi::mdl::IType_name* type_to_type_name(
         break;
     case mi::mdl::IType::TK_TEXTURE:
         {
-            mi::mdl::IType_texture const *t_type = as<mi::mdl::IType_texture>(type);
+            auto const *t_type = as<mi::mdl::IType_texture>(type);
 
             switch (t_type->get_shape()) {
             case mi::mdl::IType_texture::TS_2D:
@@ -369,7 +366,7 @@ mi::mdl::IType_name *Mdl_ast_builder::create_type_name(
     case IType::TK_TEXTURE:
     case IType::TK_BSDF_MEASUREMENT:
         {
-            std::string name = m_mdl_tf->get_mdl_type_name( type.get());
+            std::string name = m_int_tf->get_mdl_type_name( type.get());
             name = decode_name_without_signature( name);
             name = remove_qualifiers_if_from_module( name, m_owner->get_name());
 
@@ -460,24 +457,32 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
     const IExpression_list               *args,
     bool                                 named_args)
 {
-    bool is_material_type = false;
+    // Skip decl_cast operator.
+    if (sema == mi::mdl::IDefinition::DS_INTRINSIC_DAG_DECL_CAST) {
+        mi::base::Handle<const IExpression> arg(args->get_expression(mi::Size(0)));
+        return transform_expr(arg.get());
+    }
+
+    bool is_standard_material_type = false;
     Handle<IType const> const type(ret_type->skip_all_type_aliases());
     if (type->get_kind() == IType::TK_STRUCT) {
-        Handle<IType_struct const> s_tp(type->get_interface<IType_struct>());
 
+        Handle<IType_struct const> s_tp(type->get_interface<IType_struct>());
         IType_struct::Predefined_id id = s_tp->get_predefined_id();
         if (id == IType_struct::SID_USER) {
             m_used_user_types.insert(decode_name_without_signature(s_tp->get_symbol()));
         } else if (id == IType_struct::SID_MATERIAL) {
-            is_material_type = true;
+            is_standard_material_type = true;
         }
-    } else if (type->get_kind() == IType::TK_ENUM) {
-        Handle<IType_enum const> e_tp(type->get_interface<IType_enum>());
 
+    } else if (type->get_kind() == IType::TK_ENUM) {
+
+        Handle<IType_enum const> e_tp(type->get_interface<IType_enum>());
         if (e_tp->get_predefined_id() != IType_enum::EID_INTENSITY_MODE) {
             // only intensity_mode is predefined
             m_used_user_types.insert(decode_name_without_signature(e_tp->get_symbol()));
         }
+
     }
 
     if (semantic_is_operator(sema)) {
@@ -492,7 +497,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
                 mi::mdl::IExpression_unary::Operator(op), arg);
 
             if (op == mi::mdl::IExpression::OK_CAST) {
-                const mi::mdl::IType* tp = int_type_to_mdl_type(
+                const mi::mdl::IType* tp = int_type_to_core_type(
                     ret_type,
                     m_tf);
 
@@ -501,7 +506,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
             }
             return res;
         } else if (mi::mdl::is_binary_operator(op)) {
-            mi::mdl::IExpression_binary::Operator bop = mi::mdl::IExpression_binary::Operator(op);
+            auto bop = mi::mdl::IExpression_binary::Operator(op);
 
             Handle<IExpression const> l_arg(args->get_expression(mi::Size(0)));
             Handle<IExpression const> r_arg(args->get_expression(mi::Size(1)));
@@ -527,7 +532,9 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
     // do MDL 1.X => MDL 1.Y conversion here
     switch (sema) {
     case mi::mdl::IDefinition::DS_ELEM_CONSTRUCTOR:
-        if (m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_4 && n_params == 6 && is_material_type) {
+        if (   m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_4
+            && n_params == 6
+            && is_standard_material_type) {
             // MDL 1.4 -> 1.5: add default hair bsdf
             mi::mdl::IQualified_name *tu_qname = create_qualified_name("hair_bsdf");
             mi::mdl::IExpression_reference *tu_ref = to_reference(tu_qname);
@@ -1141,7 +1148,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
 // Transform a MDL expression from neuray representation to MDL representation.
 const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const IExpression* expr)
 {
-    Param_map::const_iterator it( m_param_map.find( make_handle_dup( expr)));
+    auto it( m_param_map.find( make_handle_dup( expr)));
     if( it != m_param_map.end()) {
         // must be mapped
         return to_reference( it->second);
@@ -1178,40 +1185,35 @@ const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const IExpression* 
 
             SERIAL::Class_id class_id = m_trans->get_class_id( tag);
 
-            if( class_id == Mdl_function_call::id) {
-
-                DB::Access<Mdl_function_call> fcall( tag, m_trans);
-                DB::Tag def_tag = fcall->get_function_definition( m_trans);
-                if( !def_tag)
-                    return m_ef.create_invalid();
-                DB::Access<Mdl_function_definition> fdef( def_tag, m_trans);
-                def = fdef->get_mdl_name_without_parameter_types();
-
-                // if reexported, use the original name
-                const char* original_mdl_name = fdef->get_mdl_original_name();
-                if( original_mdl_name) {
-                    DB::Tag orig_tag = m_trans->name_to_tag(
-                        get_db_name( original_mdl_name).c_str());
-                    DB::Access<Mdl_function_definition> orig_fdef( orig_tag, m_trans);
-                    def = orig_fdef->get_mdl_name_without_parameter_types();
-                }
-
-                def        = decode_name_without_signature( def);
-                named_args = fdef->is_material();
-                sema       = fdef->get_mdl_semantic();
-                args       = fcall->get_arguments();
-                n_params   = fcall->get_parameter_count();
-
-            } else {
-
-                // unsupported
-                ASSERT( M_SCENE, !"unsupported callee kind");
+            if( class_id != ID_MDL_FUNCTION_CALL) {
+                ASSERT( M_SCENE, !"invalid type of DB element referenced by indirect call");
                 return m_ef.create_invalid();
-
             }
 
+            DB::Access<Mdl_function_call> fcall( tag, m_trans);
+            DB::Tag def_tag = fcall->get_function_definition( m_trans);
+            if( !def_tag)
+                return m_ef.create_invalid();
+            DB::Access<Mdl_function_definition> fdef( def_tag, m_trans);
+            def = fdef->get_mdl_name_without_parameter_types();
+
+            // if reexported, use the original name
+            const char* original_mdl_name = fdef->get_mdl_original_name();
+            if( original_mdl_name) {
+                DB::Tag orig_tag = m_trans->name_to_tag(
+                    get_db_name( original_mdl_name).c_str());
+                DB::Access<Mdl_function_definition> orig_fdef( orig_tag, m_trans);
+                def = orig_fdef->get_mdl_name_without_parameter_types();
+            }
+
+            def        = decode_name_without_signature( def);
+            named_args = fdef->is_material();
+            sema       = fdef->get_core_semantic();
+            args       = fcall->get_arguments();
+            n_params   = fcall->get_parameter_count();
+
             def = remove_qualifiers_if_from_module( def, m_owner->get_name());
-            return transform_call(type.get(), sema, def, n_params, args.get(), named_args);
+            return transform_call( type.get(), sema, def, n_params, args.get(), named_args);
         }
 
         case IExpression::EK_DIRECT_CALL: {
@@ -1232,36 +1234,31 @@ const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const IExpression* 
 
             SERIAL::Class_id class_id = m_trans->get_class_id( tag);
 
-            if( class_id == Mdl_function_definition::id) {
-
-                DB::Access<Mdl_function_definition> fdef( tag, m_trans);
-                def = fdef->get_mdl_name_without_parameter_types();
-
-                // if reexported, use the original
-                const char* original_mdl_name = fdef->get_mdl_original_name();
-                if( original_mdl_name) {
-                    DB::Tag orig_tag = m_trans->name_to_tag(
-                        get_db_name( original_mdl_name).c_str());
-                    DB::Access<Mdl_function_definition> orig_fdef( orig_tag, m_trans);
-                    def = orig_fdef->get_mdl_name_without_parameter_types();
-
-                }
-
-                def        = decode_name_without_signature( def);
-                named_args = fdef->is_material();
-                sema       = fdef->get_mdl_semantic();
-                n_params   = fdef->get_parameter_count();
-
-            } else {
-
-                // unsupported
-                ASSERT( M_SCENE, !"unsupported callee kind");
+            if( class_id != ID_MDL_FUNCTION_DEFINITION) {
+                ASSERT( M_SCENE, !"invalid type of DB element referenced by direct call");
                 return m_ef.create_invalid();
+            }
+
+            DB::Access<Mdl_function_definition> fdef( tag, m_trans);
+            def = fdef->get_mdl_name_without_parameter_types();
+
+            // if reexported, use the original
+            const char* original_mdl_name = fdef->get_mdl_original_name();
+            if( original_mdl_name) {
+                DB::Tag orig_tag = m_trans->name_to_tag(
+                    get_db_name( original_mdl_name).c_str());
+                DB::Access<Mdl_function_definition> orig_fdef( orig_tag, m_trans);
+                def = orig_fdef->get_mdl_name_without_parameter_types();
 
             }
 
+            def        = decode_name_without_signature( def);
+            named_args = fdef->is_material();
+            sema       = fdef->get_core_semantic();
+            n_params   = fdef->get_parameter_count();
+
             def = remove_qualifiers_if_from_module( def, m_owner->get_name());
-            return transform_call(type.get(), sema, def, n_params, args.get(), named_args);
+            return transform_call( type.get(), sema, def, n_params, args.get(), named_args);
         }
 
         case IExpression::EK_PARAMETER: {
@@ -1286,14 +1283,22 @@ const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const IExpression* 
             }
         }
 
-    case IExpression::EK_TEMPORARY:
-        // should not occur for AST builder
-        ASSERT( M_SCENE, !"unexpected temporary");
-        break;
+        case IExpression::EK_TEMPORARY: {
 
-    case IExpression::EK_FORCE_32_BIT:
-        // not a real type
-        break;
+            Handle<const IExpression_temporary> temporary(
+                expr->get_interface<IExpression_temporary>());
+            mi::Size index = temporary->get_index();
+            if( index >= m_temporaries.size()) {
+                ASSERT( M_SCENE, !"invalid temporary reference");
+                break;
+            }
+
+            return to_reference( m_temporaries[index]);
+        }
+
+        case IExpression::EK_FORCE_32_BIT:
+            // not a real type
+            break;
     }
 
     ASSERT( M_SCENE, !"unexpected expression kind");
@@ -1317,7 +1322,7 @@ std::string get_texture_resource_name_gamma_selector(
         const char* name = trans->tag_to_name( tag);
         LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
             "Incorrect type for texture resource \"%s\".", name ? name : "");
-        return std::string();
+        return {};
     }
 
     DB::Access<TEXTURE::Texture> texture( tag, trans);
@@ -1329,7 +1334,7 @@ std::string get_texture_resource_name_gamma_selector(
             const char* name = trans->tag_to_name( image_tag);
             LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
                 "Incorrect type for image resource \"%s\".", name ? name : "");
-            return std::string();
+            return {};
         }
 
         DB::Access<DBIMAGE::Image> image( image_tag, trans);
@@ -1343,16 +1348,16 @@ std::string get_texture_resource_name_gamma_selector(
             return s1;
         const std::string& s2 = image->get_filename( 0, 0);
         if( s2.empty())
-            return std::string();
+            return {};
         const std::string& s3 = get_file_path(
             s2, mi::neuraylib::IMdl_impexp_api::SEARCH_OPTION_USE_FIRST);
         // Do not use the filename for animated textures/uvtiles since it only identifies the first
         // frame/uvtile.
         if( !s3.empty() && !image->is_uvtile() && !image->is_animated())
             return s3;
-        return std::string();
+        return {};
     }
-    return std::string();
+    return {};
 }
 
 /// Get the light_profile resource name of a tag.
@@ -1365,7 +1370,7 @@ std::string get_light_profile_resource_name(
         const char* name = trans->tag_to_name( tag);
         LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
             "Incorrect type for light profile resource \"%s\".", name ? name : "");
-        return std::string();
+        return {};
     }
     DB::Access<LIGHTPROFILE::Lightprofile> lightprofile( tag, trans);
     const std::string& s1 = lightprofile->get_mdl_file_path();
@@ -1373,12 +1378,12 @@ std::string get_light_profile_resource_name(
         return s1;
     const std::string& s2 = lightprofile->get_filename();
     if( s2.empty())
-        return std::string();
+        return {};
     const std::string& s3 = get_file_path(
         s2, mi::neuraylib::IMdl_impexp_api::SEARCH_OPTION_USE_FIRST);
     if( !s3.empty())
         return s3;
-    return std::string();
+    return {};
 }
 
 /// Get the bsdf_measurement resource name of a tag.
@@ -1391,7 +1396,7 @@ std::string get_bsdf_measurement_resource_name(
         const char* name = trans->tag_to_name( tag);
         LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
             "Incorrect type for BSDF measurement resource \"%s\".", name ? name : "");
-        return std::string();
+        return {};
     }
     DB::Access<BSDFM::Bsdf_measurement> bsdf_measurement( tag, trans);
     const std::string& s1 = bsdf_measurement->get_mdl_file_path();
@@ -1399,12 +1404,12 @@ std::string get_bsdf_measurement_resource_name(
         return s1;
     const std::string& s2 = bsdf_measurement->get_filename();
     if( s2.empty())
-        return std::string();
+        return {};
     const std::string& s3 = get_file_path(
         s2, mi::neuraylib::IMdl_impexp_api::SEARCH_OPTION_USE_FIRST);
     if( !s3.empty())
         return s3;
-    return std::string();
+    return {};
 }
 
 } // namespace
@@ -1444,8 +1449,8 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_value( const IValue* valu
             mi::mdl::IQualified_name *qname = create_scope_name(symbol);
             qname->add_component(sname);
 
-            mi::mdl::IType_enum const *mdl_tp = convert_enum_type(e_tp.get());
-            return to_reference(qname, mdl_tp);
+            mi::mdl::IType_enum const *core_e_tp = convert_enum_type(e_tp.get());
+            return to_reference(qname, core_e_tp);
         }
     case IValue::VK_FLOAT:
         {
@@ -1544,8 +1549,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_value( const IValue* valu
             Handle<IValue_invalid_df const> v(value->get_interface<IValue_invalid_df>());
             Handle<IType_reference const> type(v->get_type());
 
-            mi::mdl::IType_reference const *r_tp =
-                cast<mi::mdl::IType_reference>(transform_type(type.get()));
+            auto const *r_tp = cast<mi::mdl::IType_reference>(transform_type(type.get()));
             mi::mdl::IValue_invalid_ref const *vv = m_vf.create_invalid_ref(r_tp);
             return m_ef.create_literal(vv);
         }
@@ -1563,8 +1567,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_value( const IValue* valu
 
             // neuray sometimes creates wrong textures with TAG 0, handle them
             if (tag.is_invalid() || class_id != TEXTURE::Texture::id) {
-                mi::mdl::IType_reference const *r_tp =
-                    cast<mi::mdl::IType_reference>(transform_type(type.get()));
+                auto const *r_tp = cast<mi::mdl::IType_reference>(transform_type(type.get()));
                 mi::mdl::IValue_invalid_ref const *vv = m_vf.create_invalid_ref(r_tp);
                 return m_ef.create_literal(vv);
             }
@@ -1580,8 +1583,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_value( const IValue* valu
                      texture->get_image() ? texture->get_image() : texture->get_volume_data());
                 DB::Tag_version image_volume_tag_version
                     = m_trans->get_tag_version(image_volume_tag);
-                mi::mdl::IType_texture const *t_tp =
-                    cast<mi::mdl::IType_texture>(transform_type(type.get()));
+                auto const *t_tp = cast<mi::mdl::IType_texture>(transform_type(type.get()));
                 DB::Tag_version tag_version = m_trans->get_tag_version(tag);
                 mi::mdl::IValue_texture const *vv = m_vf.create_texture(
                     t_tp, "", gamma, selector.c_str(), tag.get_uint(),
@@ -1659,8 +1661,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_value( const IValue* valu
             // neuray sometimes creates invalid resources with TAG 0, handle them
             DB::Tag tag = v->get_value();
             if (tag.is_invalid()) {
-                mi::mdl::IType_reference const *r_tp =
-                    cast<mi::mdl::IType_reference>(transform_type(type.get()));
+                auto const *r_tp = cast<mi::mdl::IType_reference>(transform_type(type.get()));
                 mi::mdl::IValue_invalid_ref const *vv = m_vf.create_invalid_ref(r_tp);
                 return m_ef.create_literal(vv);
             }
@@ -1672,14 +1673,14 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_value( const IValue* valu
                 // map to IValue with tag
                 DB::Tag_version tag_version = m_trans->get_tag_version(tag);
                 if (kind == IValue::VK_LIGHT_PROFILE) {
-                    mi::mdl::IType_light_profile const *lp_tp =
+                    auto const *lp_tp =
                         cast<mi::mdl::IType_light_profile>(transform_type(type.get()));
                     mi::mdl::IValue_light_profile const *vv = m_vf.create_light_profile(
                         lp_tp, "", tag.get_uint(),
                         get_hash( /*mdl_file_path*/ nullptr, tag_version));
                     return m_ef.create_literal(vv);
                 } else {
-                    mi::mdl::IType_bsdf_measurement const *bm_tp =
+                    auto const *bm_tp =
                         cast<mi::mdl::IType_bsdf_measurement>(transform_type(type.get()));
                     mi::mdl::IValue_bsdf_measurement const *vv = m_vf.create_bsdf_measurement(
                         bm_tp, "", tag.get_uint(),
@@ -1731,8 +1732,7 @@ mi::mdl::IType const *Mdl_ast_builder::transform_type( const IType* type)
             Handle<IType_vector const> v_tp(type->get_interface<IType_vector>());
             Handle<IType const>        e_tp(v_tp->get_element_type());
 
-            mi::mdl::IType_atomic const *a_tp = cast<mi::mdl::IType_atomic>(
-                transform_type(e_tp.get()));
+            auto const *a_tp = cast<mi::mdl::IType_atomic>(transform_type(e_tp.get()));
             return m_tf.create_vector(a_tp, int(v_tp->get_size()));
         }
     case IType::TK_MATRIX:
@@ -1740,8 +1740,7 @@ mi::mdl::IType const *Mdl_ast_builder::transform_type( const IType* type)
             Handle<IType_matrix const> m_tp(type->get_interface<IType_matrix>());
             Handle<IType const>        e_tp(m_tp->get_element_type());
 
-            mi::mdl::IType_vector const *v_tp = cast<mi::mdl::IType_vector>(
-                transform_type(e_tp.get()));
+            auto const *v_tp = cast<mi::mdl::IType_vector>(transform_type(e_tp.get()));
             return m_tf.create_matrix(v_tp, int(m_tp->get_size()));
         }
     case IType::TK_COLOR:
@@ -1852,6 +1851,11 @@ void Mdl_ast_builder::remove_parameters()
     m_param_vector.clear();
 }
 
+void Mdl_ast_builder::add_temporary( const mi::mdl::ISymbol* sym)
+{
+    m_temporaries.push_back( sym);
+}
+
 // Convert an neuray enum type into a MDL enum type.
 mi::mdl::IType_enum const *Mdl_ast_builder::convert_enum_type(
     IType_enum const *e_tp)
@@ -1867,16 +1871,16 @@ mi::mdl::IType_enum const *Mdl_ast_builder::convert_enum_type(
             }
 
             mi::mdl::ISymbol const *sym = m_st.get_user_type_symbol(symbol.c_str());
-            mi::mdl::IType_enum *res = m_tf.create_enum(sym);
-
-            for (mi::Size i = 0, n = e_tp->get_size(); i < n; ++i) {
+            size_t n = e_tp->get_size();
+            MDL::Small_VLA<mi::mdl::IType_enum::Value, 8> values(n);
+            for (mi::Size i = 0; i < n; ++i) {
                 mi::mdl::ISymbol const *v_sym = m_st.get_symbol(e_tp->get_value_name(i));
                 mi::Sint32             v_code = e_tp->get_value_code(i, nullptr);
 
-                res->add_value(v_sym, v_code);
+                values[i] = mi::mdl::IType_enum::Value(v_sym, v_code);
             }
-            return res;
-        }
+            return m_tf.create_enum(sym, values.data(), values.size());
+    }
     case IType_enum::EID_TEX_GAMMA_MODE:
         return m_tf.get_predefined_enum(mi::mdl::IType_enum::EID_TEX_GAMMA_MODE);
     case IType_enum::EID_INTENSITY_MODE:

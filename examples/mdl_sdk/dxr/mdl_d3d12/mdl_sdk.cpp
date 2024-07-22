@@ -55,7 +55,7 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
     m_mdl_options.fold_all_enum_parameters = false;
     m_mdl_options.enable_shader_cache = app->get_options()->enable_shader_cache;
     m_mdl_options.distilling_support_enabled = false;
-    m_mdl_options.distilling_target = app->get_options()->distilling_target;
+    m_mdl_options.distill_target = app->get_options()->distill_target;
 
     // Access the MDL SDK
     m_neuray = mi::examples::mdl::load_and_get_ineuray();
@@ -75,8 +75,9 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
         m_neuray->get_api_component<mi::neuraylib::ILogging_configuration>());
     logging_configuration->set_log_level(mi::base::MESSAGE_SEVERITY_FATAL);
 
-    // search path setup is done during scene loading as the scene folder is added too
-    // reconfigure_search_paths();
+    // initial search path setup
+    // it is done during scene loading as well because the scene folder is added too
+    reconfigure_search_paths();
 
     // Load the plugins.
     mi::base::Handle<mi::neuraylib::IPlugin_configuration> plugin_conf(
@@ -154,9 +155,27 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
         m_app->get_options()->enable_auxiliary ? "on" : "off") != 0)
         return;
 
+    if (app->get_options()->enable_bsdf_flags)
+    {
+        if (m_hlsl_backend->set_option("libbsdf_flags_in_bsdf_data", "on") != 0)
+            return;
+    }
+
+    // if (m_hlsl_backend->set_option("hlsl_use_resource_data", "on") != 0)
+    //     return;
+
 
     // The HLSL backend supports no pointers, which means we need use fixed size arrays
-    if (m_hlsl_backend->set_option("df_handle_slot_mode", "none") != 0)
+    char const *sm = "none";
+    switch (m_app->get_options()->slot_mode) {
+    case Base_options::SM_NONE:    sm = "none";    break;
+    case Base_options::SM_FIXED_1: sm = "fixed_1"; break;
+    case Base_options::SM_FIXED_2: sm = "fixed_2"; break;
+    case Base_options::SM_FIXED_4: sm = "fixed_4"; break;
+    case Base_options::SM_FIXED_8: sm = "fixed_8"; break;
+    }
+
+    if (m_hlsl_backend->set_option("df_handle_slot_mode", sm) != 0)
     {
         log_error("Backend option 'df_handle_slot_mode' invalid.", SRC);
         return;

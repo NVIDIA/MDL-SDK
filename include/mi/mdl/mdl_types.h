@@ -95,6 +95,9 @@ public:
     /// If this type is an alias type, skip all aliases and return the base type,
     /// else the type itself.
     virtual IType const *skip_type_alias() const = 0;
+
+    /// Return true if this type is declarative, false otherwise.
+    virtual bool is_declarative() const = 0;
 };
 
 /// An MDL alias type (aka typedef).
@@ -164,9 +167,43 @@ public:
     /// Identifiers of enum types.
     enum Predefined_id {
         EID_USER           = -1,  ///< This is a user defined enum type.
-        EID_TEX_GAMMA_MODE = 0,   ///< This is the ::%tex::gamma_mode enum type.
-        EID_INTENSITY_MODE = 1,   ///< This is the MDL 1.1 intensity_mode enum type.
+        EID_TEX_GAMMA_MODE = 0,   ///< This is the \c "::tex::gamma_mode" enum type.
+        EID_INTENSITY_MODE = 1,   ///< This is the MDL 1.1 \c "%::intensity_mode" enum type.
         EID_LAST           = EID_INTENSITY_MODE
+    };
+
+    /// An immutable value of a enum type.
+    struct Value
+    {
+        /// Return the name of this value.
+        ISymbol const *get_symbol() const { return m_sym; }
+
+        /// Return the code of this value.
+        int get_code() const { return m_code; }
+
+        /// Constructor.
+        ///
+        /// \param name  the name of this enum value
+        /// \param code  the code if this enum value
+        explicit Value(ISymbol const *name, int code)
+        : m_sym(name)
+        , m_code(code)
+        {
+        }
+
+        /// Default Constructor.
+        Value()
+        : m_sym(NULL)
+        , m_code(0)
+        {
+        }
+
+    private:
+        /// The name of this value.
+        ISymbol const *m_sym;
+
+        /// The code of this value.
+        int m_code;
     };
 
     /// The kind of this subclass.
@@ -175,38 +212,24 @@ public:
     /// Get the name of this enum type.
     virtual ISymbol const *get_symbol() const = 0;
 
-    /// Add an enum value.
-    ///
-    /// \param name  The name of the value.
-    /// \param code  The code of the value.
-    ///
-    /// \return The index of this new value.
-    virtual int add_value(ISymbol const *name, int code) = 0;
-
     /// Get the number of values.
-    virtual int get_value_count() const = 0;
+    virtual size_t get_value_count() const = 0;
 
     /// Get a value at given index.
     ///
-    /// \param[in]  index    The index of the value.
-    /// \param[out] name     The name of the value.
-    /// \param[out] code     The code of the value.
+    /// \param index  The index of the value.
     ///
-    /// \return  true of success, false on index error.
-    virtual bool get_value(
-        int           index,
-        ISymbol const *&name,
-        int           &code) const = 0;
+    /// \return  the value, or NULL on index error.
+    virtual Value const *get_value(
+        size_t index) const = 0;
 
     /// Lookup a value in O(N).
     ///
-    /// \param[in]  name     The name of the value.
-    /// \param[out] code     The code of the value.
+    /// \param name  The name of the value.
     ///
-    /// \return true if the name was found, false otherwise.
-    virtual bool lookup(
-        ISymbol const *name,
-        int           &code) const = 0;
+    /// \return the value if the name was found, NULL otherwise.
+    virtual Value const *lookup(
+        ISymbol const *name) const = 0;
 
     /// If this enum is a predefined one, return its ID, else EID_USER.
     virtual Predefined_id get_predefined_id() const = 0;
@@ -384,11 +407,29 @@ public:
         ISymbol const *&name) const = 0;
 };
 
+/// A struct category.
+class IStruct_category : public Interface_owned
+{
+public:
+    /// Identifiers of struct categories.
+    enum Predefined_id {
+        CID_USER = -1,
+        CID_MATERIAL_CATEGORY = 0,
+        CID_LAST = CID_MATERIAL_CATEGORY
+    };
+
+    /// Get the name of the struct category.
+    virtual ISymbol const *get_symbol() const = 0;
+
+    /// If this struct is a predefined one, return its ID, else CID_USER.
+    virtual Predefined_id get_predefined_id() const = 0;
+};
+
 /// A struct type.
 class IType_struct : public IType_compound
 {
 public:
-    /// Identifiers of enum types.
+    /// Identifiers of struct types.
     enum Predefined_id {
         SID_USER = -1,
         SID_MATERIAL_EMISSION = 0,
@@ -399,71 +440,67 @@ public:
         SID_LAST = SID_MATERIAL
     };
 
+    /// An immutable struct field.
+    struct Field {
+        /// Get the type of this field.
+        IType const *get_type() const { return m_type; }
+
+        /// Get the name symbol of this field.
+        ISymbol const *get_symbol() const { return m_symbol; }
+
+    public:
+        /// Constructor.
+        Field(IType const *type, ISymbol const *sym)
+        : m_type(type)
+        , m_symbol(sym)
+        {
+        }
+
+        /// Default Constructor.
+        Field()
+        : m_type(NULL)
+        , m_symbol(NULL)
+        {
+        }
+
+    private:
+        /// The type of this field.
+        IType const *m_type;
+
+        /// The name of this field.
+        ISymbol const *m_symbol;
+    };
+
     /// The kind of this subclass.
     static Kind const s_kind = TK_STRUCT;
 
     /// Get the name of the struct type.
     virtual ISymbol const *get_symbol() const = 0;
 
-    /// Add a field to the struct type (at the end of the field list).
-    ///
-    /// \param type  The type of the field.
-    /// \param name  The name of the field.
-    virtual void add_field(
-        IType const   *type,
-        ISymbol const *name) = 0;
-
     /// Get the number of fields.
-    virtual int get_field_count() const = 0;
+    virtual size_t get_field_count() const = 0;
 
     /// Get a field.
     ///
     /// \param[in]  index    The index of the field.
-    /// \param[out] type     The type of the field.
-    /// \param[out] name     The name of the field.
-    virtual void get_field(
-        int           index,
-        IType const   *&type,
-        ISymbol const *&name) const = 0;
+    virtual Field const *get_field(
+        size_t index) const = 0;
 
-    /// Return the index of a field in O(N) if it is present and -1 otherwise.
+    /// Return the index of a field in O(N) if it is present and ~0 otherwise.
     ///
     /// \param name     The name of the field.
-    virtual int find_field(ISymbol const *name) const = 0;
+    virtual size_t find_field_index(ISymbol const *name) const = 0;
 
-    /// Return the index of a field in O(N) if it is present and -1 otherwise.
+    /// Return the index of a field in O(N) if it is present and ~0 otherwise.
     ///
     /// \param name     The name of the field.
-    virtual int find_field(char const *name) const = 0;
-
-    /// Return the index of a method in O(N) if it is present and -1 otherwise.
-    ///
-    /// \param name     The name of the method.
-    virtual int find_method(ISymbol const *name) const = 0;
-
-    /// Add a method.
-    ///
-    /// \param type  The type of the method.
-    /// \param name  The name of the method.
-    virtual void add_method(
-        IType_function const *type,
-        ISymbol const        *name) = 0;
-
-    /// Get the number of methods.
-    virtual int get_method_count() const = 0;
-
-    /// Get a method.
-    ///
-    /// \param[in]  index    The index of the method.
-    /// \param[out] type     The type of the field.
-    /// \param[out] name     The name of the field.
-    virtual void get_method(
-        int                  index,
-        IType_function const *&type,
-        ISymbol const        *&name) const = 0;
+    virtual size_t find_field_index(char const *name) const = 0;
 
     /// If this struct is a predefined one, return its ID, else SID_USER.
     virtual Predefined_id get_predefined_id() const = 0;
+
+    /// Get the name of the struct type's category.
+    virtual IStruct_category const *get_category() const = 0;
 };
 
 /// A string valued resource type.
@@ -765,8 +802,13 @@ public:
 
     /// Create a new type enum instance.
     ///
-    /// \param name The name of the enum.
-    virtual IType_enum *create_enum(ISymbol const *name) = 0;
+    /// \param name      The name of the enum type.
+    /// \param values    The values of this enum type.
+    /// \param n_values  The number of values.
+    virtual IType_enum const *create_enum(
+        ISymbol const           *name,
+        IType_enum::Value const *values,
+        size_t                  n_values) = 0;
 
     /// Lookup an enum type.
     ///
@@ -856,14 +898,37 @@ public:
         Function_parameter const * const parameters,
         size_t                           n_parameters) = 0;
 
+    /// Lookup a struct category.
+    ///
+    /// \param name  The name of the struct category.
+    ///
+    /// \returns the struct category or NULL if it does not exist.
+    virtual IStruct_category const *lookup_struct_category(
+        char const *name) = 0;
+    
+    /// Create a new struct category instance.
+    ///
+    /// \param name    Name of the struct category.
+    virtual IStruct_category const *create_struct_category(
+        ISymbol const *name) = 0;
+
     /// Create a new type struct instance.
     ///
-    /// \param name The name of the struct.
-    virtual IType_struct *create_struct(ISymbol const *name) = 0;
+    /// \param is_declarative Flag whether the struct is declarative or not.
+    /// \param name      The name of the struct type.
+    /// \param category  The category of the struct or NULL if it has no category.
+    /// \param fields    The fields of the struct type.
+    /// \param n_fields  The number of fields.
+    virtual IType_struct const *create_struct(
+        bool                      is_declarative,
+        ISymbol const             *name,
+        IStruct_category const    *category,
+        IType_struct::Field const *fields,
+        size_t                    n_fields) = 0;
 
     /// Lookup a struct type.
     ///
-    /// \param name The name of the struct.
+    /// \param name  The name of the struct.
     ///
     /// \returns the type struct instance or NULL if it does not exist.
     virtual IType_struct const *lookup_struct(char const *name) const = 0;
@@ -882,15 +947,20 @@ public:
     /// \param type  the type to import
     virtual IType const *import(IType const *type) = 0;
 
+    /// Return a predefined struct category.
+    ///
+    /// \param id  the ID of the predefined enum
+    virtual IStruct_category const *get_predefined_struct_category(IStruct_category::Predefined_id id) = 0;
+
     /// Return a predefined struct.
     ///
     /// \param part  the ID of the predefined struct
-    virtual IType_struct *get_predefined_struct(IType_struct::Predefined_id part) = 0;
+    virtual IType_struct const *get_predefined_struct(IType_struct::Predefined_id part) = 0;
 
     /// Return a predefined enum.
     ///
     /// \param part  the ID of the predefined enum
-    virtual IType_enum *get_predefined_enum(IType_enum::Predefined_id part) = 0;
+    virtual IType_enum const *get_predefined_enum(IType_enum::Predefined_id part) = 0;
 
     /// Return the symbol table of this type factory.
     virtual ISymbol_table *get_symbol_table() = 0;

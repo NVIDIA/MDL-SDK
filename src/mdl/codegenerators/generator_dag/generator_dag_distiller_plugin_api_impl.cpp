@@ -42,10 +42,20 @@
 
 #include <mi/mdl/mdl_distiller_node_types.h>
 
-#include <string>
+#include <cstring>
 
+#define MDL_DIST_PLUG_DEBUG_GRAPH 0
+#define MDL_DIST_PLUG_DEBUG_DUMP 0
+
+#if MDL_DIST_PLUG_DEBUG_GRAPH || MDL_DIST_PLUG_DEBUG_DUMP
+#define MDL_DIST_PLUG_DEBUG 1
+#else
 #define MDL_DIST_PLUG_DEBUG 0
+#endif
+
 #if MDL_DIST_PLUG_DEBUG
+#include <thread>
+#include <atomic>
 #include <iostream>
 #include <fstream>
 #endif
@@ -55,7 +65,7 @@ namespace mdl {
 
 extern Node_types s_node_types;
 
-#if MDL_DIST_PLUG_DEBUG
+#if MDL_DIST_PLUG_DEBUG_DUMP
 // Utility for debugging. Prints a value to stderr.
 void print_value(mi::mdl::IValue const *v, std::ostream & outs) {
     switch (v->get_kind()) {
@@ -72,16 +82,14 @@ void print_value(mi::mdl::IValue const *v, std::ostream & outs) {
         break;
 
     case mi::mdl::IValue::Kind::VK_ENUM:
-    {
-        IType_enum const *t = cast<IType_enum>(v->get_type());
-        int value_idx = cast<IValue_enum>(v)->get_index();
-        int code;
-        ISymbol const *name;
-        t->get_value(value_idx, name, code);
-        outs << t->get_symbol()->get_name() << "::";
-        outs << name->get_name();
+        {
+            IType_enum const *t = cast<IType_enum>(v->get_type());
+            int value_idx = cast<IValue_enum>(v)->get_index();
+            IType_enum::Value const *v = t->get_value(value_idx);
+            outs << t->get_symbol()->get_name() << "::";
+            outs << v->get_symbol()->get_name();
+        }
         break;
-    }
 
     case mi::mdl::IValue::Kind::VK_FLOAT:
         outs << cast<IValue_float>(v)->get_value();
@@ -96,27 +104,29 @@ void print_value(mi::mdl::IValue const *v, std::ostream & outs) {
         break;
 
     case mi::mdl::IValue::Kind::VK_VECTOR:
-    {
-        IValue_vector const *vv = cast<IValue_vector>(v);
-        outs << "float"
-                  << vv->get_component_count()
-                  << "(";
-        for (int i = 0; i < vv->get_component_count(); i++) {
-            if (IValue_float const *f = as<IValue_float>(vv->get_value(i))) {
-                if (i > 0)
-                    outs << ",";
-                outs << f->get_value();
-            } else if (IValue_int const *f = as<IValue_int>(vv->get_value(i))) {
-                if (i > 0)
-                    outs << ",";
-                outs << f->get_value();
-            } else {
-                MDL_ASSERT(!"unreachable");
+        {
+            IValue_vector const *vv = cast<IValue_vector>(v);
+            outs << "float"
+                      << vv->get_component_count()
+                      << "(";
+            for (int i = 0; i < vv->get_component_count(); ++i) {
+                if (IValue_float const *f = as<IValue_float>(vv->get_value(i))) {
+                    if (i > 0) {
+                        outs << ",";
+                    }
+                    outs << f->get_value();
+                } else if (IValue_int const *f = as<IValue_int>(vv->get_value(i))) {
+                    if (i > 0) {
+                        outs << ",";
+                    }
+                    outs << f->get_value();
+                } else {
+                    MDL_ASSERT(!"unreachable");
+                }
             }
+            outs << ")";
         }
-        outs << ")";
         break;
-    }
 
     case mi::mdl::IValue::Kind::VK_MATRIX:
         outs << "<matrix>";
@@ -129,10 +139,11 @@ void print_value(mi::mdl::IValue const *v, std::ostream & outs) {
     case mi::mdl::IValue::Kind::VK_RGB_COLOR:
     {
         outs << "color(";
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 3; ++i) {
             IValue_float const *f = cast<IValue_rgb_color>(v)->get_value(i);
-            if (i > 0)
+            if (i > 0) {
                 outs << ",";
+            }
             outs << f->get_value();
         }
         outs << ")";
@@ -144,32 +155,41 @@ void print_value(mi::mdl::IValue const *v, std::ostream & outs) {
         break;
 
     case mi::mdl::IValue::Kind::VK_INVALID_REF:
-    {
-        IType const *t = v->get_type();
-        switch (t->get_kind()) {
-        case IType::Kind::TK_BSDF:
-            outs << "bsdf()";
-            break;
-        case IType::Kind::TK_EDF:
-            outs << "edf()";
-            break;
-        case IType::Kind::TK_VDF:
-            outs << "vdf()";
-            break;
-        case IType::Kind::TK_HAIR_BSDF:
-            outs << "hair_bsdf()";
-            break;
-        default:
-            outs << "<invalid_ref>";
-            break;
+        {
+            IType const *t = v->get_type();
+            switch (t->get_kind()) {
+            case IType::Kind::TK_BSDF:
+                outs << "bsdf()";
+                break;
+            case IType::Kind::TK_EDF:
+                outs << "edf()";
+                break;
+            case IType::Kind::TK_VDF:
+                outs << "vdf()";
+                break;
+            case IType::Kind::TK_HAIR_BSDF:
+                outs << "hair_bsdf()";
+                break;
+            default:
+                outs << "<invalid_ref>";
+                break;
+            }
         }
         break;
-    }
 
     case mi::mdl::IValue::Kind::VK_TEXTURE:
-        outs << "<texture>";
-        break;
+        {
+            IValue_texture const *vv = cast<IValue_texture>(v);
 
+            outs << "<texture: "
+                << "url: \"" << vv->get_string_value()
+                << "\", sel: \"" 
+                << vv->get_selector() 
+                << "\", tag: " << vv->get_tag_value()
+                << ", ver: " << vv->get_tag_version()
+                << ">";
+        }
+        break;
     case mi::mdl::IValue::Kind::VK_LIGHT_PROFILE:
         outs << "<light_profile>";
         break;
@@ -186,7 +206,7 @@ void print_value(mi::mdl::IValue const *v, std::ostream & outs) {
 
 // Utility for debugging. Prints i*2 spaces.
 void indent(int i, std::ostream &outs) {
-    for (int x = 0; x < i; x++) {
+    for (int x = 0; x < i; ++x) {
         outs << "  ";
     }
 }
@@ -194,70 +214,74 @@ void indent(int i, std::ostream &outs) {
 // Utility for debugging. Prints a node with indentation and some
 // colors. Only works properly on terminals with ANSI color code
 // emulation.
-void Distiller_plugin_api_impl::pprint_node(IGenerated_code_dag::IMaterial_instance const *inst,
-                                            DAG_node const *node, int level, std::ostream &outs) {
+void Distiller_plugin_api_impl::pprint_node(
+    IMaterial_instance const *inst,
+    DAG_node const           *node,
+    int                      level,
+    std::ostream             &outs)
+{
   restart:
     switch (node->get_kind()) {
     case DAG_node::EK_CONSTANT:
-    {
-        DAG_constant const *c = cast<DAG_constant>(node);
-        IValue const *value = c->get_value();
-        print_value(value, outs);
-        pprint_attributes(inst, node, level, outs);
-        break;
-    }
-    case DAG_node::EK_PARAMETER:
-    {
-        DAG_parameter const *p    = cast<DAG_parameter>(node);
-        int                 index = p->get_index();
-        outs << "p" << index;
-        pprint_attributes(inst, node, level, outs);
-        break;
-    }
-    case DAG_node::EK_TEMPORARY:
-    {
-        DAG_temporary const *t = cast<DAG_temporary>(node);
-        int index = t->get_index();
-        DAG_node const *val = t->get_expr();
-        switch (val->get_kind()) {
-        case DAG_node::EK_CONSTANT:
-        case DAG_node::EK_PARAMETER:
-            node = val;
-            goto restart;
-        default:
-            outs << "t" << index;
+        {
+            DAG_constant const *c = cast<DAG_constant>(node);
+            IValue const *value = c->get_value();
+            print_value(value, outs);
             pprint_attributes(inst, node, level, outs);
-            break;
         }
         break;
-    }
+    case DAG_node::EK_PARAMETER:
+        {
+            DAG_parameter const *p    = cast<DAG_parameter>(node);
+            int                 index = p->get_index();
+            outs << "p" << index;
+            pprint_attributes(inst, node, level, outs);
+        }
+        break;
+    case DAG_node::EK_TEMPORARY:
+        {
+            DAG_temporary const *t = cast<DAG_temporary>(node);
+            int index = t->get_index();
+            DAG_node const *val = t->get_expr();
+            switch (val->get_kind()) {
+            case DAG_node::EK_CONSTANT:
+            case DAG_node::EK_PARAMETER:
+                node = val;
+                goto restart;
+            default:
+                outs << "t" << index;
+                pprint_attributes(inst, node, level, outs);
+                break;
+            }
+        }
+        break;
     case DAG_node::EK_CALL:
-    {
-        DAG_call const         *call    = cast<DAG_call>(node);
-        int                    n_params = call->get_argument_count();
-//      IDefinition::Semantics sema     = call->get_semantic();
-        char const             *name    = call->get_name();
-        int np = std::string(name).find('(');
-        if (np == std::string::npos) {
-            np = strlen(name);
-        }
-        std::string n(name, 0, np);
+        {
+            DAG_call const         *call    = cast<DAG_call>(node);
+            int                    n_params = call->get_argument_count();
+//          IDefinition::Semantics sema     = call->get_semantic();
+            char const             *name    = call->get_name();
+            int np = std::string(name).find('(');
+            if (np == std::string::npos) {
+                np = strlen(name);
+            }
+            std::string n(name, 0, np);
 
-        outs << n.c_str() << "(";
-        for (int i = 0; i < n_params; ++i) {
-            if (i > 0) {
-                outs << ",";
+            outs << n.c_str() << "(";
+            for (int i = 0; i < n_params; ++i) {
+                if (i > 0) {
+                    outs << ",";
+                }
+                if (level > 4 || i > 3) {
+                    outs << "\n";
+                    indent(level, outs);
+                }
+                pprint_node(inst, call->get_argument(i), level + 1, outs);
             }
-            if (level > 4 || i > 3) {
-                outs << "\n";
-                indent(level, outs);
-            }
-            pprint_node(inst, call->get_argument(i), level + 1, outs);
+            outs << ")";
+            pprint_attributes(inst, node, level, outs);
         }
-        outs << ")";
-        pprint_attributes(inst, node, level, outs);
         break;
-    }
     default:
         MDL_ASSERT(!"unexpected case");
         break;
@@ -265,8 +289,12 @@ void Distiller_plugin_api_impl::pprint_node(IGenerated_code_dag::IMaterial_insta
 }
 
 
-void Distiller_plugin_api_impl::pprint_attributes(IGenerated_code_dag::IMaterial_instance const *inst,
-                                                  DAG_node const *node, int level, std::ostream &outs) {
+void Distiller_plugin_api_impl::pprint_attributes(
+    IMaterial_instance const *inst,
+    DAG_node const           *node,
+    int                      level,
+    std::ostream             &outs)
+{
     auto inner = m_attribute_map.find(node);
     if (inner != m_attribute_map.end()) {
         bool first = true;
@@ -289,8 +317,11 @@ void Distiller_plugin_api_impl::pprint_attributes(IGenerated_code_dag::IMaterial
     }
 }
 
-void Distiller_plugin_api_impl::pprint_material(IGenerated_code_dag::IMaterial_instance const *inst, std::ostream &outs) {
-    for (size_t i = 0; i < inst->get_temporary_count(); i++) {
+void Distiller_plugin_api_impl::pprint_material(
+    IMaterial_instance const *inst,
+    std::ostream             &outs)
+{
+    for (size_t i = 0; i < inst->get_temporary_count(); ++i) {
         DAG_node const *temp = inst->get_temporary_value(i);
         outs << "t" << i << " = ";
         pprint_node(inst, temp, 1, outs);
@@ -298,17 +329,61 @@ void Distiller_plugin_api_impl::pprint_material(IGenerated_code_dag::IMaterial_i
     }
     outs << "body = ";
     pprint_node(inst, inst->get_constructor(), 1, outs);
-    outs << "\n";
+    outs << "\n: Resource map: \n";
+    for (size_t i = 0; i < inst->get_resource_tag_map_entries_count(); ++i) {
+        auto rt = inst->get_resource_tag_map_entry(i);
+        outs << "entry " << i << ": kind: " << rt->m_kind << " url: " << rt->m_url << " tag: " << rt->m_tag << "\n";
+    }
 }
 
 #endif
 
-/// Print a representaion of `v` to the output stream, suitable for
-/// debugging.
+/// Write an int to the output stream.
+static void write(IOutput_stream *outs, int v)
+{
+    char buf[64];
+
+    int n = snprintf(buf, sizeof(buf), "%d", v);
+    if (n > 0) {
+        outs->write(buf);
+    }
+}
+
+/// Write a float to the output stream.
+static void write(IOutput_stream *outs, float v)
+{
+    char buf[64];
+
+    int n = snprintf(buf, sizeof(buf), "%.10g", v);
+    if (n > 0) {
+        outs->write(buf);
+    }
+}
+
+/// Write a double to the output stream.
+static void write(IOutput_stream *outs, double v)
+{
+    char buf[64];
+
+    int n = snprintf(buf, sizeof(buf), "%.18g", v);
+    if (n > 0) {
+        outs->write(buf);
+    }
+}
+
+/// Write a string to the output stream.
+static void write(IOutput_stream *outs, char const *s, size_t l)
+{
+    for (size_t i = 0; i < l; ++i) {
+        outs->write_char(s[i]);
+    }
+}
+
+/// Print a representation of `v` to the output stream, suitable for debugging.
 static void deb_value(
     IOutput_stream *outs,
-    IValue const *v,
-    int level)
+    IValue const   *v,
+    int            level)
 {
     switch (v->get_kind()) {
     case mi::mdl::IValue::Kind::VK_BAD:
@@ -316,76 +391,59 @@ static void deb_value(
         break;
 
     case mi::mdl::IValue::Kind::VK_BOOL:
-        if (cast<IValue_bool>(v)->get_value()) {
-            outs->write("true");
-        } else {
-            outs->write("false");
-        }
+        outs->write(cast<IValue_bool>(v)->get_value() ? "true" : "false");
         break;
 
     case mi::mdl::IValue::Kind::VK_INT:
-    {
-        std::string temp(std::to_string(cast<IValue_int>(v)->get_value()));
-        outs->write(temp.c_str());
+        write(outs, cast<IValue_int>(v)->get_value());
         break;
-    }
 
     case mi::mdl::IValue::Kind::VK_ENUM:
-    {
-        IType_enum const *t = cast<IType_enum>(v->get_type());
-        int value_idx = cast<IValue_enum>(v)->get_index();
-        int code;
-        ISymbol const *name;
-        t->get_value(value_idx, name, code);
-        outs->write(t->get_symbol()->get_name());
-        outs->write("::");
-        outs->write(name->get_name());
+        {
+            IType_enum const *t = cast<IType_enum>(v->get_type());
+            size_t value_idx = cast<IValue_enum>(v)->get_index();
+
+            IType_enum::Value const *value = t->get_value(value_idx);
+            outs->write(t->get_symbol()->get_name());
+            outs->write("::");
+            outs->write(value->get_symbol()->get_name());
+        }
         break;
-    }
 
     case mi::mdl::IValue::Kind::VK_FLOAT:
-    {
-        std::string temp(std::to_string(cast<IValue_float>(v)->get_value()));
-        outs->write(temp.c_str());
+        write(outs, cast<IValue_float>(v)->get_value());
         break;
-    }
 
     case mi::mdl::IValue::Kind::VK_DOUBLE:
-    {
-        std::string temp(std::to_string(cast<IValue_double>(v)->get_value()));
-        outs->write(temp.c_str());
+        write(outs, cast<IValue_double>(v)->get_value());
         break;
-    }
 
     case mi::mdl::IValue::Kind::VK_STRING:
-        outs->write("\"");
+        outs->write_char('\"');
         outs->write(cast<IValue_string>(v)->get_value());
-        outs->write("\"");
+        outs->write_char('\"');
         break;
 
     case mi::mdl::IValue::Kind::VK_VECTOR:
-    {
-        IValue_vector const *vv = cast<IValue_vector>(v);
-        outs->write("float");
-        std::string temp(std::to_string(vv->get_component_count()));
-        outs->write(temp.c_str());
-        outs->write("(");
-        for (int i = 0; i < vv->get_component_count(); i++) {
-            if (i > 0)
-                outs->write(",");
-            if (IValue_float const *f = as<IValue_float>(vv->get_value(i))) {
-                std::string temp(std::to_string(f->get_value()));
-                outs->write(temp.c_str());
-            } else if (IValue_int const *f = as<IValue_int>(vv->get_value(i))) {
-                std::string temp(std::to_string(f->get_value()));
-                outs->write(temp.c_str());
-            } else {
-                MDL_ASSERT(!"unreachable");
+        {
+            IValue_vector const *vv = cast<IValue_vector>(v);
+            outs->write("float");
+            write(outs, vv->get_component_count());
+            outs->write_char('(');
+            for (int i = 0; i < vv->get_component_count(); i++) {
+                if (i > 0)
+                    outs->write_char(',');
+                if (IValue_float const *f = as<IValue_float>(vv->get_value(i))) {
+                    write(outs, f->get_value());
+                } else if (IValue_int const *f = as<IValue_int>(vv->get_value(i))) {
+                    write(outs, f->get_value());
+                } else {
+                    MDL_ASSERT(!"unreachable");
+                }
             }
+            outs->write_char(')');
         }
-        outs->write(")");
         break;
-    }
 
     case mi::mdl::IValue::Kind::VK_MATRIX:
         outs->write("<matrix>");
@@ -396,45 +454,45 @@ static void deb_value(
         break;
 
     case mi::mdl::IValue::Kind::VK_RGB_COLOR:
-    {
-        outs->write("color(");
-        for (int i = 0; i < 3; i++) {
-            IValue_float const *f = cast<IValue_rgb_color>(v)->get_value(i);
-            if (i > 0)
-                outs->write(",");
-            std::string temp(std::to_string(f->get_value()));
-            outs->write(temp.c_str());
+        {
+            outs->write("color(");
+            for (int i = 0; i < 3; ++i) {
+                IValue_float const *f = cast<IValue_rgb_color>(v)->get_value(i);
+                if (i > 0) {
+                    outs->write_char(',');
+                }
+                write(outs, f->get_value());
+            }
+            outs->write_char(')');
         }
-        outs->write(")");
         break;
-    }
 
     case mi::mdl::IValue::Kind::VK_STRUCT:
         outs->write("<struct>");
         break;
 
     case mi::mdl::IValue::Kind::VK_INVALID_REF:
-    {
-        IType const *t = v->get_type();
-        switch (t->get_kind()) {
-        case IType::Kind::TK_BSDF:
-            outs->write("bsdf()");
-            break;
-        case IType::Kind::TK_EDF:
-            outs->write("edf()");
-            break;
-        case IType::Kind::TK_VDF:
-            outs->write("vdf()");
-            break;
-        case IType::Kind::TK_HAIR_BSDF:
-            outs->write("hair_bsdf()");
-            break;
-        default:
-            outs->write("<invalid_ref>");
-            break;
+        {
+            IType const *t = v->get_type();
+            switch (t->get_kind()) {
+            case IType::Kind::TK_BSDF:
+                outs->write("bsdf()");
+                break;
+            case IType::Kind::TK_EDF:
+                outs->write("edf()");
+                break;
+            case IType::Kind::TK_VDF:
+                outs->write("vdf()");
+                break;
+            case IType::Kind::TK_HAIR_BSDF:
+                outs->write("hair_bsdf()");
+                break;
+            default:
+                outs->write("<invalid_ref>");
+                break;
+            }
         }
         break;
-    }
 
     case mi::mdl::IValue::Kind::VK_TEXTURE:
         outs->write("<texture>");
@@ -454,18 +512,19 @@ static void deb_value(
     }
 }
 
-static void deb_indent(IOutput_stream *outs, int level) {
-    for (int i = 0; i < level; i++) {
+static void deb_indent(
+    IOutput_stream *outs,
+    int            level) {
+    for (int i = 0; i < level; ++i) {
         outs->write("  ");
     }
 }
 
-/// Print a representaion of `node` to the output stream, suitable for
-/// debugging.
+/// Print a representation of `node` to the output stream, suitable for debugging.
 static void deb_node(
     IOutput_stream *outs,
     DAG_node const *node,
-    int level)
+    int            level)
 {
     if (node == nullptr) {
         outs->write("<null>");
@@ -475,77 +534,73 @@ static void deb_node(
   restart:
     switch (node->get_kind()) {
     case DAG_node::EK_CONSTANT:
-    {
-        DAG_constant const *c = cast<DAG_constant>(node);
-        IValue const *value = c->get_value();
-        deb_value(outs, value, level);
+        {
+            DAG_constant const *c = cast<DAG_constant>(node);
+            IValue const *value = c->get_value();
+            deb_value(outs, value, level);
+        }
         break;
-    }
 
     case DAG_node::EK_PARAMETER:
-    {
-        DAG_parameter const *p    = cast<DAG_parameter>(node);
-        int                 index = p->get_index();
-        outs->write("p");
-        std::string temp(std::to_string(index));
-        outs->write(temp.c_str());
+        {
+            DAG_parameter const *p    = cast<DAG_parameter>(node);
+            int                 index = p->get_index();
+            outs->write_char('p');
+            write(outs, index);
+        }
         break;
-    }
 
     case DAG_node::EK_TEMPORARY:
-    {
-        DAG_temporary const *t = cast<DAG_temporary>(node);
-        int index = t->get_index();
-        DAG_node const *val = t->get_expr();
-        switch (val->get_kind()) {
-        case DAG_node::EK_CONSTANT:
-        case DAG_node::EK_PARAMETER:
-            node = val;
-            goto restart;
-        default:
         {
-            outs->write("t");
-            std::string temp(std::to_string(index));
-            outs->write(temp.c_str());
-            break;
-        }
+            DAG_temporary const *t = cast<DAG_temporary>(node);
+            int index = t->get_index();
+            DAG_node const *val = t->get_expr();
+            switch (val->get_kind()) {
+            case DAG_node::EK_CONSTANT:
+            case DAG_node::EK_PARAMETER:
+                node = val;
+                goto restart;
+            default:
+                outs->write_char('t');
+                write(outs, index);
+                break;
+            }
         }
         break;
-    }
 
     case DAG_node::EK_CALL:
-    {
-        DAG_call const *call = cast<DAG_call>(node);
-        int n_params = call->get_argument_count();
-        char const *name = call->get_name();
+        {
+            DAG_call const *call = cast<DAG_call>(node);
+            int n_params = call->get_argument_count();
+            char const *name = call->get_name();
 
-        int np = std::string(name).find('(');
-        if (np == std::string::npos) {
-            np = strlen(name);
-        }
-        std::string n(name, 0, np);
+            char const *p = strchr(name, '(');
+            size_t np = p == nullptr ? strlen(name) : p - name;
 
-        outs->write(n.c_str());
-        outs->write("(");
-        if (n_params > 0) {
-            outs->write("\n");
-            for (int i = 0; i < n_params; ++i) {
-                deb_indent(outs, level + 1);
-                deb_node(outs, call->get_argument(i), level + 1);
-                if (i < n_params - 1) {
-                    outs->write(",");
+            write(outs, name, np);
+            outs->write_char('(');
+            if (n_params > 0) {
+                outs->write_char('\n');
+                for (int i = 0; i < n_params; ++i) {
+                    deb_indent(outs, level + 1);
+                    deb_node(outs, call->get_argument(i), level + 1);
+                    if (i < n_params - 1) {
+                        outs->write_char(',');
+                    }
+                    outs->write_char('\n');
                 }
-                outs->write("\n");
+                deb_indent(outs, level);
             }
-            deb_indent(outs, level);
+            outs->write_char(')');
         }
-        outs->write(")");
         break;
-    }
     }
 }
 
-void Distiller_plugin_api_impl::debug_node(IOutput_stream *outs, DAG_node const *node) {
+void Distiller_plugin_api_impl::debug_node(
+    IOutput_stream *outs,
+    DAG_node const *node)
+{
     deb_indent(outs, 1);
     deb_node(outs, node, 1);
 }
@@ -569,21 +624,20 @@ public:
     }
 
     DAG_node const *matcher(
-        IRule_matcher_event        *event_handler,
-        IDistiller_plugin_api      &plugin_api,
-        DAG_node const             *node,
-        const mi::mdl::Distiller_options    *options,
-        mi::mdl::Rule_result_code  &result_code) const MDL_FINAL;
+        IRule_matcher_event              *event_handler,
+        IDistiller_plugin_api            &plugin_api,
+        DAG_node const                   *node,
+        mi::mdl::Distiller_options const *options,
+        mi::mdl::Rule_result_code        &result_code) const MDL_FINAL;
 
     bool postcond(
-        IRule_matcher_event        *event_handler,
-        IDistiller_plugin_api      &plugin_api,
-        DAG_node const             *root,
-        mi::mdl::Distiller_options const    *options) const MDL_FINAL;
+        IRule_matcher_event              *event_handler,
+        IDistiller_plugin_api            &plugin_api,
+        DAG_node const                   *root,
+        mi::mdl::Distiller_options const *options) const MDL_FINAL;
 
-    // Return the name of the rule set (for diagnostic messages)
-    char const * get_rule_set_name() const MDL_FINAL;
-
+    /// Return the name of the rule set (for diagnostic messages).
+    char const *get_rule_set_name() const MDL_FINAL;
 
     /// Set the Node_types object to use.
     void set_node_types(Node_types *node_types) {
@@ -601,126 +655,213 @@ mi::mdl::Rule_eval_strategy Normalize_mixers_rules::get_strategy() const
 }
 
 // Return the name of the rule set (for diagnostic messages)
-char const * Normalize_mixers_rules::get_rule_set_name() const
+char const *Normalize_mixers_rules::get_rule_set_name() const
 {
     return "Normalize_mixers_rules";
 }
 
 // Run the matcher.
-mi::mdl::DAG_node const* Normalize_mixers_rules::matcher(
-    IRule_matcher_event       *event_handler,
-    IDistiller_plugin_api     &api,
-    DAG_node const            *node,
-    const mi::mdl::Distiller_options  *,
-    mi::mdl::Rule_result_code &result_code) const
+mi::mdl::DAG_node const *Normalize_mixers_rules::matcher(
+    IRule_matcher_event              *event_handler,
+    IDistiller_plugin_api            &api,
+    DAG_node const                   *node,
+    mi::mdl::Distiller_options const *,
+    mi::mdl::Rule_result_code        &result_code) const
 {
     switch (api.get_selector(node)) {
     case DS_DIST_BSDF_MIX_2:  // match for bsdf_mix_2, edf_mix_2, vdf_mix_2
     case DS_DIST_EDF_MIX_2:
     case DS_DIST_VDF_MIX_2:
-// RUID 1
-    if (true) {
-        DAG_node const *v_w0 = api.get_remapped_argument(node, 0);
-        DAG_node const *v_b0 = api.get_remapped_argument(node, 1);
-        DAG_node const *v_w1 = api.get_remapped_argument(node, 2);
-        DAG_node const *v_b1 = api.get_remapped_argument(node, 3);
-        if (api.get_selector(v_b0) <= api.get_selector(v_b1))
-            break;
+        // RUID 1
+        if (true) {
+            DAG_node const *v_w0 = api.get_remapped_argument(node, 0);
+            DAG_node const *v_b0 = api.get_remapped_argument(node, 1);
+            DAG_node const *v_w1 = api.get_remapped_argument(node, 2);
+            DAG_node const *v_b1 = api.get_remapped_argument(node, 3);
+            if (api.get_selector(v_b0) <= api.get_selector(v_b1)) {
+                break;
+            }
 
-        if (event_handler != NULL)
-            event_handler->rule_match_event("Normalize_mixers_rules",
-                                            /* RUID */ 1, "..._mix_2", "<internal>", 0);
+            if (event_handler != NULL) {
+                event_handler->rule_match_event(
+                    "Normalize_mixers_rules",
+                    /* RUID */ 1, "..._mix_2", "<internal>", 0);
+            }
 
-        DAG_call::Call_argument args[4];
-        args[0].arg = v_w0;
-        args[1].arg = v_b0;
-        args[2].arg = v_w1;
-        args[3].arg = v_b1;
-        return api.create_mixer_call( args, 4);
-    }
-    break;
+            DAG_call::Call_argument args[4];
+            args[0].arg = v_w0;
+            args[1].arg = v_b0;
+            args[2].arg = v_w1;
+            args[3].arg = v_b1;
+            return api.create_mixer_call( args, 4);
+        }
+        break;
     case DS_DIST_BSDF_MIX_3:  // match for bsdf_mix_3, edf_mix_3, vdf_mix_3
     case DS_DIST_EDF_MIX_3:
     case DS_DIST_VDF_MIX_3:
-// deadrule RUID 2
-    if (true) {
-        DAG_node const *v_w0 = api.get_remapped_argument(node, 0);
-        DAG_node const *v_b0 = api.get_remapped_argument(node, 1);
-        DAG_node const *v_w1 = api.get_remapped_argument(node, 2);
-        DAG_node const *v_b1 = api.get_remapped_argument(node, 3);
-        DAG_node const *v_w2 = api.get_remapped_argument(node, 4);
-        DAG_node const *v_b2 = api.get_remapped_argument(node, 5);
+        // deadrule RUID 2
+        if (true) {
+            DAG_node const *v_w0 = api.get_remapped_argument(node, 0);
+            DAG_node const *v_b0 = api.get_remapped_argument(node, 1);
+            DAG_node const *v_w1 = api.get_remapped_argument(node, 2);
+            DAG_node const *v_b1 = api.get_remapped_argument(node, 3);
+            DAG_node const *v_w2 = api.get_remapped_argument(node, 4);
+            DAG_node const *v_b2 = api.get_remapped_argument(node, 5);
 
-        if ((api.get_selector(v_b0) <= api.get_selector(v_b1))
-            && (api.get_selector(v_b1) <= api.get_selector(v_b2)))
-            break;
+            if ((api.get_selector(v_b0) <= api.get_selector(v_b1))
+                && (api.get_selector(v_b1) <= api.get_selector(v_b2))) {
+                break;
+            }
 
-        if (event_handler != NULL)
-            event_handler->rule_match_event("Normalize_mixers_rules",
-                                            /* RUID */ 2, "..._mix_3", "<internal>", 0);
+            if (event_handler != NULL) {
+                event_handler->rule_match_event(
+                    "Normalize_mixers_rules",
+                    /* RUID */ 2, "..._mix_3", "<internal>", 0);
+            }
 
-        DAG_call::Call_argument args[6];
-        args[0].arg = v_w0;
-        args[1].arg = v_b0;
-        args[2].arg = v_w1;
-        args[3].arg = v_b1;
-        args[4].arg = v_w2;
-        args[5].arg = v_b2;
-        return api.create_mixer_call( args, 6);
-    }
-    break;
+            DAG_call::Call_argument args[6];
+            args[0].arg = v_w0;
+            args[1].arg = v_b0;
+            args[2].arg = v_w1;
+            args[3].arg = v_b1;
+            args[4].arg = v_w2;
+            args[5].arg = v_b2;
+            return api.create_mixer_call( args, 6);
+        }
+        break;
+    case DS_DIST_BSDF_MIX_4:  // match for bsdf_mix_4, edf_mix_4, vdf_mix_4
+    case DS_DIST_EDF_MIX_4:
+    case DS_DIST_VDF_MIX_4:
+        // deadrule RUID 5
+        if (true) {
+            DAG_node const *v_w0 = api.get_remapped_argument(node, 0);
+            DAG_node const *v_b0 = api.get_remapped_argument(node, 1);
+            DAG_node const *v_w1 = api.get_remapped_argument(node, 2);
+            DAG_node const *v_b1 = api.get_remapped_argument(node, 3);
+            DAG_node const *v_w2 = api.get_remapped_argument(node, 4);
+            DAG_node const *v_b2 = api.get_remapped_argument(node, 5);
+            DAG_node const *v_w3 = api.get_remapped_argument(node, 6);
+            DAG_node const *v_b3 = api.get_remapped_argument(node, 7);
+
+            if ((api.get_selector(v_b0) <= api.get_selector(v_b1))
+                && (api.get_selector(v_b1) <= api.get_selector(v_b2))
+                && (api.get_selector(v_b2) <= api.get_selector(v_b3))) {
+                break;
+            }
+
+            if (event_handler != NULL) {
+                event_handler->rule_match_event(
+                    "Normalize_mixers_rules",
+                    /* RUID */ 5, "..._mix_4", "<internal>", 0);
+            }
+
+            DAG_call::Call_argument args[8];
+            args[0].arg = v_w0;
+            args[1].arg = v_b0;
+            args[2].arg = v_w1;
+            args[3].arg = v_b1;
+            args[4].arg = v_w2;
+            args[5].arg = v_b2;
+            args[6].arg = v_w3;
+            args[7].arg = v_b3;
+            return api.create_mixer_call( args, 8);
+        }
+        break;
     case DS_DIST_BSDF_COLOR_MIX_2:  // match for ..._color_mix_2
     case DS_DIST_EDF_COLOR_MIX_2:
-// deadrule RUID 3
-    if (true) {
-        DAG_node const *v_w0 = api.get_remapped_argument(node, 0);
-        DAG_node const *v_b0 = api.get_remapped_argument(node, 1);
-        DAG_node const *v_w1 = api.get_remapped_argument(node, 2);
-        DAG_node const *v_b1 = api.get_remapped_argument(node, 3);
-        if (api.get_selector(v_b0) <= api.get_selector(v_b1))
-            break;
+        // deadrule RUID 3
+        if (true) {
+            DAG_node const *v_w0 = api.get_remapped_argument(node, 0);
+            DAG_node const *v_b0 = api.get_remapped_argument(node, 1);
+            DAG_node const *v_w1 = api.get_remapped_argument(node, 2);
+            DAG_node const *v_b1 = api.get_remapped_argument(node, 3);
+            if (api.get_selector(v_b0) <= api.get_selector(v_b1)) {
+                break;
+            }
 
-        if (event_handler != NULL)
-            event_handler->rule_match_event("Normalize_mixers_rules",
-                                            /* RUID */ 3, "..._color_mix_2", "<internal>", 0);
+            if (event_handler != NULL) {
+                event_handler->rule_match_event(
+                    "Normalize_mixers_rules",
+                    /* RUID */ 3, "..._color_mix_2", "<internal>", 0);
+            }
 
-        DAG_call::Call_argument args[4];
-        args[0].arg = v_w0;
-        args[1].arg = v_b0;
-        args[2].arg = v_w1;
-        args[3].arg = v_b1;
-        return api.create_color_mixer_call( args, 4);
-    }
-    break;
+            DAG_call::Call_argument args[4];
+            args[0].arg = v_w0;
+            args[1].arg = v_b0;
+            args[2].arg = v_w1;
+            args[3].arg = v_b1;
+            return api.create_color_mixer_call( args, 4);
+        }
+        break;
     case DS_DIST_BSDF_COLOR_MIX_3:  // match for ..._color_mix_3
     case DS_DIST_EDF_COLOR_MIX_3:
-// deadrule RUID 4
-    if (true) {
-        DAG_node const *v_w0 = api.get_remapped_argument(node, 0);
-        DAG_node const *v_b0 = api.get_remapped_argument(node, 1);
-        DAG_node const *v_w1 = api.get_remapped_argument(node, 2);
-        DAG_node const *v_b1 = api.get_remapped_argument(node, 3);
-        DAG_node const *v_w2 = api.get_remapped_argument(node, 4);
-        DAG_node const *v_b2 = api.get_remapped_argument(node, 5);
+        // deadrule RUID 4
+        if (true) {
+            DAG_node const *v_w0 = api.get_remapped_argument(node, 0);
+            DAG_node const *v_b0 = api.get_remapped_argument(node, 1);
+            DAG_node const *v_w1 = api.get_remapped_argument(node, 2);
+            DAG_node const *v_b1 = api.get_remapped_argument(node, 3);
+            DAG_node const *v_w2 = api.get_remapped_argument(node, 4);
+            DAG_node const *v_b2 = api.get_remapped_argument(node, 5);
 
-        if ((api.get_selector(v_b0) <= api.get_selector(v_b1))
-            && (api.get_selector(v_b1) <= api.get_selector(v_b2)))
-            break;
+            if ((api.get_selector(v_b0) <= api.get_selector(v_b1))
+                && (api.get_selector(v_b1) <= api.get_selector(v_b2))) {
+                break;
+            }
 
-        if (event_handler != NULL)
-            event_handler->rule_match_event("Normalize_mixers_rules",
-                                            /* RUID */ 4, "..._color_mix_3", "<internal>", 0);
+            if (event_handler != NULL) {
+                event_handler->rule_match_event(
+                    "Normalize_mixers_rules",
+                    /* RUID */ 4, "..._color_mix_3", "<internal>", 0);
+            }
 
-        DAG_call::Call_argument args[6];
-        args[0].arg = v_w0;
-        args[1].arg = v_b0;
-        args[2].arg = v_w1;
-        args[3].arg = v_b1;
-        args[4].arg = v_w2;
-        args[5].arg = v_b2;
-        return api.create_color_mixer_call( args, 6);
-    }
-    break;
+            DAG_call::Call_argument args[6];
+            args[0].arg = v_w0;
+            args[1].arg = v_b0;
+            args[2].arg = v_w1;
+            args[3].arg = v_b1;
+            args[4].arg = v_w2;
+            args[5].arg = v_b2;
+            return api.create_color_mixer_call( args, 6);
+        }
+        break;
+    case DS_DIST_BSDF_COLOR_MIX_4:  // match for ..._color_mix_4
+    case DS_DIST_EDF_COLOR_MIX_4:
+        // deadrule RUID 6
+        if (true) {
+            DAG_node const *v_w0 = api.get_remapped_argument(node, 0);
+            DAG_node const *v_b0 = api.get_remapped_argument(node, 1);
+            DAG_node const *v_w1 = api.get_remapped_argument(node, 2);
+            DAG_node const *v_b1 = api.get_remapped_argument(node, 3);
+            DAG_node const *v_w2 = api.get_remapped_argument(node, 4);
+            DAG_node const *v_b2 = api.get_remapped_argument(node, 5);
+            DAG_node const *v_w3 = api.get_remapped_argument(node, 6);
+            DAG_node const *v_b3 = api.get_remapped_argument(node, 7);
+
+            if ((api.get_selector(v_b0) <= api.get_selector(v_b1))
+                && (api.get_selector(v_b1) <= api.get_selector(v_b2))
+                && (api.get_selector(v_b2) <= api.get_selector(v_b3))) {
+                break;
+            }
+
+            if (event_handler != NULL) {
+                event_handler->rule_match_event(
+                    "Normalize_mixers_rules",
+                    /* RUID */ 6, "..._color_mix_4", "<internal>", 0);
+            }
+
+            DAG_call::Call_argument args[8];
+            args[0].arg = v_w0;
+            args[1].arg = v_b0;
+            args[2].arg = v_w1;
+            args[3].arg = v_b1;
+            args[4].arg = v_w2;
+            args[5].arg = v_b2;
+            args[6].arg = v_w3;
+            args[7].arg = v_b3;
+            return api.create_color_mixer_call( args, 8);
+        }
+        break;
     default:
         break;
     }
@@ -729,19 +870,20 @@ mi::mdl::DAG_node const* Normalize_mixers_rules::matcher(
 }
 
 bool Normalize_mixers_rules::postcond(
-    IRule_matcher_event *,
-    IDistiller_plugin_api &,
-    DAG_node const *,
-    const mi::mdl::Distiller_options *) const
+    IRule_matcher_event              *,
+    IDistiller_plugin_api            &,
+    DAG_node const                   *,
+    mi::mdl::Distiller_options const *) const
 {
     return true;
 }
 
 // Constructor.
 Distiller_plugin_api_impl::Distiller_plugin_api_impl(
-    IGenerated_code_dag::IMaterial_instance const *instance,
-    ICall_name_resolver                           *call_resolver)
-: m_alloc(impl_cast<Generated_code_dag::Material_instance>(instance)->get_allocator())
+    IAllocator               *alloc,
+    IMaterial_instance const *instance,
+    ICall_name_resolver      *call_resolver)
+: m_alloc(alloc)
 , m_compiler(impl_cast<Generated_code_dag::Material_instance>(instance)->get_mdl())
 , m_printer(m_alloc)
 , m_type_factory(NULL)
@@ -763,20 +905,16 @@ Distiller_plugin_api_impl::Distiller_plugin_api_impl(
     m_global_ior[2] = 1.4f;
 }
 
-/// Factory to create a newly allocated distiller plugin API. 
-IDistiller_plugin_api* IDistiller_plugin_api::get_new_distiller_plugin_api(
-    IGenerated_code_dag::IMaterial_instance const *instance,
-    ICall_name_resolver                           *call_resolver) {
-    return new Distiller_plugin_api_impl( instance, call_resolver);
-}
-
 /// Immediately deletes this distiller plugin API
-void Distiller_plugin_api_impl::release() const {
-    delete this;
+void Distiller_plugin_api_impl::release() const
+{
+    Allocator_builder builder(get_allocator());
+    builder.destroy(this);
 }
 
 // Create a constant.
-DAG_constant const *Distiller_plugin_api_impl::create_constant(IValue const *value)
+DAG_constant const *Distiller_plugin_api_impl::create_constant(
+    IValue const *value)
 {
     DAG_constant const *res = m_node_factory->create_constant(m_value_factory->import(value));
     m_checker.check_const(res);
@@ -784,7 +922,9 @@ DAG_constant const *Distiller_plugin_api_impl::create_constant(IValue const *val
 }
 
 // Create a temporary reference.
-DAG_temporary const *Distiller_plugin_api_impl::create_temporary(DAG_node const *node, int index)
+DAG_temporary const *Distiller_plugin_api_impl::create_temporary(
+    DAG_node const *node,
+    int            index)
 {
     DAG_temporary const *res = m_node_factory->create_temporary(node, index);
     m_checker.check_temp(res);
@@ -812,8 +952,9 @@ DAG_node const *Distiller_plugin_api_impl::create_function_call(
     DAG_node const * const call_args[],
     size_t                 num_call_args)
 {
-    for (size_t i = 0; i < num_call_args; ++i)
+    for (size_t i = 0; i < num_call_args; ++i) {
         m_checker.check_node(call_args[i]);
+    }
 
     IDefinition::Semantics sema = IDefinition::DS_UNKNOWN;
     IType const            *ret_type = 0;
@@ -823,8 +964,9 @@ DAG_node const *Distiller_plugin_api_impl::create_function_call(
     string parameter_types_str(get_allocator());
     parameter_types_str += '(';
     for (size_t i = 0; i < num_call_args; ++i) {
-        if (i > 0)
+        if (i > 0) {
             parameter_types_str += ',';
+        }
         IType const *t = call_args[i]->get_type();
         m_printer.print(t->skip_type_alias());
         parameter_types.push_back(m_printer.get_line());
@@ -841,9 +983,10 @@ DAG_node const *Distiller_plugin_api_impl::create_function_call(
         return NULL;
     }
 
-    vector<const char*>::Type parameter_types_cstr(get_allocator());
-    for (const auto& s: parameter_types)
+    vector<char const *>::Type parameter_types_cstr(get_allocator());
+    for (const auto &s : parameter_types) {
         parameter_types_cstr.push_back(s.c_str());
+    }
     size_t n = parameter_types_cstr.size();
     mi::base::Handle<IOverload_result_set const> res(
         owner->find_overload_by_signature(name, n > 0 ? &parameter_types_cstr[0] : 0, n));
@@ -897,59 +1040,90 @@ DAG_node const *Distiller_plugin_api_impl::create_function_call(
     return create_call(sig, sema, args.data(), args.size(), ret_type);
 }
 
-// Create a 1-, 2-, or 3-mixer call, with 2, 4, or 6 parameters respectively.
+// Create a 1-, 2-, or 3-mixer call, with 2, 4, 6, or 8 parameters respectively.
 DAG_node const *Distiller_plugin_api_impl::create_mixer_call(
     DAG_call::Call_argument const call_args[],
     int                           num_call_args)
 {
-    MDL_ASSERT( num_call_args == 2 || num_call_args == 4 || num_call_args == 6);
+    MDL_ASSERT( num_call_args == 2 ||
+                num_call_args == 4 ||
+                num_call_args == 6 ||
+                num_call_args == 8);
     int n = num_call_args / 2;
 
     // permute order for canonical order
-    size_t permutation[6] = {0,1,2,3,4,5};
-    if ( n == 2) {
-        if ( get_selector(call_args[1].arg) > get_selector(call_args[3].arg)) {
-            std::swap( permutation[0], permutation[2]);
-            std::swap( permutation[1], permutation[3]);
+    size_t permutation[8] = { 0, 1, 2, 3, 4, 5, 6, 7 };
+    if (n == 2) {
+        if (get_selector(call_args[1].arg) > get_selector(call_args[3].arg)) {
+            std::swap(permutation[0], permutation[2]);
+            std::swap(permutation[1], permutation[3]);
         }
-    } else if ( n == 3) {
-        if ( get_selector(call_args[1].arg) > get_selector(call_args[3].arg)) {
-            std::swap( permutation[0], permutation[2]);
-            std::swap( permutation[1], permutation[3]);
+    } else if (n == 3) {
+        if (get_selector(call_args[1].arg) > get_selector(call_args[3].arg)) {
+            std::swap(permutation[0], permutation[2]);
+            std::swap(permutation[1], permutation[3]);
         }
-        if ( get_selector(call_args[permutation[3]].arg) > get_selector(call_args[5].arg)) {
-            std::swap( permutation[2], permutation[4]);
-            std::swap( permutation[3], permutation[5]);
+        if (get_selector(call_args[permutation[3]].arg) > get_selector(call_args[5].arg)) {
+            std::swap(permutation[2], permutation[4]);
+            std::swap(permutation[3], permutation[5]);
         }
-        if ( get_selector(call_args[permutation[1]].arg)
-             > get_selector(call_args[permutation[3]].arg)) {
-            std::swap( permutation[0], permutation[2]);
-            std::swap( permutation[1], permutation[3]);
+        if (get_selector(call_args[permutation[1]].arg) >
+            get_selector(call_args[permutation[3]].arg)) {
+            std::swap(permutation[0], permutation[2]);
+            std::swap(permutation[1], permutation[3]);
+        }
+    } else if (n == 4) {
+        if (get_selector(call_args[1].arg) > get_selector(call_args[3].arg)) {
+            std::swap(permutation[0], permutation[2]);
+            std::swap(permutation[1], permutation[3]);
+        }
+        if (get_selector(call_args[permutation[3]].arg) > get_selector(call_args[5].arg)) {
+            std::swap(permutation[2], permutation[4]);
+            std::swap(permutation[3], permutation[5]);
+        }
+        if (get_selector(call_args[permutation[5]].arg) > get_selector(call_args[7].arg)) {
+            std::swap(permutation[4], permutation[6]);
+            std::swap(permutation[5], permutation[7]);
+        }
+        if (get_selector(call_args[permutation[1]].arg) >
+            get_selector(call_args[permutation[3]].arg)) {
+            std::swap(permutation[0], permutation[2]);
+            std::swap(permutation[1], permutation[3]);
+        }
+        if (get_selector(call_args[permutation[3]].arg) >
+            get_selector(call_args[permutation[5]].arg)) {
+            std::swap(permutation[2], permutation[4]);
+            std::swap(permutation[3], permutation[5]);
+        }
+        if (get_selector(call_args[permutation[1]].arg) >
+            get_selector(call_args[permutation[3]].arg)) {
+            std::swap(permutation[0], permutation[2]);
+            std::swap(permutation[1], permutation[3]);
         }
     }
 
     // Determine type of mixer: BSDF, EDF, VDF
-    IType const* itp1 = get_bsdf_component_type();
-    IType const* itp2 = get_bsdf_component_array_type(n);
-    const char* tp1 = "::df::bsdf_component(float,bsdf)";
-    const char* tp2 = "::df::normalized_mix(::df::bsdf_component[N])";
-    IType const* arg_type = call_args[1].arg->get_type();
-    if ( arg_type->get_kind() == mi::mdl::IType::TK_EDF) {
+    IType const *itp1 = get_bsdf_component_type();
+    IType const *itp2 = get_bsdf_component_array_type(n);
+    char const *tp1 = "::df::bsdf_component(float,bsdf)";
+    char const *tp2 = "::df::normalized_mix(::df::bsdf_component[N])";
+    IType const *arg_type = call_args[1].arg->get_type();
+    if (arg_type->get_kind() == mi::mdl::IType::TK_EDF) {
         itp1 = get_edf_component_type();
         itp2 = get_edf_component_array_type(n);
         tp1 = "::df::edf_component(float,edf)";
         tp2 = "::df::normalized_mix(::df::edf_component[N])";
-    } else if ( arg_type->get_kind() == mi::mdl::IType::TK_VDF) {
+    } else if (arg_type->get_kind() == mi::mdl::IType::TK_VDF) {
         itp1 = get_vdf_component_type();
         itp2 = get_vdf_component_array_type(n);
         tp1 = "::df::vdf_component(float,vdf)";
         tp2 = "::df::normalized_mix(::df::vdf_component[N])";
     }
 
-    // room for up to three DF_component structs
-    DAG_call::Call_argument comp_args[3];
+    // room for up to four DF_component structs
+    DAG_call::Call_argument comp_args[4];
 
-    for ( int i = 0; i < n; ++ i) {
+    for (int i = 0; i < n; ++i) {
         DAG_call::Call_argument args[2];
 
         args[0].param_name = "weight";
@@ -957,7 +1131,7 @@ DAG_node const *Distiller_plugin_api_impl::create_mixer_call(
         args[1].param_name = "component";
         args[1].arg        = call_args[permutation[2*i+1]].arg;
 
-        static char const * const idx[3] = {"value0", "value1", "value2"};
+        static char const * const idx[4] = { "value0", "value1", "value2", "value3" };
         comp_args[i].param_name = idx[i];
         comp_args[i].arg = create_call(
             tp1,
@@ -967,72 +1141,103 @@ DAG_node const *Distiller_plugin_api_impl::create_mixer_call(
     }
 
     // create bsdf_component's array and mixer
-    DAG_node const * array = create_call(
+    DAG_node const *array = create_call(
         get_array_constructor_signature(),
         mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,
         comp_args, n,
         itp2);
-    DAG_call::Call_argument mix_arg[1] = {{ array, "components"}};
+    DAG_call::Call_argument mix_arg = { array, "components"};
     return create_call(
         tp2,
         mi::mdl::IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX,
-        mix_arg, 1,
+        &mix_arg, 1,
         arg_type);
 }
 
-// Create a 1-, 2-, or 3-color-mixer call, with 2, 4, or 6 parameters respectively.
+// Create a 1-, 2-, or 3-color-mixer call, with 2, 4, 6, or 8 parameters respectively.
 // Color-mixer exists for BSDF, EDF, and VDF.
 DAG_node const *Distiller_plugin_api_impl::create_color_mixer_call(
     DAG_call::Call_argument const call_args[],
     int                           num_call_args)
 {
-    MDL_ASSERT( num_call_args == 2 || num_call_args == 4 || num_call_args == 6);
+    MDL_ASSERT( num_call_args == 2 ||
+                num_call_args == 4 ||
+                num_call_args == 6 ||
+                num_call_args == 8);
     int n = num_call_args / 2;
 
     // permute order for canonical order
-    size_t permutation[6] = {0,1,2,3,4,5};
-    if ( n == 2) {
-        if ( get_selector(call_args[1].arg) > get_selector(call_args[3].arg)) {
-            std::swap( permutation[0], permutation[2]);
-            std::swap( permutation[1], permutation[3]);
+    size_t permutation[8] = { 0, 1, 2, 3, 4, 5, 6, 7 };
+    if (n == 2) {
+        if (get_selector(call_args[1].arg) > get_selector(call_args[3].arg)) {
+            std::swap(permutation[0], permutation[2]);
+            std::swap(permutation[1], permutation[3]);
         }
-    } else if ( n == 3) {
-        if ( get_selector(call_args[1].arg) > get_selector(call_args[3].arg)) {
-            std::swap( permutation[0], permutation[2]);
-            std::swap( permutation[1], permutation[3]);
+    } else if (n == 3) {
+        if (get_selector(call_args[1].arg) > get_selector(call_args[3].arg)) {
+            std::swap(permutation[0], permutation[2]);
+            std::swap(permutation[1], permutation[3]);
         }
-        if ( get_selector(call_args[permutation[3]].arg) > get_selector(call_args[5].arg)) {
-            std::swap( permutation[2], permutation[4]);
-            std::swap( permutation[3], permutation[5]);
+        if (get_selector(call_args[permutation[3]].arg) > get_selector(call_args[5].arg)) {
+            std::swap(permutation[2], permutation[4]);
+            std::swap(permutation[3], permutation[5]);
         }
-        if ( get_selector(call_args[permutation[1]].arg)
-             > get_selector(call_args[permutation[3]].arg)) {
-            std::swap( permutation[0], permutation[2]);
-            std::swap( permutation[1], permutation[3]);
+        if (get_selector(call_args[permutation[1]].arg) >
+            get_selector(call_args[permutation[3]].arg)) {
+            std::swap(permutation[0], permutation[2]);
+            std::swap(permutation[1], permutation[3]);
+        }
+    } else if ( n == 4) {
+        if (get_selector(call_args[1].arg) > get_selector(call_args[3].arg)) {
+            std::swap(permutation[0], permutation[2]);
+            std::swap(permutation[1], permutation[3]);
+        }
+        if (get_selector(call_args[permutation[3]].arg) > get_selector(call_args[5].arg)) {
+            std::swap(permutation[2], permutation[4]);
+            std::swap(permutation[3], permutation[5]);
+        }
+        if (get_selector(call_args[permutation[5]].arg) > get_selector(call_args[7].arg)) {
+            std::swap(permutation[4], permutation[6]);
+            std::swap(permutation[5], permutation[7]);
+        }
+        if (get_selector(call_args[permutation[1]].arg) >
+            get_selector(call_args[permutation[3]].arg)) {
+            std::swap(permutation[0], permutation[2]);
+            std::swap(permutation[1], permutation[3]);
+        }
+        if (get_selector(call_args[permutation[3]].arg) >
+            get_selector(call_args[permutation[5]].arg)) {
+            std::swap(permutation[2], permutation[4]);
+            std::swap(permutation[3], permutation[5]);
+        }
+        if (get_selector(call_args[permutation[1]].arg) >
+            get_selector(call_args[permutation[3]].arg)) {
+            std::swap(permutation[0], permutation[2]);
+            std::swap(permutation[1], permutation[3]);
         }
     }
 
     // Determine type of mixer: BSDF, EDF, or VDF
-    IType const* itp1 = get_color_bsdf_component_type();
-    IType const* itp2 = get_color_bsdf_component_array_type(n);
-    const char* tp1 = "::df::color_bsdf_component(color,bsdf)";
-    const char* tp2 = "::df::color_normalized_mix(::df::color_bsdf_component[N])";
-    IType const* arg_type = call_args[1].arg->get_type();
-    if ( arg_type->get_kind() == mi::mdl::IType::TK_EDF) {
+    IType const *itp1 = get_color_bsdf_component_type();
+    IType const *itp2 = get_color_bsdf_component_array_type(n);
+    char const *tp1 = "::df::color_bsdf_component(color,bsdf)";
+    char const *tp2 = "::df::color_normalized_mix(::df::color_bsdf_component[N])";
+    IType const *arg_type = call_args[1].arg->get_type();
+    if (arg_type->get_kind() == mi::mdl::IType::TK_EDF) {
         itp1 = get_color_edf_component_type();
         itp2 = get_color_edf_component_array_type(n);
         tp1 = "::df::color_edf_component(color,edf)";
         tp2 = "::df::color_normalized_mix(::df::color_edf_component[N])";
-    } else if ( arg_type->get_kind() == mi::mdl::IType::TK_VDF) {
+    } else if (arg_type->get_kind() == mi::mdl::IType::TK_VDF) {
         itp1 = get_color_vdf_component_type();
         itp2 = get_color_vdf_component_array_type(n);
         tp1 = "::df::color_vdf_component(color,edf)";
         tp2 = "::df::color_normalized_mix(::df::color_vdf_component[N])";
     }
-    // room for up to three DF_component structs
-    DAG_call::Call_argument comp_args[3];
+    // room for up to four DF_component structs
+    DAG_call::Call_argument comp_args[4];
 
-    for ( int i = 0; i < n; ++ i) {
+    for (int i = 0; i < n; ++i) {
         DAG_call::Call_argument args[2];
 
         args[0].param_name = "weight";
@@ -1040,7 +1245,7 @@ DAG_node const *Distiller_plugin_api_impl::create_color_mixer_call(
         args[1].param_name = "component";
         args[1].arg        = call_args[permutation[2*i+1]].arg;
 
-        static char const * const idx[3] = {"value0", "value1", "value2"};
+        static char const * const idx[4] = { "value0", "value1", "value2", "value4" };
         comp_args[i].param_name = idx[i];
         comp_args[i].arg = create_call(
             tp1,
@@ -1050,22 +1255,22 @@ DAG_node const *Distiller_plugin_api_impl::create_color_mixer_call(
     }
 
     // create color_..df_component's array and mixer
-    DAG_node const * array = create_call(
+    DAG_node const *array = create_call(
         get_array_constructor_signature(),
         mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,
         comp_args, n,
         itp2);
-    DAG_call::Call_argument mix_arg[1] = {{ array, "components"}};
-    DAG_node const * res = create_call(
+    DAG_call::Call_argument mix_arg = { array, "components"};
+    DAG_node const *res = create_call(
         tp2,
         mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX,
-        mix_arg, 1,
+        &mix_arg, 1,
         arg_type);
     MDL_ASSERT(
-        ( arg_type->get_kind() == mi::mdl::IType::TK_BSDF &&
+        (arg_type->get_kind() == mi::mdl::IType::TK_BSDF &&
           get_selector(res) == mi::mdl::DS_DIST_BSDF_COLOR_MIX_1 + num_call_args/2 - 1)
-        || ( arg_type->get_kind() == mi::mdl::IType::TK_EDF &&
-             get_selector(res) == mi::mdl::DS_DIST_EDF_COLOR_MIX_1 + num_call_args/2 - 1)
+        || (arg_type->get_kind() == mi::mdl::IType::TK_EDF &&
+          get_selector(res) == mi::mdl::DS_DIST_EDF_COLOR_MIX_1 + num_call_args/2 - 1)
     );
     return res;
 }
@@ -1096,6 +1301,13 @@ bool Distiller_plugin_api_impl::enable_unsafe_math_opt(bool flag)
 {
     return m_node_factory->enable_unsafe_math_opt(flag);
 }
+
+// Enable unsafe math optimizations.
+bool Distiller_plugin_api_impl::get_unsafe_math_opt() const
+{
+    return m_node_factory->get_unsafe_math_opt();
+}
+
 
 // Get the type factory associated with this expression factory.
 IType_factory *Distiller_plugin_api_impl::get_type_factory()
@@ -1140,7 +1352,7 @@ IType const *Distiller_plugin_api_impl::get_vdf_component_type()
 IType const *Distiller_plugin_api_impl::get_bsdf_component_array_type( int n_values)
 {
     // TBD: cache this type access in c'tor, n_values between 1 and 3
-    IType const* elem_type = get_bsdf_component_type();
+    IType const *elem_type = get_bsdf_component_type();
     return m_type_factory->create_array(elem_type, n_values);
 }
 
@@ -1148,7 +1360,7 @@ IType const *Distiller_plugin_api_impl::get_bsdf_component_array_type( int n_val
 IType const *Distiller_plugin_api_impl::get_edf_component_array_type( int n_values)
 {
     // TBD: cache this type access in c'tor, n_values between 1 and 3
-    IType const* elem_type = get_edf_component_type();
+    IType const *elem_type = get_edf_component_type();
     return m_type_factory->create_array(elem_type, n_values);
 }
 
@@ -1156,7 +1368,7 @@ IType const *Distiller_plugin_api_impl::get_edf_component_array_type( int n_valu
 IType const *Distiller_plugin_api_impl::get_vdf_component_array_type( int n_values)
 {
     // TBD: cache this type access in c'tor, n_values between 1 and 3
-    IType const* elem_type = get_vdf_component_type();
+    IType const *elem_type = get_vdf_component_type();
     return m_type_factory->create_array(elem_type, n_values);
 }
 
@@ -1191,7 +1403,7 @@ IType const *Distiller_plugin_api_impl::get_color_vdf_component_type()
 IType const *Distiller_plugin_api_impl::get_color_bsdf_component_array_type( int n_values)
 {
     // TBD: cache this type access in c'tor, n_values between 1 and 3
-    IType const* elem_type = get_color_bsdf_component_type();
+    IType const *elem_type = get_color_bsdf_component_type();
     return m_type_factory->create_array(elem_type, n_values);
 }
 
@@ -1199,7 +1411,7 @@ IType const *Distiller_plugin_api_impl::get_color_bsdf_component_array_type( int
 IType const *Distiller_plugin_api_impl::get_color_edf_component_array_type( int n_values)
 {
     // TBD: cache this type access in c'tor, n_values between 1 and 3
-    IType const* elem_type = get_color_edf_component_type();
+    IType const *elem_type = get_color_edf_component_type();
     return m_type_factory->create_array(elem_type, n_values);
 }
 
@@ -1207,7 +1419,7 @@ IType const *Distiller_plugin_api_impl::get_color_edf_component_array_type( int 
 IType const *Distiller_plugin_api_impl::get_color_vdf_component_array_type( int n_values)
 {
     // TBD: cache this type access in c'tor, n_values between 1 and 3
-    IType const* elem_type = get_color_vdf_component_type();
+    IType const *elem_type = get_color_vdf_component_type();
     return m_type_factory->create_array(elem_type, n_values);
 }
 
@@ -1304,11 +1516,13 @@ DAG_node const *Distiller_plugin_api_impl::create_binary(
     // for mixed operations, choose the type of higher kind as return type, which chooses
     // color over float3 over float over int.
     IType const *ret_type = l->get_type();
-    if ( ret_type->get_kind() < r->get_type()->get_kind())
+    if (ret_type->get_kind() < r->get_type()->get_kind()) {
         ret_type = r->get_type();
+    }
     // relational ops have bool return type
-    if ((bin_op >= IExpression_binary::OK_LESS) && (bin_op <= IExpression_binary::OK_NOT_EQUAL))
+    if ((bin_op >= IExpression_binary::OK_LESS) && (bin_op <= IExpression_binary::OK_NOT_EQUAL)) {
         ret_type = get_bool_type();
+    }
 
     IType const *lt = l->get_type()->skip_type_alias();
     IType const *rt = r->get_type()->skip_type_alias();
@@ -1436,25 +1650,24 @@ DAG_node const *Distiller_plugin_api_impl::create_select(
 
     IType_struct const *s_type = as<IType_struct>(l_type);
     MDL_ASSERT(s_type != NULL && "select not on struct type");
-    if (s_type == NULL)
+    if (s_type == NULL) {
         return NULL;
+    }
 
     IType const *ret_type = NULL;
-    for (int i = 0, n = s_type->get_field_count(); i < n; ++i) {
-        IType const *p_type;
-        ISymbol const *p_sym;
-
-        s_type->get_field(i, p_type, p_sym);
-        if (strcmp(p_sym->get_name(), member) == 0) {
+    for (size_t i = 0, n = s_type->get_field_count(); i < n; ++i) {
+        IType_struct::Field const *field = s_type->get_field(i);
+        if (strcmp(field->get_symbol()->get_name(), member) == 0) {
             // found the member
-            ret_type = p_type;
+            ret_type = field->get_type();
             break;
         }
     }
 
-    MDL_ASSERT(ret_type && "member does not exist");
-    if (ret_type == NULL)
+    MDL_ASSERT(ret_type != NULL && "member does not exist");
+    if (ret_type == NULL) {
         return NULL;
+    }
 
     m_printer.print(s_type);
     m_printer.print('.');
@@ -1484,8 +1697,9 @@ DAG_node const *Distiller_plugin_api_impl::create_array(
     DAG_node const * const values[],
     size_t                 n_values)
 {
-    for (size_t i = 0; i < n_values; ++i)
+    for (size_t i = 0; i < n_values; ++i) {
         m_checker.check_node(values[i]);
+    }
 
     if (elem_type == NULL) {
         if (n_values == 0) {
@@ -1537,7 +1751,7 @@ DAG_constant const *Distiller_plugin_api_impl::create_int_constant(int i)
 // Creates a constant of the predefined intensity_mode enum
 DAG_constant const *Distiller_plugin_api_impl::create_emission_enum_constant(int i)
 {
-    IType_enum *enum_type = m_type_factory->get_predefined_enum(
+    IType_enum const *enum_type = m_type_factory->get_predefined_enum(
         IType_enum::EID_INTENSITY_MODE);
     IValue_enum const *val = m_value_factory->create_enum(enum_type, i);
     return create_constant(val);
@@ -1597,13 +1811,13 @@ DAG_constant const *Distiller_plugin_api_impl::create_color_constant(float r, fl
     return create_constant(color);
 }
 
-/// Creates a RGB color constant of the global material IOR value.
-DAG_constant const *Distiller_plugin_api_impl::create_global_ior() 
+// Creates a RGB color constant of the global material IOR value.
+DAG_constant const *Distiller_plugin_api_impl::create_global_ior()
 { 
     return create_color_constant( m_global_ior[0], m_global_ior[1], m_global_ior[2]);
 }
 
-/// Creates a float constant of the global material IOR green value.
+// Creates a float constant of the global material IOR green value.
 DAG_constant const *Distiller_plugin_api_impl::create_global_float_ior()
 { 
     return create_float_constant( m_global_ior[1]);
@@ -1660,7 +1874,7 @@ DAG_node const *Distiller_plugin_api_impl::create_bsdf_component(
 
         IType_struct const *struct_type = cast<IType_struct>(
             m_type_factory->import(def->get_type()));
-        IValue const * values[2] = {
+        IValue const *values[2] = {
             cast<DAG_constant>(weight_arg)->get_value(),
             cast<DAG_constant>(bsdf_arg)->get_value()
         };
@@ -1690,7 +1904,7 @@ DAG_node const *Distiller_plugin_api_impl::create_edf_component(
 
         IType_struct const *struct_type = cast<IType_struct>(
             m_type_factory->import(def->get_type()));
-        IValue const * values[2] = {
+        IValue const *values[2] = {
             cast<DAG_constant>(weight_arg)->get_value(),
             cast<DAG_constant>(edf_arg)->get_value()
         };
@@ -1720,7 +1934,7 @@ DAG_node const *Distiller_plugin_api_impl::create_vdf_component(
 
         IType_struct const *struct_type = cast<IType_struct>(
             m_type_factory->import(def->get_type()));
-        IValue const * values[2] = {
+        IValue const *values[2] = {
             cast<DAG_constant>(weight_arg)->get_value(),
             cast<DAG_constant>(vdf_arg)->get_value()
         };
@@ -1750,7 +1964,7 @@ DAG_node const *Distiller_plugin_api_impl::create_color_bsdf_component(
 
         IType_struct const *struct_type = cast<IType_struct>(
             m_type_factory->import(def->get_type()));
-        IValue const * values[2] = {
+        IValue const *values[2] = {
             cast<DAG_constant>(weight_arg)->get_value(),
             cast<DAG_constant>(bsdf_arg)->get_value()
         };
@@ -1780,7 +1994,7 @@ DAG_node const *Distiller_plugin_api_impl::create_color_edf_component(
 
         IType_struct const *struct_type = cast<IType_struct>(
             m_type_factory->import(def->get_type()));
-        IValue const * values[2] = {
+        IValue const *values[2] = {
             cast<DAG_constant>(weight_arg)->get_value(),
             cast<DAG_constant>(edf_arg)->get_value()
         };
@@ -1810,7 +2024,7 @@ DAG_node const *Distiller_plugin_api_impl::create_color_vdf_component(
 
         IType_struct const *struct_type = cast<IType_struct>(
             m_type_factory->import(def->get_type()));
-        IValue const * values[2] = {
+        IValue const *values[2] = {
             cast<DAG_constant>(weight_arg)->get_value(),
             cast<DAG_constant>(vdf_arg)->get_value()
         };
@@ -1830,86 +2044,91 @@ DAG_node const *Distiller_plugin_api_impl::create_color_vdf_component(
 }
 
 // Create a constant node for a given type and value.
-DAG_constant const *Distiller_plugin_api_impl::mk_constant(char const *const_type, char const *value)
+DAG_constant const *Distiller_plugin_api_impl::mk_constant(
+    char const *const_type,
+    char const *value)
 {
-    if ( 0 == strcmp( const_type, "float")) {
-        return create_float_constant( float( atof(value)));
-    } else if ( 0 == strcmp( const_type, "color")) {
-        if ( 0 == strcmp( value, "color()")) {
-            return create_color_constant( 0.0, 0.0, 0.0);
-        } else if ( 0 == strcmp( value, "color(1.0)")) {
-            return create_color_constant( 1.0, 1.0, 1.0);
+    if (0 == strcmp(const_type, "float")) {
+        return create_float_constant(float(atof(value)));
+    } else if (0 == strcmp(const_type, "color")) {
+        if (0 == strcmp( value, "color()")) {
+            return create_color_constant(0.0f, 0.0f, 0.0f);
+        } else if (0 == strcmp(value, "color(1.0)")) {
+            return create_color_constant(1.0f, 1.0f, 1.0f);
         }
-    } else if ( 0 == strcmp( const_type, "string")) {
-        return create_string_constant( value);
-    } else if ( 0 == strcmp( const_type, "bool")) {
-        if ( 0 == strcmp( value, "false")) {
-            return create_bool_constant( false);
+    } else if (0 == strcmp(const_type, "string")) {
+        return create_string_constant(value);
+    } else if (0 == strcmp(const_type, "bool")) {
+        if (0 == strcmp(value, "false")) {
+            return create_bool_constant(false);
         }
-        return create_bool_constant( true);
-    } else if ( 0 == strcmp( const_type, "bsdf")) {
+        return create_bool_constant(true);
+    } else if (0 == strcmp(const_type, "bsdf")) {
         return create_bsdf_constant();
-    } else if ( 0 == strcmp( const_type, "edf")) {
+    } else if (0 == strcmp(const_type, "edf")) {
         return create_edf_constant();
-    } else if ( 0 == strcmp( const_type, "vdf")) {
+    } else if (0 == strcmp(const_type, "vdf")) {
         return create_vdf_constant();
-    } else if ( 0 == strcmp( const_type, "hair_bsdf")) {
+    } else if (0 == strcmp(const_type, "hair_bsdf")) {
         return create_hair_bsdf_constant();
-    } else if ( 0 == strcmp( const_type, "intensity_mode")) {
-        if ( 0 == strcmp( value, "intensity_radiant_exitance"))
+    } else if (0 == strcmp(const_type, "intensity_mode")) {
+        if (0 == strcmp(value, "intensity_radiant_exitance"))
             return create_emission_enum_constant(0);
         return create_emission_enum_constant(1);
-    } else if ( 0 == strcmp( const_type, "::df::scatter_mode")) {
-        if ( 0 == strcmp( value, "::df::scatter_reflect"))
+    } else if (0 == strcmp(const_type, "::df::scatter_mode")) {
+        if (0 == strcmp(value, "::df::scatter_reflect"))
             return create_scatter_enum_constant(0);
-        if ( 0 == strcmp( value, "::df::scatter_transmit"))
+        if (0 == strcmp(value, "::df::scatter_transmit"))
             return create_scatter_enum_constant(1);
         return create_scatter_enum_constant(2);
-    } else if ( 0 == strcmp( const_type, "material_emission")) {
-        IValue const * values[3];
-        values[0] = m_value_factory->create_invalid_ref( m_type_factory->create_edf());
-        IValue_float const *val = m_value_factory->create_float(0.0);
+    } else if (0 == strcmp(const_type, "material_emission")) {
+        IValue const *values[3];
+        values[0] = m_value_factory->create_invalid_ref(m_type_factory->create_edf());
+        IValue_float const *val = m_value_factory->create_float(0.0f);
         values[1] = m_value_factory->create_rgb_color(val, val, val);
         values[2] = m_value_factory->create_enum(m_type_factory->get_predefined_enum(
                                                      IType_enum::EID_INTENSITY_MODE), 0);
         return create_constant(
             m_value_factory->create_struct(
-                m_type_factory->get_predefined_struct( IType_struct::SID_MATERIAL_EMISSION),
+                m_type_factory->get_predefined_struct(IType_struct::SID_MATERIAL_EMISSION),
                 values, 3));
     }
-    MDL_ASSERT( ! "Unknown type or value to build constant");
+    MDL_ASSERT(!"Unknown type or value to build constant");
     return 0;
 }
 
 // Create DAG_node's for possible default values of Node_types parameter.
-DAG_node const *Distiller_plugin_api_impl::mk_default(char const *param_type, char const *param_default)
+DAG_node const *Distiller_plugin_api_impl::mk_default(
+    char const *param_type,
+    char const *param_default)
 {
-    if ( 0 == strcmp( param_type, "float3")) {
-        if ( 0 == strcmp( param_default, "float3(0.0)"))
-            return create_float3_constant( 0.0, 0.0, 0.0);
-        if ( 0 == strcmp( param_default, "::state::normal()"))
-            return create_function_call( "::state::normal", 0, 0);
-        if ( 0 == strcmp( param_default, "::state::texture_tangent_u(0)")) {
+    if (0 == strcmp(param_type, "float3")) {
+        if (0 == strcmp(param_default, "float3(0.0)"))
+            return create_float3_constant(0.0f, 0.0f, 0.0f);
+        if (0 == strcmp(param_default, "::state::normal()"))
+            return create_function_call("::state::normal", 0, 0);
+        if (0 == strcmp(param_default, "::state::texture_tangent_u(0)")) {
             DAG_node const *args[1] = {
                 create_int_constant(0)
             };
-            return create_function_call( "::state::texture_tangent_u", args, dimension_of(args));
+            return create_function_call("::state::texture_tangent_u", args, dimension_of(args));
         }
     }
-    return mk_constant( param_type, param_default);
+    return mk_constant(param_type, param_default);
 }
 
 // Returns the argument count if node is non-null and of the call kind or a compound constant,
 // and 0 otherwise.
 size_t Distiller_plugin_api_impl::get_compound_argument_size(DAG_node const *node)
 {
-    if (node == NULL)
+    if (node == NULL) {
         return 0;
+    }
     if (DAG_call const *c = as<DAG_call>(node))
-        return size_t( c->get_argument_count());
+        return size_t(c->get_argument_count());
     if (DAG_constant const *l = as<DAG_constant>(node)) {
         if (IValue_compound const *s = as<IValue_compound>(l->get_value())) {
-            return size_t( s->get_component_count());
+            return size_t(s->get_component_count());
         }
     }
     return 0;
@@ -1917,14 +2136,18 @@ size_t Distiller_plugin_api_impl::get_compound_argument_size(DAG_node const *nod
 
 // Return the i-th argument if node is non-null and of the call kind, or a compound constant,
 // and NULL otherwise.
-DAG_node const *Distiller_plugin_api_impl::get_compound_argument(DAG_node const *node, size_t i)
+DAG_node const *Distiller_plugin_api_impl::get_compound_argument(
+    DAG_node const *node,
+    size_t         i)
 {
-    if (node == NULL)
+    if (node == NULL) {
         return NULL;
+    }
 
     if (DAG_call const *c = as<DAG_call>(node)) {
-        if ( i < c->get_argument_count())
+        if (i < c->get_argument_count()) {
             return c->get_argument(i);
+        }
         return NULL;
     }
     if (DAG_constant const *l = as<DAG_constant>(node)) {
@@ -1932,8 +2155,9 @@ DAG_node const *Distiller_plugin_api_impl::get_compound_argument(DAG_node const 
         if (IValue_compound const *s = as<IValue_compound>(l->get_value())) {
             MDL_ASSERT(i < s->get_component_count());
             IValue const *arg = s->get_value(i);
-            if ( i < s->get_component_count())
+            if (i < s->get_component_count()) {
                 return create_constant(arg);
+            }
             return NULL;
         }
     }
@@ -1943,10 +2167,13 @@ DAG_node const *Distiller_plugin_api_impl::get_compound_argument(DAG_node const 
 // Return the i-th argument if node is non-null and of the call kind, or a compound constant,
 // and NULL otherwise; remaps index for special case handling of mixers and parameter
 // order of glossy BSDFs.
-DAG_node const *Distiller_plugin_api_impl::get_remapped_argument(DAG_node const* node, size_t i)
+DAG_node const *Distiller_plugin_api_impl::get_remapped_argument(
+    DAG_node const *node,
+    size_t         i)
 {
-    if (node == NULL)
+    if (node == NULL) {
         return NULL;
+    }
 
     if (DAG_call const *c = as<DAG_call>(node)) {
         IDefinition::Semantics sema = c->get_semantic();
@@ -1967,7 +2194,6 @@ DAG_node const *Distiller_plugin_api_impl::get_remapped_argument(DAG_node const*
                     get_compound_argument(components_array, i / 2), i % 2);
             }
 
-
         default:
             break;
         }
@@ -1980,24 +2206,24 @@ DAG_node const *Distiller_plugin_api_impl::get_remapped_argument(DAG_node const*
 // Returns the name of the i-th parameter of node, or NULL if there is none or node is NULL.
 char const *Distiller_plugin_api_impl::get_compound_parameter_name(
     DAG_node const *node,
-    size_t i) const
+    size_t         i) const
 {
-    if (node == NULL)
+    if (node == NULL) {
         return NULL;
-    if (DAG_call const *c = as<DAG_call>(node))
+    }
+    if (DAG_call const *c = as<DAG_call>(node)) {
         return c->get_parameter_name(i);
+    }
     if (DAG_constant const *c = as<DAG_constant>(node)) {
         if (IValue_struct const *s = as<IValue_struct>(c->get_value())) {
-             IType const *type;
-             ISymbol const *name;
-            s->get_type()->get_field( i, type, name);
-            return name->get_name();
+            IType_struct::Field const *field = s->get_type()->get_field(i);
+            return field->get_symbol()->get_name();
         }
         if (is<IValue_array>(c->get_value())) {
             if (i < 16) {
                 static char const * const idx[] = {
-                    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
-                    "10", "11", "12", "13", "14", "15"
+                    "0", "1", "2", "3", "4", "5", "6", "7",
+                    "8", "9", "10", "11", "12", "13", "14", "15"
                 };
                 return idx[i];
             }
@@ -2030,17 +2256,24 @@ bool Distiller_plugin_api_impl::eval_maybe_if(DAG_node const *node)
     return true;
 }
 
-void Distiller_plugin_api_impl::dump_attributes(IGenerated_code_dag::IMaterial_instance const *inst) {
+void Distiller_plugin_api_impl::dump_attributes(
+    IMaterial_instance const *inst)
+{
     dump_attributes(inst, std::cerr);
 }
 
-void Distiller_plugin_api_impl::dump_attributes(IGenerated_code_dag::IMaterial_instance const *inst,
-                                                DAG_node const *node) {
+void Distiller_plugin_api_impl::dump_attributes(
+    IMaterial_instance const *inst,
+    DAG_node const           *node)
+{
     dump_attributes(inst, node, std::cerr);
 }
 
-void Distiller_plugin_api_impl::dump_attributes(IGenerated_code_dag::IMaterial_instance const *inst, std::ostream &outs) {
-#if MDL_DIST_PLUG_DEBUG
+void Distiller_plugin_api_impl::dump_attributes(
+    IMaterial_instance const *inst,
+    std::ostream             &outs)
+{
+#if MDL_DIST_PLUG_DEBUG_DUMP
     for (auto oit : m_attribute_map) {
         outs << "[>>] node: " << oit.first << "\n";
         auto &inner = oit.second;
@@ -2058,9 +2291,12 @@ void Distiller_plugin_api_impl::dump_attributes(IGenerated_code_dag::IMaterial_i
 #endif
 }
 
-void Distiller_plugin_api_impl::dump_attributes(IGenerated_code_dag::IMaterial_instance const *inst,
-                                                DAG_node const *node, std::ostream &outs) {
-#if MDL_DIST_PLUG_DEBUG
+void Distiller_plugin_api_impl::dump_attributes(
+    IMaterial_instance const *inst,
+    DAG_node const           *node,
+    std::ostream             &outs)
+{
+#if MDL_DIST_PLUG_DEBUG_DUMP
     auto inner = m_attribute_map.find(node);
     if (inner != m_attribute_map.end()) {
         for (auto iit : inner->second) {
@@ -2077,9 +2313,11 @@ void Distiller_plugin_api_impl::dump_attributes(IGenerated_code_dag::IMaterial_i
 #endif
 }
 
-void Distiller_plugin_api_impl::set_attribute(DAG_node const * node,
-                                              char const *name,
-                                              DAG_node const *value) {
+void Distiller_plugin_api_impl::set_attribute(
+    DAG_node const *node,
+    char const     *name,
+    DAG_node const *value)
+{
     Attr_map::iterator inner = m_attribute_map.find(node);
     if (inner == m_attribute_map.end()) {
         Attr_map::mapped_type new_map(m_alloc);
@@ -2088,12 +2326,15 @@ void Distiller_plugin_api_impl::set_attribute(DAG_node const * node,
     inner->second.insert({name, value});
 }
 
-void Distiller_plugin_api_impl::set_attribute(IGenerated_code_dag::IMaterial_instance const *i_inst,
-                                              DAG_node const * node,
-                                              char const *name,
-                                              mi::Sint32 value) {
+void Distiller_plugin_api_impl::set_attribute(
+    IMaterial_instance const *i_inst,
+    DAG_node const           *node,
+    char const               *name,
+    mi::Sint32               value)
+{
     Generated_code_dag::Material_instance *inst =
-        const_cast<Generated_code_dag::Material_instance *>(impl_cast<Generated_code_dag::Material_instance>(i_inst));
+        const_cast<Generated_code_dag::Material_instance *>(
+            impl_cast<Generated_code_dag::Material_instance>(i_inst));
     Store<IType_factory *>         s_type_factory(m_type_factory,   inst->get_type_factory());
     Store<IValue_factory *>        s_value_factory(m_value_factory, inst->get_value_factory());
     Store<DAG_node_factory_impl *> s_node_factory(m_node_factory,   inst->get_node_factory());
@@ -2104,12 +2345,15 @@ void Distiller_plugin_api_impl::set_attribute(IGenerated_code_dag::IMaterial_ins
     set_attribute(node, name, v);
 }
 
-void Distiller_plugin_api_impl::set_attribute(IGenerated_code_dag::IMaterial_instance const *i_inst,
-                                              DAG_node const * node,
-                                              char const *name,
-                                              mi::Float32 value) {
+void Distiller_plugin_api_impl::set_attribute(
+    IMaterial_instance const *i_inst,
+    DAG_node const           *node,
+    char const               *name,
+    mi::Float32              value)
+{
     Generated_code_dag::Material_instance *inst =
-        const_cast<Generated_code_dag::Material_instance *>(impl_cast<Generated_code_dag::Material_instance>(i_inst));
+        const_cast<Generated_code_dag::Material_instance *>(
+            impl_cast<Generated_code_dag::Material_instance>(i_inst));
     Store<IType_factory *>         s_type_factory(m_type_factory,   inst->get_type_factory());
     Store<IValue_factory *>        s_value_factory(m_value_factory, inst->get_value_factory());
     Store<DAG_node_factory_impl *> s_node_factory(m_node_factory,   inst->get_node_factory());
@@ -2120,38 +2364,46 @@ void Distiller_plugin_api_impl::set_attribute(IGenerated_code_dag::IMaterial_ins
     set_attribute(node, name, v);
 }
 
-void Distiller_plugin_api_impl::remove_attributes(DAG_node const * node) {
+void Distiller_plugin_api_impl::remove_attributes(DAG_node const *node) {
     auto inner = m_attribute_map.find(node);
     if (inner != m_attribute_map.end()) {
         m_attribute_map.erase(inner);
     }
 }
 
-DAG_node const * Distiller_plugin_api_impl::get_attribute(DAG_node const * node,
-                                                          char const *name) {
+DAG_node const *Distiller_plugin_api_impl::get_attribute(
+    DAG_node const *node,
+    char const     *name)
+{
     Attr_map::iterator inner = m_attribute_map.find(node);
     if (inner != m_attribute_map.end()) {
         Node_attr_map::iterator val = inner->second.find(name);
-        if (val != inner->second.end())
+        if (val != inner->second.end()) {
             return val->second;
+        }
     }
     return nullptr;
 }
 
-bool Distiller_plugin_api_impl::attribute_exists(DAG_node const * node,
-                                                 char const *name) {
+bool Distiller_plugin_api_impl::attribute_exists(
+    DAG_node const *node,
+    char const     *name)
+{
     Attr_map::iterator inner = m_attribute_map.find(node);
     if (inner != m_attribute_map.end()) {
         Node_attr_map::iterator val = inner->second.find(name);
-        if (val != inner->second.end())
+        if (val != inner->second.end()) {
             return true;
+        }
     }
     return false;
 }
 
-void Distiller_plugin_api_impl::import_attributes(IGenerated_code_dag::IMaterial_instance const *inst) {
-    Visited_node_map marker_map(0, Visited_node_map::hasher(), Visited_node_map::key_equal(),
-                                m_alloc);
+void Distiller_plugin_api_impl::import_attributes(
+    IMaterial_instance const *inst)
+{
+    Visited_node_map marker_map(
+        0, Visited_node_map::hasher(), Visited_node_map::key_equal(), m_alloc);
     for (auto &outer : m_attribute_map) {
         for (auto &inner : outer.second) {
             DAG_node const *copy = copy_dag(inner.second, marker_map);
@@ -2160,8 +2412,10 @@ void Distiller_plugin_api_impl::import_attributes(IGenerated_code_dag::IMaterial
     }
 }
 
-void Distiller_plugin_api_impl::move_attributes(DAG_node const *to_node,
-                                                DAG_node const *from_node) {
+void Distiller_plugin_api_impl::move_attributes(
+    DAG_node const *to_node,
+    DAG_node const *from_node)
+{
     if (to_node == from_node) {
         return;
     }
@@ -2183,17 +2437,38 @@ void Distiller_plugin_api_impl::move_attributes(DAG_node const *to_node,
     }
 }
 
-IGenerated_code_dag::IMaterial_instance *Distiller_plugin_api_impl::apply_rules(
-    IGenerated_code_dag::IMaterial_instance const *i_inst,
-    IRule_matcher                                 &matcher,
-    IRule_matcher_event                           *event_handler,
-    const mi::mdl::Distiller_options              *options,
-    mi::Sint32&                                   error)
+IMaterial_instance *Distiller_plugin_api_impl::apply_rules(
+    IMaterial_instance const         *i_inst,
+    IRule_matcher                    &matcher,
+    IRule_matcher_event              *event_handler,
+    const mi::mdl::Distiller_options *options,
+    mi::Sint32&                      error)
 {
     Store<mi::mdl::Distiller_options const*> opt_store(m_options, options);
 
     Generated_code_dag::Material_instance const *inst =
         impl_cast<Generated_code_dag::Material_instance>(i_inst);
+
+    Store<IRule_matcher *>         s_matcher(m_matcher, &matcher);
+
+#if MDL_DIST_PLUG_DEBUG
+    static std::atomic<unsigned> idx = 0;
+    unsigned my_idx = idx++;
+    {
+        char buffer[64];
+        snprintf(buffer, sizeof(buffer), "_%04u_%04u_%s__2", std::this_thread::get_id(), my_idx, m_matcher->get_rule_set_name());
+#if MDL_DIST_PLUG_DEBUG_GRAPH
+        inst->dump_instance_dag(buffer);
+#endif
+
+#if MDL_DIST_PLUG_DEBUG_DUMP
+        strcat(buffer, ".matdmp");
+        std::ofstream outf(buffer);
+        outf << "[-=+=-] Input of rule set " << m_matcher->get_rule_set_name() << ":\n";
+        pprint_material(inst, outf);
+#endif
+    }
+#endif
 
     m_checker.enable_temporaries(false);
     m_checker.enable_parameters(inst->get_parameter_count() > 0);
@@ -2205,10 +2480,10 @@ IGenerated_code_dag::IMaterial_instance *Distiller_plugin_api_impl::apply_rules(
         m_alloc, Generated_code_dag::Material_instance::CF_DEFAULT, /*unsafe_math_opt=*/false);
 
     // Iterate over all custom target materials referenced by the material and make sure
-    // that they are loaded. The distiller user is responsible to load these moduels
+    // that they are loaded. The distiller user is responsible to load these modules
     // beforehand.
     size_t tmm_count = matcher.get_target_material_name_count();
-    for (size_t i = 0; i < tmm_count; i++) {
+    for (size_t i = 0; i < tmm_count; ++i) {
         char const *material_name = matcher.get_target_material_name(i);
         mi::base::Handle<IModule const> owner;
 
@@ -2234,10 +2509,11 @@ IGenerated_code_dag::IMaterial_instance *Distiller_plugin_api_impl::apply_rules(
     Store<IValue_factory *>        s_value_factory(m_value_factory, curr->get_value_factory());
     Store<DAG_node_factory_impl *> s_node_factory(m_node_factory,   curr->get_node_factory());
     Store<Rule_eval_strategy>      s_strategy(m_strategy, matcher.get_strategy());
-    Store<IRule_matcher *>         s_matcher(m_matcher, &matcher);
     Store<IRule_matcher_event *>   s_event_handler(m_event_handler, event_handler);
 
-    m_matcher->set_node_types(&s_node_types);
+    Node_types node_types;
+
+    m_matcher->set_node_types(&node_types);
 
     DAG_node const *root = curr->get_constructor();
 
@@ -2253,7 +2529,7 @@ IGenerated_code_dag::IMaterial_instance *Distiller_plugin_api_impl::apply_rules(
     m_global_ior[2] = 1.4f;
     DAG_node const *ior = get_compound_argument(root,3);
     if (ior != NULL && is<DAG_constant>(ior) && is<IType_color>(ior->get_type())) {
-        IValue_rgb_color const *rgb = as<IValue_rgb_color>(as<DAG_constant>(ior)->get_value());
+        IValue_rgb_color const *rgb = cast<IValue_rgb_color>(cast<DAG_constant>(ior)->get_value());
         m_global_ior[0] = rgb->get_value(0)->get_value();
         m_global_ior[1] = rgb->get_value(1)->get_value();
         m_global_ior[2] = rgb->get_value(2)->get_value();
@@ -2266,15 +2542,16 @@ IGenerated_code_dag::IMaterial_instance *Distiller_plugin_api_impl::apply_rules(
     m_checker.enable_temporaries(false);
     m_checker.set_owner(curr->get_node_factory());
 
-#if 0
-    static unsigned idx = 0;
+#if MDL_DIST_PLUG_DEBUG
     {
         char buffer[64];
-        snprintf(buffer, sizeof(buffer), "_%04u_%s_a2", idx, m_matcher->get_rule_set_name());
+        snprintf(buffer, sizeof(buffer), "_%04u_%04u_%s_a2", std::this_thread::get_id(), my_idx, m_matcher->get_rule_set_name());
+#if MDL_DIST_PLUG_DEBUG_GRAPH
 
         curr->dump_instance_dag(buffer);
+#endif
 
-#if MDL_DIST_PLUG_DEBUG
+#if MDL_DIST_PLUG_DEBUG_DUMP
         strcat(buffer, ".matdmp");
         std::ofstream outf(buffer);
         outf << "[-=+=-] Input of rule set " << m_matcher->get_rule_set_name() << ":\n";
@@ -2285,7 +2562,8 @@ IGenerated_code_dag::IMaterial_instance *Distiller_plugin_api_impl::apply_rules(
 
     import_attributes(curr);
 
-    Visited_node_map attr_marker_map(0, Visited_node_map::hasher(), Visited_node_map::key_equal(), m_alloc);
+    Visited_node_map attr_marker_map(
+        0, Visited_node_map::hasher(), Visited_node_map::key_equal(), m_alloc);
     move_attributes_deep(root, original_root, attr_marker_map, 0, false);
 
 #if 0
@@ -2295,11 +2573,11 @@ IGenerated_code_dag::IMaterial_instance *Distiller_plugin_api_impl::apply_rules(
 
     string root_name("material", m_alloc);
 
-    Visited_node_map replace_marker_map(0, Visited_node_map::hasher(), Visited_node_map::key_equal(), m_alloc);
-    DAG_node const* new_root = replace(root, root_name, replace_marker_map);
+    Visited_node_map replace_marker_map(
+        0, Visited_node_map::hasher(), Visited_node_map::key_equal(), m_alloc);
+    DAG_node const *new_root = replace(root, root_name, replace_marker_map);
 
     bool postcond_result = m_matcher->postcond(event_handler, *this, new_root, m_options);
-    MDL_ASSERT( postcond_result);
     if (!postcond_result) {
        error = -3;
     } else {
@@ -2312,8 +2590,11 @@ IGenerated_code_dag::IMaterial_instance *Distiller_plugin_api_impl::apply_rules(
         DAG_call const *call = cast<DAG_call>(new_root);
         IDefinition::Semantics sema = call->get_semantic();
         if (sema == IDefinition::DS_UNKNOWN &&
-            (curr->get_properties() & Generated_code_dag::Material_instance::IP_TARGET_MATERIAL_MODEL) == 0) {
-            curr->set_property(Generated_code_dag::Material_instance::IP_TARGET_MATERIAL_MODEL, true);
+            (curr->get_properties() &
+                Generated_code_dag::Material_instance::IP_TARGET_MATERIAL_MODEL) == 0)
+        {
+            curr->set_property(
+                Generated_code_dag::Material_instance::IP_TARGET_MATERIAL_MODEL, true);
         }
 
         curr->set_constructor(cast<DAG_call>(new_root));
@@ -2326,14 +2607,16 @@ IGenerated_code_dag::IMaterial_instance *Distiller_plugin_api_impl::apply_rules(
         m_checker.set_owner(NULL);
         m_checker.check_instance(curr);
     }
-#if 0
-    {
-        char buffer[64];
-        snprintf(buffer, sizeof(buffer), "_%04u_%s_z2", idx++, m_matcher->get_rule_set_name());
-
-        curr->dump_instance_dag(buffer);
 
 #if MDL_DIST_PLUG_DEBUG
+    {
+        char buffer[64];
+        snprintf(buffer, sizeof(buffer), "_%04u_%04u_%s_z2", std::this_thread::get_id(), my_idx++, m_matcher->get_rule_set_name());
+#if MDL_DIST_PLUG_DEBUG_GRAPH
+        curr->dump_instance_dag(buffer);
+#endif
+
+#if MDL_DIST_PLUG_DEBUG_DUMP
         strcat(buffer, ".matdmp");
         std::ofstream outf(buffer);
         outf << "[-=+=-] Result of applying rule set " << m_matcher->get_rule_set_name() << ":\n";
@@ -2348,18 +2631,19 @@ IGenerated_code_dag::IMaterial_instance *Distiller_plugin_api_impl::apply_rules(
 /// Skip a temporary node.
 static DAG_node const *skip_temporary(DAG_node const *node)
 {
-    if (DAG_temporary const *t = as<DAG_temporary>(node))
+    if (DAG_temporary const *t = as<DAG_temporary>(node)) {
         node = t->get_expr();
+    }
     return node;
 }
 
 // Returns a new material instance as a merge of two material instances based
 // on a material field selection mask choosing the top-level material fields
 // between the two materials.
-IGenerated_code_dag::IMaterial_instance *Distiller_plugin_api_impl::merge_materials(
-    IGenerated_code_dag::IMaterial_instance const *i_mat0,
-    IGenerated_code_dag::IMaterial_instance const *i_mat1,
-    IDistiller_plugin_api::Field_selector  field_selector)
+IMaterial_instance *Distiller_plugin_api_impl::merge_materials(
+    IMaterial_instance const              *i_mat0,
+    IMaterial_instance const              *i_mat1,
+    IDistiller_plugin_api::Field_selector field_selector)
 {
     Generated_code_dag::Material_instance const *inst0 =
         impl_cast<Generated_code_dag::Material_instance>(i_mat0);
@@ -2391,7 +2675,8 @@ IGenerated_code_dag::IMaterial_instance *Distiller_plugin_api_impl::merge_materi
     import_attributes(curr);
 
     // make a deep copy, this also removes ANY temporaries
-    Visited_node_map merge_marker_map(0, Visited_node_map::hasher(), Visited_node_map::key_equal(), m_alloc);
+    Visited_node_map merge_marker_map(
+        0, Visited_node_map::hasher(), Visited_node_map::key_equal(), m_alloc);
 
     root0 = cast<DAG_call>(copy_dag(root0, merge_marker_map));
     merge_marker_map.clear();
@@ -2409,31 +2694,6 @@ IGenerated_code_dag::IMaterial_instance *Distiller_plugin_api_impl::merge_materi
 
     DAG_call const *root1 = inst1->get_constructor();
 
-#if MDL_DIST_PLUG_DEBUG
-#if 0
-    std::cerr << "\x1b[35m{{-^-}} ------ merge_materials:\x1b[0m ------\n";
-    for (size_t i = 0; i < inst0->get_temporary_count(); i++) {
-        DAG_node const* temp = inst0->get_temporary_value(i);
-        std::cerr << "\x1b[33mt" << i << "\x1b[0m = ";
-        pprint_node(inst0, temp, 1);
-        std::cerr << "\n";
-    }
-    std::cerr << "\x1b[31m>>> root0:\x1b[0m\n";
-    pprint_node(inst0, root0, 1, std::cerr);
-    std::cerr << "\n";
-    std::cerr << "---------------------------------------\n";
-    for (size_t i = 0; i < inst1->get_temporary_count(); i++) {
-        DAG_node const* temp = inst1->get_temporary_value(i);
-        std::cerr << "\x1b[33mt" << i << "\x1b[0m = ";
-        pprint_node(inst1, temp, 1);
-        std::cerr << "\n";
-    }
-    std::cerr << "\x1b[31m>>> root1:\x1b[0m\n";
-    pprint_node(inst1, root1, 1, std::cerr);
-    std::cerr << "\n";
-    std::cerr << "---------------------------------------\n";
-#endif
-#endif
     // get material.material_geometry
     DAG_call const *geom0 = as<DAG_call>(skip_temporary(root0->get_argument(5)));
     DAG_call const *geom1 = as<DAG_call>(skip_temporary(root1->get_argument(5)));
@@ -2543,7 +2803,8 @@ IGenerated_code_dag::IMaterial_instance *Distiller_plugin_api_impl::merge_materi
         args, dimension_of(args),
         root0->get_type());
 
-    Visited_node_map attr_marker_map(0, Visited_node_map::hasher(), Visited_node_map::key_equal(), m_alloc);
+    Visited_node_map attr_marker_map(
+        0, Visited_node_map::hasher(), Visited_node_map::key_equal(), m_alloc);
     move_attributes_deep(new_root, original_root, attr_marker_map, 0, true);
 
     curr->set_constructor(cast<DAG_call>(new_root));
@@ -2560,7 +2821,7 @@ IGenerated_code_dag::IMaterial_instance *Distiller_plugin_api_impl::merge_materi
 
 // Creates a (deep) copy of a node.
 DAG_node const *Distiller_plugin_api_impl::copy_dag(
-    DAG_node const *node,
+    DAG_node const   *node,
     Visited_node_map &marker_map)
 {
 restart:
@@ -2621,12 +2882,14 @@ restart:
 
 // Copy the attributes from `from_node` to `to_node` for the whole graph.
 void Distiller_plugin_api_impl::move_attributes_deep(
-    DAG_node const *to_node, DAG_node const *from_node,
-    Visited_node_map &marker_map, int level,
-    bool ignore_mismatched_nodes)
+    DAG_node const   *to_node,
+    DAG_node const   *from_node,
+    Visited_node_map &marker_map,
+    int              level,
+    bool             ignore_mismatched_nodes)
 {
   restart:
-    MDL_ASSERT(from_node);
+    MDL_ASSERT(from_node != NULL);
 
     Visited_node_map::const_iterator it = marker_map.find(from_node);
     if (it != marker_map.end()) {
@@ -2644,11 +2907,11 @@ void Distiller_plugin_api_impl::move_attributes_deep(
         break;
 
     case DAG_node::EK_TEMPORARY:
-    {
-        DAG_temporary const *to_t = cast<DAG_temporary>(to_node);
-        to_node = to_t->get_expr();
+        {
+            DAG_temporary const *to_t = cast<DAG_temporary>(to_node);
+            to_node = to_t->get_expr();
+        }
         goto restart_inner;
-    }
     }
 
     switch (from_node->get_kind()) {
@@ -2662,44 +2925,44 @@ void Distiller_plugin_api_impl::move_attributes_deep(
         break;
 
     case DAG_node::EK_TEMPORARY:
-    {
-        DAG_temporary const *from_t = cast<DAG_temporary>(from_node);
-        from_node = from_t->get_expr();
+        {
+            DAG_temporary const *from_t = cast<DAG_temporary>(from_node);
+            from_node = from_t->get_expr();
+        }
         goto restart;
-    }
 
     case DAG_node::EK_CALL:
-    {
-        if (ignore_mismatched_nodes && (from_node->get_kind() != to_node->get_kind())) {
-            marker_map.insert(Visited_node_map::value_type(from_node, from_node));
-            return;
-        }
+        {
+            if (ignore_mismatched_nodes && (from_node->get_kind() != to_node->get_kind())) {
+                marker_map.insert(Visited_node_map::value_type(from_node, from_node));
+                return;
+            }
 
-        MDL_ASSERT(from_node->get_kind() == to_node->get_kind());
+            MDL_ASSERT(from_node->get_kind() == to_node->get_kind());
 
-        DAG_call const *from_call = cast<DAG_call>(from_node);
-        DAG_call const *to_call   = cast<DAG_call>(to_node);
+            DAG_call const *from_call = cast<DAG_call>(from_node);
+            DAG_call const *to_call   = cast<DAG_call>(to_node);
 
-        int n_params_from = from_call->get_argument_count();
-        int n_params_to   = to_call->get_argument_count();
+            int n_params_from = from_call->get_argument_count();
+            int n_params_to   = to_call->get_argument_count();
 
-        if (ignore_mismatched_nodes &&
-            (strcmp(from_call->get_name(), to_call->get_name()) ||
-             n_params_from != n_params_to)) {
-            marker_map.insert(Visited_node_map::value_type(from_node, from_node));
-            return;
-        }
+            if (ignore_mismatched_nodes &&
+                (strcmp(from_call->get_name(), to_call->get_name()) ||
+                 n_params_from != n_params_to)) {
+                marker_map.insert(Visited_node_map::value_type(from_node, from_node));
+                return;
+            }
 
-        MDL_ASSERT(n_params_from == n_params_to);
+            MDL_ASSERT(n_params_from == n_params_to);
 
-        for (int i = 0; i < n_params_from; ++i) {
-            move_attributes_deep(to_call->get_argument(i),
-                                 from_call->get_argument(i),
-                                 marker_map,
-                                 level + 1, ignore_mismatched_nodes);
+            for (int i = 0; i < n_params_from; ++i) {
+                move_attributes_deep(to_call->get_argument(i),
+                                     from_call->get_argument(i),
+                                     marker_map,
+                                     level + 1, ignore_mismatched_nodes);
+            }
         }
         break;
-    }
     }
     move_attributes(to_node, from_node);
     marker_map.insert(Visited_node_map::value_type(from_node, from_node));
@@ -2711,19 +2974,23 @@ Module const *Distiller_plugin_api_impl::find_builtin_module(
 {
     MDL const *compiler = impl_cast<MDL>(m_compiler.get());
     Module const *mod = compiler->find_builtin_module(string(mod_name, get_allocator()));
-    if (mod != NULL)
+    if (mod != NULL) {
         mod->retain();
+    }
     return mod;
 }
 
 // Find an exported definition of a module.
-Definition *Distiller_plugin_api_impl::find_exported_def(Module const *mod, char const *name)
+Definition *Distiller_plugin_api_impl::find_exported_def(
+    Module const *mod,
+    char const  *name)
 {
     Symbol_table const &symtab = mod->get_symbol_table();
     ISymbol const      *sym    = symtab.lookup_symbol(name);
 
-    if (sym == NULL)
+    if (sym == NULL) {
         return NULL;
+    }
 
     Definition_table const &def_tag = mod->get_definition_table();
     Scope const            *global = def_tag.get_global_scope();
@@ -2732,8 +2999,9 @@ Definition *Distiller_plugin_api_impl::find_exported_def(Module const *mod, char
     if (def == NULL) {
         return NULL;
     }
-    if (!def->has_flag(Definition::DEF_IS_EXPORTED))
+    if (!def->has_flag(Definition::DEF_IS_EXPORTED)) {
         return NULL;
+    }
     return def;
 }
 
@@ -2743,196 +3011,204 @@ Definition *Distiller_plugin_api_impl::find_exported_def(Module const *mod, char
 // one of the material structs, and selectors for mix_1, mix_2, mix_3,
 // clamped_mix_1, ..., as well as a special selector for local_normal.
 // All other nodes return 0.
-int Distiller_plugin_api_impl::get_selector( DAG_node const* node) const {
+int Distiller_plugin_api_impl::get_selector(DAG_node const *node) const {
     int selector = 0;
     switch ( node->get_kind()) {
     case DAG_node::EK_CONSTANT:
-    {
-        DAG_constant const *c = cast<DAG_constant>(node);
-        switch ( c->get_type()->get_kind()) {
-        case IType::TK_BSDF:
-            selector = DS_DIST_DEFAULT_BSDF;
-            break;
-        case IType::TK_HAIR_BSDF:
-            selector = DS_DIST_DEFAULT_HAIR_BSDF;
-            break;
-        case IType::TK_EDF:
-            selector = DS_DIST_DEFAULT_EDF;
-            break;
-        case IType::TK_VDF:
-            selector = DS_DIST_DEFAULT_VDF;
-            break;
-        case IType::TK_STRUCT:
         {
-            int id = as<IType_struct>(c->get_type())->get_predefined_id();
-            switch ( id) {
-            case IType_struct::SID_MATERIAL_EMISSION:
-                selector = DS_DIST_STRUCT_MATERIAL_EMISSION;
+            DAG_constant const *c = cast<DAG_constant>(node);
+            switch (c->get_type()->get_kind()) {
+            case IType::TK_BSDF:
+                selector = DS_DIST_DEFAULT_BSDF;
                 break;
-            case IType_struct::SID_MATERIAL_SURFACE:
-                selector = DS_DIST_STRUCT_MATERIAL_SURFACE;
+            case IType::TK_HAIR_BSDF:
+                selector = DS_DIST_DEFAULT_HAIR_BSDF;
                 break;
-            case IType_struct::SID_MATERIAL_VOLUME:
-                selector = DS_DIST_STRUCT_MATERIAL_VOLUME;
+            case IType::TK_EDF:
+                selector = DS_DIST_DEFAULT_EDF;
                 break;
-            case IType_struct::SID_MATERIAL_GEOMETRY:
-                selector = DS_DIST_STRUCT_MATERIAL_GEOMETRY;
+            case IType::TK_VDF:
+                selector = DS_DIST_DEFAULT_VDF;
                 break;
-            case IType_struct::SID_MATERIAL:
-                selector = DS_DIST_STRUCT_MATERIAL;
+            case IType::TK_STRUCT:
+                {
+                    int id = cast<IType_struct>(c->get_type())->get_predefined_id();
+                    switch (id) {
+                    case IType_struct::SID_MATERIAL_EMISSION:
+                        selector = DS_DIST_STRUCT_MATERIAL_EMISSION;
+                        break;
+                    case IType_struct::SID_MATERIAL_SURFACE:
+                        selector = DS_DIST_STRUCT_MATERIAL_SURFACE;
+                        break;
+                    case IType_struct::SID_MATERIAL_VOLUME:
+                        selector = DS_DIST_STRUCT_MATERIAL_VOLUME;
+                        break;
+                    case IType_struct::SID_MATERIAL_GEOMETRY:
+                        selector = DS_DIST_STRUCT_MATERIAL_GEOMETRY;
+                        break;
+                    case IType_struct::SID_MATERIAL:
+                        selector = DS_DIST_STRUCT_MATERIAL;
+                        break;
+                    default:
+                        break;
+                    }
+                }
                 break;
             default:
                 break;
             }
-            break;
         }
-        default:
-            break;
-        }
-    }
-    break;
+        break;
     case DAG_node::EK_CALL:
-    {
-        DAG_call const *c = cast<DAG_call>(node);
-        selector = c->get_semantic();
-        if ( selector == IDefinition::DS_ELEM_CONSTRUCTOR) {
-            if (is<IType_struct>(node->get_type())) {
-                int id = cast<IType_struct>(node->get_type())->get_predefined_id();
-                switch ( id) {
-                case IType_struct::SID_MATERIAL_EMISSION:
-                    selector = DS_DIST_STRUCT_MATERIAL_EMISSION;
-                    break;
-                case IType_struct::SID_MATERIAL_SURFACE:
-                    selector = DS_DIST_STRUCT_MATERIAL_SURFACE;
-                    break;
-                case IType_struct::SID_MATERIAL_VOLUME:
-                    selector = DS_DIST_STRUCT_MATERIAL_VOLUME;
-                    break;
-                case IType_struct::SID_MATERIAL_GEOMETRY:
-                    selector = DS_DIST_STRUCT_MATERIAL_GEOMETRY;
-                    break;
-                case IType_struct::SID_MATERIAL:
-                    selector = DS_DIST_STRUCT_MATERIAL;
-                    break;
-                default:
-                    break;
-                }
-            }
-        } else if ((selector == IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX)
-                   || (selector == IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX)
-                   || (selector == IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX)
-                   || (selector == IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX)
-                   || (selector == IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX)
-                   || (selector == IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX))
         {
-            if (selector == IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX)
-                selector = DS_DIST_BSDF_MIX_1;
-            else if (selector == IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX)
-                selector = DS_DIST_BSDF_CLAMPED_MIX_1;
-            else if (selector == IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX)
-                selector = DS_DIST_BSDF_COLOR_MIX_1;
-            else if (selector == IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX)
-                selector = DS_DIST_BSDF_COLOR_CLAMPED_MIX_1;
-            else if (selector == IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX)
-                selector = DS_DIST_BSDF_UNBOUNDED_MIX_1;
-            else if (selector == IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX)
-                selector = DS_DIST_BSDF_COLOR_UNBOUNDED_MIX_1;
-            // Invariant: the array argument cannot be a constant here
-            DAG_call const* array = as<DAG_call>(c->get_argument(0));
-            MDL_ASSERT( array);
-            if ( array->get_argument_count() == 2)
-                selector += 1;
-            if ( array->get_argument_count() >= 3)
-                selector += 2;
-            // check for EDF and VDF
-            IType_array const* array_type = as<IType_array>(array->get_type());
-            MDL_ASSERT( array_type);
-            IType_struct const* comp_type = as<IType_struct>(array_type->get_element_type());
-            MDL_ASSERT( comp_type);
-            IType const* field_type = comp_type->get_compound_type(1);
-            switch ( field_type->get_kind()) {
-            case mi::mdl::IType::TK_BSDF:
-                break;
-            case mi::mdl::IType::TK_EDF:
-                selector += DS_DIST_EDF_MIX_1 - DS_DIST_BSDF_MIX_1;
-                break;
-            case mi::mdl::IType::TK_VDF:
-                selector += DS_DIST_VDF_MIX_1 - DS_DIST_BSDF_MIX_1;
-                break;
-            default:
-                MDL_ASSERT(!"Malformed AST with a mixer node whose array is none of the DFs.");
-            }
-        } else if (selector == IDefinition::DS_INTRINSIC_DF_TINT) {
-            selector = DS_DIST_BSDF_TINT;
-            if (c->get_argument_count() == 2) {
-                switch (c->get_argument(1)->get_type()->get_kind()) {
-                case mi::mdl::IType::TK_BSDF:
-                    selector = DS_DIST_BSDF_TINT; break;
-                case mi::mdl::IType::TK_COLOR:
-                    // special case for nvidia::distilling_support::local_normal
-                    selector = DS_DIST_BSDF_TINT; break;
-                case mi::mdl::IType::TK_EDF:
-                    selector = DS_DIST_EDF_TINT; break;
-                case mi::mdl::IType::TK_VDF:
-                    selector = DS_DIST_VDF_TINT; break;
-                case mi::mdl::IType::TK_HAIR_BSDF:
-                    selector = DS_DIST_HAIR_BSDF_TINT; break;
-                default:
-                    MDL_ASSERT(!"Unsupported tint modifier");
+            DAG_call const *c = cast<DAG_call>(node);
+            selector = c->get_semantic();
+            if ( selector == IDefinition::DS_ELEM_CONSTRUCTOR) {
+                if (is<IType_struct>(node->get_type())) {
+                    int id = cast<IType_struct>(node->get_type())->get_predefined_id();
+                    switch ( id) {
+                    case IType_struct::SID_MATERIAL_EMISSION:
+                        selector = DS_DIST_STRUCT_MATERIAL_EMISSION;
+                        break;
+                    case IType_struct::SID_MATERIAL_SURFACE:
+                        selector = DS_DIST_STRUCT_MATERIAL_SURFACE;
+                        break;
+                    case IType_struct::SID_MATERIAL_VOLUME:
+                        selector = DS_DIST_STRUCT_MATERIAL_VOLUME;
+                        break;
+                    case IType_struct::SID_MATERIAL_GEOMETRY:
+                        selector = DS_DIST_STRUCT_MATERIAL_GEOMETRY;
+                        break;
+                    case IType_struct::SID_MATERIAL:
+                        selector = DS_DIST_STRUCT_MATERIAL;
+                        break;
+                    default:
+                        break;
+                    }
                 }
-            } else {
-                MDL_ASSERT(c->get_argument_count() == 3 && "Unsupported tint overload");
-                selector = DS_DIST_BSDF_TINT2;
-            }
-        } else if (selector == IDefinition::DS_INTRINSIC_DF_DIRECTIONAL_FACTOR) {
-            selector = DS_DIST_BSDF_DIRECTIONAL_FACTOR;
-            if (c->get_argument_count() == 4) {
-                const IType::Kind k = c->get_argument(3)->get_type()->get_kind();
-                switch (k) {
-                case mi::mdl::IType::TK_BSDF:
-                    selector = DS_DIST_BSDF_DIRECTIONAL_FACTOR; 
-                    break;
-
-                case mi::mdl::IType::TK_EDF:
-                    selector = DS_DIST_EDF_DIRECTIONAL_FACTOR; 
-                    break;
-
-                case mi::mdl::IType::TK_COLOR:
-                    // FIXME: This happens when local normals are
-                    // calculated, where BSDFs can be replaced by
-                    // color values.
-
-                    selector = DS_DIST_BSDF_DIRECTIONAL_FACTOR; 
-                    break;
-
-                default:
-                    MDL_ASSERT(!"Unsupported directional_factor modifier");
-                }
-            } else {
-                MDL_ASSERT(c->get_argument_count() == 4 && "Unsupported directional_factor overload");
-            }
-        } else if (selector == (IDefinition::DS_OP_BASE + IExpression::OK_TERNARY)) {
-            DAG_call const *c1 = as<DAG_call>(c->get_argument(1));
-            if ( c1 && c1->get_semantic() == IDefinition::DS_ELEM_CONSTRUCTOR
-                 && is<IType_struct>(c1->get_type())
-                 && cast<IType_struct>(c1->get_type())->get_predefined_id()
-                     == IType_struct::SID_MATERIAL)
+            } else if ((selector == IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX)
+                       || (selector == IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX)
+                       || (selector == IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX)
+                       || (selector == IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX)
+                       || (selector == IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX)
+                       || (selector == IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX))
             {
-                selector = DS_DIST_MATERIAL_CONDITIONAL_OPERATOR;
-            } else if ( c->get_argument(1)->get_type()->get_kind() == mi::mdl::IType::TK_BSDF) {
-                selector = DS_DIST_BSDF_CONDITIONAL_OPERATOR;
-            } else if ( c->get_argument(1)->get_type()->get_kind() == mi::mdl::IType::TK_EDF) {
-                selector = DS_DIST_EDF_CONDITIONAL_OPERATOR;
-            } else if ( c->get_argument(1)->get_type()->get_kind() == mi::mdl::IType::TK_VDF) {
-                selector = DS_DIST_VDF_CONDITIONAL_OPERATOR;
+                if (selector == IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX) {
+                    selector = DS_DIST_BSDF_MIX_1;
+                } else if (selector == IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX) {
+                    selector = DS_DIST_BSDF_CLAMPED_MIX_1;
+                } else if (selector == IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX) {
+                    selector = DS_DIST_BSDF_COLOR_MIX_1;
+                } else if (selector == IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX) {
+                    selector = DS_DIST_BSDF_COLOR_CLAMPED_MIX_1;
+                } else if (selector == IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX) {
+                    selector = DS_DIST_BSDF_UNBOUNDED_MIX_1;
+                } else if (selector == IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX) {
+                    selector = DS_DIST_BSDF_COLOR_UNBOUNDED_MIX_1;
+                }
+                // Invariant: the array argument cannot be a constant here
+                DAG_call const *array = cast<DAG_call>(c->get_argument(0));
+                if (array->get_argument_count() == 2) {
+                    selector += 1;
+                }
+                if (array->get_argument_count() == 3) {
+                    selector += 2;
+                }
+                if (array->get_argument_count() >= 4) {
+                    selector += 3;
+                }
+                // check for EDF and VDF
+                IType_array const *array_type =
+                    cast<IType_array>(array->get_type()->skip_type_alias());
+                IType_struct const *comp_type =
+                    cast<IType_struct>(array_type->get_element_type()->skip_type_alias());
+                IType const *field_type = comp_type->get_compound_type(1);
+                switch (field_type->get_kind()) {
+                case mi::mdl::IType::TK_BSDF:
+                    break;
+                case mi::mdl::IType::TK_EDF:
+                    selector += DS_DIST_EDF_MIX_1 - DS_DIST_BSDF_MIX_1;
+                    break;
+                case mi::mdl::IType::TK_VDF:
+                    selector += DS_DIST_VDF_MIX_1 - DS_DIST_BSDF_MIX_1;
+                    break;
+                default:
+                    MDL_ASSERT(!"Malformed AST with a mixer node whose array is none of the DFs.");
+                }
+            } else if (selector == IDefinition::DS_INTRINSIC_DF_TINT) {
+                selector = DS_DIST_BSDF_TINT;
+                if (c->get_argument_count() == 2) {
+                    switch (c->get_argument(1)->get_type()->get_kind()) {
+                    case mi::mdl::IType::TK_BSDF:
+                        selector = DS_DIST_BSDF_TINT; break;
+                    case mi::mdl::IType::TK_COLOR:
+                        // special case for nvidia::distilling_support::local_normal
+                        selector = DS_DIST_BSDF_TINT; break;
+                    case mi::mdl::IType::TK_EDF:
+                        selector = DS_DIST_EDF_TINT; break;
+                    case mi::mdl::IType::TK_VDF:
+                        selector = DS_DIST_VDF_TINT; break;
+                    case mi::mdl::IType::TK_HAIR_BSDF:
+                        selector = DS_DIST_HAIR_BSDF_TINT; break;
+                    default:
+                        MDL_ASSERT(!"Unsupported tint modifier");
+                    }
+                } else {
+                    MDL_ASSERT(c->get_argument_count() == 3 && "Unsupported tint overload");
+                    selector = DS_DIST_BSDF_TINT2;
+                }
+            } else if (selector == IDefinition::DS_INTRINSIC_DF_DIRECTIONAL_FACTOR) {
+                selector = DS_DIST_BSDF_DIRECTIONAL_FACTOR;
+                if (c->get_argument_count() == 4) {
+                    const IType::Kind k = c->get_argument(3)->get_type()->get_kind();
+                    switch (k) {
+                    case mi::mdl::IType::TK_BSDF:
+                        selector = DS_DIST_BSDF_DIRECTIONAL_FACTOR; 
+                        break;
+
+                    case mi::mdl::IType::TK_EDF:
+                        selector = DS_DIST_EDF_DIRECTIONAL_FACTOR; 
+                        break;
+
+                    case mi::mdl::IType::TK_COLOR:
+                        // FIXME: This happens when local normals are
+                        // calculated, where BSDFs can be replaced by
+                        // color values.
+
+                        selector = DS_DIST_BSDF_DIRECTIONAL_FACTOR; 
+                        break;
+
+                    default:
+                        MDL_ASSERT(!"Unsupported directional_factor modifier");
+                    }
+                } else {
+                    MDL_ASSERT(
+                        c->get_argument_count() == 4 && "Unsupported directional_factor overload");
+                }
+            } else if (selector == (IDefinition::DS_OP_BASE + IExpression::OK_TERNARY)) {
+                DAG_call const *c1 = as<DAG_call>(c->get_argument(1));
+                if (c1 != NULL && c1->get_semantic() == IDefinition::DS_ELEM_CONSTRUCTOR
+                    && is<IType_struct>(c1->get_type())
+                    && cast<IType_struct>(c1->get_type())->get_predefined_id()
+                        == IType_struct::SID_MATERIAL)
+                {
+                    selector = DS_DIST_MATERIAL_CONDITIONAL_OPERATOR;
+                } else if (c->get_argument(1)->get_type()->get_kind() == mi::mdl::IType::TK_BSDF) {
+                    selector = DS_DIST_BSDF_CONDITIONAL_OPERATOR;
+                } else if (c->get_argument(1)->get_type()->get_kind() == mi::mdl::IType::TK_EDF) {
+                    selector = DS_DIST_EDF_CONDITIONAL_OPERATOR;
+                } else if (c->get_argument(1)->get_type()->get_kind() == mi::mdl::IType::TK_VDF) {
+                    selector = DS_DIST_VDF_CONDITIONAL_OPERATOR;
+                }
+            } else if (selector == IDefinition::DS_UNKNOWN) {
+                if (strcmp(
+                    c->get_name(),
+                    "::nvidia::distilling_support::local_normal(float,float3)") == 0) {
+                    selector = DS_DIST_LOCAL_NORMAL;
+                }
             }
-        } else if (selector == IDefinition::DS_UNKNOWN) {
-            if ( strcmp ( c->get_name(),
-                          "::nvidia::distilling_support::local_normal(float,float3)") == 0)
-                selector = DS_DIST_LOCAL_NORMAL;
         }
-    }
-    break;
+        break;
     case DAG_node::EK_TEMPORARY:
     case DAG_node::EK_PARAMETER:
         break;
@@ -2943,7 +3219,7 @@ int Distiller_plugin_api_impl::get_selector( DAG_node const* node) const {
 // Convert a enum typed value to int.
 DAG_node const *Distiller_plugin_api_impl::convert_enum_to_int(DAG_node const *n)
 {
-    IType_enum const *e_tp = as<IType_enum>(n->get_type());
+    IType_enum const *e_tp = cast<IType_enum>(n->get_type()->skip_type_alias());
     string name(e_tp->get_symbol()->get_name(), get_allocator());
 
     string prefix(get_allocator());
@@ -3165,7 +3441,7 @@ DAG_node const *Distiller_plugin_api_impl::replace(
     node = replace_constant_by_call(node);
     move_attributes(node, old_node);
 
-    if ( is<DAG_call>(node) && m_strategy == RULE_EVAL_BOTTOM_UP) {
+    if (is<DAG_call>(node) && m_strategy == RULE_EVAL_BOTTOM_UP) {
         DAG_call const *c = cast<DAG_call>(node);
         int n = c->get_argument_count();
 
@@ -3174,8 +3450,9 @@ DAG_node const *Distiller_plugin_api_impl::replace(
         for (int i = 0; i < n; ++i) {
             DAG_node const *arg = c->get_argument(i);
             string path2( m_alloc);
-            if (m_options->trace)
+            if (m_options->trace) {
                 path2 = path + "." + c->get_parameter_name(i);
+            }
 
             n_args[i].arg        = replace(arg, path2, marker_map);
             n_args[i].param_name = c->get_parameter_name(i);
@@ -3190,13 +3467,13 @@ DAG_node const *Distiller_plugin_api_impl::replace(
         move_attributes(node, old_node);
 
         // mixer nodes might need a renormalization here
-        if ( m_normalize_mixers &&
-             ( (c->get_semantic() == IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX)
-               || (c->get_semantic() == IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX)
-               || (c->get_semantic() == IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX)
-               || (c->get_semantic() == IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX)
-               || (c->get_semantic() == IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX)
-               || (c->get_semantic() == IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX)))
+        if (m_normalize_mixers &&
+             ((c->get_semantic() == IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX)
+              || (c->get_semantic() == IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX)
+              || (c->get_semantic() == IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX)
+              || (c->get_semantic() == IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX)
+              || (c->get_semantic() == IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX)
+              || (c->get_semantic() == IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX)))
         {
             Rule_result_code dummy_result_code = RULE_RECURSE;
             Normalize_mixers_rules normalize_mixers;
@@ -3212,8 +3489,9 @@ DAG_node const *Distiller_plugin_api_impl::replace(
     do {
         //if ( m_options->trace)
         //    std::cerr << "Check path '" << path.c_str() << "':" << std::endl;
-        if ( m_event_handler != NULL)
-            m_event_handler->path_check_event( m_matcher->get_rule_set_name(), path.c_str());
+        if (m_event_handler != NULL) {
+            m_event_handler->path_check_event(m_matcher->get_rule_set_name(), path.c_str());
+        }
 
         result_code = RULE_RECURSE;
 
@@ -3238,8 +3516,9 @@ DAG_node const *Distiller_plugin_api_impl::replace(
             for (int i = 0; i < n; ++i) {
                 DAG_node const *arg = n_c->get_argument(i);
                 string path2( m_alloc);
-                if (m_options->trace)
+                if (m_options->trace) {
                     path2 = path + "." + n_c->get_parameter_name(i);
+                }
 
                 n_args[i].arg        = replace(arg, path2, marker_map);
                 n_args[i].param_name = n_c->get_parameter_name(i);
@@ -3284,9 +3563,9 @@ DAG_node const *Distiller_plugin_api_impl::replace(
 // The recursive body for all_nodes().
 bool Distiller_plugin_api_impl::all_nodes_rec(
     IRule_matcher::Checker_function test_fct,
-    DAG_node const                 *node,
-    char const                     *path,
-    Visited_node_map &marker_map)
+    DAG_node const                  *node,
+    char const                      *path,
+    Visited_node_map                &marker_map)
 {
     MDL_ASSERT(!is<DAG_temporary>(node) && "temporaries should be skipped at that point");
 
@@ -3302,14 +3581,14 @@ bool Distiller_plugin_api_impl::all_nodes_rec(
         m_event_handler->postcondition_failed_path(path);
 
     // recurse only in DAG_call nodes here
-    if ( DAG_call const * c = as<DAG_call>(node)) {
-
+    if (DAG_call const *c = as<DAG_call>(node)) {
         for (int i = 0, n = c->get_argument_count(); result && i < n; ++i) {
             DAG_node const *arg = c->get_argument(i);
 
             string path2( m_alloc);
-            if (m_options->trace)
+            if (m_options->trace) {
                 path2 = path2 + path + "." + c->get_parameter_name(i);
+            }
 
             result = result && all_nodes_rec( test_fct, arg, path2.c_str(), marker_map);
         }
@@ -3322,9 +3601,10 @@ bool Distiller_plugin_api_impl::all_nodes_rec(
 // Checks recursively for all call nodes if the property test_fct returns true.
 bool Distiller_plugin_api_impl::all_nodes(
     IRule_matcher::Checker_function test_fct,
-    DAG_node const *node)
+    DAG_node const                  *node)
 {
-    Visited_node_map all_marker_map(0, Visited_node_map::hasher(), Visited_node_map::key_equal(), m_alloc);
+    Visited_node_map all_marker_map(
+        0, Visited_node_map::hasher(), Visited_node_map::key_equal(), m_alloc);
     return all_nodes_rec( test_fct, node, "material", all_marker_map);
 }
 
@@ -3337,16 +3617,30 @@ bool Distiller_plugin_api_impl::set_normalize_mixers( bool new_value)
 }
 
 /// Normalize mixer nodes and set respective flag to keep them normalized
-IGenerated_code_dag::IMaterial_instance *Distiller_plugin_api_impl::normalize_mixers(
-    IGenerated_code_dag::IMaterial_instance const *inst,
-    IRule_matcher_event                           *event_handler,
-    const mi::mdl::Distiller_options              *options,
-    mi::Sint32                                    &error)
+IMaterial_instance *Distiller_plugin_api_impl::normalize_mixers(
+    IMaterial_instance const         *inst,
+    IRule_matcher_event              *event_handler,
+    mi::mdl::Distiller_options const *options,
+    mi::Sint32                       &error)
 {
     set_normalize_mixers(true);
     Normalize_mixers_rules normalize_mixers;
-    return apply_rules( inst, normalize_mixers, event_handler, options, error);
+    return apply_rules(inst, normalize_mixers, event_handler, options, error);
 }
+
+IDistiller_plugin_api *create_distiller_plugin_api(
+    IMaterial_instance const *instance,
+    ICall_name_resolver      *call_resolver)
+{
+    mi::mdl::Generated_code_dag::Material_instance const *inst =
+        mi::mdl::impl_cast<mi::mdl::Generated_code_dag::Material_instance>(instance);
+    mi::mdl::IAllocator *alloc = inst->get_allocator();
+    mi::mdl::Allocator_builder builder(alloc);
+
+    return builder.create<mi::mdl::Distiller_plugin_api_impl>(
+        alloc, instance, call_resolver);
+}
+
 
 } // mdl
 } // mi

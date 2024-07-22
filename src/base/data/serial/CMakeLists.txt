@@ -33,9 +33,7 @@ set(PROJECT_NAME base-data-serial)
 set(PROJECT_HEADERS
     "i_compressed_serialization.h"
     "i_serial_buffer_serializer.h"
-    "i_serial_buffered_file_serializer.h"
     "i_serial_classid.h"
-    "i_serial_file_serializer.h"
     "i_serial_serializable.h"
     "i_serializer.h"
     "serial.h"
@@ -46,7 +44,6 @@ set(PROJECT_HEADERS
 set(PROJECT_SOURCES
     "serial.cpp"
     "serial_buffer_serializer.cpp"
-    "serial_file_serializer.cpp"
     "serial_marker_helpers.cpp"
     ${PROJECT_HEADERS}
     )

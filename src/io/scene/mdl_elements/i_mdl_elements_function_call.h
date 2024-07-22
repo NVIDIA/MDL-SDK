@@ -66,15 +66,14 @@ public:
 
     /// Constructor.
     ///
-    /// \param is_material            Indicates whether this is a material or a function. Note that
-    ///                               the elemental constructor and copy constructor for material
-    ///                               are functions, even though their return type is "material".
+    /// \param is_material            Indicates whether the definition is a material or a function.
     /// \param definition_name        MDL name of the corresponding function definition.
     Mdl_function_call(
         DB::Tag module_tag,
         const char* module_db_name,
         DB::Tag definition_tag,
         Mdl_ident definition_ident,
+        bool is_declarative,
         bool is_material,
         IExpression_list* arguments,
         mi::mdl::IDefinition::Semantics semantic,
@@ -94,6 +93,8 @@ public:
     DB::Tag get_function_definition( DB::Transaction* transaction) const;
 
     const char* get_mdl_function_definition() const;
+
+    bool is_declarative() const { return m_is_declarative; }
 
     bool is_material() const { return m_is_material; }
 
@@ -123,9 +124,14 @@ public:
 
     const IExpression_list* get_enable_if_conditions() const;
 
+    /// \param target_type                 The intended type of the compiled material. Needs to be
+    ///                                    from the struct category "::material_category". Can be
+    ///                                    \c NULL, which indicates the same type as this DB
+    ///                                    material instance itself.
     Mdl_compiled_material* create_compiled_material(
         DB::Transaction* transaction,
         bool class_compilation,
+        const IType_struct* target_type,
         Execution_context* context) const;
 
     // internal methods
@@ -133,25 +139,13 @@ public:
     /// Indicates whether the function call is immutable.
     bool is_immutable() const { return m_immutable; }
 
-    /// Makes the function call mutable.
     ///
     /// This method may only be set to \c true by the MDL integration itself, not by external
     /// callers.
     void make_mutable( DB::Transaction* transaction);
 
-    /// Returns the MDL semantic of the corresponding definition.
-    mi::mdl::IDefinition::Semantics get_mdl_semantic() const;
-
-    /// Returns the MDL type of an parameter.
-    ///
-    /// \note The return type is an owned interface, not a \em reference-counted interface.
-    const mi::mdl::IType* get_mdl_return_type( DB::Transaction* transaction) const;
-
-    /// Returns the MDL return type.
-    ///
-    /// \note The return type is an owned interface, not a \em reference-counted interface.
-    const mi::mdl::IType* get_mdl_parameter_type(
-        DB::Transaction* transaction, mi::Uint32 index) const;
+    /// Returns the core semantic of the corresponding definition.
+    mi::mdl::IDefinition::Semantics get_core_semantic() const;
 
     /// Returns the module tag of the call's definition.
     DB::Tag get_module( DB::Transaction* transaction) const;
@@ -198,14 +192,17 @@ public:
         mi::Float32 mdl_wavelength_max,
         Sint32* errors = nullptr) const;
 
-    /// Creates a DAG material instance for this DB material instance (used by the DB compiled
-    /// material instance and an utility function).
+    /// Creates a DAG material instance for this DB material instance.
     ///
     /// \param transaction                 The transaction.
     /// \param use_temporaries             Indicates whether temporaries are used to represent
     ///                                    common subexpressions.
     /// \param class_compilation           Flag that selects class compilation instead of instance
     ///                                    compilation.
+    /// \param target_type                 The intended type of the compiled material. Needs to be
+    ///                                    from the struct category "::material_category". Can be
+    ///                                    \c NULL, which indicates the same type as this DB
+    ///                                    material instance itself.
     /// \param context                     execution context to propagate warnings and error
     ///                                    messages. The error codes have the following
     ///                                    meaning:
@@ -218,10 +215,11 @@ public:
     ///
     /// \note If it is detected, that a thin-walled material instance has different
     ///       transmission for surface and backface, a warning is generated.
-    const mi::mdl::IGenerated_code_dag::IMaterial_instance* create_dag_material_instance(
+    const mi::mdl::IMaterial_instance* create_dag_material_instance(
         DB::Transaction* transaction,
         bool use_temporaries,
         bool class_compilation,
+        const IType_struct* target_type,
         Execution_context* context) const;
 
     /// Improved version of SERIAL::Serializable::dump().
@@ -326,12 +324,13 @@ private:
     DB::Tag m_definition_tag;                    ///< The corresponding function definition.
     Mdl_ident m_definition_ident;                ///< The corresponding function definition
                                                  ///  identifier.
-    mi::mdl::IDefinition::Semantics m_mdl_semantic; ///< The MDL semantic. (*)
+    mi::mdl::IDefinition::Semantics m_core_semantic; ///< The semantic. (*)
     std::string m_module_db_name;                ///< The DB name of the module. (*)
     std::string m_definition_name;               ///< The MDL name of the function definition. (*)
     std::string m_definition_db_name;            ///< The DB name of the function definition. (*)
+    bool m_is_declarative;                       ///< The declarative flag. (*)
+    bool m_is_material;                          ///< Material or function definition (*)
     bool m_immutable;                            ///< The immutable flag (set for defaults).
-    bool m_is_material;                          ///< Material or function
 
     mi::base::Handle<const IType_list> m_parameter_types;            // (*)
     mi::base::Handle<const IType> m_return_type;                     // (*)

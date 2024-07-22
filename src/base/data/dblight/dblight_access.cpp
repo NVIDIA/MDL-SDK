@@ -37,10 +37,6 @@ namespace MI {
 namespace DB {
 
 Access_base::Access_base( const Access_base& other)
-  : m_element( nullptr),
-    m_transaction( nullptr),
-    m_info( nullptr),
-    m_is_edit( false)
 {
     set_access( other);
 }
@@ -62,9 +58,9 @@ Access_base::~Access_base()
 Tag_version Access_base::get_tag_version() const
 {
     if( !m_info)
-        return Tag_version();
+        return {};
 
-    return Tag_version( m_tag, m_info->get_transaction_id(), m_info->get_version());
+    return { m_tag, m_info->get_transaction_id(), m_info->get_version()};
 }
 
 const SCHED::Job* Access_base::get_job() const

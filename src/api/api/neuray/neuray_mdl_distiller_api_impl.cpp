@@ -127,21 +127,30 @@ const char* Mdl_distiller_api_impl::get_target_name( mi::Size index) const
     return m_dist_module->get_target_name(index);
 }
 
-mi::Size Mdl_distiller_api_impl::get_required_module_count(const char *target) const
+mi::Size Mdl_distiller_api_impl::get_required_module_count( const char* target) const
 {
-    return m_dist_module->get_required_module_count(target);
+    return m_dist_module->get_required_module_count( target);
 }
 
 const char* Mdl_distiller_api_impl::get_required_module_name(
-    const char *target, mi::Size index) const
+    const char* target, mi::Size index) const
 {
-    return m_dist_module->get_required_module_name(target, index);
+    const char* core_name = m_dist_module->get_required_module_name( target, index);
+    if( !core_name)
+        return nullptr;
+
+    // Here, we need to encoded the module name. But caching the result is not thread-safe, thus we
+    // would need to return an IString. Assume that the names that occur in practice are identical
+    // with and without encoding.
+    std::string encoded_module_name = MDL::encode_module_name( core_name);
+    ASSERT( M_NEURAY_API, encoded_module_name == core_name);
+    return core_name;
 }
 
 const char* Mdl_distiller_api_impl::get_required_module_code(
-    const char *target, mi::Size index) const
+    const char* target, mi::Size index) const
 {
-    return m_dist_module->get_required_module_code(target, index);
+    return m_dist_module->get_required_module_code( target, index);
 }
 
 namespace {
@@ -346,39 +355,33 @@ mi::neuraylib::ICompiled_material* Mdl_distiller_api_impl::distill_material(
     Transaction_impl* transaction = material_impl->get_transaction();
     DB::Transaction* db_transaction = material_impl->get_db_transaction();
 
-    MDL::load_distilling_support_module(db_transaction);
+    MDL::load_distilling_support_module( db_transaction);
 
-    MDL::Mdl_call_resolver resolver(db_transaction);
-
-    MDL::Mdl_material_instance_builder builder;
-    mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance> dag_material_instance(
-        builder.create_material_instance( db_transaction, db_material));
-    ASSERT( M_NEURAY_API, dag_material_instance);
-    if( !dag_material_instance)
-        return nullptr;
-
+    MDL::Mdl_call_resolver resolver( db_transaction);
     Rule_matcher_event event_handler( &options);
+    mi::base::Handle<const mi::mdl::IMaterial_instance> core_material_instance(
+        db_material->get_core_material_instance());
 
-    mi::base::Handle<const mi::mdl::IGenerated_code_dag::IMaterial_instance>
-        new_dag_material_instance(
+    mi::base::Handle<const mi::mdl::IMaterial_instance>
+        new_core_material_instance(
             m_dist_module->distill(
                 resolver,
                 (options.trace != 0 || options.debug_print) ? &event_handler : nullptr,
-                dag_material_instance.get(),
+                core_material_instance.get(),
                 target,
                 &options,
                 errors));
-    if( !new_dag_material_instance)
+    if( !new_core_material_instance)
         return nullptr;
 
     auto new_db_material = std::make_shared<MDL::Mdl_compiled_material>(
         db_transaction,
-        new_dag_material_instance.get(),
+        new_core_material_instance.get(),
         /*module_name*/ nullptr,
         db_material->get_mdl_meters_per_scene_unit(),
         db_material->get_mdl_wavelength_min(),
         db_material->get_mdl_wavelength_max(),
-        /*load_resources*/ false);
+        db_material->get_resolve_resources());
 
     mi::neuraylib::ICompiled_material* new_material
         = transaction->create<mi::neuraylib::ICompiled_material>( "__Compiled_material");
@@ -456,12 +459,20 @@ bool Baker_impl::is_uniform() const
 
 mi::Sint32 Baker_impl::bake_texture( mi::neuraylib::ICanvas* texture, mi::Uint32 samples) const
 {
-    if( !texture)
+    return Baker_impl::bake_texture(texture, 0, 1, 0, 1, samples);
+}
+
+mi::Sint32 Baker_impl::bake_texture(
+    mi::neuraylib::ICanvas* texture,
+    mi::Float32 min_u, mi::Float32 max_u, mi::Float32 min_v, mi::Float32 max_v,
+    mi::Uint32 samples) const
+{
+    if (!texture)
         return -1;
-    if( !m_transaction->is_open())
+    if (!m_transaction->is_open())
         return -2;
 
-    if( m_baker_module->bake_texture( m_transaction, m_baker_code.get(), texture, samples) != 0)
+    if (m_baker_module->bake_texture(m_transaction, m_baker_code.get(), texture, min_u, max_u, min_v, max_v, samples) != 0)
         return -3;
     return 0;
 }

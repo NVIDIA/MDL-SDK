@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 /// \file
-/// \brief      Module-internal utilities for building MDL AST from neuray
+/// \brief      Module-internal utilities for building MDL AST from integration
 ///             expressions/types
 
 #ifndef IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_AST_BUILDER_H
@@ -77,13 +77,13 @@ namespace MDL {
 
 class IType;
 
-/// Helper class that converts neuray type/expressions into MDL AST.
+/// Helper class that converts integration type/expressions into MDL AST.
 class Mdl_ast_builder
 {
 public:
     /// Constructor.
     ///
-    /// \param owner                   The MDL module that will own the newly constructed entities.
+    /// \param owner                   The core module that will own the newly constructed entities.
     /// \param transaction             The current transaction.
     /// \param traverse_ek_parameter   Indicates whether parameter references should be traversed
     ///                                and resolved via \p args, or converted to a parameter
@@ -128,7 +128,7 @@ public:
 
     /// Retrieve the filed symbol from a DS_INTRINSIC_DAG_FIELD_ACCESS call.
     ///
-    /// \param def  the unmangled MDL DAG name of the call
+    /// \param def  the unmangled DAG name of the call
     const mi::mdl::ISymbol* get_field_sym( const std::string& def);
 
     /// Transform a call.
@@ -148,19 +148,14 @@ public:
         const IExpression_list* args,
         bool named_args);
 
-    /// Transform a MDL expression from neuray representation to MDL representation.
-    ///
-    /// \param expr  the neuray expression
+    /// Transform a expression from the integration representation to core representation.
     const mi::mdl::IExpression* transform_expr( const IExpression* expr);
 
-    /// Transform a MDL expression from neuray representation to MDL representation.
-    ///
-    /// \param value  the neuray value
+    /// Transform a value from the integration representation to core representation.
     const mi::mdl::IExpression* transform_value( const IValue* value);
 
-    /// Transform a (non-user defined) MDL type from neuray representation to MDL representation.
-    ///
-    /// \param type  the neuray type
+    /// Transform a (non-user defined) type from the integration representation to core
+    /// representation.
     const mi::mdl::IType* transform_type( const IType* type);
 
     /// Create a new temporary symbol.
@@ -175,12 +170,12 @@ public:
     /// Create a reference expression for a qualified name.
     ///
     /// \param qname  the qualified name
-    /// \param type   if non-NULL, the MDL type
+    /// \param type   if non-NULL, the core type
     mi::mdl::IExpression_reference* to_reference(
         mi::mdl::IQualified_name* qname,
         const mi::mdl::IType* type = nullptr);
 
-    /// Create a reference expression for a given Symbol.
+    /// Create a reference expression for a given symbol.
     ///
     /// \param sym  the symbol
     mi::mdl::IExpression_reference* to_reference( const mi::mdl::ISymbol* sym);
@@ -194,7 +189,10 @@ public:
     /// Remove all declared parameter mappings.
     void remove_parameters();
 
-    /// Convert an neuray enum type into a MDL enum type.
+    /// Adds the symbol of a temporary.
+    void add_temporary( const mi::mdl::ISymbol* sym);
+
+    /// Convert an integration enum type into a core enum type.
     const mi::mdl::IType_enum* convert_enum_type(const IType_enum* e_tp);
 
     /// Get the list of used user types.
@@ -209,7 +207,7 @@ private:
         bool named_args,
         const IExpression_list* args);
 
-    /// The MDL module that will own the newly constructed entities.
+    /// The core module that will own the newly constructed entities.
     mi::mdl::Module* m_owner;
 
     /// The current transaction.
@@ -234,8 +232,8 @@ private:
     /// The Symbol table of \c m_owner.
     mi::mdl::Symbol_table& m_st;
 
-    /// The MDL type factory.
-    mi::base::Handle<MDL::IType_factory> m_mdl_tf;
+    /// The type factory of the MDL integration.
+    mi::base::Handle<MDL::IType_factory> m_int_tf;
 
     /// The count for temporary generation.
     unsigned m_tmp_idx;
@@ -256,10 +254,13 @@ private:
     /// The parameter map.
     Param_map m_param_map;
 
-    using Param_vector = std::vector<const mi::mdl::ISymbol*>;
+    using Symbol_vector = std::vector<const mi::mdl::ISymbol*>;
 
     /// The parameter vector.
-    Param_vector m_param_vector;
+    Symbol_vector m_param_vector;
+
+    /// The temporaries vector.
+    Symbol_vector m_temporaries;
 
     /// The arguments of the original entity (only used if \c m_traverse_ek_parameter is \c true).
     mi::base::Handle<IExpression_list const> m_args;
@@ -276,7 +277,7 @@ private:
     bool m_avoid_resource_urls;
 
     /// Set of indirect calls in the current call stack, used to check for cycles.
-    std::set<DB::Tag> m_set_indirect_calls;
+    robin_hood::unordered_set<DB::Tag> m_set_indirect_calls;
 };
 
 } // namespace MDL

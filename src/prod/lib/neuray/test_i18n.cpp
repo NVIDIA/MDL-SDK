@@ -64,7 +64,7 @@ void check_imdl_i18n_configuration(INeuray* neuray)
     Handle<IMdl_i18n_configuration> i18n_configuration(
         neuray->get_api_component<IMdl_i18n_configuration>());
     MI_CHECK(i18n_configuration);
-    const char * locale = NULL;
+    const char * locale = nullptr;
 
     // Set locale to French language
     const std::string locale_string("fr");
@@ -81,7 +81,7 @@ void check_imdl_i18n_configuration(INeuray* neuray)
     i18n_configuration->set_locale(i18n_configuration->get_system_keyword());
 
     // Disable any translation
-    i18n_configuration->set_locale(NULL);
+    i18n_configuration->set_locale(nullptr);
 
     // Set locale to French language for the rest of the tests
     i18n_configuration->set_locale(locale_string.c_str());
@@ -97,7 +97,7 @@ public:
 class Check_annotation : public Traversal_context
 {
 public:
-    void push_annotation(const char* name, const char* value, const char* original_value)
+    void push_annotation(const char* name, const char* value, const char* original_value) final
     {
         if (name && value)
         {
@@ -117,7 +117,7 @@ public:
             }
         }
     }
-    void push_qualified_name(const char* name)
+    void push_qualified_name(const char* name) final
     {
         // std::cout << "Name: " << name << std::endl;
     }
@@ -143,8 +143,8 @@ void annotations_from_annotation(const IAnnotation* anno, Traversal_context & co
 
             if (value->get_kind() == IValue::VK_STRING)
             {
-                const char* char_value(NULL);
-                const char* char_original_value(NULL);
+                const char* char_value(nullptr);
+                const char* char_original_value(nullptr);
                 mi::base::Handle<const IValue_string_localized> value_string_localized(value->get_interface<IValue_string_localized>());
                 if (value_string_localized)
                 {
@@ -312,7 +312,7 @@ MI_TEST_AUTO_FUNCTION( test_i18n )
         run_tests( neuray.get());
     }
 
-    neuray = 0;
+    neuray = nullptr;
     MI_CHECK( unload());
 }
 

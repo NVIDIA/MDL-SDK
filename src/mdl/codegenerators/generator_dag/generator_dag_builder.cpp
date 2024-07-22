@@ -859,7 +859,7 @@ bool Inline_checker::can_inline(IStatement const *stmt)
         {
             IStatement_compound const *block = cast<IStatement_compound>(stmt);
 
-            for (int i = 0, n = block->get_statement_count(); i < n; ++i) {
+            for (size_t i = 0, n = block->get_statement_count(); i < n; ++i) {
                 IStatement const *stmt = block->get_statement(i);
 
                 if (!can_inline(stmt)) {
@@ -1146,21 +1146,28 @@ bool DAG_builder::enable_target_material_compilation_mode(bool flag)
 
 // Convert a definition to a name.
 string DAG_builder::def_to_name(
-    IDefinition const *def, const char *module_name, bool with_signature_suffix) const
+    IDefinition const *def,
+    char const        *module_name,
+    bool              with_signature_suffix) const
 {
     return m_mangler.mangle(def, module_name, with_signature_suffix);
 }
 
 // Convert a definition to a name.
-string DAG_builder::def_to_name(IDefinition const *def, IModule const *module, bool with_signature_suffix) const
+string DAG_builder::def_to_name(
+    IDefinition const *def,
+    IModule const     *module,
+    bool              with_signature_suffix) const
 {
     return m_mangler.mangle(def, module, with_signature_suffix);
 }
 
 // Convert a definition to a name.
-string DAG_builder::def_to_name(IDefinition const *def) const
+string DAG_builder::def_to_name(
+    IDefinition const *def,
+    bool              with_signature_suffix) const
 {
-    return def_to_name(def, tos_module()->get_owner_module_name(def));
+    return def_to_name(def, tos_module()->get_owner_module_name(def), with_signature_suffix);
 }
 
 // Convert a type to a name.
@@ -1401,6 +1408,10 @@ DAG_node const *DAG_builder::optimize_binary_operator(
         type);
 }
 
+DAG_call const *DAG_builder::constant_to_call(DAG_constant const *cnst) {
+    return m_node_factory.value_to_constructor(cnst);
+}
+
 // Convert an MDL let temporary declaration to a DAG IR node.
 DAG_node const *DAG_builder::var_decl_to_dag(
     IDeclaration_variable const *var_decl)
@@ -1509,7 +1520,7 @@ DAG_node const *DAG_builder::stmt_to_dag(
             IStatement_compound const *block = cast<IStatement_compound>(stmt);
 
             DAG_node const *last = NULL;
-            for (int i = 0, n = block->get_statement_count(); i < n; ++i) {
+            for (size_t i = 0, n = block->get_statement_count(); i < n; ++i) {
                 IStatement const *stmt = block->get_statement(i);
 
                 last = stmt_to_dag(stmt);
@@ -1663,6 +1674,82 @@ DAG_node const *DAG_builder::stmt_to_dag(
         MDL_ASSERT(!"unsupported statement in inline");
         return NULL;
     }
+}
+
+// Insert a decl_cast to the destination type.
+DAG_node const *DAG_builder::insert_decl_cast(
+    IType const    *dst_type,
+    DAG_node const *expr)
+{
+    if (DAG_constant const *c = as<DAG_constant>(expr)) {
+        // check if we can fold it
+        IType_struct const *s_dst_type  = cast<IType_struct>(dst_type->skip_type_alias());
+        size_t             n_dst_fields = s_dst_type->get_field_count();
+
+        Small_VLA<IValue const *, 8> values(get_allocator(), n_dst_fields);
+
+        IValue_struct const *s_val      = cast<IValue_struct>(c->get_value());
+        IType_struct const  *s_src_type = s_val->get_type();
+        bool                all_const   = true;
+
+        for (size_t i = 0; i < n_dst_fields; ++i) {
+            IType_struct::Field const *field = s_dst_type->get_field(i);
+            size_t                    index  = s_src_type->find_field_index(field->get_symbol());
+
+            if (index != ~size_t(0) &&
+                s_src_type->get_field(index)->get_type() == field->get_type())
+            {
+                // the source value has a field of the same name and type
+                values[i] = s_val->get_value(index);
+            } else {
+                // FIXME: default construct this field if there is a constant
+                values[i] = NULL;
+                all_const = false;
+                break;
+            }
+        }
+
+        if (all_const) {
+            s_val = m_value_factory.create_struct(s_dst_type, values.data(), values.size());
+            return m_node_factory.create_constant(s_val);
+        }
+    }
+
+    Small_VLA<DAG_call::Call_argument, 1> call_args(get_allocator(), 1);
+
+    call_args[0].arg = expr;
+    call_args[0].param_name = "cast";
+    return m_node_factory.create_call(
+        "operator_decl_cast(<0>)",
+        IDefinition::DS_INTRINSIC_DAG_DECL_CAST,
+        call_args.data(), call_args.size(),
+        dst_type);
+    return expr;
+}
+
+// Insert a decl_cast to the destination type, if needed.
+DAG_node const *DAG_builder::maybe_insert_decl_cast(
+    IType const    *dst_type,
+    DAG_node const *expr)
+{
+    IType_struct const *dst_s_type = as<IType_struct>(dst_type);
+    if (dst_s_type == NULL) {
+        return expr;
+    }
+
+    // note: this should not fail, if the DAG is correctly typed, as decl_cast cannot change the
+    // type kind and dts IS a struct type, src must be a struct type either
+    IType_struct const *src_s_type = cast<IType_struct>(expr->get_type());
+
+    dst_type = m_type_factory.import(dst_s_type);
+    if (dst_type == src_s_type) {
+        return expr;
+    }
+
+    MDL_ASSERT(src_s_type->get_category() != NULL &&
+        src_s_type->get_category() == cast<IType_struct>(dst_type)->get_category() &&
+        "malformed decl_cast");
+    return insert_decl_cast(dst_type, expr);
 }
 
 // Convert an MDL expression to a DAG expression.
@@ -1831,8 +1918,12 @@ DAG_node const *DAG_builder::ref_to_dag(
         MDL_ASSERT(!"error definition found");
         break;
     case IDefinition::DK_ANNOTATION:
-        // annotations could not be references in error free code
+        // annotations could not be referenced in error free code
         MDL_ASSERT(!"annotation referenced in an expression");
+        break;
+    case IDefinition::DK_STRUCT_CATEGORY:
+        // struct categories could not be referenced in error free code
+        MDL_ASSERT(!"struct category referenced in an expression");
         break;
     case IDefinition::DK_TYPE:
         // types could not be references in error free code
@@ -2009,7 +2100,9 @@ DAG_node const *DAG_builder::unary_to_dag(
 }
 
 // Returns the name of a binary operator.
-string DAG_builder::get_binary_name(IExpression_binary const *binary, bool with_signature_suffix) const
+string DAG_builder::get_binary_name(
+    IExpression_binary const *binary,
+    bool                     with_signature_suffix) const
 {
     IExpression_binary::Operator op = binary->get_operator();
     IExpression const *left  = binary->get_left_argument();
@@ -2150,7 +2243,7 @@ DAG_node const *DAG_builder::create_struct_insert(
     }
 
     // create a S(old.a, ..., res, ..., old.z)
-    int n_fields = s_type->get_field_count();
+    size_t n_fields = s_type->get_field_count();
 
     bool all_args_const = true;
 
@@ -2161,20 +2254,21 @@ DAG_node const *DAG_builder::create_struct_insert(
     string name = type_to_name(s_type);
     name += '(';
 
-    for (int i = 0; i < n_fields; ++i) {
-        DAG_node const *field = NULL;
-
-        IType const   *field_tp;
-        ISymbol const *field_sym;
-        s_type->get_field(i, field_tp, field_sym);
-
+    for (size_t i = 0; i < n_fields; ++i) {
         if (i != 0) {
             name += ',';
         }
+
+        IType_struct::Field const *field     = s_type->get_field(i);
+        IType const               *field_tp  = field->get_type();
+        ISymbol const             *field_sym = field->get_symbol();
+
         name += type_to_name(field_tp->skip_type_alias());
 
+        DAG_node const *dag_field = NULL;
+
         if (i == index) {
-            field = e_node;
+            dag_field = e_node;
         } else {
             // retrieve the field from the old value
             if (s_val != NULL) {
@@ -2182,11 +2276,11 @@ DAG_node const *DAG_builder::create_struct_insert(
 
                 if (!is<IValue_bad>(res)) {
                     res = m_value_factory.import(res);
-                    field = m_node_factory.create_constant(res);
+                    dag_field = m_node_factory.create_constant(res);
                 }
             }
 
-            if (field == NULL) {
+            if (dag_field == NULL) {
                 // not a constant
 
                 char const *s_name = s_type->get_symbol()->get_name();
@@ -2203,14 +2297,14 @@ DAG_node const *DAG_builder::create_struct_insert(
 
                 call_args[0].arg        = c_node;
                 call_args[0].param_name = "s";
-                field = m_node_factory.create_call(
+                dag_field = m_node_factory.create_call(
                     name.c_str(), IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS, call_args, 1,
                     field_tp);
             }
         }
         call_args[i].param_name = field_sym->get_name();
-        call_args[i].arg        = field;
-        all_args_const          = all_args_const && is<DAG_constant>(field);
+        call_args[i].arg        = dag_field;
+        all_args_const          = all_args_const && is<DAG_constant>(dag_field);
     }
 
     name += ')';
@@ -2372,6 +2466,32 @@ DAG_node const *DAG_builder::convert_to_type(
         name.c_str(), IDefinition::DS_CONV_CONSTRUCTOR, &arg, 1, dst_type);
 }
 
+// Create a struct field select.
+DAG_node const *DAG_builder::create_field_select(
+    DAG_node const *compound,
+    char const     *field,
+    IType const    *f_type)
+{
+    IType_struct const *s_type = cast<IType_struct>(compound->get_type()->skip_type_alias());
+    char const *s_name = s_type->get_symbol()->get_name();
+
+    // create the name (+ signature) of the getter here
+    string name(s_name, get_allocator());
+    name += '.';
+    name += field;
+    name += '(';
+    name += s_name;
+    name += ')';
+
+    DAG_call::Call_argument call_args[1];
+
+    call_args[0].arg = compound;
+    call_args[0].param_name = "s";
+    return m_node_factory.create_call(
+        name.c_str(), IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS, call_args, 1,
+        f_type);
+}
+
 // Convert an MDL binary expression to a DAG expression.
 DAG_node const *DAG_builder::binary_to_dag(
     IExpression_binary const *binary)
@@ -2389,7 +2509,7 @@ DAG_node const *DAG_builder::binary_to_dag(
             IType const *left_type = left->get_type()->skip_type_alias();
 
             IExpression_reference const *ref     = cast<IExpression_reference>(right);
-            IDefinition const           *ref_def = ref->get_definition();
+            Definition const            *ref_def = impl_cast<Definition>(ref->get_definition());
 
             MDL_ASSERT(
                 ref_def->get_kind() == IDefinition::DK_MEMBER &&
@@ -2401,8 +2521,20 @@ DAG_node const *DAG_builder::binary_to_dag(
 
             DAG_node const *compound = expr_to_dag(left);
 
+            // handle an ugly case here: The type of the compound might be different
+            // from the owner type of the member, then a decl_cast must be inserted
+
+            if (is<IType_struct>(left->get_type()->skip_type_alias())) {
+                IType const *r_type = ref_def->get_def_scope()->get_scope_type();
+
+                MDL_ASSERT(r_type != NULL && "owner type of a member not set");
+                compound = maybe_insert_decl_cast(r_type, compound);
+            }
+
             DAG_constant const *c = as<DAG_constant>(compound);
-            if (c && m_node_factory.all_args_without_name(&compound, 1)) {
+
+            // check if the compound can be optimized away of "must stay"...
+            if (c != NULL && m_node_factory.all_args_without_name(&compound, 1)) {
                 // extracting a field
                 IValue const *left = c->get_value();
 
@@ -2434,26 +2566,8 @@ DAG_node const *DAG_builder::binary_to_dag(
 
             switch (left_type->get_kind()) {
             case IType::TK_STRUCT:
-                {
-                    IType_struct const *s_type = cast<IType_struct>(left_type);
-                    char const         *s_name = s_type->get_symbol()->get_name();
-
-                    // create the name (+ signature) of the getter here
-                    string name(s_name, get_allocator());
-                    name += '.';
-                    name += symbol->get_name();
-                    name += '(';
-                    name += s_name;
-                    name += ')';
-
-                    DAG_call::Call_argument call_args[1];
-
-                    call_args[0].arg        = compound;
-                    call_args[0].param_name = "s";
-                    return m_node_factory.create_call(
-                        name.c_str(), IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS, call_args, 1,
-                        m_type_factory.import(binary->get_type()));
-                }
+                return create_field_select(
+                    compound, symbol->get_name(), m_type_factory.import(binary->get_type()));
             case IType::TK_VECTOR:
                 {
                     char const *fname = symbol->get_name();
@@ -2573,7 +2687,9 @@ DAG_node const *DAG_builder::binary_to_dag(
         DAG_node const *l = expr_to_dag(left);
         DAG_node const *args[2] = { l, r };
 
-        if (is<DAG_constant>(l) && is<DAG_constant>(r) && m_node_factory.all_args_without_name(args, 2)) {
+        if (is<DAG_constant>(l) && is<DAG_constant>(r) &&
+            m_node_factory.all_args_without_name(args, 2))
+        {
             IValue const *v_l = cast<DAG_constant>(l)->get_value();
             IValue const *v_r = cast<DAG_constant>(r)->get_value();
 
@@ -2757,15 +2873,15 @@ DAG_node const *DAG_builder::try_inline(
 
     func_decl = skip_presets(func_decl, owner_mod);
 
-    bool is_material = false;
-    if (is_material_type(ret_type) &&
-        orig_call_def->get_semantics() != IDefinition::DS_ELEM_CONSTRUCTOR)
+    bool is_declarative_func = false;
+    if (orig_call_def->get_semantics() != IDefinition::DS_ELEM_CONSTRUCTOR &&
+        orig_call_def->get_property(IDefinition::DP_IS_DECLARATIVE))
     {
-        // always inline materials
-        is_material = true;
+        // always inline declarative functions
+        is_declarative_func = true;
 
         // except we are in target material model compilation mode
-        if (m_target_material_model_mode) {
+        if (m_target_material_model_mode && is_material_category_type(ret_type)) {
             if (has_target_material_model_anno(func_decl->get_annotations())) {
                 // do not inline
                 return NULL;
@@ -2802,7 +2918,8 @@ DAG_node const *DAG_builder::try_inline(
         set_parameter_array_size_var(func_decl, i, expr);
     }
 
-    if (!is_material) {
+    if (!is_declarative_func) {
+        // check, if we can inline non-declarative function
         Inline_checker checker(
             tos_module(),
             m_node_factory.get_value_factory(),
@@ -2935,6 +3052,7 @@ DAG_node const *DAG_builder::call_to_dag(
     ret_type = m_type_factory.import(ret_type);
 
     IExpression_reference const *ref = cast<IExpression_reference>(call->get_reference());
+    IType_function const *func_type = cast<IType_function>(ref->get_type());
 
     int n_args = call->get_argument_count();
 
@@ -2976,7 +3094,16 @@ DAG_node const *DAG_builder::call_to_dag(
     for (int i = 0; i < n_args; ++i) {
         IArgument const   *arg     = call->get_argument(i);
         IExpression const *arg_exp = arg->get_argument_expr();
-        DAG_node const    *node    = expr_to_dag(arg_exp);
+
+        DAG_node const *node = expr_to_dag(arg_exp);
+
+        if (i < func_type->get_parameter_count()) {
+            ISymbol const *p_name = NULL;
+            IType const *p_type = NULL;
+            func_type->get_parameter(i, p_type, p_name);
+
+            node = maybe_insert_decl_cast(p_type, node);
+        }
 
         call_args[i].arg = node;
         all_args_const   = all_args_const && is<DAG_constant>(node);
@@ -3077,8 +3204,8 @@ DAG_node const *DAG_builder::call_to_dag(
 DAG_node const *DAG_builder::let_to_dag(
     IExpression_let const *let)
 {
-    int decl_count = let->get_declaration_count();
-    for (int i = 0; i < decl_count; ++i) {
+    size_t decl_count = let->get_declaration_count();
+    for (size_t i = 0; i < decl_count; ++i) {
         IDeclaration_variable const *vd = cast<IDeclaration_variable>(let->get_declaration(i));
 
         int var_count = vd->get_variable_count();
@@ -3086,18 +3213,22 @@ DAG_node const *DAG_builder::let_to_dag(
             if (IExpression const *var_exp = vd->get_variable_init(k)) {
                 ISimple_name const *var_name = vd->get_variable_name(k);
                 IDefinition const  *var_def  = var_name->get_definition();
+                IType_name const   *t_name = vd->get_type_name();
                 ISymbol const      *var_symbol  = var_name->get_symbol();
                 char const         *symbol_name = var_symbol->get_name();
 
                 if (m_node_factory.is_exposing_names_of_let_expressions_enabled()) {
-                    // We need to ensure that CSE does not identify the to-be-created named top-level
-                    // node with a previously created unnamed node (the name is only added *after*
-                    // creation). CSE for the top-level node is detected by comparing the node ID of
-                    // the top-level node with the next node ID of the factory before calling
-                    // exp_to_dag(). If necessary, we create a shallow clone of the top-level node
-                    // with CSE disabled.
+                    // We need to ensure that CSE does not identify the to-be-created named
+                    // top-level node with a previously created unnamed node (the name is only
+                    // added *after* creation). CSE for the top-level node is detected by
+                    // comparing the node ID of the top-level node with the next node ID of the
+                    // factory before calling exp_to_dag(). If necessary, we create a shallow
+                    // clone of the top-level node with CSE disabled.
                     size_t next_id = m_node_factory.get_next_id();
-                    DAG_node const *node = expr_to_dag(var_exp);
+                    DAG_node const *expr_dag = expr_to_dag(var_exp);
+                    DAG_node const *node = t_name->is_array() 
+                        ? expr_dag
+                        : maybe_insert_decl_cast(t_name->get_type(), expr_dag);
                     if (node->get_id() < next_id) {
                         node = m_node_factory.shallow_copy(node);
                     }
@@ -3105,7 +3236,10 @@ DAG_node const *DAG_builder::let_to_dag(
                     m_tmp_value_map[var_def] = node;
                     m_node_factory.add_node_name(node, symbol_name);
                 } else {
-                    DAG_node const *node = expr_to_dag(var_exp);
+                    DAG_node const *expr_dag = expr_to_dag(var_exp);
+                    DAG_node const *node = t_name->is_array()
+                        ? expr_dag
+                        : maybe_insert_decl_cast(t_name->get_type(), expr_dag);
                     m_tmp_value_map[var_def] = node;
                 }
             }
@@ -3120,6 +3254,8 @@ DAG_node const *DAG_builder::preset_to_dag(
 {
     IDeclaration_function const *func_decl =
         cast<IDeclaration_function>(orig_mat_def->get_declaration());
+    IType_name const *ret_t_name = func_decl->get_return_type_name();
+    IType const *ret_type = ret_t_name->get_type();
 
     // every parameter of the original material is connected to the corresponding parameter
     // of the preset material
@@ -3136,7 +3272,8 @@ DAG_node const *DAG_builder::preset_to_dag(
 
     IStatement_expression const *stmt = cast<IStatement_expression>(func_decl->get_body());
     IExpression const           *mat_expr = stmt->get_expression();
-    return expr_to_dag(mat_expr);
+    DAG_node const              *expr_dag = expr_to_dag(mat_expr);
+    return ret_t_name->is_array() ? expr_dag : maybe_insert_decl_cast(ret_type, expr_dag);
 }
 
 // Convert an MDL annotation to a DAG IR node.

@@ -266,7 +266,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
             bool enable_shader_cache; // note, this is not really an SDK option but fits here
 
             bool distilling_support_enabled;
-            std::string distilling_target;
+            std::string distill_target;
         };
 
         // ----------------------------------------------------------------------------------------

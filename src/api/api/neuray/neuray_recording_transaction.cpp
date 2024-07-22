@@ -110,7 +110,7 @@ bool Recording_transaction::remove(
     if( !result || remove_local_copy)
         return result;
 
-    for( std::vector<DB::Tag>::iterator it = m_tags.begin(); it != m_tags.end(); ) {
+    for( auto it = m_tags.begin(); it != m_tags.end(); ) {
         if( tag == *it)
           it = m_tags.erase( it);
         else

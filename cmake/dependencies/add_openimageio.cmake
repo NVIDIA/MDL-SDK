@@ -46,6 +46,10 @@ else()
         PRIVATE
             ${MDL_DEPENDENCY_OPENIMAGEIO_INCLUDE}
         )
+    target_compile_options(${__TARGET_ADD_DEPENDENCY_TARGET}
+        PRIVATE
+           "$<$<STREQUAL:${MI_PLATFORM_NAME},linux-aarch64>:-flax-vector-conversions>"
+        )
 
     # link static/shared object
     if(NOT __TARGET_ADD_DEPENDENCY_NO_LINKING)

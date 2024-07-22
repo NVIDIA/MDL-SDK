@@ -84,7 +84,8 @@ void usage(bool ok = false) {
         "    -p <path>              MDL search path, can be given multiple times\n"
         "    -m <mode>              distiller target mode. Ignored if '-test spec' is set\n"
         "    -lm                    list all distiller target modes.\n"
-        "    -lrm                   list the required MDL module names for all loaded distiller targets.\n"
+        "    -lrm                   list the required MDL module names "
+                                    "for all loaded distiller targets.\n"
         "    -class                 uses class instead of instance compilation.\n"
         "                           Note: exports only a material instance though.\n"
         "    -export-spec <v>       MDL version used for export: auto, 1.3, 1.6, or 1.7\n"
@@ -104,7 +105,8 @@ void usage(bool ok = false) {
         "    -no-std-plugin         do not load standard 'mdl_{lod_}distiller.{so|dll} plugins.\n"
         "    -test <type>           run test mode. type is one of: normal, spec.\n"
         "    -test_log <path>       path where to store test results (default is '.').\n"
-        "    -test-targets <list>   override targets for -spec test mode. list is a comma-separated\n"
+        "    -test-targets <list>   override targets for -spec test mode. "
+                                    "list is a comma-separated\n"
         "                           list of target names.\n"
         "                           (default is 'diffuse,specular_glossy,transmissive_pbr,ue4').\n"
         "\n";
@@ -180,7 +182,8 @@ mi::Sint32 load_required_modules(INeuray *neuray,
         char const *module_code = distiller_api->get_required_module_code(target, i);
 
         // Load module.
-        if (mdl_impexp_api->load_module_from_string( transaction, module_name, module_code, context.get()) != 0) {
+        if (mdl_impexp_api->load_module_from_string( transaction, module_name, 
+                    module_code, context.get()) != 0) {
             std::cerr << "message count" << context->get_messages_count() << "\n";
             for (mi::Size j = 0; j < context->get_messages_count(); j++) {
                 Handle<mi::neuraylib::IMessage const> msg(context->get_message(j));
@@ -342,7 +345,8 @@ ICompiled_material const *compile_material(INeuray *neuray,
 ///
 /// The options that enable this function are intended to be used by
 /// the neuray tests, see
-/// http://qaweb.mi.nvidia.com:8090/results/testsuite/overview-current-mdl-distiller-test-binary-trunk.html
+/// http://qaweb.mi.nvidia.com:8090/results/testsuite/
+/// overview-current-mdl-distiller-test-binary-trunk.html
 /// for the current results.
 ///
 /// Depending on the given options, this runs either:
@@ -496,7 +500,8 @@ mi::Sint32 mdl_distill_main( INeuray*    neuray,
         return 1;
     }
 
-    if (load_required_modules(neuray, transaction.get(), mdl_impexp_api.get(), options, target) != 0) {
+    if (load_required_modules(neuray, transaction.get(), mdl_impexp_api.get(), options, 
+                target) != 0) {
         std::cerr << "ERROR: cannot load modules required by target " << target << "\n";
         return 1;
     }
@@ -606,7 +611,9 @@ void list_all_required_modules( INeuray* neuray) {
         std::cerr << "  " << distiller_api->get_target_name(i) << "\n";
         mi::Size m = distiller_api->get_required_module_count(distiller_api->get_target_name(i));
         for (mi::Size t = 0; t < m; t++) {
-            std::cerr << "    " << distiller_api->get_required_module_name(distiller_api->get_target_name(i), t) << "\n";
+            std::cerr << "    " 
+                << distiller_api->get_required_module_name(distiller_api->get_target_name(i), t) 
+                << "\n";
         }
     }
 }
@@ -735,6 +742,8 @@ int main( int argc, char* argv[]) {
                     options.export_spec = mdl_spec_1_7;
                 else if ( 0 == strcmp( "1.8", argv[i]))
                     options.export_spec = mdl_spec_1_8;
+                else if ( 0 == strcmp( "1.9", argv[i]))
+                    options.export_spec = mdl_spec_1_9;
                 else {
                     std::cerr << "Error: unknown argument for -export-spec parameter <v>.\n";
                     usage();
@@ -823,7 +832,8 @@ int main( int argc, char* argv[]) {
                     }
                 }
                 if (test_targets.size() == 0) {
-                    std::cerr << "Error: command line argument -test-targets requires at least one target.\n";
+                    std::cerr << "Error: command line argument -test-targets requires "
+                        "at least one target.\n";
                     usage();
                 }
                 options.test_targets = test_targets;
@@ -896,7 +906,8 @@ int main( int argc, char* argv[]) {
     for (auto& test_target : options.test_targets) {
         // Check for valid target names for all test targets from the command line
         if (!check_target(neuray.get(), test_target.c_str())) {
-            std::cerr << "Error: unknown target '" << test_target << "' for command line argument -test-targets\n";
+            std::cerr << "Error: unknown target '" << test_target 
+                << "' for command line argument -test-targets\n";
             usage();
         }
 

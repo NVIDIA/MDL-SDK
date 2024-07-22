@@ -38,6 +38,7 @@
 #include <mi/base/handle.h>
 #include <mi/base/interface_implement.h>
 #include <mi/neuraylib/iimage_api.h>
+#include <mi/neuraylib/ilogging_configuration.h>
 #include <mi/neuraylib/iplugin_api.h>
 
 #include <boost/core/noncopyable.hpp>
@@ -121,6 +122,12 @@ public:
         const mi::neuraylib::ICanvas* canvas,
         const char* image_format,
         const char* pixel_type,
+        const mi::IMap* export_options) const;
+
+    mi::neuraylib::IBuffer* deprecated_create_buffer_from_canvas(
+        const mi::neuraylib::ICanvas* canvas,
+        const char* image_format,
+        const char* pixel_type,
         const char* quality,
         bool force_default_gamma) const;
 
@@ -193,7 +200,53 @@ private:
 /// A dummy implementation of mi::neuraylib::IPlugin_api, which is used if the real implementation
 /// has not been registered with the PLUG module, e.g., in unit tests.
 ///
-/// The only purpose of this dummy implementation is to provide access to Image_api_impl.
+/// The only purpose of this dummy implementation is to provide access to the forwarding logger.
+class Logging_configuration_impl
+  : public mi::base::Interface_implement<mi::neuraylib::ILogging_configuration>,
+    public boost::noncopyable
+{
+public:
+    Logging_configuration_impl();
+
+    // public API methods (implemented)
+
+    mi::base::ILogger* get_forwarding_logger() const;
+
+    // public API methods (not implemented)
+
+    void set_receiving_logger( mi::base::ILogger* logger);
+
+    mi::base::ILogger* get_receiving_logger() const;
+
+    mi::Sint32 set_log_level( mi::base::Message_severity level);
+
+    mi::base::Message_severity get_log_level() const;
+
+    mi::Sint32 set_log_level_by_category( const char* category, mi::base::Message_severity level);
+
+    mi::base::Message_severity get_log_level_by_category( const char* category) const;
+
+    void set_log_prefix( mi::Uint32 prefix);
+
+    mi::Uint32 get_log_prefix() const;
+
+    mi::Sint32 set_log_priority( mi::Sint32 priority);
+
+    mi::Sint32 get_log_priority() const;
+
+    mi::Sint32 set_log_locally( bool value);
+
+    bool get_log_locally() const;
+
+private:
+    mi::base::Handle<mi::base::ILogger> m_forwarding_logger;
+};
+
+/// A dummy implementation of mi::neuraylib::IPlugin_api, which is used if the real implementation
+/// has not been registered with the PLUG module, e.g., in unit tests.
+///
+/// The only purpose of this dummy implementation is to provide access to Logging_configuration_impl
+/// and Image_api_impl.
 class Plugin_api_impl
   : public mi::base::Interface_implement<mi::neuraylib::IPlugin_api>,
     public boost::noncopyable
@@ -216,6 +269,7 @@ public:
 
 private:
 
+    mi::base::Handle<Logging_configuration_impl> m_logging_configuration;
     mi::base::Handle<Image_api_impl> m_image_api;
 };
 

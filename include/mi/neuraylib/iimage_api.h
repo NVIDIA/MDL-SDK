@@ -32,10 +32,12 @@
 #define MI_NEURAYLIB_IIMAGE_API_H
 
 #include <mi/base/interface_declare.h>
+#include <mi/neuraylib/version.h>
 
 namespace mi {
 
 class IArray;
+class IMap;
 
 namespace neuraylib {
 
@@ -68,6 +70,27 @@ class ITile;
 /// data to/from memory buffers. \if IRAY_API To import images from disk use
 /// #mi::neuraylib::IImport_api::import_canvas(). To export images to disk use
 /// #mi::neuraylib::IExport_api::export_canvas(). \endif
+///
+/// \section mi_image_export_options Image export options
+///
+/// Various methods for image export support options to control details of the export process. The
+/// following general options are currently supported:
+///
+/// - \c bool "force_default_gamma": If enabled, adjusts the gamma value of the exported pixel data
+///   according to the pixel type chosen for export (1.0 for HDR pixel types, 2.2 for LDR pixel
+///   types). Default: \c false.
+///
+/// The following format-specific options are currently supported:
+///
+/// - \c #mi::Uint32 "jpg:quality": The quality of JPG compression in the range from 0 to 100, where
+///   0 is the lowest quality, and 100 is the highest. Default: 100.
+/// - \c std::string "exr:data_type": Indicates the desired data type of the channels. Possible
+///   values: \c "Float16" and \c "Float32". Default: \c "Float32".
+/// - \c bool "exr:create_multipart_for_alpha": If enabled, and if the pixel type has an alpha
+///   channel, creates an OpenEXR multipart image where the RGB and alpha channels are split into
+///   two subimages named "rgb" and "alpha". The advantage is that with a separate subimage the
+///   alpha channel can be kept unassociated without violating the OpenEXR specification.
+///   \if MDL_SOURCE_RELEASE This option requires OpenImageIO >= 2.5.12. \endif Default: \c false.
 class IImage_api : public
     mi::base::Interface_declare<0x4c25a4f0,0x2bac,0x4ce6,0xb0,0xab,0x4d,0x94,0xbf,0xfd,0x97,0xa5>
 {
@@ -272,19 +295,13 @@ public:
     ///                              pixel type. If the requested pixel type is not supported, the
     ///                              argument is ignored and one of the supported formats is chosen
     ///                              instead.
-    /// \param quality               The compression quality is an integer in the range from 0 to
-    ///                              100, where 0 is the lowest quality, and 100 is the highest
-    ///                              quality.
-    /// \param force_default_gamma   If enabled, adjusts the gamma value of the exported pixel data
-    ///                              according to the pixel type chosen for export (1.0 for HDR
-    ///                              pixel types, 2.2 for LDR pixel types).
+    /// \param export_options        See \ref mi_image_export_options for supported options.
     /// \return                      The created buffer, or \c NULL in case of failure.
     virtual IBuffer* create_buffer_from_canvas(
         const ICanvas* canvas,
         const char* image_format,
         const char* pixel_type,
-        const char* quality,
-        bool force_default_gamma = false) const = 0;
+        const IMap* export_options = 0) const = 0;
 
     /// Decodes the pixel data of a memory buffer into a canvas.
     ///
@@ -404,6 +421,8 @@ public:
 
     /// Sets the gamma value of a tile and adjusts the pixel data accordingly.
     ///
+    /// The alpha channel (if present) is always linear and not affected by this operation.
+    ///
     /// \note Gamma adjustments are always done in pixel type "Color" or "Rgb_fp". If necessary,
     ///       the pixel data is converted forth and back automatically (which needs temporary
     ///       buffers).
@@ -414,6 +433,8 @@ public:
     virtual void adjust_gamma( ITile* tile, Float32 old_gamma, Float32 new_gamma) const = 0;
 
     /// Sets the gamma value of a canvas and adjusts the pixel data accordingly.
+    ///
+    /// The alpha channel (if present) is always linear and not affected by this operation.
     ///
     /// \note Gamma adjustments are always done in pixel type "Color" or "Rgb_fp". If necessary,
     ///       the pixel data is converted forth and back automatically (which needs temporary
@@ -480,6 +501,25 @@ public:
 
     //@}
 
+    virtual IBuffer* deprecated_create_buffer_from_canvas(
+        const ICanvas* canvas,
+        const char* image_format,
+        const char* pixel_type,
+        const char* quality,
+        bool force_default_gamma) const = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_15_0
+    inline IBuffer* create_buffer_from_canvas(
+        const ICanvas* canvas,
+        const char* image_format,
+        const char* pixel_type,
+        const char* quality,
+        bool force_default_gamma = false) const
+    {
+        return deprecated_create_buffer_from_canvas(
+            canvas, image_format, pixel_type, quality, force_default_gamma);
+    }
+#endif
 };
 
 /**@}*/ // end group mi_neuray_rendering / mi_neuray_rtmp
@@ -489,3 +529,4 @@ public:
 } // namespace mi
 
 #endif // MI_NEURAYLIB_IIMAGE_API_H
+

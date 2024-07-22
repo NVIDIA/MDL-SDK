@@ -109,7 +109,8 @@ hlsl::Compilation_unit *HLSLWriterBasePass::create_compilation_unit(
     hlsl::ICompiler *compiler,
     char const *name)
 {
-    hlsl::Compilation_unit *unit    = impl_cast<hlsl::Compilation_unit>(compiler->create_unit(name));
+    hlsl::Compilation_unit *unit    =
+        impl_cast<hlsl::Compilation_unit>(compiler->create_unit(name));
     hlsl::Definition_table &def_tab = unit->get_definition_table();
 
     def_tab.transition_to_scope(def_tab.get_predef_scope());
@@ -747,7 +748,9 @@ hlsl::Type *HLSLWriterBasePass::convert_type(
             //   float4[4] -> float4x4
 
             llvm::Type *array_elem_type = array_type->getElementType();
-            if (llvm::FixedVectorType *vt = llvm::dyn_cast<llvm::FixedVectorType>(array_elem_type)) {
+            if (llvm::FixedVectorType *vt =
+                    llvm::dyn_cast<llvm::FixedVectorType>(array_elem_type))
+            {
                 llvm::Type         *vt_elem_type = vt->getElementType();
                 llvm::Type::TypeID type_id       = vt_elem_type->getTypeID();
 

@@ -143,7 +143,8 @@ int test_module( IMdl_impexp_api* mdl_impexp_api,
             material_definition->create_function_call( 0, &result));
         switch ( result) {
         case -3:
-            std::cerr << "ERROR: Material '" << material_name << "' cannot be default initialized.\n";
+            std::cerr << "ERROR: Material '" << material_name 
+                << "' cannot be default initialized.\n";
             return 1;
         case -4:
             std::cerr << "ERROR: Material '" << material_name << "' is not exported.\n";
@@ -333,6 +334,7 @@ const ICompiled_material* mdl_distill( INeuray* neuray,
         case mdl_spec_1_6: std::cerr << "1.6.\n"; break;
         case mdl_spec_1_7: std::cerr << "1.7.\n"; break;
         case mdl_spec_1_8: std::cerr << "1.8.\n"; break;
+        case mdl_spec_1_9: std::cerr << "1.9.\n"; break;
         default: std::cerr << "<UNKNOWN>.\n";  break; // cannot happen
         }
     }
@@ -420,7 +422,8 @@ const ICompiled_material* mdl_distill( INeuray* neuray,
                     bake_paths[i].type == "float" ? "Float32" :
                     bake_paths[i].type == "float3" ? "Float32<3>" : "Rgb_fp";
                 Handle<mi::neuraylib::ICanvas> tex_data( image_api->create_canvas(
-                                                             pixel_type.c_str(), options->bake, options->bake));
+                                                             pixel_type.c_str(), options->bake, 
+                                                             options->bake));
 
                 int bake_res = baker->bake_texture( tex_data.get());
                 bake_time.stop();

@@ -44,12 +44,12 @@ directly inside shaders.
 
   - Integration of MDL in a real-time renderer
   - Using the glTF metallic-roughness support material, as well as other MDL materials and MDLE
-  - Importing the NV_materials_mdl glTF vendor extension (BETA)
+  - Importing the [NV_materials_mdl](https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Vendor/NV_materials_mdl/README.md) glTF vendor extension
 
 \section example_dxr_descr Detailed Description
 
 <dl>
-    <dt><b>The Examples Rendering Framework</b></dt>
+    <dt><b>The Example's Rendering Framework</b></dt>
     <dd><br>
         In order to illustrate the use of MDL in the context of real-time rendering and
         in scenes consisting of multiple objects with different materials, at least a small rendering framework
@@ -88,20 +88,17 @@ directly inside shaders.
 \endcode
         The generated code is written to the binary directory for debugging and inspection purposes: <tt>link_unit_source.hlsl</tt>
 
-        Material parameters are mapped to a \c [dear imgui](https://github.com/ocornut/imgui) user interface,
+        Material parameters are mapped to a [dear imgui](https://github.com/ocornut/imgui) user interface,
         just like in the [\link mi_neuray_example_df_cuda df_cuda example\endlink], so they can be changed at runtime.
         See <tt>mdl_d3d12/mdl_material_info.h</tt>, <tt>gui.h</tt>, and <tt>gui.cpp</tt> for more details.
     </dd>
 
     <dt><b>Specifying MDL Materials in glTF scenes</b></dt>
     <dd><br>
-        The example supports importing the NV_materials_mdl glTF vendor extension which adds support for MDL to
+        The example supports importing the [NV_materials_mdl](https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Vendor/NV_materials_mdl/README.md) glTF vendor extension which adds support for MDL to
         the glTF scene format. The extension allows the definition of function call graphs in the glTF file, which
         can be referenced by the glTF material nodes. Please refer to <tt>mdl_d3d12/mdl_material_description.cpp</tt>
-        and <tt>mdl_d3d12/gltf_nv_materials_mdl.h</tt> for details on how to integrate the extension.
-
-        \note The NV_materials_mdl glTF vendor extension and the implementation in this example are still in BETA
-        and might be subject to change.
+        and <tt>mdl_d3d12/gltf_extensions.h</tt> for details on how to integrate the extension.
 
         Here is an example of a glTF material node with the MDL extension that references a MDL material function
         call defined in the glTF file:
@@ -117,9 +114,9 @@ directly inside shaders.
 }
 
 \endcode
-        Otherwise, glTF also provides a set of parameters that are intended to be used in physically-based rendering (PBR)
+        glTF provides a set of parameters that are intended to be used in physically-based rendering (PBR)
         and is therefore compatible with MDL. This PBR material also acts as a fallback material for the case that
-        the NV_materials_mdl extension is not used. Here is an example for an glTF material node with the PBR model:
+        the NV_materials_mdl extension is not used. Here is an example for a glTF material node with the PBR model:
 \code{.unparsed}
 
 {
@@ -222,16 +219,9 @@ dxr.exe some_folder/my_scene.gltf
           All names starting with `::` literal are interpreted as MDL names and all names ending with
           `.mdle` are interpreted as file paths, which both are unlikely but not impossible to appear by accident.
 
-        - From an MDL perspective, the lack of specifying MDL material parameters in glTF is also a limitation.
-
-        - Many existing glTF scenes make use of extensions like 
-        [KHR_materials_pbrSpecularGlossiness](https://github.com/KhronosGroup/glTF/tree/master/extensions/2.0/Khronos/KHR_materials_pbrSpecularGlossiness). There are no support material for such extensions yet.
-
         - The example is based on a very simple path tracer.
           Multiple importance sampling (MIS) is only used to sample the BSDFs and the environment light.
           Emissive surfaces however are only hit by chance and the progressive rendering requires more time to converge.
-
-        - The example does not include support for measured BSDFs and light profiles.
     </dd>
 </dl>
 

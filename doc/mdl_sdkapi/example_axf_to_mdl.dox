@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-/*! \page mi_neuray_example_axf_to_mdl Example for converting from X-Rite AxF to MDL material formats.
+/*! \page mi_neuray_example_axf_to_mdl Example for converting from X-Rite AxF to MDL material formats
 
 <div align="right">
     [\link mi_neuray_example_optix7 Previous\endlink]

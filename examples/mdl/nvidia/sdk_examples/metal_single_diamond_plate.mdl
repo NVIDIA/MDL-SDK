@@ -157,7 +157,7 @@ export material single_diamond_plate(
 
 ) [[
     anno::copyright_notice (
-    "Copyright 2023 NVIDIA Corporation. All rights reserved."),
+    "Copyright 2024 NVIDIA Corporation. All rights reserved."),
     anno::author("NVIDIA Corporation"),
     anno::display_name("Metal Diamond Plate")
 ]]  = let {

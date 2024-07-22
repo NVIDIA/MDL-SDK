@@ -40,6 +40,7 @@
 #include <chrono>
 #include <TlHelp32.h>
 #include <processthreadsapi.h>
+#include <io.h>
 
 namespace mi { namespace examples { namespace mdl_d3d12
 {
@@ -56,6 +57,7 @@ static std::mutex s_vs_console_mtx;
 static std::atomic<size_t> s_log_file_active_counter = 0;
 static std::mutex s_log_file_mtx;
 static std::ofstream s_log_file;
+static HANDLE s_stderr_handle = nullptr;
 
 static Log_level s_log_level = Log_level::Info;
 
@@ -76,13 +78,44 @@ std::string current_time()
 
 // ------------------------------------------------------------------------------------------------
 
+/// supported colors
+enum class Color {
+    BLACK,
+    RED,
+    GREEN,
+    YELLOW,
+    BLUE,
+    MAGENTA,
+    CYAN,
+    WHITE,
+    DEFAULT
+};
 
+void set_current_color(unsigned color)
+{
+    if (s_stderr_handle)
+        SetConsoleTextAttribute(s_stderr_handle, (WORD)color);
+}
+
+static unsigned get_current_color()
+{
+    if (s_stderr_handle)
+    {
+        CONSOLE_SCREEN_BUFFER_INFO csbi;
+        if (GetConsoleScreenBufferInfo(s_stderr_handle, &csbi))
+            return csbi.wAttributes;
+    }
+    return 0;
+}
+
+// ------------------------------------------------------------------------------------------------
 
 void print(
     const std::string& prefix,
     const std::string& message,
     const std::string& file,
-    int line)
+    int line,
+    Color color = Color::DEFAULT)
 {
     std::string m = current_time();
     m.append(prefix);
@@ -101,15 +134,47 @@ void print(
     }
 
     s_cerr_active_counter++;
-    std::thread task_cerr([m]() {
+    std::thread task_cerr([m, color]() {
         std::lock_guard<std::mutex> lock(s_cerr_mtx);
-        std::cerr << m.c_str();
+        std::cerr << std::flush;
+        WORD attr = get_current_color();
+        attr &= ~(FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
+        switch (color) {
+            case Color::BLACK:
+                break;
+            case Color::RED:
+                attr |= FOREGROUND_RED;
+                break;
+            case Color::GREEN:
+                attr |= FOREGROUND_GREEN;
+                break;
+            case Color::YELLOW:
+                attr |= FOREGROUND_GREEN | FOREGROUND_RED;
+                break;
+            case Color::BLUE:
+                attr |= FOREGROUND_BLUE;
+                break;
+            case Color::MAGENTA:
+                attr |= FOREGROUND_BLUE | FOREGROUND_RED;
+                break;
+            case Color::CYAN:
+                attr |= FOREGROUND_BLUE | FOREGROUND_GREEN;
+                break;
+            case Color::WHITE:
+            case Color::DEFAULT:
+                attr |= FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+                break;
+        }
+        set_current_color(attr);
+        std::cerr << m.c_str() << std::flush;
+        set_current_color(attr | FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
+        std::cerr << std::flush;
         s_cerr_active_counter--;
     });
     task_cerr.detach();
 
     s_vs_console_active_counter++;
-    std::thread task_vs_console([m]() {
+    std::thread task_vs_console([m, color]() {
         std::lock_guard<std::mutex> lock(s_vs_console_mtx);
         OutputDebugStringA(m.c_str());
         s_vs_console_active_counter--;
@@ -159,6 +224,8 @@ std::string to_string(HRESULT error_code)
             return "S_FALSE";
         case S_OK:
             return "S_OK";
+        case ((HRESULT)0x887E0003L):
+            return "The D3D12 SDK version configuration of the host exe is invalid.";
         default:
             return "";
     }
@@ -328,9 +395,10 @@ std::string evaluate_dred()
             output += "\nExisting DRED Allocation Nodes:";
             while (current && current_node_i < max_nodes_to_print)
             {
+                const char* name = current->ObjectNameA ? current->ObjectNameA : "<unnamed>";
                 output += mi::examples::strings::format("\n[%03d][type=%d] %s",
-                    current_node_i, current->AllocationType, current->ObjectNameA);
-                output += current->ObjectNameA;
+                    current_node_i, current->AllocationType, name);
+                output += name;
 
                 current = current->pNext;
                 current_node_i++;
@@ -342,9 +410,10 @@ std::string evaluate_dred()
             output += "\nRecent Freed DRED Allocation Nodes:";
             while (current && current_node_i < max_nodes_to_print)
             {
+                const char* name = current->ObjectNameA ? current->ObjectNameA : "<unnamed>";
                 output += mi::examples::strings::format("\n[%03d][type=%d] %s",
-                    current_node_i, current->AllocationType, current->ObjectNameA);
-                output += current->ObjectNameA;
+                    current_node_i, current->AllocationType, name);
+                output += name;
 
                 current = current->pNext;
                 current_node_i++;
@@ -385,6 +454,47 @@ void set_log_level(Log_level level)
 
 // ------------------------------------------------------------------------------------------------
 
+void enable_color_output(bool value)
+{
+    if (value)
+    {
+        s_stderr_handle = GetStdHandle(STD_ERROR_HANDLE);
+    }
+    else
+    {
+        s_stderr_handle = nullptr;
+    }
+}
+
+
+// ------------------------------------------------------------------------------------------------
+
+void log(Log_level level,const std::string& message, const std::string& file, int line)
+{
+    switch (level)
+    {
+        break;
+    case mi::examples::mdl_d3d12::Log_level::Error:
+        log_error(message, file, line);
+        break;
+    case mi::examples::mdl_d3d12::Log_level::Warning:
+        log_warning(message, file, line);
+        break;
+    case mi::examples::mdl_d3d12::Log_level::Info:
+        log_info(message, file, line);
+        break;
+    case mi::examples::mdl_d3d12::Log_level::Verbose:
+        log_verbose(message, file, line);
+        break;
+
+    case mi::examples::mdl_d3d12::Log_level::None:
+    default:
+        break;
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+
 void log_verbose(const std::string& message, const std::string& file, int line)
 {
     if (static_cast<char>(s_log_level) < static_cast<char>(Log_level::Verbose))
@@ -410,7 +520,7 @@ void log_warning(const std::string& message, const std::string& file, int line)
     if (static_cast<char>(s_log_level) < static_cast<char>(Log_level::Warning))
         return;
 
-    print("[MDL_D3D12] [WARNING] ", message, file, line);
+    print("[MDL_D3D12] [WARNING] ", message, file, line, Color::YELLOW);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -420,7 +530,7 @@ void log_error(const std::string& message, const std::string& file, int line)
     if (static_cast<char>(s_log_level) < static_cast<char>(Log_level::Error))
         return;
 
-    print("[MDL_D3D12] [ERROR]   ", message, file, line);
+    print("[MDL_D3D12] [ERROR]   ", message, file, line, Color::RED);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -431,14 +541,14 @@ void log_error(
     const std::string& file, int line)
 {
     print("[MDL_D3D12] [ERROR]   ",
-        message + " " + print_nested_exception(exception), file, line);
+        message + " " + print_nested_exception(exception), file, line, Color::RED);
 }
 
 // ------------------------------------------------------------------------------------------------
 
 void log_error(const std::exception& exception, const std::string& file, int line)
 {
-    print("[MDL_D3D12] [ERROR]   ", print_nested_exception(exception), file, line);
+    print("[MDL_D3D12] [ERROR]   ", print_nested_exception(exception), file, line, Color::RED);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -450,10 +560,11 @@ bool log_on_failure(
         return false;
 
     std::string readable_error = to_string(error_code);
+    std::string readable_error_code = mi::examples::strings::format("0x%X", unsigned int(error_code));
     if (!readable_error.empty())
-        readable_error += " (" + std::to_string(error_code) + ")";
+        readable_error += " (" + readable_error_code + ")";
     else
-        readable_error = std::to_string(error_code);
+        readable_error = readable_error_code;
 
     if (error_code == DXGI_ERROR_DEVICE_REMOVED || error_code == DXGI_ERROR_DEVICE_RESET)
     {
@@ -462,7 +573,7 @@ bool log_on_failure(
 
     print("[MDL_D3D12] [FAILURE] ",
             message + "\n                     return code: " + readable_error,
-            file, line);
+            file, line, Color::RED);
     return true;
 }
 
@@ -618,7 +729,7 @@ void Profiling::print_statistics() const
 
 // ------------------------------------------------------------------------------------------------
 
-void Diagnostics::list_loaded_libraries()
+void Diagnostics::list_loaded_libraries(Log_level level)
 {
     DWORD process_id = GetCurrentProcessId();
     HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPALL, process_id);
@@ -649,7 +760,7 @@ void Diagnostics::list_loaded_libraries()
     for(auto& e : module_list)
         msg += mi::examples::strings::format("\n    %s", e.c_str());
 
-    log_verbose(msg);
+    log(level, msg);
 }
 
 }}} // mi::examples::mdl_d3d12

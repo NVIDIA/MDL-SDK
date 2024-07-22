@@ -840,8 +840,8 @@ public:
     ///
     /// \return if type is a deferred size array type and instancing is enabled, the immediate
     ///         size instance of this type, else -1
-    int instantiate_type_size(
-        mi::mdl::IType const *type) const MDL_WARN_UNUSED_RESULT;
+    MDL_CHECK_RESULT int instantiate_type_size(
+        mi::mdl::IType const *type) const;
 
     /// Get the tex_lookup function address for a given vtable index.
     ///

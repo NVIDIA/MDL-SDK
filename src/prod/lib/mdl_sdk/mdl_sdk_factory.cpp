@@ -42,15 +42,15 @@ mi::neuraylib::INeuray* mi_neuray_factory_deprecated(
     mi::neuraylib::IAllocator* allocator, mi::Uint32 version)
 {
     if( version != MI_NEURAYLIB_API_VERSION)
-        return 0;
+        return nullptr;
 
     // Reject user-supplied allocators which are not supported.
     if( allocator)
-        return 0;
+        return nullptr;
 
     if( ++MI::MDL::Neuray_impl::s_instance_count != 1) {
         --MI::MDL::Neuray_impl::s_instance_count;
-         return 0;
+         return nullptr;
     }
 
     return new MI::MDL::Neuray_impl();
@@ -58,21 +58,20 @@ mi::neuraylib::INeuray* mi_neuray_factory_deprecated(
 
 extern "C"
 MI_DLL_EXPORT
-mi::base::IInterface* mi_factory(
-    const mi::base::Uuid& iid)
+mi::base::IInterface* mi_factory( const mi::base::Uuid& iid)
 {
-    switch ( uuid_hash32( iid))
+    switch( uuid_hash32( iid))
     {
-    case mi::neuraylib::INeuray::IID::hash32:
-        if( ++MI::MDL::Neuray_impl::s_instance_count != 1) {
-            --MI::MDL::Neuray_impl::s_instance_count;
-            return 0;
-        }
-        return new MI::MDL::Neuray_impl();
-    case mi::neuraylib::IVersion::IID::hash32:
-        return new MI::NEURAY::Version_impl();
-    default:
-        break;
+        case mi::neuraylib::INeuray::IID::hash32:
+            if( ++MI::MDL::Neuray_impl::s_instance_count != 1) {
+                --MI::MDL::Neuray_impl::s_instance_count;
+                return nullptr;
+            }
+            return new MI::MDL::Neuray_impl();
+        case mi::neuraylib::IVersion::IID::hash32:
+            return new MI::NEURAY::Version_impl();
+        default:
+            break;
     }
-    return 0;
+    return nullptr;
 }

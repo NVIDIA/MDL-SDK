@@ -636,7 +636,7 @@ export material gltf_material(
     // ------------------------------------------------------------------------
     float4 base_float4 = gltf_prepare_tex_float4(base_color_texture) * scene::data_lookup_float4("COLOR_0", float4(1.0)); // apply vertex color
     color base_color = base_color_factor * color(base_float4.x, base_float4.y, base_float4.z);
-    float alpha = base_alpha * math::pow(base_float4.w, 1.0/2.2);
+    float alpha = base_alpha * base_float4.w;
 
     float3 metallic_roughness = gltf_prepare_tex_float3(metallic_roughness_texture);
     float metallic = metallic_factor * metallic_roughness.z;
@@ -907,11 +907,11 @@ export material gltf_material_khr_specular_glossiness(
     // ------------------------------------------------------------------------
     float4 diffuse_float4 = gltf_prepare_tex_float4(diffuse_texture) * scene::data_lookup_float4("COLOR_0", float4(1.0)); // apply vertex color
     color diffuse = diffuse_factor * color(diffuse_float4.x, diffuse_float4.y, diffuse_float4.z);
-    float alpha = base_alpha * math::pow(diffuse_float4.w, 1.0/2.2);
+    float alpha = base_alpha * diffuse_float4.w;
 
     float4 specular_glossiness = gltf_prepare_tex_float4(specular_glossiness_texture);
     color specular = specular_factor * color(specular_glossiness.x, specular_glossiness.y, specular_glossiness.z);
-    float glossiness = glossiness_factor * math::pow(specular_glossiness.w, 1.0/2.2);
+    float glossiness = glossiness_factor * specular_glossiness.w;
 
     float3 normal = gltf_prepare_normal(normal_texture);
     float occlusion = gltf_prepare_occlusion(occlusion_texture, occlusion_strength);
@@ -926,24 +926,24 @@ export material gltf_material_khr_specular_glossiness(
 
     float a = (1.0 - glossiness) * (1.0 - glossiness);
 
-	// diffuse BRDF
-	bsdf diffuse_brdf = df::diffuse_reflection_bsdf(
+        // diffuse BRDF
+        bsdf diffuse_brdf = df::diffuse_reflection_bsdf(
         tint: diffuse * occlusion, 
         roughness: 0.0);
 
-	// specular BRDF
-	bsdf specular_brdf = df::microfacet_ggx_smith_bsdf(
+        // specular BRDF
+        bsdf specular_brdf = df::microfacet_ggx_smith_bsdf(
         tint: color(occlusion),
-	    roughness_u: a, 
+            roughness_u: a, 
         roughness_v: a, 
         tangent_u: state::texture_tangent_u(0));
-	bsdf tinted_specular =  df::directional_factor(normal_tint: F_0_tint, grazing_tint: color(1.0), exponent: 5.0, base: specular_brdf);
-	//- Custom curve for specular/diffuse angular mix
-	bsdf diffuse_specular_mix = df::custom_curve_layer(
+        bsdf tinted_specular =  df::directional_factor(normal_tint: F_0_tint, grazing_tint: color(1.0), exponent: 5.0, base: specular_brdf);
+        //- Custom curve for specular/diffuse angular mix
+        bsdf diffuse_specular_mix = df::custom_curve_layer(
         normal_reflectivity: F_0, 
         grazing_reflectivity: 1.0, 
         exponent: 5.0, 
-		weight: 1.0, 
+                weight: 1.0, 
         layer: tinted_specular, 
         base: diffuse_brdf, 
         normal: normal);

@@ -34,9 +34,11 @@
 //   SET_MATERIAL_TEXTURES_INDICES     : The set index for the array of material texture array indices
 //   SET_MATERIAL_TEXTURES_2D          : The set index for the array of material 2D textures
 //   SET_MATERIAL_TEXTURES_3D          : The set index for the array of material 3D textures
+//   SET_MATERIAL_ARGUMENT_BLOCK       : The set index for the material argument block buffer
 //   BINDING_MATERIAL_TEXTURES_INDICES : The binding index for the array of material texture array indices
 //   BINDING_MATERIAL_TEXTURES_2D      : The binding index for the array of material 2D textures
 //   BINDING_MATERIAL_TEXTURES_3D      : The binding index for the array of material 3D textures
+//   BINDING_MATERIAL_ARGUMENT_BLOCK   : The binding index for the material argument block buffer
 
 #ifndef MDL_RUNTIME_GLSL
 #define MDL_RUNTIME_GLSL
@@ -72,6 +74,13 @@ layout(set = SET_MATERIAL_TEXTURES_3D, binding = BINDING_MATERIAL_TEXTURES_3D)
 uniform sampler3D uMaterialTextures3D[NUM_MATERIAL_TEXTURES_3D];
 #endif // (NUM_MATERIAL_TEXTURES_3D > 0)
 
+// The material argument block used for dynamic parameters in class compilation mode
+layout(std430, set = SET_MATERIAL_ARGUMENT_BLOCK, binding = BINDING_MATERIAL_ARGUMENT_BLOCK)
+readonly restrict buffer ArgumentBlockBuffer
+{
+    uint uMaterialArgumentBlock[];
+};
+
 
 //-----------------------------------------------------------------------------
 // MDL data types and constants
@@ -106,95 +115,148 @@ uniform sampler3D uMaterialTextures3D[NUM_MATERIAL_TEXTURES_3D];
 
 #define BSDF_USE_MATERIAL_IOR (-1.0)
 
+/// Flags controlling the calculation of DF results.
+/// This cannot be represented as a real enum, because the MDL SDK HLSL backend only sees enums
+/// as ints on LLVM level and would create wrong types for temporary variables
+#define Df_flags                             int
+#define DF_FLAGS_NONE                        0               ///< allows nothing -> black
+#define DF_FLAGS_ALLOW_REFLECT               1
+#define DF_FLAGS_ALLOW_TRANSMIT              2
+#define DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT  (DF_FLAGS_ALLOW_REFLECT | DF_FLAGS_ALLOW_TRANSMIT)
+#define DF_FLAGS_ALLOWED_SCATTER_MODE_MASK   (DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT)
+#define DF_FLAGS_FORCE_32_BIT                0xffffffffU
+
+
 struct State
 {
-    vec3 normal;
-    vec3 geom_normal;
-    vec3 position;
-    float animation_time;
-    vec3 text_coords[1];
-    vec3 tangent_u[1];
-    vec3 tangent_v[1];
-    int ro_data_segment_offset;
-    mat4 world_to_object;
-    mat4 object_to_world;
-    int object_id;
-    float meters_per_scene_unit;
-    int arg_block_offset;
+    vec3   normal;
+    vec3   geom_normal;
+    vec3   position;
+    float  animation_time;
+    vec3   text_coords[1];
+    vec3   tangent_u[1];
+    vec3   tangent_v[1];
+    vec4   text_results[16];
+    int    ro_data_segment_offset;
+    mat4   world_to_object;
+    mat4   object_to_world;
+    int    object_id;
+    float  meters_per_scene_unit;
+    int    arg_block_offset;
 };
 
 struct Bsdf_sample_data
 {
-    /*Input*/ vec3 ior1;           // IOR current med
-    /*Input*/ vec3 ior2;           // IOR other side
-    /*Input*/ vec3 k1;             // outgoing direction
-    /*Output*/ vec3 k2;            // incoming direction
-    /*Input*/ vec4 xi;             // pseudo-random sample numbers in range [0, 1)
-    /*Output*/ float pdf;          // pdf (non-projected hemisphere)
-    /*Output*/ vec3 bsdf_over_pdf; // bsdf * dot(normal, k2) / pdf
-    /*Output*/ int event_type;     // the type of event for the generated sample
-    /*Output*/ int handle;         // handle of the sampled elemental BSDF (lobe)
+    /*Input*/  vec3      ior1;            // IOR current med
+    /*Input*/  vec3      ior2;            // IOR other side
+    /*Input*/  vec3      k1;              // outgoing direction
+    /*Output*/ vec3      k2;              // incoming direction
+    /*Input*/  vec4      xi;              // pseudo-random sample numbers in range [0, 1)
+    /*Output*/ float     pdf;             // pdf (non-projected hemisphere)
+    /*Output*/ vec3      bsdf_over_pdf;   // bsdf * dot(normal, k2) / pdf
+    /*Output*/ int       event_type;      // the type of event for the generated sample
+    /*Output*/ int       handle;          // handle of the sampled elemental BSDF (lobe)
+    /*Input*/  Df_flags  flags;           // flags controlling calculation of result
+                                          // (optional depending on backend options)
 };
 
 struct Bsdf_evaluate_data
 {
-    /*Input*/ vec3 ior1;          // IOR current medium
-    /*Input*/ vec3 ior2;          // IOR other side
-    /*Input*/ vec3 k1;            // outgoing direction
-    /*Input*/ vec3 k2;            // incoming direction
-    /*Output*/ vec3 bsdf_diffuse; // bsdf_diffuse * dot(normal, k2)
-    /*Output*/ vec3 bsdf_glossy;  // bsdf_glossy * dot(normal, k2)
-    /*Output*/ float pdf;         // pdf (non-projected hemisphere)
-};
-
-struct Bsdf_auxiliary_data
-{
-    /*Input*/ vec3 ior1;    // IOR current medium
-    /*Input*/ vec3 ior2;    // IOR other side
-    /*Input*/ vec3 k1;      // outgoing direction
-    /*Output*/ vec3 albedo_diffuse;
-    /*Output*/ vec3 albedo_glossy;
-    /*Output*/ vec3 normal;
-    /*Output*/ vec3 roughness;
+    /*Input*/  vec3      ior1;            // IOR current medium
+    /*Input*/  vec3      ior2;            // IOR other side
+    /*Input*/  vec3      k1;              // outgoing direction
+    /*Input*/  vec3      k2;              // incoming direction
+    /*Output*/ vec3      bsdf_diffuse;    // bsdf_diffuse * dot(normal, k2)
+    /*Output*/ vec3      bsdf_glossy;     // bsdf_glossy * dot(normal, k2)
+    /*Output*/ float     pdf;             // pdf (non-projected hemisphere)
+    /*Input*/  Df_flags  flags;           // flags controlling calculation of result
+                                          // (optional depending on backend options)
 };
 
 struct Bsdf_pdf_data
 {
-    /*Input*/ vec3 ior1;  // IOR current medium
-    /*Input*/ vec3 ior2;  // IOR other side
-    /*Input*/ vec3 k1;    // outgoing direction
-    /*Input*/ vec3 k2;    // incoming direction
-    /*Output*/ float pdf; // pdf (non-projected hemisphere)
+    /*Input*/  vec3      ior1;            // IOR current medium
+    /*Input*/  vec3      ior2;            // IOR other side
+    /*Input*/  vec3      k1;              // outgoing direction
+    /*Input*/  vec3      k2;              // incoming direction
+    /*Output*/ float     pdf;             // pdf (non-projected hemisphere)
+    /*Input*/  Df_flags  flags;           // flags controlling calculation of result
+                                          // (optional depending on backend options)
+};
+
+struct Bsdf_auxiliary_data
+{
+    /*Input*/  vec3      ior1;            // IOR current medium
+    /*Input*/  vec3      ior2;            // IOR other side
+    /*Input*/  vec3      k1;              // outgoing direction
+    /*Output*/ vec3      albedo_diffuse;  // (diffuse part of the) albedo
+    /*Output*/ vec3      albedo_glossy;   // (glossy part of the) albedo
+    /*Output*/ vec3      normal;          // normal
+    /*Output*/ vec3      roughness;       // glossy roughness_u, glossy roughness_v, bsdf_weight
+    /*Input*/  Df_flags  flags;           // flags controlling calculation of result
+                                          // (optional depending on backend options)
 };
 
 struct Edf_sample_data
 {
-    /*Input*/ vec4 xi;            // pseudo-random sample numbers in range [0, 1)
-    /*Output*/ vec3 k1;           // outgoing direction
-    /*Output*/ float pdf;         // pdf (non-projected hemisphere)
-    /*Output*/ vec3 edf_over_pdf; // edf * dot(normal,k1) / pdf
-    /*Output*/ int event_type;    // the type of event for the generated sample
-    /*Output*/ int handle;        // handle of the sampled elemental EDF (lobe)
+    /*Input*/  vec4   xi;                 // pseudo-random sample numbers in range [0, 1)
+    /*Output*/ vec3   k1;                 // outgoing direction
+    /*Output*/ float  pdf;                // pdf (non-projected hemisphere)
+    /*Output*/ vec3   edf_over_pdf;       // edf * dot(normal,k1) / pdf
+    /*Output*/ int    event_type;         // the type of event for the generated sample
+    /*Output*/ int    handle;             // handle of the sampled elemental EDF (lobe)
 };
 
 struct Edf_evaluate_data
 {
-    /*Input*/ vec3 k1;    // outgoing direction
-    /*Output*/ float cos; // dot(normal, k1)
-    /*Output*/ vec3 edf;  // edf
-    /*Output*/ float pdf; // pdf (non-projected hemisphere)
-};
-
-struct Edf_auxiliary_data
-{
-    /*Input*/ vec3 k1; // outgoing direction
+    /*Input*/  vec3   k1;                 // outgoing direction
+    /*Output*/ float  cos;                // dot(normal, k1)
+    /*Output*/ vec3   edf;                // edf
+    /*Output*/ float  pdf;                // pdf (non-projected hemisphere)
 };
 
 struct Edf_pdf_data
 {
-    /*Input*/ vec3 k1;    // outgoing direction
-    /*Output*/ float pdf; // pdf (non-projected hemisphere)
+    /*Input*/  vec3   k1;                 // outgoing direction
+    /*Output*/ float  pdf;                // pdf (non-projected hemisphere)
 };
+
+struct Edf_auxiliary_data
+{
+    /*Input*/  vec3   k1;                 // outgoing direction
+};
+
+
+// ------------------------------------------------------------------------------------------------
+// Argument block access for dynamic parameters in class compilation mode
+// ------------------------------------------------------------------------------------------------
+
+float mdl_read_argblock_as_float(int offs)
+{
+    return uintBitsToFloat(uMaterialArgumentBlock[offs >> 2]);
+}
+
+double mdl_read_argblock_as_double(int offs)
+{
+    return packDouble2x32(
+        uvec2(uMaterialArgumentBlock[offs >> 2], uMaterialArgumentBlock[(offs >> 2) + 1]));
+}
+
+int mdl_read_argblock_as_int(int offs)
+{
+    return int(uMaterialArgumentBlock[offs >> 2]);
+}
+
+uint mdl_read_argblock_as_uint(int offs)
+{
+    return uMaterialArgumentBlock[offs >> 2];
+}
+
+bool mdl_read_argblock_as_bool(int offs)
+{
+    uint val = uMaterialArgumentBlock[offs >> 2];
+    return (val & (0xff << (8 * (offs & 3)))) != 0;
+}
 
 
 //-----------------------------------------------------------------------------

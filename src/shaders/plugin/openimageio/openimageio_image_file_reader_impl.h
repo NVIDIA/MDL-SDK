@@ -52,7 +52,7 @@ class Image_file_reader_impl : public mi::base::Interface_implement<mi::neurayli
 public:
     /// Constructor.
     Image_file_reader_impl(
-        const std::string& oiio_format,
+        std::string oiio_format,
         const std::string& plugin_name,
         mi::neuraylib::IImage_api* image_api,
         mi::neuraylib::IReader* reader,

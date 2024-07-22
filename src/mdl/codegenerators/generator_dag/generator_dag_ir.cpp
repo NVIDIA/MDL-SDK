@@ -677,7 +677,7 @@ int DAG_node_factory_impl::get_field_index(
                 string field(dot, n - dot, get_allocator());
 
                 if (IType_struct const *s_type = as<IType_struct>(c_type)) {
-                    return s_type->find_field(field.c_str());
+                    return s_type->find_field_index(field.c_str());
                 }
             }
         }
@@ -1171,36 +1171,51 @@ DAG_node const *DAG_node_factory_impl::create_call(
     // - texture constructors
     switch (sema) {
     case IDefinition::DS_ELEM_CONSTRUCTOR:
-        if (num_call_args == 6 && is_material_type(ret_type)) {
-            DAG_call::Call_argument n_call_args[7];
+        if (is_material_type(ret_type)) {
+            if (num_call_args == 6) {
+                DAG_call::Call_argument n_call_args[7];
 
-            Type_factory &tf = *m_value_factory.get_type_factory();
+                Type_factory &tf = *m_value_factory.get_type_factory();
 
-            MDL_ASSERT(strcmp(
-                name,
-                "material$1.4(bool,material_surface,material_surface,"
-                "color,material_volume,material_geometry)") == 0);
+                MDL_ASSERT(strcmp(
+                    name,
+                    "material$1.4(bool,material_surface,material_surface,"
+                    "color,material_volume,material_geometry)") == 0);
 
-            n_call_args[0] = call_args[0];
-            n_call_args[1] = call_args[1];
-            n_call_args[2] = call_args[2];
-            n_call_args[3] = call_args[3];
-            n_call_args[4] = call_args[4];
-            n_call_args[5] = call_args[5];
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2] = call_args[2];
+                n_call_args[3] = call_args[3];
+                n_call_args[4] = call_args[4];
+                n_call_args[5] = call_args[5];
 
-            n_call_args[6].param_name = "hair";
-            n_call_args[6].arg        =
-                create_constant(m_value_factory.create_invalid_ref(tf.create_hair_bsdf()));
+                n_call_args[6].param_name = "hair";
+                n_call_args[6].arg        =
+                    create_constant(m_value_factory.create_invalid_ref(tf.create_hair_bsdf()));
 
-            // map to material 1.5 constructor
-            name = "material(bool,material_surface,material_surface,"
+                // map to material 1.9 constructor
+                name = "material(bool,material_surface,material_surface,"
+                        "color,material_volume,material_geometry,hair_bsdf)";
+                return create_call(
+                    name,
+                    IDefinition::DS_ELEM_CONSTRUCTOR,
+                    n_call_args,
+                    dimension_of(n_call_args),
+                    ret_type);
+            } else if (num_call_args == 7 &&
+                strcmp(name, "material$1.8(bool,material_surface,material_surface,"
+                    "color,material_volume,material_geometry,hair_bsdf)") == 0)
+            {
+                // map to material 1.9 constructor
+                name = "material(bool,material_surface,material_surface,"
                     "color,material_volume,material_geometry,hair_bsdf)";
-            return create_call(
-                name,
-                IDefinition::DS_ELEM_CONSTRUCTOR,
-                n_call_args,
-                dimension_of(n_call_args),
-                ret_type);
+                return create_call(
+                    name,
+                    IDefinition::DS_ELEM_CONSTRUCTOR,
+                    call_args,
+                    num_call_args,
+                    ret_type);
+            }
         }
         if (num_call_args == 3 && is_material_volume_type(ret_type)) {
             DAG_call::Call_argument n_call_args[4];
@@ -1239,7 +1254,7 @@ DAG_node const *DAG_node_factory_impl::create_call(
 
             if (shape == IType_texture::TS_2D || shape == IType_texture::TS_3D) {
                 if (num_call_args == 2) {
-                    // pre MDl 1.7 constructor, add selector
+                    // pre MDL 1.7 constructor, add selector
 
                     n_call_args[0] = call_args[0];
                     n_call_args[1] = call_args[1];
@@ -1267,9 +1282,11 @@ DAG_node const *DAG_node_factory_impl::create_call(
                 DAG_node const *gamma    = call_args[1].arg;
                 DAG_node const *selector = call_args[2].arg;
 
-                if (is<DAG_constant>(url) && !is<DAG_constant>(gamma) && is<DAG_constant>(selector)) {
+                if (is<DAG_constant>(url) &&
+                    !is<DAG_constant>(gamma) && is<DAG_constant>(selector))
+                {
                     return do_avoid_non_const_gamma(
-                        as<IType_texture>(ret_type),
+                        cast<IType_texture>(ret_type),
                         cast<DAG_constant>(url),
                         gamma,
                         cast<DAG_constant>(selector));
@@ -2919,6 +2936,12 @@ bool DAG_node_factory_impl::enable_unsafe_math_opt(bool flag)
     return res;
 }
 
+// Return unsafe math optimization flag.
+bool DAG_node_factory_impl::get_unsafe_math_opt() const
+{
+    return m_unsafe_math_opt;
+}
+
 // Get the type factory associated with this expression factory.
 Type_factory *DAG_node_factory_impl::get_type_factory()
 {
@@ -2959,7 +2982,7 @@ static bool is_matrix_typed(IType const *type) {
     if (is_deriv_type(type)) {
         type = get_deriv_base_type(type);
     }
-    return as<IType_matrix>(type) != NULL;
+    return is<IType_matrix>(type->skip_type_alias());
 }
 
 /// Check if the given expression is of vector type.
@@ -2967,7 +2990,7 @@ static bool is_vector_typed(IType const *type) {
     if (is_deriv_type(type)) {
         type = get_deriv_base_type(type);
     }
-    return as<IType_vector>(type) != NULL;
+    return is<IType_vector>(type->skip_type_alias());
 }
 
 /// Check if the given expression is of matrix type.
@@ -3023,6 +3046,7 @@ bool DAG_node_factory_impl::normalize(
             }
         }
         // fall through symmetric cases
+        MDL_FALLTHROUGH
     case IExpression_binary::OK_PLUS:
     case IExpression_binary::OK_EQUAL:
     case IExpression_binary::OK_NOT_EQUAL:
@@ -3030,6 +3054,7 @@ bool DAG_node_factory_impl::normalize(
     case IExpression_binary::OK_BITWISE_XOR:
     case IExpression_binary::OK_BITWISE_OR:
         // symmetric ones
+        MDL_FALLTHROUGH
     case IExpression_binary::OK_LOGICAL_AND:
     case IExpression_binary::OK_LOGICAL_OR:
         // && and || are strict inside materials, hence they are symmetric
@@ -3226,11 +3251,10 @@ IValue const *DAG_node_factory_impl::evaluate_constructor(
     case IDefinition::DS_ELEM_CONSTRUCTOR:
         // an element wise constructor build a value from all its argument values
         if (IType_compound const *c_type = as<IType_compound>(ret_type)) {
-            if (IType_struct const *s_type = as<IType_struct>(ret_type)) {
-                if (s_type->get_predefined_id() == IType_struct::SID_MATERIAL) {
-                    // do not fold the material, later code expects it unfolded
-                    break;
-                }
+            // Constructor calls for (standard or user-defined) materials are not folded 
+            // into constants.
+            if (is_material_category_type(ret_type)) {
+                break;
             }
 
             size_t n_fields = c_type->get_compound_size();
@@ -3856,7 +3880,7 @@ DAG_call const *DAG_node_factory_impl::value_to_constructor(
 
     IType_struct const *type = v->get_type();
 
-    int n_fields = type->get_field_count();
+    size_t n_fields = type->get_field_count();
     Small_VLA<DAG_call::Call_argument, 8> args(get_allocator(), n_fields);
 
     Name_printer printer(get_allocator());
@@ -3864,20 +3888,17 @@ DAG_call const *DAG_node_factory_impl::value_to_constructor(
     printer.print(type->get_symbol()->get_name());
     printer.print('(');
 
-    for (int i = 0; i < n_fields; ++i) {
-        ISymbol const *f_sym;
-        IType const *f_type;
+    for (size_t i = 0; i < n_fields; ++i) {
+        IType_struct::Field const *field = type->get_field(i);
 
-        type->get_field(i, f_type, f_sym);
-
-        args[i].param_name = f_sym->get_name();
-        args[i].arg = create_constant(v->get_value(i));
+        args[i].param_name = field->get_symbol()->get_name();
+        args[i].arg        = create_constant(v->get_value(i));
 
         if (i != 0) {
             printer.print(',');
         }
 
-        printer.print(f_type->skip_type_alias());
+        printer.print(field->get_type()->skip_type_alias());
     }
 
     printer.print(')');

@@ -91,7 +91,7 @@ MI_TEST_AUTO_FUNCTION( test_idebug_configuration )
         run_tests( neuray.get());
     }
 
-    neuray = 0;
+    neuray = nullptr;
     MI_CHECK( unload());
 }
 

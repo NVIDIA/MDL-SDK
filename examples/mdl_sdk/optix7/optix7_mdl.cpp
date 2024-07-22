@@ -826,7 +826,7 @@ void optix_context_log_cb(unsigned int level, const char* tag, const char* messa
 }
 
 
-void createContext(PathTracerState &state, int cuda_device_id)
+void createContext(PathTracerState &state, int cuda_device_id, bool disable_optix_cache)
 {
     Timing timing("create OptiX context");
 
@@ -841,6 +841,10 @@ void createContext(PathTracerState &state, int cuda_device_id)
     options.logCallbackFunction = &optix_context_log_cb;
     options.logCallbackLevel = 4;
     OPTIX_CHECK(optixDeviceContextCreate(cu_ctx, &options, &context));
+
+    if (disable_optix_cache) {
+        OPTIX_CHECK(optixDeviceContextSetCacheEnabled(context, 0));
+    }
 
     state.context = context;
 
@@ -2199,22 +2203,23 @@ private:
 
 void printUsageAndExit(const char* argv0)
 {
-    std::cerr
-        << "Usage  : " << argv0 << " [options] [<material_name>]\n"
-        << "Options:\n"
-        << " --file | -f <filename> File for image output\n"
-        << " --launch-samples | -s  Number of samples per pixel per launch (default: 1)\n"
-        << " --mdl_path | -p <path> MDL search path, can occur multiple times.\n"
-        << " --device <id>          run on CUDA device <id> (default: 0)\n"
-        << " --hdr <filename>       HDR environment map (default: data/environment.hdr)\n"
-        << " --res <res_x> <res_y>  Resolution (default: 1024 x 1024)\n"
-        << " --fov <fov>            Horizontal field of view angle in degrees (default: 45.0)\n"
-        << " --model <name>         Can be \"sphere\" or \"cube\" (default: sphere)\n"
-        << " --nocc                 Disable class-compilation for MDL material\n"
-        << " --use-direct-call      Use OptiX direct callables to call MDL generated code\n"
-        << " --iterations | -i      Number of iterations in file mode, does not improve\n"
-        << "                        image, just used for performance measurement\n"
-        << " --help | -h            Print this usage message\n";
+    std::cerr <<
+        "Usage  : " << argv0 << " [options] [<material_name>]\n"
+        "Options:\n"
+        " --help | -h             Print this usage message\n"
+        " --file | -f <filename>  File for image output\n"
+        " --launch-samples | -s   Number of samples per pixel per launch (default: 1)\n"
+        " --mdl_path | -p <path>  MDL search path, can occur multiple times\n"
+        " --device <id>           Run on CUDA device <id> (default: 0)\n"
+        " --hdr <filename>        HDR environment map (default: data/environment.hdr)\n"
+        " --res <res_x> <res_y>   Resolution (default: 1024 x 1024)\n"
+        " --fov <fov>             Horizontal field of view angle in degrees (default: 45.0)\n"
+        " --model <name>          Can be \"sphere\" or \"cube\" (default: sphere)\n"
+        " --nocc                  Disable class-compilation for MDL material\n"
+        " --use-direct-call       Use OptiX direct callables to call MDL generated code\n"
+        " --iterations | -i       Number of iterations in file mode, does not improve image\n"
+        "                         (for benchmarks)\n"
+        " --disable-cache         Disable the OptiX shader cache (for benchmarks)\n";
     exit(0);
 }
 
@@ -2241,6 +2246,7 @@ int main(int argc, char* argv[])
     std::string env_path;
     std::string model = "sphere";
     bool class_compilation = true;
+    bool disable_optix_cache = false;
     int cuda_device_id = 0;
     int iterations = 1;
 
@@ -2292,6 +2298,8 @@ int main(int argc, char* argv[])
                 if (i >= argc - 1)
                     printUsageAndExit(argv[0]);
                 iterations = atoi(argv[++i]);
+            } else if (arg == "--disable-cache") {
+                disable_optix_cache = true;
             } else {
                 std::cerr << "Unknown option '" << argv[i] << "'\n";
                 printUsageAndExit(argv[0]);
@@ -2314,7 +2322,7 @@ int main(int argc, char* argv[])
         //
         // Set up OptiX state
         //
-        createContext(state, cuda_device_id);
+        createContext(state, cuda_device_id, disable_optix_cache);
         initMDL(state, configure_options);
         loadMaterials(state, material_names, class_compilation);
         initEnvironmentLight(state, env_path);
@@ -2405,8 +2413,14 @@ int main(int argc, char* argv[])
                 cudaMemcpyDeviceToHost));
 
             // export canvas to file
+            mi::base::Handle<mi::neuraylib::IFactory> factory(state.mdl_helper->get_factory());
+            mi::base::Handle<mi::IBoolean> option_force_default_gamma(
+                factory->create<mi::IBoolean>());
+            option_force_default_gamma->set_value(true);
+            mi::base::Handle<mi::IMap> export_options(factory->create<mi::IMap>("Map<Interface>"));
+            export_options->insert("force_default_gamma", option_force_default_gamma.get());
             state.mdl_helper->get_impexp_api()->export_canvas(
-                outfile.c_str(), canvas.get(), 100u, true);
+                outfile.c_str(), canvas.get(), export_options.get());
         }
 
         cleanupState(state);

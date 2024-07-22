@@ -67,8 +67,8 @@ MI_TEST_AUTO_FUNCTION( test_get_interface )
     Base base;
     Derived derived;
 
-    IBase* ibase = static_cast<IBase*> (&base);
-    IDerived* iderived = static_cast<IDerived*> (&derived);
+    auto* ibase = static_cast<IBase*> (&base);
+    auto* iderived = static_cast<IDerived*> (&derived);
 
     const IBase* c_ibase = ibase;
     const IDerived* c_iderived = iderived;
@@ -152,8 +152,8 @@ MI_TEST_AUTO_FUNCTION( test_get_interface_template )
     Base base;
     Derived derived;
 
-    IBase* ibase = static_cast<IBase*> (&base);
-    IDerived* iderived = static_cast<IDerived*> (&derived);
+    auto* ibase = static_cast<IBase*> (&base);
+    auto* iderived = static_cast<IDerived*> (&derived);
 
     const IBase* c_ibase = ibase;
     const IDerived* c_iderived = iderived;
@@ -243,8 +243,8 @@ MI_TEST_AUTO_FUNCTION( test_get_iid )
     Base base;
     Derived derived;
 
-    IBase* ibase = static_cast<IBase*> (&base);
-    IDerived* iderived = static_cast<IDerived*> (&derived);
+    auto* ibase = static_cast<IBase*> (&base);
+    auto* iderived = static_cast<IDerived*> (&derived);
 
     mi::base::Uuid u;
 

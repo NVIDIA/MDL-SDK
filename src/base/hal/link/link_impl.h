@@ -72,7 +72,7 @@ public:
     std::string get_filename( const char* symbol_name);
 
 private:
-    /// The OS-specific handle the the dynamic library.
+    /// The OS-specific handle to the dynamic library.
     void* m_handle;
 };
 

@@ -61,7 +61,7 @@ size_t Array<T, Allocator>::capacity() const
 template<typename T, typename Allocator>
 inline
 Array<T, Allocator>::Array(
-    const Allocator& alloc)		// allocator
+    const Allocator& alloc)             // allocator
   : m_allocator(alloc), m_array(0)
 {
     m_reserved = m_count = 0;
@@ -74,9 +74,9 @@ Array<T, Allocator>::Array(
 template<typename T, typename Allocator>
 inline
 Array<T, Allocator>::Array(
-    size_t count,			// number of elements
-    Const_reference val,		// initial value of (all) elements
-    const Allocator& alloc)		// allocator
+    size_t count,                       // number of elements
+    Const_reference val,                // initial value of (all) elements
+    const Allocator& alloc)             // allocator
   : m_allocator(alloc), m_array(0)
 {
     if (count == 0) {
@@ -99,7 +99,7 @@ Array<T, Allocator>::Array(
 template<typename T, typename Allocator>
 inline
 Array<T, Allocator>::Array(
-    const Array<T, Allocator>& array)	// the array to copy from
+    const Array<T, Allocator>& array)   // the array to copy from
   : m_allocator(array.m_allocator), m_array(0)
 {
     m_reserved = m_count = array.size();
@@ -140,7 +140,7 @@ Array<T, Allocator>::~Array()
 template<typename T, typename Allocator>
 inline
 Array<T, Allocator>& Array<T, Allocator>::operator=(
-    const Array<T, Allocator>& array)	// the array to assign from
+    const Array<T, Allocator>& array)   // the array to assign from
 {
     // check for self assignment
     if (this == &array)
@@ -166,7 +166,7 @@ Array<T, Allocator>& Array<T, Allocator>::operator=(
         m_allocator.construct(p_dest++, *p_src++);
     // alternatively use this:
     //for (size_t i=0; i<array.size(); ++i, ++p)
-    //	m_allocator.construct(p, array[i]);
+    //  m_allocator.construct(p, array[i]);
 
     m_count = array.size();
 
@@ -236,7 +236,7 @@ bool Array<T, Allocator>::empty() const
 template <typename T, typename Allocator>
 inline
 void Array<T, Allocator>::reserve(
-    size_t size)			// number of elements
+    size_t size)                        // number of elements
 {
     typedef Array<T, Allocator> This;
 
@@ -270,8 +270,8 @@ void Array<T, Allocator>::reserve(
 template <typename T, typename Allocator>
 inline
 void Array<T, Allocator>::resize(
-    size_t new_size,			// no. of elements vector will contain
-    Const_reference value)		// default value for new elements
+    size_t new_size,                    // no. of elements vector will contain
+    Const_reference value)              // default value for new elements
 {
     do_resize(new_size, value);
 }
@@ -283,7 +283,7 @@ void Array<T, Allocator>::resize(
 template <typename T, typename Allocator>
 inline
 typename Array<T, Allocator>::Reference Array<T, Allocator>::operator[](
-    size_t i)				// index of element
+    size_t i)                           // index of element
 {
     ASSERT(M_CONT, i < size());
     return m_array[i];
@@ -296,7 +296,7 @@ typename Array<T, Allocator>::Reference Array<T, Allocator>::operator[](
 template <typename T, typename Allocator>
 inline
 typename Array<T, Allocator>::Const_reference Array<T, Allocator>::operator[](
-    size_t i) const			// index of element
+    size_t i) const                     // index of element
 {
     ASSERT(M_CONT, i < size());
     return m_array[i];
@@ -309,8 +309,8 @@ typename Array<T, Allocator>::Const_reference Array<T, Allocator>::operator[](
 template<typename T, typename Allocator>
 inline
 bool Array<T, Allocator>::put(
-    size_t index,			// index at which to put the value
-    Const_reference value)		// value to insert
+    size_t index,                       // index at which to put the value
+    Const_reference value)              // value to insert
 {
     if (index >= size())
         return false;
@@ -327,9 +327,9 @@ bool Array<T, Allocator>::put(
 template<typename T, typename Allocator>
 inline
 void Array<T, Allocator>::put(
-    size_t index,			// index at which to put the value
-    Const_reference value,		// value to insert
-    Const_reference def_value)		// init value for new elements
+    size_t index,                       // index at which to put the value
+    Const_reference value,              // value to insert
+    Const_reference def_value)          // init value for new elements
 {
     // insertion w/o increasing size
     if (put(index, value))
@@ -348,8 +348,8 @@ void Array<T, Allocator>::put(
 template<typename T, typename Allocator>
 inline
 bool Array<T, Allocator>::get(
-    size_t index,			// index at which to put the value
-    Pointer value) const		// pointer for retrieve value
+    size_t index,                       // index at which to put the value
+    Pointer value) const                // pointer for retrieve value
 {
     if (index >= size())
         return false;
@@ -366,7 +366,7 @@ bool Array<T, Allocator>::get(
 template<typename T, typename Allocator>
 inline
 typename Array<T, Allocator>::Pointer Array<T, Allocator>::get(
-    size_t index) const			// index of element to retrieve
+    size_t index) const                 // index of element to retrieve
 {
     if (index >= size())
         return 0;
@@ -381,8 +381,8 @@ typename Array<T, Allocator>::Pointer Array<T, Allocator>::get(
 template<typename T, typename Allocator>
 inline
 void Array<T, Allocator>::insert(
-    size_t index,			// index at which to insert value
-    Const_reference value)		// value to insert
+    size_t index,                       // index at which to insert value
+    Const_reference value)              // value to insert
 {
     if (index < size())
         insert_n(index, 1, value);
@@ -401,9 +401,9 @@ void Array<T, Allocator>::insert(
 template<typename T, typename Allocator>
 inline
 void Array<T, Allocator>::insert_n(
-    size_t index,			// index at which to insert value
-    size_t count,			// how many times?
-    Const_reference value)		// value to insert
+    size_t index,                       // index at which to insert value
+    size_t count,                       // how many times?
+    Const_reference value)              // value to insert
 {
     // since this is an internal routine which should be fast
     // --> handle exceptional cases externally
@@ -412,7 +412,7 @@ void Array<T, Allocator>::insert_n(
     if (count == 0)
         return;
 
-    T tmp = value;			// avoid problems if value is in array
+    T tmp = value;                      // avoid problems if value is in array
 
     // resize array accordingly
     size_t old_count = size();
@@ -450,9 +450,9 @@ void Array<T, Allocator>::insert_n(
         // move data one up iff required
         if (index < old_count) {
             // move memory count times up, starting at m_array+index: backwards
-            T* p_old = m_array+old_count-1;	// last old element
-            T* p_new = m_array+size()-1;	// last new position
-            ASSERT(M_CONT, p_old+1 == p_new);	// ???? <-- don't understand it
+            T* p_old = m_array+old_count-1;     // last old element
+            T* p_new = m_array+size()-1;        // last new position
+            ASSERT(M_CONT, p_old+1 == p_new);   // ???? <-- don't understand it
 
 // TO DO: uninitialized_copy + anschliessend destroy_n --> Optimierung
 // shoud become something like copy_backward()
@@ -485,7 +485,7 @@ void Array<T, Allocator>::insert_n(
 template<typename T, typename Allocator>
 inline
 bool Array<T, Allocator>::remove(
-    size_t index)			// index of element to be removed
+    size_t index)                       // index of element to be removed
 {
     if (index >= size())
         return false;
@@ -517,10 +517,10 @@ bool Array<T, Allocator>::remove(
 template<typename T, typename Allocator>
 inline
 void Array<T, Allocator>::append(
-    Const_reference value)		// value to insert
+    Const_reference value)              // value to insert
 {
     if (m_count >= capacity()) {
-        T tmp = value;			// avoid problems if value is in array
+        T tmp = value;                  // avoid problems if value is in array
 
         size_t new_size = (3*capacity())/2;
         if (m_count >= new_size)
@@ -601,7 +601,7 @@ void Array<T, Allocator>::clear_memory()
 template <typename T, typename Allocator>
 inline
 void Array<T, Allocator>::swap(
-    Array<T, Allocator>& other)		// the other
+    Array<T, Allocator>& other)         // the other
 {
     using std::swap;
     swap(m_allocator, other.m_allocator);
@@ -620,8 +620,8 @@ void Array<T, Allocator>::swap(
 template <typename T, typename Allocator>
 inline
 void Array<T, Allocator>::do_resize(
-    size_t new_count,			// no. of elements vector will contain
-    Const_reference val)		// data for new elements
+    size_t new_count,                   // no. of elements vector will contain
+    Const_reference val)                // data for new elements
 {
     if (new_count < size()) {
         // shorten array from the right by size()-new_count elements
@@ -630,7 +630,7 @@ void Array<T, Allocator>::do_resize(
     else {
         // do we have to reallocate memory?
         if (new_count > capacity()) {
-            T tmp_val = val;		// avoid problems if value is in array
+            T tmp_val = val;            // avoid problems if value is in array
 
             // create enough space for current data + new one
             size_t new_size = (3*capacity())/2;
@@ -671,7 +671,7 @@ template <typename T, typename Allocator>
 inline
 typename Array<T, Allocator>::Pointer
 Array<T, Allocator>::allocate(
-    size_t new_count)			// no. of elements vector will contain
+    size_t new_count)                   // no. of elements vector will contain
 {
     // do we have to reallocate memory?
     ASSERT(M_CONT, new_count > capacity());
@@ -694,7 +694,7 @@ Array<T, Allocator>::allocate(
 template <typename T, typename Allocator>
 inline
 Array<T, Allocator>::Iterator::Iterator(
-    Array<T, Allocator>& array)		// The array to iterate over.
+    Array<T, Allocator>& array)         // The array to iterate over.
   : m_array(array), m_current(0)
 {}
 
@@ -796,7 +796,7 @@ typename Array<T, Allocator>::Pointer
 template <typename T, typename Allocator>
 inline
 Array<T, Allocator>::Const_iterator::Const_iterator(
-    const Array<T, Allocator>& array)	// array to iterate over
+    const Array<T, Allocator>& array)   // array to iterate over
   : m_array(array), m_current(0)
 {}
 
@@ -898,8 +898,8 @@ typename Array<T, Allocator>::Const_pointer
 template<typename T, typename Allocator>
 inline
 void swap(
-    Array<T, Allocator>& one,		// the one
-    Array<T, Allocator>& other)		// the other
+    Array<T, Allocator>& one,           // the one
+    Array<T, Allocator>& other)         // the other
 {
     one.swap(other);
 }

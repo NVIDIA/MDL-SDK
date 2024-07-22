@@ -59,7 +59,7 @@ inline Generated_code_dag const *impl_cast(IGenerated_code_dag const *t) {
 // An impl_cast allows casting from an Interface pointer to its (only) Implementation class.
 template<>
 inline Generated_code_dag::Material_instance const *impl_cast(
-    IGenerated_code_dag::IMaterial_instance const *t)
+    IMaterial_instance const *t)
 {
     return static_cast<Generated_code_dag::Material_instance const *>(t);
 }

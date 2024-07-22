@@ -37,11 +37,11 @@ namespace ATTR {
 //
 
 inline void Type_iterator::set(
-    const Type 		*type,		// current type
-    char 		*values)	// pointer to data of the type instance
+    const Type          *type,          // current type
+    char                *values)        // pointer to data of the type instance
 {
-    m_type	      = type;
-    m_value	      = values;
+    m_type            = type;
+    m_value           = values;
     if (m_type && m_type->get_typecode() == TYPE_UNDEF)
         m_type = 0;
 }
@@ -59,8 +59,8 @@ inline void Type_iterator::set(
 //
 
 inline Type_iterator::Type_iterator(
-    const Type		*type,		// current type
-    char		*values)	// data
+    const Type          *type,          // current type
+    char                *values)        // data
 {
     set(type, values);
 }
@@ -77,15 +77,15 @@ inline Type_iterator::Type_iterator(
 //
 
 inline Type_iterator::Type_iterator(
-    Type_iterator	*par,		// struct to recurse into
-    char		*values)	// data
+    Type_iterator       *par,           // struct to recurse into
+    char                *values)        // data
 {
     ASSERT(M_ATTR, par->m_type->get_typecode() == TYPE_STRUCT
                 || par->m_type->get_typecode() == TYPE_ARRAY
                 || par->m_type->get_typecode() == TYPE_ATTACHABLE
                 || par->m_type->get_typecode() == TYPE_CALL);
-    m_type		  = par->m_type->get_child();
-    m_value 		  = values;
+    m_type                = par->m_type->get_child();
+    m_value               = values;
 }
 
 

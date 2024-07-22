@@ -45,7 +45,6 @@
 #include <mi/mdl/mdl_modules.h>
 #include <mi/mdl/mdl_streams.h>
 
-#include <base/hal/disk/disk.h>
 #include <base/hal/hal/i_hal_ospath.h>
 #include <base/lib/path/i_path.h>
 #include <base/system/main/i_module_id.h>
@@ -54,7 +53,10 @@
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
 
+#include <filesystem>
 #include <string>
+
+namespace fs = std::filesystem;
 
 namespace MI {
 
@@ -125,8 +127,8 @@ void Mdl_module_info_impl::set_archive(bool val)
 void Mdl_module_info_impl::sort_shadows()
 {
     std::sort(
-        m_shadows.begin(), 
-        m_shadows.end(), 
+        m_shadows.begin(),
+        m_shadows.end(),
         compare_simple_names<Mdl_module_info_impl>);
 }
 
@@ -245,26 +247,26 @@ mi::Sint32 Mdl_package_info_impl::check_package(Mdl_package_info_impl* child)
 void Mdl_package_info_impl::sort_children()
 {
     std::sort(m_packages.begin(), m_packages.end(), compare_simple_names<Mdl_package_info_impl>);
-    for (mi::Uint32 m = 0; m < m_packages.size(); m++)
-        m_packages[m]->sort_children();
+    for (auto& m_package : m_packages)
+        m_package->sort_children();
 
-    for (mi::Uint32 m = 0; m < m_modules.size(); m++) {
-        Mdl_module_info_impl* mod = m_modules[m].get();
+    for (auto& m_module : m_modules) {
+        Mdl_module_info_impl* mod = m_module.get();
         mod->sort_shadows();
     }
 
-    for (mi::Uint32 m = 0; m < m_textures.size(); m++) {
-        Mdl_texture_info_impl* tex = m_textures[m].get();
+    for (auto& m_texture : m_textures) {
+        Mdl_texture_info_impl* tex = m_texture.get();
         tex->sort_shadows();
     }
 
-    for (mi::Uint32 m = 0; m < m_lightprofiles.size(); m++) {
-        Mdl_lightprofile_info_impl* lp = m_lightprofiles[m].get();
+    for (auto& m_lightprofile : m_lightprofiles) {
+        Mdl_lightprofile_info_impl* lp = m_lightprofile.get();
         lp->sort_shadows();
     }
 
-    for (mi::Uint32 m = 0; m < m_measured_bsdfs.size(); m++) {
-        Mdl_measured_bsdf_info_impl* mb = m_measured_bsdfs[m].get();
+    for (auto& m_measured_bsdf : m_measured_bsdfs) {
+        Mdl_measured_bsdf_info_impl* mb = m_measured_bsdf.get();
         mb->sort_shadows();
     }
 
@@ -278,12 +280,12 @@ void Mdl_package_info_impl::sort_children()
 
 mi::Sint32 Mdl_package_info_impl::shadow_module(Mdl_module_info_impl* new_module)
 {
-    for (mi::Uint32 idx = 0; idx < m_modules.size(); idx++) {
-        const Mdl_module_info_impl* nm = m_modules[idx].get();
+    for (auto& m_module : m_modules) {
+        const Mdl_module_info_impl* nm = m_module.get();
         if (strcmp(nm->get_qualified_name(), new_module->get_qualified_name()) == 0) {
             mi::base::Handle<Mdl_module_info_impl>sh_module(new Mdl_module_info_impl(*nm));
             sh_module->add_shadow(new_module);
-            m_modules[idx] = sh_module;
+            m_module = sh_module;
             return 0;
         }
     }
@@ -292,12 +294,12 @@ mi::Sint32 Mdl_package_info_impl::shadow_module(Mdl_module_info_impl* new_module
 
 mi::Sint32 Mdl_package_info_impl::shadow_texture(Mdl_texture_info_impl* new_texture)
 {
-    for (mi::Uint32 idx = 0; idx < m_textures.size(); idx++) {
-        const Mdl_texture_info_impl* nm = m_textures[idx].get();
+    for (auto& m_texture : m_textures) {
+        const Mdl_texture_info_impl* nm = m_texture.get();
         if (strcmp(nm->get_resolved_path(), new_texture->get_resolved_path()) == 0) {
             mi::base::Handle<Mdl_texture_info_impl>sh_texture(new Mdl_texture_info_impl(*nm));
             sh_texture->add_shadow(new_texture);
-            m_textures[idx] = sh_texture;
+            m_texture = sh_texture;
             return 0;
         }
     }
@@ -307,13 +309,13 @@ mi::Sint32 Mdl_package_info_impl::shadow_texture(Mdl_texture_info_impl* new_text
 mi::Sint32 Mdl_package_info_impl::shadow_lightprofile(
     Mdl_lightprofile_info_impl* new_lightprofile)
 {
-    for (mi::Uint32 idx = 0; idx < m_lightprofiles.size(); idx++) {
-        const Mdl_lightprofile_info_impl* nm = m_lightprofiles[idx].get();
+    for (auto& m_lightprofile : m_lightprofiles) {
+        const Mdl_lightprofile_info_impl* nm = m_lightprofile.get();
         if (strcmp(nm->get_resolved_path(), new_lightprofile->get_resolved_path()) == 0) {
             mi::base::Handle<Mdl_lightprofile_info_impl>sh_lightprofile(
                 new Mdl_lightprofile_info_impl(*nm));
             sh_lightprofile->add_shadow(new_lightprofile);
-            m_lightprofiles[idx] = sh_lightprofile;
+            m_lightprofile = sh_lightprofile;
             return 0;
         }
     }
@@ -323,13 +325,13 @@ mi::Sint32 Mdl_package_info_impl::shadow_lightprofile(
 mi::Sint32 Mdl_package_info_impl::shadow_measured_bsdf(
     Mdl_measured_bsdf_info_impl* new_measured_bsdf)
 {
-    for (mi::Uint32 idx = 0; idx < m_measured_bsdfs.size(); idx++) {
-        const Mdl_measured_bsdf_info_impl* nm = m_measured_bsdfs[idx].get();
+    for (auto& m_measured_bsdf : m_measured_bsdfs) {
+        const Mdl_measured_bsdf_info_impl* nm = m_measured_bsdf.get();
         if (strcmp(nm->get_resolved_path(), new_measured_bsdf->get_resolved_path()) == 0) {
             mi::base::Handle<Mdl_measured_bsdf_info_impl>sh_measured_bsdf(
                 new Mdl_measured_bsdf_info_impl(*nm));
             sh_measured_bsdf->add_shadow(new_measured_bsdf);
-            m_measured_bsdfs[idx] = sh_measured_bsdf;
+            m_measured_bsdf = sh_measured_bsdf;
             return 0;
         }
     }
@@ -337,10 +339,10 @@ mi::Sint32 Mdl_package_info_impl::shadow_measured_bsdf(
 }
 
 Mdl_package_info_impl* Mdl_package_info_impl::merge_packages(
-    const Mdl_package_info_impl* old_node, 
+    const Mdl_package_info_impl* old_node,
     const Mdl_package_info_impl* new_node)
 {
-    Mdl_package_info_impl* merge_node = new Mdl_package_info_impl(*old_node);
+    auto* merge_node = new Mdl_package_info_impl(*old_node);
     if (new_node->get_search_path_index_count() > 0) {
         mi::base::Handle<const mi::IString> resolved_path(
             new_node->get_resolved_path(0));
@@ -355,13 +357,13 @@ Mdl_package_info_impl* Mdl_package_info_impl::merge_packages(
 void Mdl_package_info_impl::add_resolved_path(const char* p)
 {
     if (p != nullptr)
-        m_resolved_paths.push_back(p);
+        m_resolved_paths.emplace_back(p);
 }
 
 void Mdl_package_info_impl::add_path(const char* p)
 {
     if (p != nullptr)
-        m_paths.push_back(p);
+        m_paths.emplace_back(p);
 }
 
 void Mdl_package_info_impl::add_path_index(mi::Size s)
@@ -476,7 +478,7 @@ mi::Size Mdl_package_info_impl::get_child_count() const
 const mi::neuraylib::IMdl_info* Mdl_package_info_impl::get_child(mi::Size index) const
 {
     const mi::Size package_count = m_packages.size();
-    if (index < package_count)  
+    if (index < package_count)
         return get_package(index);
 
     const mi::Size modules_count = m_modules.size();
@@ -503,7 +505,7 @@ const mi::neuraylib::IMdl_info* Mdl_package_info_impl::get_child(mi::Size index)
     if (index < m_measured_bsdfs.size())
         return get_measured_bsdf(index);
 
-    return nullptr; 
+    return nullptr;
 }
 
 const mi::IString* Mdl_package_info_impl::get_resolved_path(mi::Size idx) const
@@ -626,22 +628,28 @@ namespace {
         const std::string& a = archive.first;
         std::string resolved_path = HAL::Ospath::join(path, a);
         std::string res;
-#ifdef MI_PLATFORM_WINDOWS      
+#ifdef MI_PLATFORM_WINDOWS
         replace_expression(resolved_path, ".", "\\", res);
 #else
         replace_expression(resolved_path, ".", "/", res);
 #endif
-        resolved_path = res;
-        if (DISK::is_directory(resolved_path.c_str())) {
-            invalid_directories.push_back(resolved_path);
-            archive.second = false;
-        }
-        else {
-            std::string mdl = resolved_path.append(".mdl");
-            if (DISK::is_file(mdl.c_str())) {
+        try {
+            resolved_path = res;
+            fs::path fs_resolved_path(fs::u8path(resolved_path));
+            if (fs::is_directory(fs_resolved_path)) {
                 invalid_directories.push_back(resolved_path);
                 archive.second = false;
             }
+            else {
+                std::string mdl = resolved_path.append(".mdl");
+                fs::path fs_mdl(fs::u8path(mdl));
+                if (fs::is_regular_file(fs_mdl)) {
+                    invalid_directories.push_back(resolved_path);
+                    archive.second = false;
+                }
+            }
+        } catch (...) {
+            return false;
         }
 
         for (auto& other_archive : archives) {
@@ -753,7 +761,7 @@ namespace {
     };
 
     void get_resource_qualified_path(
-        const std::string& resolved_path, 
+        const std::string& resolved_path,
         const std::string& search_path,
         std::string& output ) {
         std::string resource_q_path = resolved_path.substr(search_path.size());
@@ -766,40 +774,41 @@ namespace {
 
 bool Mdl_discovery_api_impl::discover_filesystem_recursive(
     const mi::base::Handle<Mdl_package_info_impl>& parent,
-    const char* search_path, 
-    mi::Size s_idx, 
-    const char* path, 
+    const char* search_path,
+    mi::Size s_idx,
+    const char* path,
     const std::vector<std::string>& invalid_dirs,
     mi::Uint32 filter) const
 {
-    DISK::Directory dir;
-    if (!dir.open(path))
+    try {
+
+    fs::path dir(fs::u8path(path));
+    if (!fs::is_directory(dir))
         return false;
 
     std::string current_path(path);
     std::string package_path;
     resolved_path_to_qualified_path(
-        current_path.substr(strlen(search_path)), 
+        current_path.substr(strlen(search_path)),
         package_path);
     package_path += "::";
 
-    std::string entry = dir.read();
-    while (!entry.empty()) {
-        std::string resolved_path = HAL::Ospath::join(current_path, entry);
-        if (DISK::is_directory(resolved_path.c_str())) {
-            if (!is_valid_path( 
-                invalid_dirs, 
+    for (auto& fs_entry: fs::directory_iterator(dir)) {
+        std::string entry = fs_entry.path().filename().u8string();
+        std::string resolved_path = fs_entry.path().u8string();
+        if (fs::is_directory(fs_entry)) {
+            if (!is_valid_path(
+                invalid_dirs,
                 resolved_path)) {
-                entry = dir.read();
                 continue;
             }
-           
+
             mi::base::Handle<Mdl_package_info_impl> child_package(
                 new Mdl_package_info_impl(
-                    entry, 
+                    entry,
                     search_path,
-                    resolved_path, 
-                    mi::Uint32(s_idx), 
+                    resolved_path,
+                    mi::Uint32(s_idx),
                     package_path + entry));
 
             if (!is_valid_node_name(entry.c_str()) ||
@@ -808,13 +817,12 @@ bool Mdl_discovery_api_impl::discover_filesystem_recursive(
                     child_package->set_kind(mi::neuraylib::IMdl_info::Kind::DK_DIRECTORY);
                 }
                 else {
-                    entry = dir.read();
                     continue;
                 }
             }
 
             mi::Sint32 idx = parent->check_package(child_package.get());
-            if (idx >= 0) { 
+            if (idx >= 0) {
                 mi::base::Handle<const Mdl_package_info_impl> mg(parent->get_package(idx));
                 mi::base::Handle<Mdl_package_info_impl> merge_package(
                     parent->merge_packages(mg.get(), child_package.get()));
@@ -822,9 +830,9 @@ bool Mdl_discovery_api_impl::discover_filesystem_recursive(
                 // Continue recursion with a merged node
                 discover_filesystem_recursive(
                     merge_package,
-                    search_path, 
-                    s_idx, 
-                    resolved_path.c_str(), 
+                    search_path,
+                    s_idx,
+                    resolved_path.c_str(),
                     invalid_dirs,
                     filter);
                 parent->reset_package(merge_package.get(), idx);
@@ -833,9 +841,9 @@ bool Mdl_discovery_api_impl::discover_filesystem_recursive(
                 // Continue recursion with a new node
                 discover_filesystem_recursive(
                     child_package,
-                    search_path, 
-                    s_idx, 
-                    resolved_path.c_str(), 
+                    search_path,
+                    s_idx,
+                    resolved_path.c_str(),
                     invalid_dirs,
                     filter);
                 parent->add_package(child_package.get());
@@ -844,23 +852,22 @@ bool Mdl_discovery_api_impl::discover_filesystem_recursive(
         else {
             size_t pos_e = entry.find_last_of('.');
             if (pos_e == std::string::npos) {
-                entry = dir.read();
                 continue;
             }
             else {
                 entry = entry.substr(0, pos_e);
                 if (!is_valid_node_name(entry.c_str())) {
-                    entry = dir.read();
                     continue;
                 }
             }
-            
+
             std::string res_qualified_path;
             get_resource_qualified_path(resolved_path, search_path, res_qualified_path);
 
             size_t pos_rp = resolved_path.find_last_of('.');
             std::string short_path(resolved_path.substr(0, pos_rp));
-            if (DISK::is_file(resolved_path.c_str()) &&
+            fs::path fs_resolved_path(fs::u8path(resolved_path));
+            if (fs::is_regular_file(fs_resolved_path) &&
                 (is_valid_path(invalid_dirs, short_path)) &&
                 (pos_rp != std::string::npos)) {
                 std::string ext = resolved_path.substr(
@@ -937,10 +944,12 @@ bool Mdl_discovery_api_impl::discover_filesystem_recursive(
                 }
             }
         }
-        entry = dir.read();
     }
-    dir.close();
     return true;
+
+    } catch(...) {
+        return false;
+    }
 }
 
 const mi::neuraylib::IMdl_discovery_result* Mdl_discovery_api_impl::discover(
@@ -951,46 +960,32 @@ const mi::neuraylib::IMdl_discovery_result* Mdl_discovery_api_impl::discover(
     mi::base::Handle<Mdl_package_info_impl> root_package(
         new Mdl_package_info_impl("", "", "", -1, ""));
 
+    try {
+
     for (mi::Size i = 0; i < search_paths.size(); ++i) {
-        std::string path = search_paths[i]; 
-        if (!DISK::access(path.c_str(), false))
+
+        fs::path fs_path( fs::u8path( search_paths[i]));
+        if (!fs::exists(fs_path))
             continue;
 
-        if (!DISK::is_path_absolute(path))
-            path = HAL::Ospath::join(DISK::get_cwd(), path);
-        path = HAL::Ospath::normpath_v2(path);
+        if (!fs_path.is_absolute())
+            fs_path = fs::absolute(fs_path);
+        fs_path = fs_path.lexically_normal();
 
-        DISK::Directory dir;
-        if (!dir.open(path.c_str()))
-            continue;
-
-        std::string entry = dir.read();
         std::map<std::string, bool> archives;
-        while (!entry.empty()) {
-            if (DISK::is_file(HAL::Ospath::join(path, entry).c_str())) {
-                std::size_t found_mdr = entry.rfind(".mdr");
-                if (found_mdr != std::string::npos && found_mdr == entry.size() - 4)
-                    archives.insert(
-                        std::make_pair(entry.substr(0, found_mdr), 
-                        true));  
-            }
-            entry = dir.read();
-        }
+        for (const auto& entry: fs::directory_iterator(fs_path))
+            if (fs::is_regular_file(entry) && entry.path().extension().u8string() == ".mdr")
+                archives.insert(std::make_pair(entry.path().stem().u8string(), true));
 
         // Discover archives
-        std::vector<std::string> invalid_directies;
+        std::vector<std::string> invalid_directories;
         for (auto& archive : archives) {
-            if (validate_archive(
-                archive, 
-                archives, 
-                invalid_directies, 
-                path)) {
-                    std::string resolved_path = HAL::Ospath::join(path, archive.first);
-                    resolved_path += ".mdr";
+            if (validate_archive(archive, archives, invalid_directories, fs_path.u8string())) {
+                    std::string resolved_path = (fs_path / (archive.first + ".mdr")).u8string();
                     discover_archive(
-                        root_package, 
-                        path.c_str(), 
-                        i, 
+                        root_package,
+                        fs_path.u8string().c_str(),
+                        i,
                         resolved_path.c_str(),
                         filter);
             }
@@ -998,32 +993,31 @@ const mi::neuraylib::IMdl_discovery_result* Mdl_discovery_api_impl::discover(
 
         // Discover file system
         discover_filesystem_recursive(
-            root_package, 
-            path.c_str(), 
-            i, 
-            path.c_str(), 
-            invalid_directies,
+            root_package,
+            fs_path.u8string().c_str(),
+            i,
+            fs_path.u8string().c_str(),
+            invalid_directories,
             filter);
     }
     root_package->sort_children();
-    
-    mi::base::Handle<Mdl_discovery_result_impl>
-        disc_res(new Mdl_discovery_result_impl(
-            root_package.get(), 
-            search_paths));
-    disc_res->retain();
-    return disc_res.get();
+
+    } catch(...) {
+        // nothing to do
+    }
+
+    return new Mdl_discovery_result_impl(root_package.get(), search_paths);
 }
 
 bool Mdl_discovery_api_impl::add_archive_entries(
-    const mi::base::Handle<Mdl_package_info_impl>& parent,  
-    mi::Size s_idx, 
-    const char* sp, 
-    const char* fqp, 
-    const char* rp, 
+    const mi::base::Handle<Mdl_package_info_impl>& parent,
+    mi::Size s_idx,
+    const char* sp,
+    const char* fqp,
+    const char* rp,
     std::string& qualified_path,
-    const char* extension, 
-    std::string& entry, 
+    const char* extension,
+    std::string& entry,
     mi::Size level) const
 {
     std::string quali = std::string(fqp);
@@ -1108,7 +1102,7 @@ bool Mdl_discovery_api_impl::add_archive_entries(
                 if (parent->shadow_lightprofile(lightprofile.get()) < 0) {
                     parent->add_lightprofile(lightprofile.get());
                     entry_added = true;
-                }   
+                }
             }
             else if (is_bsdf_file(extension)) {
                 mi::base::Handle<Mdl_measured_bsdf_info_impl>measured_bsdf(
@@ -1194,10 +1188,10 @@ bool Mdl_discovery_api_impl::discover_archive_recursive(
                     entry,
                     search_path,
                     rpath_formatted,
-                    mi::Uint32(s_idx), 
+                    mi::Uint32(s_idx),
                     qpath_formatted));
             new_package->set_archive(0, true);
-          
+
             // Check if the qualified path has changed in last recursion step
             std::size_t f = std::string(previous_module).find(resolved_no_delimiter);
             if ((f != std::string::npos) || (s_idx != 0)) {
@@ -1231,21 +1225,21 @@ bool Mdl_discovery_api_impl::discover_archive_recursive(
                 parent->add_package(new_package.get());
                 if (!terminate)
                     discover_archive_recursive(
-                        new_package, 
+                        new_package,
                         previous_module,
-                        full_q_path, 
-                        search_path, 
-                        resolved_path, 
+                        full_q_path,
+                        search_path,
+                        resolved_path,
                         extension,
-                        s_idx, 
-                        level + 1);       
+                        s_idx,
+                        level + 1);
             }
     }
     return true;
 }
 
 bool Mdl_discovery_api_impl::read_archive(
-    const char* res_path, 
+    const char* res_path,
     std::vector<std::string>& e_list,
     mi::Uint32 filter) const
 {
@@ -1264,7 +1258,7 @@ bool Mdl_discovery_api_impl::read_archive(
     mi::mdl::MDL_zip_container_archive* zip_archive =
         mi::mdl::MDL_zip_container_archive::open(
             mdl->get_mdl_allocator(),
-            full_path.c_str(), 
+            full_path.c_str(),
             err);
     if (!zip_archive)
         return false;
@@ -1306,7 +1300,7 @@ bool Mdl_discovery_api_impl::read_archive(
                     is_filtered = false;
             }
 
-            // Collect filtered paths only filter DK_PACKAGE is set 
+            // Collect filtered paths only filter DK_PACKAGE is set
             if (filter == mi::neuraylib::IMdl_info::Kind::DK_PACKAGE) {
 #ifndef MI_PLATFORM_WINDOWS
                 size_t s_pos = e.find_last_of('\\');
@@ -1319,14 +1313,14 @@ bool Mdl_discovery_api_impl::read_archive(
                     it = std::find(
                         unhandled_packages.begin(), unhandled_packages.end(), package_path);
                     if (it == unhandled_packages.end()) {
-                        // Add an unhandled path 
+                        // Add an unhandled path
                         if (is_filtered)
                             unhandled_packages.push_back(package_path);
                     }
                 }
             }
             if ((valid_entry) && (!is_filtered)) {
-                e_list.push_back(std::string(zip_archive->get_entry_name(i)));
+                e_list.emplace_back(zip_archive->get_entry_name(i));
                 std::string res;
                 replace_expression(
                     e_list[e_list.size() - 1],
@@ -1338,7 +1332,7 @@ bool Mdl_discovery_api_impl::read_archive(
         }
     }
 
-    // Special case when omly filter DK_PACKAGE is set 
+    // Special case when omly filter DK_PACKAGE is set
     for (const  auto& p : unhandled_packages) {
         // Add unhandled_paths
         e_list.push_back(p);
@@ -1357,15 +1351,15 @@ bool Mdl_discovery_api_impl::read_archive(
 
 bool Mdl_discovery_api_impl::discover_archive(
     const mi::base::Handle<Mdl_package_info_impl>& parent,
-    const char* search_path, 
-    mi::Size s_idx, 
+    const char* search_path,
+    mi::Size s_idx,
     const char* res_path,
     mi::Uint32 filter) const
 {
     std::vector<std::string> entry_list;
     if (!read_archive(res_path, entry_list, filter))
         return false;
-    
+
     for (mi::Size x = 0; x < entry_list.size(); ++x) {
         mi::Size p = 0;
         while (entry_list[x][p] == ':')
@@ -1411,8 +1405,8 @@ Mdl_discovery_result_impl::Mdl_discovery_result_impl(
     const std::vector<std::string>& paths)
     : m_graph(make_handle_dup(graph))
 {
-    for (mi::Size i=0; i < paths.size(); ++i)
-        m_search_paths.push_back(paths[i]);
+    for (const auto& path : paths)
+        m_search_paths.push_back(path);
 }
 
 const mi::neuraylib::IMdl_package_info* Mdl_discovery_result_impl::get_graph() const

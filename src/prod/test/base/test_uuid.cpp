@@ -49,8 +49,8 @@ std::ostringstream& operator<<( std::ostringstream& out, const mi::base::Uuid& i
 }
 }}
 
-typedef mi::base::Uuid_t<0x33244daf,0xd131,0x4f29,0x98,0xcf,0x83,0xe1,0xdc,0x7c,0xdf,0xe0> ID1;
-typedef mi::base::Uuid_t<0x841522b0,0xdf6f,0x4d84,0x97,0xa2,0x0b,0xdd,0x60,0x97,0x36,0x9b> ID2;
+using ID1 = mi::base::Uuid_t<858017199, 53553, 20265, 152, 207, 131, 225, 220, 124, 223, 224>;
+using ID2 = mi::base::Uuid_t<2215977648U, 57199, 19844, 151, 162, 11, 221, 96, 151, 54, 155>;
 
 mi::Uint32 uuid_switch_test( const mi::base::Uuid& id) {
     switch ( uuid_hash32( id)) {

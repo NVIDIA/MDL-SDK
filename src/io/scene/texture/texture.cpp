@@ -126,7 +126,7 @@ std::string Texture::get_selector( DB::Transaction* transaction) const
         DB::Access<DBIMAGE::Image> image( m_image, transaction);
         return image->get_selector();
     } else
-        return std::string();
+        return {};
 }
 
 const SERIAL::Serializable* Texture::serialize( SERIAL::Serializer* serializer) const
@@ -206,19 +206,19 @@ DB::Tag load_mdl_texture(
 {
     if( !image_set) {
         result = -1;
-        return DB::Tag();
+        return {};
     }
 
     mi::Size n = image_set->get_length();
     if( n == 0) {
         result = -1;
-        return DB::Tag();
+        return {};
     }
 
     for( mi::Size f = 0; f < n; ++f)
         if( image_set->get_frame_length( f) == 0) {
             result = -1;
-            return DB::Tag();
+            return {};
         }
 
     std::string identifier;
@@ -243,7 +243,7 @@ DB::Tag load_mdl_texture(
 
     std::string db_texture_name = shared_proxy ? "MI_default_" : "";
     db_texture_name += "texture_" + identifier
-        + "_" + std::string( STRING::lexicographic_cast_s<std::string>( gamma))
+        + "_" + std::string( STRING::lexicographic_cast_s<std::string>( gamma).value())
         + "_" + selector;
     if( !shared_proxy)
         db_texture_name
@@ -268,7 +268,7 @@ DB::Tag load_mdl_texture(
         auto image = std::make_unique<DBIMAGE::Image>();
         result = image->reset_image_set( transaction, image_set, impl_hash);
         if( result != 0)
-            return DB::Tag();
+            return {};
         image_tag = transaction->store_for_reference_counting(
             image.release(), db_image_name.c_str(), privacy_level);
     }

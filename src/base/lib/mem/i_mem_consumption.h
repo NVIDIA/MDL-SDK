@@ -46,6 +46,7 @@
 #include <map>
 #include <unordered_map>
 #include <set>
+#include <unordered_set>
 #include <string>
 #include <utility> // pair
 #include <vector>
@@ -163,6 +164,11 @@ MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(unsigned long long int)
 MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(float)
 MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(double)
 MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(long double)
+#ifndef MI_PLATFORM_WINDOWS
+#ifdef MI_ARCH_64BIT
+MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(size_t)
+#endif
+#endif
 
 }
 
@@ -176,7 +182,11 @@ MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(unsigned long long int)
 MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(float)
 MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(double)
 MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(long double)
-
+#ifndef MI_PLATFORM_WINDOWS
+#ifdef MI_ARCH_64BIT
+MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(size_t)
+#endif
+#endif
 }
 
 }
@@ -302,7 +312,7 @@ inline size_t dynamic_memory_consumption (const vector<T,A>& the_vector)
     size_t total = the_vector.capacity() * sizeof(T);
 
     // additional dynamic size of the vector elements
-    if (the_vector.size() > 0 && has_dynamic_memory_consumption (the_vector[0])) {
+    if (!the_vector.empty() && has_dynamic_memory_consumption(the_vector[0])) {
         const size_t n = the_vector.size();
         for (size_t i = 0; i < n; ++i)
             total += dynamic_memory_consumption (the_vector[i]);
@@ -351,7 +361,7 @@ inline size_t dynamic_memory_consumption (const map<T1, T2>& the_map)
 #endif
 
     // additional dynamic size of the map elements
-    if (the_map.size() > 0) {
+    if (!the_map.empty()) {
         bool dynamic_memory_T1 = has_dynamic_memory_consumption (the_map.begin()->first);
         bool dynamic_memory_T2 = has_dynamic_memory_consumption (the_map.begin()->second);
         if (dynamic_memory_T1 || dynamic_memory_T2) {
@@ -384,7 +394,7 @@ inline size_t dynamic_memory_consumption (const map<T1, T2, A>& the_map)
 #endif
 
     // additional dynamic size of the map elements
-    if (the_map.size() > 0) {
+    if (!the_map.empty()) {
         bool dynamic_memory_T1 = has_dynamic_memory_consumption (the_map.begin()->first);
         bool dynamic_memory_T2 = has_dynamic_memory_consumption (the_map.begin()->second);
         if (dynamic_memory_T1 || dynamic_memory_T2) {
@@ -422,7 +432,7 @@ inline size_t dynamic_memory_consumption (const multimap<T1, T2>& the_map)
 #endif
 
     // additional dynamic size of the multimap elements
-    if (the_map.size() > 0) {
+    if (!the_map.empty()) {
         bool dynamic_memory_T1 = has_dynamic_memory_consumption (the_map.begin()->first);
         bool dynamic_memory_T2 = has_dynamic_memory_consumption (the_map.begin()->second);
         if (dynamic_memory_T1 || dynamic_memory_T2) {
@@ -455,7 +465,7 @@ inline size_t dynamic_memory_consumption (const multimap<T1, T2, A>& the_map)
 #endif
 
     // additional dynamic size of the multimap elements
-    if (the_map.size() > 0) {
+    if (!the_map.empty()) {
         bool dynamic_memory_T1 = has_dynamic_memory_consumption (the_map.begin()->first);
         bool dynamic_memory_T2 = has_dynamic_memory_consumption (the_map.begin()->second);
         if (dynamic_memory_T1 || dynamic_memory_T2) {
@@ -493,7 +503,7 @@ inline size_t dynamic_memory_consumption (const set<T>& the_set)
 #endif
 
     // additional dynamic size of the set elements
-    if (the_set.size() > 0 && has_dynamic_memory_consumption (*(the_set.begin()))) {
+    if (!the_set.empty() && has_dynamic_memory_consumption(*(the_set.begin()))) {
         typename Set_type::const_iterator it = the_set.begin();
         typename Set_type::const_iterator it_end = the_set.end();
         for (; it != it_end; ++it)
@@ -522,11 +532,32 @@ inline size_t dynamic_memory_consumption (const set<T1, A>& the_set)
 #endif
 
     // additional dynamic size of the set elements
-    if (the_set.size() > 0 && has_dynamic_memory_consumption (*(the_set.begin()))) {
+    if (!the_set.empty() && has_dynamic_memory_consumption(*(the_set.begin()))) {
         typename Set_type::const_iterator it = the_set.begin();
         typename Set_type::const_iterator it_end = the_set.end();
         for (; it != it_end; ++it)
             total += dynamic_memory_consumption (*it);
+    }
+
+    return total;
+}
+
+// std::unordered_set
+template <class T1, class H, class KE, class A> \
+inline bool has_dynamic_memory_consumption(const unordered_set<T1, H, KE, A>&) { return true; }
+
+template <class T1, class H, class KE, class A>
+inline size_t dynamic_memory_consumption(const unordered_set<T1, H, KE, A>& the_set)
+{
+    typedef unordered_set<T1, H, KE, A> Set_type;
+
+    size_t total = sizeof(Set_type);
+    // additional dynamic size of the set elements
+    if (!the_set.empty() && has_dynamic_memory_consumption(*(the_set.begin()))) {
+        typename Set_type::const_iterator it = the_set.begin();
+        typename Set_type::const_iterator it_end = the_set.end();
+        for (; it != it_end; ++it)
+            total += dynamic_memory_consumption(*it);
     }
 
     return total;
@@ -549,7 +580,7 @@ inline size_t dynamic_memory_consumption (const std::unordered_map<T1, T2, T3, T
     size_t total = sizeof(Map_type);
 
     // additional dynamic size of the map elements
-    if (the_map.size() > 0) {
+    if (!the_map.empty()) {
         const bool dynamic_memory_T1 = has_dynamic_memory_consumption (the_map.begin()->first);
         const bool dynamic_memory_T2 = has_dynamic_memory_consumption (the_map.begin()->second);
         if (dynamic_memory_T1 || dynamic_memory_T2) {
@@ -564,6 +595,7 @@ inline size_t dynamic_memory_consumption (const std::unordered_map<T1, T2, T3, T
 
     return total;
 }
+
 
 } // namespace std
 

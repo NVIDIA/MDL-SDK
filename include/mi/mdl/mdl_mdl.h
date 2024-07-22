@@ -37,6 +37,7 @@
 #include <mi/mdl/mdl_code_generators.h>
 #include <mi/mdl/mdl_definitions.h>
 #include <mi/mdl/mdl_options.h>
+#include <mi/mdl/mdl_distiller_plugin_api.h>
 
 namespace mi {
 
@@ -57,6 +58,7 @@ class IThread_context;
 class IValue;
 class IValue_factory;
 class IGenerated_code_dag;
+class IMaterial_instance;
 class ISerializer;
 class IDeserializer;
 class IMDL_comparator;
@@ -125,8 +127,9 @@ public:
         MDL_VERSION_1_6,                        ///< compile MDL 1.6
         MDL_VERSION_1_7,                        ///< compile MDL 1.7
         MDL_VERSION_1_8,                        ///< compile MDL 1.8
+        MDL_VERSION_1_9,                        ///< compile MDL 1.9
         MDL_VERSION_EXP,                        ///< experimental features
-        MDL_LATEST_VERSION = MDL_VERSION_1_8,   ///< always the latest fully supported version
+        MDL_LATEST_VERSION = MDL_VERSION_1_9,   ///< always the latest fully supported version
         MDL_DEFAULT_VERSION = MDL_VERSION_1_0,  ///< The default compiler version.
     };
 
@@ -391,6 +394,21 @@ public:
     /// \return the code DAG
     virtual IGenerated_code_dag const *deserialize_code_dag(IDeserializer *ds) = 0;
 
+    /// Serialize a material instance to the given serializer.
+    ///
+    /// \param instance              the material instance to serialize
+    /// \param is                    the serializer data is written to
+    virtual void serialize_material_instance(
+        IMaterial_instance const *instance,
+        ISerializer *is) const = 0;
+
+    /// Deserialize a material instancefrom a given deserializer.
+    ///
+    /// \param ds  the deserializer data is read from
+    ///
+    /// \return the material instance
+    virtual IMaterial_instance const *deserialize_material_instance(IDeserializer *ds) = 0;
+
     /// Create a new MDL lambda function.
     ///
     /// \param context  the execution context for this lambda function.
@@ -533,6 +551,20 @@ public:
     /// \return true on success, false if the given translator was not found
     virtual bool remove_foreign_module_translator(
         IMDL_foreign_module_translator *translator) = 0;
+
+    /// Create a distiller plugin API using this compiler.
+    /// The plugin API is required for distilling.
+    ///
+    /// The interface is not reference counted. A call to \c release()
+    /// immediately deletes it.
+    ///
+    /// \param instance       a material instance used to retrieve an allocator
+    /// \param call_resolver  a MDL call name resolver for the IR checker
+    ///
+    /// \return 
+    virtual IDistiller_plugin_api *create_distiller_plugin_api(
+        IMaterial_instance const *instance,
+        ICall_name_resolver      *call_resolver) = 0;
 };
 
 
@@ -678,7 +710,7 @@ There are two different compilation modes to accommodate different needs: instan
 and class compilation.
 In instance compilation mode (the default) all arguments, i.e., constant expressions
 and call expressions, are compiled into the body of the resulting material.
-Hence, the resulting IGenerated_code_dag::IMaterial_instance is parameterless.
+Hence, the resulting IMaterial_instance is parameterless.
 This mode offers most optimization possibilities.
 As a downside, even the smallest argument change requires a recompilation to target code.
 
@@ -708,13 +740,13 @@ The layouts are available as IGenerated_code_value_layout objects returned by
 IGenerated_code_executable::get_captured_arguments_layout() or ILink_unit::get_arg_block_layout().
 For each class-compiled material with parameters, one layout will be added to the lists.
 
-Using the parameter name and type information from the IGenerated_code_dag::IMaterial_instance
+Using the parameter name and type information from the IMaterial_instance
 object corresponding to the layout, the layout can be navigated with
 IGenerated_code_value_layout::get_nested_state() and the offset, kind, and size of an
 argument or sub-element can be retrieved via IGenerated_code_value_layout::get_layout().
 
 So, if you wanted to get the offset of \c "x.b" in the above example case, you would search for the
-index for which IGenerated_code_dag::IMaterial_instance::get_parameter_name() returns \c "x.b" and
+index for which IMaterial_instance::get_parameter_name() returns \c "x.b" and
 use this index to get the nested layout state for it.
 Providing this state to IGenerated_code_value_layout::get_layout() would then result in the offset
 of this argument within the target argument block data.

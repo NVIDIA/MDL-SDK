@@ -96,7 +96,7 @@ MDL::IAnnotation* get_internal_annotation( mi::neuraylib::IAnnotation* anno)
 {
     if( !anno)
         return nullptr;
-    Annotation* anno_int = static_cast<Annotation*>( anno);
+    auto* anno_int = static_cast<Annotation*>( anno);
     return anno_int->get_internal_annotation();
 }
 
@@ -104,7 +104,7 @@ const MDL::IAnnotation* get_internal_annotation( const mi::neuraylib::IAnnotatio
 {
     if( !anno)
         return nullptr;
-    const Annotation* anno_int = static_cast<const Annotation*>( anno);
+    const auto* anno_int = static_cast<const Annotation*>( anno);
     return anno_int->get_internal_annotation();
 }
 
@@ -112,7 +112,7 @@ MDL::IAnnotation_block* get_internal_annotation_block( mi::neuraylib::IAnnotatio
 {
     if( !block)
         return nullptr;
-    Annotation_block* block_int = static_cast<Annotation_block*>( block);
+    auto* block_int = static_cast<Annotation_block*>( block);
     return block_int->get_internal_annotation_block();
 }
 
@@ -121,7 +121,7 @@ const MDL::IAnnotation_block* get_internal_annotation_block(
 {
     if( !block)
         return nullptr;
-    const Annotation_block* block_int = static_cast<const Annotation_block*>( block);
+    const auto* block_int = static_cast<const Annotation_block*>( block);
     return block_int->get_internal_annotation_block();
 }
 
@@ -129,7 +129,7 @@ MDL::IAnnotation_list* get_internal_annotation_list( mi::neuraylib::IAnnotation_
 {
     if( !list)
         return nullptr;
-    Annotation_list* list_int = static_cast<Annotation_list*>( list);
+    auto* list_int = static_cast<Annotation_list*>( list);
     return list_int->get_internal_annotation_list();
 }
 
@@ -138,12 +138,12 @@ const MDL::IAnnotation_list* get_internal_annotation_list(
 {
     if( !list)
         return nullptr;
-    const Annotation_list* list_int = static_cast<const Annotation_list*>( list);
+    const auto* list_int = static_cast<const Annotation_list*>( list);
     return list_int->get_internal_annotation_list();
 }
 
 template <class E, class I>
-Expression_base<E, I>::~Expression_base() { }
+Expression_base<E, I>::~Expression_base() = default;
 
 template <class E, class I>
 const mi::neuraylib::IType* Expression_base<E, I>::get_type() const
@@ -176,7 +176,7 @@ mi::Sint32 Expression_constant::set_value( mi::neuraylib::IValue* value)
 
 const char* Expression_call::get_call() const
 {
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
+    auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     DB::Tag tag = m_expr->get_call();
     return db_transaction->tag_to_name( tag);
@@ -187,7 +187,7 @@ mi::Sint32 Expression_call::set_call( const char* name)
     if( !name)
         return -1;
 
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
+    auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     DB::Tag tag = db_transaction->name_to_tag( name);
     if( !tag)
@@ -198,7 +198,7 @@ mi::Sint32 Expression_call::set_call( const char* name)
     mi::base::Handle<MDL::IType_factory> tf( vf->get_type_factory());
 
     SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
-    if( class_id != MDL::Mdl_function_call::id)
+    if( class_id != MDL::ID_MDL_FUNCTION_CALL)
         return -3;
 
     DB::Access<MDL::Mdl_function_call> call( tag, db_transaction);
@@ -220,7 +220,7 @@ mi::Sint32 Expression_call::set_call( const char* name)
 
 const char* Expression_direct_call::get_definition() const
 {
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
+    auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     DB::Tag tag = m_expr->get_definition(db_transaction);
     if (!tag.is_valid())
@@ -515,7 +515,7 @@ mi::neuraylib::IExpression_call* Expression_factory::create_call( const char* na
         return nullptr;
 
     SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
-    if( class_id != MDL::Mdl_function_call::id)
+    if( class_id != MDL::ID_MDL_FUNCTION_CALL)
         return nullptr;
 
     DB::Access<MDL::Mdl_function_call> call( tag, db_transaction);
@@ -568,7 +568,7 @@ mi::neuraylib::IExpression_direct_call* Expression_factory::create_direct_call(
         get_internal_expression_list( arguments));
 
     SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
-    if( class_id != MDL::Mdl_function_definition::id) {
+    if( class_id != MDL::ID_MDL_FUNCTION_DEFINITION) {
         if( errors)
             *errors = -7;
         return nullptr;
@@ -606,7 +606,7 @@ mi::neuraylib::IExpression_list* Expression_factory::create_expression_list() co
 mi::neuraylib::IAnnotation* Expression_factory::create_annotation(
     const char* name, const mi::neuraylib::IExpression_list* arguments) const
 {
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
+    auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     mi::base::Handle<const MDL::IExpression_list> arguments_int(
         get_internal_expression_list( arguments));
@@ -828,7 +828,7 @@ const mi::neuraylib::IAnnotation_list* Expression_factory::create_annotation_lis
 const mi::neuraylib::IAnnotation_definition* Expression_factory::create_annotation_definition(
     const MDL::IAnnotation_definition* anno_def, const mi::base::IInterface* owner) const
 {
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>(m_transaction.get());
+    auto* transaction_impl = static_cast<Transaction_impl*>(m_transaction.get());
     mi::base::Handle<Type_factory> tf(transaction_impl->get_type_factory());
 
     return anno_def ? new Annotation_definition(this, tf.get(), anno_def, owner) : nullptr;
@@ -839,34 +839,76 @@ mi::neuraylib::IExpression* Expression_factory::create_cast(
     const mi::neuraylib::IType* target_type,
     const char* cast_db_name,
     bool force_cast,
+    bool direct_call,
     mi::Sint32* errors) const
 {
     mi::Sint32 dummy_errors;
-    if (errors == nullptr)
+    if( errors == nullptr)
         errors = &dummy_errors;
     *errors = 0;
 
-    if (!(src_expr && target_type)) {
+    if( !src_expr || !target_type) {
         *errors = -1;
         return nullptr;
     }
-    mi::base::Handle<MDL::IExpression> src_expr_int(get_internal_expression(src_expr));
-    mi::base::Handle<const MDL::IType> target_type_int(get_internal_type(target_type));
 
-    mi::base::Handle<MDL::IExpression> result_int(m_ef->create_cast(
+    mi::base::Handle<MDL::IExpression> src_expr_int( get_internal_expression( src_expr));
+    mi::base::Handle<const MDL::IType> target_type_int( get_internal_type( target_type));
+
+    mi::base::Handle<MDL::IExpression> result_int( m_ef->create_cast(
         get_db_transaction(),
         src_expr_int.get(),
         target_type_int.get(),
         cast_db_name,
         force_cast,
-        /*direct_call=*/false,
+        direct_call,
         errors));
 
-    if (src_expr_int == result_int) {
+    if( src_expr_int == result_int) {
         src_expr->retain();
         return src_expr;
     }
-    return create(result_int.get(), /*owner=*/ nullptr);
+
+    return create( result_int.get(), /*owner*/ nullptr);
+}
+
+mi::neuraylib::IExpression* Expression_factory::create_decl_cast(
+    mi::neuraylib::IExpression* src_expr,
+    const mi::neuraylib::IType_struct* target_type,
+    const char* cast_db_name,
+    bool force_cast,
+    bool direct_call,
+    mi::Sint32* errors) const
+{
+    mi::Sint32 dummy_errors;
+    if( errors == nullptr)
+        errors = &dummy_errors;
+    *errors = 0;
+
+    if( !src_expr || !target_type) {
+        *errors = -1;
+        return nullptr;
+    }
+
+    mi::base::Handle<MDL::IExpression> src_expr_int( get_internal_expression( src_expr));
+    mi::base::Handle<const MDL::IType_struct> target_type_int(
+        get_internal_type<MDL::IType_struct>( target_type));
+
+    mi::base::Handle<MDL::IExpression> result_int( m_ef->create_decl_cast(
+        get_db_transaction(),
+        src_expr_int.get(),
+        target_type_int.get(),
+        cast_db_name,
+        force_cast,
+        direct_call,
+        errors));
+
+    if( src_expr_int == result_int) {
+        src_expr->retain();
+        return src_expr;
+    }
+
+    return create( result_int.get(), /*owner*/ nullptr);
 }
 
 DB::Transaction* Expression_factory::get_db_transaction() const
@@ -874,7 +916,7 @@ DB::Transaction* Expression_factory::get_db_transaction() const
     if( !m_transaction)
         return nullptr;
 
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
+    auto* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     return transaction_impl->get_db_transaction();
 }
 

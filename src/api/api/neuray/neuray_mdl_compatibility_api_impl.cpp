@@ -80,7 +80,7 @@ public:
     /// Get the number of search paths.
     ///
     /// \param set  the path set
-    size_t get_search_path_count(Path_set set) const {
+    size_t get_search_path_count(Path_set set) const final {
 
         return set == mi::mdl::IMDL_search_path::MDL_SEARCH_PATH ? m_roots.size() : 0;
     }
@@ -89,7 +89,7 @@ public:
     ///
     /// \param set  the path set
     /// \param i    index of the path
-    char const *get_search_path(Path_set set, size_t i) const {
+    char const *get_search_path(Path_set set, size_t i) const final {
 
         if (set != mi::mdl::IMDL_search_path::MDL_SEARCH_PATH)
             return nullptr;
@@ -99,7 +99,7 @@ public:
     }
 
     /// Add a search path.
-    void add_path(const char *path) { m_roots.push_back(path); }
+    void add_path(const char *path) { m_roots.emplace_back( path); }
 
     /// Constructor
     Mdl_search_path() {
@@ -112,7 +112,7 @@ public:
         for (const auto& p : mdl_paths)
             add_path(p.c_str());
     }
-   
+
 private:
 
     /// The search path roots.
@@ -130,7 +130,7 @@ mi::Sint32 Mdl_compatibility_api_impl::compare_modules(
     if (module_name == nullptr || repl_file_name == nullptr)
         return -1;
 
-    Mdl_execution_context_impl* context_impl = static_cast<Mdl_execution_context_impl*>(context);
+    auto* context_impl = static_cast<Mdl_execution_context_impl*>(context);
 
     mi::base::Handle<mi::mdl::IMDL> mdl(m_mdlc_module->get_mdl());
 
@@ -147,10 +147,10 @@ mi::Sint32 Mdl_compatibility_api_impl::compare_modules(
                 search_paths->get_element<mi::IString const>(i));
             if (path)
                 replacement_search_path->add_path(path->get_c_str());
-        } 
+        }
         comparator->install_replacement_search_path(replacement_search_path.get());
     }
-   
+
     // load the first module
     mi::base::Handle<mi::mdl::IModule const> mod1(
         comparator->load_module(ctx.get(), module_name));
@@ -188,7 +188,7 @@ mi::Sint32 Mdl_compatibility_api_impl::compare_archives(
     if (archive_fname1 == nullptr || archive_fname2 == nullptr)
         return -1;
 
-    Mdl_execution_context_impl* context_impl = static_cast<Mdl_execution_context_impl*>(context);
+    auto* context_impl = static_cast<Mdl_execution_context_impl*>(context);
 
     mi::base::Handle<mi::mdl::IMDL> mdl(m_mdlc_module->get_mdl());
 

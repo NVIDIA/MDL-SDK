@@ -49,7 +49,7 @@ public:
     /// Default constructor.
     ///
     /// Does not create a valid instance, to be used by the deserializer only.
-    Mdl_annotation_definition_proxy();
+    Mdl_annotation_definition_proxy() = default;
 
     /// Constructor.
     ///

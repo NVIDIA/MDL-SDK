@@ -20,6 +20,7 @@
 #define VER_PRODUCTVERSION_STR      MI_VERSION_STRING
 #define VER_DATE		    MI_DATE_STRING
 #define VER_FILEDESCRIPTION_STR     "dds"
+
 #define VER_INTERNALNAME_STR        "dds n"
 #define VER_ORIGINALFILENAME_STR    TARGET_FILENAME /* from rc command line */
 

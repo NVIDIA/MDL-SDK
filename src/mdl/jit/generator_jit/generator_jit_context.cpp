@@ -2953,7 +2953,12 @@ llvm::FunctionCallee Function_context::get_tex_lookup_func(
     ARGS4(float result[3], Core_tex_handler const *self, unsigned texture_idx, int const coord[3])
 
 #define ARGS_resolution_2d \
-    ARGS5(int result[2], Core_tex_handler const *self, unsigned texture_idx, int const uv_tile[2], float frame)
+    ARGS5( \
+        int result[2], \
+        Core_tex_handler const *self, \
+        unsigned texture_idx, \
+        int const uv_tile[2], \
+        float frame)
 
 #define ARGS_resolution_3d \
     ARGS4(int result[3], Core_tex_handler const *self, unsigned texture_idx, float frame)

@@ -222,6 +222,18 @@
 #endif
 #ifndef FIELD
 /**
+ * Defines a field of a builtin type.
+ *
+ * @param classname  the name of the builtin type this field belongs to
+ * @param mod        the type modifier of this field
+ * @param type       the type of the field
+ * @param fieldname  the name of the field
+ * @param flags      version flags
+ */
+#define FIELD(classname, mod, type, fieldname, flags)
+#endif
+#ifndef STRUCT_FIELD
+/**
  * Defines a field of a builtin struct.
  *
  * @param classname  the name of the builtin struct this field belongs to
@@ -230,7 +242,8 @@
  * @param fieldname  the name of the field
  * @param flags      version flags
  */
-#define FIELD(classname, mod, type, fieldname, flags)
+#define STRUCT_FIELD(classname, mod, type, fieldname, flags) \
+    FIELD(classname, mod, type, fieldname, flags)
 #endif
 #ifndef ENUM_VALUE
 /**
@@ -259,6 +272,40 @@
  * @param typename      the name of the builtin type
  */
 #define BUILTIN_TYPE_END(typename)
+#endif
+#ifndef BUILTIN_STRUCT_BEGIN
+/**
+ * Defines the begin of a builtin struct type.
+ *
+ * @param typename      the name of the builtin struct type
+ * @param flags         version flags
+ */ 
+#define BUILTIN_STRUCT_BEGIN(typename, flags) BUILTIN_TYPE_BEGIN(typename, flags)
+#endif
+#ifndef BUILTIN_STRUCT_END
+/**
+ * Defines the end of a builtin struct type.
+ *
+ * @param typename      the name of the builtin struct type
+ */
+#define BUILTIN_STRUCT_END(typename)  BUILTIN_TYPE_END(typename)
+#endif
+#ifndef BUILTIN_ENUM_BEGIN
+/**
+ * Defines the begin of a builtin enum type.
+ *
+ * @param typename      the name of the builtin enum type
+ * @param flags         version flags
+ */
+#define BUILTIN_ENUM_BEGIN(typename, flags) BUILTIN_TYPE_BEGIN(typename, flags)
+#endif
+#ifndef BUILTIN_ENUM_END
+/**
+ * Defines the end of a builtin enum type.
+ *
+ * @param typename      the name of the builtin enum type
+ */
+#define BUILTIN_ENUM_END(typename)  BUILTIN_TYPE_END(typename)
 #endif
 #ifndef ARG
 /**
@@ -312,6 +359,18 @@
  * @param expr  the default expression
  */
 #define CDEFARG(type, name, arr, expr)
+#endif
+#ifndef XDEFARG
+/**
+ * Defines a function or method eXtra (uniform/varying based on option) argument
+ * with an default expression.
+ *
+ * @param type  the type of the argument
+ * @param name  the name of the argument
+ * @param arr   ARR if this is an array of type, else empty
+ * @param expr  the default expression
+ */
+#define XDEFARG(type, name, arr, expr)
 #endif
 #ifndef EXPR_LITERAL
 /**
@@ -418,6 +477,9 @@
 #endif
 #ifndef EXPLICIT
 #define EXPLICIT
+#endif
+#ifndef DECLARATIVE
+#define DECLARATIVE
 #endif
 
 /* ------------ Variable definitions ------------ */
@@ -1368,6 +1430,16 @@ BUILTIN_TYPE_END(vdf)
 
 // Texture ----------------------------------------------------------------------
 
+// This IS ugly: the texture type constructors depend on the ::tex::gamma_mode type.
+// However, these types are builtin, so we must create them in every module and than
+// means ::tex::gamma_mode must be available in advance ...
+// Build the type here!
+BUILTIN_ENUM_BEGIN(tex_gamma_mode, BUILD_TYPE_ONLY)
+    ENUM_VALUE(tex_gamma_mode, gamma_default, 0, 0)
+    ENUM_VALUE(tex_gamma_mode, gamma_linear,  1, 0)
+    ENUM_VALUE(tex_gamma_mode, gamma_srgb,    2, 0)
+BUILTIN_ENUM_END(tex_gamma_mode)
+
 BUILTIN_TYPE_BEGIN(texture_2d, 0)
     // default constructor
     CONSTRUCTOR(IMPLICIT, texture_2d, ARG0(), DS_INVALID_REF_CONSTRUCTOR, 0)
@@ -1436,7 +1508,7 @@ BUILTIN_TYPE_END(texture_ptex)
 
 // Material ----------------------------------------------------------------------
 
-BUILTIN_TYPE_BEGIN(intensity_mode, SINCE_1_1)
+BUILTIN_ENUM_BEGIN(intensity_mode, SINCE_1_1)
     ENUM_VALUE(intensity_mode, intensity_radiant_exitance, 0, SINCE_1_1)
     ENUM_VALUE(intensity_mode, intensity_power,            1, SINCE_1_1)
 
@@ -1447,58 +1519,59 @@ BUILTIN_TYPE_BEGIN(intensity_mode, SINCE_1_1)
         ), DS_COPY_CONSTRUCTOR, SINCE_1_1)
     // conversion operator to int
     CONSTRUCTOR(IMPLICIT, int, ARG1(ARG(intensity_mode, value,)), DS_CONV_OPERATOR, SINCE_1_1)
-BUILTIN_TYPE_END(intensity_mode)
+BUILTIN_ENUM_END(intensity_mode)
 
-BUILTIN_TYPE_BEGIN(material_emission, 0)
-    FIELD(material_emission,, edf,            emission , 0)         // = edf();
-    FIELD(material_emission,, color,          intensity, 0)         // = color(0.0);
-    FIELD(material_emission,, intensity_mode, mode,      SINCE_1_1) // = intensity_radiant_exitance;
+BUILTIN_STRUCT_BEGIN(material_emission, 0)
+    STRUCT_FIELD(material_emission,, edf,            emission , 0)         // = edf();
+    STRUCT_FIELD(material_emission,, color,          intensity, 0)         // = color(0.0);
+    STRUCT_FIELD(material_emission,, intensity_mode, mode,      SINCE_1_1) // =
+        // intensity_radiant_exitance;
 
     // default constructor for MDL 1.0
-    CONSTRUCTOR(IMPLICIT, material_emission,
+    CONSTRUCTOR(IMPLICIT; DECLARATIVE, material_emission,
         ARG2(
             DEFARG(edf,   emission,,  EXPR_CONSTRUCTOR(edf)),
             DEFARG(color, intensity,, EXPR_COLOR_LITERAL(0.0f))
         ), DS_ELEM_CONSTRUCTOR, REMOVED_1_1)
     // default constructor for MDL 1.1
-    CONSTRUCTOR(IMPLICIT, material_emission,
+    CONSTRUCTOR(IMPLICIT; DECLARATIVE, material_emission,
         ARG3(
             DEFARG(edf,            emission,,  EXPR_CONSTRUCTOR(edf)),
             DEFARG(color,          intensity,, EXPR_COLOR_LITERAL(0.0f)),
             DEFARG(intensity_mode, mode,,      EXPR_INTENSITY_MODE_ENUM(intensity_radiant_exitance))
         ), DS_ELEM_CONSTRUCTOR, SINCE_1_1)
     // copy constructor
-    CONSTRUCTOR(IMPLICIT, material_emission,
+    CONSTRUCTOR(IMPLICIT; DECLARATIVE, material_emission,
         ARG1(
             ARG(material_emission, value,)
         ), DS_COPY_CONSTRUCTOR, 0)
-BUILTIN_TYPE_END(material_emission)
+BUILTIN_STRUCT_END(material_emission)
 
-BUILTIN_TYPE_BEGIN(material_surface, 0)
-    FIELD(material_surface,, bsdf,              scattering, 0) // = bsdf();
-    FIELD(material_surface,, material_emission, emission,   0) // = material_emission();
+BUILTIN_STRUCT_BEGIN(material_surface, 0)
+    STRUCT_FIELD(material_surface,, bsdf,              scattering, 0) // = bsdf();
+    STRUCT_FIELD(material_surface,, material_emission, emission,   0) // = material_emission();
 
     // default constructor
-    CONSTRUCTOR(IMPLICIT, material_surface,
+    CONSTRUCTOR(IMPLICIT; DECLARATIVE, material_surface,
         ARG2(
             DEFARG(bsdf,              scattering,, EXPR_CONSTRUCTOR(bsdf)),
             DEFARG(material_emission, emission,,   EXPR_CONSTRUCTOR(material_emission))
         ), DS_ELEM_CONSTRUCTOR, 0)
     // copy constructor
-    CONSTRUCTOR(IMPLICIT, material_surface,
+    CONSTRUCTOR(IMPLICIT; DECLARATIVE, material_surface,
         ARG1(
             ARG(material_surface, value,)
         ), DS_COPY_CONSTRUCTOR, 0)
-BUILTIN_TYPE_END(material_surface)
+BUILTIN_STRUCT_END(material_surface)
 
-BUILTIN_TYPE_BEGIN(material_volume, 0)
-    FIELD(material_volume,, vdf,   scattering,             0) // = vdf();
-    FIELD(material_volume,, color, absorption_coefficient, 0) // = 0.0;
-    FIELD(material_volume,, color, scattering_coefficient, 0) // = 0.0;
-    FIELD(material_volume,, color, emission_intensity,     SINCE_1_7) // = 0.0
+BUILTIN_STRUCT_BEGIN(material_volume, 0)
+    STRUCT_FIELD(material_volume,, vdf,   scattering,             0) // = vdf();
+    STRUCT_FIELD(material_volume,, color, absorption_coefficient, 0) // = 0.0;
+    STRUCT_FIELD(material_volume,, color, scattering_coefficient, 0) // = 0.0;
+    STRUCT_FIELD(material_volume,, color, emission_intensity,     SINCE_1_7) // = 0.0
 
     // default constructor for MDL 1.0
-    CONSTRUCTOR(IMPLICIT, material_volume,
+    CONSTRUCTOR(IMPLICIT; DECLARATIVE, material_volume,
         ARG3(
             DEFARG(vdf,   scattering,,             EXPR_CONSTRUCTOR(vdf)),
             DEFARG(color, absorption_coefficient,, EXPR_COLOR_LITERAL(0.0f)),
@@ -1506,7 +1579,7 @@ BUILTIN_TYPE_BEGIN(material_volume, 0)
         ), DS_ELEM_CONSTRUCTOR, REMOVED_1_7)
 
     // default constructor for MDL 1.7
-    CONSTRUCTOR(IMPLICIT, material_volume,
+    CONSTRUCTOR(IMPLICIT; DECLARATIVE, material_volume,
         ARG4(
             DEFARG(vdf,   scattering,,             EXPR_CONSTRUCTOR(vdf)),
             DEFARG(color, absorption_coefficient,, EXPR_COLOR_LITERAL(0.0f)),
@@ -1514,67 +1587,67 @@ BUILTIN_TYPE_BEGIN(material_volume, 0)
             DEFARG(color, emission_intensity,,     EXPR_COLOR_LITERAL(0.0f))
         ), DS_ELEM_CONSTRUCTOR, SINCE_1_7)
     // copy constructor
-    CONSTRUCTOR(IMPLICIT, material_volume,
+    CONSTRUCTOR(IMPLICIT; DECLARATIVE, material_volume,
         ARG1(
             ARG(material_volume, value,)
         ), DS_COPY_CONSTRUCTOR, 0)
-BUILTIN_TYPE_END(material_volume)
+BUILTIN_STRUCT_END(material_volume)
 
-BUILTIN_TYPE_BEGIN(material_geometry, 0)
-    FIELD(material_geometry,        , float3, displacement,   0) // = float3(0.0);
-    FIELD(material_geometry,        , float,  cutout_opacity, 0) // = 1.0f;
-    FIELD(material_geometry,        , float3, normal,         0) // = state::normal;
+BUILTIN_STRUCT_BEGIN(material_geometry, 0)
+    STRUCT_FIELD(material_geometry,        , float3, displacement,   0) // = float3(0.0);
+    STRUCT_FIELD(material_geometry,        , float,  cutout_opacity, 0) // = 1.0f;
+    STRUCT_FIELD(material_geometry,        , float3, normal,         0) // = state::normal;
 
     // default constructor
-    CONSTRUCTOR(IMPLICIT, material_geometry,
+    CONSTRUCTOR(IMPLICIT; DECLARATIVE, material_geometry,
         ARG3(
             DEFARG(float3, displacement,,   EXPR_FLOAT3_LITERAL(0.0f)),
             DEFARG(float,  cutout_opacity,, EXPR_LITERAL(1.0f)),
             DEFARG(float3, normal,,         EXPR_STATE(float3, normal))
         ), DS_ELEM_CONSTRUCTOR, 0)
     // copy constructor
-    CONSTRUCTOR(IMPLICIT, material_geometry,
+    CONSTRUCTOR(IMPLICIT; DECLARATIVE, material_geometry,
         ARG1(
             ARG(material_geometry, value,)
         ), DS_COPY_CONSTRUCTOR, 0)
-BUILTIN_TYPE_END(material_geometry)
+BUILTIN_STRUCT_END(material_geometry)
 
-BUILTIN_TYPE_BEGIN(material, 0)
-    FIELD(material, uniform, bool,              thin_walled, 0) // = false;
-    FIELD(material,        , material_surface,  surface,     0) // = material_surface();
-    FIELD(material,        , material_surface,  backface,    0) // = material_surface();
-    FIELD(material, uniform, color,             ior,         0) // = color(1.0);
-    FIELD(material,        , material_volume,   volume,      0) // = material_volume();
-    FIELD(material,        , material_geometry, geometry,    0) // = material_geometry();
-    FIELD(material,        , hair_bsdf,         hair,        SINCE_1_5) // = hair_bsdf();
+BUILTIN_STRUCT_BEGIN(material, 0)
+    STRUCT_FIELD(material, uniform, bool,              thin_walled, 0) // = false;
+    STRUCT_FIELD(material,        , material_surface,  surface,     0) // = material_surface();
+    STRUCT_FIELD(material,        , material_surface,  backface,    0) // = material_surface();
+    STRUCT_FIELD(material, extra  , color,             ior,         0) // = color(1.0);
+    STRUCT_FIELD(material,        , material_volume,   volume,      0) // = material_volume();
+    STRUCT_FIELD(material,        , material_geometry, geometry,    0) // = material_geometry();
+    STRUCT_FIELD(material,        , hair_bsdf,         hair,        SINCE_1_5) // = hair_bsdf();
 
     // default constructor until MDL 1.5
-    CONSTRUCTOR(IMPLICIT, material,
+    CONSTRUCTOR(IMPLICIT; DECLARATIVE, material,
         ARG6(
             UDEFARG(bool,              thin_walled,, EXPR_LITERAL(false)),
             DEFARG(material_surface,   surface,,     EXPR_CONSTRUCTOR(material_surface)),
             DEFARG(material_surface,   backface,,    EXPR_CONSTRUCTOR(material_surface)),
-            UDEFARG(color,             ior,,         EXPR_COLOR_LITERAL(1.0f)),
+            XDEFARG(color,             ior,,         EXPR_COLOR_LITERAL(1.0f)),
             DEFARG(material_volume,    volume,,      EXPR_CONSTRUCTOR(material_volume)),
             DEFARG(material_geometry,  geometry,,    EXPR_CONSTRUCTOR(material_geometry))
         ), DS_ELEM_CONSTRUCTOR, REMOVED_1_5)
     // default constructor from MDL 1.5
-    CONSTRUCTOR(IMPLICIT, material,
+    CONSTRUCTOR(IMPLICIT; DECLARATIVE, material,
         ARG7(
             UDEFARG(bool,              thin_walled,, EXPR_LITERAL(false)),
             DEFARG(material_surface,   surface,,     EXPR_CONSTRUCTOR(material_surface)),
             DEFARG(material_surface,   backface,,    EXPR_CONSTRUCTOR(material_surface)),
-            UDEFARG(color,             ior,,         EXPR_COLOR_LITERAL(1.0f)),
+            XDEFARG(color,             ior,,         EXPR_COLOR_LITERAL(1.0f)),
             DEFARG(material_volume,    volume,,      EXPR_CONSTRUCTOR(material_volume)),
             DEFARG(material_geometry,  geometry,,    EXPR_CONSTRUCTOR(material_geometry)),
             DEFARG(hair_bsdf,          hair,,        EXPR_CONSTRUCTOR(hair_bsdf))
         ), DS_ELEM_CONSTRUCTOR, SINCE_1_5)
     // copy constructor
-    CONSTRUCTOR(IMPLICIT, material,
+    CONSTRUCTOR(IMPLICIT; DECLARATIVE, material,
         ARG1(
             ARG(material, value,)
         ), DS_COPY_CONSTRUCTOR, 0)
-BUILTIN_TYPE_END(material)
+BUILTIN_STRUCT_END(material)
 
 // -------------------------- operators -------------------------------
 
@@ -2343,15 +2416,21 @@ OPERATOR(double4x4, OK_DIVIDE_ASSIGN, ARG2(ARG(double4x4, x,), ARG(double, y,)),
 #undef ARG2
 #undef ARG1
 #undef ARG0
+#undef XDEFARG
 #undef CDEFARG
 #undef UDEFARG
 #undef DEFARG
 #undef UARG
 #undef ARG
 #endif
+#undef BUILTIN_ENUM_END
+#undef BUILTIN_ENUM_BEGIN
+#undef BUILTIN_STRUCT_END
+#undef BUILTIN_STRUCT_BEGIN
 #undef BUILTIN_TYPE_END
 #undef BUILTIN_TYPE_BEGIN
 #undef ENUM_VALUE
+#undef STRUCT_FIELD
 #undef FIELD
 #undef CONSTRUCTOR
 #undef METHOD_SYNONYM

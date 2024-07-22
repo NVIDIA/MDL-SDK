@@ -46,14 +46,14 @@ MI_TEST_AUTO_FUNCTION( verify_config_module )
     SYSTEM::Access_module<Config_module> config_module(false);
     Config_registry& registry = config_module->get_configuration();
 
-    int   c_int		= 11;
-    int   c_int3	= 333;
-    float l_flt		= 11.5;
-    float l_flt3	= 111.5;
-    std::string d_str	= "ss1";
+    int   c_int         = 11;
+    int   c_int3        = 333;
+    float l_flt         = 11.5;
+    float l_flt3        = 111.5;
+    std::string d_str   = "ss1";
     std::string d_str3= "sss1";
-    bool  c_bool0	= false;
-    bool  c_bool1	= true;
+    bool  c_bool0       = false;
+    bool  c_bool1       = true;
     registry.add_value("int", c_int);
     registry.add_value("int3", c_int3);
     registry.add_value("flt", l_flt);

@@ -35,13 +35,10 @@
 #include "dblight_database.h"
 #include "dblight_info.h"
 #include "dblight_scope.h"
-#include "dblight_util.h"
 
 #include <base/data/db/i_db_element.h>
 #include <base/data/serial/i_serial_buffer_serializer.h>
 #include <base/data/serial/serial.h>
-#include <base/hal/thread/i_thread_block.h>
-#include <base/hal/thread/i_thread_rw_lock.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/system/main/i_assert.h>
 
@@ -60,16 +57,15 @@ Transaction_impl::Transaction_impl(
     m_id( id),
     m_visibility_id( ~0U)
 {
+    m_scope->pin();
 }
 
-void Transaction_impl::unpin()
+Transaction_impl::~Transaction_impl()
 {
-    if( --m_pin_count > 0)
-        return;
-
     MI_ASSERT( m_state == COMMITTED || m_state == ABORTED);
     m_transaction_manager->remove_from_all_transactions( this);
-    delete this;
+
+    m_scope->unpin();
 }
 
 DB::Scope* Transaction_impl::get_scope()
@@ -123,6 +119,8 @@ DB::Info* Transaction_impl::access_element( DB::Tag tag)
 {
     Statistics_helper helper( g_access);
 
+    THREAD::Block_shared block( &m_database->get_lock());
+
     if( m_state != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
@@ -143,6 +141,8 @@ DB::Info* Transaction_impl::edit_element( DB::Tag tag)
 {
     Statistics_helper helper( g_edit);
 
+    THREAD::Block block( &m_database->get_lock());
+
     if( m_state != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
@@ -160,9 +160,18 @@ DB::Info* Transaction_impl::edit_element( DB::Tag tag)
     MI_ASSERT( element);
 
     mi::Uint32 version = allocate_sequence_number();
+    DB::Privacy_level privacy_level = info->get_privacy_level();
     const DB::Tag_set& references = info->get_references();
+
+    // Find scope for store level.
+    DB::Scope* scope = m_scope;
+    while( scope->get_level() > privacy_level)
+        scope = scope->get_parent();
+    ASSERT( M_DB, scope->get_level() <= privacy_level);
+
+    auto* scope_impl = static_cast<Scope_impl*>( scope);
     Info_impl* new_info = m_database->get_info_manager()->start_edit(
-        element, DB::Scope_id( 0), this, version, tag, info->get_name(), references);
+        element, scope_impl, this, version, tag, privacy_level, info->get_name(), references);
 
     info->unpin();
     return new_info;
@@ -172,12 +181,18 @@ void Transaction_impl::finish_edit( DB::Info* info, DB::Journal_type journal_typ
 {
     Statistics_helper helper( g_finish_edit);
 
+    // Invoke callback to prepare store.
+    info->get_element()->prepare_store( this, info->get_tag());
+
+    THREAD::Block block( &m_database->get_lock());
+
     if( m_state != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
         return;
     }
 
+    // Check serialization.
     if( m_database->get_check_serialization_edit()) {
         SERIAL::Buffer_serializer serializer;
         serializer.serialize( info->get_element());
@@ -186,8 +201,7 @@ void Transaction_impl::finish_edit( DB::Info* info, DB::Journal_type journal_typ
             deserializer.deserialize( serializer.get_buffer(), serializer.get_buffer_size())));
     }
 
-    info->get_element()->prepare_store( this, info->get_tag());
-    m_database->get_info_manager()->finish_edit( static_cast<Info_impl*>( info));
+    m_database->get_info_manager()->finish_edit( static_cast<Info_impl*>( info), this);
 }
 
 DB::Tag Transaction_impl::reserve_tag()
@@ -202,7 +216,8 @@ DB::Tag Transaction_impl::store(
     DB::Privacy_level store_level)
 {
     DB::Tag tag = m_database->allocate_tag();
-    store( tag, element, name, privacy_level, DB::JOURNAL_NONE, store_level);
+    store_element_internal(
+        tag, element, name, privacy_level, DB::JOURNAL_NONE, store_level, /*store_for_rc*/ false);
     return tag;
 }
 
@@ -214,7 +229,71 @@ void Transaction_impl::store(
     DB::Journal_type journal_type,
     DB::Privacy_level store_level)
 {
+    store_element_internal(
+        tag, element, name, privacy_level, journal_type, store_level, /*store_for_rc*/ false);
+}
+
+DB::Tag Transaction_impl::store_for_reference_counting(
+    DB::Element_base* element,
+    const char* name,
+    DB::Privacy_level privacy_level,
+    DB::Privacy_level store_level)
+{
+    DB::Tag tag = m_database->allocate_tag();
+    store_element_internal(
+        tag, element, name, privacy_level, DB::JOURNAL_NONE, store_level, /*store_for_rc*/ true);
+    return tag;
+}
+
+void Transaction_impl::store_for_reference_counting(
+    DB::Tag tag,
+    DB::Element_base* element,
+    const char* name,
+    DB::Privacy_level privacy_level,
+    DB::Journal_type journal_type,
+    DB::Privacy_level store_level)
+{
+    store_element_internal(
+        tag, element, name, privacy_level, journal_type, store_level, /*store_for_rc*/ true);
+}
+
+void Transaction_impl::store_element_internal(
+    DB::Tag tag,
+    DB::Element_base* element,
+    const char* name,
+    DB::Privacy_level privacy_level,
+    DB::Journal_type journal_type,
+    DB::Privacy_level store_level,
+    bool store_for_rc)
+{
     Statistics_helper helper( g_store);
+
+    if( !tag) {
+        LOG::mod_log->error( M_DB, LOG::Mod_log::C_DATABASE, "Invalid tag used with "
+            " Transaction::%s().", store_for_rc ? "store_for_reference_counting" : "store");
+        delete element;
+        return;
+    }
+
+    if( name && !name[0]) {
+        LOG::mod_log->error( M_DB, LOG::Mod_log::C_DATABASE, "Invalid empty name used with "
+            " Transaction::%s().", store_for_rc ? "store_for_reference_counting" : "store");
+        delete element;
+        return;
+    }
+
+    if( !element) {
+        LOG::mod_log->error( M_DB, LOG::Mod_log::C_DATABASE, "Invalid element used with "
+            " Transaction::%s().", store_for_rc ? "store_for_reference_counting" : "store");
+        return;
+    }
+
+    MI_ASSERT( journal_type == DB::JOURNAL_NONE || journal_type == DB::JOURNAL_ALL);
+
+    // Invoke callback to prepare store.
+    element->prepare_store( this, tag);
+
+    THREAD::Block block( &m_database->get_lock());
 
     if( m_state != OPEN) {
         LOG::mod_log->error(
@@ -223,30 +302,7 @@ void Transaction_impl::store(
         return;
     }
 
-    if( !tag) {
-        LOG::mod_log->error( M_DB, LOG::Mod_log::C_DATABASE, "Invalid tag used with "
-            " Transaction::store() or Transaction::store_for_reference_counting().");
-        delete element;
-        return;
-    }
-
-    if( name && !name[0]) {
-        LOG::mod_log->error( M_DB, LOG::Mod_log::C_DATABASE, "Invalid empty name used with "
-            " Transaction::store() or Transaction::store_for_reference_counting().");
-        delete element;
-        return;
-    }
-
-    if( !element) {
-        LOG::mod_log->error( M_DB, LOG::Mod_log::C_DATABASE, "Invalid element used with "
-            " Transaction::store() or Transaction::store_for_reference_counting().");
-        return;
-    }
-
-    MI_ASSERT( privacy_level == 0 || privacy_level == 255);
-    MI_ASSERT( journal_type == DB::JOURNAL_NONE || journal_type == DB::JOURNAL_ALL);
-    MI_ASSERT( store_level == 0 || store_level == 255);
-
+    // Check serialization.
     std::string name_str;
     if( m_database->get_check_serialization_store()) {
         // Copy name to avoid that the pointer becomes invalid in case it points into the element
@@ -264,33 +320,37 @@ void Transaction_impl::store(
             name = name_str.c_str();
     }
 
-    mi::Uint32 version = allocate_sequence_number();
-    element->prepare_store( this, tag);
-    m_database->get_info_manager()->store( element, DB::Scope_id( 0), this, version, tag, name);
-}
+    // Clamp store level.
+    if( store_level > privacy_level)
+        store_level = privacy_level;
+    MI_ASSERT( store_level <= privacy_level);
 
-DB::Tag Transaction_impl::store_for_reference_counting(
-    DB::Element_base* element,
-    const char* name,
-    DB::Privacy_level privacy_level,
-    DB::Privacy_level store_level)
-{
-    DB::Tag tag = store( element, name, privacy_level, store_level);
-    if( tag)
-        remove( tag, false);
-    return tag;
-}
+    // Find scope for store level.
+    DB::Scope* scope = m_scope;
+    while( scope->get_level() > store_level)
+        scope = scope->get_parent();
+    ASSERT( M_DB, scope->get_level() <= store_level);
 
-void Transaction_impl::store_for_reference_counting(
-    DB::Tag tag,
-    DB::Element_base* element,
-    const char* name,
-    DB::Privacy_level privacy_level,
-    DB::Journal_type journal_type,
-    DB::Privacy_level store_level)
-{
-    store( tag, element, name, privacy_level, journal_type, store_level);
-    remove( tag, false);
+    DB::Tag_set references;
+    element->get_references( &references);
+
+    // Check privacy levels.
+    if( m_database->get_check_privacy_levels()) {
+        DB::Privacy_level referencing_level = scope->get_level();
+        check_privacy_levels( referencing_level, references, tag, name, /*store*/ true);
+    }
+
+    auto* scope_impl = static_cast<Scope_impl*>( scope);
+    mi::Uint32 version1 = allocate_sequence_number();
+    // Modifies references.
+    m_database->get_info_manager()->store(
+        element, scope_impl, this, version1, tag, privacy_level, name, references);
+
+    if( store_for_rc) {
+        mi::Uint32 version2 = allocate_sequence_number();
+        m_database->get_info_manager()->remove(
+            m_scope, this, version2, tag, /*remove_local_copy*/ false);
+    }
 }
 
 DB::Tag Transaction_impl::store(
@@ -300,7 +360,7 @@ DB::Tag Transaction_impl::store(
     DB::Privacy_level store_level)
 {
     MI_ASSERT( !"Not implemented");
-    return DB::Tag();
+    return {};
 }
 
 void Transaction_impl::store(
@@ -321,7 +381,7 @@ DB::Tag Transaction_impl::store_for_reference_counting(
     DB::Privacy_level store_level)
 {
     MI_ASSERT( !"Not implemented");
-    return DB::Tag();
+    return {};
 }
 
 void Transaction_impl::store_for_reference_counting(
@@ -337,12 +397,20 @@ void Transaction_impl::store_for_reference_counting(
 void Transaction_impl::localize(
     DB::Tag tag, DB::Privacy_level privacy_level, DB::Journal_type journal_type)
 {
-    MI_ASSERT( !"Not implemented");
+    Statistics_helper helper( g_localize);
+
+    DB::Info* info = access_element( tag);
+    DB::Element_base* element = info->get_element();
+    DB::Element_base* copy = element->copy();
+    store( tag, copy, info->get_name(), privacy_level, journal_type, privacy_level);
+    info->unpin();
 }
 
 bool Transaction_impl::remove( DB::Tag tag, bool remove_local_copy)
 {
     Statistics_helper helper( g_remove);
+
+    THREAD::Block block( &m_database->get_lock());
 
     if( m_state != OPEN) {
         LOG::mod_log->error(
@@ -351,12 +419,14 @@ bool Transaction_impl::remove( DB::Tag tag, bool remove_local_copy)
     }
 
     mi::Uint32 version = allocate_sequence_number();
-    return m_database->get_info_manager()->remove( DB::Scope_id( 0), this, version, tag);
+    return m_database->get_info_manager()->remove( m_scope, this, version, tag, remove_local_copy);
 }
 
 const char* Transaction_impl::tag_to_name( DB::Tag tag)
 {
     Statistics_helper helper( g_tag_to_name);
+
+    THREAD::Block_shared block( &m_database->get_lock());
 
     if( m_state != OPEN) {
         LOG::mod_log->error(
@@ -377,18 +447,20 @@ DB::Tag Transaction_impl::name_to_tag( const char* name)
 {
     Statistics_helper helper( g_name_to_tag);
 
+    THREAD::Block_shared block( &m_database->get_lock());
+
     if( m_state != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
-        return DB::Tag();
+        return {};
     }
 
     if( !name)
-        return DB::Tag();
+        return {};
 
     Info_impl* info = m_database->get_info_manager()->lookup_info( name, m_scope, m_id);
     if( !info)
-        return DB::Tag();
+        return {};
 
     DB::Tag result = info->get_tag();
     info->unpin();
@@ -397,21 +469,73 @@ DB::Tag Transaction_impl::name_to_tag( const char* name)
 
 SERIAL::Class_id Transaction_impl::get_class_id( DB::Tag tag)
 {
+    Statistics_helper helper( g_get_class_id);
+
+    THREAD::Block_shared block( &m_database->get_lock());
+
     if( m_state != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
-        return SERIAL::Class_id();
+        return 0;
     }
 
-    DB::Info* info = access_element( tag);
+    Info_impl* info = m_database->get_info_manager()->lookup_info( tag, m_scope, m_id);
+    if( !info)
+        return SERIAL::class_id_unknown;
+
     SERIAL::Class_id class_id = info->get_element()->get_class_id();
     info->unpin();
     return class_id;
 }
 
+DB::Privacy_level Transaction_impl::get_tag_privacy_level( DB::Tag tag)
+{
+    Statistics_helper helper( g_get_tag_privacy_level);
+
+    THREAD::Block_shared block( &m_database->get_lock());
+
+    if( m_state != OPEN) {
+        LOG::mod_log->error(
+            M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
+        return 0;
+    }
+
+    Info_impl* info = m_database->get_info_manager()->lookup_info( tag, m_scope, m_id);
+    if( !info)
+        return 0;
+
+    DB::Privacy_level privacy_level = info->get_privacy_level();
+    info->unpin();
+    return privacy_level;
+}
+
+DB::Privacy_level Transaction_impl::get_tag_store_level( DB::Tag tag)
+{
+    Statistics_helper helper( g_get_tag_store_level);
+
+    THREAD::Block_shared block( &m_database->get_lock());
+
+    if( m_state != OPEN) {
+        LOG::mod_log->error(
+            M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
+        return 0;
+    }
+
+    DB::Privacy_level store_level;
+    Info_impl* info = m_database->get_info_manager()->lookup_info(
+        tag, m_scope, m_id, &store_level);
+    if( !info)
+        return 0;
+
+    info->unpin();
+    return store_level;
+}
+
 mi::Uint32 Transaction_impl::get_tag_reference_count( DB::Tag tag)
 {
     Statistics_helper helper( g_get_tag_reference_count);
+
+    THREAD::Block_shared block( &m_database->get_lock());
 
     if( m_state != OPEN) {
         LOG::mod_log->error(
@@ -424,15 +548,19 @@ mi::Uint32 Transaction_impl::get_tag_reference_count( DB::Tag tag)
 
 DB::Tag_version Transaction_impl::get_tag_version( DB::Tag tag)
 {
+    Statistics_helper helper( g_get_tag_version);
+
+    THREAD::Block_shared block( &m_database->get_lock());
+
     if( m_state != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
-        return DB::Tag_version();
+        return {};
     }
 
     Info_impl* info = m_database->get_info_manager()->lookup_info( tag, m_scope, m_id);
     if( !info)
-        return DB::Tag_version();
+        return {};
 
     DB::Tag_version result( tag, info->get_transaction_id(), info->get_version());
     info->unpin();
@@ -442,23 +570,58 @@ DB::Tag_version Transaction_impl::get_tag_version( DB::Tag tag)
 bool Transaction_impl::can_reference_tag(
     DB::Privacy_level referencing_level, DB::Tag referenced_tag)
 {
+    Statistics_helper helper( g_can_reference_tag);
+
+    THREAD::Block_shared block( &m_database->get_lock());
+
+    return can_reference_tag_locked( referencing_level, referenced_tag);
+}
+
+bool Transaction_impl::can_reference_tag_locked(
+    DB::Privacy_level referencing_level, DB::Tag referenced_tag)
+{
+    m_database->get_lock().check_is_owned_shared_or_exclusive();
+
+    DB::Scope* scope = m_scope;
+    while( scope->get_level() > referencing_level)
+        scope = scope->get_parent();
+
+    Info_impl* referenced_info = m_database->get_info_manager()->lookup_info(
+        referenced_tag, scope, m_id);
+    if( !referenced_info)
+        return false;
+
+    referenced_info->unpin();
     return true;
 }
 
 bool Transaction_impl::can_reference_tag(
     DB::Tag referencing_tag, DB::Tag referenced_tag)
 {
-    return true;
+    Statistics_helper helper( g_can_reference_tag);
+
+    THREAD::Block_shared block( &m_database->get_lock());
+
+    DB::Privacy_level referencing_level;
+    Info_impl* referencing_info = m_database->get_info_manager()->lookup_info(
+        referencing_tag, m_scope, m_id, &referencing_level);
+    if( !referencing_info)
+        return false;
+
+    referencing_info->unpin();
+    return can_reference_tag_locked( referencing_level, referenced_tag);
 }
 
 bool Transaction_impl::get_tag_is_removed( DB::Tag tag)
 {
     Statistics_helper helper( g_get_tag_is_removed);
 
+    THREAD::Block_shared block( &m_database->get_lock());
+
     if( m_state != OPEN) {
         LOG::mod_log->error(
             M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
-        return 0;
+        return false;
     }
 
     return m_database->get_info_manager()->get_tag_is_removed( tag);
@@ -514,6 +677,33 @@ bool Transaction_impl::is_visible_for( DB::Transaction_id id) const
     return (m_state == COMMITTED) && (m_visibility_id <= id);
 }
 
+void Transaction_impl::check_privacy_levels(
+    DB::Privacy_level referencing_level,
+    const DB::Tag_set& references,
+    DB::Tag tag,
+    const char* name,
+    bool store)
+{
+    m_database->get_lock().check_is_owned_shared_or_exclusive();
+
+    for( DB::Tag referenced_tag: references) {
+        if( !can_reference_tag_locked( referencing_level, referenced_tag)) {
+            std::string name_str;
+            if( name) {
+                name_str += '\"';
+                name_str += name;
+                name_str += '\"';
+            } else
+                name_str = "without name";
+            LOG::mod_log->error( M_DB, LOG::Mod_log::C_DATABASE,
+                "%s database element %s (tag %u) contains an invalid reference to a database "
+                "element with tag %u. The referenced database element exist only in a more private "
+                "scope (or not at all).",
+                (store ? "Stored" : "Edited"), name_str.c_str(), tag(), referenced_tag());
+        }
+    }
+}
+
 std::ostream& operator<<( std::ostream& s, const Transaction_impl::State& state)
 {
     switch( state) {
@@ -528,6 +718,8 @@ std::ostream& operator<<( std::ostream& s, const Transaction_impl::State& state)
 Transaction_manager::~Transaction_manager()
 {
     MI_ASSERT( m_open_transactions.empty());
+
+    // Removal of all scopes (and their infos) should not leave any transactions behind.
     MI_ASSERT( m_all_transactions.empty());
 }
 
@@ -535,9 +727,12 @@ Transaction_impl* Transaction_manager::start_transaction( Scope_impl* scope)
 {
     THREAD::Block block( &m_database->get_lock());
 
-    Transaction_impl* transaction = new Transaction_impl(
+    auto* transaction = new Transaction_impl(
         m_database, this, scope, m_next_transaction_id++);
-    m_all_transactions.insert( *transaction);
+    {
+        THREAD::Block block( m_all_transactions_lock);
+        m_all_transactions.insert( *transaction);
+    }
     m_open_transactions.insert( *transaction);
 
     return transaction;
@@ -557,12 +752,13 @@ void Transaction_manager::end_transaction( Transaction_impl* transaction, bool c
     transaction->set_state( commit ? Transaction_impl::COMMITTED : Transaction_impl::ABORTED);
     transaction->unpin();
 
+    Statistics_helper helper( g_garbage_collection);
     m_database->get_info_manager()->garbage_collection( get_lowest_open_transaction_id());
 }
 
 void Transaction_manager::remove_from_all_transactions( Transaction_impl* transaction)
 {
-    THREAD::Block block( m_all_transaction_lock);
+    THREAD::Block block( m_all_transactions_lock);
 
     auto it = m_all_transactions.find( *transaction);
     MI_ASSERT( it != m_all_transactions.end());
@@ -580,7 +776,7 @@ DB::Transaction_id Transaction_manager::get_lowest_open_transaction_id() const
 void Transaction_manager::dump( std::ostream& s, bool mask_pointer_values)
 {
     m_database->get_lock().check_is_owned_shared_or_exclusive();
-    THREAD::Block block( m_all_transaction_lock);
+    THREAD::Block block( m_all_transactions_lock);
 
     s << "Count of all transactions: " << m_all_transactions.size() << std::endl;
     s << "Count of open transactions: " << m_open_transactions.size() << std::endl;

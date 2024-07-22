@@ -764,7 +764,7 @@ static void update_camera(
 // Progressively render scene
 static void render_scene(
     const Options &options,
-    std::unique_ptr<Ptx_code> target_code,
+    std::unique_ptr<Target_code> target_code,
     mi::mdl::IMDL *mdl_compiler,
     const std::vector<Df_cuda_material>& material_bundle)
 {
@@ -846,7 +846,7 @@ static void render_scene(
     update_camera(kernel_params, phi, theta, base_dist, window_context.zoom);
 
     // Build the full CUDA kernel with all the generated code
-    std::vector<std::unique_ptr<Ptx_code> > target_codes;
+    std::vector<std::unique_ptr<Target_code> > target_codes;
     target_codes.push_back(std::move(target_code));
     CUfunction  cuda_function;
     char const *ptx_name = options.enable_derivatives ?
@@ -964,10 +964,10 @@ static void render_scene(
                         if (info == nullptr) {
                             std::shared_ptr<Enum_type_info> p(new Enum_type_info());
 
-                            for (int i = 0, n = val_type->get_value_count(); i < n; ++i) {
-                                const mi::mdl::ISymbol *e_sym = nullptr;
-                                int                    e_code = 0;
-                                val_type->get_value(i, e_sym, e_code);
+                            for (size_t i = 0, n = val_type->get_value_count(); i < n; ++i) {
+                                const mi::mdl::IType_enum::Value *e_val = val_type->get_value(i);
+                                const mi::mdl::ISymbol           *e_sym = e_val->get_symbol();
+                                int                              e_code = e_val->get_code();
 
                                 p->add(e_sym->get_name(), e_code);
                             }
@@ -1562,11 +1562,15 @@ int MAIN_UTF8(int argc, char* argv[])
         options.material_names.push_back("::nvidia::sdk_examples::tutorials::example_df");
 
     {
+        mi::Uint32 backend_options =
+            options.enable_derivatives ? BACKEND_OPTIONS_ENABLE_DERIVATIVES : BACKEND_OPTIONS_NONE;
+
         // Initialize the material compiler with 16 result buffer slots ("texture results")
-        Material_ptx_compiler mc(
+        Material_backend_compiler mc(
             mdl_compiler.get(),
+            /*target_backend*/ mi::mdl::ICode_generator::TL_PTX,
             16,
-            options.enable_derivatives,
+            backend_options,
             /*df_handle_mode=*/ "none",
             /*lambda_return_mode=*/ "sret");
         for (std::size_t i = 0; i < options.mdl_paths.size(); ++i)
@@ -1647,7 +1651,7 @@ int MAIN_UTF8(int argc, char* argv[])
             mc.print_messages();
         } else {
             // Generate the CUDA PTX code for the link unit.
-            std::unique_ptr<Ptx_code> target_code(mc.generate_cuda_ptx());
+            std::unique_ptr<Target_code> target_code(mc.generate_target_code());
 
             if (target_code.get()) {
                 // Render

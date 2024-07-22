@@ -39,7 +39,27 @@
 #include <errhandlingapi.h>
 #include <strsafe.h>
 #include <dbghelp.h>
+#include <d3d12.h>
+#include<Windows.h>  
 
+typedef LONG NTSTATUS, *PNTSTATUS;
+typedef NTSTATUS(WINAPI* RtlGetVersionPtr)(PRTL_OSVERSIONINFOW);
+
+RTL_OSVERSIONINFOW GetOSVersion() {
+    HMODULE hMod = ::GetModuleHandleW(L"ntdll.dll");
+    if (hMod) {
+        RtlGetVersionPtr fxPtr = (RtlGetVersionPtr)::GetProcAddress(hMod, "RtlGetVersion");
+        if (fxPtr != nullptr) {
+            RTL_OSVERSIONINFOW rovi = { 0 };
+            rovi.dwOSVersionInfoSize = sizeof(rovi);
+            if (0 == fxPtr(&rovi)) {
+                return rovi;
+            }
+        }
+    }
+    RTL_OSVERSIONINFOW rovi = { 0 };
+    return rovi;
+}
 
 namespace mi { namespace examples { namespace mdl_d3d12
 {
@@ -168,6 +188,7 @@ int Base_application::run(
     {
         // give the user time to read the reason of failure
         std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+        Diagnostics::list_loaded_libraries(Log_level::Info);
         return -1;
     }
 
@@ -201,9 +222,6 @@ int Base_application::run(
         std::this_thread::sleep_for(std::chrono::milliseconds(5000));
     }
 
-    // before unloading list every library that is in use
-    Diagnostics::list_loaded_libraries();
-
     // unload the application
     if (!unload())
     {
@@ -211,6 +229,9 @@ int Base_application::run(
         // give the user time to read the reason of failure 
         std::this_thread::sleep_for(std::chrono::milliseconds(5000));
     }
+
+    // before unloading list every library that is in use
+    Diagnostics::list_loaded_libraries(return_code == 0 ? Log_level::Verbose : Log_level::Info);
 
     // release base application resources
     for (auto&& queue : m_command_queues)
@@ -227,7 +248,8 @@ int Base_application::run(
     if (options->gpu_debug)
     {
         ComPtr<IDXGIDebug1> debugController;
-        if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&debugController))))
+        if (!log_on_failure(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&debugController)), 
+            "Failed to get query DXGI Debug Infterface"))
         {
             debugController->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL);
         }
@@ -283,13 +305,31 @@ bool Base_application::initialize_internal(
     m_options = options;
     m_dynamic_options = dynamic_options;
 
+    // log version number for potential repros
+    RTL_OSVERSIONINFOW os_version = GetOSVersion();
+    log_info("OS Version: Windows " + std::to_string(os_version.dwMajorVersion) + "." +
+        std::to_string(os_version.dwMinorVersion) + " build " + std::to_string(os_version.dwBuildNumber));
+
+    #ifdef AGILITY_SDK_ENABLED
+        const std::string agility_sdk_enabled = " enabled: YES";
+    #else
+        const std::string agility_sdk_enabled = " enabled: NO";
+    #endif
+    #ifdef D3D12_PREVIEW_SDK_VERSION
+        log_info("Microsoft Agility SDK Version: " +
+            std::to_string(D3D12_PREVIEW_SDK_VERSION) + agility_sdk_enabled);
+    #else
+        log_info("Microsoft Agility SDK Version: None" + agility_sdk_enabled);
+    #endif
+
     UINT dxgi_factory_flags = 0;
     D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_12_1;
 
     if(options->gpu_debug)
     {
         ComPtr<ID3D12Debug3> debugController;
-        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))
+        if (!log_on_failure(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)),
+            "Failed to get query DXGI Debug Infterface"))
         {
             debugController->EnableDebugLayer();
             //debugController->SetEnableGPUBasedValidation(true);
@@ -299,7 +339,8 @@ bool Base_application::initialize_internal(
         }
 
         ComPtr<IDXGIInfoQueue> dxgiInfoQueue;
-        if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiInfoQueue))))
+        if (!log_on_failure(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiInfoQueue)),
+            "Failed to get query DXGI Debug Infterface"))
         {
             dxgi_factory_flags |= DXGI_CREATE_FACTORY_DEBUG;
             dxgiInfoQueue->SetBreakOnSeverity(
@@ -318,7 +359,8 @@ bool Base_application::initialize_internal(
         // available from 10.0.18362.0
         #if WDK_NTDDI_VERSION > NTDDI_WIN10_RS5
             ComPtr<ID3D12DeviceRemovedExtendedDataSettings> dredSettings;
-            if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&dredSettings))))
+            if (!log_on_failure(D3D12GetDebugInterface(IID_PPV_ARGS(&dredSettings)),
+                "Failed to get query DXGI Debug Infterface"))
             {
                 dredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
                 dredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
@@ -391,13 +433,16 @@ bool Base_application::initialize_internal(
         std::string name = mi::examples::strings::wstr_to_str(pair.desc.Description);
 
         // create the device context
-        if (SUCCEEDED(D3D12CreateDevice(
-            pair.adapter.Get(), feature_level, _uuidof(D3DDevice), &m_device)))
+        if (!log_on_failure(D3D12CreateDevice(
+            pair.adapter.Get(), feature_level, _uuidof(D3DDevice), &m_device),
+            "Failed to create D3D Device: " + name))
         {
-            // check ray tracing support
-            D3D12_FEATURE_DATA_D3D12_OPTIONS5 data;
-            m_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &data, sizeof(data));
-            if (data.RaytracingTier == D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
+            // check ray tracing support and other features
+            D3D12_FEATURE_DATA_D3D12_OPTIONS data;
+            D3D12_FEATURE_DATA_D3D12_OPTIONS5 data5;
+            m_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &data, sizeof(data));
+            m_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &data5, sizeof(data5));
+            if (data5.RaytracingTier == D3D12_RAYTRACING_TIER_NOT_SUPPORTED)
             {
                 log_info("D3D Device does not support RTX: " + name);
                 m_device = nullptr;
@@ -446,7 +491,7 @@ bool Base_application::initialize_internal(
             {
                 std::string tier = "";
                 {
-                    switch (data.RaytracingTier)
+                    switch (data5.RaytracingTier)
                     {
                     case D3D12_RAYTRACING_TIER_1_1:
                         tier = "D3D12_RAYTRACING_TIER_1_1 (or higher)";
@@ -493,6 +538,7 @@ bool Base_application::initialize_internal(
                     {
                     case D3D_SHADER_MODEL_6_6:
                         model = "D3D_SHADER_MODEL_6_6 (or higher)";
+                        options->features.HLSL_dynamic_resources = true;
                         break;
                     case D3D_SHADER_MODEL_6_5:
                         model = "D3D_SHADER_MODEL_6_5";
@@ -510,13 +556,36 @@ bool Base_application::initialize_internal(
                 }
                 log_info("Supporting Shader Model: " + model);
             }
+
+            // get device resource binding tier
+            {
+                std::string tier = "";
+                {
+                    switch (data.ResourceBindingTier)
+                    {
+                    case D3D12_RESOURCE_BINDING_TIER_3:
+                        tier = "D3D12_RESOURCE_BINDING_TIER_3 (or higher)";
+                        break;
+                    case D3D12_RESOURCE_BINDING_TIER_2:
+                        tier = "D3D12_RESOURCE_BINDING_TIER_2";
+                        options->features.HLSL_dynamic_resources = false;
+                        break;
+                    case D3D12_RESOURCE_BINDING_TIER_1:
+                        tier = "D3D12_RESOURCE_BINDING_TIER_1";
+                        options->features.HLSL_dynamic_resources = false;
+                        break;
+                    default:
+                        tier = "NOT_SUPPORTED";
+                        break;
+                    }
+                }
+                log_info("Supporting Resource Binding Tier: " + tier);
+            }
+
             found_adapter = true;
             break;
         }
-        else
-        {
-            log_info("Failed to create D3D Device: " + name);
-        }
+ 
     }
 
     if (!found_adapter)
@@ -528,7 +597,7 @@ bool Base_application::initialize_internal(
     if (options->gpu_debug)
     {
         ComPtr<ID3D12InfoQueue> pInfoQueue;
-        if (SUCCEEDED(m_device.As(&pInfoQueue)))
+        if (!log_on_failure(m_device.As(&pInfoQueue), "Failed to query Info Queue"))
         {
             pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
             pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
@@ -543,7 +612,7 @@ bool Base_application::initialize_internal(
             NewFilter.DenyList.NumSeverities = _countof(Severities);
             NewFilter.DenyList.pSeverityList = Severities;
 
-            if(log_on_failure(pInfoQueue->PushStorageFilter(&NewFilter),
+            if (log_on_failure(pInfoQueue->PushStorageFilter(&NewFilter),
                 "Failed to setup D3D debug messages", SRC))
                 return false;
         }
@@ -551,8 +620,11 @@ bool Base_application::initialize_internal(
         set_dred_device(m_device.Get());
     }
 
+    log_info("Supporting HLSL Dynamic Resources: " + 
+        std::string(options->features.HLSL_dynamic_resources ? "YES" : "NO"));
+
     // check if the device context is still valid
-    if(log_on_failure(m_device->GetDeviceRemovedReason(),
+    if (log_on_failure(m_device->GetDeviceRemovedReason(),
        "Created device is in invalid state.", SRC))
        return false;
 
@@ -578,6 +650,8 @@ bool Base_application::initialize_internal(
 Base_dynamic_options::Base_dynamic_options(const Base_options* options) 
     : m_restart_progressive_rendering(true)
     , m_active_lpe(options->lpe.empty() ? "beauty" : options->lpe[0])
+    , m_available_aovs({})
+    , m_active_aov(0)
 {
 }
 

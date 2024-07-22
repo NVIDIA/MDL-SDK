@@ -274,23 +274,23 @@ Manifest_impl::Manifest_impl( const mi::mdl::IArchive_manifest* manifest)
     key = manifest->get_key( mi::mdl::IArchive_manifest::PK_MDL);
     mi::mdl::IMDL::MDL_version mdl = manifest->get_mdl_version();
     value = convert_mdl_version( mdl);
-    m_fields.push_back( std::make_pair( key, value));
+    m_fields.emplace_back( key, value);
     m_index_count[key] = std::make_pair( m_fields.size()-1, 1);
 
     // version
     key = manifest->get_key( mi::mdl::IArchive_manifest::PK_VERSION);
     const mi::mdl::ISemantic_version* version = manifest->get_sema_version();
     std::string version_str = convert_sema_version( version);
-    m_fields.push_back( std::make_pair( key, version_str));
+    m_fields.emplace_back( key, version_str);
     m_index_count[key] = std::make_pair( m_fields.size()-1, 1);
 
     // module
     key = manifest->get_key( mi::mdl::IArchive_manifest::PK_MODULE);
     mi::Size count = manifest->get_module_count();
     for( mi::Size i = 0; i < count; ++i) {
-        // note: libMDL returns the module names WITHOUT the leasding ::
+        // MDL core returns the module names without leading ::
         value = manifest->get_module_name( i);
-        m_fields.push_back( std::make_pair( key, std::string("::") + value));
+        m_fields.emplace_back( key, std::string( "::") + value);
     }
     m_index_count[key] = std::make_pair( m_fields.size()-count, count);
 
@@ -302,7 +302,7 @@ Manifest_impl::Manifest_impl( const mi::mdl::IArchive_manifest* manifest)
         std::string dependency_str( dependency->get_archive_name());
         dependency_str += ' ';
         dependency_str += convert_sema_version( dependency->get_version());
-        m_fields.push_back( std::make_pair( key, dependency_str));
+        m_fields.emplace_back( key, dependency_str);
         dependency = dependency->get_next();
     }
     m_index_count[key] = std::make_pair( first_index, m_fields.size()-first_index);
@@ -321,7 +321,7 @@ Manifest_impl::Manifest_impl( const mi::mdl::IArchive_manifest* manifest)
     multi_value = manifest->get_opt_author();
     while( multi_value) {
         value = multi_value->get_value();
-        m_fields.push_back( std::make_pair( key, value));
+        m_fields.emplace_back( key, value);
         multi_value = multi_value->get_next();
     }
     m_index_count[key] = std::make_pair( first_index, m_fields.size()-first_index);
@@ -332,7 +332,7 @@ Manifest_impl::Manifest_impl( const mi::mdl::IArchive_manifest* manifest)
     multi_value = manifest->get_opt_contributor();
     while( multi_value) {
         value = multi_value->get_value();
-        m_fields.push_back( std::make_pair( key, value));
+        m_fields.emplace_back( key, value);
         multi_value = multi_value->get_next();
     }
     m_index_count[key] = std::make_pair( first_index, m_fields.size()-first_index);
@@ -341,7 +341,7 @@ Manifest_impl::Manifest_impl( const mi::mdl::IArchive_manifest* manifest)
     key = manifest->get_key( mi::mdl::IArchive_manifest::PK_COPYRIGHT_NOTICE);
     value = manifest->get_opt_copyrigth_notice();
     if( value) {
-        m_fields.push_back( std::make_pair( key, value));
+        m_fields.emplace_back( key, value);
         m_index_count[key] = std::make_pair( m_fields.size()-1, 1);
     }
 
@@ -349,7 +349,7 @@ Manifest_impl::Manifest_impl( const mi::mdl::IArchive_manifest* manifest)
     key = manifest->get_key( mi::mdl::IArchive_manifest::PK_DESCRIPTION);
     value = manifest->get_opt_description();
     if( value) {
-        m_fields.push_back( std::make_pair( key, value));
+        m_fields.emplace_back( key, value);
         m_index_count[key] = std::make_pair( m_fields.size()-1, 1);
     }
 
@@ -357,7 +357,7 @@ Manifest_impl::Manifest_impl( const mi::mdl::IArchive_manifest* manifest)
     key = manifest->get_key( mi::mdl::IArchive_manifest::PK_CREATED);
     value = manifest->get_opt_created();
     if( value) {
-        m_fields.push_back( std::make_pair( key, value));
+        m_fields.emplace_back( key, value);
         m_index_count[key] = std::make_pair( m_fields.size()-1, 1);
     }
 
@@ -365,7 +365,7 @@ Manifest_impl::Manifest_impl( const mi::mdl::IArchive_manifest* manifest)
     key = manifest->get_key( mi::mdl::IArchive_manifest::PK_MODIFIED);
     value = manifest->get_opt_modified();
     if( value) {
-        m_fields.push_back( std::make_pair( key, value));
+        m_fields.emplace_back( key, value);
         m_index_count[key] = std::make_pair( m_fields.size()-1, 1);
     }
 
@@ -377,7 +377,7 @@ Manifest_impl::Manifest_impl( const mi::mdl::IArchive_manifest* manifest)
         multi_value = manifest->get_first_value( i);
         while( multi_value) {
             value = multi_value->get_value();
-            m_fields.push_back( std::make_pair( key, value));
+            m_fields.emplace_back( key, value);
             multi_value = multi_value->get_next();
         }
         m_index_count[key] = std::make_pair( first_index, m_fields.size()-first_index);
@@ -404,7 +404,7 @@ mi::Size Manifest_impl::get_number_of_fields( const char* key) const
     if( !key)
         return 0;
 
-    Index_count_map::const_iterator it = m_index_count.find( key);
+    auto it = m_index_count.find( key);
     return it == m_index_count.end() ? 0 : it->second.second;
 }
 
@@ -413,7 +413,7 @@ const char* Manifest_impl::get_value( const char* key, mi::Size index) const
     if( !key)
         return nullptr;
 
-    Index_count_map::const_iterator it = m_index_count.find( key);
+    auto it = m_index_count.find( key);
     if( it == m_index_count.end())
         return nullptr;
     if( index >= it->second.second)
@@ -455,7 +455,7 @@ void Manifest_impl::convert_exports(
         while( multi_value) {
             const char* export_name = multi_value->get_export_name();
             std::string qualified_name = std::string( "::") + module_name + "::" + export_name;
-            m_fields.push_back( std::make_pair( key, qualified_name));
+            m_fields.emplace_back( key, qualified_name);
             multi_value = multi_value->get_next();
         }
     }
@@ -475,6 +475,7 @@ const char* Manifest_impl::convert_mdl_version( mi::mdl::IMDL::MDL_version versi
         case mi::mdl::IMDL::MDL_VERSION_1_6: return "1.6";
         case mi::mdl::IMDL::MDL_VERSION_1_7: return "1.7";
         case mi::mdl::IMDL::MDL_VERSION_1_8: return "1.8";
+        case mi::mdl::IMDL::MDL_VERSION_1_9: return "1.9";
         case mi::mdl::IMDL::MDL_VERSION_EXP: return "99.99";
     }
 

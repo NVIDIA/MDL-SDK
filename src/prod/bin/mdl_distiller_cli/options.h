@@ -67,8 +67,9 @@ enum mdl_spec {
     mdl_spec_1_3,  ///< Force 1.3 output, casting all color version BSDFs to float versions
     mdl_spec_1_6,  ///< Force 1.6 version
     mdl_spec_1_7,  ///< Force 1.7 version
-    mdl_spec_1_8,  ///< Force 1.7 version
-    mdl_spec_auto  ///< Auto detect the needed version between 1.3, 1.6, 1.7 and 1.8
+    mdl_spec_1_8,  ///< Force 1.8 version
+    mdl_spec_1_9,  ///< Force 1.9 version
+    mdl_spec_auto  ///< Auto detect the needed version between 1.3, 1.6, 1.7, 1.8 and 1.9
 };
 
 /// Options class to hold all parameters for algorithm and rule customizations.
@@ -100,9 +101,11 @@ public:
     bool                merge_transmission_and_base_color;
                                           ///< Merge transmission and base color into one
     bool                emission;         ///< Export emission, or no emission if false.
-    bool                target_material_model_mode; ///< Compile material in target material model mode.
+    bool                target_material_model_mode; /**< Compile material in target material 
+                                                         model mode. */
     std::vector<const char*> additional_modules;
-                                          ///< Modules to load (e.g. those defining custom target materials)
+                                          /**< Modules to load (e.g. those defining custom target 
+                                               materials) */
     std::vector<std::string> test_targets;///< Targets to use for '-test spec' mode.
 
     /// Create options with default settings.

@@ -41,15 +41,15 @@ namespace IMAGE {
 
 /// Dummy type to select the overload/constructor for file-based images.
 struct File_based_helper {};
-typedef const File_based_helper* File_based;
+using File_based = const File_based_helper*;
 
 /// Dummy type to select the overload/constructor for container-based images.
 struct Container_based_helper {};
-typedef const Container_based_helper* Container_based;
+using Container_based = const Container_based_helper*;
 
 // Dummy type to select the overload/constructor for memory-based images.
 struct Memory_based_helper {};
-typedef const Memory_based_helper* Memory_based;
+using Memory_based = const Memory_based_helper*;
 
 constexpr mi::Uint32 default_tile_width  = 64;
 constexpr mi::Uint32 default_tile_height = 64;
@@ -173,7 +173,7 @@ struct Pixel_type_traits<PT_SINT8>
     /// \em unsigned 8-bit integer. The pixel type name should be fixed to reflect this, but this is
     /// not trivial without breaking user code since the API boundary uses strings instead of enums
     /// to encode pixel type names.
-    typedef mi::Uint8 Base_type;
+    using Base_type = mi::Uint8;
     static constexpr int s_components_per_pixel = 1;
     static constexpr bool s_has_alpha = false;
     static constexpr bool s_linear = false;
@@ -182,7 +182,7 @@ struct Pixel_type_traits<PT_SINT8>
 template <>
 struct Pixel_type_traits<PT_SINT32>
 {
-    typedef mi::Sint32 Base_type;
+    using Base_type = mi::Sint32;
     static constexpr int s_components_per_pixel = 1;
     static constexpr bool s_has_alpha = false;
     static constexpr bool s_linear = true;
@@ -191,7 +191,7 @@ struct Pixel_type_traits<PT_SINT32>
 template <>
 struct Pixel_type_traits<PT_FLOAT32>
 {
-    typedef mi::Float32 Base_type;
+    using Base_type = mi::Float32;
     static constexpr int s_components_per_pixel = 1;
     static constexpr bool s_has_alpha = false;
     static constexpr bool s_linear = true;
@@ -200,7 +200,7 @@ struct Pixel_type_traits<PT_FLOAT32>
 template <>
 struct Pixel_type_traits<PT_FLOAT32_2>
 {
-    typedef mi::Float32 Base_type;
+    using Base_type = mi::Float32;
     static constexpr int s_components_per_pixel = 2;
     static constexpr bool s_has_alpha = false;
     static constexpr bool s_linear = true;
@@ -209,7 +209,7 @@ struct Pixel_type_traits<PT_FLOAT32_2>
 template <>
 struct Pixel_type_traits<PT_FLOAT32_3>
 {
-    typedef mi::Float32 Base_type;
+    using Base_type = mi::Float32;
     static constexpr int s_components_per_pixel = 3;
     static constexpr bool s_has_alpha = false;
     static constexpr bool s_linear = true;
@@ -218,7 +218,7 @@ struct Pixel_type_traits<PT_FLOAT32_3>
 template <>
 struct Pixel_type_traits<PT_FLOAT32_4>
 {
-    typedef mi::Float32 Base_type;
+    using Base_type = mi::Float32;
     static constexpr int s_components_per_pixel = 4;
     static constexpr bool s_has_alpha = false;
     static constexpr bool s_linear = true;
@@ -227,7 +227,7 @@ struct Pixel_type_traits<PT_FLOAT32_4>
 template <>
 struct Pixel_type_traits<PT_RGB>
 {
-    typedef mi::Uint8 Base_type;
+    using Base_type = mi::Uint8;
     static constexpr int s_components_per_pixel = 3;
     static constexpr bool s_has_alpha = false;
     static constexpr bool s_linear = false;
@@ -236,7 +236,7 @@ struct Pixel_type_traits<PT_RGB>
 template <>
 struct Pixel_type_traits<PT_RGBA>
 {
-    typedef mi::Uint8 Base_type;
+    using Base_type = mi::Uint8;
     static constexpr int s_components_per_pixel = 4;
     static constexpr bool s_has_alpha = true;
     static constexpr bool s_linear = false;
@@ -245,7 +245,7 @@ struct Pixel_type_traits<PT_RGBA>
 template <>
 struct Pixel_type_traits<PT_RGBE>
 {
-    typedef mi::Uint8 Base_type;
+    using Base_type = mi::Uint8;
     static constexpr int s_components_per_pixel = 4;
     static constexpr bool s_has_alpha = false;
     static constexpr bool s_linear = true;
@@ -254,7 +254,7 @@ struct Pixel_type_traits<PT_RGBE>
 template <>
 struct Pixel_type_traits<PT_RGBEA>
 {
-    typedef mi::Uint8 Base_type;
+    using Base_type = mi::Uint8;
     static constexpr int s_components_per_pixel = 5;
     static constexpr bool s_has_alpha = true;
     static constexpr bool s_linear = true;
@@ -263,7 +263,7 @@ struct Pixel_type_traits<PT_RGBEA>
 template <>
 struct Pixel_type_traits<PT_RGB_16>
 {
-    typedef mi::Uint16 Base_type;
+    using Base_type = mi::Uint16;
     static constexpr int s_components_per_pixel = 3;
     static constexpr bool s_has_alpha = false;
     static constexpr bool s_linear = false;
@@ -272,7 +272,7 @@ struct Pixel_type_traits<PT_RGB_16>
 template <>
 struct Pixel_type_traits<PT_RGBA_16>
 {
-    typedef mi::Uint16 Base_type;
+    using Base_type = mi::Uint16;
     static constexpr int s_components_per_pixel = 4;
     static constexpr bool s_has_alpha = true;
     static constexpr bool s_linear = false;
@@ -281,7 +281,7 @@ struct Pixel_type_traits<PT_RGBA_16>
 template <>
 struct Pixel_type_traits<PT_RGB_FP>
 {
-    typedef mi::Float32 Base_type;
+    using Base_type = mi::Float32;
     static constexpr int s_components_per_pixel = 3;
     static constexpr bool s_has_alpha = false;
     static constexpr bool s_linear = true;
@@ -290,7 +290,7 @@ struct Pixel_type_traits<PT_RGB_FP>
 template <>
 struct Pixel_type_traits<PT_COLOR>
 {
-    typedef mi::Float32 Base_type;
+    using Base_type = mi::Float32;
     static constexpr int s_components_per_pixel = 4;
     static constexpr bool s_has_alpha = true;
     static constexpr bool s_linear = true;

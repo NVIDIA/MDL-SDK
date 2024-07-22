@@ -169,6 +169,9 @@ PREDEF_SYM(sym_tex_gamma_mode, SYM_TYPE_TEX_GAMMA_MODE, "::tex::gamma_mode")
 PREDEF_SYM(sym_intensity_mode, SYM_TYPE_INTENSITY_MODE, "intensity_mode")
 PREDEF_SYM(sym_hair_bsdf, SYM_TYPE_HAIR_BSDF, "hair_bsdf")
 
+// category names
+PREDEF_SYM(sym_cat_material_category, SYM_CAT_MATERIAL_CATEGORY, "material_category")
+
 // enum values
 PREDEF_SYM(sym_enum_gamma_default, SYM_ENUM_GAMMA_DEFAULT, "gamma_default")
 PREDEF_SYM(sym_enum_gamma_linear, SYM_ENUM_GAMMA_LINEAR, "gamma_linear")

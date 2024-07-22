@@ -69,8 +69,7 @@ The \neurayAdjectiveName uses [CMake](http://www.cmake.org/) to generate build f
 It is required to use CMake 3.12 or later (3.21 or later on Windows),
 which can be downloaded from the [CMake Website](https://cmake.org/download/).
 When using a Unix-like system, you can install the *cmake* package using 
-the respective package management systems. On the Mac OS X platform, third party
-dependencies can be resolved using the [Homebrew Package Manager](https://brew.sh/index_de).
+the respective package management systems.
 
 \subsection mi_neuray_getting_started_dependencies Dependencies
 
@@ -91,7 +90,7 @@ The following third-party dependencies are used by several and/or major
 examples. Installation is strongly recommended unless the corresponding group
 of examples is of no interest to you.
 
--   <a name="vcpkg">**vcpkg**</a> (git commit ID fe1e9f5)
+-   <a name="vcpkg">**vcpkg**</a> (git commit ID 5d675c7e5)
     [Vcpkg](https://vcpkg.io/en/getting-started.html) is the recommended way to
     install other dependencies like GLEW and GLFW. The
     vcpkg version mentioned above corresponds to the versions mentioned for
@@ -120,7 +119,7 @@ of examples is of no interest to you.
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
     package *glew*.
 
--   **GLFW** (3.3.8) \n
+-   **GLFW** (3.4) \n
     This dependency is required for all OpenGL- and Vulkan-based examples. \n
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
     package *glfw3*.
@@ -130,11 +129,12 @@ of examples is of no interest to you.
     Please follow the instructions on the 
     [CUDA Developer Website](https://developer.nvidia.com/cuda-toolkit).
 
--   **Vulkan SDK** (1.2.198.1) \n
+-   **Vulkan SDK** (Windows: 1.3.275.0, Linux: 1.2.198.1) \n
     This dependency is required for all Vulkan-based examples. \n
     Please follow the instructions on the
     [Vulkan SDK Website](https://vulkan.lunarg.com/sdk/home). \n
-    For debug builds on Windows, the debug libraries are required to be installed.
+    For debug builds on Windows, the debug libraries are required to be installed. \n
+    Note that the prebuilt binaries for version 1.3.275.0 do not work on CentOS 7.x.
 
 The following third-party dependencies are only used by fewer or single
 examples, or add additional features to other examples. Installation can be
@@ -247,7 +247,7 @@ features.
         for example: *C:/Qt/5.10.1/msvc2017_64*
 
     -   **VULKAN_SDK_DIR** in Ungrouped Entries (only if not installed using the installer) \n
-        for example: *C:/VulkanSDK/1.2.198.1*
+        for example: *C:/VulkanSDK/1.3.275.0*
 
     -   **PANTORA_AXF_DIR** in Ungrouped Entries \n
         for example: *C:/projects/thirdparty/pantora-axf-1.9.0*
@@ -391,49 +391,69 @@ features.
 
 \subsection mi_neuray_getting_started_cmake_options Additional CMake Options
 
-The following options allow to select the components to build and particular logging information:
+The following options enable you to select the components to be built:
 
--   **MDL_ENABLE_CUDA_EXAMPLES**  
-    [ON/OFF] enable/disable examples that require CUDA.
+-   **MDL_BUILD_SDK_EXAMPLES** \n
+    [ON/OFF] enable/disable the MDL SDK examples (see also below for ways to
+    enable/disable examples based on their required thirdparty dependencies).
 
--   **MDL_ENABLE_D3D12_EXAMPLES**  
-    [ON/OFF] enable/disable examples that require D3D12 (Windows only).
-
--   **MDL_ENABLE_OPENGL_EXAMPLES**  
-    [ON/OFF] enable/disable examples that require OpenGL.
-
--   **MDL_ENABLE_VULKAN_EXAMPLES**  
-    [ON/OFF] enable/disable examples that require Vulkan.
-
--   **MDL_ENABLE_OPTIX7_EXAMPLES**  
-    [ON/OFF] enable/disable examples that require OptiX 7 (Linux and Windows only).
-
--   **MDL_ENABLE_QT_EXAMPLES**  
-    [ON/OFF] enable/disable examples that require Qt.
-
--   **MDL_ENABLE_AXF_EXAMPLES**  
-    [ON/OFF] enable/disable the AxF to MDL example.
-
--   **MDL_ENABLE_PYTHON_BINDINGS**  
+-   **MDL_ENABLE_PYTHON_BINDINGS** \n
     [ON/OFF] enable/disable the generation and compilation of the MDL Python Bindings.
 
--   **MDL_BUILD_ARNOLD_PLUGIN**  
-    [ON/OFF] enable/disable the build of the MDL Arnold Plugin.
+The following options enable you to select particular logging information
+useful for debugging the CMake setup:
 
--   **MDL_ENABLE_MATERIALX**  
-    [ON/OFF] enable/disable MaterialX in examples that support it.
-
--   **MDL_LOG_PLATFORM_INFOS**  
+-   **MDL_LOG_PLATFORM_INFOS** \n
     [ON/OFF] enable/disable the logging of platform and CMake settings.
 
--   **MDL_LOG_DEPENDENCIES**  
+-   **MDL_LOG_DEPENDENCIES** \n
     [ON/OFF] enable/disable the logging of dependencies of the individual targets.
 
--   **MDL_LOG_FILE_DEPENDENCIES**  
+-   **MDL_LOG_FILE_DEPENDENCIES** \n
     [ON/OFF] enable/disable the logging of files that copied to the output folder.
 
 In case of any help request, please attach the log messages generated when the log options are enabled.
+
+The following options affect how various components are built:
+
+-   **MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES** \n
+    [ON/OFF] links the MSVC dynamic runtime (/MD) instead of static (/MT) when
+    creating the example executables.
+
+The following options enable you to select the examples to be built based on
+their required thirdparty dependencies (see also **MDL_BUILD_SDK_EXAMPLES**
+above):
+
+-   **MDL_ENABLE_CUDA_EXAMPLES** \n
+    [ON/OFF] enable/disable examples that require CUDA.
+
+-   **MDL_ENABLE_D3D12_EXAMPLES** \n
+    [ON/OFF] enable/disable examples that require D3D12 (Windows only).
+
+-   **MDL_ENABLE_OPENGL_EXAMPLES** \n
+    [ON/OFF] enable/disable examples that require OpenGL.
+
+-   **MDL_ENABLE_VULKAN_EXAMPLES** \n
+    [ON/OFF] enable/disable examples that require Vulkan.
+
+-   **MDL_ENABLE_OPTIX7_EXAMPLES** \n
+    [ON/OFF] enable/disable examples that require OptiX 7 (Linux and Windows only).
+
+-   **MDL_ENABLE_QT_EXAMPLES** \n
+    [ON/OFF] enable/disable examples that require Qt.
+
+-   **MDL_ENABLE_AXF_EXAMPLES** \n
+    [ON/OFF] enable/disable the AxF to MDL example.
+
+-   **MDL_BUILD_ARNOLD_PLUGIN** \n
+    [ON/OFF] enable/disable the build of the MDL Arnold Plugin.
+
+-   **MDL_ENABLE_MATERIALX** \n
+    [ON/OFF] enable/disable MaterialX in examples that support it.
+
+
 \endif
+
 \subsection mi_neuray_getting_started_custom_build Custom build environments
 
 You can integrate \neurayProductName easily in other build

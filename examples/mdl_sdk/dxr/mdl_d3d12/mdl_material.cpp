@@ -52,7 +52,6 @@ Mdl_material::Mdl_material(Base_application* app)
     , m_material_id(s_material_id_counter.fetch_add(1))
     , m_name("material_" + std::to_string(m_material_id))
     , m_description()
-    , m_flags(IMaterial::Flags::None)
     , m_compiled_hash("")
     , m_resource_hash("")
     , m_target(nullptr)
@@ -124,6 +123,61 @@ bool Mdl_material::compile_material(const Mdl_material_description& description)
 
     // the instance is setup and in the DB, now it is the same as recompiling
     return recompile_material(context.get());
+}
+
+// ------------------------------------------------------------------------------------------------
+
+namespace // anonymous
+{
+    // Utility function to dump the hash, arguments, temporaries, and fields of a compiled material.
+    std::string dump_compiled_material(mdl_d3d12::Mdl_sdk* sdk, const mi::neuraylib::ICompiled_material* cm)
+    {
+        std::stringstream s;
+        mi::base::Handle<mi::neuraylib::IExpression_factory> expression_factory(
+            sdk->get_factory().create_expression_factory(sdk->get_transaction().get()));
+        mi::base::Handle<mi::neuraylib::IValue_factory> value_factory(
+            expression_factory->get_value_factory());
+
+        mi::base::Uuid hash = cm->get_hash();
+        char buffer[36];
+        snprintf(buffer, sizeof(buffer),
+            "%08x %08x %08x %08x", hash.m_id1, hash.m_id2, hash.m_id3, hash.m_id4);
+        s << "    hash overall = " << buffer << std::endl;
+
+        for (mi::Uint32 i = mi::neuraylib::SLOT_FIRST; i <= mi::neuraylib::SLOT_LAST; ++i) {
+            hash = cm->get_slot_hash(mi::neuraylib::Material_slot(i));
+            snprintf(buffer, sizeof(buffer),
+                "%08x %08x %08x %08x", hash.m_id1, hash.m_id2, hash.m_id3, hash.m_id4);
+            s << "    hash slot " << std::setw(2) << i << " = " << buffer << std::endl;
+        }
+
+        mi::Size parameter_count = cm->get_parameter_count();
+        for (mi::Size i = 0; i < parameter_count; ++i) {
+            mi::base::Handle<const mi::neuraylib::IValue> argument(cm->get_argument(i));
+            std::stringstream name;
+            name << i;
+            mi::base::Handle<const mi::IString> result(
+                value_factory->dump(argument.get(), name.str().c_str(), 1));
+            s << "    argument " << result->get_c_str() << std::endl;
+        }
+
+        mi::Size temporary_count = cm->get_temporary_count();
+        for (mi::Size i = 0; i < temporary_count; ++i) {
+            mi::base::Handle<const mi::neuraylib::IExpression> temporary(cm->get_temporary(i));
+            std::stringstream name;
+            name << i;
+            mi::base::Handle<const mi::IString> result(
+                expression_factory->dump(temporary.get(), name.str().c_str(), 1));
+            s << "    temporary " << result->get_c_str() << std::endl;
+        }
+
+        mi::base::Handle<const mi::neuraylib::IExpression> body(cm->get_body());
+        mi::base::Handle<const mi::IString> result(expression_factory->dump(body.get(), 0, 1));
+        s << "    body " << result->get_c_str() << std::endl;
+
+        s << std::endl;
+        return s.str();
+    }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -218,6 +272,15 @@ bool Mdl_material::recompile_material(mi::neuraylib::IMdl_execution_context* con
         // in the generated code and expose the factor in the MDL material state of the shader.
         context->set_option("fold_meters_per_scene_unit", false);
 
+        // We can compiled a material to the selected target type.
+        // This will influence the expressions paths available depending on that target type.
+        // Without the option the type is not casted.
+        mi::base::Handle<mi::neuraylib::IType_factory> tf(
+            m_sdk->get_factory().create_type_factory(m_sdk->get_transaction().get()));
+        mi::base::Handle<const mi::neuraylib::IType_struct> material_target_type(
+            tf->create_struct(m_app->get_options()->material_type.c_str()));
+        context->set_option("target_type", material_target_type.get());
+
         mi::base::Handle<const mi::neuraylib::IMaterial_instance> material_instance2(
             material_instance->get_interface<mi::neuraylib::IMaterial_instance>());
         mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
@@ -226,19 +289,19 @@ bool Mdl_material::recompile_material(mi::neuraylib::IMdl_execution_context* con
             !compiled_material)
                 return false;
 
-        if (mdl_options.distilling_support_enabled && mdl_options.distilling_target != "none")
+        if (mdl_options.distilling_support_enabled && mdl_options.distill_target != "none")
         {
             mi::Sint32 res = 0;
             mi::base::Handle<mi::neuraylib::ICompiled_material> distilled_material(
                 m_app->get_mdl_sdk().get_distiller().distill_material(
-                    compiled_material.get(), mdl_options.distilling_target.c_str(), nullptr, &res));
+                    compiled_material.get(), mdl_options.distill_target.c_str(), nullptr, &res));
             if (res == -2)
             {
-                log_error("Distilling target not registered: '" + mdl_options.distilling_target);
+                log_error("Distilling target not registered: '" + mdl_options.distill_target);
             }
             else if (distilled_material)
             {
-                log_info("Distilled material to '" + mdl_options.distilling_target + "': " + get_name());
+                log_info("Distilled material to '" + mdl_options.distill_target + "': " + get_name());
 
                 const mi::base::Uuid compiled_hash = compiled_material->get_hash();
                 const mi::base::Uuid distilled_hash = distilled_material->get_hash();
@@ -253,6 +316,30 @@ bool Mdl_material::recompile_material(mi::neuraylib::IMdl_execution_context* con
 
                 log_verbose("Compiled Hash: " + get_name() + ": " + compiled_hash_s);
                 log_verbose("Distilled Hash: " + get_name() + ": " + distilled_hash_s);
+
+                if (m_app->get_options()->distill_debug)
+                {
+                    // store the distiller output in a sub-folder
+                    std::string dir = mi::examples::io::get_working_directory() + "/_distilling/";
+                    mi::examples::io::mkdir(dir);
+
+                    // dump both, the original and the distilled
+                    auto action = [&](std::string target, std::string hash, auto mat)
+                        {
+                            std::string filename = dir + get_name() +
+                                "_" + target + "_" + hash + ".log";
+                            FILE* file =
+                                _wfopen(mi::examples::strings::str_to_wstr(filename).c_str(), L"w");
+                            if (file)
+                            {
+                                std::string dump = dump_compiled_material(m_sdk, mat.get());
+                                fwrite(dump.c_str(), dump.size(), 1, file);
+                                fclose(file);
+                            }
+                        };
+                    action("original", compiled_hash_s, compiled_material);
+                    action(mdl_options.distill_target, distilled_hash_s, distilled_material);
+                }
 
                 compiled_material = distilled_material;
             }
@@ -282,13 +369,6 @@ bool Mdl_material::recompile_material(mi::neuraylib::IMdl_execution_context* con
         log_verbose("New Hash: " + get_name() + ": " + m_compiled_hash);
     }
 
-    // some minor optimization
-    // use inspection to override the opacity option
-    m_flags = mi::examples::enums::remove_flag(m_description.get_flags(), IMaterial::Flags::Opaque);
-    float opacity = -1.0f;
-    if (compiled_material->get_cutout_opacity(&opacity) && opacity >= 1.0f)
-        m_flags = mi::examples::enums::set_flag(m_description.get_flags(), IMaterial::Flags::Opaque);
-
     return true;
 }
 
@@ -308,47 +388,6 @@ void Mdl_material::set_target_interface(
 void Mdl_material::reset_target_interface()
 {
     m_target = nullptr;
-}
-// ------------------------------------------------------------------------------------------------
-
-const Descriptor_table Mdl_material::get_descriptor_table()
-{
-    // same as the static case + additional per material resources
-    Descriptor_table table;
-
-    // bind material constants
-    table.register_cbv(0, 3, 0);
-
-    // bind material argument block
-    table.register_srv(1, 3, 1);
-
-    // bind per material texture info
-    table.register_srv(2, 3, 2);
-
-    // bind per material light profile info
-    table.register_srv(3, 3, 3);
-
-    // bind per material mbsdf info
-    table.register_srv(4, 3, 4);
-
-    // bind textures
-    size_t light_profile_count = m_target->get_material_resource_count(Mdl_resource_kind::Light_profile);
-    size_t mbsdf_count = m_target->get_material_resource_count(Mdl_resource_kind::Bsdf_measurement);
-    size_t tex_count = m_target->get_material_resource_count(Mdl_resource_kind::Texture);
-    size_t tex_srv_count = tex_count
-                         + light_profile_count // one texture per light profile
-                         + mbsdf_count * 2;    // one texture per mbsdf part
-    tex_srv_count = std::max(size_t(1), tex_srv_count);
-    table.register_srv(0, 4, 5, tex_srv_count);
-    table.register_srv(0, 5, 5, tex_srv_count);
-
-    // bind buffers
-    size_t buffer_srv_count = light_profile_count  // one buffer per light profile
-                            + mbsdf_count * 2 * 2; // two buffers per mbsdf part
-    buffer_srv_count = std::max(size_t(1), buffer_srv_count);
-    table.register_srv(0, 6, 5 + tex_srv_count, buffer_srv_count);
-
-    return table;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -451,7 +490,7 @@ void Mdl_material::update_material_parameters()
     m_argument_block_buffer->upload(command_list);
     command_queue->execute_command_list(command_list);
 
-    m_constants.data.material_flags = static_cast<uint32_t>(m_flags);
+    m_constants.data.flags = static_cast<uint32_t>(m_description.get_flags());
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -556,6 +595,13 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
     mi::base::Handle<const mi::neuraylib::ITarget_code> target_code(m_target->get_target_code());
     uint32_t zero(0);
 
+    // free old buffer
+    if (m_argument_block_buffer)
+    {
+        delete m_argument_block_buffer;
+        m_argument_block_buffer = nullptr;
+    }
+
     // if there is already an argument block (material has parameter and class compilation)
     if (m_argument_layout_index != static_cast<mi::Size>(-1) &&
         m_argument_layout_index < target_code->get_argument_layout_count())
@@ -593,22 +639,16 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
         m_argument_block_data = std::vector<uint8_t>(buffer_size, 0);
         memcpy(m_argument_block_data.data(), arg_block->get_data(), arg_block->get_size());
 
-        auto argument_block_buffer = new Buffer(
+        m_argument_block_buffer = new Buffer(
             m_app, buffer_size, get_name() + "_ArgumentBlock");
-
-        argument_block_buffer->set_data(m_argument_block_data);
-
-        if (m_argument_block_buffer != nullptr) delete m_argument_block_buffer;
-        m_argument_block_buffer = argument_block_buffer;
+        m_argument_block_buffer->set_data(m_argument_block_data);
     }
-
     // if there is no data, a dummy buffer that contains a null pointer is created
     if (!m_argument_block_buffer)
     {
         m_argument_block_buffer = new Buffer(m_app, 4, get_name() + "_ArgumentBlock_nullptr");
         m_argument_block_buffer->set_data(&zero, 1);
     }
-
 
     // load per material textures
     // load the texture in parallel, if not forced otherwise
@@ -711,7 +751,7 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
     // we try to reuse is if it fits
     if (m_first_resource_heap_handle.is_valid())
     {
-        if (resource_heap.get_block_size(m_first_resource_heap_handle) < handle_count)
+        if (resource_heap.get_block_size(m_first_resource_heap_handle) != handle_count)
             resource_heap.free_views(m_first_resource_heap_handle); // free heap block
     }
 
@@ -728,21 +768,17 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
         return false;
 
     // create a resource view for the argument block
-    auto argument_block_data_srv = m_first_resource_heap_handle.create_offset(1);
-    if (!argument_block_data_srv.is_valid())
-        return false;
-
     if (!resource_heap.create_shader_resource_view(
-        m_argument_block_buffer, true, argument_block_data_srv))
+        m_argument_block_buffer, true, m_first_resource_heap_handle.create_offset(1)))
             return false;
 
     // create the texture info buffer and view to handle resource mapping
     std::vector<Mdl_texture_info> texture_info_data(
         m_resources[Mdl_resource_kind::Texture].size(), {0, 0, 0});
 
-    if (m_texture_infos &&
-        m_texture_infos->get_element_count() < std::max(texture_info_data.size(), size_t(1)))
+    if (m_texture_infos)
     {
+        // resize buffer by recreating it
         delete m_texture_infos;
         m_texture_infos = nullptr;
     }
@@ -751,21 +787,16 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
         m_texture_infos = new Structured_buffer<Mdl_texture_info>(
             m_app, std::max(texture_info_data.size(), size_t(1)), get_name() + "_TextureInfos");
     }
-
-    auto texture_info_srv = m_first_resource_heap_handle.create_offset(2);
-    if (!texture_info_srv.is_valid())
-        return false;
-
-    if (!resource_heap.create_shader_resource_view(m_texture_infos, texture_info_srv))
+    if (!resource_heap.create_shader_resource_view(m_texture_infos, m_first_resource_heap_handle.create_offset(2)))
         return false;
 
     // create the light profile info buffer and view to handle resource mapping
     std::vector<Mdl_light_profile_info> light_profile_info_data(
         m_resources[Mdl_resource_kind::Light_profile].size());
 
-    if (m_light_profile_infos &&
-        m_light_profile_infos->get_element_count() < std::max(light_profile_info_data.size(), size_t(1)))
+    if (m_light_profile_infos)
     {
+        // resize buffer by recreating it
         delete m_light_profile_infos;
         m_light_profile_infos = nullptr;
     }
@@ -774,21 +805,15 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
         m_light_profile_infos = new Structured_buffer<Mdl_light_profile_info>(
             m_app, std::max(light_profile_info_data.size(), size_t(1)), get_name() + "_LightProfileInfos");
     }
-
-    auto light_profile_info_srv = m_first_resource_heap_handle.create_offset(3);
-    if (!light_profile_info_srv.is_valid())
-        return false;
-
-    if (!resource_heap.create_shader_resource_view(m_light_profile_infos, light_profile_info_srv))
+    if (!resource_heap.create_shader_resource_view(m_light_profile_infos, m_first_resource_heap_handle.create_offset(3)))
         return false;
 
     // create the mbsdf info buffer and view to handle resource mapping
     std::vector<Mdl_mbsdf_info> mbsdf_info_data(
         m_resources[Mdl_resource_kind::Bsdf_measurement].size());
-
-    if (m_mbsdf_infos &&
-        m_mbsdf_infos->get_element_count() < std::max(mbsdf_info_data.size(), size_t(1)))
+    if (m_mbsdf_infos)
     {
+        // resize buffer by recreating it
         delete m_mbsdf_infos;
         m_mbsdf_infos = nullptr;
     }
@@ -797,17 +822,11 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
         m_mbsdf_infos = new Structured_buffer<Mdl_mbsdf_info>(
             m_app, std::max(mbsdf_info_data.size(), size_t(1)), get_name() + "_MbsdfInfos");
     }
-
-    auto mbsdf_info_srv = m_first_resource_heap_handle.create_offset(4);
-    if (!mbsdf_info_srv.is_valid())
-        return false;
-
-    if (!resource_heap.create_shader_resource_view(m_mbsdf_infos, mbsdf_info_srv))
+    if (!resource_heap.create_shader_resource_view(m_mbsdf_infos, m_first_resource_heap_handle.create_offset(4)))
         return false;
 
     // create shader resource views for textures
     size_t descriptor_heap_offset = 5;
-    size_t gpu_texture_array_offset = 0;
     for (size_t t = 0; t < m_resources[Mdl_resource_kind::Texture].size(); ++t)
     {
         Mdl_resource_assignment& assignment = m_resources[Mdl_resource_kind::Texture][t];
@@ -825,25 +844,10 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
             }
         }
 
-        // create resource views for each tile
-        for (auto& tile : tile_map)
-        {
-            Descriptor_heap_handle heap_handle =
-                m_first_resource_heap_handle.create_offset(descriptor_heap_offset++);
-            if (!heap_handle.is_valid())
-                return false;
-
-            // create 2D or 3D view
-            if (!resource_heap.create_shader_resource_view(
-                static_cast<Texture*>(tile),
-                assignment.dimension,
-                heap_handle))
-                    return false;
-        }
-
         // mapping from runtime texture id to index into the array of views
         Mdl_texture_info& info = texture_info_data[assignment.runtime_resource_id - 1];
-        info.gpu_resource_array_start = gpu_texture_array_offset;
+        info.gpu_resource_array_start = 
+            m_first_resource_heap_handle.create_offset(descriptor_heap_offset).get_heap_index();
         info.gpu_resource_array_size = tile_map.size();
         info.gpu_resource_frame_first = assignment.has_data() ? assignment.texture_data->frame_first : 0;
         info.gpu_resource_uvtile_u_min = assignment.has_data() ? assignment.texture_data->uvtile_u_min : 0;
@@ -852,22 +856,25 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
         info.gpu_resource_uvtile_height =
             assignment.has_data() ? assignment.texture_data->get_uvtile_height() : 1;
 
-        gpu_texture_array_offset += tile_map.size();
+        // create resource views for each tile
+        for (auto& tile : tile_map)
+        {
+            // create 2D or 3D view
+            if (!resource_heap.create_shader_resource_view(
+                static_cast<Texture*>(tile),
+                assignment.dimension,
+                m_first_resource_heap_handle.create_offset(descriptor_heap_offset++)))
+                    return false;
+        }
     }
 
     // create texture and buffer shader resource views and gpu infos for light profiles
-    size_t gpu_buffer_array_offset = 0;
     for (size_t i = 0; i < m_resources[Mdl_resource_kind::Light_profile].size(); ++i)
     {
         Mdl_resource_assignment& assignment = m_resources[Mdl_resource_kind::Light_profile][i];
 
-        size_t eval_tex_descriptor_heap_offset = 5 + tex_count + i; // 1 texture per light profile
-        size_t buffer_descriptor_heap_offset = 5 + tex_count
-                                             + light_profile_count // handles for light profile textures
-                                             + i; // 1 buffer per light profile
-
         Descriptor_heap_handle eval_tex_heap_handle =
-            m_first_resource_heap_handle.create_offset(eval_tex_descriptor_heap_offset);
+            m_first_resource_heap_handle.create_offset(descriptor_heap_offset++);
         if (!eval_tex_heap_handle.is_valid())
             return false;
 
@@ -878,7 +885,7 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
                 return false;
 
         Descriptor_heap_handle sample_buffer_heap_handle =
-            m_first_resource_heap_handle.create_offset(buffer_descriptor_heap_offset);
+            m_first_resource_heap_handle.create_offset(descriptor_heap_offset++);
         if (!sample_buffer_heap_handle.is_valid())
             return false;
 
@@ -888,8 +895,8 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
                 return false;
 
         Mdl_light_profile_info& light_profile_info = light_profile_info_data[i];
-        light_profile_info.eval_data_index = gpu_texture_array_offset++;
-        light_profile_info.sample_data_index = gpu_buffer_array_offset++;
+        light_profile_info.eval_data_index = eval_tex_heap_handle.get_heap_index();
+        light_profile_info.sample_data_index = sample_buffer_heap_handle.get_heap_index();
 
         light_profile_info.angular_resolution = assignment.light_profile_data->get_angular_resolution();
         light_profile_info.inv_angular_resolution = {
@@ -911,15 +918,6 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
     {
         Mdl_resource_assignment& assignment = m_resources[Mdl_resource_kind::Bsdf_measurement][i];
 
-        size_t eval_tex_descriptor_heap_offset = 5 + tex_count
-                                               + light_profile_count // 1 texture per light profile
-                                               + i * 2;              // 1 texture per mbsdf part
-        size_t buffer_descriptor_heap_offset = 5 + tex_count
-                                             + light_profile_count // 1 texture per light profile
-                                             + mbsdf_count * 2     // 2 textures per mbsdf
-                                             + light_profile_count // 1 buffer per light profile
-                                             + i * 2 * 2;          // 2 buffers per mbsdf part
-
         Mdl_mbsdf_info& mbsdf_info = mbsdf_info_data[i];
         for (mi::neuraylib::Mbsdf_part part : { mi::neuraylib::MBSDF_DATA_REFLECTION, mi::neuraylib::MBSDF_DATA_TRANSMISSION })
         {
@@ -930,7 +928,7 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
             const Bsdf_measurement::Part& mbsdf_part = assignment.mbsdf_data->get_part(part);
 
             Descriptor_heap_handle eval_tex_heap_handle =
-                m_first_resource_heap_handle.create_offset(eval_tex_descriptor_heap_offset++);
+                m_first_resource_heap_handle.create_offset(descriptor_heap_offset++);
             if (!eval_tex_heap_handle.is_valid())
                 return false;
 
@@ -941,7 +939,7 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
                     return false;
 
             Descriptor_heap_handle sample_buffer_heap_handle =
-                m_first_resource_heap_handle.create_offset(buffer_descriptor_heap_offset++);
+                m_first_resource_heap_handle.create_offset(descriptor_heap_offset++);
             if (!sample_buffer_heap_handle.is_valid())
                 return false;
 
@@ -951,7 +949,7 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
                     return false;
 
             Descriptor_heap_handle albedo_buffer_heap_handle =
-                m_first_resource_heap_handle.create_offset(buffer_descriptor_heap_offset++);
+                m_first_resource_heap_handle.create_offset(descriptor_heap_offset++);
             if (!albedo_buffer_heap_handle.is_valid())
                 return false;
 
@@ -960,9 +958,9 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
                 albedo_buffer_heap_handle))
                     return false;
 
-            mbsdf_info.eval_data_index[part] = gpu_texture_array_offset++;
-            mbsdf_info.sample_data_index[part] = gpu_buffer_array_offset++;
-            mbsdf_info.albedo_data_index[part] = gpu_buffer_array_offset++;
+            mbsdf_info.eval_data_index[part] = eval_tex_heap_handle.get_heap_index();
+            mbsdf_info.sample_data_index[part] = sample_buffer_heap_handle.get_heap_index();
+            mbsdf_info.albedo_data_index[part] = albedo_buffer_heap_handle.get_heap_index();
             mbsdf_info.max_albedo[part] = mbsdf_part.max_albedo;
             mbsdf_info.angular_resolution_theta[part] = mbsdf_part.angular_resolution_theta;
             mbsdf_info.angular_resolution_phi[part] = mbsdf_part.angular_resolution_phi;
@@ -975,8 +973,11 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
     m_light_profile_infos->set_data(light_profile_info_data.data(), light_profile_info_data.size());
     m_mbsdf_infos->set_data(mbsdf_info_data.data(), mbsdf_info_data.size());
 
+    // material code features
+    m_constants.data.features = m_material_target_interface.material_code_paths;
+
     // optimization potential
-    m_constants.data.material_flags = static_cast<uint32_t>(m_flags);
+    m_constants.data.flags = static_cast<uint32_t>(m_description.get_flags());
 
     m_constants.upload();
     if (!m_argument_block_buffer->upload(command_list)) return false;

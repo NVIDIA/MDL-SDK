@@ -66,13 +66,13 @@ bool test_rle_array();
 void test_push_back();
 Rle_array<int> test_push_back_n();
 void test_iterators(
-    const Rle_array<int>& array);	// array to operate on
+    const Rle_array<int>& array);       // array to operate on
 void test_chunk_iterators(
-    const Rle_array<int>& array);	// array to operate on
+    const Rle_array<int>& array);       // array to operate on
 void test_accessors(
-    const Rle_array<int>& array);	// array to operate on
+    const Rle_array<int>& array);       // array to operate on
 void test_removal(
-    Rle_array<int>& array);		// array to operate on
+    Rle_array<int>& array);             // array to operate on
 
 // The overall Rle_array test function.
 bool test_rle_array()
@@ -202,15 +202,15 @@ Rle_array<int> test_push_back_n()
 
 // Test the iterators.
 void test_iterators(
-    const Rle_array<int>& array)	//  array to iterate on
+    const Rle_array<int>& array)        //  array to iterate on
 {
     Rle_iterator<int> iter = array.begin();
     MI_REQUIRE_EQUAL(*iter, 1);
 
     for (int i=0; i<4; ++i, ++iter)
-	MI_REQUIRE_EQUAL(*iter, 1);
+        MI_REQUIRE_EQUAL(*iter, 1);
     for (int i=0; i<3; ++i, ++iter)
-	MI_REQUIRE_EQUAL(*iter, 3);
+        MI_REQUIRE_EQUAL(*iter, 3);
     MI_REQUIRE_EQUAL(*iter, 0);
     ++iter;
     MI_REQUIRE_EQUAL(*iter, 1);
@@ -234,7 +234,7 @@ void test_iterators(
 
 // Test the iterators.
 void test_chunk_iterators(
-    const Rle_array<int>& array)	// array to operate on
+    const Rle_array<int>& array)        // array to operate on
 {
     Rle_chunk_iterator<int> iter = array.begin_chunk();
 
@@ -270,13 +270,13 @@ void test_chunk_iterators(
 
 // Test the accessors.
 void test_accessors(
-    const Rle_array<int>& array)	// array to operate on
+    const Rle_array<int>& array)        // array to operate on
 {
     size_t i = 0;
     for (; i<4; ++i)
-	MI_REQUIRE_EQUAL(array[i], 1);
+        MI_REQUIRE_EQUAL(array[i], 1);
     for (; i<7; ++i)
-	MI_REQUIRE_EQUAL(array[i], 3);
+        MI_REQUIRE_EQUAL(array[i], 3);
     MI_REQUIRE_EQUAL(array[i++], 0);
     MI_REQUIRE_EQUAL(array[i++], 1);
     MI_REQUIRE_EQUAL(array[i++], 2);
@@ -287,7 +287,7 @@ void test_accessors(
 
 // Test the data removal.
 void test_removal(
-    Rle_array<int>& array)		// array to operate on
+    Rle_array<int>& array)              // array to operate on
 {
     MI_REQUIRE(!array.empty());
     MI_REQUIRE_EQUAL(array.size(), 11);

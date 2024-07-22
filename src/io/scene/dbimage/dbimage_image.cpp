@@ -34,9 +34,11 @@
 #include <mi/neuraylib/ireader.h>
 #include <mi/neuraylib/itile.h>
 
+#include <filesystem>
+#include <utility>
+
 #include <boost/core/ignore_unused.hpp>
 
-#include <base/hal/disk/disk.h>
 #include <base/hal/hal/i_hal_ospath.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/path/i_path.h>
@@ -49,6 +51,8 @@
 #include <io/image/image/i_image_utilities.h>
 #include <io/scene/scene/i_scene_journal_types.h>
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
+
+namespace fs = std::filesystem;
 
 namespace MI {
 
@@ -159,10 +163,10 @@ class File_image_set : public Image_set
 public:
     /// Constructor for a single file (no animated textures nor uvtiles)
     File_image_set(
-        const std::string& original_filename,
+        std::string original_filename,
         const char* selector,
         const std::string& resolved_filename)
-      : m_original_filename( original_filename),
+      : m_original_filename( std::move( original_filename)),
         m_selector( selector ? selector : "")
     {
         m_array.push_back( Uv_frame_filename{ 0, 0, 0, resolved_filename});
@@ -176,12 +180,12 @@ public:
 
     /// Constructor that supports animated textures and uvtiles (array can be unordered).
     File_image_set(
-        const std::string& original_filename,
+        std::string original_filename,
         const char* selector,
         const std::vector<Uv_frame_filename>& array,
         bool is_animated,
         bool is_uvtile)
-      : m_original_filename( original_filename),
+      : m_original_filename( std::move( original_filename)),
         m_selector( selector ? selector : ""),
         m_array( array),
         m_is_animated( is_animated),
@@ -214,54 +218,55 @@ public:
         }
     }
 
-    bool is_mdl_container() const { return false; }
+    bool is_mdl_container() const final { return false; }
 
-    const char* get_original_filename() const { return m_original_filename.c_str(); }
+    const char* get_original_filename() const final { return m_original_filename.c_str(); }
 
-    const char* get_container_filename() const { return ""; }
+    const char* get_container_filename() const final { return ""; }
 
-    const char* get_mdl_file_path() const { return ""; }
+    const char* get_mdl_file_path() const final { return ""; }
 
-    const char* get_selector() const { return !m_selector.empty() ? m_selector.c_str() : nullptr; }
+    const char* get_selector() const final
+    { return !m_selector.empty() ? m_selector.c_str() : nullptr; }
 
-    const char* get_image_format() const { return ""; }
+    const char* get_image_format() const final { return ""; }
 
-    bool is_animated() const { return m_is_animated; }
+    bool is_animated() const final { return m_is_animated; }
 
-    bool is_uvtile() const { return m_is_uvtile; }
+    bool is_uvtile() const final { return m_is_uvtile; }
 
-    mi::Size get_length() const { return m_frame_index_to_frame_number.size(); }
+    mi::Size get_length() const final { return m_frame_index_to_frame_number.size(); }
 
-    mi::Size get_frame_number( mi::Size f) const
+    mi::Size get_frame_number( mi::Size f) const final
     {
         ASSERT( M_SCENE, f < get_length());
         return m_frame_index_to_frame_number[f];
     }
 
-    mi::Size get_frame_length( mi::Size f) const
+    mi::Size get_frame_length( mi::Size f) const final
     {
         ASSERT( M_SCENE, f < get_length());
         return m_global_indices_per_frame_index[f].size();
     }
 
-    void get_uvtile_uv( mi::Size f, mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const
+    void get_uvtile_uv( mi::Size f, mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const final
     {
         mi::Size index = get_global_index( f, i);
         u = m_array[index].u;
         v = m_array[index].v;
     }
 
-    const char* get_resolved_filename( mi::Size f, mi::Size i) const
+    const char* get_resolved_filename( mi::Size f, mi::Size i) const final
     {
         mi::Size index = get_global_index( f, i);
         return m_array[index].filename.c_str();
     }
 
-    const char* get_container_membername( mi::Size f, mi::Size i) const { return ""; }
+    const char* get_container_membername( mi::Size f, mi::Size i) const final { return ""; }
 
-    mi::neuraylib::IReader* open_reader( mi::Size f, mi::Size i) const { return nullptr; }
+    mi::neuraylib::IReader* open_reader( mi::Size f, mi::Size i) const final { return nullptr; }
 
-    mi::neuraylib::ICanvas* get_canvas( mi::Size f, mi::Size i) const { return nullptr; }
+    mi::neuraylib::ICanvas* get_canvas( mi::Size f, mi::Size i) const final { return nullptr; }
 
 private:
     mi::Size get_global_index( mi::Size f, mi::Size i) const
@@ -297,46 +302,48 @@ class Container_file_image_set : public Image_set
 {
 public:
     Container_file_image_set(
-        const std::string& resolved_container_filename,
-        const std::string& container_member_name,
+        std::string resolved_container_filename,
+        std::string container_member_name,
         const char* selector)
-      : m_resolved_container_filename( resolved_container_filename),
-        m_container_member_name( container_member_name),
+      : m_resolved_container_filename( std::move( resolved_container_filename)),
+        m_container_member_name( std::move( container_member_name)),
         m_selector( selector ? selector : "")
     {
     }
 
-    bool is_mdl_container() const { return true; }
+    bool is_mdl_container() const final { return true; }
 
-    const char* get_original_filename() const { return ""; }
+    const char* get_original_filename() const final { return ""; }
 
-    const char* get_container_filename() const { return m_resolved_container_filename.c_str(); }
+    const char* get_container_filename() const final
+    { return m_resolved_container_filename.c_str(); }
 
-    const char* get_mdl_file_path() const { return ""; }
+    const char* get_mdl_file_path() const final { return ""; }
 
-    const char* get_selector() const { return !m_selector.empty() ? m_selector.c_str() : nullptr; }
+    const char* get_selector() const final
+    { return !m_selector.empty() ? m_selector.c_str() : nullptr; }
 
-    const char* get_image_format() const { return ""; }
+    const char* get_image_format() const final { return ""; }
 
-    bool is_animated() const { return false; }
+    bool is_animated() const final { return false; }
 
-    bool is_uvtile() const { return false; }
+    bool is_uvtile() const final { return false; }
 
-    mi::Size get_length() const { return 1; }
+    mi::Size get_length() const final { return 1; }
 
-    mi::Size get_frame_number( mi::Size f) const
+    mi::Size get_frame_number( mi::Size f) const final
     {
         ASSERT( M_SCENE, f < get_length());
         return 0;
     }
 
-    mi::Size get_frame_length( mi::Size f) const
+    mi::Size get_frame_length( mi::Size f) const final
     {
         ASSERT( M_SCENE, f < get_length());
         return 1;
     }
 
-    void get_uvtile_uv( mi::Size f, mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const
+    void get_uvtile_uv( mi::Size f, mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const final
     {
         ASSERT( M_SCENE, f < get_length());
         ASSERT( M_SCENE, i < get_frame_length( f));
@@ -344,16 +351,16 @@ public:
         v = 0;
     }
 
-    const char* get_resolved_filename( mi::Size f, mi::Size i) const { return ""; }
+    const char* get_resolved_filename( mi::Size f, mi::Size i) const final { return ""; }
 
-    const char* get_container_membername( mi::Size f, mi::Size i) const
+    const char* get_container_membername( mi::Size f, mi::Size i) const final
     {
         ASSERT( M_SCENE, f < get_length());
         ASSERT( M_SCENE, i < get_frame_length( f));
         return m_container_member_name.c_str();
     }
 
-    mi::neuraylib::IReader* open_reader( mi::Size f, mi::Size i) const
+    mi::neuraylib::IReader* open_reader( mi::Size f, mi::Size i) const final
     {
         ASSERT( M_SCENE, f < get_length());
         ASSERT( M_SCENE, i < get_frame_length( f));
@@ -361,7 +368,7 @@ public:
             m_resolved_container_filename, m_container_member_name);
     }
 
-    mi::neuraylib::ICanvas* get_canvas( mi::Size f, mi::Size i) const { return nullptr; }
+    mi::neuraylib::ICanvas* get_canvas( mi::Size f, mi::Size i) const final { return nullptr; }
 
 private:
     std::string m_resolved_container_filename;
@@ -447,10 +454,6 @@ Image::Image( const Image& other)
     m_cached_frames[0].m_uvtiles.resize( 1);
 
     ASSERT( M_SCENE, m_frames_filenames.size() == m_cached_frames.size());
-}
-
-Image::~Image()
-{
 }
 
 mi::Sint32 Image::reset_file(
@@ -939,8 +942,9 @@ SERIAL::Serializable* Image::deserialize( SERIAL::Deserializer* deserializer)
 
     // Re-resolving m_resolved_container_filename is not possible for container filename since we do
     // not have the original container filename.
+    std::error_code ec;
     if( !m_resolved_container_filename.empty()
-        && !DISK::is_file( m_resolved_container_filename.c_str()))
+        && !fs::is_regular_file( fs::u8path( m_resolved_container_filename), ec))
         m_resolved_container_filename.clear();
 
     for( auto& frame_filenames: m_frames_filenames)
@@ -952,7 +956,7 @@ SERIAL::Serializable* Image::deserialize( SERIAL::Deserializer* deserializer)
 
             // Re-resolve m_resolved_filename
             if( !uvfn.m_resolved_filename.empty()
-                    && !DISK::is_file( uvfn.m_resolved_filename.c_str())) {
+                && !fs::is_regular_file( fs::u8path( uvfn.m_resolved_filename), ec)) {
                 // TODO Fix this for files with uvtile or frame markers
                 uvfn.m_resolved_filename
                     = path_module->search( PATH::MDL, m_original_filename);
@@ -1172,7 +1176,7 @@ std::string get_regex(
         if( mask.substr( q, 6) == "<UDIM>") {
 
             if( mode != MODE_OFF)
-                return std::string();
+                return {};
             mode        = MODE_UDIM;
             mode_index  = index++;
             result     += "([1-9][0-9][0-9][0-9])";
@@ -1181,7 +1185,7 @@ std::string get_regex(
         } else if( mask.substr( q, 9) == "<UVTILE0>") {
 
             if( mode != MODE_OFF)
-                return std::string();
+                return {};
             mode        = MODE_UVTILE0;
             mode_index  = index++;
             result     += "(_u-?[0-9]+_v-?[0-9]+)";
@@ -1190,7 +1194,7 @@ std::string get_regex(
         } else if( mask.substr( q, 9) == "<UVTILE1>") {
 
             if( mode != MODE_OFF)
-                return std::string();
+                return {};
             mode        = MODE_UVTILE1;
             mode_index  = index++;
             result     += "(_u-?[0-9]+_v-?[0-9]+)";
@@ -1199,7 +1203,7 @@ std::string get_regex(
         } else if( (frames_max_digits = get_frame_marker_length( &mask[q]))) {
 
             if( frames_index > 0)
-                return std::string();
+                return {};
             frames_index  = index++;
             result       += "([0-9]+)";
             q            += frames_max_digits + 2;
@@ -1355,77 +1359,72 @@ Image_set* Image::resolve_filename( const std::string& filename, const char* sel
         return nullptr;
     }
 
-    // Obtain search paths and directory relative to search paths
-    std::string dirname = HAL::Ospath::dirname( filename);
-    PATH::Path_module::Search_path search_paths;
-    std::string relative_dirname;
-    if( DISK::is_path_absolute( dirname)) {
-        if( !DISK::access( dirname.c_str()))
-            return nullptr;
-        search_paths.push_back( dirname);
-    } else {
-        search_paths = path_module->get_search_path( PATH::RESOURCE);
-        relative_dirname = dirname;
-    }
-    dirname.clear();
+    try {
 
-    std::wstring filename_wregex( STRING::utf8_to_wchar( filename_regex.c_str()));
-    std::wregex regex( filename_wregex);
-
-    std::vector<Uv_frame_filename> result;
-
-    for( auto it = search_paths.begin(); it != search_paths.end(); ++it) {
-
-        std::string current_dir = HAL::Ospath::join( *it, relative_dirname);
-
-        DISK::Directory dir;
-        if( !dir.open( current_dir.c_str()))
-            continue;
-
-        std::string fn = dir.read();
-        while( !fn.empty()) {
-
-            std::wstring filename( STRING::utf8_to_wchar( fn.c_str()));
-            std::wsmatch matches;
-            if( !std::regex_match( filename, matches, regex)) {
-                fn = dir.read();
-                continue;
+        // Obtain paths to consider
+        std::vector<fs::path> paths;
+        fs::path tmp( fs::u8path( filename).parent_path());
+        if( tmp.is_absolute()) {
+            paths.push_back( tmp);
+        } else {
+            const PATH::Path_module::Search_path& search_paths
+                = path_module->get_search_path( PATH::RESOURCE);
+            for( const auto& entry: search_paths) {
+                fs::path head( fs::u8path( entry));
+                fs::path combined = (head / tmp).lexically_normal();
+                if( fs::is_directory( combined))
+                    paths.push_back( combined);
             }
+        }
+        tmp.clear();
 
-            mi::Sint32 u = 0, v = 0;
-            if( mode_index > 0) {
-                ASSERT( M_SCENE, matches.size() >= mode_index);
-                std::wstring wmatch( matches[mode_index].first, matches[mode_index].second);
-                std::string match = STRING::wchar_to_utf8( wmatch.c_str());
-                parse_u_v( mode, match.c_str(), u, v);
-            }
+        std::wstring filename_wregex( STRING::utf8_to_wchar( filename_regex.c_str()));
+        std::wregex regex( filename_wregex);
 
-            mi::Size frame_number = 0;
-            if( frames_index > 0) {
-                ASSERT( M_SCENE, matches.size() >= frames_index);
-                std::wstring wmatch( matches[frames_index].first, matches[frames_index].second);
-                std::string match = STRING::wchar_to_utf8( wmatch.c_str());
-                if( match.size() > frames_max_digits) {
-                    fn = dir.read();
+        std::vector<Uv_frame_filename> result;
+
+        for( const auto& directory: paths) {
+
+            for( const auto& entry: fs::directory_iterator( directory)) {
+
+                std::string dir_filename = entry.path().filename().u8string();
+                std::wstring dir_wfilename( STRING::utf8_to_wchar( dir_filename.c_str()));
+                std::wsmatch matches;
+                if( !std::regex_match( dir_wfilename, matches, regex))
                     continue;
+
+                mi::Sint32 u = 0, v = 0;
+                if( mode_index > 0) {
+                    ASSERT( M_SCENE, matches.size() >= mode_index);
+                    std::wstring wmatch( matches[mode_index].first, matches[mode_index].second);
+                    std::string match = STRING::wchar_to_utf8( wmatch.c_str());
+                    parse_u_v( mode, match.c_str(), u, v);
                 }
-                char* endptr;
-                frame_number = std::strtoul( match.c_str(), &endptr, 10);
-                ASSERT( M_SCENE, match.c_str() + match.size() == endptr);
+
+                mi::Size frame_number = 0;
+                if( frames_index > 0) {
+                    ASSERT( M_SCENE, matches.size() >= frames_index);
+                    std::wstring wmatch( matches[frames_index].first, matches[frames_index].second);
+                    std::string match = STRING::wchar_to_utf8( wmatch.c_str());
+                    if( match.size() > frames_max_digits)
+                        continue;
+                    char* endptr;
+                    frame_number = std::strtoul( match.c_str(), &endptr, 10);
+                    ASSERT( M_SCENE, match.c_str() + match.size() == endptr);
+                }
+
+                result.push_back( Uv_frame_filename{ frame_number, u, v, entry.path().u8string()});
             }
 
-            std::string resolved_filename = HAL::Ospath::join( current_dir, fn);
-            result.push_back( Uv_frame_filename{ frame_number, u, v, resolved_filename});
-
-            fn = dir.read();
+            if( !result.empty())
+                return new File_image_set(
+                    filename, selector, result, frames_index > 0, mode_index > 0);
         }
 
-        if( !result.empty())
-            return new File_image_set(
-                filename, selector, result, frames_index > 0, mode_index > 0);
+        return nullptr;
+    } catch( ...) {
+        return nullptr;
     }
-
-    return nullptr;
 }
 
 void Image::reset_shared(
@@ -1449,7 +1448,7 @@ void Image::reset_shared(
         }
     }
 
-    Image_impl* impl = new Image_impl( is_animated, is_uvtile, frames, frame_to_id);
+    auto* impl = new Image_impl( is_animated, is_uvtile, frames, frame_to_id);
 
     setup_cached_values( impl);
 
@@ -1583,9 +1582,7 @@ Image_impl::Image_impl(
     m_is_cubemap = m_frames[0].m_uvtiles[0].m_mipmap->get_is_cubemap();
 }
 
-Image_impl::~Image_impl()
-{
-}
+Image_impl::~Image_impl() = default;
 
 const IMAGE::IMipmap* Image_impl::get_mipmap( mi::Size frame_id, mi::Size uvtile_id) const
 {

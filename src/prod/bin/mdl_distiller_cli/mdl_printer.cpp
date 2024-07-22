@@ -440,7 +440,8 @@ bool Mdl_printer::expression_needs_parens(IExpression const *expr)
             return expression_needs_parens(array_expr.get());
         }
 
-        if ((semantic == IFunction_definition::DS_SELECT) || (semantic == IFunction_definition::DS_INTRINSIC_DAG_FIELD_ACCESS)) {
+        if ((semantic == IFunction_definition::DS_SELECT) 
+                || (semantic == IFunction_definition::DS_INTRINSIC_DAG_FIELD_ACCESS)) {
             Handle<IExpression const> struct_expr(arguments->get_expression(mi::Size(0)));
             return expression_needs_parens(struct_expr.get());
         }
@@ -448,10 +449,12 @@ bool Mdl_printer::expression_needs_parens(IExpression const *expr)
             return true;
         }
 
-        if ((semantic >= IFunction_definition::DS_UNARY_FIRST) && (semantic < IFunction_definition::DS_BINARY_FIRST)){
+        if ((semantic >= IFunction_definition::DS_UNARY_FIRST) 
+                && (semantic < IFunction_definition::DS_BINARY_FIRST)){
             return true;
         }
-        if ((semantic >= IFunction_definition::DS_BINARY_FIRST) && (semantic < IFunction_definition::DS_TERNARY)) {
+        if ((semantic >= IFunction_definition::DS_BINARY_FIRST) 
+                && (semantic < IFunction_definition::DS_TERNARY)) {
             return true;
         }
 
@@ -472,7 +475,8 @@ bool Mdl_printer::expression_needs_parens(IExpression const *expr)
 bool Mdl_printer::trivial_expression(IExpression const *expr)
 {
     if (m_suppress_trivial_temps) {
-        if (expr->get_kind() == IExpression::EK_CONSTANT || expr->get_kind() == IExpression::EK_PARAMETER) {
+        if (expr->get_kind() == IExpression::EK_CONSTANT 
+                || expr->get_kind() == IExpression::EK_PARAMETER) {
             Handle<IType const> t(expr->get_type());
             switch (t->get_kind()) {
             case IType::TK_INT:
@@ -500,7 +504,8 @@ bool Mdl_printer::contains_interesting_expression(IExpression const *expr)
 {
     Handle<IType const> t(expr->get_type());
     IType::Kind kind =t->get_kind();
-    if (kind == IType::TK_BSDF || kind == IType::TK_VDF || kind == IType::TK_EDF || kind == IType::TK_HAIR_BSDF) {
+    if (kind == IType::TK_BSDF || kind == IType::TK_VDF || kind == IType::TK_EDF 
+            || kind == IType::TK_HAIR_BSDF) {
         return true;
     }
 
@@ -633,9 +638,11 @@ void Mdl_printer::print_identifier(std::string const &identifier) {
                     if (unicode_char >= 32 && unicode_char <= 0x7F) {
                         m_out << char(unicode_char);
                     } else if (unicode_char <= 0xFFFF) {
-                        m_out << "\\u" << std::setw(4) << std::setfill('0') << std::hex << unsigned(unicode_char);
+                        m_out << "\\u" << std::setw(4) << std::setfill('0') << std::hex 
+                            << unsigned(unicode_char);
                     } else {
-                        m_out << "\\U" << std::setw(8) << std::setfill('0') << std::hex << unsigned(unicode_char);
+                        m_out << "\\U" << std::setw(8) << std::setfill('0') << std::hex 
+                            << unsigned(unicode_char);
                     }
                     break;
                 }
@@ -823,7 +830,8 @@ void Mdl_printer::print_value(IValue const *value, std::string const &path_prefi
                                                      Bake_path_cmp(path_prefix)));
         }
         if (b) {
-            std::string texname = baked_texture_file_name(m_derived_material_name.c_str(), path_prefix);
+            std::string texname = baked_texture_file_name(m_derived_material_name.c_str(), 
+                    path_prefix);
 
             if (is_normal_map_path(path_prefix))
             {
@@ -988,7 +996,8 @@ void Mdl_printer::print_value(IValue const *value, std::string const &path_prefi
         Handle<IValue_float const> g(d->get_value(1));
         Handle<IValue_float const> b(d->get_value(2));
         m_out << "color(";
-        if (std::isfinite(r->get_value()) && r->get_value() == g->get_value() && r->get_value() == b->get_value()) {
+        if (std::isfinite(r->get_value()) && r->get_value() == g->get_value() 
+                && r->get_value() == b->get_value()) {
             if (r->get_value() != 0.0) {
                 print_value(r.get(), path_prefix); // FIXME: what prefix is correct?
             }
@@ -1041,7 +1050,8 @@ void Mdl_printer::print_value(IValue const *value, std::string const &path_prefi
             if ( i > 0) {
                 m_out << ',';
             }
-            print_value(elem.get(), dot_sep(path_prefix, sel_name)); // FIXME: Is path creation correct?
+            print_value(elem.get(), dot_sep(path_prefix, sel_name)); // FIXME: Is path creation 
+                                                                     //        correct?
         }
         m_out << ')';
         break;
@@ -1112,7 +1122,8 @@ void Mdl_printer::print_value(IValue const *value, std::string const &path_prefi
             value->get_interface<const IValue_bsdf_measurement>());
         m_out << "bsdf_measurement(";
         Handle<const mi::neuraylib::IBsdf_measurement> mbsdf(
-            m_transaction->access<mi::neuraylib::IBsdf_measurement>(val_bsdf_measurement->get_value()));
+            m_transaction->
+            access<mi::neuraylib::IBsdf_measurement>(val_bsdf_measurement->get_value()));
         if (mbsdf.is_valid_interface()) {
             m_out << '\"' << strip_path(m_neuray, mbsdf->get_filename()) << '\"';
         }
@@ -1126,7 +1137,8 @@ void Mdl_printer::print_value(IValue const *value, std::string const &path_prefi
     }
 }
 
-void Mdl_printer::print_direct_call(IExpression_direct_call const *call, std::string const &path_prefix, int indent)
+void Mdl_printer::print_direct_call(IExpression_direct_call const *call, 
+        std::string const &path_prefix, int indent)
 {
     Handle<const IExpression_list> arguments(call->get_arguments());
 
@@ -1167,8 +1179,9 @@ void Mdl_printer::print_direct_call(IExpression_direct_call const *call, std::st
             }
             std::stringstream s;
             s << i;
-            print_expression(arg_expr.get(), dot_sep(path_prefix, s.str()), // FIXME: Does path extension make sense here?
-                             indent + 1);
+            print_expression(arg_expr.get(), dot_sep(path_prefix, s.str()), // FIXME: Does path
+                             indent + 1);                                   // extension make
+                                                                            // sense here?
         }
         if (argc > 1) {
             m_out << "\n";
@@ -1192,7 +1205,8 @@ void Mdl_printer::print_direct_call(IExpression_direct_call const *call, std::st
         m_out << "[";
         print_expression(index_expr.get(), path_prefix, indent); // FIXME: path_prefix correct?
         m_out << "]";
-    } else if ((semantic == IFunction_definition::DS_SELECT) || (semantic == IFunction_definition::DS_INTRINSIC_DAG_FIELD_ACCESS)) {
+    } else if ((semantic == IFunction_definition::DS_SELECT) 
+            || (semantic == IFunction_definition::DS_INTRINSIC_DAG_FIELD_ACCESS)) {
         if (suppress_expression(call)) {
             m_out << "...";
             return;
@@ -1203,8 +1217,9 @@ void Mdl_printer::print_direct_call(IExpression_direct_call const *call, std::st
         if (arg0_parens)
             m_out << "(";
         print_expression(struct_expr.get(),
-                         dot_sep(path_prefix, get_struct_selector(function_name)), // FIXME: Is path creation correct?
-                         indent);
+                         dot_sep(path_prefix, get_struct_selector(function_name)), // FIXME:Is path
+                         indent);                                                  // creation 
+                                                                                   // correct?
         if (arg0_parens)
             m_out << ")";
         print_identifier(get_struct_selector(function_name));
@@ -1240,7 +1255,8 @@ void Mdl_printer::print_direct_call(IExpression_direct_call const *call, std::st
         print_expression(arg2_expr.get(), dot_sep(path_prefix, arg2_name), indent);
         if (arg2_parens)
             m_out << ")";
-    } else if ((semantic >= IFunction_definition::DS_UNARY_FIRST) && (semantic < IFunction_definition::DS_CAST)){
+    } else if ((semantic >= IFunction_definition::DS_UNARY_FIRST) 
+            && (semantic < IFunction_definition::DS_CAST)){
         if (suppress_expression(call)) {
             m_out << "...";
             return;
@@ -1259,7 +1275,8 @@ void Mdl_printer::print_direct_call(IExpression_direct_call const *call, std::st
                          indent);
         if (arg0_parens)
             m_out << ")";
-    } else if ((semantic >= IFunction_definition::DS_BINARY_FIRST) && (semantic < IFunction_definition::DS_TERNARY)) {
+    } else if ((semantic >= IFunction_definition::DS_BINARY_FIRST) 
+            && (semantic < IFunction_definition::DS_TERNARY)) {
         if (suppress_expression(call)) {
             m_out << "...";
             return;
@@ -1360,7 +1377,8 @@ void Mdl_printer::print_direct_call(IExpression_direct_call const *call, std::st
     }
 }
 
-void Mdl_printer::print_expression(IExpression const *expr, std::string const &path_prefix, int indent)
+void Mdl_printer::print_expression(IExpression const *expr, std::string const &path_prefix, 
+        int indent)
 {
     switch (expr->get_kind()) {
     case IExpression::EK_CONSTANT:
@@ -1388,7 +1406,8 @@ void Mdl_printer::print_expression(IExpression const *expr, std::string const &p
             return;
         }
         // add parameter support here if class compilation needs to be supported
-        Handle<const IExpression_parameter> parameter(expr->get_interface<const IExpression_parameter>());
+        Handle<const IExpression_parameter> 
+            parameter(expr->get_interface<const IExpression_parameter>());
         mdl_assert(parameter.is_valid_interface());
 
         mi::Size parameter_idx = parameter->get_index();
@@ -1430,7 +1449,8 @@ void Mdl_printer::print_expression(IExpression const *expr, std::string const &p
                 m_material->get_temporary(temp->get_index()));
             print_expression(temp_expr.get(), path_prefix, indent);
         } else {
-            Handle<const IExpression_temporary> temp(expr->get_interface<const IExpression_temporary>());
+            Handle<const IExpression_temporary> 
+                temp(expr->get_interface<const IExpression_temporary>());
             mdl_assert(temp.is_valid_interface());
 
             Handle<IExpression const> temp_expr(m_material->get_temporary(temp->get_index()));
@@ -1614,7 +1634,8 @@ void Mdl_printer::analyze_expression(IExpression const *expr, std::string const 
     case IExpression::EK_PARAMETER:
     {
         // add parameter support here if class compilation needs to be supported
-        Handle<const IExpression_parameter> parameter(expr->get_interface<const IExpression_parameter>());
+        Handle<const IExpression_parameter> 
+            parameter(expr->get_interface<const IExpression_parameter>());
         mdl_assert(parameter.is_valid_interface());
 
         mi::Size parameter_idx = parameter->get_index();
@@ -1666,7 +1687,8 @@ void Mdl_printer::analyze_expression(IExpression const *expr, std::string const 
 
     case IExpression::EK_TEMPORARY:
     {
-        Handle<const IExpression_temporary> temp(expr->get_interface<const IExpression_temporary>());
+        Handle<const IExpression_temporary> 
+            temp(expr->get_interface<const IExpression_temporary>());
         mdl_assert(temp.is_valid_interface());
 
         Handle<IExpression const> temp_expr(m_material->get_temporary(temp->get_index()));
@@ -1832,6 +1854,10 @@ void Mdl_printer::print_prolog()
 
     case mdl_spec_1_8:
         m_out << "mdl 1.8;\n";
+        break;
+
+    case mdl_spec_1_9:
+        m_out << "mdl 1.9;\n";
         break;
 
     default:

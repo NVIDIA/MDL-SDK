@@ -137,7 +137,7 @@ public:
 
     /// Returns a reader for the module.
     ///
-    /// The reader does \em need to support absolute access or recorded access.
+    /// The reader does \em not need to support absolute access or recorded access.
     virtual IReader* create_reader() const = 0;
 };
 
@@ -192,7 +192,7 @@ public:
     ///            range.
     virtual IReader* create_reader( Size i) const = 0;
 
-    /// Returns the resource hash value for ta resource entity.
+    /// Returns the resource hash value for a resource entity.
     ///
     /// \param i   The index of the requested resource entity (from 0 to #get_count()-1).
     /// \return    The hash value of the \p i -th resource entity, or a zero-initialized value if

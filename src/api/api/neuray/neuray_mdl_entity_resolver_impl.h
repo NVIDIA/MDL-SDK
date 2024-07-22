@@ -228,7 +228,7 @@ class Core_mdl_resource_set_impl
 public:
     Core_mdl_resource_set_impl(
         mi::neuraylib::IMdl_resolved_resource* resolved_resource,
-        const std::map<size_t, size_t>& frame_number_to_id);
+        std::map<size_t, size_t> frame_number_to_id);
 
     const char* get_mdl_url_mask() const final;
 

@@ -115,7 +115,7 @@ mi::Sint32 Export_result_ext_impl::message_push_back(
 
     m_message_numbers.push_back( number);
     m_message_severities.push_back( severity);
-    m_messages.push_back( message);
+    m_messages.emplace_back( message);
     return 0;
 }
 

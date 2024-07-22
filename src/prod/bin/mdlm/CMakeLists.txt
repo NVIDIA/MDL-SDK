@@ -40,7 +40,7 @@ set(PROJECT_HEADERS
     "options.h"
     "search_path.h"
     "util.h"
-    "version.h"
+    "version_helper.h"
     )
 
 set(PROJECT_SOURCES
@@ -53,7 +53,7 @@ set(PROJECT_SOURCES
     "options.cpp"
     "search_path.cpp"
     "util.cpp"
-    "version.cpp"
+    "version_helper.cpp"
 
     ${PROJECT_HEADERS}
     )
@@ -84,8 +84,3 @@ target_create_vs_user_settings(TARGET ${PROJECT_NAME})
 add_target_install(
     TARGET ${PROJECT_NAME}
     )
-
-# -------------------------------------------------------------------------------------------------
-# Add tests if available
-# -------------------------------------------------------------------------------------------------
-add_tests(POST)

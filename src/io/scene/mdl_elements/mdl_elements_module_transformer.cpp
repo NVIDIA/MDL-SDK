@@ -35,12 +35,13 @@
 #include <regex>
 #include <set>
 
+#include <boost/core/ignore_unused.hpp>
+
 #include <mi/mdl/mdl_modules.h>
 #include <mi/mdl/mdl_names.h>
 #include <mi/mdl/mdl_symbols.h>
 #include <mi/mdl/mdl_thread_context.h>
 
-#include <boost/core/ignore_unused.hpp>
 #include <base/lib/config/config.h>
 #include <base/util/registry/i_config_registry.h>
 #include <base/util/string_utils/i_string_utils.h>
@@ -125,11 +126,9 @@ mi::mdl::IExpression *User_constant_remover::convert_enum_value( mi::mdl::IValue
     mi::mdl::IQualified_name *qname = create_qualified_name( scope);
 
     // Get name of enum value and add it to the qualified name
-    mi::mdl::ISymbol const *value_symbol;
-    int value_code;
-    type->get_value( value->get_index(), value_symbol, value_code);
+    mi::mdl::IType_enum::Value const *e_value = type->get_value( value->get_index());
 
-    mi::mdl::ISimple_name *value_sname = m_nf->create_simple_name( value_symbol);
+    mi::mdl::ISimple_name *value_sname = m_nf->create_simple_name( e_value->get_symbol());
     qname->add_component( value_sname);
 
     mi::mdl::IType_name *tname = m_nf->create_type_name( qname);
@@ -139,21 +138,21 @@ mi::mdl::IExpression *User_constant_remover::convert_enum_value( mi::mdl::IValue
 }
 
 // Converts a struct or array value to a call expression to the corresponding constructor.
-mi::mdl::IExpression *User_constant_remover::convert_compound_value(
-    mi::mdl::IValue_compound const *value)
+mi::mdl::IExpression* User_constant_remover::convert_compound_value(
+    const mi::mdl::IValue_compound*value)
 {
-    mi::mdl::IType_compound const *type = value->get_type();
-    mi::mdl::Definition_table const &def_tab = m_module->get_definition_table();
-    mi::mdl::Scope const *scope;
-    if( mi::mdl::IType_array const *a_tp = as<mi::mdl::IType_array>( type)) {
+    const mi::mdl::IType_compound* type = value->get_type();
+    const mi::mdl::Definition_table& def_tab = m_module->get_definition_table();
+    const mi::mdl::Scope* scope;
+    if( auto const* a_tp = as<mi::mdl::IType_array>( type)) {
         scope = def_tab.get_type_scope( a_tp->get_element_type());
     } else {
         scope = def_tab.get_type_scope( type);
     }
     MDL_ASSERT( scope);
 
-    mi::mdl::IQualified_name *qname = create_qualified_name( scope);
-    mi::mdl::IType_name *tname = m_nf->create_type_name( qname);
+    mi::mdl::IQualified_name* qname = create_qualified_name( scope);
+    mi::mdl::IType_name* tname = m_nf->create_type_name( qname);
 
     // Adapt type for arrays, with a value, the size of the array is known
     if( mi::mdl::is<mi::mdl::IType_array>( type)) {
@@ -163,7 +162,7 @@ mi::mdl::IExpression *User_constant_remover::convert_compound_value(
         //tname->set_incomplete_array();
     }
 
-    mi::mdl::IExpression_reference *constructor = m_ef->create_reference( tname);
+    mi::mdl::IExpression_reference* constructor = m_ef->create_reference( tname);
     constructor->set_type( type);
 
     // Adapt constructor for arrays, if needed
@@ -171,18 +170,18 @@ mi::mdl::IExpression *User_constant_remover::convert_compound_value(
         constructor->set_array_constructor();
     }
 
-    mi::mdl::IExpression_call *call = m_ef->create_call( constructor);
+    mi::mdl::IExpression_call* call = m_ef->create_call( constructor);
     call->set_type( type);
 
     // Convert all compound elements and add to constructor arguments
     for( int i = 0, n = value->get_component_count(); i < n; ++i) {
-        mi::mdl::IValue const *arg_value = value->get_value( i);
-        mi::mdl::IExpression *arg_expr = convert_user_value( arg_value);
+        const mi::mdl::IValue* arg_value = value->get_value( i);
+        const mi::mdl::IExpression* arg_expr = convert_user_value( arg_value);
         // Was not a user value? Use original value
         if( arg_expr == nullptr) {
             arg_expr = m_ef->create_literal( arg_value);
         }
-        mi::mdl::IArgument const *arg = m_ef->create_positional_argument( arg_expr);
+        const mi::mdl::IArgument* arg = m_ef->create_positional_argument( arg_expr);
         call->add_argument( arg);
     }
 
@@ -264,10 +263,10 @@ public:
     Import_entries_holder(
         SYSTEM::Access_module<MDLC::Mdlc_module>& mdlc_module,
         DB::Transaction* transaction,
-        mi::mdl::Module* mdl_module)
+        mi::mdl::Module* module)
       : m_mdlc_module( mdlc_module),
         m_transaction( transaction),
-        m_module( mdl_module, mi::base::DUP_INTERFACE)
+        m_module( module, mi::base::DUP_INTERFACE)
     {
         Module_cache module_cache(
             m_transaction, m_mdlc_module->get_module_wait_queue(), {});
@@ -291,7 +290,7 @@ private:
 /// There must be no weak relative import declarations or weak relative resource file paths.
 class Version_upgrader : public User_constant_remover, public mi::mdl::IClone_modifier
 {
-    typedef User_constant_remover Base;
+    using Base = User_constant_remover;
 public:
     Version_upgrader(
         mi::mdl::IMDL* mdl,
@@ -350,8 +349,8 @@ void Version_upgrader::run()
         impl_cast<mi::mdl::MDL>( m_mdl),
         m_to_major,
         m_to_minor,
-        /*enable_mdl_next=*/true,
-        /*enable_experimental=*/false);
+        /*enable_mdl_next*/ true,
+        /*enable_experimental*/ false);
 
     // Promote call expressions and its arguments.
     visit( m_module);
@@ -363,8 +362,7 @@ void Version_upgrader::run()
 
 mi::mdl::IExpression* Version_upgrader::post_visit( mi::mdl::IExpression_call* expr)
 {
-    const mi::mdl::IExpression_reference* ref
-        = as<mi::mdl::IExpression_reference>( expr->get_reference());
+    const auto* ref = as<mi::mdl::IExpression_reference>( expr->get_reference());
     if( !ref)
         return expr;
 
@@ -449,7 +447,7 @@ void Alias_remover::run()
 {
     // Check whether the module contains any aliases.
     bool aliases_found = false;
-    for( int i = 0, n = m_module->get_declaration_count(); i < n; ++i) {
+    for( size_t i = 0, n = m_module->get_declaration_count(); i < n; ++i) {
         const mi::mdl::IDeclaration* decl = m_module->get_declaration( i);
         mi::mdl::IDeclaration::Kind kind = decl->get_kind();
         if(    kind == mi::mdl::IDeclaration::DK_MODULE
@@ -465,7 +463,7 @@ void Alias_remover::run()
         return;
 
     // Adapt import declarations to avoid aliases.
-    for( int i = 0, n = m_module->get_declaration_count(); i < n; ++i) {
+    for( size_t i = 0, n = m_module->get_declaration_count(); i < n; ++i) {
 
         const mi::mdl::IDeclaration* decl = m_module->get_declaration( i);
         mi::mdl::IDeclaration::Kind kind = decl->get_kind();
@@ -475,11 +473,9 @@ void Alias_remover::run()
         if( kind != mi::mdl::IDeclaration::DK_IMPORT)
             break;
 
-        const mi::mdl::IDeclaration_import* import
-            = cast<mi::mdl::IDeclaration_import>( decl);
+        const auto* import = cast<mi::mdl::IDeclaration_import>( decl);
 
-        mi::mdl::IQualified_name* using_name
-            = const_cast<mi::mdl::IQualified_name*>( import->get_module_name());
+        auto* using_name = const_cast<mi::mdl::IQualified_name*>( import->get_module_name());
         if( using_name) {
             handle_import_name( using_name);
             std::vector<std::string> absolute_name = get_absolute_name( using_name);
@@ -492,8 +488,7 @@ void Alias_remover::run()
         }
 
         for( int j = 0, n2 = import->get_name_count(); j < n2; ++j) {
-            mi::mdl::IQualified_name* import_name
-                = const_cast<mi::mdl::IQualified_name*>( import->get_name( j));
+            auto* import_name = const_cast<mi::mdl::IQualified_name*>( import->get_name( j));
             handle_import_name( import_name);
             mi::mdl::IQualified_name* module_name = strip_last_component( import_name);
             std::vector<std::string> absolute_name = get_absolute_name( module_name);
@@ -508,7 +503,7 @@ void Alias_remover::run()
     // Remove all alias declarations.
     std::vector<const mi::mdl::IDeclaration*> declarations;
     declarations.reserve( m_module->get_declaration_count());
-    for( int i = 0, n = m_module->get_declaration_count(); i < n; ++i) {
+    for( size_t i = 0, n = m_module->get_declaration_count(); i < n; ++i) {
         const mi::mdl::IDeclaration* decl = m_module->get_declaration( i);
         switch( decl->get_kind()) {
             case mi::mdl::IDeclaration::DK_NAMESPACE_ALIAS:
@@ -549,8 +544,7 @@ void Alias_remover::handle_import_name( mi::mdl::IQualified_name* name)
         }
 
         // Re-add component symbol without declaration in this module.
-        const mi::mdl::IDeclaration_namespace_alias* decl
-            = as<mi::mdl::IDeclaration_namespace_alias>( def->get_declaration());
+        const auto* decl = as<mi::mdl::IDeclaration_namespace_alias>( def->get_declaration());
         if( !decl) {
             name->add_component( m_nf->create_simple_name( sym));
             continue;
@@ -665,7 +659,7 @@ mi::mdl::IQualified_name* Alias_remover::get_reference_name(
 /// Provides common infrastructure for adjusting import declarations.
 class Import_declaration_replacer : public User_constant_remover
 {
-    typedef User_constant_remover Base;
+    using Base = User_constant_remover;
 public:
     Import_declaration_replacer(
         mi::mdl::IMDL* mdl,
@@ -673,8 +667,8 @@ public:
         const std::vector<std::string>& module_name)
       : Base( module),
         m_mdl( mdl),
-        m_module_name( module_name),
-        m_counter( 0)
+        m_module_name( module_name)
+
     {
         int major = 0;
         int minor = 0;
@@ -760,7 +754,7 @@ protected:
     std::map<std::string, std::string> m_new_aliases;
 
     /// Counter to generate new alias names.
-    mi::Size m_counter;
+    mi::Size m_counter = 0;
 };
 
 void Import_declaration_replacer::run()
@@ -770,8 +764,7 @@ void Import_declaration_replacer::run()
     for( mi::Size i = 0, n = m_module->get_declaration_count(); i < n; ++i) {
 
         const mi::mdl::IDeclaration* decl = m_module->get_declaration( static_cast<int>( i));
-        const mi::mdl::IDeclaration_namespace_alias* alias
-            = as<mi::mdl::IDeclaration_namespace_alias>( decl);
+        const auto* alias = as<mi::mdl::IDeclaration_namespace_alias>( decl);
         if( !alias)
             continue;
 
@@ -792,20 +785,18 @@ void Import_declaration_replacer::run()
     for( mi::Size i = 0, n = m_module->get_declaration_count(); i < n; ++i) {
 
         const mi::mdl::IDeclaration* decl = m_module->get_declaration( static_cast<int>( i));
-        const mi::mdl::IDeclaration_import* import = as<mi::mdl::IDeclaration_import>( decl);
+        const auto* import = as<mi::mdl::IDeclaration_import>( decl);
         if( !import)
             continue;
 
-        mi::mdl::IQualified_name* using_name
-            = const_cast<mi::mdl::IQualified_name*>( import->get_module_name());
+        auto* using_name = const_cast<mi::mdl::IQualified_name*>( import->get_module_name());
         if( using_name) {
             handle_name( using_name, /*name_refers_to_module*/ true);
             continue;
         }
 
         for( int j = 0, n2 = import->get_name_count(); j < n2; ++j) {
-            mi::mdl::IQualified_name* import_name
-                = const_cast<mi::mdl::IQualified_name*>( import->get_name( j));
+            auto* import_name = const_cast<mi::mdl::IQualified_name*>( import->get_name( j));
             handle_name( import_name, /*name_refers_to_module*/ false);
         }
     }
@@ -821,18 +812,18 @@ void Import_declaration_replacer::run()
     declarations.reserve( m_module->get_declaration_count() + m_new_aliases.size());
     mi::mdl::IDeclaration_factory* df = m_module->get_declaration_factory();
 
-    for( int i = 0, n = m_module->get_declaration_count(); i < n; ++i) {
+    for( size_t i = 0, n = m_module->get_declaration_count(); i < n; ++i) {
 
         const mi::mdl::IDeclaration* decl = m_module->get_declaration( i);
         switch( decl->get_kind()) {
 
             // Add new alias declarations in front of the first import declaration.
             case mi::mdl::IDeclaration::DK_IMPORT: {
-                for( auto it = m_new_aliases.begin(); it != m_new_aliases.end(); ++it) {
+                for( auto& new_alias : m_new_aliases) {
                     mi::mdl::ISimple_name* alias_sn
-                        = m_nf->create_simple_name( m_nf->create_symbol( it->second.c_str()));
+                        = m_nf->create_simple_name( m_nf->create_symbol( new_alias.second.c_str()));
                     mi::mdl::ISimple_name* namespace_sn
-                        = m_nf->create_simple_name( m_nf->create_symbol( it->first.c_str()));
+                        = m_nf->create_simple_name( m_nf->create_symbol( new_alias.first.c_str()));
                     mi::mdl::IQualified_name* namespace_qn = m_nf->create_qualified_name();
                     namespace_qn->add_component( namespace_sn);
                     const mi::mdl::IDeclaration* alias_decl
@@ -846,8 +837,7 @@ void Import_declaration_replacer::run()
 
             // Remove incorrect alias declarations.
             case mi::mdl::IDeclaration::DK_NAMESPACE_ALIAS: {
-                const mi::mdl::IDeclaration_namespace_alias* alias
-                    = cast<mi::mdl::IDeclaration_namespace_alias>( decl);
+                const auto* alias = cast<mi::mdl::IDeclaration_namespace_alias>( decl);
                 if( is_correct_alias_decl( alias))
                     declarations.push_back( decl);
                 break;
@@ -872,9 +862,9 @@ void Import_declaration_replacer::do_create_absolute_import_declaration(
     // Update \p name.
     name->clear_components();
     name->set_absolute();
-    for( mi::Size i = 0, n = absolute_name.size(); i < n; ++i)
+    for( const auto& n : absolute_name)
         name->add_component(
-            m_nf->create_simple_name( m_nf->create_symbol( absolute_name[i].c_str())));
+            m_nf->create_simple_name( m_nf->create_symbol( n.c_str())));
 
     // Create IQualified_name for absolute module name.
     mi::mdl::IQualified_name* absolute_module_name_qn = m_nf->create_qualified_name();
@@ -1006,7 +996,7 @@ std::vector<std::string> Import_declaration_replacer::create_absolute_name(
 
     for( mi::Uint32 i = 0, n = name->get_component_count(); i < n; ++i) {
         const mi::mdl::ISymbol* sym = name->get_component( i)->get_symbol();
-        size_t id	= sym->get_id();
+        size_t id       = sym->get_id();
         if( id == mi::mdl::ISymbol::SYM_DOT) {
             if( i == 0)
                 was_strict_relative = true;
@@ -1113,7 +1103,7 @@ mi::mdl::IExpression* Import_declaration_replacer::post_visit( mi::mdl::IExpress
     expr_name->add_component( m_nf->create_simple_name( def->get_symbol()));
 
     // Set new name for expression reference.
-    mi::mdl::IType_name* type_name = const_cast<mi::mdl::IType_name*>( expr->get_name());
+    auto* type_name = const_cast<mi::mdl::IType_name*>( expr->get_name());
     type_name->set_qualified_name( expr_name);
 
     return expr;
@@ -1337,7 +1327,7 @@ private:
 /// Provides common infrastructure for adjusting resource file paths.
 class Resource_file_path_replacer : public User_constant_remover
 {
-    typedef User_constant_remover Base;
+    using Base = User_constant_remover;
 public:
     Resource_file_path_replacer(
         mi::mdl::Module* module,
@@ -1464,8 +1454,7 @@ const mi::mdl::IValue_resource* Resource_file_path_replacer::create_resource(
 {
     switch( value->get_kind()) {
         case mi::mdl::IValue::VK_TEXTURE: {
-            const mi::mdl::IValue_texture* t
-                = cast<mi::mdl::IValue_texture>( value);
+            const auto* t = cast<mi::mdl::IValue_texture>( value);
             return m_vf->create_texture(
                 t->get_type(),
                 s,
@@ -1475,8 +1464,7 @@ const mi::mdl::IValue_resource* Resource_file_path_replacer::create_resource(
                 t->get_tag_version());
         }
         case mi::mdl::IValue::VK_LIGHT_PROFILE: {
-            const mi::mdl::IValue_light_profile* l
-                = cast<mi::mdl::IValue_light_profile>( value);
+            const auto* l = cast<mi::mdl::IValue_light_profile>( value);
             return m_vf->create_light_profile(
                 l->get_type(),
                 s,
@@ -1484,8 +1472,7 @@ const mi::mdl::IValue_resource* Resource_file_path_replacer::create_resource(
                 l->get_tag_version());
         }
         case mi::mdl::IValue::VK_BSDF_MEASUREMENT: {
-            const mi::mdl::IValue_bsdf_measurement* b
-                = cast<mi::mdl::IValue_bsdf_measurement>( value);
+            const auto* b = cast<mi::mdl::IValue_bsdf_measurement>( value);
             return m_vf->create_bsdf_measurement(
                 b->get_type(),
                 s,
@@ -1502,7 +1489,7 @@ const mi::mdl::IValue_resource* Resource_file_path_replacer::create_resource(
 /// Creates absolute resource file paths.
 class Absolute_resource_file_path_creator : public Resource_file_path_replacer
 {
-    typedef Resource_file_path_replacer Base;
+    using Base = Resource_file_path_replacer;
 public:
     Absolute_resource_file_path_creator(
         mi::mdl::Module* module,
@@ -1570,7 +1557,7 @@ private:
 /// Creates strict relative resource file paths.
 class Relative_resource_file_path_creator : public Resource_file_path_replacer
 {
-    typedef Resource_file_path_replacer Base;
+    using Base = Resource_file_path_replacer;
 public:
     Relative_resource_file_path_creator(
         mi::mdl::Module* module,
@@ -1656,7 +1643,7 @@ private:
 /// Creates non-weak relative resource file paths.
 class Non_weak_relative_resource_file_path_creator : public Resource_file_path_replacer
 {
-    typedef Resource_file_path_replacer Base;
+    using Base = Resource_file_path_replacer;
 public:
     Non_weak_relative_resource_file_path_creator(
         mi::mdl::Module* module,
@@ -1940,7 +1927,7 @@ public:
         m_include_regex( include_regex),
         m_exclude_regex( exclude_regex) { }
 
-    bool inline_import( const mi::mdl::IModule* module)
+    bool inline_import( const mi::mdl::IModule* module) final
     {
         const mi::mdl::Module* module_impl = impl_cast<mi::mdl::Module>( module);
         if( module_impl->is_compiler_owned() || module_impl->is_native())
@@ -1996,7 +1983,7 @@ mi::Sint32 Mdl_module_transformer::inline_imported_modules(
     get_min_required_mdl_version( m_module.get(), &callback, done, version);
 
     mi::base::Handle<mi::mdl::Module> new_module( impl_cast<mi::mdl::Module>(
-        m_mdl->create_module( /*context=*/ nullptr, m_module->get_name(), version)));
+        m_mdl->create_module( /*context*/ nullptr, m_module->get_name(), version)));
 
     mi::mdl::Def_set exports(
         0, mi::mdl::Def_set::hasher(), mi::mdl::Def_set::key_equal(), m_module->get_allocator());
@@ -2086,11 +2073,13 @@ bool Mdl_module_transformer::convert_filters(
     try {
         if( include_filter) {
             std::wstring include_filter_wstr = STRING::utf8_to_wchar( include_filter);
-            include_regex.reset( new std::wregex( include_filter_wstr, std::wregex::extended));
+            include_regex = std::make_unique<std::wregex>(
+                include_filter_wstr, std::wregex::extended);
         }
         if( exclude_filter) {
             std::wstring exclude_filter_wstr = STRING::utf8_to_wchar( exclude_filter);
-            exclude_regex.reset( new std::wregex( exclude_filter_wstr, std::wregex::extended));
+            exclude_regex = std::make_unique<std::wregex>(
+                exclude_filter_wstr, std::wregex::extended);
         }
         return true;
     } catch( const std::regex_error& ) {
@@ -2156,7 +2145,7 @@ void Mdl_module_transformer::get_min_required_mdl_version(
             version = v;
     }
 
-    for( int i = 0, n = module->get_import_count(); i < n; ++i) {
+    for( size_t i = 0, n = module->get_import_count(); i < n; ++i) {
         mi::base::Handle<const mi::mdl::Module> import( module->get_import( i));
         get_min_required_mdl_version( import.get(), callback, done, version);
     }

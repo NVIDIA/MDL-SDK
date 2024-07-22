@@ -606,7 +606,7 @@ public:
         const float     theta_phi[2]) const override;
 
     /// Destructor.
-    virtual ~Resource_handler();
+    virtual ~Resource_handler() = default;
 
 private:
     /// Specifies, whether derivative texture functions will be used.

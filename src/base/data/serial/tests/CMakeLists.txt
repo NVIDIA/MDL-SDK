@@ -34,7 +34,6 @@ create_unit_test(
     SOURCES
         ../test.cpp
         ../test_buffer_serializer.cpp
-        ../test_file_serializer.cpp
         ../test_markers.cpp
         ../test_serializable.cpp
     HEADERS

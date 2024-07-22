@@ -91,8 +91,9 @@ IExpression const *Definition::get_default_param_initializer(int param_idx) cons
     if ((m_kind == DK_FUNCTION || m_kind == DK_CONSTRUCTOR || m_kind == DK_ANNOTATION) &&
         m_parameter_inits != NULL)
     {
-        if (0 <= param_idx && size_t(param_idx) < m_parameter_inits->count)
+        if (0 <= param_idx && size_t(param_idx) < m_parameter_inits->count) {
             return m_parameter_inits->exprs[param_idx];
+        }
     }
     return NULL;
 }
@@ -134,8 +135,9 @@ void Definition::copy_initializers(Module *module, Definition const *prev_def)
         if (m_parameter_inits == NULL) {
             module->allocate_initializers(this, prev_def->m_parameter_inits->count);
         }
-        for (size_t i = 0, n = prev_def->m_parameter_inits->count; i < n; ++i)
+        for (size_t i = 0, n = prev_def->m_parameter_inits->count; i < n; ++i) {
             m_parameter_inits->exprs[i] = prev_def->m_parameter_inits->exprs[i];
+        }
     } else {
         m_parameter_inits = NULL;
     }
@@ -144,16 +146,26 @@ void Definition::copy_initializers(Module *module, Definition const *prev_def)
 // Return the value of an enum constant or a global constant.
 IValue const *Definition::get_constant_value() const
 {
-    if (m_kind == DK_ENUM_VALUE || m_kind == DK_CONSTANT)
+    if (m_kind == DK_ENUM_VALUE || m_kind == DK_CONSTANT) {
         return m_value;
+    }
+    return NULL;
+}
+
+// Return the value of an enum constant or a global constant.
+IStruct_category const *Definition::get_category() const
+{
+    if (m_kind == DK_STRUCT_CATEGORY)
+        return m_category;
     return NULL;
 }
 
 // Return the field index of a field member.
 int Definition::get_field_index() const
 {
-    if (m_kind == DK_MEMBER)
+    if (m_kind == DK_MEMBER) {
         return m_u.field_index;
+    }
     return -1;
 }
 
@@ -162,7 +174,9 @@ IDefinition::Semantics Definition::get_semantics() const
 {
     if (m_kind == DK_FUNCTION    || m_kind == DK_OPERATOR ||
         m_kind == DK_CONSTRUCTOR || m_kind == DK_ANNOTATION)
+    {
         return m_u.sema_code;
+    }
     return DS_UNKNOWN;
 }
 
@@ -170,16 +184,18 @@ IDefinition::Semantics Definition::get_semantics() const
 // Return the parameter index of a parameter.
 int Definition::get_parameter_index() const
 {
-    if (m_kind == DK_PARAMETER)
+    if (m_kind == DK_PARAMETER) {
         return m_u.param_index;
+    }
     return -1;
 }
 
 // Return the namespace of a namespace alias.
 ISymbol const *Definition::get_namespace() const
 {
-    if (m_kind == DK_NAMESPACE)
+    if (m_kind == DK_NAMESPACE) {
         return m_u.name_space;
+    }
     return NULL;
 }
 
@@ -196,12 +212,14 @@ bool Definition::get_property(Property prop) const
     case DP_IS_OVERLOADED:
         if (m_kind == DK_FUNCTION || m_kind == DK_CONSTRUCTOR) {
             for (Definition const *o = get_prev_def(); o != NULL; o = o->get_prev_def()) {
-                if (o->m_kind == m_kind)
+                if (o->m_kind == m_kind) {
                     return true;
+                }
             }
             for (Definition const *o = get_next_def(); o != NULL; o = o->get_next_def()) {
-                if (o->m_kind == m_kind)
+                if (o->m_kind == m_kind) {
                     return true;
+                }
             }
         }
         break;
@@ -263,6 +281,8 @@ bool Definition::get_property(Property prop) const
         return has_flag(Definition::DEF_USES_DERIVATIVES);
     case DP_USES_SCENE_DATA:
         return has_flag(Definition::DEF_USES_SCENE_DATA);
+    case DP_IS_DECLARATIVE:
+        return has_flag(Definition::DEF_IS_DECLARATIVE);
     }
     return false;
 }
@@ -294,11 +314,6 @@ unsigned Definition::get_literal_parameter_mask() const
 // Change the type of the definition.
 void Definition::set_type(IType const *type)
 {
-    MDL_ASSERT(
-        m_kind == DK_VARIABLE ||
-        m_kind == DK_CONSTANT ||
-        m_kind == DK_FUNCTION ||
-        is<IType_error>(type));
     m_type = type;
 }
 
@@ -401,6 +416,13 @@ void Definition::remove_from_parent()
     }
 }
 
+// Set the category of this definition.
+void Definition::set_category(IStruct_category const *category)
+{
+    MDL_ASSERT(m_kind == DK_STRUCT_CATEGORY && m_category == NULL);
+    m_category = category;
+}
+
 // Constructor.
 Definition::Definition(
     Kind           kind,
@@ -432,6 +454,7 @@ Definition::Definition(
 , m_outer_def(outer)
 , m_definite_def(NULL)
 , m_value(NULL)
+, m_category(NULL)
 , m_version_flags(0)
 , m_flags()
 , m_parameter_deriv_mask(0)
@@ -452,7 +475,7 @@ Definition::Definition(
     size_t           module_id,
     size_t           id,
     size_t           owner_import_idx)
-: Base()                
+: Base()
 , m_kind(other.m_kind)
 , m_unique_id(id)
 , m_owner_module_id(module_id)
@@ -473,6 +496,7 @@ Definition::Definition(
 , m_outer_def(outer)
 , m_definite_def(NULL)
 , m_value(NULL)
+, m_category(NULL)
 , m_version_flags(other.m_version_flags)
 , m_flags(other.m_flags)
 , m_parameter_deriv_mask(other.m_parameter_deriv_mask)
@@ -588,11 +612,12 @@ Definition *Scope::find_def_in_scope_or_parent(ISymbol const *sym) const
 {
     Scope const *scope = this;
     for (;;) {
-        Definition *def = scope->find_definition_in_scope(sym);
-        if (def)
+        if (Definition *def = scope->find_definition_in_scope(sym)) {
             return def;
-        if (scope->m_parent == NULL)
+        }
+        if (scope->m_parent == NULL) {
             return NULL;
+        }
         scope = scope->m_parent;
     }
 }
@@ -601,8 +626,9 @@ Definition *Scope::find_def_in_scope_or_parent(ISymbol const *sym) const
 Scope *Scope::find_named_subscope(ISymbol const *name) const
 {
     for (Scope *scope = m_sub_scopes; scope != NULL; scope = scope->m_next_subscope) {
-        if (scope->m_scope_type == NULL && scope->m_scope_name == name)
+        if (scope->m_scope_type == NULL && scope->m_scope_name == name) {
             return scope;
+        }
     }
     return NULL;
 }
@@ -611,8 +637,9 @@ Scope *Scope::find_named_subscope(ISymbol const *name) const
 Scope *Scope::get_first_named_subscope() const
 {
     for (Scope *scope = m_sub_scopes; scope != NULL; scope = scope->m_next_subscope) {
-        if (scope->m_scope_type == NULL && scope->m_scope_name != NULL)
+        if (scope->m_scope_type == NULL && scope->m_scope_name != NULL) {
             return scope;
+        }
     }
     return NULL;
 }
@@ -621,8 +648,9 @@ Scope *Scope::get_first_named_subscope() const
 Scope *Scope::get_next_named_subscope() const
 {
     for (Scope *scope = m_next_subscope; scope != NULL; scope = scope->m_next_subscope) {
-        if (scope->m_scope_type == NULL && scope->m_scope_name != NULL)
+        if (scope->m_scope_type == NULL && scope->m_scope_name != NULL) {
             return scope;
+        }
     }
     return NULL;
 }
@@ -649,8 +677,9 @@ void Scope::walk(IDefinition_visitor const *visitor) const
 // Returns true if this is an empty scope that can be thrown away.
 bool Scope::is_empty() const
 {
-    if (m_definitions != NULL || m_sub_scopes != NULL)
+    if (m_definitions != NULL || m_sub_scopes != NULL) {
         return false;
+    }
     if (m_scope_type != NULL || m_scope_name != NULL) {
         // type or named scopes are referenced and expected to exists
         return false;
@@ -669,10 +698,12 @@ void Scope::collect_enum_values(
 {
     for (Definition const *def = m_definitions; def != NULL; def = def->m_next) {
         // no overload on enum values, so it is enough to check this
-        if (def->get_kind() != IDefinition::DK_ENUM_VALUE)
+        if (def->get_kind() != IDefinition::DK_ENUM_VALUE) {
             continue;
-        if (def->get_type() == e_type)
+        }
+        if (def->get_type() == e_type) {
             values.push_back(def);
+        }
     }
 }
 
@@ -771,28 +802,35 @@ void Scope::set_owner_definition(Definition const *owner_def)
 
 /// Indentation printer.
 static void indent(Printer *printer, size_t depth) {
-    for (size_t i = 0; i < depth; ++i)
+    for (size_t i = 0; i < depth; ++i) {
         printer->print("  ");
+    }
 }
 
 /// Prints a definition.
 static void print_def(Printer *printer, Definition const *def)
 {
-    IType const   *type = def->get_type();
+    IType const *type = def->get_type();
     ISymbol const *name = def->get_sym();
 
-    if (def->has_flag(Definition::DEF_IS_EXPORTED))
+    if (def->has_flag(Definition::DEF_IS_EXPORTED)) {
         printer->print("export ");
-    if (def->has_flag(Definition::DEF_IS_IMPORTED))
+    }
+    if (def->has_flag(Definition::DEF_IS_IMPORTED)) {
         printer->print("imported ");
-    if (def->has_flag(Definition::DEF_IS_EXPLICIT))
+    }
+    if (def->has_flag(Definition::DEF_IS_EXPLICIT)) {
         printer->print("explicit ");
-    if (def->has_flag(Definition::DEF_IS_EXPLICIT_WARN))
+    }
+    if (def->has_flag(Definition::DEF_IS_EXPLICIT_WARN)) {
         printer->print("explicit_warn ");
-    if (def->has_flag(Definition::DEF_IS_UNIFORM))
+    }
+    if (def->has_flag(Definition::DEF_IS_UNIFORM)) {
         printer->print("uniform ");
-    if (def->has_flag(Definition::DEF_IS_VARYING))
+    }
+    if (def->has_flag(Definition::DEF_IS_VARYING)) {
         printer->print("varying ");
+    }
 
     IDefinition::Kind kind = def->get_kind();
     switch (kind) {
@@ -808,6 +846,9 @@ static void print_def(Printer *printer, Definition const *def)
     case IDefinition::DK_ANNOTATION:
         printer->print("annotation ");
         break;
+    case IDefinition::DK_STRUCT_CATEGORY:
+        printer->print("struct_category ");
+        break;
     case IDefinition::DK_TYPE:
         printer->print("type ");
         break;
@@ -818,17 +859,19 @@ static void print_def(Printer *printer, Definition const *def)
         }
         break;
     case IDefinition::DK_VARIABLE:
-        if (def->has_flag(Definition::DEF_IS_LET_TEMPORARY))
+        if (def->has_flag(Definition::DEF_IS_LET_TEMPORARY)) {
             printer->print("temporary ");
-        else
+        } else {
             printer->print("var ");
+        }
         break;
     case IDefinition::DK_MEMBER:
         printer->print("member ");
         break;
     case IDefinition::DK_CONSTRUCTOR:
-        if (def->has_flag(Definition::DEF_IS_CONST_CONSTRUCTOR))
+        if (def->has_flag(Definition::DEF_IS_CONST_CONSTRUCTOR)) {
             printer->print("const ");
+        }
         printer->print("constructor ");
         break;
     case IDefinition::DK_PARAMETER:
@@ -953,8 +996,9 @@ void Scope::serialize(Definition_table const &dt, Module_serializer &serializer)
         sub_scope != NULL;
         sub_scope = sub_scope->m_next_subscope)
     {
-        if (owned_scopes.find(sub_scope) == owned_scopes.end())
+        if (owned_scopes.find(sub_scope) == owned_scopes.end()) {
             sub_scope->serialize(dt, serializer);
+        }
     }
 
     // ready, write marker
@@ -1008,8 +1052,9 @@ void Scope::deserialize(
     // deserialize children
     for (;;) {
         t = deserializer.read_section_tag();
-        if (t == Serializer::ST_SCOPE_END)
+        if (t == Serializer::ST_SCOPE_END) {
             break;
+        }
 
         if (t == Serializer::ST_SCOPE_START) {
             // deserialize a sub scope
@@ -1208,7 +1253,7 @@ void Definition_table::serialize_def(
     serializer.write_encoded_tag(sym_tag);
     DOUT(("sym %u (%s)\n", unsigned(sym_tag), def->m_sym->get_name()));
 
-    if (def->m_kind != Definition::DK_NAMESPACE) {
+    if (def->m_kind != Definition::DK_NAMESPACE && def->m_kind != Definition::DK_STRUCT_CATEGORY) {
         // write the type of this definition
         Tag_t type_tag = serializer.get_type_tag(def->m_type);
         serializer.write_encoded_tag(type_tag);
@@ -1315,7 +1360,7 @@ void Definition_table::serialize_def(
     for (size_t i = 0, n = (def->m_flags.get_size() + 7) / 8; i < n; ++i) {
         serializer.write_byte(raw_data[i]);
     }
-    DOUT(("Flags:%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n",
+    DOUT(("Flags:%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n",
         def->has_flag(Definition::DEF_IS_PREDEFINED)        ? " predef"   : "",
         def->has_flag(Definition::DEF_IS_DECL_ONLY)         ? " dclonly"  : "",
         def->has_flag(Definition::DEF_IS_INCOMPLETE)        ? " incmpl"   : "",
@@ -1336,7 +1381,24 @@ void Definition_table::serialize_def(
         def->has_flag(Definition::DEF_IS_VARYING)           ? " varying"  : "",
         def->has_flag(Definition::DEF_IS_WRITTEN)           ? " written"  : "",
         def->has_flag(Definition::DEF_IS_LET_TEMPORARY)     ? " let_tmp"  : "",
-        def->has_flag(Definition::DEF_NO_INLINE)            ? " no_inl"   : ""
+        def->has_flag(Definition::DEF_NO_INLINE)            ? " no_inl"   : "",
+        def->has_flag(Definition::DEF_USES_STATE)           ? " use_state": "",
+        def->has_flag(Definition::DEF_USES_TEXTURES)        ? " use_txt"  : "",
+        def->has_flag(Definition::DEF_USES_SCENE_DATA)      ? " use_scene": "",
+        def->has_flag(Definition::DEF_CAN_THROW_BOUNDS)     ? " bounds"   : "",
+        def->has_flag(Definition::DEF_CAN_THROW_DIVZERO)    ? " div_zero" : "",
+        def->has_flag(Definition::DEF_REF_BY_DEFAULT_INIT)  ? " init_ref" : "",
+        def->has_flag(Definition::DEF_READ_TEXTURE_ATTR)    ? " rd_txattr": "",
+        def->has_flag(Definition::DEF_READ_LP_ATTR)         ? " rd_lpattr": "",
+        def->has_flag(Definition::DEF_USES_VARYING_STATE)   ? " use_vstat": "",
+        def->has_flag(Definition::DEF_USES_DEBUG_CALLS)     ? " use_dbg"  : "",
+        def->has_flag(Definition::DEF_USES_OBJECT_ID)       ? " use_objid": "",
+        def->has_flag(Definition::DEF_USES_TRANSFORM)       ? " use_xform": "",
+        def->has_flag(Definition::DEF_USES_NORMAL)          ? " use_norm" : "",
+        def->has_flag(Definition::DEF_IS_NATIVE)            ? " native"   : "",
+        def->has_flag(Definition::DEF_IS_CONST_EXPR)        ? " cnst_expr": "",
+        def->has_flag(Definition::DEF_IS_DERIVABLE)         ? " deriv"    : "",
+        def->has_flag(Definition::DEF_IS_DECLARATIVE)       ? " decl"     : ""
     ));
 
     // serialize version flags
@@ -1396,7 +1458,7 @@ Definition *Definition_table::deserialize_def(Module_deserializer &deserializer)
 
     IType const *type      = NULL;
     IType const *decl_type = NULL;
-    if (kind != Definition::DK_NAMESPACE) {
+    if (kind != Definition::DK_NAMESPACE && kind != Definition::DK_STRUCT_CATEGORY) {
         // read the type of this definition
         Tag_t type_tag = deserializer.read_encoded_tag();
         type = deserializer.get_type(type_tag);
@@ -1527,28 +1589,45 @@ Definition *Definition_table::deserialize_def(Module_deserializer &deserializer)
     for (size_t i = 0, n = (new_def->m_flags.get_size() + 7) / 8; i < n; ++i) {
         raw_data[i] = deserializer.read_byte();
     }
-    DOUT(("Flags:%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n",
-        new_def->has_flag(Definition::DEF_IS_PREDEFINED)        ? " predef"   : "",
-        new_def->has_flag(Definition::DEF_IS_DECL_ONLY)         ? " dclonly"  : "",
-        new_def->has_flag(Definition::DEF_IS_INCOMPLETE)        ? " incmpl"   : "",
-        new_def->has_flag(Definition::DEF_IS_EXPLICIT)          ? " explct"   : "",
-        new_def->has_flag(Definition::DEF_IS_EXPLICIT_WARN)     ? " explct_w" : "",
-        new_def->has_flag(Definition::DEF_IS_COMPILER_GEN)      ? " cc_gen"   : "",
-        new_def->has_flag(Definition::DEF_IS_EXPORTED)          ? " exp"      : "",
-        new_def->has_flag(Definition::DEF_IS_IMPORTED)          ? " imp"      : "",
-        new_def->has_flag(Definition::DEF_OP_LVALUE)            ? " lval"     : "",
-        new_def->has_flag(Definition::DEF_IGNORE_OVERLOAD)      ? " IGN"      : "",
-        new_def->has_flag(Definition::DEF_IS_CONST_CONSTRUCTOR) ? " cnst_con" : "",
-        new_def->has_flag(Definition::DEF_IS_REACHABLE)         ? " reach"    : "",
-        new_def->has_flag(Definition::DEF_IS_STDLIB)            ? " stdlib"   : "",
-        new_def->has_flag(Definition::DEF_IS_USED)              ? " used"     : "",
-        new_def->has_flag(Definition::DEF_IS_UNUSED)            ? " unused"   : "",
-        new_def->has_flag(Definition::DEF_USED_INCOMPLETE)      ? " use_incpl": "",
-        new_def->has_flag(Definition::DEF_IS_UNIFORM)           ? " uniform"  : "",
-        new_def->has_flag(Definition::DEF_IS_VARYING)           ? " varying"  : "",
-        new_def->has_flag(Definition::DEF_IS_WRITTEN)           ? " written"  : "",
-        new_def->has_flag(Definition::DEF_IS_LET_TEMPORARY)     ? " let_tmp"  : "",
-        new_def->has_flag(Definition::DEF_NO_INLINE)            ? " no_inl"   : ""
+    DOUT(("Flags:%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n",
+        def->has_flag(Definition::DEF_IS_PREDEFINED)        ? " predef"   : "",
+        def->has_flag(Definition::DEF_IS_DECL_ONLY)         ? " dclonly"  : "",
+        def->has_flag(Definition::DEF_IS_INCOMPLETE)        ? " incmpl"   : "",
+        def->has_flag(Definition::DEF_IS_EXPLICIT)          ? " explct"   : "",
+        def->has_flag(Definition::DEF_IS_EXPLICIT_WARN)     ? " explct_w" : "",
+        def->has_flag(Definition::DEF_IS_COMPILER_GEN)      ? " cc_gen"   : "",
+        def->has_flag(Definition::DEF_IS_EXPORTED)          ? " exp"      : "",
+        def->has_flag(Definition::DEF_IS_IMPORTED)          ? " imp"      : "",
+        def->has_flag(Definition::DEF_OP_LVALUE)            ? " lval"     : "",
+        def->has_flag(Definition::DEF_IGNORE_OVERLOAD)      ? " IGN"      : "",
+        def->has_flag(Definition::DEF_IS_CONST_CONSTRUCTOR) ? " cnst_con" : "",
+        def->has_flag(Definition::DEF_IS_REACHABLE)         ? " reach"    : "",
+        def->has_flag(Definition::DEF_IS_STDLIB)            ? " stdlib"   : "",
+        def->has_flag(Definition::DEF_IS_USED)              ? " used"     : "",
+        def->has_flag(Definition::DEF_IS_UNUSED)            ? " unused"   : "",
+        def->has_flag(Definition::DEF_USED_INCOMPLETE)      ? " use_incpl": "",
+        def->has_flag(Definition::DEF_IS_UNIFORM)           ? " uniform"  : "",
+        def->has_flag(Definition::DEF_IS_VARYING)           ? " varying"  : "",
+        def->has_flag(Definition::DEF_IS_WRITTEN)           ? " written"  : "",
+        def->has_flag(Definition::DEF_IS_LET_TEMPORARY)     ? " let_tmp"  : "",
+        def->has_flag(Definition::DEF_NO_INLINE)            ? " no_inl"   : "",
+        def->has_flag(Definition::DEF_USES_STATE)           ? " use_state": "",
+        def->has_flag(Definition::DEF_USES_TEXTURES)        ? " use_txt"  : "",
+        def->has_flag(Definition::DEF_USES_SCENE_DATA)      ? " use_scene": "",
+        def->has_flag(Definition::DEF_CAN_THROW_BOUNDS)     ? " bounds"   : "",
+        def->has_flag(Definition::DEF_CAN_THROW_DIVZERO)    ? " div_zero" : "",
+        def->has_flag(Definition::DEF_REF_BY_DEFAULT_INIT)  ? " init_ref" : "",
+        def->has_flag(Definition::DEF_READ_TEXTURE_ATTR)    ? " rd_txattr": "",
+        def->has_flag(Definition::DEF_READ_LP_ATTR)         ? " rd_lpattr": "",
+        def->has_flag(Definition::DEF_USES_VARYING_STATE)   ? " use_vstat": "",
+        def->has_flag(Definition::DEF_USES_DEBUG_CALLS)     ? " use_dbg"  : "",
+        def->has_flag(Definition::DEF_USES_OBJECT_ID)       ? " use_objid": "",
+        def->has_flag(Definition::DEF_USES_TRANSFORM)       ? " use_xform": "",
+        def->has_flag(Definition::DEF_USES_NORMAL)          ? " use_norm" : "",
+        def->has_flag(Definition::DEF_IS_NATIVE)            ? " native"   : "",
+        def->has_flag(Definition::DEF_IS_CONST_EXPR)        ? " cnst_expr": "",
+        def->has_flag(Definition::DEF_IS_DERIVABLE)         ? " deriv"    : "",
+        def->has_flag(Definition::DEF_IS_DECLARATIVE)       ? " decl"     : ""
     ));
 
     // deserialize version flags
@@ -1722,12 +1801,14 @@ void Definition_table::transition_to_scope(Scope *scope)
     }
 
     // remove until prefix is reached
-    for (int i = 0; i <= curr_idx; ++i)
+    for (int i = 0; i <= curr_idx; ++i) {
         leave_scope();
+    }
 
     // reopen until top is reached
-    for (int i = new_idx; i >= 0; --i)
+    for (int i = new_idx; i >= 0; --i) {
         reopen_scope(new_stack[i]);
+    }
 }
 
 // Enter a new (entity) definition.
@@ -1738,7 +1819,7 @@ Definition *Definition_table::enter_definition(
     Position const   *pos)
 {
     Definition *new_def;
-    MDL_ASSERT(symbol != NULL);
+    MDL_ASSERT(symbol != NULL && (type != NULL || kind == Definition::DK_STRUCT_CATEGORY));
     Definition *curr_def = get_definition(symbol);
     if (curr_def && curr_def->get_def_scope() == m_curr_scope) {
         // there is already a definition for this symbol, append it
@@ -1794,7 +1875,7 @@ Definition *Definition_table::enter_error(ISymbol const *symbol, const IType_err
 
     // no definition inside this scope
     Definition *err_def = m_builder.create<Definition>(
-        Definition::DK_ERROR, m_owner.get_unique_id(), symbol, err_type, (Position *)0,
+        Definition::DK_ERROR, m_owner.get_unique_id(), symbol, err_type, (Position *)NULL,
         m_curr_scope, (Definition *)0, ++m_next_definition_id);
 
     m_curr_scope->add_definition(err_def);
@@ -1883,15 +1964,16 @@ Definition *Definition_table::import_definition(
 
     IType const *imp_type      = imported->get_type();
     IType const *imp_decl_type = imported->get_decl_type();
-    if (imp_decl_type != imp_type) {
-        imp_decl_type = m_owner.import_type(imp_decl_type);
-    } else {
-        imp_decl_type = NULL;
+    if (imp_type != nullptr) {
+        if (imp_decl_type != imp_type) {
+            imp_decl_type = m_owner.import_type(imp_decl_type);
+        } else {
+            imp_decl_type = NULL;
+        }
+        imp_type = m_owner.import_type(imp_type);
     }
-    imp_type = m_owner.import_type(imp_type);
-
     Definition *curr_def = get_definition(imp_sym);
-    if (curr_def && curr_def->get_def_scope() == m_curr_scope) {
+    if (curr_def != NULL && curr_def->get_def_scope() == m_curr_scope) {
         // there is already a definition for this symbol, append it */
         new_def = m_builder.create<Definition>(
             *imported, imp_sym, imp_type, imp_decl_type, imp_pos,
@@ -1909,8 +1991,12 @@ Definition *Definition_table::import_definition(
         m_curr_scope->add_definition(new_def);
     }
 
-    if (imported->m_value)
+    if (imported->m_value != NULL) {
         new_def->m_value = m_owner.import_value(imported->m_value);
+    }
+    if (imported->m_category != NULL) {
+        new_def->m_category = m_owner.import_struct_category(imported->m_category);
+    }
     new_def->m_u.code = imported->m_u.code;
     set_definition(imp_sym, new_def);
 
@@ -1927,8 +2013,9 @@ Definition const *Definition_table::get_namespace_alias(
     ISymbol const *alias)
 {
     Namespace_aliases_map::const_iterator it = m_namespace_aliases.find(alias);
-    if (it != m_namespace_aliases.end())
+    if (it != m_namespace_aliases.end()) {
         return it->second;
+    }
     return NULL;
 }
 

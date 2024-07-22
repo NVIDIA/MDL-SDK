@@ -44,7 +44,8 @@ export int fd_float(float a = -43.0f [[ unused() ]] ) { return 0; }
 
 // Test texture constructor with selector (differs from fd_texture_success() only in selector).
 export int fd_texture_selector(
-    uniform texture_2d t = texture_2d("./resources/test.png", tex::gamma_default, "R") [[ unused() ]]
+    uniform texture_2d t
+        = texture_2d("./resources/test.png", tex::gamma_default, "R") [[ unused() ]]
 ) { return 0; }
 
 
@@ -103,8 +104,10 @@ export color fd_body_with_control_flow(
 
 // Prototype for test_resource_sharing1.mdle and test_resource_sharing2.mdle
 //
-// MDLE generates with
-// ./mdlm -p $MI_SRC/io/scene create-mdle ::mdl_elements::test_misc::md_resources test_resource_sharing1.mdle
+// MDLE generated with
+//
+// ./mdlm -p $MI_SRC/io/scene create-mdle ::mdl_elements::test_misc::md_resources
+//     test_resource_sharing1.mdle
 //
 export material md_resources(
     uniform texture_2d t = texture_2d("./resources/test.png", ::tex::gamma_default, ""),

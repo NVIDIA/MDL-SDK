@@ -132,7 +132,7 @@ public:
     /// \return A 32-bit thread id which is unique amongst all threads
     Uint64 get_uint()
     {
-    	return (Uint64)m_thread_id;
+        return (Uint64)m_thread_id;
     }
 
 private:
@@ -239,16 +239,16 @@ private:
     /// \param thread the actual thread to start
     static void *do_run(void *thread);
 #else
-    HANDLE m_handle;			///< the thread handle
+    HANDLE m_handle;                    ///< the thread handle
     unsigned int m_tid;                 ///< the thread ID
     /// Utility function to invoke the run method.
     /// \param thread the actual thread to start
     static unsigned __stdcall do_run(void *thread);
 #endif
     boost::dynamic_bitset<> m_current_affinity; ///< current/cached CPU affinity mask, otherwise the job system constantly sets it to the same exact value
-    THREAD::Lock m_lock;		///< protect the flag \c m_was_started
-    bool m_was_started;			///< was the thread already started?
-    bool m_create_detached;		///< need/can not be collected with join()
+    THREAD::Lock m_lock;                ///< protect the flag \c m_was_started
+    bool m_was_started;                 ///< was the thread already started?
+    bool m_create_detached;             ///< need/can not be collected with join()
 };
 
 }

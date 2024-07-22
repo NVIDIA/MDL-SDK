@@ -60,7 +60,7 @@ inline Attribute_propagation Attribute::get_override() const
 
 
 inline void Attribute::set_override(
-    Attribute_propagation	ov)		// override children?
+    Attribute_propagation       ov)             // override children?
 {
     m_override = ov;
 }
@@ -73,7 +73,7 @@ inline bool Attribute::get_global() const
 
 
 inline void Attribute::set_global(
-    bool		global)			// participates in inheritance?
+    bool                global)                 // participates in inheritance?
 {
     m_global = global;
 }
@@ -108,7 +108,7 @@ inline char* Attribute::set_values()
 }
 
 inline bool Attribute::get_value_bool(
-    Uint		n) const	// if array, get n-th value
+    Uint                n) const        // if array, get n-th value
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_BOOLEAN));
     ASSERT(M_ATTR, n < m_type.get_arraysize());
@@ -117,8 +117,8 @@ inline bool Attribute::get_value_bool(
 
 
 inline void Attribute::set_value_bool(
-    bool		v,		// new value to set
-    Uint		n)		// if array, get n-th value
+    bool                v,              // new value to set
+    Uint                n)              // if array, get n-th value
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_BOOLEAN));
     ASSERT(M_ATTR, n < m_type.get_arraysize());
@@ -128,7 +128,7 @@ inline void Attribute::set_value_bool(
 
 
 inline int Attribute::get_value_int(
-    Uint		n) const	// if array, get n-th value
+    Uint                n) const        // if array, get n-th value
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_INT32)
                 || contains_expected_type(m_type, TYPE_SCALAR));
@@ -146,8 +146,8 @@ inline int Attribute::get_value_int(
 }
 
 inline void Attribute::set_value_int(
-    int			v,		// new value to set
-    Uint		n)		// if array, get n-th value
+    int                 v,              // new value to set
+    Uint                n)              // if array, get n-th value
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_INT32)
         || contains_expected_type(m_type, TYPE_SCALAR));
@@ -164,7 +164,7 @@ inline void Attribute::set_value_int(
 }
 
 inline Scalar Attribute::get_value_scalar(
-    Uint		n) const	// if array, get n-th value
+    Uint                n) const        // if array, get n-th value
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_INT32)
         || contains_expected_type(m_type, TYPE_SCALAR));
@@ -182,7 +182,7 @@ inline Scalar Attribute::get_value_scalar(
 }
 
 inline Dscalar Attribute::get_value_dscalar(
-    Uint		n) const	// if array, get n-th value
+    Uint                n) const        // if array, get n-th value
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_INT32)
         || contains_expected_type(m_type, TYPE_SCALAR)
@@ -203,7 +203,7 @@ inline Dscalar Attribute::get_value_dscalar(
 }
 
 inline Attribute::Vector3 Attribute::get_value_vector3(
-    Uint		n) const	// if array, get n-th value
+    Uint                n) const        // if array, get n-th value
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_VECTOR3));
     ASSERT(M_ATTR, n < m_type.get_arraysize());
@@ -213,7 +213,7 @@ inline Attribute::Vector3 Attribute::get_value_vector3(
 }
 
 inline mi::math::Color Attribute::get_value_color(
-    Uint		n) const
+    Uint                n) const
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_COLOR) ||
                    contains_expected_type(m_type, TYPE_VECTOR3) ||
@@ -239,8 +239,8 @@ inline mi::math::Color Attribute::get_value_color(
 
 
 inline void Attribute::set_value_scalar(
-    Scalar		v,		// new value to set
-    Uint		n)		// if array, get n-th value
+    Scalar              v,              // new value to set
+    Uint                n)              // if array, get n-th value
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_SCALAR));
     ASSERT(M_ATTR, n < m_type.get_arraysize());
@@ -257,8 +257,8 @@ inline void Attribute::set_value_scalar(
 
 
 inline void Attribute::set_value_dscalar(
-    Dscalar		v,		// new value to set
-    Uint		n)		// if array, get n-th value
+    Dscalar             v,              // new value to set
+    Uint                n)              // if array, get n-th value
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_DSCALAR));
     ASSERT(M_ATTR, n < m_type.get_arraysize());
@@ -359,7 +359,7 @@ inline void Attribute::set_value( const T &v, Uint n)
 
 
 inline const char *Attribute::get_values_i(
-    Uint		i) const	// if attribute list, list index
+    Uint                i) const        // if attribute list, list index
 {
     ASSERT(M_ATTR, i==0 || i < get_listsize());
     return i >= get_listsize() ? 0 :
@@ -367,7 +367,7 @@ inline const char *Attribute::get_values_i(
 }
 
 inline char *Attribute::set_values_i(
-    Uint		i)		// if attribute list, list index
+    Uint                i)              // if attribute list, list index
 {
     ASSERT(M_ATTR, i < get_listsize());
     return i >= get_listsize() ? 0 :
@@ -375,8 +375,8 @@ inline char *Attribute::set_values_i(
 }
 
 inline bool Attribute::get_value_bool_i(
-    Uint		i,		// if attribute list, list index
-    Uint		n) const	// if array, get n-th value
+    Uint                i,              // if attribute list, list index
+    Uint                n) const        // if array, get n-th value
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_BOOLEAN));
     ASSERT(M_ATTR, i < get_listsize());
@@ -387,9 +387,9 @@ inline bool Attribute::get_value_bool_i(
 
 
 inline void Attribute::set_value_bool_i(
-    bool		v,		// new value to set
-    Uint		i,		// if attribute list, list index
-    Uint		n)		// if array, get n-th value
+    bool                v,              // new value to set
+    Uint                i,              // if attribute list, list index
+    Uint                n)              // if array, get n-th value
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_BOOLEAN));
     ASSERT(M_ATTR, i < get_listsize());
@@ -400,8 +400,8 @@ inline void Attribute::set_value_bool_i(
 
 
 inline int Attribute::get_value_int_i(
-    Uint		i,		// if attribute list, list index
-    Uint		n) const	// if array, get n-th value
+    Uint                i,              // if attribute list, list index
+    Uint                n) const        // if array, get n-th value
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_INT32)
                 || contains_expected_type(m_type, TYPE_SCALAR));
@@ -421,9 +421,9 @@ inline int Attribute::get_value_int_i(
 
 
 inline void Attribute::set_value_int_i(
-    int			v,		// new value to set
-    Uint		i,		// if attribute list, list index
-    Uint		n)		// if array, get n-th value
+    int                 v,              // new value to set
+    Uint                i,              // if attribute list, list index
+    Uint                n)              // if array, get n-th value
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_INT32));
     ASSERT(M_ATTR, i < get_listsize());
@@ -433,8 +433,8 @@ inline void Attribute::set_value_int_i(
 }
 
 inline Scalar Attribute::get_value_scalar_i(
-    Uint		i,		// if attribute list, list index
-    Uint		n) const	// if array, get n-th value
+    Uint                i,              // if attribute list, list index
+    Uint                n) const        // if array, get n-th value
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_INT32)
         || contains_expected_type(m_type, TYPE_SCALAR));
@@ -453,8 +453,8 @@ inline Scalar Attribute::get_value_scalar_i(
 }
 
 inline Dscalar Attribute::get_value_dscalar_i(
-    Uint		i,		// if attribute list, list index
-    Uint		n) const	// if array, get n-th value
+    Uint                i,              // if attribute list, list index
+    Uint                n) const        // if array, get n-th value
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_INT32)
         || contains_expected_type(m_type, TYPE_SCALAR)
@@ -476,8 +476,8 @@ inline Dscalar Attribute::get_value_dscalar_i(
 }
 
 inline Attribute::Vector3 Attribute::get_value_vector3_i(
-    Uint		i,		// if attribute list, list index
-    Uint		n) const	// if array, get n-th value
+    Uint                i,              // if attribute list, list index
+    Uint                n) const        // if array, get n-th value
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_VECTOR3));
     ASSERT(M_ATTR, i < get_listsize());
@@ -490,8 +490,8 @@ inline Attribute::Vector3 Attribute::get_value_vector3_i(
 }
 
 inline mi::math::Color Attribute::get_value_color_i(
-    Uint		i,
-    Uint		n) const
+    Uint                i,
+    Uint                n) const
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_COLOR) ||
                    contains_expected_type(m_type, TYPE_VECTOR3) ||
@@ -521,9 +521,9 @@ inline mi::math::Color Attribute::get_value_color_i(
 }
 
 inline void Attribute::set_value_scalar_i(
-    Scalar		v,		// new value to set
-    Uint		i,		// if attribute list, list index
-    Uint		n)		// if array, get n-th value
+    Scalar              v,              // new value to set
+    Uint                i,              // if attribute list, list index
+    Uint                n)              // if array, get n-th value
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_SCALAR));
     ASSERT(M_ATTR, i < get_listsize());
@@ -533,9 +533,9 @@ inline void Attribute::set_value_scalar_i(
 }
 
 inline void Attribute::set_value_dscalar_i(
-    Dscalar		v,		// new value to set
-    Uint		i,		// if attribute list, list index
-    Uint		n)		// if array, get n-th value
+    Dscalar             v,              // new value to set
+    Uint                i,              // if attribute list, list index
+    Uint                n)              // if array, get n-th value
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_DSCALAR));
     ASSERT(M_ATTR, i < get_listsize());
@@ -545,9 +545,9 @@ inline void Attribute::set_value_dscalar_i(
 }
 
 inline void Attribute::set_value_vector3_i(
-    const Vector3&	v,
-    Uint		i,
-    Uint		n)
+    const Vector3&      v,
+    Uint                i,
+    Uint                n)
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_VECTOR3));
     ASSERT(M_ATTR, i < get_listsize());
@@ -662,16 +662,16 @@ inline Attribute *Attribute::copy() const
 //
 
 inline void Attribute::swap(
-    Attribute		&other)		// the other attribute
+    Attribute           &other)         // the other attribute
 {
     using std::swap;
-    swap(m_id,		other.m_id);
-    swap(m_override,	other.m_override);
+    swap(m_id,          other.m_id);
+    swap(m_override,    other.m_override);
     // should the Type swap be a fast swap, as well ? so far: just copy it
-    swap(m_type,	other.m_type);
-    swap(m_values,	other.m_values);
-    swap(m_attachments,	other.m_attachments);
-    swap(m_global,	other.m_global);
+    swap(m_type,        other.m_type);
+    swap(m_values,      other.m_values);
+    swap(m_attachments, other.m_attachments);
+    swap(m_global,      other.m_global);
 }
 
 
@@ -691,7 +691,7 @@ inline SERIAL::Class_id Attribute::get_class_id() const
 //
 
 inline bool Attribute::is_type_of(
-    SERIAL::Class_id id) const		// the class id to check
+    SERIAL::Class_id id) const          // the class id to check
 {
     return id == ID_ATTRIBUTE ? true : false;
 }
@@ -702,8 +702,8 @@ inline bool Attribute::is_type_of(
 //
 
 inline void swap(
-    Attribute	&one,			// the one
-    Attribute	&other)			// the other
+    Attribute   &one,                   // the one
+    Attribute   &other)                 // the other
 {
     one.swap(other);
 }

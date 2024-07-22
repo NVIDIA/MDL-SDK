@@ -30,7 +30,7 @@
 #include "util.h"
 #include "command.h"
 #if defined(DEBUG)
-#include "version.h"
+#include "version_helper.h"
 #include "util.h"
 #include "options.h"
 #include "archive.h"
@@ -45,7 +45,6 @@ int run(int argc, char *argv[])
 
 #if defined(DEBUG)
     Version::Test();
-    Util::File::Test();
     MDLM_option_parser::Test();
     Archive::Test();
 #endif

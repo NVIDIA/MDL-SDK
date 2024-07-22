@@ -58,7 +58,7 @@ enum BSDF_event_flags
 {
     BSDF_EVENT_DIFFUSE      = 1,
     BSDF_EVENT_GLOSSY       = 1 << 1,
-    BSDF_EVENT_SPECULAR	    = 1 << 2,
+    BSDF_EVENT_SPECULAR     = 1 << 2,
     BSDF_EVENT_REFLECTION   = 1 << 3,
     BSDF_EVENT_TRANSMISSION = 1 << 4
 };
@@ -78,6 +78,19 @@ enum BSDF_event_type
 // the calling code can mark an IOR field in *_data with BSDF_USE_MATERIAL_IOR, which will then
 // be replaced by BSDF functions with the MDL material's IOR
 #define BSDF_USE_MATERIAL_IOR   -1.0f
+
+/// Flags controlling the calculation of DF results.
+enum Df_flags {
+    DF_FLAGS_NONE = 0,               ///< allows nothing -> black
+
+    DF_FLAGS_ALLOW_REFLECT = 1,
+    DF_FLAGS_ALLOW_TRANSMIT = 2,
+    DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT = DF_FLAGS_ALLOW_REFLECT | DF_FLAGS_ALLOW_TRANSMIT,
+    DF_FLAGS_ALLOWED_SCATTER_MODE_MASK = DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT,
+
+    DF_FLAGS_FORCE_32_BIT = 0xffffffffU
+};
+
 
 /// Type of Bsdf_evaluate_data variants, depending on the backend and its configuration.
 #define BSDF_HSMP -2   ///< renderer defined buffers; not supported by all backends
@@ -105,6 +118,9 @@ struct __align__(16) BSDF_sample_data
     float3 bsdf_over_pdf;       // output:  bsdf * dot(normal, k2) / pdf
     int event_type;             // output:  BSDF_event_type
     int handle;                 // output:  handle of the sampled elemental BSDF (lobe)
+
+    Df_flags flags;             // input:   flags controlling calculation of result
+                                //          (optional depending on backend options)
 };
 
 struct __align__(16) BSDF_evaluate_data
@@ -132,6 +148,9 @@ struct __align__(16) BSDF_evaluate_data
         float3 bsdf_glossy [MDL_DF_HANDLE_SLOT_MODE]; // output: (glossy) bsdf * dot(normal, k2)
     #endif
     float  pdf;                 // output: pdf (non-projected hemisphere)
+
+    Df_flags flags;             // input:   flags controlling calculation of result
+                                //          (optional depending on backend options)
 };
 
 struct __align__(16) BSDF_pdf_data
@@ -142,6 +161,9 @@ struct __align__(16) BSDF_pdf_data
 
     float3 k2;                  // input:   incoming direction
     float pdf;                  // output:  pdf (non-projected hemisphere)
+
+    Df_flags flags;             // input:   flags controlling calculation of result
+                                //          (optional depending on backend options)
 };
 
 struct __align__(16) BSDF_auxiliary_data
@@ -207,18 +229,21 @@ struct __align__(16) BSDF_auxiliary_data
     #else
         float3 roughness[MDL_DF_HANDLE_SLOT_MODE];
     #endif
+
+    Df_flags flags;             // input:   flags controlling calculation of result
+                                //          (optional depending on backend options)
 };
 
 
 // functions provided by libbsdf
-typedef void (*mdl_bsdf_sample_function)  (BSDF_sample_data *,
-                                           MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
-typedef void (*mdl_bsdf_evaluate_function)(BSDF_evaluate_data *,
-                                           MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
-typedef void (*mdl_bsdf_pdf_function)     (BSDF_pdf_data *,
-                                           MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
-typedef void(*mdl_bsdf_auxiliary_function)(BSDF_auxiliary_data *,
-                                           MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
+typedef void (*mdl_bsdf_sample_function)   (BSDF_sample_data *,
+                                            MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
+typedef void (*mdl_bsdf_evaluate_function) (BSDF_evaluate_data *,
+                                            MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
+typedef void (*mdl_bsdf_pdf_function)      (BSDF_pdf_data *,
+                                            MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
+typedef void (*mdl_bsdf_auxiliary_function)(BSDF_auxiliary_data *,
+                                            MDL_SDK_State *, MDL_SDK_Res_data_pair *, void *);
 
 // type of events created by EDF importance sampling
 enum EDF_event_type

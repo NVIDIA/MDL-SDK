@@ -272,7 +272,7 @@ void print_annotations(
     const char* descValue = nullptr;
     mi::Sint32 res = annotations.get_annotation_param_value_by_name<const char*>(
         "::anno::description(string)", 0, descValue);
-    std::cout << "Value of \"description\": \"" << ( res == 0 ? descValue : "nullptr") << "\"\n";
+    std::cout << R"(Value of "description": ")" << ( res == 0 ? descValue : "nullptr") << "\"\n";
 
     mi::Sint32 fooValue = 0;
     res = annotations.get_annotation_param_value_by_name<mi::Sint32>(
@@ -360,6 +360,7 @@ void create_variant( mi::neuraylib::INeuray* neuray, mi::neuraylib::ITransaction
         anno_block.get(),
         /*return_annotations*/ nullptr,
         /*is_exported*/ true,
+        /*is_declarative*/ true,
         context.get()) == 0);
 
     // Instantiate the material definition of the variant.

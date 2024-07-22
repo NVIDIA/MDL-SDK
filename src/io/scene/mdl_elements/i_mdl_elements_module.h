@@ -35,6 +35,7 @@
 #include <mi/neuraylib/imodule.h> // for mi::neuraylib::Mdl_version
 
 #include <vector>
+
 #include <base/data/db/i_db_access.h>
 #include <base/data/db/i_db_tag.h>
 #include <io/scene/scene/i_scene_scene_element.h>
@@ -169,6 +170,8 @@ public:
 
     DB::Tag get_import( mi::Size index) const;
 
+    const IStruct_category_list* get_struct_categories() const;
+
     const IType_list* get_types() const;
 
     const IValue_list* get_constants() const;
@@ -229,10 +232,10 @@ public:
 
     // internal methods
 
-    /// Returns the underlying MDL module.
+    /// Returns the underlying core module.
     ///
     /// Never returns NULL.
-    const mi::mdl::IModule* get_mdl_module() const;
+    const mi::mdl::IModule* get_core_module() const;
 
     /// Returns the DAG representation of this module.
     const mi::mdl::IGenerated_code_dag* get_code_dag() const;
@@ -360,10 +363,10 @@ private:
         mi::mdl::IMDL* mdl,
         const mi::mdl::IModule* module,
         mi::mdl::IGenerated_code_dag* code_dag,
-        const std::vector<Mdl_tag_ident>& imports,
-        const std::vector<Mdl_tag_ident>& functions,
-        const std::vector<Mdl_tag_ident>& materials,
-        const std::vector<DB::Tag>& annotation_proxies,
+        std::vector<Mdl_tag_ident> imports,
+        std::vector<Mdl_tag_ident> functions,
+        std::vector<Mdl_tag_ident> materials,
+        std::vector<DB::Tag> annotation_proxies,
         Execution_context* context);
 
     /// Performs a post-order DFS traversal of the DAG of imports and invokes reload() on all nodes.
@@ -384,7 +387,7 @@ private:
         DB::Transaction* transaction,
         DB::Tag module_tag,
         bool top_level,
-        std::set<DB::Tag>& done,
+        robin_hood::unordered_set<DB::Tag>& done,
         Execution_context* context);
 
 public:
@@ -401,7 +404,7 @@ public:
     mi::Sint32 reload_module_internal(
         DB::Transaction* transaction,
         mi::mdl::IMDL* mdl,
-        const mi::mdl::IModule* mdl_module,
+        const mi::mdl::IModule* module,
         Execution_context* context);
 
 private:
@@ -416,7 +419,7 @@ private:
 
     /// The main MDL interface.
     mi::base::Handle<mi::mdl::IMDL> m_mdl;
-    /// The underlying MDL module.
+    /// The underlying core module.
     mi::base::Handle<const mi::mdl::IModule> m_module;
     /// The DAG representation of this module.
     mi::base::Handle<const mi::mdl::IGenerated_code_dag> m_code_dag;
@@ -437,14 +440,15 @@ private:
     /// archives.
     std::string m_api_file_name;
 
-    Mdl_ident m_ident;                               ///< This module's current identifier.
+    Mdl_ident m_ident;                                  ///< This module's current identifier.
 
-    std::vector<Mdl_tag_ident> m_imports;            ///< The imported modules.
+    std::vector<Mdl_tag_ident> m_imports;               ///< The imported modules.
 
-    mi::base::Handle<IType_list> m_exported_types;   ///< The exported user defined types.
-    mi::base::Handle<IType_list> m_local_types;      ///< The local user defined types.
-    mi::base::Handle<IValue_list> m_constants;       ///< The constants.
-    mi::base::Handle<IAnnotation_block> m_annotations; ///< Module annotations.
+    mi::base::Handle<IStruct_category_list> m_struct_categories; ///< The struct categories.
+    mi::base::Handle<IType_list> m_exported_types;      ///< The exported user defined types.
+    mi::base::Handle<IType_list> m_local_types;         ///< The local user defined types.
+    mi::base::Handle<IValue_list> m_constants;          ///< The constants.
+    mi::base::Handle<IAnnotation_block> m_annotations;  ///< Module annotations.
 
     /// This module's annotation definitions.
     mi::base::Handle<IAnnotation_definition_list> m_annotation_definitions;
@@ -457,13 +461,13 @@ private:
     std::vector<Resource_tag_tuple_ext> m_resources;
 
     /// Maps functions definition DB names to indices as used in #m_functions.
-    std::map <std::string, mi::Size> m_function_name_to_index;
+    std::map<std::string, mi::Size> m_function_name_to_index;
 
     /// Maps material definition DB names to indices as used in #m_materials.
-    std::map <std::string, mi::Size> m_material_name_to_index;
+    std::map<std::string, mi::Size> m_material_name_to_index;
 
     /// Maps annotation definition DB names to indices as used in #m_annotation_proxies.
-    std::map <std::string, mi::Size> m_annotation_name_to_index;
+    std::map<std::string, mi::Size> m_annotation_name_to_index;
 };
 
 } // namespace MDL

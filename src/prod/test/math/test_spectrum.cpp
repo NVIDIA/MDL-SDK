@@ -49,10 +49,10 @@ namespace mi { namespace math {
     //
     std::ostream & operator<< (std::ostream & os, Spectrum const & c)
     {
-	return os << "Spectrum(r = " << c[0]
-		  << ", g = " << c[1]
-		  << ", b = " << c[2]
-		  << ")";
+        return os << "Spectrum(r = " << c[0]
+                  << ", g = " << c[1]
+                  << ", b = " << c[2]
+                  << ")";
     }
 }}
 

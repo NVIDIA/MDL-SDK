@@ -354,6 +354,8 @@ IExpression_direct_call
 IExpression_list
 IExpression_parameter
 IExpression_temporary
+IStruct_category
+IStruct_category_list
 IType
 IType_alias
 IType_array
@@ -407,6 +409,7 @@ IValue_vector
 # MDL SDK API enums
 #
 #
+IStruct_category::Predefined_id
 IType::Kind
 IType::Modifier
 IType_enum::Predefined_id

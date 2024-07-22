@@ -123,19 +123,19 @@ mi::neuraylib::ICompiled_material* Material_instance_impl::create_compiled_mater
     mi::Uint32 flags,
     mi::neuraylib::IMdl_execution_context* context) const
 {
-    const Function_call_impl* fc = static_cast<const Function_call_impl*>( m_impl.get());
+    const auto* fc = static_cast<const Function_call_impl*>( m_impl.get());
     return fc->create_compiled_material( flags, context);
 }
 
 const MDL::Mdl_function_call* Material_instance_impl::get_db_element() const
 {
-    const Function_call_impl* fc = static_cast<const Function_call_impl*>( m_impl.get());
+    const auto* fc = static_cast<const Function_call_impl*>( m_impl.get());
     return static_cast<const MDL::Mdl_function_call*>( fc->get_db_element());
 }
 
 MDL::Mdl_function_call* Material_instance_impl::get_db_element()
 {
-    Function_call_impl* fc = static_cast<Function_call_impl*>( m_impl.get());
+    auto* fc = static_cast<Function_call_impl*>( m_impl.get());
     return static_cast<MDL::Mdl_function_call*>( fc->get_db_element());
 }
 

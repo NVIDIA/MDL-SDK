@@ -80,15 +80,15 @@ MI_TEST_AUTO_FUNCTION( test_module )
 
 
     std::string absolute_file_name2 = "Hello\\World\\Foo";
-    std::string absolute_file_name3 = "\\Hello\\World\\Foo\\";
+    std::string absolute_file_name3 = R"(\Hello\World\Foo\)";
 
     std::vector<std::string> tests;
-    tests.push_back("Hello\\World\\Foo");
-    tests.push_back("\\Hello\\World\\Foo\\");
-    tests.push_back("\\\\Hello\\\\World\\Foo\\\\");
-    tests.push_back("\\");
-    tests.push_back("\\\\");
-    tests.push_back("");
+    tests.emplace_back("Hello\\World\\Foo");
+    tests.emplace_back(R"(\Hello\World\Foo\)");
+    tests.emplace_back(R"(\\Hello\\World\Foo\\)");
+    tests.emplace_back("\\");
+    tests.emplace_back("\\\\");
+    tests.emplace_back("");
     {
         using namespace boost::algorithm;
 

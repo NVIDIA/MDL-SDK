@@ -41,75 +41,56 @@
 #define MDL_RADIANCE_CLOSEST_HIT_PROGRAM    export_name(MdlRadianceClosestHitProgram)
 #define MDL_SHADOW_ANY_HIT_PROGRAM          export_name(MdlShadowAnyHitProgram)
 
-#if defined(WITH_ENUM_SUPPORT)
-    enum MaterialFlags
-    {
-        MATERIAL_FLAG_NONE          = 0,
-        MATERIAL_FLAG_OPAQUE        = 1 << 0, // allows to skip opacity evaluation
-        MATERIAL_FLAG_SINGLE_SIDED  = 1 << 1  // geometry is only visible from the front side
-    };
-#else
-    #define MaterialFlags uint
-    #define MATERIAL_FLAG_NONE          0
-    #define MATERIAL_FLAG_OPAQUE        (1 << 0)
-    #define MATERIAL_FLAG_SINGLE_SIDED  (1 << 1)
+#include "content/environment.hlsl"
+
+// ------------------------------------------------------------------------------------------------
+// Local Root Signature
+// ------------------------------------------------------------------------------------------------
+
+// when the hit programm has access to the SBT we can use the data directly
+// otherwise we would have the access them them through the heap using:
+
+// #define FEATURE_HIT_PROGRAMM_SBT_ACCESS 1
+#if (FEATURE_HIT_PROGRAMM_SBT_ACCESS == 1)
+    ByteAddressBuffer sbt_vertices : register(t1, space0);
+    StructuredBuffer<uint> sbt_indices: register(t2, space0);
 #endif
 
-// ------------------------------------------------------------------------------------------------
-// defined in the global root signature
-// ------------------------------------------------------------------------------------------------
-
-// for some post processing effects or for AI denoising, auxiliary outputs are required.
-// from the MDL material perspective albedo (approximation) and normals can be generated.
-#if defined(ENABLE_AUXILIARY)
-    // in order to limit the payload size, this data is written directly from the hit programs
-    RWTexture2D<float4> AlbedoDiffuseBuffer : register(u2, space0);
-    RWTexture2D<float4> AlbedoGlossyBuffer : register(u3, space0);
-    RWTexture2D<float4> NormalBuffer : register(u4, space0);
-    RWTexture2D<float4> RoughnessBuffer : register(u5, space0);
-#endif
-
-// Ray tracing acceleration structure, accessed as a SRV
-RaytracingAccelerationStructure SceneBVH : register(t0, space0);
-
-// Environment map and sample data for importance sampling
-Texture2D<float4> environment_texture : register(t0, space1);
-StructuredBuffer<Environment_sample_data> environment_sample_buffer : register(t1, space1);
-
-// ------------------------------------------------------------------------------------------------
-// defined in the local root signature
-// ------------------------------------------------------------------------------------------------
-
-// mesh data
-StructuredBuffer<uint> indices: register(t2, space0);
 
 // geometry data
 // as long as there are only a few values here, place them directly instead of a constant buffer
-cbuffer _Geometry_constants_0 : register(b2, space0) { uint geometry_vertex_buffer_byte_offset; }
-cbuffer _Geometry_constants_1 : register(b3, space0) { uint geometry_vertex_stride; }
-cbuffer _Geometry_constants_2 : register(b4, space0) { uint geometry_index_offset; }
-cbuffer _Geometry_constants_3 : register(b5, space0) { uint geometry_scene_data_info_offset; }
+cbuffer Local_Constants_b0_space1 : register(b0, space1) { uint geomerty_mesh_resource_heap_index; }
+cbuffer Local_Constants_b1_space1 : register(b1, space1) { uint geometry_instance_resource_heap_index; }
+cbuffer Local_Constants_b2_space1 : register(b2, space1) { uint geometry_part_vertex_buffer_byte_offset; }
+cbuffer Local_Constants_b3_space1 : register(b3, space1) { uint geometry_part_vertex_stride; }
+cbuffer Local_Constants_b4_space1 : register(b4, space1) { uint geometry_part_index_offset; }
+cbuffer Local_Constants_b5_space1 : register(b5, space1) { uint geometry_part_scene_data_info_offset; }
+cbuffer Local_Constants_b6_space1 : register(b6, space1) { uint material_target_heap_index; }
+cbuffer Local_Constants_b7_space1 : register(b7, space1) { uint material_instance_heap_index; }
 
-cbuffer Material_constants : register(b0, MDL_MATERIAL_REGISTER_SPACE)
+// ------------------------------------------------------------------------------------------------
+// entrypoint -> runtime interface
+// entrypoint -> renderer
+// ------------------------------------------------------------------------------------------------
+
+uint get_ro_data_segment_heap_index() { return material_target_heap_index; }
+ConstantBuffer<Material_constants> get_current_material()
 {
-    // shared for all material compiled from the same MDL material
-    // - none -
-
-    // individual properties of the different material instances
-    int material_id;
-    uint material_flags;
+    #if (FEATURE_DYNAMIC_RESOURCES == 1)
+        return ResourceDescriptorHeap[NonUniformResourceIndex(material_instance_heap_index)];
+    #else
+        return Global_CBVs_Material_constants[NonUniformResourceIndex(material_instance_heap_index)];
+    #endif
 }
+uint get_argument_block_heap_index() { return material_instance_heap_index + 1; }
+uint get_texture_infos_heap_index() { return material_instance_heap_index + 2; }
+uint get_light_profile_heap_index() { return material_instance_heap_index + 3; }
+uint get_mbsdf_infos_heap_index() { return material_instance_heap_index + 4; }
+uint get_vertex_buffer_heap_index() { return geomerty_mesh_resource_heap_index; }
+uint get_index_buffer_heap_index() { return geomerty_mesh_resource_heap_index + 1; }
+uint get_scene_data_info_heap_index() { return geometry_instance_resource_heap_index; }
+uint get_scene_data_buffer_heap_index() { return geometry_instance_resource_heap_index + 1; }
 
-// Defined in the code generator, enable everything here for source code editing only
-#if !defined(MDL_HAS_SURFACE_SCATTERING)
-#define MDL_HAS_SURFACE_SCATTERING 1
-#define MDL_HAS_SURFACE_EMISSION 1
-#define MDL_HAS_BACKFACE_SCATTERING 1
-#define MDL_HAS_BACKFACE_EMISSION 1
-#define MDL_HAS_VOLUME_ABSORPTION 1
-#define MDL_CAN_BE_THIN_WALLED 1
-#define MDL_HAS_INIT 1
-#endif
 
 // ------------------------------------------------------------------------------------------------
 // helper
@@ -120,12 +101,12 @@ float3 sample_lights(
     Shading_state_material state, out float3 to_light, out float light_pdf, inout uint seed)
 {
     float p_select_light = 1.0f;
-    if (point_light_enabled != 0)
+    if (scene_constants.point_light_enabled != 0)
     {
         // keep it simple and use either point light or environment light, each with the same
         // probability. If the environment factor is zero, we always use the point light
         // Note: see also miss shader
-        p_select_light = environment_intensity_factor > 0.0f ? 0.5f : 1.0f;
+        p_select_light = scene_constants.environment_intensity_factor > 0.0f ? 0.5f : 1.0f;
 
         // in general, you would select the light depending on the importance of it
         // e.g. by incorporating their luminance
@@ -137,14 +118,15 @@ float3 sample_lights(
 
             // compute light direction and distance
             #if defined(USE_DERIVS)
-                to_light = point_light_position - state.position.val;
+                to_light = scene_constants.point_light_position - state.position.val;
             #else
-                to_light = point_light_position - state.position;
+                to_light = scene_constants.point_light_position - state.position;
             #endif
             const float inv_distance2 = 1.0f / dot(to_light, to_light);
             to_light *= sqrt(inv_distance2);
 
-            return point_light_intensity * inv_distance2 * 0.25f * M_ONE_OVER_PI / p_select_light;
+            return scene_constants.point_light_intensity *
+                inv_distance2 * 0.25f * M_ONE_OVER_PI / p_select_light;
         }
 
         // probability to select the environment instead
@@ -153,8 +135,6 @@ float3 sample_lights(
 
     // light from the environment
     float3 radiance = environment_sample(   // (see common.hlsl)
-        environment_texture,                // assuming lat long map
-        environment_sample_buffer,          // importance sampling data of the environment map
         seed,
         to_light,
         light_pdf);
@@ -165,39 +145,73 @@ float3 sample_lights(
 }
 
 
-// fetch vertex data with known layout
-float3 fetch_vertex_data_float3(const uint index, const uint byte_offset)
+ByteAddressBuffer get_vertex_buffer()
 {
-    const uint address =
-        geometry_vertex_buffer_byte_offset + // base address for this part of the mesh
-        geometry_vertex_stride * index +     // offset to the selected vertex
-        byte_offset;                         // offset within the vertex
+    #if (FEATURE_HIT_PROGRAMM_SBT_ACCESS == 1)
+        // fastest (direct access because the address is in the root signature)
+        return sbt_vertices;
+    #elif (FEATURE_DYNAMIC_RESOURCES == 1)
+        // slower but more flexible (one indirection though the heap)
+        return ResourceDescriptorHeap[NonUniformResourceIndex(get_vertex_buffer_heap_index())];
+    #else
+        // even slower but also flexible (indirection through the heap and a descriptor table)
+        return Global_SRVs_ByteAddressBuffer[NonUniformResourceIndex(
+            get_vertex_buffer_heap_index())];
+    #endif
+}
 
-    return asfloat(vertices.Load3(address));
+StructuredBuffer<uint> get_index_buffer()
+{
+    #if (FEATURE_HIT_PROGRAMM_SBT_ACCESS == 1)
+        return sbt_indices;
+    #elif (FEATURE_DYNAMIC_RESOURCES == 1)
+        // slower but more flexible (one indirection though the heap)
+        return ResourceDescriptorHeap[NonUniformResourceIndex(get_index_buffer_heap_index())];
+    #else
+        // even slower but also flexible (indirection through the heap and a descriptor table)
+        return Global_SRVs_StructuredBuffer_uint[NonUniformResourceIndex(
+            get_index_buffer_heap_index())];
+    #endif
 }
 
 // fetch vertex data with known layout
-float4 fetch_vertex_data_float4(const uint index, const uint byte_offset)
+float3 fetch_vertex_data_float3(ByteAddressBuffer vb, const uint index, const uint byte_offset)
 {
     const uint address =
-        geometry_vertex_buffer_byte_offset + // base address for this part of the mesh
-        geometry_vertex_stride * index +     // offset to the selected vertex
+        geometry_part_vertex_buffer_byte_offset + // base address for this part of the mesh
+        geometry_part_vertex_stride * index +     // offset to the selected vertex
         byte_offset;                         // offset within the vertex
 
-    return asfloat(vertices.Load4(address));
+    // mesh data, includes the per mesh scene data
+    return asfloat(vb.Load3(address));
+}
+
+// fetch vertex data with known layout
+float4 fetch_vertex_data_float4(ByteAddressBuffer vb, const uint index, const uint byte_offset)
+{
+    const uint address =
+        geometry_part_vertex_buffer_byte_offset + // base address for this part of the mesh
+        geometry_part_vertex_stride * index +     // offset to the selected vertex
+        byte_offset;                         // offset within the vertex
+
+    return asfloat(vb.Load4(address));
 }
 
 bool is_back_face()
 {
+    // get vertex and index buffer
+    ByteAddressBuffer vb = get_vertex_buffer();
+    StructuredBuffer<uint> ib = get_index_buffer();
+
     // get vertex indices for the hit triangle
-    const uint index_offset = 3 * PrimitiveIndex() + geometry_index_offset;
+    const uint index_offset = 3 * PrimitiveIndex() + geometry_part_index_offset;
     const uint3 vertex_indices = uint3(
-        indices[index_offset + 0], indices[index_offset + 1], indices[index_offset + 2]);
+        ib[index_offset + 0], ib[index_offset + 1], ib[index_offset + 2]);
 
     // get position of the hit point
-    const float3 pos0 = fetch_vertex_data_float3(vertex_indices.x, VERT_BYTEOFFSET_POSITION);
-    const float3 pos1 = fetch_vertex_data_float3(vertex_indices.y, VERT_BYTEOFFSET_POSITION);
-    const float3 pos2 = fetch_vertex_data_float3(vertex_indices.z, VERT_BYTEOFFSET_POSITION);
+    const float3 pos0 = fetch_vertex_data_float3(vb, vertex_indices.x, VERT_BYTEOFFSET_POSITION);
+    const float3 pos1 = fetch_vertex_data_float3(vb, vertex_indices.y, VERT_BYTEOFFSET_POSITION);
+    const float3 pos2 = fetch_vertex_data_float3(vb, vertex_indices.z, VERT_BYTEOFFSET_POSITION);
 
     // compute geometry normal and check for back face hit
     const float3 geom_normal = normalize(cross(pos1 - pos0, pos2 - pos0));
@@ -208,10 +222,14 @@ void setup_mdl_shading_state(
     out Shading_state_material mdl_state,
     Attributes attrib)
 {
+    // get vertex and index buffer
+    ByteAddressBuffer vb = get_vertex_buffer();
+    StructuredBuffer<uint> ib = get_index_buffer();
+
     // get vertex indices for the hit triangle
-    const uint index_offset = 3 * PrimitiveIndex() + geometry_index_offset;
+    const uint index_offset = 3 * PrimitiveIndex() + geometry_part_index_offset;
     const uint3 vertex_indices = uint3(
-        indices[index_offset + 0], indices[index_offset + 1], indices[index_offset + 2]);
+        ib[index_offset + 0], ib[index_offset + 1], ib[index_offset + 2]);
 
     // coordinates inside the triangle
     const float3 barycentric = float3(
@@ -222,18 +240,18 @@ void setup_mdl_shading_state(
     const float4x4 world_to_object = to4x4(WorldToObject());
 
     // get position of the hit point
-    const float3 pos0 = fetch_vertex_data_float3(vertex_indices.x, VERT_BYTEOFFSET_POSITION);
-    const float3 pos1 = fetch_vertex_data_float3(vertex_indices.y, VERT_BYTEOFFSET_POSITION);
-    const float3 pos2 = fetch_vertex_data_float3(vertex_indices.z, VERT_BYTEOFFSET_POSITION);
+    const float3 pos0 = fetch_vertex_data_float3(vb, vertex_indices.x, VERT_BYTEOFFSET_POSITION);
+    const float3 pos1 = fetch_vertex_data_float3(vb, vertex_indices.y, VERT_BYTEOFFSET_POSITION);
+    const float3 pos2 = fetch_vertex_data_float3(vb, vertex_indices.z, VERT_BYTEOFFSET_POSITION);
     float3 hit_position = pos0 * barycentric.x + pos1 * barycentric.y + pos2 * barycentric.z;
     hit_position = mul(object_to_world, float4(hit_position, 1)).xyz;
 
     // get normals (geometry normal and interpolated vertex normal)
     const float3 geom_normal = normalize(cross(pos1 - pos0, pos2 - pos0));
     const float3 normal = normalize(
-        fetch_vertex_data_float3(vertex_indices.x, VERT_BYTEOFFSET_NORMAL) * barycentric.x +
-        fetch_vertex_data_float3(vertex_indices.y, VERT_BYTEOFFSET_NORMAL) * barycentric.y +
-        fetch_vertex_data_float3(vertex_indices.z, VERT_BYTEOFFSET_NORMAL) * barycentric.z);
+        fetch_vertex_data_float3(vb, vertex_indices.x, VERT_BYTEOFFSET_NORMAL) * barycentric.x +
+        fetch_vertex_data_float3(vb, vertex_indices.y, VERT_BYTEOFFSET_NORMAL) * barycentric.y +
+        fetch_vertex_data_float3(vb, vertex_indices.z, VERT_BYTEOFFSET_NORMAL) * barycentric.z);
 
     // transform normals using inverse transpose
     // -  world_to_object = object_to_world^-1
@@ -244,9 +262,9 @@ void setup_mdl_shading_state(
     // reconstruct tangent frame from vertex data
     float3 world_tangent, world_binormal;
     float4 tangent0 =
-        fetch_vertex_data_float4(vertex_indices.x, VERT_BYTEOFFSET_TANGENT) * barycentric.x +
-        fetch_vertex_data_float4(vertex_indices.y, VERT_BYTEOFFSET_TANGENT) * barycentric.y +
-        fetch_vertex_data_float4(vertex_indices.z, VERT_BYTEOFFSET_TANGENT) * barycentric.z;
+        fetch_vertex_data_float4(vb, vertex_indices.x, VERT_BYTEOFFSET_TANGENT) * barycentric.x +
+        fetch_vertex_data_float4(vb, vertex_indices.y, VERT_BYTEOFFSET_TANGENT) * barycentric.y +
+        fetch_vertex_data_float4(vb, vertex_indices.z, VERT_BYTEOFFSET_TANGENT) * barycentric.z;
     tangent0.xyz = normalize(tangent0.xyz);
     world_tangent = normalize(mul(object_to_world, float4(tangent0.xyz, 0)).xyz);
     world_tangent = normalize(world_tangent - dot(world_tangent, world_normal) * world_normal);
@@ -276,7 +294,7 @@ void setup_mdl_shading_state(
     #else
         mdl_state.position = hit_position;
     #endif
-    mdl_state.animation_time = enable_animiation ? total_time : 0.0f;
+    mdl_state.animation_time = scene_constants.enable_animiation ? scene_constants.total_time : 0.0f;
     mdl_state.tangent_u[0] = world_tangent;
     mdl_state.tangent_v[0] = world_binormal;
     // #if defined(USE_TEXTURE_RESULTS)
@@ -287,12 +305,12 @@ void setup_mdl_shading_state(
     mdl_state.world_to_object = world_to_object;
     mdl_state.object_to_world = object_to_world;
     mdl_state.object_id = 0;
-    mdl_state.meters_per_scene_unit = meters_per_scene_unit;
+    mdl_state.meters_per_scene_unit = scene_constants.meters_per_scene_unit;
     mdl_state.arg_block_offset = 0;
 
     // fill the renderer state information
-    mdl_state.renderer_state.scene_data_info_offset = geometry_scene_data_info_offset;
-    mdl_state.renderer_state.scene_data_geometry_byte_offset = geometry_vertex_buffer_byte_offset;
+    mdl_state.renderer_state.scene_data_info_offset = geometry_part_scene_data_info_offset;
+    mdl_state.renderer_state.scene_data_geometry_byte_offset = geometry_part_vertex_buffer_byte_offset;
     mdl_state.renderer_state.hit_vertex_indices = vertex_indices;
     mdl_state.renderer_state.barycentric = barycentric;
     mdl_state.renderer_state.hit_backface = backfacing_primitive;
@@ -304,12 +322,12 @@ void setup_mdl_shading_state(
         mdl_state, SCENE_DATA_ID_TEXCOORD_0, float2(0.0f, 0.0f), false);
 
     // apply uv transformations
-    texcoord0 = texcoord0 * uv_scale + uv_offset;
-    if (uv_repeat != 0)
+    texcoord0 = texcoord0 * scene_constants.uv_scale + scene_constants.uv_offset;
+    if (scene_constants.uv_repeat != 0)
     {
         texcoord0 = texcoord0 - floor(texcoord0);
     }
-    if (uv_saturate != 0)
+    if (scene_constants.uv_saturate != 0)
     {
         texcoord0 = saturate(texcoord0);
     }
@@ -332,16 +350,17 @@ void setup_mdl_shading_state(
 [shader("anyhit")]
 void MDL_RADIANCE_ANY_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes attrib)
 {
+    ConstantBuffer<Material_constants> mat = get_current_material();
+
     // back face culling
-    if (has_flag(material_flags, MATERIAL_FLAG_SINGLE_SIDED)) {
-        if (is_back_face()) {
-            IgnoreHit();
-            return;
-        }
+    if (mat.is_single_sided() && is_back_face())
+    {
+        IgnoreHit();
+        return;
     }
 
-    // early out if there is no opacity function
-    if (has_flag(material_flags, MATERIAL_FLAG_OPAQUE))
+    // early out if there is no opacity function, it's a hit.
+    if (!mat.has_cutout_opacity())
         return;
 
     // setup MDL state
@@ -361,22 +380,33 @@ void MDL_RADIANCE_ANY_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes attr
 [shader("closesthit")]
 void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes attrib)
 {
+    ConstantBuffer<Material_constants> mat = get_current_material();
+
     // setup MDL state
     Shading_state_material mdl_state;
     setup_mdl_shading_state(mdl_state, attrib);
 
     // pre-compute and cache data used by different generated MDL functions
-    #if (MDL_HAS_INIT == 1)
+    if (mat.has_init())
+    {
         mdl_init(mdl_state);
-    #endif
+    }
+
+    // Illustrate the usage of AOVs.
+    // A custom material type is probably very well known to the renderer or other components that use the code.
+    // Here, we simply display AOVs as color rather than feeding the results into a simulation or
+    // post processing pipeline for example.
+    if (mat.has_aovs() && scene_constants.aov_index_to_render >= 0)
+    {
+        float3 aov_as_color = mdl_aov(scene_constants.aov_index_to_render, mdl_state);
+        payload.contribution = aov_as_color;
+        add_flag(payload.flags, FLAG_DONE);
+        return;
+    }
 
     // thin-walled materials are allowed to have a different back side
     // buy the can't have volumetric properties
-    #if (MDL_CAN_BE_THIN_WALLED == 1)
-        const bool thin_walled = mdl_thin_walled(mdl_state);
-    #else
-        const bool thin_walled = false;
-    #endif
+    const bool thin_walled = mat.can_be_thin_walled() ? mdl_thin_walled(mdl_state) : false;
 
     // for thin-walled materials there is no 'inside'
     const bool inside = has_flag(payload.flags, FLAG_INSIDE);
@@ -386,68 +416,82 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
 
     // apply volume attenuation
     //---------------------------------------------------------------------------------------------
-    #if (MDL_HAS_VOLUME_ABSORPTION == 1)
-        if (inside && !thin_walled) // compute absorption only on exit
-        {
-            const float3 abs_coeff = mdl_volume_absorption_coefficient(mdl_state);
+    if (inside && !thin_walled && mat.has_volume_absorption()) // compute absorption only on exit
+    {
+        const float3 abs_coeff = mdl_volume_absorption_coefficient(mdl_state);
 
-            // distance in meters
-            #if defined(USE_DERIVS)
-                const float distance = length(mdl_state.position.val - payload.ray_origin_next) * meters_per_scene_unit;
-            #else
-                const float distance = length(mdl_state.position - payload.ray_origin_next) * meters_per_scene_unit;
-            #endif
+        // distance in meters
+        #if defined(USE_DERIVS)
+            const float distance = length(mdl_state.position.val - payload.ray_origin_next) *
+                scene_constants.meters_per_scene_unit;
+        #else
+            const float distance =
+                length(mdl_state.position - payload.ray_origin_next) *
+                scene_constants.meters_per_scene_unit;
+        #endif
 
-            payload.weight.x *= abs_coeff.x > 0.0f ? exp(-abs_coeff.x * distance) : 1.0f;
-            payload.weight.y *= abs_coeff.y > 0.0f ? exp(-abs_coeff.y * distance) : 1.0f;
-            payload.weight.z *= abs_coeff.z > 0.0f ? exp(-abs_coeff.z * distance) : 1.0f;
-        }
-    #endif
+        payload.weight.x *= abs_coeff.x > 0.0f ? exp(-abs_coeff.x * distance) : 1.0f;
+        payload.weight.y *= abs_coeff.y > 0.0f ? exp(-abs_coeff.y * distance) : 1.0f;
+        payload.weight.z *= abs_coeff.z > 0.0f ? exp(-abs_coeff.z * distance) : 1.0f;
+    }
 
     // add emission
     //---------------------------------------------------------------------------------------------
-    #if (MDL_HAS_SURFACE_EMISSION == 1 || MDL_HAS_BACKFACE_EMISSION == 1)
+    const bool has_surface_emission = mat.has_surface_emission();
+    const bool has_backface_emission = mat.has_backface_emission();
+    if (has_surface_emission || has_backface_emission)
     {
         // evaluate EDF
         Edf_evaluate_data eval_data = (Edf_evaluate_data) 0;
         eval_data.k1 = -WorldRayDirection();
-        #if (MDL_DF_HANDLE_SLOT_MODE != -1)
-            eval_data.handle_offset = 0;
-        #endif
+
+        // evaluate intensity expression
         float3 intensity = float3(0.0f, 0.0f, 0.0f);
+        if (has_backface_emission && thin_walled && mdl_state.renderer_state.hit_backface)
+            intensity = mdl_backface_emission_intensity(mdl_state);
+        else if (has_surface_emission)
+            intensity = mdl_surface_emission_intensity(mdl_state);
 
-        if (thin_walled && mdl_state.renderer_state.hit_backface && (MDL_HAS_BACKFACE_EMISSION == 1))
-        {
-            #if (MDL_HAS_BACKFACE_EMISSION == 1)
-                // evaluate the distribution function
-                mdl_backface_emission_evaluate(eval_data, mdl_state);
-
-                // evaluate intensity expression
-                intensity = mdl_backface_emission_intensity(mdl_state);
-            #endif
-        }
-        else
-        {
-            #if (MDL_HAS_SURFACE_EMISSION == 1)
-                // evaluate the distribution function
-                mdl_surface_emission_evaluate(eval_data, mdl_state);
-
-                // evaluate intensity expression
-                intensity = mdl_surface_emission_intensity(mdl_state);
-            #endif
-        }
-
-        // add emission
         #if (MDL_DF_HANDLE_SLOT_MODE == -1)
+
+            // evaluate the distribution function
+            if (has_backface_emission && thin_walled && mdl_state.renderer_state.hit_backface)
+            {
+                mdl_backface_emission_evaluate(eval_data, mdl_state);
+            }
+            else if (has_surface_emission)
+            {
+                mdl_surface_emission_evaluate(eval_data, mdl_state);
+            }
+        
+            // add emission
             payload.contribution += payload.weight * intensity * eval_data.edf;
+
         #else
-            payload.contribution += payload.weight * intensity * eval_data.edf[0];
-        #endif
+            for(uint offset = 0; offset < MDL_DF_HANDLE_SLOT_COUNT; offset += MDL_DF_HANDLE_SLOT_MODE)
+            {
+                // evaluate the distribution function
+                eval_data.handle_offset = offset;
+                if (has_backface_emission && thin_walled && mdl_state.renderer_state.hit_backface)
+                {
+                    mdl_backface_emission_evaluate(eval_data, mdl_state);
+                }
+                else if (has_surface_emission)
+                {
+                    mdl_surface_emission_evaluate(eval_data, mdl_state);
+                }
+        
+                // add emission
+                for (uint lobe = 0; lobe < MDL_DF_HANDLE_SLOT_MODE; ++lobe)
+                    payload.contribution += payload.weight * intensity * eval_data.edf[lobe];
+            }
+#endif
     }
-    #endif
 
     // Write Auxiliary Buffers
     //---------------------------------------------------------------------------------------------
+    const bool has_surface_scattering = mat.has_surface_scattering();
+    const bool has_backface_scattering = mat.has_backface_scattering();
     #if defined(ENABLE_AUXILIARY)
     if (has_flag(payload.flags, FLAG_FIRST_PATH_SEGMENT))
     {
@@ -455,35 +499,68 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
         aux_data.ior1 = ior1;                    // IOR current medium
         aux_data.ior2 = ior2;                    // IOR other side
         aux_data.k1 = -WorldRayDirection();      // outgoing direction
-        #if (MDL_DF_HANDLE_SLOT_MODE != -1)
-            aux_data.handle_offset = 0;
+        aux_data.flags = scene_constants.bsdf_data_flags;
+        uint3 launch_index =  DispatchRaysIndex();
+
+        #if (FEATURE_DYNAMIC_RESOURCES == 1)
+            RWTexture2D<float4> AlbedoDiffuseBuffer = ResourceDescriptorHeap[2];
+            RWTexture2D<float4> AlbedoGlossyBuffer = ResourceDescriptorHeap[3];
+            RWTexture2D<float4> NormalBuffer = ResourceDescriptorHeap[4];
+            RWTexture2D<float4> RoughnessBuffer = ResourceDescriptorHeap[5];
+        #else
+            RWTexture2D<float4> AlbedoDiffuseBuffer = Global_UAVs_Texture2D_float4[2];
+            RWTexture2D<float4> AlbedoGlossyBuffer = Global_UAVs_Texture2D_float4[3];
+            RWTexture2D<float4> NormalBuffer = Global_UAVs_Texture2D_float4[4];
+            RWTexture2D<float4> RoughnessBuffer = Global_UAVs_Texture2D_float4[5];
         #endif
 
-        // use backface instead of surface scattering?
-        if (thin_walled && mdl_state.renderer_state.hit_backface && (MDL_HAS_BACKFACE_SCATTERING == 1))
-        {
-            #if (MDL_HAS_BACKFACE_SCATTERING == 1)
-                mdl_backface_scattering_auxiliary(aux_data, mdl_state);
-            #endif
-        }
-        else
-        {
-            #if (MDL_HAS_SURFACE_SCATTERING == 1)
-                mdl_surface_scattering_auxiliary(aux_data, mdl_state);
-            #endif
-        }
-
-        uint3 launch_index =  DispatchRaysIndex();
         #if (MDL_DF_HANDLE_SLOT_MODE == -1)
+
+            if (has_backface_scattering && thin_walled && mdl_state.renderer_state.hit_backface)
+            {
+                mdl_backface_scattering_auxiliary(aux_data, mdl_state);
+            }
+            else if (has_surface_scattering)
+            {
+                mdl_surface_scattering_auxiliary(aux_data, mdl_state);
+            }
+        
             AlbedoDiffuseBuffer[launch_index.xy] = float4(aux_data.albedo_diffuse, 1.0f);
             AlbedoGlossyBuffer[launch_index.xy] = float4(aux_data.albedo_glossy, 1.0f);
             NormalBuffer[launch_index.xy] = float4(aux_data.normal, 1.0f);
             RoughnessBuffer[launch_index.xy] = float4(aux_data.roughness.xy, 0.0f, 1.0f);
+
         #else
-            AlbedoDiffuseBuffer[launch_index.xy] = float4(aux_data.albedo_diffuse[0], 1.0f);
-            AlbedoGlossyBuffer[launch_index.xy] = float4(aux_data.albedo_glossy[0], 1.0f);
-            NormalBuffer[launch_index.xy] = float4(aux_data.normal[0], 1.0f);
-            RoughnessBuffer[launch_index.xy] = float4(aux_data.roughness[0].xy, 0.0f, 1.0f);
+            float3 aux_albedo_diffuse = float3(0.0f, 0.0f, 0.0f);
+            float3 aux_albedo_glossy = float3(0.0f, 0.0f, 0.0f);
+            float3 aux_normal = float3(0.0f, 0.0f, 0.0f);
+            float aux_roughness_weight_sum = 0.0f;
+            float2 aux_rouhness = float2(0.0f, 0.0f);
+            for(uint offset = 0; offset < MDL_DF_HANDLE_SLOT_COUNT; offset += MDL_DF_HANDLE_SLOT_MODE)
+            {
+                aux_data.handle_offset = offset;
+                if (has_backface_scattering && thin_walled && mdl_state.renderer_state.hit_backface)
+                {
+                    mdl_backface_scattering_auxiliary(aux_data, mdl_state);
+                }
+                else if (has_surface_scattering)
+                {
+                    mdl_surface_scattering_auxiliary(aux_data, mdl_state);
+                }
+
+                for (uint lobe = 0; lobe < MDL_DF_HANDLE_SLOT_MODE; ++lobe)
+                {
+                    aux_albedo_diffuse += aux_data.albedo_diffuse[lobe];
+                    aux_albedo_glossy += aux_data.albedo_glossy[lobe];
+                    aux_normal += aux_data.normal[lobe];
+                    aux_rouhness += aux_data.roughness[lobe].xy * aux_data.roughness[lobe].z;
+                    aux_roughness_weight_sum += aux_data.roughness[lobe].z;
+                }
+            }
+            AlbedoDiffuseBuffer[launch_index.xy] = float4(aux_albedo_diffuse, 0.0f);
+            AlbedoGlossyBuffer[launch_index.xy] = float4(aux_albedo_glossy, 0.0f);
+            NormalBuffer[launch_index.xy] = float4(aux_normal, 0.0f);
+            RoughnessBuffer[launch_index.xy] = float4(aux_rouhness / aux_roughness_weight_sum, 0.0f, 0.0f);
         #endif
     }
     #endif
@@ -508,41 +585,50 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
         eval_data.ior2 = ior2;
         eval_data.k1 = -WorldRayDirection();
         eval_data.k2 = to_light;
+        eval_data.flags = scene_constants.bsdf_data_flags;
+
         #if (MDL_DF_HANDLE_SLOT_MODE != -1)
-            eval_data.handle_offset = 0;
+        // begin handle loop
+        for(uint offset = 0; offset < MDL_DF_HANDLE_SLOT_COUNT; offset += MDL_DF_HANDLE_SLOT_MODE)
+        {
+            eval_data.handle_offset = offset;
         #endif
 
-        // use backface instead of surface scattering?
-        if (thin_walled && mdl_state.renderer_state.hit_backface && (MDL_HAS_BACKFACE_SCATTERING == 1))
-        {
-            #if (MDL_HAS_BACKFACE_SCATTERING == 1)
+            // use backface instead of surface scattering?
+            if (has_backface_scattering && thin_walled && mdl_state.renderer_state.hit_backface)
+            {
                 mdl_backface_scattering_evaluate(eval_data, mdl_state);
-            #endif
-        }
-        else
-        {
-            #if (MDL_HAS_SURFACE_SCATTERING == 1)
+            }
+            else if (has_surface_scattering)
+            {
                 mdl_surface_scattering_evaluate(eval_data, mdl_state);
-            #endif
-        }
+            }
 
-        // compute lighting for this light
-        if(eval_data.pdf > 0.0f)
-        {
-            const float mis_weight = (light_pdf == DIRAC)
-                ? 1.0f
-                : light_pdf / (light_pdf + eval_data.pdf);
+            // compute lighting for this light
+            if(eval_data.pdf > 0.0f)
+            {
+                const float mis_weight = (light_pdf == DIRAC)
+                    ? 1.0f
+                    : light_pdf / (light_pdf + eval_data.pdf);
 
-            // sample weight
-            const float3 w = payload.weight * radiance_over_pdf * mis_weight;
-            #if (MDL_DF_HANDLE_SLOT_MODE == -1)
-                contribution += w * eval_data.bsdf_diffuse;
-                contribution += w * eval_data.bsdf_glossy;
-            #else
-                contribution += w * eval_data.bsdf_diffuse[0];
-                contribution += w * eval_data.bsdf_glossy[0];
-            #endif
+                // sample weight
+                const float3 w = payload.weight * radiance_over_pdf * mis_weight;
+                #if (MDL_DF_HANDLE_SLOT_MODE == -1)
+                    contribution += w * eval_data.bsdf_diffuse;
+                    contribution += w * eval_data.bsdf_glossy;
+                #else
+                    for (uint i = 0; i < MDL_DF_HANDLE_SLOT_MODE; ++i)
+                    {
+                        contribution += w * eval_data.bsdf_diffuse[i];
+                        contribution += w * eval_data.bsdf_glossy[i];
+                    }
+                #endif
+            }
+
+        #if (MDL_DF_HANDLE_SLOT_MODE != -1)
+        // end handle loop
         }
+        #endif
     }
 
     // Sample direction of the next ray
@@ -556,19 +642,16 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
     sample_data.ior2 = ior2;                    // IOR other side
     sample_data.k1 = -WorldRayDirection();      // outgoing direction
     sample_data.xi = rnd4(payload.seed);        // random sample number
+    sample_data.flags = scene_constants.bsdf_data_flags;
 
     // use backface instead of surface scattering?
-    if (thin_walled && mdl_state.renderer_state.hit_backface && (MDL_HAS_BACKFACE_SCATTERING == 1))
+    if (has_backface_scattering && thin_walled && mdl_state.renderer_state.hit_backface)
     {
-        #if (MDL_HAS_BACKFACE_SCATTERING == 1)
-            mdl_backface_scattering_sample(sample_data, mdl_state);
-        #endif
+        mdl_backface_scattering_sample(sample_data, mdl_state);
     }
-    else
+    else if (has_surface_scattering)
     {
-        #if (MDL_HAS_SURFACE_SCATTERING == 1)
-            mdl_surface_scattering_sample(sample_data, mdl_state);
-        #endif
+        mdl_surface_scattering_sample(sample_data, mdl_state);
     }
 
     // stop on absorb
@@ -621,7 +704,7 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
     #endif
     ray.Direction = to_light;
     ray.TMin = 0.0f;
-    ray.TMax = far_plane_distance;
+    ray.TMax = scene_constants.far_plane_distance;
 
     // prepare the ray and payload but trace at the end to reduce the amount of data that has
     // to be recovered after coming back from the shadow trace
@@ -629,6 +712,7 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
     shadow_payload.isHit = false;
     shadow_payload.seed = payload.seed;
 
+    // Ray tracing acceleration structure
     TraceRay(
         SceneBVH,               // AccelerationStructure
         RAY_FLAG_NONE,          // RayFlags
@@ -651,16 +735,17 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
 [shader("anyhit")]
 void MDL_SHADOW_ANY_HIT_PROGRAM(inout ShadowHitInfo payload, Attributes attrib)
 {
+    ConstantBuffer<Material_constants> mat = get_current_material();
+
     // back face culling
-    if (has_flag(material_flags, MATERIAL_FLAG_SINGLE_SIDED)) {
-        if (is_back_face()) {
-            IgnoreHit();
-            return;
-        }
+    if (mat.is_single_sided() && is_back_face())
+    {
+        IgnoreHit();
+        return;
     }
 
     // early out if there is no opacity function
-    if (has_flag(material_flags, MATERIAL_FLAG_OPAQUE))
+    if (!mat.has_cutout_opacity())
     {
         payload.isHit = true;
         AcceptHitAndEndSearch();

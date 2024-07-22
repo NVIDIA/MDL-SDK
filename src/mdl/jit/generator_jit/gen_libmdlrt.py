@@ -34,7 +34,7 @@ import os
 
 copyright_str = """
 /******************************************************************************
- * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ * Copyright 2024 NVIDIA Corporation. All rights reserved.
  *****************************************************************************/
 """
 

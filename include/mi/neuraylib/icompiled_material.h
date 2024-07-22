@@ -48,24 +48,24 @@ class IMdl_execution_context;
 ///
 /// \see #mi::neuraylib::ICompiled_material and #mi::neuraylib::ICompiled_material::get_slot_hash()
 enum Material_slot {
-    SLOT_THIN_WALLED,                     ///< Slot thin_walled
-    SLOT_SURFACE_SCATTERING,              ///< Slot surface.scattering
-    SLOT_SURFACE_EMISSION_EDF_EMISSION,   ///< Slot surface.emission.emission
-    SLOT_SURFACE_EMISSION_INTENSITY,      ///< Slot surface.emission.intensity
-    SLOT_SURFACE_EMISSION_MODE,           ///< Slot surface.emission.mode 
-    SLOT_BACKFACE_SCATTERING,             ///< Slot backface.scattering
-    SLOT_BACKFACE_EMISSION_EDF_EMISSION,  ///< Slot backface.emission.emission
-    SLOT_BACKFACE_EMISSION_INTENSITY,     ///< Slot backface.emission.intensity
-    SLOT_BACKFACE_EMISSION_MODE,          ///< Slot backface.emission.mode 
-    SLOT_IOR,                             ///< Slot ior
-    SLOT_VOLUME_SCATTERING,               ///< Slot volume.scattering
-    SLOT_VOLUME_ABSORPTION_COEFFICIENT,   ///< Slot volume.absorption_coefficient
-    SLOT_VOLUME_SCATTERING_COEFFICIENT,   ///< Slot volume.scattering_coefficient
-    SLOT_VOLUME_EMISSION_INTENSITY,       ///< Slot volume.emission_intensity
-    SLOT_GEOMETRY_DISPLACEMENT,           ///< Slot geometry.displacement
-    SLOT_GEOMETRY_CUTOUT_OPACITY,         ///< Slot geometry.cutout_opacity
-    SLOT_GEOMETRY_NORMAL,                 ///< Slot geometry.normal
-    SLOT_HAIR,                            ///< Slot hair
+    SLOT_THIN_WALLED,                     ///< Slot \c "thin_walled"
+    SLOT_SURFACE_SCATTERING,              ///< Slot \c "surface.scattering"
+    SLOT_SURFACE_EMISSION_EDF_EMISSION,   ///< Slot \c "surface.emission.emission"
+    SLOT_SURFACE_EMISSION_INTENSITY,      ///< Slot \c "surface.emission.intensity"
+    SLOT_SURFACE_EMISSION_MODE,           ///< Slot \c "surface.emission.mode"
+    SLOT_BACKFACE_SCATTERING,             ///< Slot \c "backface.scattering"
+    SLOT_BACKFACE_EMISSION_EDF_EMISSION,  ///< Slot \c "backface.emission.emission"
+    SLOT_BACKFACE_EMISSION_INTENSITY,     ///< Slot \c "backface.emission.intensity"
+    SLOT_BACKFACE_EMISSION_MODE,          ///< Slot \c "backface.emission.mode"
+    SLOT_IOR,                             ///< Slot \c "ior"
+    SLOT_VOLUME_SCATTERING,               ///< Slot \c "volume.scattering"
+    SLOT_VOLUME_ABSORPTION_COEFFICIENT,   ///< Slot \c "volume.absorption_coefficient"
+    SLOT_VOLUME_SCATTERING_COEFFICIENT,   ///< Slot \c "volume.scattering_coefficient"
+    SLOT_VOLUME_EMISSION_INTENSITY,       ///< Slot \c "volume.emission_intensity"
+    SLOT_GEOMETRY_DISPLACEMENT,           ///< Slot \c "geometry.displacement"
+    SLOT_GEOMETRY_CUTOUT_OPACITY,         ///< Slot \c "geometry.cutout_opacity"
+    SLOT_GEOMETRY_NORMAL,                 ///< Slot \c "geometry.normal"
+    SLOT_HAIR,                            ///< Slot \c "hair"
     SLOT_FIRST = SLOT_THIN_WALLED,        ///< First slot
     SLOT_LAST  = SLOT_HAIR,               ///< Last slot
     SLOT_FORCE_32_BIT = 0xffffffffU
@@ -73,14 +73,17 @@ enum Material_slot {
 
 mi_static_assert( sizeof( Material_slot) == sizeof( mi::Uint32));
 
-/// The compiled material's opacity.
+/// The opacity of a compiled material.
 ///
 /// See #mi::neuraylib::ICompiled_material::get_opacity() and
 /// #mi::neuraylib::ICompiled_material::get_surface_opacity().
 enum Material_opacity {
-    OPACITY_OPAQUE,                     ///< material is opaque
-    OPACITY_TRANSPARENT,                ///< material is transparent
-    OPACITY_UNKNOWN,                    ///< material might be transparent
+    /// The material is opaque.
+    OPACITY_OPAQUE,
+    /// The material is transparent.
+    OPACITY_TRANSPARENT,
+    /// The opacity of the material is unknown, e.g., because it depends on parameters.
+    OPACITY_UNKNOWN,
     OPACITY_FORCE_32_BIT = 0xffffffffU
 };
 
@@ -89,9 +92,9 @@ mi_static_assert( sizeof( Material_opacity) == sizeof( mi::Uint32));
 /// This interface represents a compiled material.
 ///
 /// A compiled material is a canonical representation of a material instance including all its
-/// arguments (constants and call expressions). In this canonical representation, all function calls
-/// are folded into one expression and common subexpressions are identified (denoted as \em
-/// temporaries here).
+/// arguments (constants and call expressions). In this canonical representation, all function
+/// calls are (if possible) folded into one expression and common subexpressions are identified
+/// (denoted as \em temporaries here).
 ///
 /// Note that there are two modes to create compiled materials: instance compilation and class
 /// compilation. In instance compilation mode all arguments of the material instance, i.e., the
@@ -117,20 +120,19 @@ class ICompiled_material : public
                                 neuraylib::IScene_element>
 {
 public:
-    /// \name Common methods related to instance and class compilation
+    /// \name Material body and temporaries
     //@{
 
-    /// Returns the direct call expression that represents the body of the compiled material.
+    /// Returns the body (or material root) of the compiled material.
     virtual const IExpression_direct_call* get_body() const = 0;
 
-    /// Returns the number of temporaries used by this compiled material.
+    /// Returns the number of temporaries.
     virtual Size get_temporary_count() const = 0;
 
-    /// Returns the expression of a temporary.
+    /// Returns a temporary.
     ///
-    /// \param index            The index of the temporary.
-    /// \return                 The expression of the temporary, or \c NULL if \p index is out of
-    ///                         range.
+    /// \param index   The index of the temporary.
+    /// \return        The expression of the temporary, or \c NULL if \p index is out of range.
     virtual const IExpression* get_temporary( Size index) const = 0;
 
     /// Returns the expression of a temporary.
@@ -141,10 +143,9 @@ public:
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template parameter.
     ///
-    /// \tparam T               The interface type of the requested element.
-    /// \param index            The index of the temporary.
-    /// \return                 The expression of the temporary, or \c NULL if \p index is out of
-    ///                         range.
+    /// \tparam T      The interface type of the requested temporary.
+    /// \param index   The index of the temporary.
+    /// \return        The expression of the temporary, or \c NULL if \p index is out of range.
     template<class T>
     const T* get_temporary( Size index) const
     {
@@ -156,54 +157,53 @@ public:
         return ptr_T;
     }
 
-    /// Returns the conversion ration between meters and scene units for this material.
-    virtual Float32 get_mdl_meters_per_scene_unit() const = 0;
-
-    /// Returns the smallest supported wavelength.
-    virtual Float32 get_mdl_wavelength_min() const = 0;
-
-    /// Returns the largest supported wavelength.
-    virtual Float32 get_mdl_wavelength_max() const = 0;
-
-    /// Indicates whether this material depends on coordinate space transformations like
-    /// \c %state::transform() and related functions.
-    virtual bool depends_on_state_transform() const = 0;
-
-    /// Indicates whether this material depends on \c state::object_id().
-    virtual bool depends_on_state_object_id() const = 0;
-
-    /// Indicates whether this material depends on global distribution (edf).
-    virtual bool depends_on_global_distribution() const = 0;
-
-    /// Indicates whether this material depends on uniform scene data.
-    virtual bool depends_on_uniform_scene_data() const = 0;
-
-    /// Returns the number of scene data attributes referenced by this instance.
-    virtual Size get_referenced_scene_data_count() const = 0;
-
-    /// Return the name of a scene data attribute referenced by this instance.
+    /// Looks up a sub-expression of the compiled material.
     ///
-    /// \param index  the index of the scene data attribute
-    virtual const char* get_referenced_scene_data_name( Size index) const = 0;
+    /// \param path    The path from the material root to the expression that should be returned,
+    ///                e.g., \c "surface.scattering.tint".
+    /// \return        A sub-expression for \p expr according to \p path, or \c NULL in case of
+    ///                errors.
+    virtual const IExpression* lookup_sub_expression( const char* path) const = 0;
+
+    /// Indicates whether the compiled material is valid.
+    ///
+    /// A compiled material becomes invalid, if any of the modules it uses definitions from has
+    /// has been reloaded.
+    ///
+    /// \param context     In case of failure, the execution context can be checked for error
+    ///                    messages. Can be \c NULL.
+    virtual bool is_valid( IMdl_execution_context* context) const = 0;
 
     //@}
-    /// \name Additional methods related to class compilation
+    /// \name Parameters and arguments (class compilation mode only)
     //@{
 
     /// Returns the number of parameters used by this compiled material.
+    ///
+    /// Parameters and arguments only exist in class compilation mode. This method always returns 0
+    /// in instance compilation mode.
     virtual Size get_parameter_count() const = 0;
 
     /// Returns the name of a parameter.
     ///
-    /// Note that the parameter name is only available if the corresponding parameter of the
-    /// original material instance has a constant as argument. If that argument is a call,
-    /// \c NULL is returned.
+    /// In class compilation mode, the parameters are named according to the path to the
+    /// corresponding node in the open material graph that served as basis for the compiled
+    /// material. For example, the path \c "a.b.x" refers to a parameter named \c "x" on a node
+    /// connected to a parameter named \c "b" on a node connected to the parameter \c "a" of the
+    /// material instance that has been compiled.
+    ///
+    /// Note that these paths here correspond to the open material graph that served as basis for
+    /// the compiled material, and not to the structure of the resulting compiled material, as it
+    /// is the case for #lookup_sub_expression() or #get_sub_expression_hash().
+    ///
+    /// \param index   The index of the parameter.
+    /// \return        The name of the parameter, or \c NULL if \p index is out of range.
     virtual const char* get_parameter_name( Size index) const = 0;
 
     /// Returns the value of an argument.
     ///
-    /// \param index            The index of the argument.
-    /// \return                 The value of the argument, or \c NULL if \p index is out of range.
+    /// \param index   The index of the argument.
+    /// \return        The value of the argument, or \c NULL if \p index is out of range.
     virtual const IValue* get_argument( Size index) const = 0;
 
     /// Returns the value of an argument.
@@ -214,9 +214,9 @@ public:
     /// on the returned pointer, since the return type already is a pointer to the type \p T
     /// specified as template argument.
     ///
-    /// \tparam T               The interface type of the requested element
-    /// \param index            The index of the argument.
-    /// \return                 The value of the argument, or \c NULL if \p index is out of range.
+    /// \tparam T      The interface type of the requested element
+    /// \param index   The index of the argument.
+    /// \return        The value of the argument, or \c NULL if \p index is out of range.
     template<class T>
     const T* get_argument( Size index) const
     {
@@ -228,123 +228,153 @@ public:
         return ptr_T;
     }
 
-    /// Returns a hash of the body and all temporaries.
+    /// Looks up the DB name of a function call connected to the argument of a compiled material.
     ///
-    /// The hash allows to quickly identify compiled materials that have the same body,
-    /// temporaries, and parameter names. Note that the arguments are not included in the hash
-    /// value.
-    ///
-    /// \note For performance reasons, the hash for resources does not include the actual resource
-    ///       data, but certain properties to identify resources: If the absolute MDL file path is
-    ///       available, it is used (including the gamma value and selector for textures). If the
-    ///       absolute MDL file path is not available, some internal IDs that identify the resource
-    ///       in the database are used instead. \n
-    ///       For the latter case, the following applies: If two otherwise identical materials share
-    ///       a resource (in the sense of there is one and only one DB element for that resource),
-    ///       then their hash is also identical. But if the materials use distinct (but otherwise
-    ///       identical) copies of the same DB element, then their IDs are different, resulting in
-    ///       different hashes. IDs are also different if a module is removed from the database, and
-    ///       later loaded again. IDs might be different if the module is loaded in different
-    ///       processes.
-    ///
-    /// \see #get_slot_hash() for hashes for individual material slots
-    virtual base::Uuid get_hash() const = 0;
-
-    /// Returns the hash of a particular material slot.
-    ///
-    /// The hash allows to quickly identify compiled materials that have the same body,
-    /// temporaries, and parameter names. Note that the arguments are not included in the hash
-    /// value.
-    ///
-    /// \note For performance reasons, the hash for resources does not include the actual resource
-    ///       data, but certain properties to identify resources: If the absolute MDL file path is
-    ///       available, it is used (including the gamma value and selector for textures). If the
-    ///       absolute MDL file path is not available, some internal IDs that identify the resource
-    ///       in the database are used instead. \n
-    ///       For the latter case, the following applies: If two otherwise identical materials share
-    ///       a resource (in the sense of there is one and only one DB element for that resource),
-    ///       then their hash is also identical. But if the materials use distinct (but otherwise
-    ///       identical) copies of the same DB element, then their IDs are different, resulting in
-    ///       different hashes. IDs are also different if a module is removed from the database, and
-    ///       later loaded again. IDs might be different if the module is loaded in different
-    ///       processes.
-    ///
-    /// \see #get_hash() for a hash covering all slots together
-    virtual base::Uuid get_slot_hash( Material_slot slot) const = 0;
-
-    /// Looks up a sub-expression of the compiled material.
-    ///
-    /// \param path            The path from the material root to the expression that should be
-    ///                        returned, e.g., \c "surface.scattering.tint".
-    /// \return                A sub-expression for \p expr according to \p path, or \c NULL in case
-    ///                        of errors.
-    virtual const IExpression* lookup_sub_expression( const char* path) const = 0;
-
-
-    /// Looks up the database name of the mdl instance connected to the argument of a compiled
-    /// material.
-    ///
-    /// The parameters on the compiled material in class compilation mode can have more complex
-    /// names if a shade graph has been compiled. The name corresponds to a path through the shade
-    /// graph identifying a node and a parameter on that node whose value should be passed into
-    /// the parameter of the compiled result. For example, the path "a.b.x" refers to a parameter
-    /// named x on a node connected to a parameter named b on a node connected to the parameter a
-    /// of the material that has been compiled.
-    /// \param material_instance_name   The name of the material instance this material was
+    /// \param material_instance_name   The name of the material instance this compiled material was
     ///                                 compiled from.
-    /// \param parameter_index          The index of the parameter for which the database name of
-    ///                                 the connected function is to be looked up (e.g. if the
-    ///                                 compiled material has a parameter named \c "tint.s.texture"
-    ///                                 the function returns the database name of the function
-    ///                                 connected to the tint parameter.
+    /// \param parameter_index          The index of the parameter for which the DB name of the
+    ///                                 connected function call is to be looked up. For example, if
+    ///                                 the compiled material has a parameter named \c
+    ///                                 "tint.s.texture" the function returns DB name of the
+    ///                                 function connected to the tint parameter.
     /// \param errors                   An optional pointer to an #mi::Sint32 to which an error
-    ///                                    code will be written. The error codes have the following
-    ///                                    meaning:
-    ///                                    -  0: Success.
-    ///                                    - -1: The parameter material_instance_name is \c NULL or
-    ///                                          a material instance of that name does not exist in
-    ///                                          the database.
-    ///                                    - -2: The given parameter index exceeds the parameter
-    ///                                          count of the compiled material.
-    ///                                    - -3: The function could not be found in the database.
-    ///                                          This might be due to the fact that the given
-    ///                                          parameter is not connected to a function or the
-    ///                                          material instance has been changed after the
-    ///                                          creation of this compiled material.
-    /// \return The database name of the connected function or \c NULL in case an error occurred.
+    ///                                 code will be written. The error codes have the following
+    ///                                 meaning:
+    ///                                 -  0: Success.
+    ///                                 - -1: \p material_instance_name is \c NULL,
+    ///                                       or there is no material instance of that name.
+    ///                                 - -2: \p parameter_index is out of bounds.
+    ///                                 - -3: The corresponding function call could not be found in
+    ///                                       the database. This might be due to the fact that the
+    ///                                       given parameter is not connected to a function or the
+    ///                                       material instance has been changed after the creation
+    ///                                       of this compiled material.
+    /// \return                         The DB name of the connected function call, or \c NULL in
+    ///                                 case of errors.
     virtual const IString* get_connected_function_db_name(
         const char* material_instance_name,
         Size parameter_index,
         Sint32* errors = 0) const = 0;
 
-    /// Returns the opacity of the material.
+    //@}
+    /// \name Properties of the compiled material
+    //@{
+
+    /// Returns the conversion ration between meters and scene units.
+    virtual Float32 get_mdl_meters_per_scene_unit() const = 0;
+
+    /// Returns the smallest supported wavelength.
+    virtual Float32 get_mdl_wavelength_min() const = 0;
+
+    /// Returns the largest supported wavelength.
+    virtual Float32 get_mdl_wavelength_max() const = 0;
+
+    /// Returns the opacity of the compiled material.
     ///
-    /// First, the cutout_opacity is checked. In case of opaque
-    /// materials it is checked if a transmissive BSDF is present in the \c surface.scattering
-    /// slot of the material.
+    /// The method returns #OPACITY_TRANSPARENT if the cutout opacity is a constant and less than
+    /// 1.0. Otherwise it checks whether a transmissive BSDF is present in the \c surface.scattering
+    /// slot.
+    ///
+    /// See #get_surface_opacity() for a variant ignoring the cutout opacity, and
+    /// #get_cutout_opacity() to retrieve the cutout opacity itself.
     virtual Material_opacity get_opacity() const = 0;
 
-    /// Returns the surface opacity of the material by checking, if a
-    /// transmissive BSDF is present in the \c surface.scattering slot of
-    /// the material.
+    /// Returns the surface opacity of the compiled material.
+    ///
+    /// The methods checks whether a transmissive BSDF is present in the \c surface.scattering slot.
+    ///
+    /// See #get_opacity() for a variant taking the cutout opacity into account, and
+    /// #get_cutout_opacity() to retrieve the cutout opacity itself.
     virtual Material_opacity get_surface_opacity() const = 0;
 
-    /// Returns the cutout opacity of the material if it is constant.
+    /// Returns the cutout opacity (provided it is a constant).
     ///
-    /// \param[out] cutout_opacity  get the cutout_opacity value of the material
+    /// \see #get_opacity() and #get_surface_opacity()
     ///
-    /// \return \c true in case of success, \c false if the value is not a constant, but depends on
-    ///          parameters or complex user expressions
+    /// \param[out] cutout_opacity  The cutout opacity value in case of success.
+    /// \return                     \c true in case of success, \c false if the value is not a
+    ///                             constant, but depends on parameters or complex user expressions.
+
     virtual bool get_cutout_opacity( Float32* cutout_opacity) const = 0;
 
-    /// Returns \c true, if the compiled material is valid, \c false otherwise.
+    /// Returns the number of scene data attributes referenced by this compiled material.
+    virtual Size get_referenced_scene_data_count() const = 0;
+
+    /// Return the name of a scene data attribute referenced by this compiled material.
     ///
-    /// \param context     In case of failure, the execution context can be checked for error
-    ///                    messages. Can be \c NULL.
+    /// \param index   The index of the scene data attribute.
+    virtual const char* get_referenced_scene_data_name( Size index) const = 0;
+
+    /// Indicates whether the compiled material depends on coordinate space transformations like
+    /// \c %state::transform() and related functions.
+    virtual bool depends_on_state_transform() const = 0;
+
+    /// Indicates whether the compiled material depends on \c state::object_id().
+    virtual bool depends_on_state_object_id() const = 0;
+
+    /// Indicates whether the compiled material depends on global distribution (edf).
+    virtual bool depends_on_global_distribution() const = 0;
+
+    /// Indicates whether the compiled material depends on uniform scene data.
+    virtual bool depends_on_uniform_scene_data() const = 0;
+
+    //@}
+    /// \name Hash values of the compiled material or parts thereof
+    //@{
+
+    /// Returns a hash of the body and all temporaries.
     ///
-    /// A compiled material becomes invalid, if any of the modules it uses definitions from has
-    /// has been reloaded.
-    virtual bool is_valid( IMdl_execution_context* context) const = 0;
+    /// The hash allows to quickly identify compiled materials that have the same body, temporaries,
+    /// and parameter names. Note that the arguments themselves are not included in the hash value.
+    ///
+    /// \note For performance reasons, the hash for resources does not include the actual resource
+    ///       data, but certain properties to identify resources: If the absolute MDL file path is
+    ///       available, it is used (including the gamma value and selector for textures). If the
+    ///       absolute MDL file path is not available, some internal IDs that identify the resource
+    ///       in the database are used instead. \n
+    ///       For the latter case, the following applies: If two otherwise identical compiled
+    ///       materials share a resource (in the sense of there is one and only one DB element for
+    ///       that resource), then their hash is also identical. But if the compiled materials use
+    ///       distinct (but otherwise identical) copies of the same DB element, then their IDs are
+    ///       different, resulting in different hashes. IDs are also different if a module is
+    ///       removed from the database, and later loaded again. IDs might be different if the
+    ///       module is loaded in different processes.
+    ///
+    /// \see #get_slot_hash() for hashes of predefined material slots, and
+    ///      #get_sub_expression_hash() for hashes of arbitrary subexpressions
+    virtual base::Uuid get_hash() const = 0;
+
+    /// Returns the hash of a particular material slot.
+    ///
+    /// The hash allows to quickly identify compiled materials where a particular material slot
+    /// is identical (corresponding parts of the body and temporaries, and all parameter names).
+    /// Note that the arguments themselves are not included in the hash value. See #get_hash()
+    /// for details about resources.
+    ///
+    /// \see #get_hash() for a hash covering all slots in one hash value, and
+    ///      #get_sub_expression_hash() for hashes of arbitrary subexpressions
+    virtual base::Uuid get_slot_hash( Material_slot slot) const = 0;
+
+    /// Returns the hash of a sub-expression of the compiled material.
+    ///
+    /// The hash allows to quickly identify compiled materials where a particular sub-expression
+    /// is identical (corresponding parts of the body and temporaries, and all parameter names).
+    /// Note that the arguments themselves are not included in the hash value. See #get_hash() for
+    /// details about resources.
+    ///
+    /// \note This hash value is computed on-demand, unless the path corresponds to one of the
+    ///       predefined material slots, for which the method simply returns the precomputed hash
+    ///       value.
+    ///
+    /// \see #get_hash() for a hash covering all slots in one hash value, and #get_slot_hash()
+    ///      for hashes of predefined material slots
+    ///
+    /// \param path            The path from the material root to the expression that should be
+    ///                        hashed, e.g., \c "surface.scattering.tint". An empty path can be
+    ///                        used to identify the entire compiled material.
+    /// \return                A hash for the sub-expression identified by \p path, or
+    ///                        default-constructed in case invalid paths.
+    virtual base::Uuid get_sub_expression_hash( const char* path) const = 0;
 
     //@}
 };

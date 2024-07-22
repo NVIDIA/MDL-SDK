@@ -285,6 +285,7 @@ int MAIN_UTF8(int argc, char* argv[])
                 /*enable_axuiliary_output*/ false,
                 /*enable_pdf*/ true,
                 /*use_adapt_normal*/ false,
+                /*enable_bsdf_flags*/ false,
                 /*df_handle_mode*/ "none",
                 /*lambda_return_mode*/ "sret");
 

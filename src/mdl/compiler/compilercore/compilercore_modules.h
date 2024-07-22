@@ -231,33 +231,33 @@ public:
     bool is_valid() const MDL_FINAL;
 
     /// Get the number of imported modules.
-    int get_import_count() const MDL_FINAL;
+    size_t get_import_count() const MDL_FINAL;
 
     /// Get the imported module at index.
     ///
     /// \param index        The index of the imported module.
     /// \returns            The imported Module.
     ///
-    Module const *get_import(int index) const MDL_FINAL MDL_WARN_UNUSED_RESULT;
+    MDL_CHECK_RESULT Module const *get_import(size_t index) const MDL_FINAL;
 
     /// Get the number of exported definitions.
     ///
     /// \returns The number of exported definitions.
     ///
-    int get_exported_definition_count() const MDL_FINAL;
+    size_t get_exported_definition_count() const MDL_FINAL;
 
     /// Get the exported definition at index.
     ///
     /// \param index    The index of the exported definition.
     /// \returns        The exported definition at index.
     ///
-    Definition const *get_exported_definition(int index) const MDL_FINAL;
+    Definition const *get_exported_definition(size_t index) const MDL_FINAL;
 
     /// Get the number of declarations.
-    int get_declaration_count() const MDL_FINAL;
+    size_t get_declaration_count() const MDL_FINAL;
 
     /// Get the declaration at index.
-    IDeclaration const *get_declaration(int index) const MDL_FINAL;
+    IDeclaration const *get_declaration(size_t index) const MDL_FINAL;
 
     /// Add a declaration.
     void add_declaration(IDeclaration const *decl) MDL_FINAL;
@@ -356,13 +356,13 @@ public:
     /// Get the number of builtin definitions.
     ///
     /// \returns The number of builtin definitions if this is the builtin module, else 0.
-    int get_builtin_definition_count() const MDL_FINAL;
+    size_t get_builtin_definition_count() const MDL_FINAL;
 
     /// Get the builtin definition at index.
     ///
     /// \param index    The index of the builtin definition.
     /// \returns        The exported definition at index.
-    IDefinition const *get_builtin_definition(int index) const MDL_FINAL;
+    IDefinition const *get_builtin_definition(size_t index) const MDL_FINAL;
 
     /// Returns true if this is a module from the standard library.
     bool is_stdlib() const MDL_FINAL;
@@ -605,6 +605,11 @@ public:
     /// \param type  the type to import
     const IType *import_type(const IType *type);
 
+    /// Import a struct category from another module.
+    ///
+    /// \param cat  the struct category to import
+    IStruct_category const *import_struct_category(IStruct_category const *cat);
+
     /// Import a value from another module.
     ///
     /// \param value  the value to import
@@ -660,7 +665,7 @@ public:
     ///
     /// \param expr      the expression to clone
     /// \param modifier  an optional clone modifier, may be NULL
-    IExpression *clone_expr(
+    MDL_CHECK_RESULT IExpression *clone_expr(
         IExpression const *expr,
         IClone_modifier   *modifier);
 
@@ -668,7 +673,7 @@ public:
     ///
     /// \param arg       the argument to clone
     /// \param modifier  an optional clone modifier, may be NULL
-    IArgument const *clone_arg(
+    MDL_CHECK_RESULT IArgument const *clone_arg(
         IArgument const *arg,
         IClone_modifier *modifier);
 
@@ -676,20 +681,21 @@ public:
     ///
     /// \param type_name  the type name to clone
     /// \param modifier   an optional clone modifier, may be NULL
-    IType_name *clone_name(
+    MDL_CHECK_RESULT IType_name *clone_name(
         IType_name const *type_name,
         IClone_modifier  *modifier);
 
     /// Clone the given simple name.
     ///
     /// \param sname  the name to clone
-    ISimple_name const *clone_name(ISimple_name const *sname);
+    MDL_CHECK_RESULT ISimple_name const *clone_name(
+        ISimple_name const *sname);
 
     /// Clone the given qualified name.
     ///
     /// \param qname  the qualified name
     /// \param modifier   an optional clone modifier, may be NULL
-    IQualified_name *clone_name(
+    MDL_CHECK_RESULT IQualified_name *clone_name(
         IQualified_name const *qname,
         IClone_modifier       *modifier);
 
@@ -699,7 +705,7 @@ public:
     /// \param clone_init if true, the init expression is cloned
     /// \param clone_anno if true, the annotations are cloned
     /// \param modifier   an optional clone modifier, may be NULL
-    IParameter const *clone_param(
+    MDL_CHECK_RESULT IParameter const *clone_param(
         IParameter const   *param,
         bool               clone_init,
         bool               clone_anno,
@@ -709,7 +715,7 @@ public:
     ///
     /// \param decl       the variable declaration to clone
     /// \param modifier   an optional clone modifier, may be NULL
-    IDeclaration *clone_decl(
+    MDL_CHECK_RESULT IDeclaration *clone_decl(
         IDeclaration_variable const *decl,
         IClone_modifier             *modifier);
 
@@ -717,7 +723,7 @@ public:
     ///
     /// \param anno_block the annotation block to clone
     /// \param modifier   an optional clone modifier, may be NULL
-    IAnnotation_block *clone_annotation_block(
+    MDL_CHECK_RESULT IAnnotation_block *clone_annotation_block(
         IAnnotation_block const *anno_block,
         IClone_modifier         *modifier);
 
@@ -725,7 +731,7 @@ public:
     ///
     /// \param anno       the annotation to clone
     /// \param modifier   an optional clone modifier, may be NULL
-    IAnnotation *clone_annotation(
+    MDL_CHECK_RESULT IAnnotation *clone_annotation(
         IAnnotation const *anno,
         IClone_modifier   *modifier);
 
@@ -923,7 +929,7 @@ public:
     /// Get the compiler of this module.
     ///
     /// \return the compiler, refcount increased
-    MDL *get_compiler() const;
+    MDL_CHECK_RESULT MDL *get_compiler() const;
 
     /// Enter a new semantic version for given module.
     ///
@@ -1135,7 +1141,7 @@ private:
     /// \param idx  the import index
     ///
     /// \returns the import entry, NULL if idx is out of range.
-    Import_entry const *get_import_entry(size_t idx) const;
+    MDL_CHECK_RESULT Import_entry const *get_import_entry(size_t idx) const;
 
     /// Get the import index plus 1 for a given (already imported) module.
     ///

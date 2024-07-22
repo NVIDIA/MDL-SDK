@@ -33,16 +33,18 @@
 #include <map>
 #include <set>
 #include <memory>
+#include <filesystem>
+
 #include <base/lib/tinyxml2/tinyxml2.h>
 #include <base/system/main/access_module.h>
 #include <base/lib/path/i_path.h>
 #include <base/hal/hal/i_hal_ospath.h>
-#include <base/hal/disk/disk.h>
 #include <base/lib/log/i_log_assert.h>
 #include <base/util/string_utils/i_string_utils.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/system/main/module_registration.h>
 #include <mdl/integration/mdlnr/i_mdlnr.h>
+
 #include <mi/mdl/mdl_mdl.h>
 #include <mi/mdl/mdl_archiver.h>
 #include <mi/mdl/mdl_streams.h>
@@ -56,6 +58,8 @@ using tinyxml2::XMLDocument;
 
 typedef string Qualified_name;
 typedef string Folder;
+
+namespace fs = std::filesystem;
 
 bool has_ending(const string & full_string, const string & ending)
 {
@@ -96,59 +100,57 @@ bool has_beginning(const string & full_string, const string & beginning)
 class File_discovery
 {
 public:
-    /// Search files with ending (e.g. "_fr.xlf") in the given folder 
+    /// Search files with ending (e.g. "_fr.xlf") in the given folder
     void discover(
         const string & suffix
-        , const string & folder
+        , const fs::path & folder
         , vector<string> & filenames
         , bool recursive = false
         , string prefix = "" // File name must match some of this prefix
     ) const
     {
-        string path = MI::HAL::Ospath::normpath_v2(folder);
+        try {
 
-        if (!MI::DISK::access(path.c_str(), false))
-            return;
+            if (!fs::is_directory(folder))
+                return;
 
-        // Collect all archives
-        MI::DISK::Directory dir;
-        if (!dir.open(path.c_str()))
-            return;
-
-        string entry = dir.read();
-        while (!entry.empty())
-        {
-            string entry_path(MI::HAL::Ospath::join(path, entry));
-            if (MI::DISK::is_file(entry_path.c_str()))
+            // Collect all archives
+            for (const auto& entry_path: fs::directory_iterator(folder))
             {
-                // Search for pattern in the filename
-                if (has_ending(entry_path, suffix))
+                if (fs::is_regular_file(entry_path))
                 {
-                    // Text prefix
-                    bool ok(true);
-                    if (!prefix.empty())
+                    // Search for pattern in the filename
+                    string entry = entry_path.path().filename().u8string();
+                    if (has_ending(entry, suffix))
                     {
-                        string test(entry.substr(0, entry.length() - suffix.length()));
-                        size_t idx = prefix.find(test);
-                        if (idx != 0)
+                        // Text prefix
+                        bool ok(true);
+                        if (!prefix.empty())
                         {
-                            ok = false;
+                            string test(entry.substr(0, entry.length() - suffix.length()));
+                            size_t idx = prefix.find(test);
+                            if (idx != 0)
+                            {
+                                ok = false;
+                            }
+                        }
+                        if (ok)
+                        {
+                            filenames.push_back(entry_path.path().u8string());
                         }
                     }
-                    if (ok)
-                    {
-                        filenames.push_back(entry_path);
-                    }
+                }
+                else if (recursive && fs::is_directory(entry_path))
+                {
+                    discover(suffix, entry_path.path(), filenames, recursive);
                 }
             }
-            else if (recursive && MI::DISK::is_directory(entry_path.c_str()))
-            {
-                discover(suffix, entry_path, filenames, recursive);
-            }
 
-            entry = dir.read();
+        } catch(...) {
+            // nothing to do
         }
     }
+
     /// Search the list of folders
     void discover(
         const string & pattern
@@ -159,7 +161,7 @@ public:
     {
         for (const string & folder : folders)
         {
-            discover(pattern, folder, filenames, recursive);
+            discover(pattern, fs::u8path(folder), filenames, recursive);
         }
     }
     void discover_archives(
@@ -176,7 +178,7 @@ public:
         {
             prefix = prefix.substr(1);
         }
-        discover(".mdr", folder, filenames, false /*recursive*/, prefix);
+        discover(".mdr", fs::u8path(folder), filenames, false /*recursive*/, prefix);
     }
 };
 
@@ -385,7 +387,12 @@ public:
         }
         else
         {
-            return MI::DISK::is_file(m_filename.c_str());
+            try {
+                return fs::is_regular_file(fs::u8path(m_filename));
+            } catch (...) {
+                return false;
+            }
+
         }
         return false;
     }

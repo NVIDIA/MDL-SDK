@@ -630,7 +630,7 @@ bool Optimizer::is_swizzle(
 
 static size_t swizzle_pos(char c)
 {
-    // ง 5.5 Vector Components
+    // ยง 5.5 Vector Components
     //
     // The component names supported are :
     // {x, y, z, w} Useful when accessing vectors that represent points or normals

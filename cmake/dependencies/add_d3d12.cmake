@@ -44,9 +44,15 @@ if(NOT MDL_ENABLE_D3D12_EXAMPLES)
 else()
 
     # headers
+    if(MDL_AGILITY_SDK_FOUND AND AGILITY_SDK_ENABLED)
+        set(D3D12_INCLUDES ${MDL_DEPENDENCY_AGILITY_SDK_INCLUDE})
+    else()
+        set(D3D12_INCLUDES ${MDL_DEPENDENCY_D3D12_INCLUDE})
+    endif()
+
     target_include_directories(${__TARGET_ADD_DEPENDENCY_TARGET} 
         PRIVATE
-            ${MDL_DEPENDENCY_D3D12_INCLUDE}
+            ${D3D12_INCLUDES}
             ${MDL_DEPENDENCY_DXGI_INCLUDE}
             ${MDL_DEPENDENCY_WINRT_INCLUDE}
         )
@@ -65,4 +71,14 @@ else()
                 ${MDL_DEPENDENCY_D3D12_SHARED}
             )
     endif()
+
+    # copy the agility sdk
+    if(MDL_AGILITY_SDK_FOUND AND AGILITY_SDK_ENABLED)
+        target_copy_to_output_dir(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
+            DEST_SUBFOLDER "D3D12"
+            FILES
+                ${MDL_DEPENDENCY_AGILITY_SDK_SHARED}
+            )
+    endif()
+
 endif()

@@ -33,7 +33,6 @@ set(PROJECT_NAME base-system-stlext)
 create_unit_test(
     SOURCES
         ../test.cpp
-        ../test_any.cpp
         ../test_restore.cpp
         ../test_safe_cast.cpp
     DEPENDS

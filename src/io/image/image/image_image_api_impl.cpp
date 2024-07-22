@@ -40,12 +40,14 @@
 #include <mi/neuraylib/ibuffer.h>
 #include <mi/neuraylib/icanvas.h>
 #include <mi/neuraylib/iimage_plugin.h>
+#include <mi/neuraylib/imap.h>
 #include <mi/neuraylib/version.h>
 
-#include <base/system/stlext/i_stlext_likely.h>
-#include <base/util/string_utils/i_string_lexicographic_cast.h>
-#include <base/lib/log/i_log_logger.h>
+#include <base/data/idata/i_idata_factory.h>
 #include <base/hal/disk/disk_memory_reader_writer_impl.h>
+#include <base/lib/log/i_log_logger.h>
+#include <base/lib/log/i_log_utilities.h>
+#include <base/util/string_utils/i_string_lexicographic_cast.h>
 
 #include "i_image.h"
 #include "i_image_access_canvas.h"
@@ -199,22 +201,34 @@ mi::neuraylib::IBuffer* Image_api_impl::create_buffer_from_canvas(
     const mi::neuraylib::ICanvas* canvas,
     const char* image_format,
     const char* pixel_type,
-    const char* quality,
-    bool force_default_gamma) const
+    const mi::IMap* export_options) const
 {
     if( !canvas || !image_format || !pixel_type)
         return nullptr;
 
-    STLEXT::Likely<mi::Uint32> quality_likely = STRING::lexicographic_cast_s<mi::Uint32>( quality);
-    if( !quality_likely.get_status())
+    return m_image_module->create_buffer_from_canvas(
+        canvas, image_format, pixel_type, export_options);
+}
+
+mi::neuraylib::IBuffer* Image_api_impl::deprecated_create_buffer_from_canvas(
+    const mi::neuraylib::ICanvas* canvas,
+    const char* image_format,
+    const char* pixel_type,
+    const char* quality,
+    bool force_default_gamma) const
+{
+    std::optional<mi::Uint32> quality_optional = STRING::lexicographic_cast_s<mi::Uint32>( quality);
+    if( !quality_optional.has_value())
         return nullptr;
 
-    const mi::Uint32 quality_uint32 = *quality_likely.get_ptr(); //-V522 PVS
+    const mi::Uint32 quality_uint32 = quality_optional.value();
     if( quality_uint32 > 100)
         return nullptr;
 
-    return m_image_module->create_buffer_from_canvas(
-        canvas, image_format, pixel_type, quality_uint32, force_default_gamma);
+    mi::base::Handle<mi::IMap> export_options(
+         m_image_module->convert_legacy_options( quality_uint32, force_default_gamma));
+
+    return create_buffer_from_canvas( canvas, image_format, pixel_type, export_options.get());
 }
 
 mi::neuraylib::ICanvas* Image_api_impl::create_canvas_from_buffer(
@@ -333,8 +347,92 @@ mi::Sint32 Image_api_impl::shutdown()
     return 0;
 }
 
+Logging_configuration_impl::Logging_configuration_impl()
+  : m_forwarding_logger( new LOG::Forwarding_logger)
+{
+}
+
+void Logging_configuration_impl::set_receiving_logger( mi::base::ILogger* logger)
+{
+    ASSERT( M_IMAGE, !"not implemented by this implementation");
+}
+
+mi::base::ILogger* Logging_configuration_impl::get_receiving_logger() const
+{
+    ASSERT( M_IMAGE, !"not implemented by this implementation");
+    return nullptr;
+}
+
+mi::base::ILogger* Logging_configuration_impl::get_forwarding_logger() const
+{
+    m_forwarding_logger->retain();
+    return m_forwarding_logger.get();
+}
+
+mi::Sint32 Logging_configuration_impl::set_log_level( mi::base::Message_severity level)
+{
+    ASSERT( M_IMAGE, !"not implemented by this implementation");
+    return -1;
+}
+
+mi::base::Message_severity Logging_configuration_impl::get_log_level() const
+{
+    ASSERT( M_IMAGE, !"not implemented by this implementation");
+    return mi::base::MESSAGE_SEVERITY_INFO;
+}
+
+mi::Sint32 Logging_configuration_impl::set_log_level_by_category(
+    const char* category, mi::base::Message_severity level)
+{
+    ASSERT( M_IMAGE, !"not implemented by this implementation");
+    return -1;
+}
+
+mi::base::Message_severity Logging_configuration_impl::get_log_level_by_category(
+    const char* category) const
+{
+    ASSERT( M_IMAGE, !"not implemented by this implementation");
+    return mi::base::MESSAGE_SEVERITY_INFO;
+}
+
+void Logging_configuration_impl::set_log_prefix( mi::Uint32 prefix)
+{
+    ASSERT( M_IMAGE, !"not implemented by this implementation");
+}
+
+mi::Uint32 Logging_configuration_impl::get_log_prefix() const
+{
+    ASSERT( M_IMAGE, !"not implemented by this implementation");
+    return 0;
+}
+
+mi::Sint32 Logging_configuration_impl::set_log_priority( mi::Sint32 priority)
+{
+    ASSERT( M_IMAGE, !"not implemented by this implementation");
+    return -1;
+}
+
+mi::Sint32 Logging_configuration_impl::get_log_priority() const
+{
+    ASSERT( M_IMAGE, !"not implemented by this implementation");
+    return 0;
+}
+
+mi::Sint32 Logging_configuration_impl::set_log_locally( bool value)
+{
+    ASSERT( M_IMAGE, !"not implemented by this implementation");
+    return -1;
+}
+
+bool Logging_configuration_impl::get_log_locally() const
+{
+    ASSERT( M_IMAGE, !"not implemented by this implementation");
+    return false;
+}
+
 Plugin_api_impl::Plugin_api_impl( IMAGE::Image_module* image_module)
 {
+    m_logging_configuration = new Logging_configuration_impl;
     m_image_api = new Image_api_impl( image_module);
 }
 
@@ -352,6 +450,11 @@ const char* Plugin_api_impl::get_version() const
 mi::base::IInterface* Plugin_api_impl::get_api_component(
     const mi::base::Uuid& uuid) const
 {
+    if( uuid == mi::neuraylib::ILogging_configuration::IID()) {
+        m_logging_configuration->retain();
+        return m_logging_configuration.get();
+    }
+
     if( uuid == mi::neuraylib::IImage_api::IID()) {
         m_image_api->retain();
         return m_image_api.get();

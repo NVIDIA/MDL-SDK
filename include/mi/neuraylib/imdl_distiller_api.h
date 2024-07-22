@@ -179,11 +179,11 @@ public:
     /// \param material           The material to be distilled.
     /// \param target             The target model. See #get_target_count() and #get_target_name().
     /// \param distiller_options  Options for the distiller. Supported options are:
-    ///       - \c "top_layer_weight" of type \c mi::IFloat32. This weight is given to the top 
+    ///       - \c "top_layer_weight" of type #mi::IFloat32. This weight is given to the top
     ///         layer if a Fresnel layered BSDF is simplified to a single diffuse BSDF in the 
     ///         'diffuse' distilling target. The base layer uses one minus this weight.
     ///         Default: 0.04.
-    ///       - \c "layer_normal" of type \c mi::IBoolean. If \c true, it enables the aggregation 
+    ///       - \c "layer_normal" of type #mi::IBoolean. If \c true, it enables the aggregation
     ///         of the local normal maps of BSDF layerers to combine them with the global normal
     ///         map. Default: \c true.
     ///                           
@@ -220,37 +220,37 @@ public:
 
     /// Returns the number of required MDL modules for the given target.
     ///
-    /// If a target reports any required modules, the integrating
-    /// application must query the name and MDL code for each of them
-    /// using \c get_required_module_name() and \c
-    /// get_required_module_code() and load them using \c
-    /// mi::neuraylib::IMdl_distiller_api::load_module_from_string()
-    /// before distilling any material to that target, otherwise
-    /// distilling will fail.
+    /// If a target reports any required modules, the integrating application must query the name
+    /// and MDL code for each of them using #get_required_module_name() and
+    /// #get_required_module_code() and load them using
+    /// #mi::neuraylib::IMdl_impexp_api::load_module_from_string() before distilling any material
+    /// to that target, otherwise distilling will fail.
     ///
     /// \param target    The target material model to distill to.
     ///
     /// \return          The number of required MDL modules for that target.
-    virtual Size get_required_module_count(const char *target) const = 0;
+    virtual Size get_required_module_count( const char* target) const = 0;
 
-    /// Returns the name of required MDL module with the given index
-    /// for the given target.
+    /// Returns the MDL name of the required MDL module with the given index for the given target.
+    ///
+    /// \see #get_required_module_count()
     ///
     /// \param target    The target material model to distill to.
     /// \param index     The index of the required module for the given target.
     ///
-    /// \return          The fully qualified MDL module name of the required module.
-    virtual const char* get_required_module_name(const char *target, Size index) const = 0;
+    /// \return          The MDL name of the required module.
+    virtual const char* get_required_module_name( const char* target, Size index) const = 0;
 
-    /// Returns the MDL source code of required MDL module with the
-    /// given index for the given target.
+    /// Returns the MDL source code of the required MDL module with the given index for the given
+    /// target.
+    ///
+    /// \see #get_required_module_count()
     ///
     /// \param target    The target material model to distill to.
     /// \param index     The index of the required module for the given target.
     ///
     /// \return          The MDL source code of the required module.
-    virtual const char* get_required_module_code(const char *target, Size index) const = 0;
-
+    virtual const char* get_required_module_code( const char* target, Size index) const = 0;
 };
 
 /// Allows to bake a varying or uniform expression of a compiled material into a texture or
@@ -281,6 +281,27 @@ public:
     ///                  - -2: The transaction that is bound to this baker is no longer open.
     ///                  - -3: The execution of the MDL code failed.
     virtual Sint32 bake_texture( ICanvas* texture, Uint32 samples = 1) const = 0;
+
+    /// Bakes the expression as texture.
+    ///
+    /// \param texture   The baked texture will be stored in this canvas. If the pixel type of \p
+    ///                  canvas does not match the pixel type of the expression to be baked (as
+    ///                  indicated by #get_pixel_type()), then the pixel data is converted as
+    ///                  described in #mi::neuraylib::IImage_api::convert().
+    /// \param min_u     The lower value of the U range used for baking.
+    /// \param max_u     The higher value of the U range used for baking.
+    /// \param min_v     The lower value of the V range used for baking.
+    /// \param max_v     The higher value of the V range used for baking.
+    /// \param samples   The number of samples (per pixel).
+    /// \return
+    ///                  -  0: Success.
+    ///                  - -1: Invalid parameters (\c NULL pointer).
+    ///                  - -2: The transaction that is bound to this baker is no longer open.
+    ///                  - -3: The execution of the MDL code failed.
+    virtual Sint32 bake_texture(
+        ICanvas* texture,
+        Float32 min_u, Float32 max_u, Float32 min_v, Float32 max_v,
+        Uint32 samples = 1) const = 0;
 
     /// Bakes the expression as constant.
     ///

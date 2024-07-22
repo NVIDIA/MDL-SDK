@@ -35,6 +35,8 @@ Buffer::Buffer(Base_application* app, size_t size_in_byte, std::string debug_nam
     : m_app(app)
     , m_debug_name(debug_name)
     , m_size_in_byte(size_in_byte)
+    , m_resource_latest_requested_state(D3D12_RESOURCE_STATE_COMMON)
+    , m_upload_resource_latest_requested_state(D3D12_RESOURCE_STATE_GENERIC_READ)
 {
     if (m_size_in_byte == 0)
     {
@@ -45,9 +47,6 @@ Buffer::Buffer(Base_application* app, size_t size_in_byte, std::string debug_nam
     // Create a committed resource for uploading
     auto upload_heap_properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
     auto upload_buffer_desc = CD3DX12_RESOURCE_DESC::Buffer(m_size_in_byte);
-
-    m_upload_resource_latest_requested_state =
-        D3D12_RESOURCE_STATE_GENERIC_READ | D3D12_RESOURCE_STATE_COPY_SOURCE;
     log_on_failure(m_app->get_device()->CreateCommittedResource(
         &upload_heap_properties,
         D3D12_HEAP_FLAG_NONE,
@@ -58,15 +57,13 @@ Buffer::Buffer(Base_application* app, size_t size_in_byte, std::string debug_nam
         "Failed to create upload resource for: " + m_debug_name, SRC);
     set_debug_name(m_upload_resource.Get(), m_debug_name + "_Upload");
 
-
     // Create a committed resource for the GPU resource in a default heap.
-    m_resource_latest_requested_state = D3D12_RESOURCE_STATE_COMMON;
-    upload_heap_properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-    upload_buffer_desc = CD3DX12_RESOURCE_DESC::Buffer(m_size_in_byte, D3D12_RESOURCE_FLAG_NONE);
+    auto heap_properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+    auto buffer_desc = CD3DX12_RESOURCE_DESC::Buffer(m_size_in_byte, D3D12_RESOURCE_FLAG_NONE);
     log_on_failure(m_app->get_device()->CreateCommittedResource(
-        &upload_heap_properties,
+        &heap_properties,
         D3D12_HEAP_FLAG_NONE,
-        &upload_buffer_desc,
+        &buffer_desc,
         m_resource_latest_requested_state,
         nullptr,
         IID_PPV_ARGS(&m_resource)),
@@ -93,10 +90,10 @@ bool Buffer::set_data(const void* data, size_t size_in_byte)
 
 bool Buffer::upload(D3DCommandList* command_list)
 {
-    // transition the upload resource on first usage
-    if(m_upload_resource_latest_requested_state == D3D12_RESOURCE_STATE_COMMON)
+    // transition the resource on first usage
+    if (m_resource_latest_requested_state == D3D12_RESOURCE_STATE_COMMON)
     {
-        auto upload_resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_upload_resource.Get(),
+        auto upload_resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_resource.Get(),
             D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_GENERIC_READ);
         command_list->ResourceBarrier(1, &upload_resource_barrier);
         m_resource_latest_requested_state = D3D12_RESOURCE_STATE_GENERIC_READ;

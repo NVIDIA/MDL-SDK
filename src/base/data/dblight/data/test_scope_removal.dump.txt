@@ -1,0 +1,39 @@
+Count of all scopes: 4
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
+ID 1: name = (null), pin count = 3, level = 1, parent ID = 0, removed = 0
+ID 2: name = (null), pin count = 1, level = 2, parent ID = 1, removed = 0
+ID 3: name = (null), pin count = 1, level = 2, parent ID = 1, removed = 0
+
+Count of all transactions: 0
+Count of open transactions: 0
+Count of infos by distinct names: 0
+Count of infos by distinct tags: 0
+
+Count of all scopes: 3
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
+ID 1: name = (null), pin count = 2, level = 1, parent ID = 0, removed = 0
+ID 2: name = (null), pin count = 1, level = 2, parent ID = 1, removed = 0
+
+Count of all transactions: 0
+Count of open transactions: 0
+Count of infos by distinct names: 0
+Count of infos by distinct tags: 0
+
+Count of all scopes: 3
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
+ID 1: name = (null), pin count = 1, level = 1, parent ID = 0, removed = 1
+ID 2: name = (null), pin count = 1, level = 2, parent ID = 1, removed = 0
+
+Count of all transactions: 0
+Count of open transactions: 0
+Count of infos by distinct names: 0
+Count of infos by distinct tags: 0
+
+Count of all scopes: 1
+ID 0: name = (null), pin count = 1, level = 0, parent ID = (null), removed = 0
+
+Count of all transactions: 0
+Count of open transactions: 0
+Count of infos by distinct names: 0
+Count of infos by distinct tags: 0
+

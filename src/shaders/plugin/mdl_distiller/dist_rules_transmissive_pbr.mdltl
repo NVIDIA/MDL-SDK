@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ * Copyright 2024 NVIDIA Corporation. All rights reserved.
  *****************************************************************************/
 
 // Rules that directly map individual expressions to other mdl expressions
@@ -56,9 +56,24 @@ rules Make_simple_for_tpbr bottomup {
     //total review of mix handling necessary todo.
     bsdf_clamped_mix_2(w1,df1,w2,df2) --> bsdf_mix_2(w1,df1,w2,df2);
     bsdf_clamped_mix_3(w1,df1,w2,df2,w3,df3) --> bsdf_mix_2(w1,df1,w2+w3,bsdf_mix_2(w2/(w2+w3),df2,w3/(w2+w3),df3));
+    bsdf_clamped_mix_4(w1,df1,w2,df2,w3,df3,w4,df4) -->
+        bsdf_mix_2(w1,df1,
+                   w2+w3+w4,bsdf_mix_2(w2/(w2+w3+w4),df2,
+                                       (w3+w4)/(w2+w3+w4), bsdf_mix_2(w3/(w3+w4),df3,
+                                                                      w4/(w3+w4),df4)));
     bsdf_unbounded_mix_2(w1,df1,w2,df2) --> bsdf_mix_2(w1,df1,w2,df2);
     bsdf_unbounded_mix_3(w1,df1,w2,df2,w3,df3) --> bsdf_mix_2(w1,df1,w2+w3,bsdf_mix_2(w2/(w2+w3),df2,w3/(w2+w3),df3));
+    bsdf_unbounded_mix_4(w1,df1,w2,df2,w3,df3,w4,df4) -->
+        bsdf_mix_2(w1,df1,
+                   w2+w3+w4,bsdf_mix_2(w2/(w2+w3+w4),df2,
+                                       (w3+w4)/(w2+w3+w4), bsdf_mix_2(w3/(w3+w4),df3,
+                                                                      w4/(w3+w4),df4)));
     bsdf_mix_3(w1,df1,w2,df2,w3,df3)--> bsdf_mix_2(w1,df1,w2+w3,bsdf_mix_2(w2/(w2+w3),df2,w3/(w2+w3),df3));
+    bsdf_mix_4(w1,df1,w2,df2,w3,df3,w4,df4) -->
+        bsdf_mix_2(w1,df1,
+                   w2+w3+w4,bsdf_mix_2(w2/(w2+w3+w4),df2,
+                                       (w3 + w4)/(w2+w3+w4), bsdf_mix_2(w3/(w3+w4),df3,
+                                                                        w4/(w3+w4),df4)));
 
     diffuse_transmission_bsdf(tint) --> simple_glossy_bsdf(1.0,1.0,tint,color(0.0),state::texture_tangent_u(0),scatter_transmit);
 
@@ -97,21 +112,27 @@ rules Make_simple_for_tpbr bottomup {
         nonode(measured_factor) &&
         nonode(bsdf_mix_1) &&//done testing
         nonode(bsdf_mix_3) &&//done testing
+        nonode(bsdf_mix_4) &&//done testing
         nonode(bsdf_clamped_mix_1) &&//done testing
         nonode(bsdf_clamped_mix_2) &&//done testing
         nonode(bsdf_clamped_mix_3) &&
+        nonode(bsdf_clamped_mix_4) &&
         nonode(bsdf_unbounded_mix_1) &&
         nonode(bsdf_unbounded_mix_2) &&
         nonode(bsdf_unbounded_mix_3) &&
+        nonode(bsdf_unbounded_mix_4) &&
         nonode(bsdf_color_mix_1) &&
         nonode(bsdf_color_mix_2) &&
         nonode(bsdf_color_mix_3) &&
+        nonode(bsdf_color_mix_4) &&
         nonode(bsdf_color_clamped_mix_1) &&
         nonode(bsdf_color_clamped_mix_2) &&
         nonode(bsdf_color_clamped_mix_3) &&
+        nonode(bsdf_color_clamped_mix_4) &&
         nonode(bsdf_color_unbounded_mix_1) &&
         nonode(bsdf_color_unbounded_mix_2) &&
         nonode(bsdf_color_unbounded_mix_3) &&
+        nonode(bsdf_color_unbounded_mix_4) &&
 //        nonode(weighted_layer) &&//done testing
 //        nonode(color_weighted_layer) &&
         nonode(fresnel_layer) &&//done testing
@@ -217,13 +238,15 @@ rules Make_normal_for_tpbr bottomup {
         --> b [[ local_normal_w = w1,
                  local_normal_n = nvidia::distilling_support::combine_normals(1.0-nw1,n,nw1,nl1) ]]
           if w1 == 1.0;
+          
     b ~ weighted_layer(w1,
                        _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
                        _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
-                       n)
-        --> b [[ local_normal_w = (1.0-w1) * nw2 + w1,
-                 local_normal_n = nvidia::distilling_support::combine_normals( 1.0-w1, nl2, w1, 
-                                                                               nvidia::distilling_support::combine_normals(1.0-nw1,n,nw1,nl1)) ]];
+                       _)
+        --> b [[ local_normal_w = (1.0-w1) * nw2 + w1*nw1,
+                //since _bs1 is already bumped, n can have no impact.       
+                 local_normal_n = nvidia::distilling_support::combine_normals( 1.0-w1, nl2, w1, nl1)]];
+                                                                               //nvidia::distilling_support::combine_normals(1.0-nw1,n,nw1,nl1)) ]];
 
     //dont collect normals of custom curve layers top, these are for clearcoats
     b ~ custom_curve_layer(_,_,_,_,

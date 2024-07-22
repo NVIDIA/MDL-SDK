@@ -83,22 +83,16 @@ const mi::base::IInterface* Function_call_impl::get_interface(
     // Handle all other cases first. In particular, IDb_element is requested before the instance is
     // fully set up and functionality on the underlying DB element, like is_material(), is
     // available.
-    if(    interface_id != mi::neuraylib::IMaterial_instance::IID()
-        && interface_id != mi::neuraylib::IFunction_call::IID())
+    if( interface_id != mi::neuraylib::IMaterial_instance::IID())
         return Parent_type::get_interface( interface_id);
 
-    // Handle special cases of function calls and material instances.
-    bool is_mat = is_material();
+    // Handle special case for material instances.
+    bool supports_mi = is_material();
 
-    if( interface_id == mi::neuraylib::IMaterial_instance::IID() && !is_mat)
+    if( interface_id == mi::neuraylib::IMaterial_instance::IID() && !supports_mi)
         return nullptr;
-    if( interface_id == mi::neuraylib::IMaterial_instance::IID() &&  is_mat)
+    if( interface_id == mi::neuraylib::IMaterial_instance::IID() &&  supports_mi)
         return Material_instance_impl::create_api_class( this);
-
-    if( interface_id == mi::neuraylib::IFunction_call::IID() && !is_mat)
-        return Parent_type::get_interface( interface_id);
-    if( interface_id == mi::neuraylib::IFunction_call::IID() && is_mat)
-        return Parent_type::get_interface( interface_id);
 
     ASSERT( M_NEURAY_API, false);
     return nullptr;
@@ -110,22 +104,20 @@ mi::base::IInterface* Function_call_impl::get_interface(
     // Handle all other cases first. In particular, IDb_element is requested before the instance is
     // fully set up and functionality on the underlying DB element, like is_material(), is
     // available.
-    if(    interface_id != mi::neuraylib::IMaterial_instance::IID()
-        && interface_id != mi::neuraylib::IFunction_call::IID())
+    if( interface_id != mi::neuraylib::IMaterial_instance::IID())
         return Parent_type::get_interface( interface_id);
 
-    // Handle special cases of function calls and material instances.
-    bool is_mat = is_material();
+    // Handle special case for material instances.
+    //
+    // Explicitly call the method is_material() instead of inlining it to ensure that the const
+    // overload of get_db_element() is called. This is a workaround for the Python binding which is
+    // not correctly tracking the const property of interface pointers.
+    bool supports_mi = is_material();
 
-    if( interface_id == mi::neuraylib::IMaterial_instance::IID() && !is_mat)
+    if( interface_id == mi::neuraylib::IMaterial_instance::IID() && !supports_mi)
         return nullptr;
-    if( interface_id == mi::neuraylib::IMaterial_instance::IID() &&  is_mat)
+    if( interface_id == mi::neuraylib::IMaterial_instance::IID() &&  supports_mi)
         return Material_instance_impl::create_api_class( this);
-
-    if( interface_id == mi::neuraylib::IFunction_call::IID() && !is_mat)
-        return Parent_type::get_interface( interface_id);
-    if( interface_id == mi::neuraylib::IFunction_call::IID() && is_mat)
-        return Parent_type::get_interface( interface_id);
 
     ASSERT( M_NEURAY_API, false);
     return nullptr;
@@ -148,6 +140,11 @@ const char* Function_call_impl::get_function_definition() const
 const char* Function_call_impl::get_mdl_function_definition() const
 {
     return get_db_element()->get_mdl_function_definition();
+}
+
+bool Function_call_impl::is_declarative() const
+{
+    return get_db_element()->is_declarative();
 }
 
 bool Function_call_impl::is_material() const
@@ -201,8 +198,8 @@ mi::Sint32 Function_call_impl::set_arguments( const mi::neuraylib::IExpression_l
 
     DB::Tag_set tags;
     MDL::collect_references( arguments_int.get(), &tags);
-    for( DB::Tag_set::const_iterator it = tags.begin(); it != tags.end(); ++it)
-        if( !can_reference_tag( *it))
+    for( auto tag : tags)
+        if( !can_reference_tag( tag))
             return -7;
 
     add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
@@ -220,8 +217,8 @@ mi::Sint32 Function_call_impl::set_argument(
 
     DB::Tag_set tags;
     MDL::collect_references( argument_int.get(), &tags);
-    for( DB::Tag_set::const_iterator it = tags.begin(); it != tags.end(); ++it)
-        if( !can_reference_tag( *it))
+    for( auto tag : tags)
+        if( !can_reference_tag( tag))
             return -7;
 
     mi::Sint32 result = get_db_element()->set_argument(
@@ -242,8 +239,8 @@ mi::Sint32 Function_call_impl::set_argument(
 
     DB::Tag_set tags;
     MDL::collect_references( argument_int.get(), &tags);
-    for( DB::Tag_set::const_iterator it = tags.begin(); it != tags.end(); ++it)
-        if( !can_reference_tag( *it))
+    for( auto tag : tags)
+        if( !can_reference_tag( tag))
             return -7;
 
     mi::Sint32 result = get_db_element()->set_argument(
@@ -311,18 +308,25 @@ mi::neuraylib::ICompiled_material* Function_call_impl::create_compiled_material(
     MDL::Execution_context default_context;
     MDL::Execution_context* mdl_context = unwrap_and_clear_context( context, default_context);
 
+    mi::base::Handle<const MDL::IType_struct> target_type_int;
+    mi::base::Handle<const mi::base::IInterface> target_type(
+        mdl_context->get_interface_option<const mi::base::IInterface>( MDL_CTX_OPTION_TARGET_TYPE));
+    if( target_type) {
+        mi::base::Handle<const mi::neuraylib::IType> target_type_itype_struct(
+            target_type->get_interface<mi::neuraylib::IType_struct>());
+        ASSERT( M_NEURAY_API, target_type_itype_struct); // enforced by option validator
+        target_type_int = get_internal_type<MDL::IType_struct>( target_type_itype_struct.get());
+    }
+
     bool class_compilation = flags & mi::neuraylib::IMaterial_instance::CLASS_COMPILATION;
     std::shared_ptr<MDL::Mdl_compiled_material> db_instance(
         get_db_element()->create_compiled_material(
-            get_db_transaction(),
-            class_compilation,
-            mdl_context));
+            get_db_transaction(), class_compilation, target_type_int.get(), mdl_context));
     if( !db_instance)
         return nullptr;
 
-    mi::neuraylib::ICompiled_material* api_instance
-        = get_transaction()->create<mi::neuraylib::ICompiled_material>(
-            "__Compiled_material");
+    auto* api_instance = get_transaction()->create<mi::neuraylib::ICompiled_material>(
+        "__Compiled_material");
     static_cast<Compiled_material_impl*>( api_instance)->get_db_element()->swap(
         *db_instance);
     return api_instance;

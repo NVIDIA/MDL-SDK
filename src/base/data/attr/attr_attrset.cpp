@@ -45,13 +45,13 @@
 namespace {
 // Dump the given Attribute.
 void print_attribute(
-    const MI::ATTR::Attribute *attr,	// the attribute
-    MI::DB::Transaction *transaction);	// transaction
+    const MI::ATTR::Attribute *attr,    // the attribute
+    MI::DB::Transaction *transaction);  // transaction
 // Given a raw pointer to some data and a type, print out the correct value.
 void print_type_value(
-    const MI::ATTR::Type &type,		// type of value
-    const char *val_ptr,		// raw data of value
-    MI::DB::Transaction *transaction);	// transaction
+    const MI::ATTR::Type &type,         // type of value
+    const char *val_ptr,                // raw data of value
+    MI::DB::Transaction *transaction);  // transaction
 }
 
 namespace MI {
@@ -97,7 +97,7 @@ Attribute_set::~Attribute_set()
 //
 
 Attribute_set &Attribute_set::operator=(
-    const Attribute_set &attrset)	// attribute set to copy
+    const Attribute_set &attrset)       // attribute set to copy
 {
     if (&attrset == this)
         return *this;
@@ -115,7 +115,7 @@ Attribute_set &Attribute_set::operator=(
 //
 
 Attribute_set::Attribute_set(
-    const Attribute_set &attrset)	// attribute set to copy
+    const Attribute_set &attrset)       // attribute set to copy
 {
     *this = attrset;
 }
@@ -129,7 +129,7 @@ Attribute_set::Attribute_set(
 //
 
 void Attribute_set::swap(
-    Attribute_set	&other)		// the other
+    Attribute_set       &other)         // the other
 {
     using std::swap;
     swap(m_attrs, other.m_attrs);
@@ -144,9 +144,9 @@ void Attribute_set::swap(
 // Set the value appropriately - create Attribute, if it's not there.
 void set_bool_attrib(
     Attribute_set& attr_set,
-    Attribute_id id,			// which attribute
-    bool v,				// new value
-    bool create)			// create when missing?
+    Attribute_id id,                    // which attribute
+    bool v,                             // new value
+    bool create)                        // create when missing?
 {
     Attribute* flag = attr_set.lookup(id);
 
@@ -172,7 +172,7 @@ void set_bool_attrib(
 //
 
 Attribute *Attribute_set::lookup(
-    Attribute_id		    id)	// ID of attribute
+    Attribute_id                    id) // ID of attribute
 {
     Iter it = m_attrs.find(id);
     if (it == m_attrs.end())
@@ -182,7 +182,7 @@ Attribute *Attribute_set::lookup(
 }
 
 const Attribute *Attribute_set::lookup(
-    Attribute_id		    id) const       // ID of attribute
+    Attribute_id                    id) const       // ID of attribute
 {
     Const_iter it = m_attrs.find(id);
     if (it == m_attrs.end())
@@ -192,7 +192,7 @@ const Attribute *Attribute_set::lookup(
 }
 
 const Attribute *Attribute_set::lookup(
-    const char		*name) const	// name of attribute to look up
+    const char          *name) const    // name of attribute to look up
 {
     return lookup(Attribute::id_lookup(name));
 }
@@ -205,7 +205,7 @@ Attribute *Attribute_set::lookup(
 
 
 std::shared_ptr<Attribute> Attribute_set::lookup_shared_ptr(
-    Attribute_id	id) const	// ID of attribute to look up
+    Attribute_id        id) const       // ID of attribute to look up
 {
     Const_iter it = m_attrs.find(id);
     if (it == m_attrs.end())
@@ -259,7 +259,7 @@ bool Attribute_set::attach(
 //
 
 std::shared_ptr<Attribute> Attribute_set::detach(
-    Attribute_id	id)		// ID of attribute to detach
+    Attribute_id        id)             // ID of attribute to detach
 {
     std::shared_ptr<Attribute> attr;
     Iter it = m_attrs.find(id);
@@ -296,7 +296,7 @@ bool Attribute_set::replace(
 //
 
 void Attribute_set::deep_copy(
-    const Attribute_set &other)		// the other
+    const Attribute_set &other)         // the other
 {
     ASSERT(M_ATTR, m_attrs.empty());
 
@@ -430,7 +430,7 @@ void collect_tags_rec(Type_iterator& iter, DB::Tag_set& result)
 // exact because reference counting is used to prevent deletion of scene
 // elements that are still referenced somewhere.
 void Attribute_set::get_references(
-    DB::Tag_set		*result) const	// return all referenced tags
+    DB::Tag_set         *result) const  // return all referenced tags
 {
     if (!result)
         return;
@@ -467,7 +467,7 @@ void get_references(
 // serialize the object to the given serializer including all sub elements.
 // It must return a pointer behind itself (e.g. this + 1) to handle arrays.
 const SERIAL::Serializable *Attribute_set::serialize(
-    SERIAL::Serializer	*serializer) const	// functions for byte streams
+    SERIAL::Serializer  *serializer) const      // functions for byte streams
 {
     ASSERT(M_ATTR, m_attrs.size() <= std::numeric_limits<Uint32>::max());
     Uint32 size = Uint32(m_attrs.size());
@@ -475,7 +475,7 @@ const SERIAL::Serializable *Attribute_set::serialize(
 
     Const_iter it, end = m_attrs.end();
     for (it=m_attrs.begin(); it != end; ++it) {
-        ASSERT(M_ATTR, (*it).second);		// no NULL pointers supported
+        ASSERT(M_ATTR, (*it).second);           // no NULL pointers supported
         serializer->serialize(const_cast<Attribute*>((*it).second.get()));
     }
 
@@ -489,7 +489,7 @@ const SERIAL::Serializable *Attribute_set::serialize(
 //
 
 SERIAL::Serializable *Attribute_set::deserialize(
-    SERIAL::Deserializer *deser)	// useful functions for byte streams
+    SERIAL::Deserializer *deser)        // useful functions for byte streams
 {
     Uint32 size;
     deser->read(&size);
@@ -539,7 +539,7 @@ SERIAL::Serializable *Attribute_set::factory()
 //
 
 void Attribute_set::print(
-    DB::Transaction *transaction) const	// transaction to use for tag retrieval
+    DB::Transaction *transaction) const // transaction to use for tag retrieval
 {
     mod_log->debug(M_ATTR, LOG::Mod_log::C_DATABASE,
         "---Print current Attribute_set");
@@ -561,8 +561,8 @@ using namespace MI::ATTR;
 
 // Dump the given Attribute.
 void print_attribute(
-    const Attribute *attr,				// the attribute
-    DB::Transaction *transaction)			// transaction
+    const Attribute *attr,                              // the attribute
+    DB::Transaction *transaction)                       // transaction
 {
     if (!attr)
         return;
@@ -576,9 +576,9 @@ void print_attribute(
 
 // Given a raw pointer to some data and a type, print out the correct value.
 void print_type_value(
-    const Type &typ,					// type of value
-    const char *val_ptr,				// raw data of value
-    DB::Transaction *transaction)			// transaction
+    const Type &typ,                                    // type of value
+    const char *val_ptr,                                // raw data of value
+    DB::Transaction *transaction)                       // transaction
 {
     Type_code code = typ.get_typecode();
     size_t array_size = typ.get_arraysize();
@@ -676,11 +676,11 @@ void print_type_value(
         break;
       }
       case TYPE_MATRIX: {
-//	Scalar *ptr = (Scalar*)val_ptr;
+//      Scalar *ptr = (Scalar*)val_ptr;
         break;
       }
       case TYPE_DMATRIX: {
-//	Dscalar *ptr = (Dscalar*)val_ptr;
+//      Dscalar *ptr = (Dscalar*)val_ptr;
         break;
       }
       case TYPE_TAG: {

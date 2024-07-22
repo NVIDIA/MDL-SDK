@@ -143,5 +143,5 @@ void main()
     vec3 res = mdl_mat_subexpr(material_index, state);
 
     // Apply gamma correction and write to output variable
-    FragColor = pow(vec4(res, 1.0), vec4(1.0 / 2.2));
+    FragColor = vec4(pow(res, vec3(1.0 / 2.2)), 1.0);
 }

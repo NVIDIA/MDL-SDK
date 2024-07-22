@@ -216,6 +216,8 @@ public:
                                                   ///  function.
         DS_INTRINSIC_MATH_FLOAT_BITS_TO_INT,      ///< The %math::float_bits_to_int() intrinsic
                                                   ///  function.
+        DS_INTRINSIC_MATH_ROUND_AWAY_FROM_ZERO,   ///< The %math::round_away_from_zero() intrinsic
+                                                  ///  function.
         DS_INTRINSIC_MATH_DX,                     ///< The %math::DX() intrinsic function.
         DS_INTRINSIC_MATH_DY,                     ///< The %math::DY() intrinsic function.
         DS_INTRINSIC_MATH_LAST = DS_INTRINSIC_MATH_DY,
@@ -397,7 +399,9 @@ public:
         DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,
         /// The array length operator. See \ref mi_neuray_mdl_array_length_operator.
         DS_INTRINSIC_DAG_ARRAY_LENGTH,
-        DS_INTRINSIC_DAG_LAST = DS_INTRINSIC_DAG_ARRAY_LENGTH,
+        /// The decl_cast operator. See \ref mi_neuray_mdl_decl_cast_operator.
+        DS_INTRINSIC_DAG_DECL_CAST,
+        DS_INTRINSIC_DAG_LAST = DS_INTRINSIC_DAG_DECL_CAST,
 
         DS_FORCE_32_BIT = 0xffffffffU             //   Undocumented, for alignment only.
     };
@@ -464,6 +468,13 @@ public:
 
     /// Indicates whether the function definition is exported by its module.
     virtual bool is_exported() const = 0;
+
+    /// Indicates whether the function definition is declarative.
+    ///
+    /// \note This includes, in addition to functions definitions that are explicitly marked as
+    ///       declarative, also function definitions that have been analyzed by the MDL compiler
+    //        to be declarative.
+    virtual bool is_declarative() const = 0;
 
     /// Indicates whether the function definition is uniform.
     ///
@@ -660,37 +671,43 @@ public:
     ///                     list.
     /// \param[out] errors  An optional pointer to an #mi::Sint32 to which an error code will be
     ///                     written. The error codes have the following meaning:
-    ///                     -  0: Success.
-    ///                     - -1: An argument for a non-existing parameter was provided in
-    ///                           \p arguments.
-    ///                     - -2: The type of an argument in \p arguments does not have the correct
-    ///                           type, see #get_parameter_types().
-    ///                     - -3: A parameter that has no default was not provided with an argument
-    ///                           value.
-    ///                     - -4: The definition can not be instantiated because it is not exported.
-    ///                     - -5: A parameter type is uniform, but the corresponding argument has a
-    ///                           varying return type.
-    ///                     - -6: An argument expression is not a constant nor a call.
-    ///                     - -8: One of the parameter types is uniform, but the corresponding
-    ///                           argument or default is a call expression and the return type of
-    ///                           the called function definition is effectively varying since the
-    ///                           function definition itself is varying.
-    ///                     - -9: The function definition is invalid due to a module reload, see
-    ///                           #is_valid() for diagnostics.
+    ///                     -   0: Success.
+    ///                     -  -1: An argument for a non-existing parameter was provided in
+    ///                            \p arguments.
+    ///                     -  -2: The type of an argument in \p arguments does not have the correct
+    ///                            type, see #get_parameter_types().
+    ///                     -  -3: A parameter that has no default was not provided with an argument
+    ///                            value.
+    ///                     -  -4: The definition can not be instantiated because it is not
+    ///                            exported.
+    ///                     -  -5: A parameter type is uniform, but the corresponding argument has a
+    ///                            varying return type.
+    ///                     -  -6: An argument expression is not a constant nor a call.
+    ///                     -  -8: One of the parameter types is uniform, but the corresponding
+    ///                            argument or default is a call expression and the return type of
+    ///                            the called function definition is effectively varying since the
+    ///                            function definition itself is varying.
+    ///                     -  -9: The function definition is invalid due to a module reload, see
+    ///                            #is_valid() for diagnostics.
+    ///                     - -10: The definition is non-declarative and at least one of the
+    ///                            arguments is a declarative call.
     /// \return             The created function call, or \c NULL in case of errors.
     virtual IFunction_call* create_function_call(
         const IExpression_list* arguments, Sint32* errors = 0) const = 0;
 
     /// Returns the mangled name of the function.
     ///
-    /// \note: The mangled name is computed for real MDL functions only, for materials it is
-    /// equal to #get_mdl_simple_name()
+    /// \note For materials, the mangled name is equal to #get_mdl_simple_name().
     ///
-    /// \return         The mangled MDL name of the function definition.
-    virtual const char *get_mdl_mangled_name() const = 0;
+    /// \return         The mangled name of the function definition.
+    virtual const char* get_mangled_name() const = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_15_0
+    inline const char* get_mdl_mangled_name() const { return get_mangled_name(); }
+#endif // MI_NEURAYLIB_DEPRECATED_15_0
 };
 
-mi_static_assert(sizeof(IFunction_definition::Semantics) == sizeof(Uint32));
+mi_static_assert( sizeof( IFunction_definition::Semantics) == sizeof( Uint32));
 
 /**@}*/ // end group mi_neuray_mdl_elements
 

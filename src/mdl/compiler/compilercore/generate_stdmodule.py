@@ -61,12 +61,20 @@ def scan_src_file(prefix, filename):
     block.name, ext = os.path.splitext(os.path.basename(filename))
     block.name = prefix + "_" + block.name
 
-    in_file = open(filename)
+    if sys.version_info >= (3,0):
+        # Python3: Ensure we get a bytesteam, not a string by 'rb'. Needed for possible unicode coding/decoding
+        in_file = open(filename, 'rb')
+    else:
+        in_file = open(filename)
+
     state = "header"
     for line in in_file:
-        # rstrip removes the '\n' too
-        line = line.rstrip()
-
+        # rstrip removes the '\n' too. 
+        if sys.version_info >= (3,0):
+            # Input could be non-ascii. The hex-conversion below does not allow thisA
+            line = line.decode('utf-8','replace').rstrip()
+        else:
+            line = line.rstrip()
         if state == "header":
             # read header, lines must start with "//"
             res = re.search(r"\s*//(.*)", line)
@@ -84,7 +92,10 @@ def scan_src_file(prefix, filename):
 
 def check_whitespace(src):
     """Check a given file for whitespace errors."""
-    f = open(src)
+    if sys.version_info >= (3,0):
+        f = open(src,encoding='utf-8')
+    else:
+        f = open(src)
     lineno = 1
     module = os.path.basename(src)
     s_re = re.compile("^[ ]*\t+[ ]*.*")
@@ -163,17 +174,31 @@ def generate_cpp_file(files,
             target.write("// " + str + '\n')
 
         text = "\n".join(block.text) + "\n"
-        l = len(text)
+        if sys.version_info >= (3,0):
+            # need to put the input into a byte-array. The character could be multi-byte (i.e. utf-8. This would break encoding
+            text_byte_array=bytearray()
+            text_byte_array.extend(text.encode())
+            l = len(text_byte_array)
+        else:
+            l = len(text)
         kl = len(key)
         target.write("unsigned char const " + block.name + "[%u] = {" % (l))
         first = False
         if key:
             for i in range(l):
+                #if ord(text[i]) > 0xFF:
+                #    print (f"High ord at pos {i} {hex(ord(text[i]))} for char {text[i]}")
                 first = False
+                # line break after 8
                 if i % 8 == 0:
                     target.write('\n  ')
                     first = True
-                code = ord(text[i]) ^ ord(key[i % kl]) ^ (i & 0xFF)
+                if sys.version_info >= (3,0):
+                    code = text_byte_array[i] ^ ord(key[i % kl]) ^ (i & 0xFF)
+                else:
+                    code = ord(text[i]) ^ ord(key[i % kl]) ^ (i & 0xFF)
+                #print (f"Debug: for Char text[i] and i % kl = {i % kl} and key[i % kl] = {key[i % kl]} and ord(key[i % kl])={ord(key[i % kl])} and (i & 0xFF) {(i & 0xFF)} the code is {code}")
+                assert code <= 0xff, "code {} at index {}/{} for text {} is > 0xFF".format(code,i,l,text)
                 start = code
                 if not first:
                     target.write(' ')
@@ -209,7 +234,13 @@ def generate_cpp_file(files,
     # write all blocks
     for block in blocks:
         text = "\n".join(block.text) + "\n"
-        l = len(text)
+        # Copy code from above: On Python 3 we count bytes to match the signature in the cpp file
+        if sys.version_info >= (3,0):
+            text_byte_array=bytearray()
+            text_byte_array.extend(text.encode())
+            l = len(text_byte_array)
+        else:
+            l = len(text)
         target.write("extern unsigned char const " + block.name + "[%u];\n" % (l))
 
     target.write('\n}  // mi\n}  // ' + namespace + '\n')

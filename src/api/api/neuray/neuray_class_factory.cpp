@@ -35,15 +35,14 @@
 #include "neuray_class_factory.h"
 
 #include <mi/base/handle.h>
+#include <mi/neuraylib/ienum_decl.h>
 #include <mi/neuraylib/inumber.h>
 #include <mi/neuraylib/istring.h>
+#include <mi/neuraylib/istructure_decl.h>
 #include <mi/neuraylib/iuser_class.h>
 
 #include "i_neuray_db_element.h"
-#include "neuray_enum_decl_impl.h"
-#include "neuray_structure_decl_impl.h"
 #include "neuray_transaction_impl.h"
-#include "neuray_type_utilities.h"
 
 #include "neuray_expression_impl.h"
 #include "neuray_type_impl.h"
@@ -55,20 +54,72 @@
 
 #include <iomanip>
 #include <sstream>
-#include <base/data/db/i_db_transaction.h>
-#include <base/system/stlext/i_stlext_likely.h>
+
 #include <boost/core/ignore_unused.hpp>
+
+#include <base/data/db/i_db_transaction.h>
+#include <base/data/idata/i_idata_factory.h>
+#include <base/data/idata/idata_interfaces.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/util/string_utils/i_string_lexicographic_cast.h>
 #include <io/scene/scene/i_scene_journal_types.h>
+#include <api/api/neuray/neuray_transaction_impl.h>
 
 namespace MI {
 
 namespace NEURAY {
 
+class Tag_handler : public mi::base::Interface_implement<IDATA::ITag_handler>
+{
+public:
+    Tag_handler( Class_factory* class_factory) : m_class_factory( class_factory) { }
+
+    const char* tag_to_name( DB::Transaction* transaction, DB::Tag tag) final
+    {
+        return transaction->tag_to_name( tag);
+    }
+
+    DB::Tag name_to_tag( DB::Transaction* transaction, const char* name) final
+    {
+        return transaction->name_to_tag( name);
+    }
+
+    const mi::base::IInterface* access_tag( DB::Transaction* transaction, DB::Tag tag) final
+    {
+        mi::base::Handle api_transaction( new Transaction_impl(
+            transaction, m_class_factory, /*commit_or_abort_warning*/ false));
+        return api_transaction->access( tag);
+    }
+
+    mi::base::IInterface* edit_tag( DB::Transaction* transaction, DB::Tag tag) final
+    {
+        mi::base::Handle api_transaction( new Transaction_impl(
+            transaction, m_class_factory, /*commit_or_abort_warning*/ false));
+        return api_transaction->edit( tag);
+    }
+
+    std::pair<DB::Tag,mi::Sint32> get_tag( const mi::base::IInterface* interface) final
+    {
+        mi::base::Handle<const IDb_element> db_element( interface->get_interface<IDb_element>());
+        if( !db_element)
+            return {{}, -2};
+
+        DB::Tag tag = db_element->get_tag();
+        if( !tag)
+            return {{}, -3};
+
+        return {tag, 0};
+    }
+
+private:
+    Class_factory* m_class_factory;
+};
+
 Class_factory* s_class_factory;
 
 Class_factory::Class_factory()
+  : m_tag_handler( new Tag_handler( this)),
+    m_idata_factory( new IDATA::Factory( m_tag_handler.get()))
 {
 }
 
@@ -76,8 +127,6 @@ Class_factory::~Class_factory()
 {
     ASSERT( M_NEURAY_API, m_map_name_user_class_factory.empty());
     ASSERT( M_NEURAY_API, m_map_uuid_user_class_factory.empty());
-    ASSERT( M_NEURAY_API, m_map_name_structure_decl.empty());
-    ASSERT( M_NEURAY_API, m_map_name_enum_decl.empty());
 }
 
 mi::Sint32 Class_factory::register_class(
@@ -90,9 +139,6 @@ mi::Sint32 Class_factory::register_class(
     ASSERT( M_NEURAY_API, api_class_factory);
     ASSERT( M_NEURAY_API, db_element_factory);
 
-    mi::base::Lock::Block block2( &m_map_name_enum_decl_lock);
-    mi::base::Lock::Block block3( &m_map_name_structure_decl_lock);
-
     if( m_map_name_id.find( class_name)                 != m_map_name_id.end())
         return -1;
     if( m_map_id_api_class_factory.find( class_id)      != m_map_id_api_class_factory.end())
@@ -103,9 +149,9 @@ mi::Sint32 Class_factory::register_class(
         return -1;
     if( m_map_name_user_class_factory.find( class_name) != m_map_name_user_class_factory.end())
         return -1;
-    if( m_map_name_enum_decl.find( class_name)          != m_map_name_enum_decl.end())
+    if( make_handle( m_idata_factory->get_enum_decl( class_name)))
         return -1;
-    if( m_map_name_structure_decl.find( class_name)     != m_map_name_structure_decl.end())
+    if( make_handle( m_idata_factory->get_structure_decl( class_name)))
         return -1;
 
     m_map_name_id[class_name]                 = class_id;
@@ -122,18 +168,15 @@ mi::Sint32 Class_factory::register_class(
     ASSERT( M_NEURAY_API, class_name);
     ASSERT( M_NEURAY_API, api_class_factory);
 
-    mi::base::Lock::Block block2( &m_map_name_enum_decl_lock);
-    mi::base::Lock::Block block3( &m_map_name_structure_decl_lock);
-
     if( m_map_name_id.find( class_name)                 != m_map_name_id.end())
         return -1;
     if( m_map_name_api_class_factory.find( class_name)  != m_map_name_api_class_factory.end())
         return -1;
     if( m_map_name_user_class_factory.find( class_name) != m_map_name_user_class_factory.end())
         return -1;
-    if( m_map_name_enum_decl.find( class_name)          != m_map_name_enum_decl.end())
+    if( make_handle( m_idata_factory->get_enum_decl( class_name)))
         return -1;
-    if( m_map_name_structure_decl.find( class_name)     != m_map_name_structure_decl.end())
+    if( make_handle( m_idata_factory->get_structure_decl( class_name)))
         return -1;
 
     m_map_name_api_class_factory[class_name] = api_class_factory;
@@ -148,9 +191,6 @@ mi::Sint32 Class_factory::register_class(
     ASSERT( M_NEURAY_API, class_name);
     ASSERT( M_NEURAY_API, factory);
 
-    mi::base::Lock::Block block2( &m_map_name_enum_decl_lock);
-    mi::base::Lock::Block block3( &m_map_name_structure_decl_lock);
-
     if( m_map_name_id.find( class_name)                 != m_map_name_id.end())
         return -1;
     if( m_map_name_api_class_factory.find( class_name)  != m_map_name_api_class_factory.end())
@@ -159,9 +199,9 @@ mi::Sint32 Class_factory::register_class(
         return -1;
     if( m_map_uuid_user_class_factory.find( uuid)       != m_map_uuid_user_class_factory.end())
         return -1;
-    if( m_map_name_enum_decl.find( class_name)          != m_map_name_enum_decl.end())
+    if( make_handle( m_idata_factory->get_enum_decl( class_name)))
         return -1;
-    if( m_map_name_structure_decl.find( class_name)     != m_map_name_structure_decl.end())
+    if( make_handle( m_idata_factory->get_structure_decl( class_name)))
         return -1;
 
     if( strcmp( class_name, "__DiCE_class_without_name") != 0)
@@ -220,79 +260,28 @@ mi::Sint32 Class_factory::register_structure_decl(
     ASSERT( M_NEURAY_API, structure_name);
     ASSERT( M_NEURAY_API, decl);
 
-    mi::base::Lock::Block block2( &m_map_name_enum_decl_lock);
-    mi::base::Lock::Block block3( &m_map_name_structure_decl_lock);
-
     if( m_map_name_id.find( structure_name)                 != m_map_name_id.end())
         return -1;
     if( m_map_name_api_class_factory.find( structure_name)  != m_map_name_api_class_factory.end())
         return -1;
     if( m_map_name_user_class_factory.find( structure_name) != m_map_name_user_class_factory.end())
         return -1;
-    if( m_map_name_enum_decl.find( structure_name)          != m_map_name_enum_decl.end())
-        return -1;
-    if( m_map_name_structure_decl.find( structure_name)     != m_map_name_structure_decl.end())
-        return -1;
 
-    // Maybe we should check in addition that all member type names are valid. But there are two
-    // problems:
-    // - Some types require a transaction for instantiation, which we do not have here (could
-    //   implement a check for valid type names without creating instances of it).
-    // - Type names might become invalid since there is no reference counting between structure
-    //   and enum declarations.
-
-    std::vector<std::string> blacklist;
-    blacklist.push_back( structure_name);
-    if( contains_blacklisted_type_names( decl, blacklist))
-        return -5;
-
-    // Clone the declaration such that modifications after registration have no effect.
-    mi::base::Handle<mi::IStructure_decl> copy(
-        create_class_instance<mi::IStructure_decl>( nullptr, "Structure_decl"));
-    mi::Size n = decl->get_length();
-    for( mi::Size i = 0; i < n; ++i) {
-        mi::Sint32 result
-            = copy->add_member( decl->get_member_type_name( i), decl->get_member_name( i));
-        ASSERT( M_NEURAY_API, result == 0);
-        boost::ignore_unused( result);
-    }
-
-    // Set the type name
-    Structure_decl_impl* copy_impl = static_cast<Structure_decl_impl*>( copy.get());
-    copy_impl->set_structure_type_name( structure_name);
-
-    m_map_name_structure_decl[structure_name] = copy;
-
-    return 0;
+    return m_idata_factory->register_structure_decl( structure_name, decl);
 }
 
 mi::Sint32 Class_factory::unregister_structure_decl( const char* structure_name)
 {
     ASSERT( M_NEURAY_API, structure_name);
 
-    mi::base::Lock::Block block( &m_map_name_structure_decl_lock);
-
-    auto it = m_map_name_structure_decl.find( structure_name);
-    if( it == m_map_name_structure_decl.end())
-        return -1;
-
-    m_map_name_structure_decl.erase( it);
-
-    return 0;
+    return m_idata_factory->unregister_structure_decl( structure_name);
 }
 
 const mi::IStructure_decl* Class_factory::get_structure_decl( const char* structure_name) const
 {
     ASSERT( M_NEURAY_API, structure_name);
 
-    mi::base::Lock::Block block( &m_map_name_structure_decl_lock);
-
-    auto it = m_map_name_structure_decl.find( structure_name);
-    if( it == m_map_name_structure_decl.end())
-        return nullptr;
-
-    it->second->retain();
-    return it->second.get();
+    return m_idata_factory->get_structure_decl( structure_name);
 }
 
 mi::Sint32 Class_factory::register_enum_decl(
@@ -301,69 +290,28 @@ mi::Sint32 Class_factory::register_enum_decl(
     ASSERT( M_NEURAY_API, enum_name);
     ASSERT( M_NEURAY_API, decl);
 
-    mi::base::Lock::Block block2( &m_map_name_enum_decl_lock);
-    mi::base::Lock::Block block3( &m_map_name_structure_decl_lock);
-
     if( m_map_name_id.find( enum_name)                 != m_map_name_id.end())
         return -1;
     if( m_map_name_api_class_factory.find( enum_name)  != m_map_name_api_class_factory.end())
         return -1;
     if( m_map_name_user_class_factory.find( enum_name) != m_map_name_user_class_factory.end())
         return -1;
-    if( m_map_name_enum_decl.find( enum_name)          != m_map_name_enum_decl.end())
-        return -1;
-    if( m_map_name_structure_decl.find( enum_name)     != m_map_name_structure_decl.end())
-        return -1;
 
-    mi::Size n = decl->get_length();
-    if( n == 0)
-        return -6;
-
-    // Clone the declaration such that modifications after registration have no effect.
-    mi::base::Handle<mi::IEnum_decl> copy(
-        create_class_instance<mi::IEnum_decl>( nullptr, "Enum_decl"));
-    for( mi::Size i = 0; i < n; ++i) {
-        mi::Sint32 result = copy->add_enumerator( decl->get_name( i), decl->get_value( i));
-        ASSERT( M_NEURAY_API, result == 0);
-        boost::ignore_unused( result);
-    }
-
-    // Set the type name
-    Enum_decl_impl* copy_impl = static_cast<Enum_decl_impl*>( copy.get());
-    copy_impl->set_enum_type_name( enum_name);
-
-    m_map_name_enum_decl[enum_name] = copy;
-
-    return 0;
+    return m_idata_factory->register_enum_decl( enum_name, decl);
 }
 
 mi::Sint32 Class_factory::unregister_enum_decl( const char* enum_name)
 {
     ASSERT( M_NEURAY_API, enum_name);
 
-    mi::base::Lock::Block block( &m_map_name_enum_decl_lock);
-
-    auto it = m_map_name_enum_decl.find( enum_name);
-    if( it == m_map_name_enum_decl.end())
-        return -1;
-
-    m_map_name_enum_decl.erase( it);
-
-    return 0;
+    return m_idata_factory->unregister_enum_decl( enum_name);
 }
 
 const mi::IEnum_decl* Class_factory::get_enum_decl( const char* enum_name) const
 {
     ASSERT( M_NEURAY_API, enum_name);
 
-    mi::base::Lock::Block block( &m_map_name_enum_decl_lock);
-
-    auto it = m_map_name_enum_decl.find( enum_name);
-    if( it == m_map_name_enum_decl.end())
-        return nullptr;
-
-    it->second->retain();
-    return it->second.get();
+    return m_idata_factory->get_enum_decl( enum_name);
 }
 
 void Class_factory::unregister_user_defined_classes()
@@ -374,14 +322,12 @@ void Class_factory::unregister_user_defined_classes()
 
 void Class_factory::unregister_structure_decls()
 {
-    mi::base::Lock::Block block( &m_map_name_structure_decl_lock);
-    m_map_name_structure_decl.clear();
+    m_idata_factory->unregister_structure_decls();
 }
 
 void Class_factory::unregister_enum_decls()
 {
-    mi::base::Lock::Block block( &m_map_name_enum_decl_lock);
-    m_map_name_enum_decl.clear();
+    m_idata_factory->unregister_enum_decls();
 }
 
 SERIAL::Class_id Class_factory::get_class_id( const char* class_name) const
@@ -418,11 +364,11 @@ mi::base::IInterface* Class_factory::create_class_instance(
     // create API class instance
     mi::base::Handle<mi::base::IInterface> interface(
         invoke_api_class_factory( transaction, class_id));
-    if( !interface.is_valid_interface())
+    if( !interface)
         return nullptr;
 
     // connect DB element and API class
-    IDb_element* idb_element = interface->get_interface<IDb_element>();
+    auto* idb_element = interface->get_interface<IDb_element>();
     ASSERT( M_NEURAY_API, idb_element);
     if( is_edit)
         idb_element->set_state_edit( transaction, tag);
@@ -438,35 +384,12 @@ mi::base::IInterface* Class_factory::create_type_instance(
     mi::Uint32 argc,
     const mi::base::IInterface* argv[]) const
 {
-    if( !type_name)
-        return nullptr;
-    std::string type_name_string( type_name);
-    mi::Size length = type_name_string.size();
+    DB::Transaction* db_transaction = transaction ? transaction->get_db_transaction() : nullptr;
+    mi::base::IInterface* result = m_idata_factory->create(
+        db_transaction, type_name, argc, argv);
+    if( result)
+        return result;
 
-    // handle arrays
-    if( type_name[length-1] == ']')
-        return create_array_instance( transaction, type_name, argc, argv);
-
-    // handle maps
-    if( type_name_string.substr( 0, 4) == "Map<")
-        return create_map_instance( transaction, type_name, argc, argv);
-
-    // handle pointers
-    if(( type_name_string.substr( 0,  8) == "Pointer<")
-         || ( type_name_string.substr( 0, 14) == "Const_pointer<"))
-        return create_pointer_instance( transaction, type_name, argc, argv);
-
-    // handle structures
-    mi::base::Handle<const mi::IStructure_decl> structure_decl( get_structure_decl( type_name));
-    if( structure_decl.is_valid_interface())
-        return create_structure_instance( transaction, type_name, argc, argv, structure_decl.get());
-
-    // handle enums
-    mi::base::Handle<const mi::IEnum_decl> enum_decl( get_enum_decl( type_name));
-    if( enum_decl.is_valid_interface())
-        return create_enum_instance( transaction, type_name, argc, argv, enum_decl.get());
-
-    // handle simple types
     return create_class_instance( transaction, type_name, argc, argv);
 }
 
@@ -477,21 +400,7 @@ mi::base::IInterface* Class_factory::create_class_instance( const mi::base::Uuid
 
 std::string Class_factory::uuid_to_string( const mi::base::Uuid& uuid)
 {
-    std::ostringstream s;
-    s.fill( '0');
-    s << std::setiosflags( std::ios::right) << std::hex << '('
-        << "0x" << std::setw( 8) <<    uuid.m_id1                << ','
-        << "0x" << std::setw( 4) <<   (uuid.m_id2      & 0xffff) << ','
-        << "0x" << std::setw( 4) <<   (uuid.m_id2 >> 16)         << ','
-        << "0x" << std::setw( 2) <<  ((uuid.m_id3      ) & 0xff) << ','
-        << "0x" << std::setw( 2) <<  ((uuid.m_id3 >>  8) & 0xff) << ','
-        << "0x" << std::setw( 2) <<  ((uuid.m_id3 >> 16) & 0xff) << ','
-        << "0x" << std::setw( 2) <<   (uuid.m_id3 >> 24)         << ','
-        << "0x" << std::setw( 2) <<  ((uuid.m_id4      ) & 0xff) << ','
-        << "0x" << std::setw( 2) <<  ((uuid.m_id4 >>  8) & 0xff) << ','
-        << "0x" << std::setw( 2) <<  ((uuid.m_id4 >> 16) & 0xff) << ','
-        << "0x" << std::setw( 2) <<   (uuid.m_id4 >> 24)         << ')';
-    return s.str();
+    return m_idata_factory->uuid_to_string( uuid);
 }
 
 Type_factory* Class_factory::create_type_factory(
@@ -523,24 +432,21 @@ mi::base::IInterface* Class_factory::create_class_instance(
     // create API/user class instance
     mi::base::Handle<mi::base::IInterface> interface(
         invoke_api_or_user_class_factory( transaction, class_name, argc, argv));
-    if( !interface.is_valid_interface())
+    if( !interface)
         return nullptr;
 
     // if it is a user class instance, we are done
     mi::base::Handle<mi::neuraylib::IUser_class> user_class(
         interface.get_interface<mi::neuraylib::IUser_class>());
-    if( user_class.is_valid_interface()) {
-        user_class->retain();
-        return user_class.get();
-    }
+    if( user_class)
+        return user_class.extract();
 
     auto it = m_map_name_db_element_factory.find( class_name);
 
     if( it == m_map_name_db_element_factory.end()) {
 
         // there is no DB element factory registered for this class name
-        interface->retain();
-        return interface.get();
+        return interface.extract();
 
     } else {
 
@@ -551,187 +457,12 @@ mi::base::IInterface* Class_factory::create_class_instance(
             return nullptr;
 
         // connect DB element and API class
-        IDb_element* idb_element = interface->get_interface<IDb_element>();
+        auto* idb_element = interface->get_interface<IDb_element>();
         ASSERT( M_NEURAY_API, idb_element);
         idb_element->set_state_pointer( transaction, db_element);
 
         return idb_element;
     }
-}
-
-mi::base::IInterface* Class_factory::create_array_instance(
-    Transaction_impl* transaction,
-    const char* type_name,
-    mi::Uint32 argc,
-    const mi::base::IInterface* argv[]) const
-{
-    ASSERT( M_NEURAY_API, type_name);
-    std::string type_name_str( type_name);
-    ASSERT( M_NEURAY_API, type_name_str[type_name_str.size()-1] == ']');
-
-    if( argc != 0)
-        return nullptr;
-
-    const mi::base::IInterface* new_argv[2];
-
-    // extract delimiters
-    mi::Size left_bracket = type_name_str.rfind( '[');
-    if( left_bracket == std::string::npos)
-        return nullptr;
-    mi::Size right_bracket = type_name_str.rfind( ']');
-    if( right_bracket != type_name_str.length() - 1)
-        return nullptr;
-
-    // extract element type name
-    std::string element_type_name = type_name_str.substr( 0, left_bracket);
-    mi::base::Handle<mi::IString> element_type_name_string(
-        create_class_instance<mi::IString>( transaction, "String"));
-    element_type_name_string->set_c_str( element_type_name.c_str());
-    new_argv[0] = element_type_name_string.get();
-
-    // extract length
-    std::string length_str = type_name_str.substr( left_bracket+1, right_bracket-left_bracket-1);
-    if( length_str.empty()) {
-        // create dynamic array instance
-        return create_class_instance( transaction, "__Dynamic_array", 1, new_argv);
-    }
-
-    // extract length (continued)
-    STLEXT::Likely<mi::Size> length_likely
-        = STRING::lexicographic_cast_s<mi::Size>( length_str);
-    if( !length_likely.get_status())
-        return nullptr;
-    mi::Size length = *length_likely.get_ptr(); //-V522 PVS
-    mi::base::Handle<mi::ISize> length_value(
-        create_class_instance<mi::ISize>( transaction, "Size"));
-    length_value->set_value( length);
-
-    // create array instance
-    new_argv[1] = length_value.get();
-    return create_class_instance( transaction, "__Array", 2, new_argv);
-}
-
-mi::base::IInterface* Class_factory::create_map_instance(
-    Transaction_impl* transaction,
-    const char* type_name,
-    mi::Uint32 argc,
-    const mi::base::IInterface* argv[]) const
-{
-    ASSERT( M_NEURAY_API, type_name);
-    std::string type_name_str( type_name);
-    ASSERT( M_NEURAY_API, type_name_str.substr( 0, 4) == "Map<");
-
-    if( argc != 0)
-        return nullptr;
-
-    const mi::base::IInterface* new_argv[1];
-
-    // extract delimiters
-    mi::Size left_angle_bracket = type_name_str.find( '<');
-    mi::Size right_angle_bracket = type_name_str.rfind( '>');
-    if( left_angle_bracket != 3)
-        return nullptr;
-    if( right_angle_bracket != type_name_str.length() - 1)
-        return nullptr;
-
-    // extract value type name
-    std::string value_type_name
-        = type_name_str.substr( left_angle_bracket+1, right_angle_bracket-left_angle_bracket-1);
-    mi::base::Handle<mi::IString> value_type_name_string(
-        create_class_instance<mi::IString>( transaction, "String"));
-    value_type_name_string->set_c_str( value_type_name.c_str());
-    new_argv[0] = value_type_name_string.get();
-
-    // create map instance
-    return create_class_instance( transaction, "__Map", 1, new_argv);
-}
-
-mi::base::IInterface* Class_factory::create_pointer_instance(
-    Transaction_impl* transaction,
-    const char* type_name,
-    mi::Uint32 argc,
-    const mi::base::IInterface* argv[]) const
-{
-    ASSERT( M_NEURAY_API, type_name);
-    std::string type_name_str( type_name);
-    ASSERT( M_NEURAY_API, ( type_name_str.substr( 0,  8) == "Pointer<")
-                       || ( type_name_str.substr( 0, 14) == "Const_pointer<"));
-    bool is_const = type_name_str.substr( 0, 14) == "Const_pointer<";
-
-    if( argc != 0)
-        return nullptr;
-
-    const mi::base::IInterface* new_argv[1];
-
-    // extract delimiters
-    mi::Size left_angle_bracket = type_name_str.find( '<');
-    if( !is_const && left_angle_bracket != 7)
-        return nullptr;
-    mi::Size right_angle_bracket = type_name_str.rfind( '>');
-    if( right_angle_bracket != type_name_str.length() - 1)
-        return nullptr;
-
-    // extract value type name
-    std::string value_type_name
-        = type_name_str.substr( left_angle_bracket+1, right_angle_bracket-left_angle_bracket-1);
-    mi::base::Handle<mi::IString> value_type_name_string(
-        create_class_instance<mi::IString>( transaction, "String"));
-    value_type_name_string->set_c_str( value_type_name.c_str());
-    new_argv[0] = value_type_name_string.get();
-
-    // create pointer instance
-    return create_class_instance(
-        transaction, is_const ? "__Const_pointer" : "__Pointer", 1, new_argv);
-}
-
-mi::base::IInterface* Class_factory::create_structure_instance(
-    Transaction_impl* transaction,
-    const char* type_name,
-    mi::Uint32 argc,
-    const mi::base::IInterface* argv[],
-    const mi::IStructure_decl* decl) const
-{
-    ASSERT( M_NEURAY_API, type_name);
-
-    if( argc != 0)
-        return nullptr;
-
-    const mi::base::IInterface* new_argv[2];
-    new_argv[0] = decl;
-
-    mi::base::Handle<mi::IString> type_name_string(
-        create_class_instance<mi::IString>( transaction, "String"));
-    type_name_string->set_c_str( type_name);
-    new_argv[1] = type_name_string.get();
-
-    // create structure instance
-    mi::base::IInterface* result = create_class_instance( transaction, "__Structure", 2, new_argv);
-    return result;
-}
-
-mi::base::IInterface* Class_factory::create_enum_instance(
-    Transaction_impl* transaction,
-    const char* type_name,
-    mi::Uint32 argc,
-    const mi::base::IInterface* argv[],
-    const mi::IEnum_decl* decl) const
-{
-    ASSERT( M_NEURAY_API, type_name);
-
-    if( argc != 0)
-        return nullptr;
-
-    const mi::base::IInterface* new_argv[2];
-    new_argv[0] = decl;
-
-    mi::base::Handle<mi::IString> type_name_string(
-        create_class_instance<mi::IString>( transaction, "String"));
-    type_name_string->set_c_str( type_name);
-    new_argv[1] = type_name_string.get();
-
-    // create enum instance
-    mi::base::IInterface* result = create_class_instance( transaction, "__Enum", 2, new_argv);
-    return result;
 }
 
 mi::base::IInterface* Class_factory::extract_user_class(
@@ -747,7 +478,7 @@ mi::base::IInterface* Class_factory::extract_element(
     bool is_edit) const
 {
     ASSERT( M_NEURAY_API, false);
-    return 0;
+    return nullptr;
 }
 
 mi::base::IInterface* Class_factory::invoke_api_class_factory(
@@ -815,60 +546,6 @@ mi::base::IInterface* Class_factory::invoke_user_class_factory( const mi::base::
     // create user class instance
     mi::neuraylib::IUser_class_factory* user_class_factory = it->second.get();
     return user_class_factory->create( nullptr, 0, nullptr);
-}
-
-bool Class_factory::contains_blacklisted_type_names(
-    const std::string& type_name, std::vector<std::string>& blacklist)
-{
-    // check if type_name is blacklisted
-    auto it = find( blacklist.begin(), blacklist.end(), type_name);
-    if( it != blacklist.end())
-        return true;
-
-    // descend into structures
-    auto it_structure_decl = m_map_name_structure_decl.find( type_name);
-    if( it_structure_decl != m_map_name_structure_decl.end()) {
-        blacklist.push_back( type_name);
-        bool result = contains_blacklisted_type_names( it_structure_decl->second.get(), blacklist);
-        blacklist.pop_back();
-        return result;
-    }
-
-    // descend into arrays
-    mi::Size length;
-    const std::string& array_element = Type_utilities::strip_array( type_name, length);
-    if( !array_element.empty())
-        return contains_blacklisted_type_names( array_element, blacklist);
-
-    // descend into maps
-    const std::string& map_value = Type_utilities::strip_map( type_name);
-    if( !map_value.empty())
-        return contains_blacklisted_type_names( map_value, blacklist);
-
-    // descend into pointers
-    const std::string& pointer_nested = Type_utilities::strip_pointer( type_name);
-    if( !pointer_nested.empty())
-        return contains_blacklisted_type_names( pointer_nested, blacklist);
-
-    // descend into const pointers
-    const std::string& const_pointer_nested = Type_utilities::strip_const_pointer( type_name);
-    if( !const_pointer_nested.empty())
-        return contains_blacklisted_type_names( const_pointer_nested, blacklist);
-
-    return false;
-
-}
-
-bool Class_factory::contains_blacklisted_type_names(
-    const mi::IStructure_decl* decl, std::vector<std::string>& blacklist)
-{
-    mi::Size n = decl->get_length();
-    for( mi::Size i = 0; i < n; ++i) {
-        std::string member_type_name = decl->get_member_type_name( i);
-        if( contains_blacklisted_type_names( member_type_name, blacklist))
-            return true;
-    }
-    return false;
 }
 
 } // namespace NEURAY

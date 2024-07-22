@@ -55,8 +55,8 @@ namespace i18n
         {}
 
         /// \return
-        ///		- SUCCESS: Success
-        ///		- UNSPECIFIED_FAILURE: Unspecified failure.
+        ///             - SUCCESS: Success
+        ///             - UNSPECIFIED_FAILURE: Unspecified failure.
         int execute();
     };
 

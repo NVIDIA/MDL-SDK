@@ -80,49 +80,48 @@ namespace base
 */
 class Default_logger : public Interface_implement_singleton<ILogger>
 {
-    Default_logger() {}
+    Default_logger() = default;
     Default_logger( const Default_logger&) {}
-public:
 
-    virtual void message(Message_severity level, const char* module_category,
-                         const mi::base::Message_details&, const char* message) {
+public:
+    void message(
+        Message_severity level,
+        const char* module_category,
+        const mi::base::Message_details&,
+        const char* message) final
+    {
         const char* level_str = "";
         switch ( level) {
-        case MESSAGE_SEVERITY_FATAL:
-            level_str = "Fatal";
-            break;
-        case MESSAGE_SEVERITY_ERROR:
-            level_str = "Error";
-            break;
-        case MESSAGE_SEVERITY_WARNING:
-            level_str = "Warning";
-            break;
-        case MESSAGE_SEVERITY_INFO:
-            level_str = "Info";
-            break;
-        case MESSAGE_SEVERITY_VERBOSE:
-            level_str = "Verbose";
-            break;
-        case MESSAGE_SEVERITY_DEBUG:
-            level_str = "Debug";
-            break;
-        default:
-            break;
+            case MESSAGE_SEVERITY_FATAL:
+                level_str = "Fatal";
+                break;
+            case MESSAGE_SEVERITY_ERROR:
+                level_str = "Error";
+                break;
+            case MESSAGE_SEVERITY_WARNING:
+                level_str = "Warning";
+                break;
+            case MESSAGE_SEVERITY_INFO:
+                level_str = "Info";
+                break;
+            case MESSAGE_SEVERITY_VERBOSE:
+                level_str = "Verbose";
+                break;
+            case MESSAGE_SEVERITY_DEBUG:
+                level_str = "Debug";
+                break;
+            default:
+                break;
         }
         std::fprintf( stderr, "%s: [%s] %s\n", level_str, module_category, message);
-        if ( level == MESSAGE_SEVERITY_FATAL) {
+        if( level == MESSAGE_SEVERITY_FATAL) {
             MI_BASE_DEFAULT_LOGGER_ABORT;
         }
     }
 
     /// Returns the single instance of the default logger.
-    static ILogger* get_instance() {
-        // We claim that this is multithreading safe because the
-        // Default_logger has an empty default constructor.
-        // Whatever number of threads gets into the constructor, there
-        // should be no way to screw up the initialization in each
-        // thread. The optimizer might even be able to eliminate all
-        // code here.
+    static ILogger* get_instance()
+    {
         static Default_logger logger;
         return &logger;
     }

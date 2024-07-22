@@ -33,15 +33,12 @@
 
 #include "mdl/compiler/compilercore/compilercore_assert.h"
 
+#include <cstring>
+
 namespace mi {
 namespace mdl {
 
-// Global reference to Node_types object, set by init();
-Node_types s_node_types;
-
-// Return node type
-std::string Node_type::get_return_type() const {
-    size_t i = Node_types::static_idx_from_type( type_name.c_str());
+char const *Node_types::get_return_type(size_t i) const {
     if ( i == material)
         return "material";
     if ( i == material_surface)
@@ -52,24 +49,36 @@ std::string Node_type::get_return_type() const {
         return "material_volume";
     if ( i == material_geometry)
         return "material_geometry";
-    if ((i >= bsdf) && (i < last_bsdf))
+    if ((i >= bsdf) && (i <= last_bsdf))
         return "bsdf";
-    if ( (i >= edf) && (i < last_edf))
+    if ( (i >= edf) && (i <= last_edf))
         return "edf";
-    if ( (i >= vdf) && (i < last_vdf))
+    if ( (i >= vdf) && (i <= last_vdf))
         return "vdf";
-    if ( (i >= hair_bsdf) && (i < last_hair_bsdf))
+    if ( (i >= hair_bsdf) && (i <= last_hair_bsdf))
         return "hair_bsdf";
-    if ( i == local_normal)
+    if (i == material_conditional_operator) {
+        return "material";
+    }
+    if (i == bsdf_conditional_operator) {
+        return "bsdf";
+    }
+    if (i== edf_conditional_operator) {
+        return "edf";
+    }
+    if (i == vdf_conditional_operator) {
+        return "vdf";
+    }
+    if ( i == local_normal) {
         return "color";
+    }
     return "UNKNOWN";
 }
 
 std::string Node_type::get_signature() const {
-    std::string s = mdl_type_name + "(";
+    std::string s = std::string(mdl_type_name) + "(";
     size_t n = parameters.size();
     for ( size_t i = 0; i < n; ++i) {
-        // swap tint color to third arg position if this is a glossy BRDF
         s += parameters[i].param_type;
         if ( i+1 < n)
             s += ",";
@@ -78,17 +87,12 @@ std::string Node_type::get_signature() const {
     return s;
 }
 
-// static members, initialized to 0, will be set later by init();
-Node_types::Node_type_vector*  Node_types::s_node_types = 0;
-Node_types::Map_type_to_idx*   Node_types::s_map_type_to_idx = 0;
-
-
 /// Add zero-param node-type.
 void Node_types::push( Mdl_node_type type, const char* type_name, const char* mdl_type_name,
                        mi::mdl::IDefinition::Semantics sem, const char* sel, size_t min_param) {
-    MDL_ASSERT(size_t(type) == s_node_types->size());
-    (*s_map_type_to_idx)[type_name] = type;
-    s_node_types->push_back( Node_type( type_name, mdl_type_name, sem, sel, min_param));
+    MDL_ASSERT(size_t(type) == m_node_types.size());
+    m_map_type_to_idx[type_name] = type;
+    m_node_types.push_back( Node_type( type_name, mdl_type_name, sem, sel, min_param));
 }
 
 /// Add one-param node-type.
@@ -96,7 +100,7 @@ void Node_types::push( Mdl_node_type type, const char* type_name, const char* md
                        mi::mdl::IDefinition::Semantics sem, const char* sel, size_t min_param,
                        const Node_param& param1) {
     push( type, type_name, mdl_type_name, sem, sel, min_param);
-    std::vector<Node_param>& parameters = s_node_types->back().parameters;
+    std::vector<Node_param>& parameters = m_node_types.back().parameters;
     parameters.push_back( param1);
 }
 
@@ -107,7 +111,7 @@ void Node_types::push(
     const Node_param& param1, const Node_param& param2)
 {
     push( type, type_name, mdl_type_name, sem, sel, min_param);
-    std::vector<Node_param>& parameters = s_node_types->back().parameters;
+    std::vector<Node_param>& parameters = m_node_types.back().parameters;
     parameters.push_back( param1);
     parameters.push_back( param2);
 }
@@ -119,7 +123,7 @@ void Node_types::push(
     const Node_param& param1, const Node_param& param2, const Node_param& param3)
 {
     push( type, type_name, mdl_type_name, sem, sel, min_param);
-    std::vector<Node_param>& parameters = s_node_types->back().parameters;
+    std::vector<Node_param>& parameters = m_node_types.back().parameters;
     parameters.push_back( param1);
     parameters.push_back( param2);
     parameters.push_back( param3);
@@ -133,7 +137,7 @@ void Node_types::push(
     const Node_param& param4)
 {
     push( type, type_name, mdl_type_name, sem, sel, min_param);
-    std::vector<Node_param>& parameters = s_node_types->back().parameters;
+    std::vector<Node_param>& parameters = m_node_types.back().parameters;
     parameters.push_back( param1);
     parameters.push_back( param2);
     parameters.push_back( param3);
@@ -148,7 +152,7 @@ void Node_types::push(
     const Node_param& param4, const Node_param& param5)
 {
     push( type, type_name, mdl_type_name, sem, sel, min_param);
-    std::vector<Node_param>& parameters = s_node_types->back().parameters;
+    std::vector<Node_param>& parameters = m_node_types.back().parameters;
     parameters.push_back( param1);
     parameters.push_back( param2);
     parameters.push_back( param3);
@@ -164,7 +168,7 @@ void Node_types::push(
     const Node_param& param4, const Node_param& param5, const Node_param& param6)
 {
     push( type, type_name, mdl_type_name, sem, sel, min_param);
-    std::vector<Node_param>& parameters = s_node_types->back().parameters;
+    std::vector<Node_param>& parameters = m_node_types.back().parameters;
     parameters.push_back( param1);
     parameters.push_back( param2);
     parameters.push_back( param3);
@@ -182,7 +186,7 @@ void Node_types::push(
     const Node_param& param7)
 {
     push( type, type_name, mdl_type_name, sem, sel, min_param);
-    std::vector<Node_param>& parameters = s_node_types->back().parameters;
+    std::vector<Node_param>& parameters = m_node_types.back().parameters;
     parameters.push_back( param1);
     parameters.push_back( param2);
     parameters.push_back( param3);
@@ -201,7 +205,7 @@ void Node_types::push(
     const Node_param& param7, const Node_param& param8)
 {
     push( type, type_name, mdl_type_name, sem, sel, min_param);
-    std::vector<Node_param>& parameters = s_node_types->back().parameters;
+    std::vector<Node_param>& parameters = m_node_types.back().parameters;
     parameters.push_back( param1);
     parameters.push_back( param2);
     parameters.push_back( param3);
@@ -221,7 +225,7 @@ void Node_types::push(
     const Node_param& param7, const Node_param& param8, const Node_param& param9)
 {
     push( type, type_name, mdl_type_name, sem, sel, min_param);
-    std::vector<Node_param>& parameters = s_node_types->back().parameters;
+    std::vector<Node_param>& parameters = m_node_types.back().parameters;
     parameters.push_back( param1);
     parameters.push_back( param2);
     parameters.push_back( param3);
@@ -243,7 +247,7 @@ void Node_types::push(
     const Node_param& param10)
 {
     push( type, type_name, mdl_type_name, sem, sel, min_param);
-    std::vector<Node_param>& parameters = s_node_types->back().parameters;
+    std::vector<Node_param>& parameters = m_node_types.back().parameters;
     parameters.push_back( param1);
     parameters.push_back( param2);
     parameters.push_back( param3);
@@ -256,11 +260,7 @@ void Node_types::push(
     parameters.push_back( param10);
 }
 
-void Node_types::init() {
-    MDL_ASSERT(s_node_types == 0);
-    MDL_ASSERT(s_map_type_to_idx == 0);
-    s_node_types = new Node_type_vector;
-    s_map_type_to_idx = new Map_type_to_idx;
+Node_types::Node_types() {
     push( material, "material", "material",
           mi::mdl::IDefinition::DS_ELEM_CONSTRUCTOR,
           "mi::mdl::DS_DIST_STRUCT_MATERIAL", 6,
@@ -298,13 +298,17 @@ void Node_types::init() {
 
     push( bsdf, "bsdf", "bsdf", mi::mdl::IDefinition::DS_ELEM_CONSTRUCTOR,
           "mi::mdl::DS_DIST_DEFAULT_BSDF", 0);
-    push( diffuse_reflection_bsdf, "diffuse_reflection_bsdf", "::df::diffuse_reflection_bsdf",
+    push( diffuse_reflection_bsdf,
+          "diffuse_reflection_bsdf",
+          "::df::diffuse_reflection_bsdf",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF,
           "mi::mdl::IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF", 0,
           Node_param( "color", "tint", "color(1.0)"),
           Node_param( "float", "roughness", "0.0"),
           Node_param( "string", "handle", ""));
-    push( dusty_diffuse_reflection_bsdf, "dusty_diffuse_reflection_bsdf", "::df::dusty_diffuse_reflection_bsdf",
+    push( dusty_diffuse_reflection_bsdf,
+          "dusty_diffuse_reflection_bsdf",
+          "::df::dusty_diffuse_reflection_bsdf",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_DUSTY_DIFFUSE_REFLECTION_BSDF,
           "mi::mdl::IDefinition::DS_INTRINSIC_DF_DUSTY_DIFFUSE_REFLECTION_BSDF", 0,
           Node_param( "color", "tint", "color(1.0)"),
@@ -473,6 +477,17 @@ void Node_types::init() {
           Node_param(  "bsdf", "component_2", "bsdf()"),
           Node_param( "float", "weight_3", "0.0"),
           Node_param(  "bsdf", "component_3", "bsdf()"));
+    push( bsdf_mix_4, "bsdf_mix_4", "::df::normalized_mix",
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX,
+          "mi::mdl::DS_DIST_BSDF_MIX_4", 8,
+          Node_param( "float", "weight_1", "0.0"),
+          Node_param(  "bsdf", "component_1", "bsdf()"),
+          Node_param( "float", "weight_2", "0.0"),
+          Node_param(  "bsdf", "component_2", "bsdf()"),
+          Node_param( "float", "weight_3", "0.0"),
+          Node_param(  "bsdf", "component_3", "bsdf()"),
+          Node_param( "float", "weight_4", "0.0"),
+          Node_param(  "bsdf", "component_4", "bsdf()"));
     push( bsdf_clamped_mix_1, "bsdf_clamped_mix_1", "::df::clamped_mix",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX,
           "mi::mdl::DS_DIST_BSDF_CLAMPED_MIX_1", 2,
@@ -494,6 +509,17 @@ void Node_types::init() {
           Node_param(  "bsdf", "component_2", "bsdf()"),
           Node_param( "float", "weight_3", "0.0"),
           Node_param(  "bsdf", "component_3", "bsdf()"));
+    push( bsdf_clamped_mix_4, "bsdf_clamped_mix_4", "::df::clamped_mix",
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX,
+          "mi::mdl::DS_DIST_BSDF_CLAMPED_MIX_4", 8,
+          Node_param( "float", "weight_1", "0.0"),
+          Node_param(  "bsdf", "component_1", "bsdf()"),
+          Node_param( "float", "weight_2", "0.0"),
+          Node_param(  "bsdf", "component_2", "bsdf()"),
+          Node_param( "float", "weight_3", "0.0"),
+          Node_param(  "bsdf", "component_3", "bsdf()"),
+          Node_param( "float", "weight_4", "0.0"),
+          Node_param(  "bsdf", "component_4", "bsdf()"));
     push( bsdf_unbounded_mix_1, "bsdf_unbounded_mix_1", "::df::unbounded_mix",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX,
           "mi::mdl::DS_DIST_BSDF_UNBOUNDED_MIX_1", 2,
@@ -515,6 +541,17 @@ void Node_types::init() {
           Node_param("bsdf", "component_2", "bsdf()"),
           Node_param("float", "weight_3", "0.0"),
           Node_param("bsdf", "component_3", "bsdf()"));
+    push( bsdf_unbounded_mix_4, "bsdf_unbounded_mix_4", "::df::unbounded_mix",
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX,
+          "mi::mdl::DS_DIST_BSDF_UNBOUNDED_MIX_4", 8,
+          Node_param("float", "weight_1", "0.0"),
+          Node_param("bsdf", "component_1", "bsdf()"),
+          Node_param("float", "weight_2", "0.0"),
+          Node_param("bsdf", "component_2", "bsdf()"),
+          Node_param("float", "weight_3", "0.0"),
+          Node_param("bsdf", "component_3", "bsdf()"),
+          Node_param("float", "weight_4", "0.0"),
+          Node_param("bsdf", "component_4", "bsdf()"));
 
     push( bsdf_color_mix_1, "bsdf_color_mix_1", "::df::color_normalized_mix",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX,
@@ -537,6 +574,17 @@ void Node_types::init() {
           Node_param(  "bsdf", "component_2", "bsdf()"),
           Node_param( "color", "weight_3", "color(0.0)"),
           Node_param(  "bsdf", "component_3", "bsdf()"));
+    push( bsdf_color_mix_4, "bsdf_color_mix_4", "::df::color_normalized_mix",
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX,
+          "mi::mdl::DS_DIST_BSDF_COLOR_MIX_4", 8,
+          Node_param( "color", "weight_1", "color(0.0)"),
+          Node_param(  "bsdf", "component_1", "bsdf()"),
+          Node_param( "color", "weight_2", "color(0.0)"),
+          Node_param(  "bsdf", "component_2", "bsdf()"),
+          Node_param( "color", "weight_3", "color(0.0)"),
+          Node_param(  "bsdf", "component_3", "bsdf()"),
+          Node_param( "color", "weight_4", "color(0.0)"),
+          Node_param(  "bsdf", "component_4", "bsdf()"));
     push( bsdf_color_clamped_mix_1, "bsdf_color_clamped_mix_1", "::df::color_clamped_mix",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX,
           "mi::mdl::DS_DIST_BSDF_COLOR_CLAMPED_MIX_1", 2,
@@ -558,6 +606,17 @@ void Node_types::init() {
           Node_param(  "bsdf", "component_2", "bsdf()"),
           Node_param( "color", "weight_3", "color(0.0)"),
           Node_param(  "bsdf", "component_3", "bsdf()"));
+    push( bsdf_color_clamped_mix_4, "bsdf_color_clamped_mix_4", "::df::color_clamped_mix",
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX,
+          "mi::mdl::DS_DIST_BSDF_COLOR_CLAMPED_MIX_4", 8,
+          Node_param( "color", "weight_1", "color(0.0)"),
+          Node_param(  "bsdf", "component_1", "bsdf()"),
+          Node_param( "color", "weight_2", "color(0.0)"),
+          Node_param(  "bsdf", "component_2", "bsdf()"),
+          Node_param( "color", "weight_3", "color(0.0)"),
+          Node_param(  "bsdf", "component_3", "bsdf()"),
+          Node_param( "color", "weight_4", "color(0.0)"),
+          Node_param(  "bsdf", "component_4", "bsdf()"));
     push( bsdf_color_unbounded_mix_1, "bsdf_color_unbounded_mix_1", "::df::color_unbounded_mix",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX,
           "mi::mdl::DS_DIST_BSDF_COLOR_UNBOUNDED_MIX_1", 2,
@@ -579,6 +638,17 @@ void Node_types::init() {
           Node_param(  "bsdf", "component_2", "bsdf()"),
           Node_param( "color", "weight_3", "color(0.0)"),
           Node_param(  "bsdf", "component_3", "bsdf()"));
+    push( bsdf_color_unbounded_mix_4, "bsdf_color_unbounded_mix_4", "::df::color_unbounded_mix",
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX,
+          "mi::mdl::DS_DIST_BSDF_COLOR_UNBOUNDED_MIX_4", 6,
+          Node_param( "color", "weight_1", "color(0.0)"),
+          Node_param(  "bsdf", "component_1", "bsdf()"),
+          Node_param( "color", "weight_2", "color(0.0)"),
+          Node_param(  "bsdf", "component_2", "bsdf()"),
+          Node_param( "color", "weight_3", "color(0.0)"),
+          Node_param(  "bsdf", "component_3", "bsdf()"),
+          Node_param( "color", "weight_4", "color(0.0)"),
+          Node_param(  "bsdf", "component_4", "bsdf()"));
 
     push( weighted_layer, "weighted_layer", "::df::weighted_layer",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_WEIGHTED_LAYER,
@@ -708,6 +778,17 @@ void Node_types::init() {
           Node_param(  "edf", "component_2", "edf()"),
           Node_param( "float", "weight_3", "0.0"),
           Node_param(  "edf", "component_3", "edf()"));
+    push( edf_mix_4, "edf_mix_4", "::df::normalized_mix",
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX,
+          "mi::mdl::DS_DIST_EDF_MIX_4", 8,
+          Node_param( "float", "weight_1", "0.0"),
+          Node_param(  "edf", "component_1", "edf()"),
+          Node_param( "float", "weight_2", "0.0"),
+          Node_param(  "edf", "component_2", "edf()"),
+          Node_param( "float", "weight_3", "0.0"),
+          Node_param(  "edf", "component_3", "edf()"),
+          Node_param( "float", "weight_4", "0.0"),
+          Node_param(  "edf", "component_4", "edf()"));
     push( edf_clamped_mix_1, "edf_clamped_mix_1", "::df::clamped_mix",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX,
           "mi::mdl::DS_DIST_EDF_CLAMPED_MIX_1", 2,
@@ -729,6 +810,17 @@ void Node_types::init() {
           Node_param(  "edf", "component_2", "edf()"),
           Node_param( "float", "weight_3", "0.0"),
           Node_param(  "edf", "component_3", "edf()"));
+    push( edf_clamped_mix_4, "edf_clamped_mix_4", "::df::clamped_mix",
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX,
+          "mi::mdl::DS_DIST_EDF_CLAMPED_MIX_4", 8,
+          Node_param( "float", "weight_1", "0.0"),
+          Node_param(  "edf", "component_1", "edf()"),
+          Node_param( "float", "weight_2", "0.0"),
+          Node_param(  "edf", "component_2", "edf()"),
+          Node_param( "float", "weight_3", "0.0"),
+          Node_param(  "edf", "component_3", "edf()"),
+          Node_param( "float", "weight_4", "0.0"),
+          Node_param(  "edf", "component_4", "edf()"));
     push( edf_unbounded_mix_1, "edf_unbounded_mix_1", "::df::unbounded_mix",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX,
           "mi::mdl::DS_DIST_EDF_UNBOUNDED_MIX_1", 2,
@@ -750,6 +842,17 @@ void Node_types::init() {
           Node_param(  "edf", "component_2", "edf()"),
           Node_param( "float", "weight_3", "0.0"),
           Node_param(  "edf", "component_3", "edf()"));
+    push( edf_unbounded_mix_4, "edf_unbounded_mix_4", "::df::unbounded_mix",
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX,
+          "mi::mdl::DS_DIST_EDF_UNBOUNDED_MIX_4", 8,
+          Node_param( "float", "weight_1", "0.0"),
+          Node_param(  "edf", "component_1", "edf()"),
+          Node_param( "float", "weight_2", "0.0"),
+          Node_param(  "edf", "component_2", "edf()"),
+          Node_param( "float", "weight_3", "0.0"),
+          Node_param(  "edf", "component_3", "edf()"),
+          Node_param( "float", "weight_4", "0.0"),
+          Node_param(  "edf", "component_4", "edf()"));
 
     push( edf_color_mix_1, "edf_color_mix_1", "::df::color_normalized_mix",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX,
@@ -772,6 +875,17 @@ void Node_types::init() {
           Node_param(  "edf", "component_2", "edf()"),
           Node_param( "color", "weight_3", "color(0.0)"),
           Node_param(  "edf", "component_3", "edf()"));
+    push( edf_color_mix_4, "edf_color_mix_4", "::df::color_normalized_mix",
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX,
+          "mi::mdl::DS_DIST_EDF_COLOR_MIX_4", 8,
+          Node_param( "color", "weight_1", "color(0.0)"),
+          Node_param(  "edf", "component_1", "edf()"),
+          Node_param( "color", "weight_2", "color(0.0)"),
+          Node_param(  "edf", "component_2", "edf()"),
+          Node_param( "color", "weight_3", "color(0.0)"),
+          Node_param(  "edf", "component_3", "edf()"),
+          Node_param( "color", "weight_4", "color(0.0)"),
+          Node_param(  "edf", "component_4", "edf()"));
     push( edf_color_clamped_mix_1, "edf_color_clamped_mix_1", "::df::color_clamped_mix",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX,
           "mi::mdl::DS_DIST_EDF_COLOR_CLAMPED_MIX_1", 2,
@@ -793,6 +907,17 @@ void Node_types::init() {
           Node_param(  "edf", "component_2", "edf()"),
           Node_param( "color", "weight_3", "color(0.0)"),
           Node_param(  "edf", "component_3", "edf()"));
+    push( edf_color_clamped_mix_4, "edf_color_clamped_mix_4", "::df::color_clamped_mix",
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX,
+          "mi::mdl::DS_DIST_EDF_COLOR_CLAMPED_MIX_4", 8,
+          Node_param( "color", "weight_1", "color(0.0)"),
+          Node_param(  "edf", "component_1", "edf()"),
+          Node_param( "color", "weight_2", "color(0.0)"),
+          Node_param(  "edf", "component_2", "edf()"),
+          Node_param( "color", "weight_3", "color(0.0)"),
+          Node_param(  "edf", "component_3", "edf()"),
+          Node_param( "color", "weight_4", "color(0.0)"),
+          Node_param(  "edf", "component_4", "edf()"));
     push( edf_color_unbounded_mix_1, "edf_color_unbounded_mix_1", "::df::color_unbounded_mix",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX,
           "mi::mdl::DS_DIST_EDF_COLOR_UNBOUNDED_MIX_1", 2,
@@ -814,6 +939,17 @@ void Node_types::init() {
           Node_param(  "edf", "component_2", "edf()"),
           Node_param( "color", "weight_3", "color(0.0)"),
           Node_param(  "edf", "component_3", "edf()"));
+    push( edf_color_unbounded_mix_4, "edf_color_unbounded_mix_4", "::df::color_unbounded_mix",
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX,
+          "mi::mdl::DS_DIST_EDF_COLOR_UNBOUNDED_MIX_4", 8,
+          Node_param( "color", "weight_1", "color(0.0)"),
+          Node_param(  "edf", "component_1", "edf()"),
+          Node_param( "color", "weight_2", "color(0.0)"),
+          Node_param(  "edf", "component_2", "edf()"),
+          Node_param( "color", "weight_3", "color(0.0)"),
+          Node_param(  "edf", "component_3", "edf()"),
+          Node_param( "color", "weight_4", "color(0.0)"),
+          Node_param(  "edf", "component_4", "edf()"));
 
     push( vdf, "vdf", "vdf", mi::mdl::IDefinition::DS_ELEM_CONSTRUCTOR,
           "mi::mdl::DS_DIST_DEFAULT_VDF", 0);
@@ -855,6 +991,17 @@ void Node_types::init() {
           Node_param(  "vdf", "component_2", "vdf()"),
           Node_param( "float", "weight_3", "0.0"),
           Node_param(  "vdf", "component_3", "vdf()"));
+    push( vdf_mix_4, "vdf_mix_4", "::df::normalized_mix",
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX,
+          "mi::mdl::DS_DIST_VDF_MIX_4", 8,
+          Node_param( "float", "weight_1", "0.0"),
+          Node_param(  "vdf", "component_1", "vdf()"),
+          Node_param( "float", "weight_2", "0.0"),
+          Node_param(  "vdf", "component_2", "vdf()"),
+          Node_param( "float", "weight_3", "0.0"),
+          Node_param(  "vdf", "component_3", "vdf()"),
+          Node_param( "float", "weight_4", "0.0"),
+          Node_param(  "vdf", "component_4", "vdf()"));
     push( vdf_clamped_mix_1, "vdf_clamped_mix_1", "::df::clamped_mix",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX,
           "mi::mdl::DS_DIST_VDF_CLAMPED_MIX_1", 2,
@@ -876,6 +1023,17 @@ void Node_types::init() {
           Node_param(  "vdf", "component_2", "vdf()"),
           Node_param( "float", "weight_3", "0.0"),
           Node_param(  "vdf", "component_3", "vdf()"));
+    push( vdf_clamped_mix_4, "vdf_clamped_mix_4", "::df::clamped_mix",
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX,
+          "mi::mdl::DS_DIST_VDF_CLAMPED_MIX_4", 8,
+          Node_param( "float", "weight_1", "0.0"),
+          Node_param(  "vdf", "component_1", "vdf()"),
+          Node_param( "float", "weight_2", "0.0"),
+          Node_param(  "vdf", "component_2", "vdf()"),
+          Node_param( "float", "weight_3", "0.0"),
+          Node_param(  "vdf", "component_3", "vdf()"),
+          Node_param( "float", "weight_4", "0.0"),
+          Node_param(  "vdf", "component_4", "vdf()"));
     push( vdf_unbounded_mix_1, "vdf_unbounded_mix_1", "::df::unbounded_mix",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX,
           "mi::mdl::DS_DIST_VDF_UNBOUNDED_MIX_1", 2,
@@ -897,6 +1055,17 @@ void Node_types::init() {
           Node_param(  "vdf", "component_2", "vdf()"),
           Node_param( "float", "weight_3", "0.0"),
           Node_param(  "vdf", "component_3", "vdf()"));
+    push( vdf_unbounded_mix_4, "vdf_unbounded_mix_4", "::df::unbounded_mix",
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX,
+          "mi::mdl::DS_DIST_VDF_UNBOUNDED_MIX_4", 8,
+          Node_param( "float", "weight_1", "0.0"),
+          Node_param(  "vdf", "component_1", "vdf()"),
+          Node_param( "float", "weight_2", "0.0"),
+          Node_param(  "vdf", "component_2", "vdf()"),
+          Node_param( "float", "weight_3", "0.0"),
+          Node_param(  "vdf", "component_3", "vdf()"),
+          Node_param( "float", "weight_4", "0.0"),
+          Node_param(  "vdf", "component_4", "vdf()"));
 
     push( vdf_color_mix_1, "vdf_color_mix_1", "::df::color_normalized_mix",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX,
@@ -919,6 +1088,17 @@ void Node_types::init() {
           Node_param(  "vdf", "component_2", "vdf()"),
           Node_param( "color", "weight_3", "color(0.0)"),
           Node_param(  "vdf", "component_3", "vdf()"));
+    push( vdf_color_mix_4, "vdf_color_mix_4", "::df::color_normalized_mix",
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX,
+          "mi::mdl::DS_DIST_VDF_COLOR_MIX_4", 8,
+          Node_param( "color", "weight_1", "color(0.0)"),
+          Node_param(  "vdf", "component_1", "vdf()"),
+          Node_param( "color", "weight_2", "color(0.0)"),
+          Node_param(  "vdf", "component_2", "vdf()"),
+          Node_param( "color", "weight_3", "color(0.0)"),
+          Node_param(  "vdf", "component_3", "vdf()"),
+          Node_param( "color", "weight_4", "color(0.0)"),
+          Node_param(  "vdf", "component_4", "vdf()"));
     push( vdf_color_clamped_mix_1, "vdf_color_clamped_mix_1", "::df::color_clamped_mix",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX,
           "mi::mdl::DS_DIST_VDF_COLOR_CLAMPED_MIX_1", 2,
@@ -940,6 +1120,17 @@ void Node_types::init() {
           Node_param(  "vdf", "component_2", "vdf()"),
           Node_param( "color", "weight_3", "color(0.0)"),
           Node_param(  "vdf", "component_3", "vdf()"));
+    push( vdf_color_clamped_mix_4, "vdf_color_clamped_mix_4", "::df::color_clamped_mix",
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX,
+          "mi::mdl::DS_DIST_VDF_COLOR_CLAMPED_MIX_4", 8,
+          Node_param( "color", "weight_1", "color(0.0)"),
+          Node_param(  "vdf", "component_1", "vdf()"),
+          Node_param( "color", "weight_2", "color(0.0)"),
+          Node_param(  "vdf", "component_2", "vdf()"),
+          Node_param( "color", "weight_3", "color(0.0)"),
+          Node_param(  "vdf", "component_3", "vdf()"),
+          Node_param( "color", "weight_4", "color(0.0)"),
+          Node_param(  "vdf", "component_4", "vdf()"));
     push( vdf_color_unbounded_mix_1, "vdf_color_unbounded_mix_1", "::df::color_unbounded_mix",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX,
           "mi::mdl::DS_DIST_VDF_COLOR_UNBOUNDED_MIX_1", 2,
@@ -961,6 +1152,17 @@ void Node_types::init() {
           Node_param(  "vdf", "component_2", "vdf()"),
           Node_param( "color", "weight_3", "color(0.0)"),
           Node_param(  "vdf", "component_3", "vdf()"));
+    push( vdf_color_unbounded_mix_4, "vdf_color_unbounded_mix_4", "::df::color_unbounded_mix",
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX,
+          "mi::mdl::DS_DIST_VDF_COLOR_UNBOUNDED_MIX_4", 8,
+          Node_param( "color", "weight_1", "color(0.0)"),
+          Node_param(  "vdf", "component_1", "vdf()"),
+          Node_param( "color", "weight_2", "color(0.0)"),
+          Node_param(  "vdf", "component_2", "vdf()"),
+          Node_param( "color", "weight_3", "color(0.0)"),
+          Node_param(  "vdf", "component_3", "vdf()"),
+          Node_param( "color", "weight_4", "color(0.0)"),
+          Node_param(  "vdf", "component_4", "vdf()"));
 
     push( hair_bsdf, "hair_bsdf", "hair_bsdf", mi::mdl::IDefinition::DS_ELEM_CONSTRUCTOR,
           "mi::mdl::DS_DIST_DEFAULT_HAIR_BSDF", 0);
@@ -988,7 +1190,7 @@ void Node_types::init() {
 
     push( material_conditional_operator, "material_conditional_operator",
          "operator?(bool,<0>,<0>)",
-          mi::mdl::IDefinition::Semantics(mi::mdl::IExpression::OK_TERNARY),
+          mi::mdl::operator_to_semantic(mi::mdl::IExpression::OK_TERNARY),
           "mi::mdl::DS_DIST_MATERIAL_CONDITIONAL_OPERATOR", 3,
           Node_param(  "bool", "cond", ""),
           Node_param(  "material", "true_exp", ""),
@@ -996,7 +1198,7 @@ void Node_types::init() {
 
     push( bsdf_conditional_operator, "bsdf_conditional_operator",
           "operator?(bool,<0>,<0>)",
-          mi::mdl::IDefinition::Semantics(mi::mdl::IExpression::OK_TERNARY),
+          mi::mdl::operator_to_semantic(mi::mdl::IExpression::OK_TERNARY),
           "mi::mdl::DS_DIST_BSDF_CONDITIONAL_OPERATOR", 3,
           Node_param(  "bool", "cond", ""),
           Node_param(  "bsdf", "true_exp", ""),
@@ -1004,7 +1206,7 @@ void Node_types::init() {
 
     push( edf_conditional_operator, "edf_conditional_operator",
           "operator?(bool,<0>,<0>)",
-          mi::mdl::IDefinition::Semantics(mi::mdl::IExpression::OK_TERNARY),
+          mi::mdl::operator_to_semantic(mi::mdl::IExpression::OK_TERNARY),
           "mi::mdl::DS_DIST_EDF_CONDITIONAL_OPERATOR", 3,
           Node_param(  "bool", "cond", ""),
           Node_param(  "edf", "true_exp", ""),
@@ -1012,7 +1214,7 @@ void Node_types::init() {
 
     push( vdf_conditional_operator, "vdf_conditional_operator",
           "operator?(bool,<0>,<0>)",
-          mi::mdl::IDefinition::Semantics(mi::mdl::IExpression::OK_TERNARY),
+          mi::mdl::operator_to_semantic(mi::mdl::IExpression::OK_TERNARY),
           "mi::mdl::DS_DIST_VDF_CONDITIONAL_OPERATOR", 3,
           Node_param(  "bool", "cond", ""),
           Node_param(  "vdf", "true_exp", ""),
@@ -1027,18 +1229,9 @@ void Node_types::init() {
 
 }
 
-// Clean up dynamically allocated memory. Can be initialized again.
-void Node_types::exit() {
-    delete s_node_types;
-    delete s_map_type_to_idx;
-    s_node_types = 0;
-    s_map_type_to_idx = 0;
-}
-
 void Node_types::print_all_nodes( std::ostream& out) {
-    MDL_ASSERT(s_node_types != 0);
-    for ( size_t i = 0; i < s_node_types->size(); ++i) {
-        const Node_type& node_type = (*s_node_types)[i];
+    for ( size_t i = 0; i < m_node_types.size(); ++i) {
+        const Node_type& node_type = m_node_types[i];
         out << node_type.type_name << "(";
         size_t n_params = node_type.parameters.size();
         for ( size_t k = 0; k < n_params; ++k) {
@@ -1046,7 +1239,7 @@ void Node_types::print_all_nodes( std::ostream& out) {
                 out << "\n    ";
             const Node_param& param = node_type.parameters[k];
             out << param.param_type << ' ' << param.param_name;
-            if ( ! param.param_default.empty()) {
+            if (param.param_default[0]) {
                 if ( k < node_type.min_parameters) {
                     // make it in the print out clear that this default can't be used in rules
                     out << " ( = " << param.param_default << ")";
@@ -1063,98 +1256,82 @@ void Node_types::print_all_nodes( std::ostream& out) {
 
 void Node_types::print_all_mdl_nodes( std::ostream& out) {
     const char* spaces_43 = "                                           ";
-    MDL_ASSERT(s_node_types != 0);
-    for ( size_t i = 0; i < s_node_types->size(); ++i) {
-        const Node_type& node_type = (*s_node_types)[i];
-        size_t l = node_type.mdl_type_name.size();
+    for ( size_t i = 0; i < m_node_types.size(); ++i) {
+        const Node_type& node_type = m_node_types[i];
+        size_t l = strlen(node_type.mdl_type_name);
         if (l > 43)
             l = 43;
         out << (spaces_43 + l) << node_type.mdl_type_name << " --> " << node_type.type_name << '\n';
     }
 }
 
-int Node_types::idx_from_type( const char* type_name) {
-    MDL_ASSERT(s_node_types != 0);
-    Map_type_to_idx::const_iterator pos = s_map_type_to_idx->find( type_name);
-    if ( pos == s_map_type_to_idx->end())
+int Node_types::idx_from_type( const char* type_name) const {
+    Map_type_to_idx::const_iterator pos = m_map_type_to_idx.find( type_name);
+    if ( pos == m_map_type_to_idx.end())
         return -1;
     return pos->second;
-}
-
-int Node_types::static_idx_from_type( const char* type_name) {
-    MDL_ASSERT(s_node_types != 0);
-    Map_type_to_idx::const_iterator pos = s_map_type_to_idx->find( type_name);
-    if ( pos == s_map_type_to_idx->end())
-        return -1;
-    return pos->second;
-}
-
-const Node_type* Node_types::static_type_from_idx( int idx) {
-    MDL_ASSERT(s_node_types != 0);
-    MDL_ASSERT(idx >= 0);
-    if (size_t(idx) >= s_node_types->size())
-        return nullptr;
-    return &((* s_node_types)[idx]);
 }
 
 const Node_type* Node_types::type_from_idx( int idx) const {
-    MDL_ASSERT(s_node_types != 0);
-    MDL_ASSERT(idx >= 0 && idx < int(s_node_types->size()));
-    return &((* s_node_types)[idx]);
+    if (idx >= int(m_node_types.size())) {
+        return nullptr;
+    }
+    MDL_ASSERT(idx >= 0);
+    return &(m_node_types[idx]);
 }
 
 const Node_type* Node_types::type_from_name( const char* type_name) {
-    MDL_ASSERT(s_node_types != 0);
-    return static_type_from_idx( static_idx_from_type( type_name));
+    return type_from_idx(idx_from_type( type_name));
 }
 
-const std::string& Node_types::type_name( int idx) {
-    return static_type_from_idx(idx)->type_name;
+char const *Node_types::type_name( int idx) {
+    return type_from_idx(idx)->type_name;
 }
 
-const std::string& Node_types::mdl_type_name( int idx) {
-    return static_type_from_idx(idx)->mdl_type_name;
+char const *Node_types::mdl_type_name( int idx) {
+    return type_from_idx(idx)->mdl_type_name;
 }
 
 bool Node_types::is_type( const char* type_name) {
-    MDL_ASSERT(s_node_types != 0);
-    Map_type_to_idx::const_iterator pos = s_map_type_to_idx->find( type_name);
-    return ( pos != s_map_type_to_idx->end());
+    Map_type_to_idx::const_iterator pos = m_map_type_to_idx.find( type_name);
+    return ( pos != m_map_type_to_idx.end());
 }
 
 size_t Node_types::get_n_params( Mdl_node_type node_type) {
-    const Node_type* type = static_type_from_idx( node_type);
+    const Node_type* type = type_from_idx( node_type);
     return type->parameters.size();
 }
 
-const std::string& Node_types::get_param_type( Mdl_node_type node_type, size_t arg_idx) {
-    const Node_type* type = static_type_from_idx( node_type);
+char const *Node_types::get_param_type( Mdl_node_type node_type, size_t arg_idx) {
+    const Node_type* type = type_from_idx( node_type);
     MDL_ASSERT(arg_idx < type->parameters.size());
     return type->parameters[arg_idx].param_type;
 }
 
-const std::string& Node_types::get_param_name( Mdl_node_type node_type, size_t arg_idx) {
-    const Node_type* type = static_type_from_idx( node_type);
+char const *Node_types::get_param_name( Mdl_node_type node_type, size_t arg_idx) {
+    const Node_type* type = type_from_idx( node_type);
     MDL_ASSERT(arg_idx < type->parameters.size());
     return type->parameters[arg_idx].param_name;
 }
 
-const std::string& Node_types::get_param_default( Mdl_node_type node_type, size_t arg_idx) {
-    const Node_type* type = static_type_from_idx( node_type);
+char const *Node_types::get_param_default( Mdl_node_type node_type, size_t arg_idx) {
+    const Node_type* type = type_from_idx( node_type);
     MDL_ASSERT(arg_idx < type->parameters.size());
     return type->parameters[arg_idx].param_default;
 }
 
-bool Node_types::is_param_node_type( const std::string& param_type_name) {
-    return (param_type_name == "material" ||
-            param_type_name == "material_surface" ||
-            param_type_name == "material_emission" ||
-            param_type_name == "material_volume" ||
-            param_type_name == "material_geometry" ||
-            param_type_name == "bsdf" ||
-            param_type_name == "edf" ||
-            param_type_name == "vdf" ||
-            param_type_name == "hair_bsdf");
+bool Node_types::is_param_node_type(char const *param_type_name) {
+    return (
+        !strcmp(param_type_name, "material") ||
+        !strcmp(param_type_name, "material_surface") ||
+        !strcmp(param_type_name, "material_emission") ||
+        !strcmp(param_type_name, "material_volume") ||
+        !strcmp(param_type_name, "material_geometry") ||
+        !strcmp(param_type_name, "bsdf") ||
+        !strcmp(param_type_name, "edf") ||
+        !strcmp(param_type_name, "vdf") ||
+        !strcmp(param_type_name, "hair_bsdf")
+        );
 }
 
 bool Node_types::is_param_node_type( Mdl_node_type node_type, size_t arg_idx) {

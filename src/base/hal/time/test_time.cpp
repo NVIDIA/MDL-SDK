@@ -45,7 +45,7 @@ MI_TEST_AUTO_FUNCTION( test_time )
 {
     // how to get the local time.
     struct tm nowtime;
-    MI_REQUIRE(Time::localtime(&nowtime) == 0);	// syscall
+    MI_REQUIRE(Time::localtime(&nowtime) == 0); // syscall
     Time t = Time::mktime(&nowtime);
     (void) t;
 #ifdef MI_TEST_VERBOSE

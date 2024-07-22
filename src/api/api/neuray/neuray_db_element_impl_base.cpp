@@ -169,11 +169,11 @@ DB::Tag Db_element_impl_base::get_tag() const
             break;
         case STATE_POINTER:
         case STATE_INVALID:
-            return DB::Tag();
+            return {};
             break;
     }
     ASSERT( M_NEURAY_API, false);
-    return DB::Tag();
+    return {};
 }
 
 mi::Sint32 Db_element_impl_base::store(

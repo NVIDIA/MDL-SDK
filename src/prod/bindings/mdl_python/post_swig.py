@@ -30,6 +30,7 @@
 import argparse
 import shutil
 import re
+from ast import literal_eval as make_tuple
 
 # Note, this scipt is used to remove unnecessary and potentially misused functions from the binding.
 # In the future this script or the generation itself can change in order to avoid post processing
@@ -62,6 +63,7 @@ def run(args, binding_file_path):
     global_names_to_remove: list[str] = [
         'BAKE_',
         'BAKER_',  # belongs to BAKE_
+        'BSDF_',  # Bsdf_type used in IBsdf_isotropic_data
         'CLIP_',
         'ELEMENT_TYPE_',
         'FILTER_',
@@ -82,27 +84,156 @@ def run(args, binding_file_path):
 
     global_name_pattern:re.Pattern = re.compile(r"^(\w+)\s=\s_pymdlsdk.(\1)\s*$")
 
+    manualTypeHintMap: dict = {}
+    manualTypeHintMap['-> "char const *":'] = '-> str:'
+    manualTypeHintMap['-> "mi::Sint64":'] = '-> int:'
+    manualTypeHintMap[': "mi::Sint64"'] = ': int'
+    manualTypeHintMap['-> "mi::Sint32":'] = '-> int:'
+    manualTypeHintMap[': "mi::Sint32"'] = ': int'
+    manualTypeHintMap['-> "mi::Sint16":'] = '-> int:'
+    manualTypeHintMap[': "mi::Sint16"'] = ': int'
+    manualTypeHintMap['-> "mi::Sint8":'] = '-> int:'
+    manualTypeHintMap[': "mi::Sint8"'] = ': int'
+    manualTypeHintMap['-> "mi::Uint64":'] = '-> int:'
+    manualTypeHintMap[': "mi::Uint64"'] = ': int'
+    manualTypeHintMap['-> "mi::Uint32":'] = '-> int:'
+    manualTypeHintMap[': "mi::Uint32"'] = ': int'
+    manualTypeHintMap['-> "mi::Uint16":'] = '-> int:'
+    manualTypeHintMap[': "mi::Uint16"'] = ': int'
+    manualTypeHintMap['-> "mi::Uint8":'] = '-> int:'
+    manualTypeHintMap[': "mi::Uint8"'] = ': int'
+    manualTypeHintMap['-> "mi::Float32":'] = '-> float:'
+    manualTypeHintMap[': "mi::Float32"'] = ': float'
+    manualTypeHintMap['-> "mi::Float64":'] = '-> float:'
+    manualTypeHintMap[': "mi::Float64"'] = ': float'
+    manualTypeHintMap['-> "mi::Size":'] = '-> int:'
+    manualTypeHintMap[': "mi::Size"'] = ': int'
+    manualTypeHintMap['-> "mi::Difference":'] = '-> int:'
+    manualTypeHintMap[': "mi::Difference"'] = ': int'
+    manualTypeHintMap['-> "size_t":'] = '-> int:'
+    manualTypeHintMap[': "size_t"'] = ': int'
+    manualTypeHintMap['-> "uint64_t":'] = '-> int:'
+    manualTypeHintMap[': "uint64_t"'] = ': int'
+    manualTypeHintMap[': "char const *"'] = ': str'
+    manualTypeHintMap['-> "bool":'] = '-> bool:'
+    manualTypeHintMap[': "bool"'] = ': bool'
+    manualTypeHintMap['-> "mi::math::Color_struct":'] = '-> "Color_struct":'
+    manualTypeHintMap['-> "void":'] = '-> None:'
+    manualTypeHintMap['-> "std::string":'] = '-> str:'
+
+    # used for __exit__ functions
+    manualTypeHintMap['exc_type: "void const *"'] = 'exc_type'
+    manualTypeHintMap['exc_value: "void const *"'] = 'exc_value'
+    manualTypeHintMap['exc_traceback: "void const *"'] = 'exc_traceback'
+
+    # since we renamed them to ovoid conflicts in swig
+    manualTypeHintMap[': "_IType_struct"'] = ': "IType_structure"'
+    manualTypeHintMap[': "_IType_enum"'] = ': "IType_enumeration"'
+
+
+    def add_type_map_iinterface(map: dict, map_from: str, map_to: str):
+        map[f'-> "_{map_from}":'] =                             f'-> "{map_to}":'
+        map[f': "_{map_from}"'] =                               f': "{map_to}"'
+        map[f'-> "mi::{map_from} *":'] =                        f'-> "{map_to}":'
+        map[f': "mi::{map_from} *"'] =                          f': "{map_to}"'
+        map[f'-> "mi::{map_from} const *":'] =                  f'-> "{map_to}":'
+        map[f': "mi::{map_from} const *"'] =                    f': "{map_to}"'
+        map[f'-> "mi::base::{map_from} *":'] =                  f'-> "{map_to}":'
+        map[f': "mi::base::{map_from} *"'] =                    f': "{map_to}"'
+        map[f'-> "mi::base::{map_from} const *":'] =            f'-> "{map_to}":'
+        map[f': "mi::base::{map_from} const *"'] =              f': "{map_to}"'
+        map[f'-> "mi::neuraylib::{map_from} *":'] =             f'-> "{map_to}":'
+        map[f': "mi::neuraylib::{map_from} *"'] =               f': "{map_to}"'
+        map[f'-> "mi::neuraylib::{map_from} const *":'] =       f'-> "{map_to}":'
+        map[f': "mi::neuraylib::{map_from} const *"'] =         f': "{map_to}"'
+        map[f'-> "SmartPtr< mi::{map_from} > *":'] =            f'-> "{map_to}":'
+        map[f'-> "SmartPtr< mi::base::{map_from} > *":'] =      f'-> "{map_to}":'
+        map[f'-> "SmartPtr< mi::neuraylib::{map_from} > *":'] = f'-> "{map_to}":'
+
+    def add_type_map_primitive(map: dict, map_from: str, map_to: str):
+        map[f'-> "{map_from}":'] =                      f'-> "{map_to}":'
+        map[f': "{map_from}"'] =                        f': "{map_to}"'
+        map[f'-> "{map_from} const":'] =                f'-> "{map_to}":'
+        map[f': "{map_from} const"'] =                  f': "{map_to}"'
+        map[f'-> "mi::{map_from}":'] =                  f'-> "{map_to}":'
+        map[f': "mi::{map_from}"'] =                    f': "{map_to}"'
+        map[f'-> "mi::{map_from} const":'] =            f'-> "{map_to}":'
+        map[f': "mi::{map_from} const"'] =              f': "{map_to}"'
+        map[f'-> "mi::base::{map_from}":'] =            f'-> "{map_to}":'
+        map[f': "mi::base::{map_from}"'] =              f': "{map_to}"'
+        map[f'-> "mi::base::{map_from} const":'] =      f'-> "{map_to}":'
+        map[f': "mi::base::{map_from} const"'] =        f': "{map_to}"'
+
     strip: bool = False
     strip_n_lines: int = 0
-    strip_end: str = ""
     class_name: str = ""
+    append_to_end_of_class_lines: list[str] = []
     is_iinterface: bool = False
-    for line in Lines:
+    num_lines = len(Lines)
+    line_index: int = 0
+    while line_index < num_lines:
+        line: str = Lines[line_index]
+
+        if not class_name:
+            # drop the unused swig functions in the beginning of the module
+            # (this works as long as there are no empty lines in the functions to strip)
+            if line.startswith('def _swig_setattr_nondynamic_instance_variable(set):') or \
+               line.startswith('def _swig_setattr_nondynamic_class_variable(set):') or \
+               line.startswith('def _swig_add_metaclass(metaclass):') or \
+               line.startswith('class _SwigNonDynamicMeta(type):'):
+                line = line.strip()
+                while line != "":  # drop everything until we find the next empty line
+                    line_index = line_index + 1
+                    line = Lines[line_index].strip()
+                line_index = line_index + 2  # drop the empty line as well
+                continue
+
+            if line.startswith('if _swig_python_version_info < (2, 7, 0):') or \
+               line.startswith('    from . import _pymdlsdk') or \
+               line.startswith('except ImportError:') or \
+               line.startswith('    except __builtin__.Exception:'):
+                line = line.rstrip() + "  # pragma: no cover\n"
+
         # keep class name for logs
         lineNoWhiteSpaces = line.strip()
         if line.startswith('class '):
             class_name = re.search(r'^class (.*?)\(.*', line).group(1)
             is_iinterface = class_name.startswith("I")
+            if not line.startswith('class _'):
+                if is_iinterface:
+                    add_type_map_iinterface(manualTypeHintMap, class_name, class_name)
+                else:
+                    add_type_map_primitive(manualTypeHintMap, class_name, class_name)
+            
+            assert(len(append_to_end_of_class_lines) == 0)
+
+        # end of class
+        if line.startswith("# Register "):
+            # append the lines we collected for "end of class"
+            for l in append_to_end_of_class_lines:
+                ProcessedLines.append(l)
+            append_to_end_of_class_lines.clear()
 
         # find interface classes with a leading _
         if line.startswith('class _I'):
-            strip_end = f'_pymdlsdk.{class_name}_swigregister'
             strip = True
-        elif strip and line.startswith(strip_end):
+        elif strip and line.startswith(f'_pymdlsdk.{class_name}_swigregister'):
             strip = False
-            strip_n_lines = 2
+            strip_n_lines = 1
             if args.verbose:
                 print(f"removed class: '{class_name}'")
+        # add empty lines after regular classes that somehow are missing in swig 4.2.1
+        elif line.startswith(f'_pymdlsdk.{class_name}_swigregister'):
+            ProcessedLines.append(line+"\n")
+            line_index = line_index + 1
+            continue # stop here since we changed the line_index
+
+        # handle type hint mappings
+        elif lineNoWhiteSpaces.startswith('@post_swig_add_type_hint_mapping('):
+            deco_args: tuple = make_tuple(lineNoWhiteSpaces[32:])
+            manualTypeHintMap[f'-> "{deco_args[0]}":'] = f'-> "{deco_args[1]}":'
+            manualTypeHintMap[f': "{deco_args[0]}"'] = f': "{deco_args[1]}"'
+            strip_n_lines = 1  # drop this line
 
         # remove the __ref__ and __deref__ functions added by swig.
         # They are not used by the bindings and should not be used by binding users.
@@ -119,8 +250,7 @@ def run(args, binding_file_path):
         elif lineNoWhiteSpaces.startswith('def I') and \
             lineNoWhiteSpaces.startswith(f'def {class_name}_IID() -> "mi::base::Uuid const":'):
             strip = True
-            strip_end = f'return _pymdlsdk.{class_name}_IID()'
-        elif strip and lineNoWhiteSpaces.startswith(strip_end):
+        elif strip and lineNoWhiteSpaces.startswith( f'return _pymdlsdk.{class_name}_IID()'):
             strip = False
             strip_n_lines = 2
             if args.verbose:
@@ -129,8 +259,7 @@ def run(args, binding_file_path):
         elif lineNoWhiteSpaces.startswith('def I') and \
             lineNoWhiteSpaces.startswith(f'def {class_name}__get_interface(iface: "mi::base::IInterface *") ->'):
             strip = True
-            strip_end = f'return _pymdlsdk.{class_name}__get_interface(iface)'
-        elif strip and lineNoWhiteSpaces.startswith(strip_end):
+        elif strip and lineNoWhiteSpaces.startswith(f'return _pymdlsdk.{class_name}__get_interface(iface)'):
             strip = False
             strip_n_lines = 2
             if args.verbose:
@@ -157,7 +286,25 @@ def run(args, binding_file_path):
             if not constant_process:
                 general: re.Match = global_name_pattern.match(line)
                 if general and general.group(1) not in global_names_to_preserve:
-                    print(f"Error: MDL Python Bindings contain global constant '{general.group(1)}' that isn't handled.")
+                    print(f"Error: Bindings contain global constant '{general.group(1)}' that isn't handled.")
+
+        # move (extended) functions to the end of the class to make sure regular functions are defined earlier
+        elif lineNoWhiteSpaces == '@post_swig_move_to_end_of_class':
+            found_function_begin: bool = False
+            while(True):
+                line_index = line_index + 1
+                line = Lines[line_index]
+                if line.startswith('    def '):
+                    if found_function_begin: # stop when reaching the next function
+                        break
+                    else:
+                        found_function_begin = True
+                if line.startswith('    @') and found_function_begin: # stop when reaching a decorator of the next function
+                    break
+                if line.startswith("# Register "): # stop when reaching the end of the class
+                    break
+                append_to_end_of_class_lines.append(line)
+            continue  # Note, we need skip processing here
 
         # skip lines or not
         if not strip:
@@ -166,7 +313,52 @@ def run(args, binding_file_path):
             else:
                 ProcessedLines.append(line)
 
-    # pverwrite the file
+        # to read the next line.
+        # can't use a range iterator here because we need to manipulate the intex
+        line_index = line_index + 1
+
+
+    # second loop over all lines to replace type hints until swig is able to produce correct python names
+    # also add some sanity checks
+    if args.verbose:
+        for key, value in manualTypeHintMap.items():
+            print(f"replacing type hints:    {key}    by    {value}")
+
+    num_lines = len(ProcessedLines)
+    for i in range(num_lines):
+        line: str = ProcessedLines[i]
+        lineNoWhiteSpaces: str = line.lstrip()
+        # for now, look at signatures only
+        if lineNoWhiteSpaces.startswith("def "):
+            for key, value in manualTypeHintMap.items():
+                line = line.replace(key, value)
+            ProcessedLines[i] = line
+
+            # check for deprecated c++ functions that should not be accessible in the bindings
+            # note, the python bindings stubs have a leading underscore
+            if lineNoWhiteSpaces.startswith("def deprecated_"):
+                print(f"Error: Bindings contain a deprecated function: {line.strip()}")
+                continue
+
+            # out parameters are not supported directly, they are in handled in 'mdl_python_swig.i'
+            if ': "mi::Sint32 *"' in line:
+                print(f"Error: Bindings contains an out parameter: {line.strip()}")
+                continue
+
+            # missing interface that need to be added to the bindings. Ignoring the function is also possible if desired.
+            if line.find("mi::") >= 0:  # issue a warning for now. this could potentially mean an error
+                print(f"Error: Bindings contains unhandled type hints: {line.strip()}")
+
+            if ' *"' in line:
+                print(f"Error: Bindings contains a pointer in the signature: {line.strip()}")
+                continue
+
+            if ' &"' in line:
+                print(f"Error: Bindings contains a reference in the signature: {line.strip()}")
+                continue
+
+
+    # write the file
     with open(binding_file_path, 'w') as binding_file:
         binding_file.writelines(ProcessedLines)
 
@@ -178,6 +370,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     binding_file_path = args.outdir + '/' + args.module + '.py'
-    print(f"post processing binding moduke: {binding_file_path}")
+    print(f"Post-processing binding module: {binding_file_path}")
 
     run(parser.parse_args(), binding_file_path)

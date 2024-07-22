@@ -34,7 +34,6 @@
 
 #include "i_config_registry.h"
 
-#include <base/system/stlext/i_stlext_any.h>
 #include <map>
 #include <string>
 
@@ -53,27 +52,27 @@ class Config_registry_impl : public Config_registry
     /// \param value the value
     /// \return success of registration
     virtual bool add_value(
-	const std::string& name,
-	const STLEXT::Any& value);
+        const std::string& name,
+        const std::any& value);
     /// Registering a value into a list of values of the same type.
     /// \param name name of the value
     /// \param value the value
     /// \return success of registration
     virtual bool add_value_multiple(
-	const std::string& name,
-	const STLEXT::Any& value);
+        const std::string& name,
+        const std::any& value);
     /// Update, ie overwrite the existing value with the given one.
     /// \param name name of the value
     /// \param value the value
     virtual void overwrite_value(
-	const std::string& name,
-	const STLEXT::Any& value);
+        const std::string& name,
+        const std::any& value);
 
     /// Retrieving a value.
     /// \param name name of the value
     /// \return its value or the empty type iff not registered
-    STLEXT::Any get_value(
-	const std::string& name) const;
+    std::any get_value(
+        const std::string& name) const;
 
     /// Retrieve the start of the registry.
     virtual Const_iter begin() const { return m_values.begin(); }
@@ -81,7 +80,7 @@ class Config_registry_impl : public Config_registry
     virtual Const_iter end() const { return m_values.end(); }
 
   private:
-    std::map<std::string, STLEXT::Any> m_values;	///< the stored registered values
+    std::map<std::string, std::any> m_values;   ///< the stored registered values
 };
 
 }

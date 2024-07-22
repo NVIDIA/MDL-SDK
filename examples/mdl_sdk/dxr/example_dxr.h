@@ -126,6 +126,13 @@ namespace mi { namespace examples { namespace dxr
         /// far plane that defines the maximum ray travel distance
         float far_plane_distance;
 
+        /// if >= 0, a visual representation of the selected AOV is displayed instead of the
+        /// regular PBR rendering
+        int aov_index_to_render;
+
+        /// the BSDF data flags to use when executing BSDF functions
+        uint32_t bsdf_data_flags;
+
         /// resets the progressive iteration counter to restart the rendering in the next frame.
         void restart_progressive_rendering();
 
@@ -157,6 +164,7 @@ namespace mi { namespace examples { namespace dxr
         Albedo_Glossy,
         Normal,
         Roughness,
+        AOV,
 
         count
     };
@@ -259,7 +267,6 @@ namespace mi { namespace examples { namespace dxr
         mdl_d3d12::Texture* m_roughness_buffer;
         mdl_d3d12::Descriptor_heap_handle m_roughness_buffer_uav;
 
-        mdl_d3d12::Descriptor_heap_handle m_acceleration_structure_srv;
         mdl_d3d12::Raytracing_pipeline* m_pipeline[2];
         mdl_d3d12::Shader_binding_tables* m_shader_binding_table[2];
         size_t m_active_pipeline_index; // pipeline and binding tables can be swapped after updates
@@ -273,6 +280,13 @@ namespace mi { namespace examples { namespace dxr
         mdl_d3d12::Descriptor_heap_handle m_camera_cbv;
 
         mdl_d3d12::Environment* m_environment;
+
+        // The global root signature for the ray-tracing calls is fix
+        uint32_t m_global_root_signature_camera_constants_slot;
+        uint32_t m_global_root_signature_scene_constants_slot;
+        uint32_t m_global_root_signature_bvh_slot;
+        uint32_t m_global_root_signature_environment_slot;
+        uint32_t m_global_root_signature_resource_heap_slot;
 
         bool m_take_screenshot;
         bool m_toggle_fullscreen;

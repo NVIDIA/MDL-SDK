@@ -32,6 +32,7 @@
 #define MI_NEURAYLIB_IIMAGE_H
 
 #include <mi/neuraylib/iscene_element.h>
+#include <mi/neuraylib/version.h>
 
 namespace mi {
 
@@ -338,10 +339,6 @@ public:
     /// Returns the number of uv-tiles for a given frame (or 0 if \p frame_id is out of bounds).
     virtual Size get_frame_length( Size frame_id) const = 0;
 
-#ifdef MI_NEURAYLIB_DEPRECATED_12_1
-    inline Size get_uvtile_length() const { return get_frame_length( 0); }
-#endif
-
     /// Returns the u- and v- coordinates corresponding to a uv-tile ID.
     ///
     /// \param frame_id    The frame ID of the frame.
@@ -351,11 +348,6 @@ public:
     /// \return            0 on success, -1 if \p uvtile_id is out of range.
     virtual Sint32 get_uvtile_uv( Size frame_id, Size uvtile_id, Sint32& u, Sint32& v) const = 0;
 
-#ifdef MI_NEURAYLIB_DEPRECATED_12_1
-    inline Sint32 get_uvtile_uv( Uint32 uvtile_id, Sint32& u, Sint32& v) const
-    { return get_uvtile_uv( 0, uvtile_id, u, v); }
-#endif
-
     /// Returns the uv-tile ID corresponding to u- and v-coordinates.
     ///
     /// \param frame_id    The frame ID of the frame.
@@ -363,11 +355,6 @@ public:
     /// \param v           The v-coordinate of the uv-tile..
     /// \return            The uv-tile ID, or -1 of there is no uv-tile with the given coordinates.
     virtual Size get_uvtile_id( Size frame_id, Sint32 u, Sint32 v) const = 0;
-
-#ifdef MI_NEURAYLIB_DEPRECATED_12_1
-    inline Uint32 get_uvtile_id( Sint32 u, Sint32 v) const
-    { return static_cast<Uint32>( get_uvtile_id( 0, u, v)); }
-#endif
 
     /// Returns the ranges of u- and v-coordinates.
     ///
@@ -378,12 +365,6 @@ public:
     /// \param[out] max_v  Largest v-coordinate for that frame.
     virtual void get_uvtile_uv_ranges(
         Size frame_id, Sint32& min_u, Sint32& min_v, Sint32& max_u, Sint32& max_v) const = 0;
-
-#ifdef MI_NEURAYLIB_DEPRECATED_12_1
-    inline void get_uvtile_uv_ranges(
-        Sint32& min_u, Sint32& min_v, Sint32& max_u, Sint32& max_v) const
-    { return get_uvtile_uv_ranges( 0, min_u, min_v, max_u, max_v); }
-#endif
 
     //@}
     /// \name Methods to query filenames, selector, and canvases
@@ -400,11 +381,6 @@ public:
     ///
     /// \see #get_original_filename()
     virtual const char* get_filename( Size frame_id, Size uvtile_id) const = 0;
-
-#ifdef MI_NEURAYLIB_DEPRECATED_12_1
-    inline const char* get_filename( Uint32 uvtile_id = 0) const
-    { return get_filename( 0, uvtile_id); }
-#endif
 
     /// Returns the unresolved file as passed to #reset_file().
     ///
@@ -427,11 +403,6 @@ public:
     ///                    failure, e.g., because of an invalid uv-tile ID.
     virtual const ICanvas* get_canvas( Size frame_id, Size uvtile_id, Uint32 level) const = 0;
 
-#ifdef MI_NEURAYLIB_DEPRECATED_12_1
-    inline const ICanvas* get_canvas( Uint32 level = 0, Uint32 uvtile_id = 0) const
-    { return get_canvas( 0, uvtile_id, level); }
-#endif
-
     //@}
     /// \name Properties of the canvases (convenience methods)
     //@{
@@ -445,20 +416,12 @@ public:
     /// See \ref mi_neuray_types for a list of supported pixel types.
     virtual const char* get_type( Size frame_id, Size uvtile_id) const = 0 ;
 
-#ifdef MI_NEURAYLIB_DEPRECATED_12_1
-    inline const char* get_type( Uint32 uvtile_id = 0) const { return get_type( 0, uvtile_id); }
-#endif
-
     /// Returns the number of levels in the mipmap pyramid.
     ///
     /// \param frame_id    The frame ID of the mipmap.
     /// \param uvtile_id   The uv-tile ID of the mipmap to get the number of levels for.
     /// \return            The number of levels, or -1 in case of an invalid frame ID or uv-tile ID.
     virtual Uint32 get_levels( Size frame_id, Size uvtile_id) const = 0;
-
-#ifdef MI_NEURAYLIB_DEPRECATED_12_1
-    inline Uint32 get_levels( Uint32 uvtile_id = 0) const { return get_levels( 0, uvtile_id); }
-#endif
 
     /// Returns the horizontal resolution of a canvas.
     ///
@@ -469,11 +432,6 @@ public:
     ///                    uv-tile ID, or level.
     virtual Uint32 resolution_x( Size frame_id, Size uvtile_id, Uint32 level) const = 0;
 
-#ifdef MI_NEURAYLIB_DEPRECATED_12_1
-    inline Uint32 resolution_x( Uint32 level = 0, Uint32 uvtile_id = 0) const
-    { return resolution_x( 0, uvtile_id, level); }
-#endif
-
     /// Returns the vertical resolution of a canvas.
     ///
     /// \param frame_id    The frame ID of the canvas.
@@ -483,11 +441,6 @@ public:
     ///                    uv-tile ID, or level.
     virtual Uint32 resolution_y( Size frame_id, Size uvtile_id, Uint32 level) const = 0;
 
-#ifdef MI_NEURAYLIB_DEPRECATED_12_1
-    inline Uint32 resolution_y( Uint32 level = 0, Uint32 uvtile_id = 0) const
-    { return resolution_y( 0, uvtile_id, level); }
-#endif
-
     /// Returns the number of layers of a canvas.
     ///
     /// \param frame_id    The frame ID of the canvas.
@@ -496,11 +449,6 @@ public:
     /// \return            The number of layers, or -1 in case of an invalid frame ID,
     ///                    uv-tile ID, or level.
     virtual Uint32 resolution_z( Size frame_id, Size uvtile_id, Uint32 level) const = 0;
-
-#ifdef MI_NEURAYLIB_DEPRECATED_12_1
-    inline Uint32 resolution_z( Uint32 level = 0, Uint32 uvtile_id = 0) const
-    { return resolution_z( 0, uvtile_id, level); }
-#endif
 
     //@}
 };

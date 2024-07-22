@@ -266,7 +266,7 @@ void test_direct_call( DB::Transaction* transaction)
     MI_CHECK( e);
 
     MI_CHECK_EQUAL( e->get_kind(), IExpression::EK_DIRECT_CALL);
-    MI_CHECK_EQUAL( DB::Tag( 42), e->get_definition(/*transaction=*/nullptr));
+    MI_CHECK_EQUAL( DB::Tag( 42), e->get_definition( /*transaction*/ nullptr));
     MI_CHECK_EQUAL( DB::Tag( 43), e->get_module());
     check_dump( /*transaction*/ nullptr, ef, e.get(), "direct call foo = tag 42 ()");
     check_list( ef, e.get());

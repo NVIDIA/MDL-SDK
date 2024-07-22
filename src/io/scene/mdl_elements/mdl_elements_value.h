@@ -348,7 +348,7 @@ public:
 
     void set_value( DB::Tag value) { m_value = value; }
 
-    const char* get_file_path( DB::Transaction* transaction) const;
+    std::string get_file_path( DB::Transaction* transaction) const;
 
     const char* get_unresolved_file_path() const { return m_unresolved_file_path.c_str(); }
 
@@ -366,7 +366,6 @@ public:
 
 private:
     DB::Tag m_value;
-    mutable std::string m_cached_file_path;
     std::string m_unresolved_file_path;
     std::string m_owner_module;
     mi::Float32 m_gamma;
@@ -394,7 +393,7 @@ public:
 
     void set_value( DB::Tag value) { m_value = value; }
 
-    const char* get_file_path( DB::Transaction* transaction) const;
+    std::string get_file_path( DB::Transaction* transaction) const;
 
     const char* get_unresolved_file_path() const { return m_unresolved_file_path.c_str(); }
 
@@ -408,7 +407,6 @@ public:
 
 private:
     DB::Tag m_value;
-    mutable std::string m_cached_file_path;
     std::string m_unresolved_file_path;
     std::string m_owner_module;
 };
@@ -435,7 +433,7 @@ public:
 
     void set_value( DB::Tag value) { m_value = value; }
 
-    const char* get_file_path( DB::Transaction* transaction) const;
+    std::string get_file_path( DB::Transaction* transaction) const;
 
     const char* get_unresolved_file_path() const { return m_unresolved_file_path.c_str(); }
 
@@ -449,7 +447,6 @@ public:
 
 private:
     DB::Tag m_value;
-    mutable std::string m_cached_file_path;
     std::string m_unresolved_file_path;
     std::string m_owner_module;
 };

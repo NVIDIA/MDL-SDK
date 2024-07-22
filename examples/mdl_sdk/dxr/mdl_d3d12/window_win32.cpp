@@ -328,6 +328,7 @@ void Window_win32::set_window_mode(IWindow::Mode mode)
     m_app->flush_command_queues();
 
     // actually set the new mode
+    // Note, this will only work if the display is connected to the GPU that is used.
     if (log_on_failure(m_swap_chain->SetFullscreenState(!fullscreen_state, nullptr),
         "Failed to change window mode.", SRC))
         return;

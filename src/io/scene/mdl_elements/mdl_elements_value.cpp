@@ -37,6 +37,7 @@
 
 #include <cstring>
 #include <sstream>
+
 #include <boost/core/ignore_unused.hpp>
 
 #include <mi/neuraylib/istring.h>
@@ -445,21 +446,20 @@ mi::Size Value_struct::get_memory_consumption() const
     return size;
 }
 
-const char* Value_texture::get_file_path( DB::Transaction* transaction) const
+std::string Value_texture::get_file_path( DB::Transaction* transaction) const
 {
     if( !m_value && !m_unresolved_file_path.empty())
         return m_unresolved_file_path.c_str();
 
     if( !m_value || transaction->get_class_id( m_value) != TEXTURE::ID_TEXTURE)
-        return nullptr;
+        return {};
     DB::Access<TEXTURE::Texture> texture( m_value, transaction);
     DB::Tag image_tag = texture->get_image();
     if( image_tag && transaction->get_class_id(image_tag) == DBIMAGE::ID_IMAGE) {
         DB::Access<DBIMAGE::Image> image( image_tag, transaction);
-        m_cached_file_path = image->get_mdl_file_path();
-        return !m_cached_file_path.empty() ? m_cached_file_path.c_str() : nullptr;
+        return image->get_mdl_file_path();
     }
-    return nullptr;
+    return {};
 }
 
 mi::Size Value_texture::get_memory_consumption() const
@@ -468,16 +468,15 @@ mi::Size Value_texture::get_memory_consumption() const
         + dynamic_memory_consumption( m_type);
 }
 
-const char* Value_light_profile::get_file_path( DB::Transaction* transaction) const
+std::string Value_light_profile::get_file_path( DB::Transaction* transaction) const
 {
     if( !m_value && !m_unresolved_file_path.empty())
         return m_unresolved_file_path.c_str();
 
     if( !m_value || transaction->get_class_id( m_value) != LIGHTPROFILE::ID_LIGHTPROFILE)
-        return nullptr;
+        return {};
     DB::Access<LIGHTPROFILE::Lightprofile> light_profile( m_value, transaction);
-    m_cached_file_path = light_profile->get_mdl_file_path();
-    return !m_cached_file_path.empty() ?  m_cached_file_path.c_str() : nullptr;
+    return light_profile->get_mdl_file_path();
 }
 
 mi::Size Value_light_profile::get_memory_consumption() const
@@ -486,16 +485,15 @@ mi::Size Value_light_profile::get_memory_consumption() const
         + dynamic_memory_consumption( m_type);
 }
 
-const char* Value_bsdf_measurement::get_file_path( DB::Transaction* transaction) const
+std::string Value_bsdf_measurement::get_file_path( DB::Transaction* transaction) const
 {
     if( !m_value && !m_unresolved_file_path.empty())
         return m_unresolved_file_path.c_str();
 
     if( !m_value || transaction->get_class_id( m_value) != BSDFM::ID_BSDF_MEASUREMENT)
-        return nullptr;
+        return {};
     DB::Access<BSDFM::Bsdf_measurement> bsdf_measurement( m_value, transaction);
-    m_cached_file_path = bsdf_measurement->get_mdl_file_path();
-    return !m_cached_file_path.empty() ?  m_cached_file_path.c_str() : nullptr;
+    return bsdf_measurement->get_mdl_file_path();
 }
 
 mi::Size Value_bsdf_measurement::get_memory_consumption() const
@@ -701,7 +699,7 @@ IValue_texture* Value_factory::create_texture(
     if( !type)
         return nullptr;
 
-    Value_texture* tex = new Value_texture(
+    auto* tex = new Value_texture(
         type, value, unresolved_file_path, owner_module, gamma, selector);
     return tex;
 }
@@ -1102,7 +1100,7 @@ IValue* Value_factory::clone( const IValue* value) const
                 value->get_type<IType_compound>());
             mi::base::Handle<const IValue_compound> value_compound(
                 value->get_interface<IValue_compound>());
-            IValue_compound* result = create<IValue_compound>( type_compound.get());
+            auto* result = create<IValue_compound>( type_compound.get());
             mi::Size n = value_compound->get_size();
             if( kind == IValue::VK_ARRAY) {
                 mi::base::Handle<IValue_array> result_array(
@@ -1756,7 +1754,7 @@ IValue* Value_factory::deserialize( SERIAL::Deserializer* deserializer) const
 {
     mi::Uint32 kind_as_uint32;
     SERIAL::read( deserializer, &kind_as_uint32);
-    IValue::Kind kind = static_cast<IValue::Kind>( kind_as_uint32);
+    auto kind = static_cast<IValue::Kind>( kind_as_uint32);
 
     switch( kind) {
 
@@ -1917,7 +1915,7 @@ IValue* Value_factory::deserialize( SERIAL::Deserializer* deserializer) const
 void Value_factory::serialize_list(
     SERIAL::Serializer* serializer, const IValue_list* list) const
 {
-    const Value_list* list_impl = static_cast<const Value_list*>( list);
+    const auto* list_impl = static_cast<const Value_list*>( list);
 
     write( serializer, list_impl->m_index_name);
 
@@ -1929,7 +1927,7 @@ void Value_factory::serialize_list(
 
 IValue_list* Value_factory::deserialize_list( SERIAL::Deserializer* deserializer) const
 {
-    Value_list* list_impl = new Value_list( /*initial_capacity*/ 0);
+    auto* list_impl = new Value_list( /*initial_capacity*/ 0);
 
     read( deserializer, &list_impl->m_index_name);
 

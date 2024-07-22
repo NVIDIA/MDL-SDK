@@ -80,7 +80,7 @@ public:
         mi::Uint32 miplevels,
         bool is_cubemap,
         mi::Float32 gamma,
-        mi::Uint32 quality) const;
+        const mi::IMap* export_options) const;
 
     mi::neuraylib::IImage_file* open_for_reading(
         mi::neuraylib::IReader* reader, const char* selector) const;

@@ -598,7 +598,13 @@ public:
 
     /// Creates an STL allocator from an IAllocator.
     /// Non-explicit to simplify use.
-    /*implicit*/ Mi_allocator(IAllocator *alloc) : m_alloc(alloc, mi::base::DUP_INTERFACE)
+    /*implicit*/ Mi_allocator(IAllocator *alloc)
+    :
+#if 0
+        m_alloc(alloc, mi::base::DUP_INTERFACE)
+#else
+        m_alloc(alloc)
+#endif
     {
     }
 
@@ -619,7 +625,7 @@ public:
 
 #if MDL_RVALUE_REFERENCES
     /// Move constructor.
-    Mi_allocator(Mi_allocator<T> &&other)
+    Mi_allocator(Mi_allocator<T> &&other) noexcept
     : m_alloc(other.m_alloc)
     {
         // Do NOT move the allocator here. Doing this will make the deallocate() function fail.
@@ -716,7 +722,11 @@ public:
     }
 
     /// The memory arena for this allocator.
+#if 0
     mi::base::Handle<IAllocator> m_alloc;
+#else
+    IAllocator *m_alloc;
+#endif
 };
 
 /// A specialization of the pooled allocator for the void type.

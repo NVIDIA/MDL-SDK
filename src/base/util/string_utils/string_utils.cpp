@@ -58,13 +58,13 @@ struct Is_not_whitespace
     // \return true when one is not a whitespace, false else
     bool operator()(char one) const { return !std::isspace(one, m_locale); }
   private:
-    const std::locale& m_locale;	// the locale in use
+    const std::locale& m_locale;        // the locale in use
 };
 
 
 // Local helper for stripping leading whitespace.
 string lstrip_ws(
-    const string& str)		// input
+    const string& str)          // input
 {
     string::const_iterator it =
         std::find_if(str.begin(), str.end(), Is_not_whitespace());
@@ -79,7 +79,7 @@ string lstrip_ws(
 
 // Local helper for stripping trailing whitespace.
 string rstrip_ws(
-    const string& str)		// input
+    const string& str)          // input
 {
     string::const_reverse_iterator it =
         std::find_if(str.rbegin(), str.rend(), Is_not_whitespace());
@@ -94,8 +94,8 @@ string rstrip_ws(
 // Strip given leading and trailing characters. If no characters are given
 // then all valid whitespace characters will be taken instead.
 string strip(
-    const string& str,		// given input
-    const string& sep)		// characters to be stripped
+    const string& str,          // given input
+    const string& sep)          // characters to be stripped
 {
     string tmp = lstrip(str, sep);
     return rstrip(tmp, sep);
@@ -105,8 +105,8 @@ string strip(
 // Strip given leading characters. If no characters are given
 // then all valid whitespace characters will be taken instead.
 string lstrip(
-    const string& str,		// given input
-    const string& sep)		// characters to be stripped
+    const string& str,          // given input
+    const string& sep)          // characters to be stripped
 {
     if (sep.empty()) {
         return lstrip_ws(str);
@@ -125,8 +125,8 @@ string lstrip(
 // Strip given trailing characters. If no characters are given
 // then all valid whitespace characters will be taken instead.
 string rstrip(
-    const string& str,		// given input
-    const string& sep)		// characters to be stripped
+    const string& str,          // given input
+    const string& sep)          // characters to be stripped
 {
     if (sep.empty()) {
         return rstrip_ws(str);
@@ -149,7 +149,6 @@ string rstrip(
 void to_lower(
     string& input)
 {
-    // using the global ::tolower() as the STLport implementation is breaking on MAC OSX.
     std::transform(input.begin(), input.end(), input.begin(), ::tolower);
 }
 
@@ -157,7 +156,6 @@ void to_lower(
 void to_upper(
     string& input)
 {
-    // using the global ::toupper() as the STLport implementation is breaking on MAC OSX.
     std::transform(input.begin(), input.end(), input.begin(), ::toupper);
 }
 

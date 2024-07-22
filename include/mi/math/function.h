@@ -615,20 +615,13 @@ inline Float64 fmod( Float64 a, Float64 b) { return std::fmod(a,b); }
 /// Returns the positive fractional part of \p s.
 inline Float32 frac( Float32 s)
 {
-    Float32 dummy;
-    if( s >= 0.0f)
-        return std::modf( s, &dummy);
-    else
-        return 1.0f + std::modf( s, &dummy);
+    return s - std::floor(s);
 }
+
 /// Returns the positive fractional part of \p s.
 inline Float64 frac( Float64 s)
 {
-    Float64 dummy;
-    if( s >= 0.0f)
-        return std::modf( s, &dummy);
-    else
-        return 1.0f + std::modf( s, &dummy);
+    return s - std::floor(s);
 }
 
 /// Compares the two given values for equality within the given epsilon.
@@ -730,7 +723,7 @@ inline Float32 log2 MI_PREVENT_MACRO_EXPAND ( Float32 s)
 { return std::log(s) * 1.4426950408889634073599246810019f /* log(2) */; }
 /// Returns the %base 2 logarithm of \p s.
 inline Float64 log2 MI_PREVENT_MACRO_EXPAND ( Float64 s)
-{ return std::log(s) * 1.4426950408889634073599246810019 /* log(2) */; }
+{ return std::log(s) * 1.4426950408889634073599246810019  /* log(2) */; }
 
 /// Returns the integer log2 of \p v.
 inline Sint32 log2_int( const Uint32 v) { return (v != 0) ? 31 - leading_zeros(v) : 0; }

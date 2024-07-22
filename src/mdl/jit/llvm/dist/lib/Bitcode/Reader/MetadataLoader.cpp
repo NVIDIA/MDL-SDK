@@ -1236,7 +1236,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
     }
 
     Type *Ty = getTypeByID(Record[0]);
-    if (Ty->isMetadataTy() || Ty->isVoidTy()) {
+    if (!Ty || Ty->isMetadataTy() || Ty->isVoidTy()) {
       dropRecord();
       break;
     }
@@ -1278,7 +1278,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
       return error("Invalid record");
 
     Type *Ty = getTypeByID(Record[0]);
-    if (Ty->isMetadataTy() || Ty->isVoidTy())
+    if (!Ty || Ty->isMetadataTy() || Ty->isVoidTy())
       return error("Invalid record");
 
     MetadataList.assignValue(

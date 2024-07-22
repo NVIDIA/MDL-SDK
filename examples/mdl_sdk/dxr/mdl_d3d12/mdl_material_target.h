@@ -48,17 +48,51 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
     // --------------------------------------------------------------------------------------------
 
+    enum class Material_code_feature
+    {
+        HAS_INIT            = 1 << 0,
+        SURFACE_SCATTERING  = 1 << 1,
+        SURFACE_EMISSION    = 1 << 2,
+        BACKFACE_SCATTERING = 1 << 3,
+        BACKFACE_EMISSION   = 1 << 4,
+        VOLUME_ABSORPTION   = 1 << 5,
+        CUTOUT_OPACITY      = 1 << 6,
+        CAN_BE_THIN_WALLED  = 1 << 7,
+        HAS_AOVS            = 1 << 8
+    };
+
+    // --------------------------------------------------------------------------------------------
+
+    struct Mdl_aov_info
+    {
+        uint32_t runtime_index;
+        std::string expression_path;
+        std::string hlsl_name;
+        std::string mdl_type_name;
+    };
+
+    // --------------------------------------------------------------------------------------------
+
     /// Information about a target that is required by a material.
     struct Mdl_material_target_interface
     {
-        bool has_init = false;
-        bool has_surface_scattering = false;
-        bool has_surface_emission = false;
-        bool has_backface_scattering = false;
-        bool has_backface_emission = false;
-        bool has_volume_absorption = false;
-        bool can_be_thin_walled = false;
-        mi::Size argument_layout_index;
+        mi::Size argument_layout_index = 0;
+        uint32_t material_code_paths = 0;
+
+        void add_code_feature(Material_code_feature to_add) 
+        { 
+            material_code_paths |= static_cast<uint32_t>(to_add);
+        }
+
+        void remove_code_feature(Material_code_feature to_remove) {
+            material_code_paths &= ~static_cast<uint32_t>(to_remove);
+        }
+
+        bool has_code_feature(Material_code_feature to_check) {
+            return (material_code_paths & static_cast<uint32_t>(to_check)) != 0;
+        }
+
+        std::vector< Mdl_aov_info> aovs;
     };
 
     // --------------------------------------------------------------------------------------------
@@ -170,16 +204,11 @@ namespace mi { namespace examples { namespace mdl_d3d12
             return m_dxil_compiled_libraries;
         }
 
-        /// all per target resources can be access in this region of the descriptor heap
-        D3D12_GPU_DESCRIPTOR_HANDLE get_descriptor_heap_region() const
+        /// Get the start index of the resources belonging to material target.
+        /// The index can be used directly in the shader code.
+        uint32_t get_resource_heap_index() const
         {
-            return m_first_resource_heap_handle.get_gpu_handle();
-        }
-
-        /// get a descriptor table that describes the resource layout in the target heap region
-        const Descriptor_table& get_descriptor_table() const
-        {
-            return m_resource_descriptor_table;
+            return static_cast<uint32_t>(m_first_resource_heap_handle.get_heap_index());
         }
 
         /// get the number of materials that are registered at this target
@@ -248,6 +277,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         bool m_generation_required;
         std::string m_hlsl_source_code;
         bool m_compilation_required;
+        std::map<std::string, std::string> m_hlsl_compilation_defines;
 
         std::string m_radiance_any_hit_name;
         std::string m_radiance_closest_hit_name;

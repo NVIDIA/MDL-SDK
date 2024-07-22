@@ -38,11 +38,11 @@ MI_TEST_AUTO_FUNCTION( verify_that_assert_is_overriden_properly )
     bool assert_throws_test_suite_failure( false );
     try
     {
-	mi_math_assert(false);
+        mi_math_assert(false);
     }
     catch(MI::TEST::Test_suite_failure const & )
     {
-	assert_throws_test_suite_failure = true;
+        assert_throws_test_suite_failure = true;
     }
     MI_CHECK(assert_throws_test_suite_failure);
 }
@@ -52,11 +52,11 @@ MI_TEST_AUTO_FUNCTION( verify_that_extended_assert_is_overriden_properly )
     bool assert_throws_test_suite_failure( false );
     try
     {
-	mi_math_assert_msg(false, "this test message is ignored");
+        mi_math_assert_msg(false, "this test message is ignored");
     }
     catch(MI::TEST::Test_suite_failure const & )
     {
-	assert_throws_test_suite_failure = true;
+        assert_throws_test_suite_failure = true;
     }
     MI_CHECK(assert_throws_test_suite_failure);
 }

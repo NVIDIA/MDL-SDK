@@ -84,7 +84,7 @@ mi::Sint32 Mdl_impexp_api_impl::load_module(
     if( !transaction || !argument)
         return -1;
 
-    Transaction_impl* transaction_impl
+    auto* transaction_impl
         = static_cast<Transaction_impl*>( transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
@@ -102,7 +102,7 @@ mi::Sint32 Mdl_impexp_api_impl::load_module_from_string(
     if( !transaction || !module_name || !module_source)
         return -1;
 
-    Transaction_impl* transaction_impl
+    auto* transaction_impl
         = static_cast<Transaction_impl*>( transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
@@ -134,14 +134,14 @@ mi::Sint32 Mdl_impexp_api_impl::export_module(
 
     const MDL::Mdl_module* db_module
         = static_cast<const Module_impl*>( module.get())->get_db_element();
-    mi::base::Handle<const mi::mdl::IModule> mdl_module( db_module->get_mdl_module());
+    mi::base::Handle<const mi::mdl::IModule> core_module( db_module->get_core_module());
 
     DISK::File_writer_impl writer;
     if( !writer.open( filename))
         return -2;
 
     return export_module_common(
-        transaction, module_name, mdl_module.get(), &writer, filename, context_impl);
+        transaction, module_name, core_module.get(), &writer, filename, context_impl);
 }
 
 mi::Sint32 Mdl_impexp_api_impl::export_module_to_string(
@@ -163,11 +163,11 @@ mi::Sint32 Mdl_impexp_api_impl::export_module_to_string(
 
     const MDL::Mdl_module* db_module
         = static_cast<const Module_impl*>( module.get())->get_db_element();
-    mi::base::Handle<const mi::mdl::IModule> mdl_module( db_module->get_mdl_module());
+    mi::base::Handle<const mi::mdl::IModule> core_module( db_module->get_core_module());
 
     DISK::Memory_writer_impl writer;
     mi::Sint32 result = export_module_common(
-        transaction, module_name, mdl_module.get(), &writer, /*filename*/ nullptr, context_impl);
+        transaction, module_name, core_module.get(), &writer, /*filename*/ nullptr, context_impl);
 
     mi::base::Handle<mi::neuraylib::IBuffer> buffer( writer.get_buffer());
     const mi::Uint8* data = buffer->get_data();
@@ -183,8 +183,7 @@ mi::Sint32 Mdl_impexp_api_impl::export_module_to_string(
 mi::Sint32 Mdl_impexp_api_impl::export_canvas(
     const char* filename,
     const mi::neuraylib::ICanvas* canvas,
-    mi::Uint32 quality,
-    bool force_default_gamma) const
+    const mi::IMap* export_options) const
 {
     if( !filename)
         return -1;
@@ -192,12 +191,25 @@ mi::Sint32 Mdl_impexp_api_impl::export_canvas(
     if( !canvas)
         return -2;
 
+    SYSTEM::Access_module<IMAGE::Image_module> image_module( false);
+    bool result = image_module->export_canvas( canvas, filename, export_options);
+    return result ? 0 : -4;
+}
+
+mi::Sint32 Mdl_impexp_api_impl::deprecated_export_canvas(
+    const char* filename,
+    const mi::neuraylib::ICanvas* canvas,
+    mi::Uint32 quality,
+    bool force_default_gamma) const
+{
     if( quality > 100)
        return -3;
 
     SYSTEM::Access_module<IMAGE::Image_module> image_module( false);
-    bool result = image_module->export_canvas( canvas, filename, quality, force_default_gamma);
-    return result ? 0 : -4;
+    mi::base::Handle<mi::IMap> export_options(
+        image_module->convert_legacy_options( quality, force_default_gamma));
+
+    return export_canvas( filename, canvas, export_options.get());
 }
 
 mi::Sint32 Mdl_impexp_api_impl::export_lightprofile(
@@ -209,7 +221,7 @@ mi::Sint32 Mdl_impexp_api_impl::export_lightprofile(
     if( !lightprofile)
         return -2;
 
-    const Lightprofile_impl* lightprofile_impl
+    const auto* lightprofile_impl
         = static_cast<const Lightprofile_impl*>( lightprofile);
     const LIGHTPROFILE::Lightprofile* db_lightprofile = lightprofile_impl->get_db_element();
     DB::Transaction* db_transaction = lightprofile_impl->get_db_transaction();
@@ -237,23 +249,6 @@ const mi::IString* Mdl_impexp_api_impl::frame_uvtile_marker_to_string(
 
     const std::string& result = MDL::frame_uvtile_marker_to_string( marker, f, u, v);
     return result.empty() ? nullptr : new String_impl( result.c_str());
-}
-
-const mi::IString* Mdl_impexp_api_impl::deprecated_uvtile_string_to_marker(
-    const char* str, const char* marker) const
-{
-    if( !str || !marker)
-        return nullptr;
-
-    const std::string& result = MDL::deprecated_uvtile_string_to_marker( str, marker);
-    return result.empty() ? nullptr : new String_impl( result.c_str());
-}
-
-const mi::IString* Mdl_impexp_api_impl::deprecated_frame_string_to_marker(
-    const char* str, mi::Size digits) const
-{
-    ASSERT( M_NEURAY_API, false);
-    return nullptr;
 }
 
 const mi::IString* Mdl_impexp_api_impl::get_mdl_module_name(
@@ -332,9 +327,9 @@ public:
       , m_impl( impl, mi::base::DUP_INTERFACE)
     { }
 
-    const char* get_db_name() const { return m_impl->get_db_name(); }
+    const char* get_db_name() const final { return m_impl->get_db_name(); }
 
-    const mi::neuraylib::IType_list* get_argument_types() const
+    const mi::neuraylib::IType_list* get_argument_types() const final
     {
         mi::base::Handle<const MDL::IType_list> result_int( m_impl->get_argument_types());
         return m_tf->create_type_list( result_int.get(), /*owner*/ nullptr);
@@ -359,7 +354,7 @@ const mi::neuraylib::IDeserialized_function_name* Mdl_impexp_api_impl::deseriali
     if( !transaction || !function_name)
         return nullptr;
 
-    Transaction_impl* transaction_impl
+    auto* transaction_impl
         = static_cast<Transaction_impl*>( transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
@@ -386,7 +381,7 @@ const mi::neuraylib::IDeserialized_function_name* Mdl_impexp_api_impl::deseriali
     if( !transaction || !module_name || !function_name_without_module_name)
         return nullptr;
 
-    Transaction_impl* transaction_impl
+    auto* transaction_impl
         = static_cast<Transaction_impl*>( transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
@@ -452,7 +447,7 @@ mi::Sint32 Mdl_impexp_api_impl::export_module_common(
     mi::base::Handle<mi::mdl::IMDL_exporter> mdl_exporter( mdl->create_exporter());
 
     // create the resource callback
-    Transaction_impl* transaction_impl
+    auto* transaction_impl
         = static_cast<Transaction_impl*>( transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     std::string uri

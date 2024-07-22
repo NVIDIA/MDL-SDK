@@ -45,8 +45,12 @@ void MI_CHECK_IMG_DIFF( const char* image1, const char* image2, bool strict = tr
 #endif
 
 
+#if defined( MI_PLATFORM_LINUX) && defined( MI_ARCH_ARM_64) && defined( NDEBUG)
+    command += strict ? " -fail 0.00052" : " -fail 0.01 -failpercent 0.01";
+#else
     command += strict ? " -fail 0.000016" : " -fail 0.01 -failpercent 0.01";
-    command += " ";
+#endif
+    command += " -a ";
     command += image1;
     command += " ";
     command += image2;

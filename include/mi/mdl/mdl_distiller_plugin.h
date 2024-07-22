@@ -48,7 +48,7 @@ namespace mi {
 namespace mdl {
 
 /// Type of MDL distiller plugins
-#define MI_DIST_MDL_DISTILLER_PLUGIN_TYPE "mdl_distiller v2"
+#define MI_DIST_MDL_DISTILLER_PLUGIN_TYPE "mdl_distiller v4"
 
 /// Abstract interface for MDL distiller plugins.
 class Mdl_distiller_plugin : public mi::base::Plugin {
@@ -98,10 +98,10 @@ public:
     ///                          - -2: Reserved for API layer.
     ///                          - -3: Unspecified failure.
     /// \return                  The distilled material instance, or \c NULL in case of failure.
-    virtual const mi::mdl::IGenerated_code_dag::IMaterial_instance* distill(
+    virtual const mi::mdl::IMaterial_instance* distill(
         mi::mdl::IDistiller_plugin_api& api,
         mi::mdl::IRule_matcher_event* event_handler,
-        const mi::mdl::IGenerated_code_dag::IMaterial_instance* material_instance,
+        const mi::mdl::IMaterial_instance* material_instance,
         mi::Size target_index,
         Distiller_options* options,
         mi::Sint32* p_error) const = 0;

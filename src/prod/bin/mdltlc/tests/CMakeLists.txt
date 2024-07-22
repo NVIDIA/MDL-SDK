@@ -35,8 +35,5 @@ create_unit_test(
     SOURCES
         ../test_basics.cpp
     DEPENDS
-        boost
         mdl::prod-bin-mdltlclib
-    LINK_LIBRARIES
-        Boost::filesystem
     )

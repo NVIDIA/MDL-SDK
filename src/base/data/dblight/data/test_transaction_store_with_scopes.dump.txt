@@ -1,0 +1,126 @@
+Count of all scopes: 3
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
+ID 1: name = (null), pin count = 2, level = 10, parent ID = 0, removed = 0
+ID 2: name = (null), pin count = 1, level = 20, parent ID = 1, removed = 0
+
+Count of all transactions: 0
+Count of open transactions: 0
+Count of infos by distinct names: 0
+Count of infos by distinct tags: 0
+
+Count of all scopes: 3
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
+ID 1: name = (null), pin count = 2, level = 10, parent ID = 0, removed = 0
+ID 2: name = (null), pin count = 2, level = 20, parent ID = 1, removed = 0
+
+Count of all transactions: 1
+Count of open transactions: 0
+ID 0: pin count = 1, state = COMMITTED, next sequence number = 9, visibility ID = 1
+
+Count of infos by distinct names: 9
+Index 0: name = "foo1", count = 1
+    Index 0: scope ID = 2, transaction ID = 0 (cleared), version = 0, pin count = 0, tag = 1, privacy level = 255, removal = 0, references = { }
+Index 1: name = "foo2", count = 1
+    Index 0: scope ID = 2, transaction ID = 0 (cleared), version = 1, pin count = 0, tag = 2, privacy level = 255, removal = 0, references = { }
+Index 2: name = "foo3", count = 1
+    Index 0: scope ID = 1, transaction ID = 0 (cleared), version = 2, pin count = 0, tag = 3, privacy level = 255, removal = 0, references = { }
+Index 3: name = "foo4", count = 1
+    Index 0: scope ID = 1, transaction ID = 0 (cleared), version = 3, pin count = 0, tag = 4, privacy level = 255, removal = 0, references = { }
+Index 4: name = "foo5", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 4, pin count = 0, tag = 5, privacy level = 255, removal = 0, references = { }
+Index 5: name = "foo6", count = 1
+    Index 0: scope ID = 2, transaction ID = 0 (cleared), version = 5, pin count = 0, tag = 6, privacy level = 20, removal = 0, references = { }
+Index 6: name = "foo7", count = 1
+    Index 0: scope ID = 1, transaction ID = 0 (cleared), version = 6, pin count = 0, tag = 7, privacy level = 15, removal = 0, references = { }
+Index 7: name = "foo8", count = 1
+    Index 0: scope ID = 1, transaction ID = 0 (cleared), version = 7, pin count = 0, tag = 8, privacy level = 10, removal = 0, references = { }
+Index 8: name = "foo9", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 8, pin count = 0, tag = 9, privacy level = 0, removal = 0, references = { }
+
+Count of infos by distinct tags: 9
+Index 0: tag = 1, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 2, transaction ID = 0 (cleared), version = 0, pin count = 0, tag = 1, privacy level = 255, removal = 0, name = "foo1", references = { }
+Index 1: tag = 2, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 2, transaction ID = 0 (cleared), version = 1, pin count = 0, tag = 2, privacy level = 255, removal = 0, name = "foo2", references = { }
+Index 2: tag = 3, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 1, transaction ID = 0 (cleared), version = 2, pin count = 0, tag = 3, privacy level = 255, removal = 0, name = "foo3", references = { }
+Index 3: tag = 4, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 1, transaction ID = 0 (cleared), version = 3, pin count = 0, tag = 4, privacy level = 255, removal = 0, name = "foo4", references = { }
+Index 4: tag = 5, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 4, pin count = 0, tag = 5, privacy level = 255, removal = 0, name = "foo5", references = { }
+Index 5: tag = 6, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 2, transaction ID = 0 (cleared), version = 5, pin count = 0, tag = 6, privacy level = 20, removal = 0, name = "foo6", references = { }
+Index 6: tag = 7, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 1, transaction ID = 0 (cleared), version = 6, pin count = 0, tag = 7, privacy level = 15, removal = 0, name = "foo7", references = { }
+Index 7: tag = 8, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 1, transaction ID = 0 (cleared), version = 7, pin count = 0, tag = 8, privacy level = 10, removal = 0, name = "foo8", references = { }
+Index 8: tag = 9, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 8, pin count = 0, tag = 9, privacy level = 0, removal = 0, name = "foo9", references = { }
+
+
+Count of all scopes: 3
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
+ID 1: name = (null), pin count = 1, level = 10, parent ID = 0, removed = 1
+ID 2: name = (null), pin count = 1, level = 20, parent ID = 1, removed = 0
+
+Count of all transactions: 0
+Count of open transactions: 0
+Count of infos by distinct names: 9
+Index 0: name = "foo1", count = 1
+    Index 0: scope ID = 2, transaction ID = 0 (cleared), version = 0, pin count = 0, tag = 1, privacy level = 255, removal = 0, references = { }
+Index 1: name = "foo2", count = 1
+    Index 0: scope ID = 2, transaction ID = 0 (cleared), version = 1, pin count = 0, tag = 2, privacy level = 255, removal = 0, references = { }
+Index 2: name = "foo3", count = 1
+    Index 0: scope ID = 1, transaction ID = 0 (cleared), version = 2, pin count = 0, tag = 3, privacy level = 255, removal = 0, references = { }
+Index 3: name = "foo4", count = 1
+    Index 0: scope ID = 1, transaction ID = 0 (cleared), version = 3, pin count = 0, tag = 4, privacy level = 255, removal = 0, references = { }
+Index 4: name = "foo5", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 4, pin count = 0, tag = 5, privacy level = 255, removal = 0, references = { }
+Index 5: name = "foo6", count = 1
+    Index 0: scope ID = 2, transaction ID = 0 (cleared), version = 5, pin count = 0, tag = 6, privacy level = 20, removal = 0, references = { }
+Index 6: name = "foo7", count = 1
+    Index 0: scope ID = 1, transaction ID = 0 (cleared), version = 6, pin count = 0, tag = 7, privacy level = 15, removal = 0, references = { }
+Index 7: name = "foo8", count = 1
+    Index 0: scope ID = 1, transaction ID = 0 (cleared), version = 7, pin count = 0, tag = 8, privacy level = 10, removal = 0, references = { }
+Index 8: name = "foo9", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 8, pin count = 0, tag = 9, privacy level = 0, removal = 0, references = { }
+
+Count of infos by distinct tags: 9
+Index 0: tag = 1, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 2, transaction ID = 0 (cleared), version = 0, pin count = 0, tag = 1, privacy level = 255, removal = 0, name = "foo1", references = { }
+Index 1: tag = 2, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 2, transaction ID = 0 (cleared), version = 1, pin count = 0, tag = 2, privacy level = 255, removal = 0, name = "foo2", references = { }
+Index 2: tag = 3, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 1, transaction ID = 0 (cleared), version = 2, pin count = 0, tag = 3, privacy level = 255, removal = 0, name = "foo3", references = { }
+Index 3: tag = 4, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 1, transaction ID = 0 (cleared), version = 3, pin count = 0, tag = 4, privacy level = 255, removal = 0, name = "foo4", references = { }
+Index 4: tag = 5, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 4, pin count = 0, tag = 5, privacy level = 255, removal = 0, name = "foo5", references = { }
+Index 5: tag = 6, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 2, transaction ID = 0 (cleared), version = 5, pin count = 0, tag = 6, privacy level = 20, removal = 0, name = "foo6", references = { }
+Index 6: tag = 7, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 1, transaction ID = 0 (cleared), version = 6, pin count = 0, tag = 7, privacy level = 15, removal = 0, name = "foo7", references = { }
+Index 7: tag = 8, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 1, transaction ID = 0 (cleared), version = 7, pin count = 0, tag = 8, privacy level = 10, removal = 0, name = "foo8", references = { }
+Index 8: tag = 9, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 8, pin count = 0, tag = 9, privacy level = 0, removal = 0, name = "foo9", references = { }
+
+
+Count of all scopes: 1
+ID 0: name = (null), pin count = 1, level = 0, parent ID = (null), removed = 0
+
+Count of all transactions: 0
+Count of open transactions: 0
+Count of infos by distinct names: 2
+Index 0: name = "foo5", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 4, pin count = 0, tag = 5, privacy level = 255, removal = 0, references = { }
+Index 1: name = "foo9", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 8, pin count = 0, tag = 9, privacy level = 0, removal = 0, references = { }
+
+Count of infos by distinct tags: 2
+Index 0: tag = 5, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 4, pin count = 0, tag = 5, privacy level = 255, removal = 0, name = "foo5", references = { }
+Index 1: tag = 9, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 8, pin count = 0, tag = 9, privacy level = 0, removal = 0, name = "foo9", references = { }
+
+

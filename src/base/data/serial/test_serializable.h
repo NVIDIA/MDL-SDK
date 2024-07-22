@@ -76,10 +76,10 @@ public:
     }
     /// serialize method
     const MI::SERIAL::Serializable* serialize(
-	MI::SERIAL::Serializer* serializer) const; // serialize to this serializer
+        MI::SERIAL::Serializer* serializer) const; // serialize to this serializer
     /// deserialize method
     MI::SERIAL::Serializable* deserialize(
-	MI::SERIAL::Deserializer* deserializer); // deserialize from here
+        MI::SERIAL::Deserializer* deserializer); // deserialize from here
 public:
     // Deliberately left public st the test can configure this class easily.
     /// int value
@@ -113,10 +113,10 @@ public:
     }
     /// serialize method
     const MI::SERIAL::Serializable* serialize(
-	MI::SERIAL::Serializer* serializer) const; // serialize to this serializer
+        MI::SERIAL::Serializer* serializer) const; // serialize to this serializer
     /// deserialize method
     MI::SERIAL::Serializable* deserialize(
-	MI::SERIAL::Deserializer* deserializer); // deserialize from here
+        MI::SERIAL::Deserializer* deserializer); // deserialize from here
 public:
     // Deliberately left public st the test can configure this class easily.
     /// int value
@@ -258,23 +258,23 @@ extern MI::SERIAL::Serializable* test_type_4_factory();
 
 /// Comparison of Test_types_0 for equality.
 extern bool operator==(
-    const Test_type_0& lhs,				// lhs
-    const Test_type_0& rhs);				// rhs
+    const Test_type_0& lhs,                             // lhs
+    const Test_type_0& rhs);                            // rhs
 
 /// Comparison of Test_types_1 for equality.
 extern bool operator==(
-    const Test_type_1& lhs,				// lhs
-    const Test_type_1& rhs);				// rhs
+    const Test_type_1& lhs,                             // lhs
+    const Test_type_1& rhs);                            // rhs
 
 /// Comparison of Test_types_2 for equality.
 extern bool operator==(
-    const Test_type_2& lhs,				// lhs
-    const Test_type_2& rhs);				// rhs
+    const Test_type_2& lhs,                             // lhs
+    const Test_type_2& rhs);                            // rhs
 
 /// Comparison of Test_types_3 for equality.
 extern bool operator==(
-    const Test_type_3& lhs,				// lhs
-    const Test_type_3& rhs);				// rhs
+    const Test_type_3& lhs,                             // lhs
+    const Test_type_3& rhs);                            // rhs
 
 /// Pretty-print Test_type_0; needed when MI_REQUIRE_EQUAL() fails.
 inline std::ostream & operator<< (std::ostream & os, Test_type_0 const & tt)

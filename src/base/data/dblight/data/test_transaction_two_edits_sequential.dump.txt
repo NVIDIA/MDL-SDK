@@ -1,30 +1,21 @@
+Count of all scopes: 1
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
+
 Count of all transactions: 1
 Count of open transactions: 1
 ID 0: pin count = 3, state = OPEN, next sequence number = 1, visibility ID = 4294967295
 
 Count of infos by distinct names: 1
 Index 0: name = "foo", count = 1
-    Index 0: transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, removal = 0, references = { }
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, references = { }
 
 Count of infos by distinct tags: 1
 Index 0: tag = 1, count = 1, pin count = 1, removed = 0
-    Index 0: transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, removal = 0, name = "foo", references = { }
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
 
 
-Count of all transactions: 1
-Count of open transactions: 1
-ID 0: pin count = 5, state = OPEN, next sequence number = 2, visibility ID = 4294967295
-
-Count of infos by distinct names: 1
-Index 0: name = "foo", count = 2
-    Index 0: transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, removal = 0, references = { }
-    Index 1: transaction ID = 0 (set), version = 1, pin count = 1, tag = 1, removal = 0, references = { }
-
-Count of infos by distinct tags: 1
-Index 0: tag = 1, count = 2, pin count = 1, removed = 0
-    Index 0: transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, removal = 0, name = "foo", references = { }
-    Index 1: transaction ID = 0 (set), version = 1, pin count = 1, tag = 1, removal = 0, name = "foo", references = { }
-
+Count of all scopes: 1
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
 
 Count of all transactions: 1
 Count of open transactions: 1
@@ -32,14 +23,35 @@ ID 0: pin count = 5, state = OPEN, next sequence number = 2, visibility ID = 429
 
 Count of infos by distinct names: 1
 Index 0: name = "foo", count = 2
-    Index 0: transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, removal = 0, references = { }
-    Index 1: transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, removal = 0, references = { }
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, references = { }
+    Index 1: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 1, tag = 1, privacy level = 0, removal = 0, references = { }
 
 Count of infos by distinct tags: 1
 Index 0: tag = 1, count = 2, pin count = 1, removed = 0
-    Index 0: transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, removal = 0, name = "foo", references = { }
-    Index 1: transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, removal = 0, name = "foo", references = { }
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
+    Index 1: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 1, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
 
+
+Count of all scopes: 1
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
+
+Count of all transactions: 1
+Count of open transactions: 1
+ID 0: pin count = 5, state = OPEN, next sequence number = 2, visibility ID = 4294967295
+
+Count of infos by distinct names: 1
+Index 0: name = "foo", count = 2
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, references = { }
+    Index 1: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, privacy level = 0, removal = 0, references = { }
+
+Count of infos by distinct tags: 1
+Index 0: tag = 1, count = 2, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
+    Index 1: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
+
+
+Count of all scopes: 1
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
 
 Count of all transactions: 1
 Count of open transactions: 1
@@ -47,16 +59,19 @@ ID 0: pin count = 7, state = OPEN, next sequence number = 3, visibility ID = 429
 
 Count of infos by distinct names: 1
 Index 0: name = "foo", count = 3
-    Index 0: transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, removal = 0, references = { }
-    Index 1: transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, removal = 0, references = { }
-    Index 2: transaction ID = 0 (set), version = 2, pin count = 1, tag = 1, removal = 0, references = { }
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, references = { }
+    Index 1: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, privacy level = 0, removal = 0, references = { }
+    Index 2: scope ID = 0, transaction ID = 0 (set), version = 2, pin count = 1, tag = 1, privacy level = 0, removal = 0, references = { }
 
 Count of infos by distinct tags: 1
 Index 0: tag = 1, count = 3, pin count = 1, removed = 0
-    Index 0: transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, removal = 0, name = "foo", references = { }
-    Index 1: transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, removal = 0, name = "foo", references = { }
-    Index 2: transaction ID = 0 (set), version = 2, pin count = 1, tag = 1, removal = 0, name = "foo", references = { }
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
+    Index 1: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
+    Index 2: scope ID = 0, transaction ID = 0 (set), version = 2, pin count = 1, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
 
+
+Count of all scopes: 1
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
 
 Count of all transactions: 1
 Count of open transactions: 1
@@ -64,16 +79,19 @@ ID 0: pin count = 7, state = OPEN, next sequence number = 3, visibility ID = 429
 
 Count of infos by distinct names: 1
 Index 0: name = "foo", count = 3
-    Index 0: transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, removal = 0, references = { }
-    Index 1: transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, removal = 0, references = { }
-    Index 2: transaction ID = 0 (set), version = 2, pin count = 0, tag = 1, removal = 0, references = { }
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, references = { }
+    Index 1: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, privacy level = 0, removal = 0, references = { }
+    Index 2: scope ID = 0, transaction ID = 0 (set), version = 2, pin count = 0, tag = 1, privacy level = 0, removal = 0, references = { }
 
 Count of infos by distinct tags: 1
 Index 0: tag = 1, count = 3, pin count = 1, removed = 0
-    Index 0: transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, removal = 0, name = "foo", references = { }
-    Index 1: transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, removal = 0, name = "foo", references = { }
-    Index 2: transaction ID = 0 (set), version = 2, pin count = 0, tag = 1, removal = 0, name = "foo", references = { }
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
+    Index 1: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
+    Index 2: scope ID = 0, transaction ID = 0 (set), version = 2, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
 
+
+Count of all scopes: 1
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
 
 Count of all transactions: 1
 Count of open transactions: 1
@@ -81,16 +99,19 @@ ID 0: pin count = 8, state = OPEN, next sequence number = 3, visibility ID = 429
 
 Count of infos by distinct names: 1
 Index 0: name = "foo", count = 3
-    Index 0: transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, removal = 0, references = { }
-    Index 1: transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, removal = 0, references = { }
-    Index 2: transaction ID = 0 (set), version = 2, pin count = 1, tag = 1, removal = 0, references = { }
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, references = { }
+    Index 1: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, privacy level = 0, removal = 0, references = { }
+    Index 2: scope ID = 0, transaction ID = 0 (set), version = 2, pin count = 1, tag = 1, privacy level = 0, removal = 0, references = { }
 
 Count of infos by distinct tags: 1
 Index 0: tag = 1, count = 3, pin count = 1, removed = 0
-    Index 0: transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, removal = 0, name = "foo", references = { }
-    Index 1: transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, removal = 0, name = "foo", references = { }
-    Index 2: transaction ID = 0 (set), version = 2, pin count = 1, tag = 1, removal = 0, name = "foo", references = { }
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
+    Index 1: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
+    Index 2: scope ID = 0, transaction ID = 0 (set), version = 2, pin count = 1, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
 
+
+Count of all scopes: 1
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
 
 Count of all transactions: 1
 Count of open transactions: 1
@@ -98,16 +119,19 @@ ID 0: pin count = 8, state = OPEN, next sequence number = 3, visibility ID = 429
 
 Count of infos by distinct names: 1
 Index 0: name = "foo", count = 3
-    Index 0: transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, removal = 0, references = { }
-    Index 1: transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, removal = 0, references = { }
-    Index 2: transaction ID = 0 (set), version = 2, pin count = 0, tag = 1, removal = 0, references = { }
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, references = { }
+    Index 1: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, privacy level = 0, removal = 0, references = { }
+    Index 2: scope ID = 0, transaction ID = 0 (set), version = 2, pin count = 0, tag = 1, privacy level = 0, removal = 0, references = { }
 
 Count of infos by distinct tags: 1
 Index 0: tag = 1, count = 3, pin count = 1, removed = 0
-    Index 0: transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, removal = 0, name = "foo", references = { }
-    Index 1: transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, removal = 0, name = "foo", references = { }
-    Index 2: transaction ID = 0 (set), version = 2, pin count = 0, tag = 1, removal = 0, name = "foo", references = { }
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
+    Index 1: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
+    Index 2: scope ID = 0, transaction ID = 0 (set), version = 2, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
 
+
+Count of all scopes: 1
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
 
 Count of all transactions: 1
 Count of open transactions: 0
@@ -115,10 +139,10 @@ ID 0: pin count = 1, state = COMMITTED, next sequence number = 3, visibility ID 
 
 Count of infos by distinct names: 1
 Index 0: name = "foo", count = 1
-    Index 0: transaction ID = 0 (cleared), version = 2, pin count = 0, tag = 1, removal = 0, references = { }
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 2, pin count = 0, tag = 1, privacy level = 0, removal = 0, references = { }
 
 Count of infos by distinct tags: 1
 Index 0: tag = 1, count = 1, pin count = 1, removed = 0
-    Index 0: transaction ID = 0 (cleared), version = 2, pin count = 0, tag = 1, removal = 0, name = "foo", references = { }
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 2, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
 
 

@@ -126,22 +126,6 @@ void randomize(mi::math::Vector<T,DIM> & v)
 // Generic vector properties
 ///////////////////////////////////////////////////////////////////////////////
 
-template <class T>
-void has_trivial_default_constructor(T val)
-{
-    T copy( val );
-
-    // Without this workaround g++ seems to skip copying the values from "val" to "copy" in light
-    // of the following constructor call in placement new for "copy".
-    for (mi::Size i( 0u ); i != T::SIZE; ++i) {
-        volatile typename T::value_type dummy = copy[i];
-        (void) dummy;
-    }
-
-    new (&copy) T();
-    MI_CHECK_EQUAL(val, copy);
-}
-
 template <class T, mi::Size DIM>
 void single_value_constructed_vector_has_that_value_in_all_elements(T val)
 {
@@ -153,25 +137,25 @@ void single_value_constructed_vector_has_that_value_in_all_elements(T val)
 template <class Lhs, class Rhs>
 void commutative_multiplication(Lhs lhs, Rhs rhs)
 {
-    MI_CHECK_EQUAL_MSG( lhs * rhs, rhs * lhs
-                      , "lhs = " << lhs << ", rhs = " << rhs
-                      );
+    std::ostringstream s;
+    s << "lhs = " << lhs << ", rhs = " << rhs;
+    MI_CHECK_EQUAL_MSG( lhs * rhs, rhs * lhs, s.str() );
 }
 
 template <class Lhs, class Rhs>
 void commutative_addition(Lhs lhs, Rhs rhs)
 {
-    MI_CHECK_EQUAL_MSG( lhs + rhs, rhs + lhs
-                      , "lhs = " << lhs << ", rhs = " << rhs
-                      );
+    std::ostringstream s;
+    s << "lhs = " << lhs << ", rhs = " << rhs;
+    MI_CHECK_EQUAL_MSG( lhs + rhs, rhs + lhs, s.str() );
 }
 
 template <class T1, class T2>
 void distributivity(T1 sum1, T1 sum2, T2 scalar)
 {
-    MI_CHECK_EQUAL_MSG( (sum1 + sum2) * scalar, (sum1 * scalar) + (sum2 * scalar)
-                      , "sum1 = " << sum1 << ", sum2 = " << sum2 << ", scalar = " << scalar
-                      );
+    std::ostringstream s;
+    s << "sum1 = " << sum1 << ", sum2 = " << sum2 << ", scalar = " << scalar;
+    MI_CHECK_EQUAL_MSG( (sum1 + sum2) * scalar, (sum1 * scalar) + (sum2 * scalar), s.str() );
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -228,24 +212,6 @@ void check_property(void (*f)(T1, T2, T3))
 ///////////////////////////////////////////////////////////////////////////////
 // Vector unit tests
 ///////////////////////////////////////////////////////////////////////////////
-
-#define TRIVIAL_DEFAULT_CONSTRUCTOR(dim, type, ignore)                                          \
-  MI_TEST_AUTO_FUNCTION( trivial_construction_of_ ## dim ## _dimensional_ ## type ## _vector )  \
-  {                                                                                             \
-      check_property(&has_trivial_default_constructor< mi::math::Vector<type, dim> >);          \
-  }
-
-#ifdef NDEBUG
-// These tests are run only in NDEBUG mode, because the vector class does *not*
-// have a trivial default constructor when debugging is enabled. In DEBUG mode,
-// the vector is initialized with numeric_max<T>::max() to increase the chances
-// of bogus code failing, i.e. code that uses the vector without initializing
-// it first.
-TEST_VECTOR_PROPERTY(TRIVIAL_DEFAULT_CONSTRUCTOR, float,    void)
-TEST_VECTOR_PROPERTY(TRIVIAL_DEFAULT_CONSTRUCTOR, double,   void)
-TEST_VECTOR_PROPERTY(TRIVIAL_DEFAULT_CONSTRUCTOR, int,      void)
-TEST_VECTOR_PROPERTY(TRIVIAL_DEFAULT_CONSTRUCTOR, unsigned, void)
-#endif
 
 #define SINGLE_VALUE_CONSTRUCTION(dim, type, ignore)                                                            \
   MI_TEST_AUTO_FUNCTION( verify_constructor_of_ ## dim ## _dimensional_ ## type ## _vector )                    \
@@ -308,7 +274,7 @@ TEST_VECTOR_PROPERTY(VECTOR_DISTRIBUTIVITY_WITH_DIMENSION, double, double)
 MI_TEST_AUTO_FUNCTION( test_vector_function_normalize )
 {
     using namespace mi;
-    typedef math::Vector<Float32,3> Vector3;
+    using Vector3 = math::Vector<Float32, 3>;
     Vector3 v3a(11, 22, 33);
 
     MI_CHECK( v3a.normalize());
@@ -788,7 +754,7 @@ MI_TEST_AUTO_FUNCTION( test_vector_function_overloads )
 MI_TEST_AUTO_FUNCTION( test_vector_function_access_get_set_dim1 )
 { // test vector accessors, get, set, dim 1
     using namespace mi;
-    typedef math::Vector<Float32,1> Vector1;
+    using Vector1 = math::Vector<Float32, 1>;
     Vector1 v1a(11);
     MI_CHECK_EQUAL( v1a.begin() + 1, v1a.end());
     MI_CHECK_EQUAL( 11, v1a.x);
@@ -806,7 +772,7 @@ MI_TEST_AUTO_FUNCTION( test_vector_function_access_get_set_dim1 )
 MI_TEST_AUTO_FUNCTION( test_vector_function_access_get_set_dim2 )
 { // test vector accessors, get, set, dim 2
     using namespace mi;
-    typedef math::Vector<Float32,2> Vector2;
+    using Vector2 = math::Vector<Float32, 2>;
     Vector2 v2a(11, 22);
     MI_CHECK_EQUAL( v2a.begin() + 2, v2a.end());
     MI_CHECK_EQUAL( 11, v2a.x);
@@ -834,7 +800,7 @@ MI_TEST_AUTO_FUNCTION( test_vector_function_access_get_set_dim2 )
 MI_TEST_AUTO_FUNCTION( test_vector_function_access_get_set_dim3 )
 { // test vector accessors, get, set, dim 3
     using namespace mi;
-    typedef math::Vector<Float32,3> Vector3;
+    using Vector3 = math::Vector<Float32, 3>;
     Vector3 v3a(11, 22, 33);
     MI_CHECK_EQUAL( v3a.begin() + 3, v3a.end());
     MI_CHECK_EQUAL( 11, v3a.x);
@@ -872,7 +838,7 @@ MI_TEST_AUTO_FUNCTION( test_vector_function_access_get_set_dim3 )
 MI_TEST_AUTO_FUNCTION( test_vector_function_access_get_set_dim4 )
 { // test vector accessors, get, set, dim 4
     using namespace mi;
-    typedef math::Vector<Float32,4> Vector4;
+    using Vector4 = math::Vector<Float32, 4>;
     Vector4 v4a(11, 22, 33, 44);
     MI_CHECK_EQUAL( v4a.begin() + 4, v4a.end());
     MI_CHECK_EQUAL( 11, v4a.x);
@@ -920,7 +886,7 @@ MI_TEST_AUTO_FUNCTION( test_vector_function_access_get_set_dim4 )
 MI_TEST_AUTO_FUNCTION( test_vector_function_access_get_set_dim5 )
 { // test vector accessors, get, set, dim 5
     using namespace mi;
-    typedef math::Vector<Float32,5> Vector5;
+    using Vector5 = math::Vector<Float32, 5>;
     Float32 data[5] = {11, 22, 33, 44, 55};
     Vector5 v5a(data);
     MI_CHECK_EQUAL( v5a.begin() + 5, v5a.end());
@@ -974,10 +940,10 @@ MI_TEST_AUTO_FUNCTION( test_vector_function_access_get_set_dim5 )
 MI_TEST_AUTO_FUNCTION( test_vector_function_any )
 {
     using mi::math::any;
-    typedef mi::math::Vector<mi::Float32,3> Vector3;
-    typedef mi::math::Vector<mi::Sint32,3>  VectorI3;
-    typedef mi::math::Vector<mi::Uint8,3>   VectorU3;
-    typedef mi::math::Vector<bool,3>        VectorB3;
+    using Vector3  = mi::math::Vector<mi::Float32, 3>;
+    using VectorI3 = mi::math::Vector<mi::Sint32, 3>;
+    using VectorU3 = mi::math::Vector<mi::Uint8, 3>;
+    using VectorB3 = mi::math::Vector<bool, 3>;
     MI_CHECK(   any(1));
     MI_CHECK( ! any(0));
     MI_CHECK(   any(1.0));
@@ -1013,10 +979,10 @@ MI_TEST_AUTO_FUNCTION( test_vector_function_any )
 MI_TEST_AUTO_FUNCTION( test_vector_function_all )
 {
     using mi::math::all;
-    typedef mi::math::Vector<mi::Float32,3> Vector3;
-    typedef mi::math::Vector<mi::Sint32,3>  VectorI3;
-    typedef mi::math::Vector<mi::Uint8,3>   VectorU3;
-    typedef mi::math::Vector<bool,3>        VectorB3;
+    using Vector3  = mi::math::Vector<mi::Float32, 3>;
+    using VectorI3 = mi::math::Vector<mi::Sint32, 3>;
+    using VectorU3 = mi::math::Vector<mi::Uint8, 3>;
+    using VectorB3 = mi::math::Vector<bool, 3>;
     MI_CHECK(   all(1));
     MI_CHECK( ! all(0));
     MI_CHECK(   all(1.0));
@@ -1052,8 +1018,8 @@ MI_TEST_AUTO_FUNCTION( test_vector_function_all )
 MI_TEST_AUTO_FUNCTION( test_vector_function_elementwise_comparisons )
 {
     using mi::math::any;
-    typedef mi::math::Vector<mi::Float32,3> Vector3;
-    typedef mi::math::Vector<bool,3>        VectorB3;
+    using Vector3  = mi::math::Vector<mi::Float32, 3>;
+    using VectorB3 = mi::math::Vector<bool, 3>;
     Vector3 v1(1.0, 3.0, 4.0);
     Vector3 v2(1.0, 4.0, 4.0);
     Vector3 v3(1.0, 4.0, 5.0);
@@ -1082,7 +1048,7 @@ MI_TEST_AUTO_FUNCTION( test_vector_function_elementwise_comparisons )
 
 MI_TEST_AUTO_FUNCTION( test_vector_free_comparison_operators )
 {
-    typedef mi::math::Vector<mi::Float32,2> Vector2;
+    using Vector2 = mi::math::Vector<mi::Float32, 2>;
     Vector2 v1(1.0, 3.0);
     Vector2 v2(1.0, 4.0);
     Vector2 v3(0.0, 4.0);
@@ -1108,7 +1074,7 @@ MI_TEST_AUTO_FUNCTION( test_vector_free_comparison_operators )
 
 MI_TEST_AUTO_FUNCTION( test_vector_free_logical_operators )
 {
-    typedef mi::math::Vector<bool,4> Vector4;
+    using Vector4 = mi::math::Vector<bool, 4>;
     Vector4 v1( false, false,  true, true);
     Vector4 v2( false,  true, false, true);
     MI_CHECK_EQUAL( Vector4( false, false, false,  true), v1 && v2);
@@ -1131,7 +1097,7 @@ MI_TEST_AUTO_FUNCTION( test_vector_free_logical_operators )
 
 MI_TEST_AUTO_FUNCTION( test_vector_incr_decr_operators )
 {
-    typedef mi::math::Vector<mi::Sint32,2> Vector2;
+    using Vector2 = mi::math::Vector<mi::Sint32, 2>;
     Vector2 v1(22,33);
     Vector2 v2 = ++v1;
     MI_CHECK_EQUAL( Vector2(23,34), v1);

@@ -120,6 +120,11 @@ public:
         SYM_TYPE_HAIR_BSDF,
         SYM_TYPE_LAST = SYM_TYPE_HAIR_BSDF,
 
+        // categories
+        SYM_CAT_FIRST,
+        SYM_CAT_MATERIAL_CATEGORY = SYM_CAT_FIRST,
+        SYM_CAT_LAST = SYM_CAT_MATERIAL_CATEGORY,
+
         // enums
         SYM_ENUM_FIRST,
         SYM_ENUM_GAMMA_DEFAULT = SYM_ENUM_FIRST,

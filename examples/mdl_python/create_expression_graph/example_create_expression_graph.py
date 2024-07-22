@@ -211,6 +211,7 @@ def run_example(neuray):
                             empty_anno_block,  # drop annotations
                             empty_anno_block,  # drop annotations
                             True,  # export the material/function
+                            True,  # declarative keyword
                             execution_context) != 0:
 
                         print("Error: Failed to add variant to module builder")

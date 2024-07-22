@@ -30,13 +30,14 @@
 
 #include "i_bsdf_measurement.h"
 
+#include <filesystem>
 #include <sstream>
 
 #include <mi/neuraylib/bsdf_isotropic_data.h>
 #include <mi/neuraylib/ibsdf_isotropic_data.h>
 #include <mi/neuraylib/ireader.h>
+
 #include <base/system/main/access_module.h>
-#include <base/hal/disk/disk.h>
 #include <base/hal/disk/disk_file_reader_writer_impl.h>
 #include <base/hal/disk/disk_memory_reader_writer_impl.h>
 #include <base/hal/hal/i_hal_ospath.h>
@@ -51,6 +52,8 @@
 #include <base/util/string_utils/i_string_utils.h>
 #include <io/scene/scene/i_scene_journal_types.h>
 #include <io/scene/mdl_elements/mdl_elements_detail.h>
+
+namespace fs = std::filesystem;
 
 namespace MI {
 
@@ -260,17 +263,17 @@ const SERIAL::Serializable* Bsdf_measurement::serialize( SERIAL::Serializer* ser
 {
     Scene_element_base::serialize( serializer);
 
-    SERIAL::write(serializer, serializer->is_remote() ? "" : m_original_filename);
-    SERIAL::write(serializer, serializer->is_remote() ? "" : m_resolved_filename);
-    SERIAL::write(serializer, serializer->is_remote() ? "" : m_resolved_container_filename);
-    SERIAL::write(serializer, serializer->is_remote() ? "" : m_resolved_container_membername);
-    SERIAL::write(serializer, serializer->is_remote() ? "" : m_mdl_file_path);
-    SERIAL::write(serializer, HAL::Ospath::sep());
+    SERIAL::write( serializer, serializer->is_remote() ? "" : m_original_filename);
+    SERIAL::write( serializer, serializer->is_remote() ? "" : m_resolved_filename);
+    SERIAL::write( serializer, serializer->is_remote() ? "" : m_resolved_container_filename);
+    SERIAL::write( serializer, serializer->is_remote() ? "" : m_resolved_container_membername);
+    SERIAL::write( serializer, serializer->is_remote() ? "" : m_mdl_file_path);
+    SERIAL::write( serializer, HAL::Ospath::sep());
 
-    SERIAL::write(serializer, m_impl_tag);
-    SERIAL::write(serializer, m_impl_hash);
+    SERIAL::write( serializer, m_impl_tag);
+    SERIAL::write( serializer, m_impl_hash);
 
-    SERIAL::write(serializer, m_cached_is_valid);
+    SERIAL::write( serializer, m_cached_is_valid);
 
     return this + 1;
 }
@@ -279,20 +282,21 @@ SERIAL::Serializable* Bsdf_measurement::deserialize( SERIAL::Deserializer* deser
 {
     Scene_element_base::deserialize( deserializer);
 
-    SERIAL::read(deserializer, &m_original_filename);
-    SERIAL::read(deserializer, &m_resolved_filename);
-    SERIAL::read(deserializer, &m_resolved_container_filename);
-    SERIAL::read(deserializer, &m_resolved_container_membername);
-    SERIAL::read(deserializer, &m_mdl_file_path);
+    SERIAL::read( deserializer, &m_original_filename);
+    SERIAL::read( deserializer, &m_resolved_filename);
+    SERIAL::read( deserializer, &m_resolved_container_filename);
+    SERIAL::read( deserializer, &m_resolved_container_membername);
+    SERIAL::read( deserializer, &m_mdl_file_path);
     std::string serializer_sep;
-    SERIAL::read(deserializer, &serializer_sep);
+    SERIAL::read( deserializer, &serializer_sep);
 
-    SERIAL::read(deserializer, &m_impl_tag);
-    SERIAL::read(deserializer, &m_impl_hash);
+    SERIAL::read( deserializer, &m_impl_tag);
+    SERIAL::read( deserializer, &m_impl_hash);
 
-    SERIAL::read(deserializer, &m_cached_is_valid);
+    SERIAL::read( deserializer, &m_cached_is_valid);
 
     // Adjust m_original_filename and m_resolved_filename for this host.
+    std::error_code ec;
     if( !m_original_filename.empty()) {
 
         if( serializer_sep != HAL::Ospath::sep()) {
@@ -304,13 +308,14 @@ SERIAL::Serializable* Bsdf_measurement::deserialize( SERIAL::Deserializer* deser
 
         // Re-resolve filename if it is not meaningful for this host. If unsuccessful, clear value
         // (no error since we no longer require all resources to be present on all nodes).
-        if( !DISK::is_file( m_resolved_filename.c_str())) {
+        if( !fs::is_regular_file( fs::u8path( m_resolved_filename), ec)) {
             SYSTEM::Access_module<PATH::Path_module> m_path_module( false);
             m_resolved_filename = m_path_module->search( PATH::MDL, m_original_filename);
             if( m_resolved_filename.empty())
                 m_resolved_filename = m_path_module->search(
                     PATH::RESOURCE, m_original_filename);
         }
+
     }
 
     // Adjust m_resolved_container_filename and m_resolved_container_membername for this host.
@@ -320,7 +325,7 @@ SERIAL::Serializable* Bsdf_measurement::deserialize( SERIAL::Deserializer* deser
             = HAL::Ospath::convert_to_platform_specific_path( m_resolved_container_filename);
         m_resolved_container_membername
             = HAL::Ospath::convert_to_platform_specific_path( m_resolved_container_membername);
-        if( !DISK::is_file( m_resolved_container_filename.c_str())) {
+        if( !fs::is_regular_file( fs::u8path( m_resolved_container_filename), ec)) {
             m_resolved_container_filename.clear();
             m_resolved_container_membername.clear();
         }
@@ -391,7 +396,7 @@ void Bsdf_measurement::reset_shared(
         }
     }
 
-    Bsdf_measurement_impl* impl = new Bsdf_measurement_impl( reflection, transmission);
+    auto* impl = new Bsdf_measurement_impl( reflection, transmission);
 
     setup_cached_values( impl);
 
@@ -409,9 +414,7 @@ void Bsdf_measurement::setup_cached_values( const Bsdf_measurement_impl* impl)
     m_cached_is_valid = impl->is_valid();
 }
 
-Bsdf_measurement_impl::Bsdf_measurement_impl()
-{
-}
+Bsdf_measurement_impl::Bsdf_measurement_impl() = default;
 
 Bsdf_measurement_impl::Bsdf_measurement_impl(
     const mi::neuraylib::IBsdf_isotropic_data* reflection,
@@ -428,9 +431,7 @@ Bsdf_measurement_impl::Bsdf_measurement_impl( const Bsdf_measurement_impl& other
     m_transmission = other.m_transmission;
 }
 
-Bsdf_measurement_impl::~Bsdf_measurement_impl()
-{
-}
+Bsdf_measurement_impl::~Bsdf_measurement_impl() = default;
 
 const mi::base::IInterface* Bsdf_measurement_impl::get_reflection() const
 {
@@ -525,8 +526,8 @@ DB::Journal_type Bsdf_measurement_impl::get_journal_flags() const
 void Bsdf_measurement_impl::serialize_bsdf_data(
     SERIAL::Serializer* serializer, const mi::neuraylib::IBsdf_isotropic_data* bsdf_data)
 {
-    bool exists = bsdf_data != 0;
-    SERIAL::write(serializer, exists);
+    bool exists = bsdf_data != nullptr;
+    SERIAL::write( serializer, exists);
     if( !exists)
         return;
 
@@ -534,9 +535,9 @@ void Bsdf_measurement_impl::serialize_bsdf_data(
     const mi::Uint32 resolution_phi     = bsdf_data->get_resolution_phi();
     const mi::neuraylib::Bsdf_type type = bsdf_data->get_type();
 
-    SERIAL::write(serializer, resolution_theta);
-    SERIAL::write(serializer, resolution_phi);
-    SERIAL::write(serializer, static_cast<mi::Uint32>( type));
+    SERIAL::write( serializer, resolution_theta);
+    SERIAL::write( serializer, resolution_phi);
+    SERIAL::write( serializer, static_cast<mi::Uint32>( type));
 
     mi::Size size = static_cast<mi::Size>( resolution_theta) * resolution_theta * resolution_phi;
     if( type == mi::neuraylib::BSDF_RGB)
@@ -550,7 +551,7 @@ mi::neuraylib::IBsdf_isotropic_data* Bsdf_measurement_impl::deserialize_bsdf_dat
     SERIAL::Deserializer* deserializer)
 {
     bool exists;
-    SERIAL::read(deserializer, &exists);
+    SERIAL::read( deserializer, &exists);
     if( !exists)
         return nullptr;
 
@@ -558,11 +559,11 @@ mi::neuraylib::IBsdf_isotropic_data* Bsdf_measurement_impl::deserialize_bsdf_dat
     mi::Uint32 resolution_phi;
     mi::Uint32 type;
 
-    SERIAL::read(deserializer, &resolution_theta);
-    SERIAL::read(deserializer, &resolution_phi);
-    SERIAL::read(deserializer, &type);
+    SERIAL::read( deserializer, &resolution_theta);
+    SERIAL::read( deserializer, &resolution_phi);
+    SERIAL::read( deserializer, &type);
 
-    mi::neuraylib::Bsdf_isotropic_data* bsdf_data = new mi::neuraylib::Bsdf_isotropic_data(
+    auto* bsdf_data = new mi::neuraylib::Bsdf_isotropic_data(
         resolution_theta, resolution_phi, static_cast<mi::neuraylib::Bsdf_type>( type));
     mi::base::Handle<mi::neuraylib::Bsdf_buffer> bsdf_buffer( bsdf_data->get_bsdf_buffer());
     mi::Float32* data = bsdf_buffer->get_data();
@@ -617,8 +618,7 @@ mi::neuraylib::IBsdf_isotropic_data* import_data_from_reader( mi::neuraylib::IRe
     if( !read( reader, reinterpret_cast<char*>( data), size * sizeof( mi::Float32)))
         return nullptr;
 
-    bsdf_data->retain();
-    return bsdf_data.get();
+    return bsdf_data.extract();
 }
 
 bool import_measurement_from_reader(
@@ -797,7 +797,7 @@ DB::Tag load_mdl_bsdf_measurement(
 {
     if( !reader) {
         result = -1;
-        return DB::Tag();
+        return {};
     }
 
     std::string identifier;
@@ -829,7 +829,7 @@ DB::Tag load_mdl_bsdf_measurement(
         reader, filename, container_filename, container_membername, mdl_file_path, impl_hash);
     ASSERT( M_BSDF_MEASUREMENT, result == 0 || result == -7);
     if( result != 0)
-        return DB::Tag();
+        return {};
 
     tag = transaction->store_for_reference_counting(
         bsdfm.release(), db_name.c_str(), transaction->get_scope()->get_level());

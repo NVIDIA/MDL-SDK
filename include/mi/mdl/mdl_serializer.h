@@ -89,6 +89,12 @@ enum Serializer_tags {
 
     /// Mark the end of a lambda function.
     ST_LAMBDA_END   = TAG_FOURCC('l', 'm', 'd', 'E'),
+
+    /// The material instance start tag.
+    ST_INSTANCE_START = TAG_FOURCC('i', 'n', 's', 'S'),
+
+    /// The material instance end tag.
+    ST_INSTANCE_END = TAG_FOURCC('i', 'n', 's', 'E'),
 };
 
 }  // Serializer

@@ -40,17 +40,15 @@
 
 #include <sys/stat.h>
 
+#include <filesystem>
 #include <fstream>
-
-#include <boost/filesystem.hpp>
 
 #include "mdltlc_compiler_options.h"
 #include "mdltlc_compiler.h"
-#include "mdltlc_union_find_map.h"
 
 #define DIR_PREFIX "test_output"
 
-namespace fs = boost::filesystem;
+namespace fs = std::filesystem;
 
 static char const *success_files[] = {
     "000_empty.mdltl",
@@ -223,7 +221,7 @@ static Expected_failure failure_files[] = {
 // Test the Compiler_options class.
 MI_TEST_AUTO_FUNCTION( test_compiler_options )
 {
-    mi::base::Handle<mi::mdl::IMDL> imdl(mi::mdl::initialize());
+    mi::base::Handle<mi::mdl::IMDL> imdl(mi::mdl::initialize(true));
     mi::mdl::IAllocator *allocator = imdl->get_mdl_allocator();
     mi::mdl::Memory_arena arena(allocator);
 
@@ -269,7 +267,7 @@ MI_TEST_AUTO_FUNCTION( test_compiler_options )
 // compiler is created.
 MI_TEST_AUTO_FUNCTION( test_compiler_creation )
 {
-    mi::base::Handle<mi::mdl::IMDL> imdl(mi::mdl::initialize());
+    mi::base::Handle<mi::mdl::IMDL> imdl(mi::mdl::initialize(true));
     mi::mdl::IAllocator *allocator = imdl->get_mdl_allocator();
 
     mi::mdl::Allocator_builder builder(allocator);
@@ -294,7 +292,7 @@ MI_TEST_AUTO_FUNCTION( test_compiler_creation )
 MI_TEST_AUTO_FUNCTION( test_expected_success )
 {
     for (size_t i = 0; i < sizeof(success_files) / sizeof(success_files[0]); i++) {
-        mi::base::Handle<mi::mdl::IMDL> imdl(mi::mdl::initialize());
+        mi::base::Handle<mi::mdl::IMDL> imdl(mi::mdl::initialize(true));
         mi::mdl::IAllocator *allocator = imdl->get_mdl_allocator();
 
         mi::mdl::Allocator_builder builder(allocator);
@@ -333,7 +331,7 @@ MI_TEST_AUTO_FUNCTION( test_expected_failure )
     char_ptr_less;
 
     for (size_t i = 0; i < sizeof(failure_files) / sizeof(failure_files[0]); i++) {
-        mi::base::Handle<mi::mdl::IMDL> imdl(mi::mdl::initialize());
+        mi::base::Handle<mi::mdl::IMDL> imdl(mi::mdl::initialize(true));
         mi::mdl::IAllocator *allocator = imdl->get_mdl_allocator();
 
         mi::mdl::Allocator_builder builder(allocator);
@@ -418,7 +416,7 @@ MI_TEST_AUTO_FUNCTION( test_expected_failure )
 // files at once, not one per compiler creation.
 MI_TEST_AUTO_FUNCTION( test_multi_files )
 {
-    mi::base::Handle<mi::mdl::IMDL> imdl(mi::mdl::initialize());
+    mi::base::Handle<mi::mdl::IMDL> imdl(mi::mdl::initialize(true));
     mi::mdl::IAllocator *allocator = imdl->get_mdl_allocator();
 
     mi::mdl::Allocator_builder builder(allocator);
@@ -538,7 +536,7 @@ MI_TEST_AUTO_FUNCTION( test_golden_files )
 
     for (size_t i = 0; i < sizeof(success_generate_files) / sizeof(success_generate_files[0]); i++) {
 
-        mi::base::Handle<mi::mdl::IMDL> imdl(mi::mdl::initialize());
+        mi::base::Handle<mi::mdl::IMDL> imdl(mi::mdl::initialize(true));
         mi::mdl::IAllocator *allocator = imdl->get_mdl_allocator();
 
         mi::mdl::Allocator_builder builder(allocator);
@@ -591,196 +589,6 @@ MI_TEST_AUTO_FUNCTION( test_golden_files )
 
             MI_CHECK(result);
         }
-    }
-}
-
-// Test the Union_find_map utility class class.
-MI_TEST_AUTO_FUNCTION( test_union_find )
-{
-    mi::base::Handle<mi::mdl::IMDL> imdl(mi::mdl::initialize());
-    mi::mdl::IAllocator *allocator = imdl->get_mdl_allocator();
-    mi::mdl::Memory_arena arena(allocator);
-
-    // This merge function allows to merge values if they are the same which means that values are only compatible if they are the same.
-    auto merge_sizes = [](size_t x, size_t y, bool &success) {
-        if (x != y) {
-            success = false;
-        }
-        return x;
-    };
-
-    Union_find_map<size_t, size_t> uf_map(&arena);
-
-    // The keys for the test are pointers to size_t.
-    size_t *one = new size_t(1);
-    size_t *two = new size_t(2);
-    size_t *three = new size_t(3);
-    size_t *four = new size_t(4);
-    size_t *five = new size_t(5);
-    size_t *keys[] = {one, two, three, four, five};
-
-    uf_map.announce(one);
-    uf_map.announce(two);
-    uf_map.announce(three);
-    uf_map.announce(four);
-    uf_map.announce(five);
-
-    // Check that we can set values and that retrieval works.
-    MI_CHECK(uf_map.set_value(one, 1, merge_sizes));
-    MI_CHECK(uf_map.get_value(one));
-    MI_CHECK_EQUAL(*uf_map.get_value(one), 1);
-
-    // No value for key `two'.
-    MI_CHECK(!uf_map.get_value(two));
-
-    // Check for the other keys...
-    MI_CHECK(uf_map.set_value(three, 1, merge_sizes));
-    MI_CHECK(uf_map.get_value(three));
-    MI_CHECK_EQUAL(*uf_map.get_value(three), 1);
-
-    MI_CHECK(uf_map.set_value(four, 2, merge_sizes));
-    MI_CHECK(uf_map.get_value(four));
-    MI_CHECK_EQUAL(*uf_map.get_value(four), 2);
-
-    MI_CHECK(uf_map.set_value(five, 2, merge_sizes));
-    MI_CHECK(uf_map.get_value(five));
-    MI_CHECK_EQUAL(*uf_map.get_value(five), 2);
-
-    // Overwriting with different value does not work.
-    MI_CHECK(!uf_map.set_value(five, 1, merge_sizes));
-    // Overwriting with existing value does work.
-    MI_CHECK(uf_map.set_value(five, 2, merge_sizes));
-    // Make sure the value is unchanged.
-    MI_CHECK(uf_map.get_value(five));
-    MI_CHECK_EQUAL(*uf_map.get_value(five), 2);
-
-    // Merge two sets, where only one has a value.
-    MI_CHECK(uf_map.union_(one, two, merge_sizes));
-
-    // Merge two sets where both have (compatible) values.
-    MI_CHECK(uf_map.union_(two, three, merge_sizes));
-
-    // Merging two sets with incompatible values fails.
-    MI_CHECK(!uf_map.union_(three, four, merge_sizes));
-
-    // ... but merging two sets with different (compatible) values
-    // does work.
-    MI_CHECK (uf_map.union_(five, four, merge_sizes));
-
-    Union_find_map<size_t, size_t>::Key_set_vector sets = uf_map.sets();
-    MI_CHECK_EQUAL(sets.size(), 2);
-    MI_CHECK_EQUAL(sets[0].size() + sets[1].size(), 5);
-    for (auto &k : keys) {
-        MI_CHECK_EQUAL(sets[0].count(k) + sets[1].count(k), 1);
-    }
-#if 0
-    for (auto &kv : sets) {
-        std::cout << "{";
-        for (auto &k : kv) {
-            std::cout << " " << k;
-        }
-        std::cout << " }\n";
-    }
-#endif
-
-    delete one;
-    delete two;
-    delete three;
-    delete four;
-
-}
-
-// Test the Dense_union_find_map utility class class.
-MI_TEST_AUTO_FUNCTION( test_union_find_dense )
-{
-    mi::base::Handle<mi::mdl::IMDL> imdl(mi::mdl::initialize());
-    mi::mdl::IAllocator *allocator = imdl->get_mdl_allocator();
-    mi::mdl::Memory_arena arena(allocator);
-
-    // This merge function allows to merge values if they are the same which means that values are only compatible if they are the same.
-    auto merge_sizes = [](size_t x, size_t y, bool &success) {
-        if (x != y) {
-            success = false;
-        }
-        return x;
-    };
-
-    Dense_union_find_map<size_t> uf_map(&arena);
-
-    // The keys for the test are pointers to size_t.
-    size_t one = 1;
-    size_t two = 2;
-    size_t three = 3;
-    size_t four = 4;
-    size_t five = 5;
-    size_t keys[] = {one, two, three, four, five};
-
-    uf_map.announce(one);
-    uf_map.announce(two);
-    uf_map.announce(three);
-    uf_map.announce(four);
-    uf_map.announce(five);
-
-    // Check that we can set values and that retrieval works.
-    MI_CHECK(uf_map.set_value(one, 1, merge_sizes));
-    MI_CHECK(uf_map.get_value(one));
-    MI_CHECK_EQUAL(*uf_map.get_value(one), 1);
-
-    // No value for key `two'.
-    MI_CHECK(!uf_map.get_value(two));
-
-    // Check for the other keys...
-    MI_CHECK(uf_map.set_value(three, 1, merge_sizes));
-    MI_CHECK(uf_map.get_value(three));
-    MI_CHECK_EQUAL(*uf_map.get_value(three), 1);
-
-    MI_CHECK(uf_map.set_value(four, 2, merge_sizes));
-    MI_CHECK(uf_map.get_value(four));
-    MI_CHECK_EQUAL(*uf_map.get_value(four), 2);
-
-    MI_CHECK(uf_map.set_value(five, 2, merge_sizes));
-    MI_CHECK(uf_map.get_value(five));
-    MI_CHECK_EQUAL(*uf_map.get_value(five), 2);
-
-    // Overwriting with different value does not work.
-    MI_CHECK(!uf_map.set_value(five, 1, merge_sizes));
-    // Overwriting with existing value does work.
-    MI_CHECK(uf_map.set_value(five, 2, merge_sizes));
-    // Make sure the value is unchanged.
-    MI_CHECK(uf_map.get_value(five));
-    MI_CHECK_EQUAL(*uf_map.get_value(five), 2);
-
-    // Merge two sets, where only one has a value.
-    MI_CHECK(uf_map.union_(one, two, merge_sizes));
-
-    // Merge two sets where both have (compatible) values.
-    MI_CHECK(uf_map.union_(two, three, merge_sizes));
-
-    // Merging two sets with incompatible values fails.
-    MI_CHECK(!uf_map.union_(three, four, merge_sizes));
-
-    // ... but merging two sets with different (compatible) values
-    // does work.
-    MI_CHECK (uf_map.union_(five, four, merge_sizes));
-
-    Dense_union_find_map<size_t>::Key_set_vector sets = uf_map.sets();
-#if 0
-    for (auto &kv : sets) {
-        std::cout << "{";
-        for (auto &k : kv) {
-            std::cout << " " << k;
-        }
-        std::cout << " }\n";
-    }
-#endif
-    // Note that for dense maps, all keys from zero up to the largest
-    // one in the map exist. Keys that are smaller than the largest
-    // one that has been announced are announced implicitly because of
-    // how the map works internally.
-    MI_CHECK_EQUAL(sets.size(), 3);
-    MI_CHECK_EQUAL(sets[0].size() + sets[1].size() + sets[2].size(), 6);
-    for (auto &k : keys) {
-        MI_CHECK_EQUAL(sets[0].count(k) + sets[1].count(k) + sets[2].count(k), 1);
     }
 }
 

@@ -74,7 +74,7 @@ public:
         mi::neuraylib::IValue_factory* fact,
         const mi::neuraylib::IFunction_call* call,
         mi::Size index,
-        mi::Sint32* error) const final;
+        mi::Sint32* errors) const final;
 
     // internal methods
 

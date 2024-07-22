@@ -267,6 +267,18 @@ enum Mbsdf_part
 /// for this IOR field.
 #define BSDF_USE_MATERIAL_IOR (-1.0f)
 
+/// Flags controlling the calculation of DF results.
+/// This cannot be represented as a real enum, because the MDL SDK HLSL backend only sees enums
+/// as ints on LLVM level and would create wrong types for temporary variables
+#define Df_flags                             int
+#define DF_FLAGS_NONE                        0               ///< allows nothing -> black
+#define DF_FLAGS_ALLOW_REFLECT               1
+#define DF_FLAGS_ALLOW_TRANSMIT              2
+#define DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT  (DF_FLAGS_ALLOW_REFLECT | DF_FLAGS_ALLOW_TRANSMIT)
+#define DF_FLAGS_ALLOWED_SCATTER_MODE_MASK   (DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT)
+#define DF_FLAGS_FORCE_32_BIT                0xffffffffU
+
+
 /// Input and output structure for BSDF sampling data.
 struct Bsdf_sample_data {
     float3 ior1;                    ///< mutual input: IOR current medium
@@ -279,6 +291,9 @@ struct Bsdf_sample_data {
     float3 bsdf_over_pdf;           ///< output: bsdf * dot(normal, k2) / pdf
     Bsdf_event_type event_type;     ///< output: the type of event for the generated sample
     int handle;                     ///< output: handle of the sampled elemental BSDF (lobe)
+
+    Df_flags flags;                 ///< input: flags controlling calculation of result
+                                    ///<     (optional depending on backend options)
 };
 
 /// Input and output structure for BSDF evaluation data.
@@ -300,6 +315,9 @@ struct Bsdf_evaluate_data {
         float3 bsdf_glossy[MDL_DF_HANDLE_SLOT_MODE];  ///< output: (glossy) bsdf * dot(normal, k2)
     #endif
     float pdf;                      ///< output: pdf (non-projected hemisphere)
+
+    Df_flags flags;                 ///< input: flags controlling calculation of result
+                                    ///<     (optional depending on backend options)
 };
 
 /// Input and output structure for BSDF PDF calculation data.
@@ -310,6 +328,9 @@ struct Bsdf_pdf_data {
 
     float3 k2;                      ///< input: incoming direction
     float pdf;                      ///< output: pdf (non-projected hemisphere)
+
+    Df_flags flags;                 ///< input: flags controlling calculation of result
+                                    ///<     (optional depending on backend options)
 };
 
 /// Input and output structure for BSDF auxiliary calculation data.
@@ -334,11 +355,14 @@ struct Bsdf_auxiliary_data {
 
     #if (MDL_DF_HANDLE_SLOT_MODE == -1)
         float3 roughness;                          ///< output: glossy rougness_u,
-                                                   ///  glossy roughness_v, bsdf_weight
+                                                   ///< glossy roughness_v, bsdf_weight
     #else
         float3 roughness[MDL_DF_HANDLE_SLOT_MODE]; ///< output: glossy rougness_u, 
-                                                   ///  glossy roughness_v, bsdf_weight
+                                                   ///< glossy roughness_v, bsdf_weight
     #endif
+
+    Df_flags flags;                 ///< input: flags controlling calculation of result
+                                    ///<     (optional depending on backend options)
 };
 
 /// Input and output structure for EDF sampling data.

@@ -70,6 +70,32 @@ class MainBinding(UnittestBase):
         color.release()  # the manual release
         self.assertFalse(color.is_valid_interface())
 
+    def test_attach_neuray_functions(self):
+        handle: int = self.sdk.neuray.__iinterface_ptr_as_uint64__(retain=True)  # handle normally comes from a running application
+        neuray: pymdlsdk.INeuray = pymdlsdk.attach_ineuray(handle)
+        self.assertEqual(neuray.get_status(), pymdlsdk.INeuray.Status.STARTED)
+        neuray = None
+
+    def test_attach_transaction_functions(self):
+        handle: int = self.sdk.transaction.__iinterface_ptr_as_uint64__(retain=True)  # handle normally comes from a running application
+        trans: pymdlsdk.ITransaction = pymdlsdk.attach_itransaction(handle)
+        self.assertIsValidInterface(trans)
+        self.assertTrue(trans.is_open())
+        trans = None
+
+    def test_swig_repr(self):
+        text: str = self.sdk.neuray.__repr__()
+        self.assertNotNullOrEmpty(text)
+        color: pymdlsdk.IType_color = self.tf.create_color()
+        invalidFloat: pymdlsdk.IType_float = color.get_interface(pymdlsdk.IType_float)
+        text: str = invalidFloat.__repr__()
+        self.assertNotNullOrEmpty(text)
+
+    def test_print_ref_counts(self):
+        pymdlsdk._enable_print_ref_counts(True)
+        with self.sdk.neuray.get_api_component(pymdlsdk.IMdl_configuration) as cfg:
+            pass
+        pymdlsdk._enable_print_ref_counts(False)
 
 # run all tests of this file
 if __name__ == '__main__':

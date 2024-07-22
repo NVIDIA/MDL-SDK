@@ -31,10 +31,12 @@
 
 #include "pch.h"
 
+#include <io/scene/scene/i_scene_mdl_sdk.h>
 #include <io/scene/scene/i_scene_scene_element_base.h>
 
 #include <base/data/dblight/dblight_database.h>
 #include <base/data/serial/serial.h>
+#include <base/system/main/module_registration.h>
 #include <io/scene/bsdf_measurement/i_bsdf_measurement.h>
 #include <io/scene/dbimage/i_dbimage.h>
 #include <io/scene/lightprofile/i_lightprofile.h>
@@ -48,6 +50,13 @@
 namespace MI {
 
 namespace SCENE {
+
+static SYSTEM::Module_registration<Scene_module> s_module( M_SCENE, "SCENE");
+
+SYSTEM::Module_registration_entry* Scene_module::get_instance()
+{
+    return s_module.init_module( s_module.get_name());
+}
 
 std::string get_class_name( SERIAL::Class_id id)
 {
@@ -64,15 +73,22 @@ void Scene_element_base::swap( Scene_element_base& other)
     std::swap( m_attributes, other.m_attributes);
 }
 
-size_t Scene_element_base::get_size() const { return 0; }
+size_t Scene_element_base::get_size() const
+{
+    return sizeof( *this)
+        + DB::Element_base::get_size() - sizeof( DB::Element_base)
+        + m_attributes.get_size() - sizeof( ATTR::Attribute_set);
+}
 
 const SERIAL::Serializable* Scene_element_base::serialize( SERIAL::Serializer* serializer) const
 {
+    m_attributes.serialize( serializer);
     return this + 1;
 }
 
 SERIAL::Serializable* Scene_element_base::deserialize( SERIAL::Deserializer* deserializer)
 {
+    m_attributes.deserialize( deserializer);
     return this + 1;
 }
 
@@ -82,9 +98,9 @@ void Scene_element_base::get_references( DB::Tag_set* result) const
     get_scene_element_references( result);
 }
 
-void register_db_elements( DB::Database* db)
+void Scene_module::register_db_elements( DB::Database* db)
 {
-    DBLIGHT::Database_impl* db_impl = static_cast<DBLIGHT::Database_impl*>( db);
+    auto* db_impl = static_cast<DBLIGHT::Database_impl*>( db);
     SERIAL::Deserialization_manager* manager = db_impl->get_deserialization_manager();
 
 #define REGISTER_CLASS(c) manager->register_class( c::id, c::factory)

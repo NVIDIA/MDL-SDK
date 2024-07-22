@@ -86,6 +86,8 @@ public:
 
     bool is_exported() const final;
 
+    bool is_declarative() const final;
+
     bool is_uniform() const final;
 
     bool is_material() const final;
@@ -116,7 +118,7 @@ public:
 
     const char* get_thumbnail() const final;
 
-    bool is_valid(mi::neuraylib::IMdl_execution_context* context) const final;
+    bool is_valid( mi::neuraylib::IMdl_execution_context* context) const final;
 
     const mi::neuraylib::IExpression* get_body() const final;
 
@@ -130,9 +132,11 @@ public:
         const mi::neuraylib::IExpression_list* arguments,
         mi::Sint32* errors) const final;
 
-    const char* get_mdl_mangled_name() const final;
+    const char* get_mangled_name() const final;
+
 private:
     mutable std::string m_cached_thumbnail;
+    mutable std::string m_cached_mangled_name;
 };
 
 } // namespace NEURAY

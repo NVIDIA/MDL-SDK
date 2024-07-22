@@ -58,80 +58,80 @@ using namespace mi::math;
 // It's important to identify tags (type 't') separately so the serializer
 // stores them as type Tag in .mib files, because impmib remaps tag values.
 void eval_typecode(
-    Type_code typecode,					// the typecode to be evaluated
-    int* type,						// store the type of the primitives here
-    int* count,						// store the count of the primitives here
-    int* size)						// store the overall size here
+    Type_code typecode,                                 // the typecode to be evaluated
+    int* type,                                          // store the type of the primitives here
+    int* count,                                         // store the count of the primitives here
+    int* size)                                          // store the overall size here
 {
     *type = *count = *size = 0;
     switch(typecode) {
-      case TYPE_BOOLEAN:		*type = 'c'; *size = 1; *count = 1;	break;
-      case TYPE_INT8:			*type = 'c'; *size = 1; *count = 1;	break;
-      case TYPE_INT16:			*type = 's'; *size = 2; *count = 1;	break;
-      case TYPE_INT32:			*type = 'i'; *size = 4; *count = 1;	break;
-      case TYPE_INT64:			*type = 'q'; *size = 8; *count = 1;	break;
-      case TYPE_SCALAR:			*type = 'f'; *size = 4; *count = 1;	break;
-      case TYPE_VECTOR2:		*type = 'f'; *size = 4; *count = 2;	break;
-      case TYPE_VECTOR3:		*type = 'f'; *size = 4; *count = 3;	break;
-      case TYPE_VECTOR4:		*type = 'f'; *size = 4; *count = 4;	break;
-      case TYPE_DSCALAR:		*type = 'd'; *size = 8; *count = 1;	break;
-      case TYPE_DVECTOR2:		*type = 'd'; *size = 8; *count = 2;	break;
-      case TYPE_DVECTOR3:		*type = 'd'; *size = 8; *count = 3;	break;
-      case TYPE_DVECTOR4:		*type = 'd'; *size = 8; *count = 4;	break;
-          // case TYPE_MATRIX4X4:	// identical to type matrix
-      case TYPE_MATRIX:			*type = 'f'; *size = 4; *count = 16;	break;
-      case TYPE_DMATRIX:		*type = 'd'; *size = 8; *count = 16;	break;
-      case TYPE_QUATERNION:		*type = 'f'; *size = 4; *count = 4;	break;
-      case TYPE_STRING:			*type = '*'; *size = sizeof(void*); *count = 1;	break;
-          // case TYPE_RGBA_FP:	// identical to type color
-      case TYPE_COLOR:			*type = 'f'; *size = 4; *count = 4;	break;
-      case TYPE_RGB:			*type = 'c'; *size = 1; *count = 3;	break;
-      case TYPE_RGBA:			*type = 'c'; *size = 1; *count = 4;	break;
-      case TYPE_RGBE:			*type = 'c'; *size = 1; *count = 4;	break;
-      case TYPE_RGBEA:			*type = 'c'; *size = 1; *count = 5;	break;
-      case TYPE_RGB_16:			*type = 's'; *size = 2; *count = 3;	break;
-      case TYPE_RGBA_16:		*type = 's'; *size = 2; *count = 4;	break;
-      case TYPE_RGB_FP:			*type = 'f'; *size = 4; *count = 3;	break;
-      case TYPE_TAG:			*type = 't'; *size = 4; *count = 1;	break;
-      case TYPE_TEXTURE:		*type = 't'; *size = 4; *count = 1;	break;
-      case TYPE_TEXTURE1D:		*type = 't'; *size = 4; *count = 1;	break;
-      case TYPE_TEXTURE2D:		*type = 't'; *size = 4; *count = 1;	break;
-      case TYPE_TEXTURE3D:		*type = 't'; *size = 4; *count = 1;	break;
-      case TYPE_TEXTURE_CUBE:		*type = 't'; *size = 4; *count = 1;	break;
-      case TYPE_LIGHTPROFILE:		*type = 't'; *size = 4; *count = 1;	break;
-      case TYPE_BRDF:			*type = 't'; *size = 4; *count = 1;	break;
-      case TYPE_LIGHT:			*type = 't'; *size = 4; *count = 1;	break;
-      case TYPE_BSDF_MEASUREMENT:	*type = 't'; *size = 4; *count = 1;	break;
+      case TYPE_BOOLEAN:                *type = 'c'; *size = 1; *count = 1;     break;
+      case TYPE_INT8:                   *type = 'c'; *size = 1; *count = 1;     break;
+      case TYPE_INT16:                  *type = 's'; *size = 2; *count = 1;     break;
+      case TYPE_INT32:                  *type = 'i'; *size = 4; *count = 1;     break;
+      case TYPE_INT64:                  *type = 'q'; *size = 8; *count = 1;     break;
+      case TYPE_SCALAR:                 *type = 'f'; *size = 4; *count = 1;     break;
+      case TYPE_VECTOR2:                *type = 'f'; *size = 4; *count = 2;     break;
+      case TYPE_VECTOR3:                *type = 'f'; *size = 4; *count = 3;     break;
+      case TYPE_VECTOR4:                *type = 'f'; *size = 4; *count = 4;     break;
+      case TYPE_DSCALAR:                *type = 'd'; *size = 8; *count = 1;     break;
+      case TYPE_DVECTOR2:               *type = 'd'; *size = 8; *count = 2;     break;
+      case TYPE_DVECTOR3:               *type = 'd'; *size = 8; *count = 3;     break;
+      case TYPE_DVECTOR4:               *type = 'd'; *size = 8; *count = 4;     break;
+          // case TYPE_MATRIX4X4:       // identical to type matrix
+      case TYPE_MATRIX:                 *type = 'f'; *size = 4; *count = 16;    break;
+      case TYPE_DMATRIX:                *type = 'd'; *size = 8; *count = 16;    break;
+      case TYPE_QUATERNION:             *type = 'f'; *size = 4; *count = 4;     break;
+      case TYPE_STRING:                 *type = '*'; *size = sizeof(void*); *count = 1; break;
+          // case TYPE_RGBA_FP: // identical to type color
+      case TYPE_COLOR:                  *type = 'f'; *size = 4; *count = 4;     break;
+      case TYPE_RGB:                    *type = 'c'; *size = 1; *count = 3;     break;
+      case TYPE_RGBA:                   *type = 'c'; *size = 1; *count = 4;     break;
+      case TYPE_RGBE:                   *type = 'c'; *size = 1; *count = 4;     break;
+      case TYPE_RGBEA:                  *type = 'c'; *size = 1; *count = 5;     break;
+      case TYPE_RGB_16:                 *type = 's'; *size = 2; *count = 3;     break;
+      case TYPE_RGBA_16:                *type = 's'; *size = 2; *count = 4;     break;
+      case TYPE_RGB_FP:                 *type = 'f'; *size = 4; *count = 3;     break;
+      case TYPE_TAG:                    *type = 't'; *size = 4; *count = 1;     break;
+      case TYPE_TEXTURE:                *type = 't'; *size = 4; *count = 1;     break;
+      case TYPE_TEXTURE1D:              *type = 't'; *size = 4; *count = 1;     break;
+      case TYPE_TEXTURE2D:              *type = 't'; *size = 4; *count = 1;     break;
+      case TYPE_TEXTURE3D:              *type = 't'; *size = 4; *count = 1;     break;
+      case TYPE_TEXTURE_CUBE:           *type = 't'; *size = 4; *count = 1;     break;
+      case TYPE_LIGHTPROFILE:           *type = 't'; *size = 4; *count = 1;     break;
+      case TYPE_BRDF:                   *type = 't'; *size = 4; *count = 1;     break;
+      case TYPE_LIGHT:                  *type = 't'; *size = 4; *count = 1;     break;
+      case TYPE_BSDF_MEASUREMENT:       *type = 't'; *size = 4; *count = 1;     break;
       case TYPE_ENUM:                   *type = 'i'; *size = 4; *count = 1;     break;
-      case TYPE_VECTOR2I:       	*type = 'i'; *size = 4; *count = 2;     break;
-      case TYPE_VECTOR3I:       	*type = 'i'; *size = 4; *count = 3;     break;
-      case TYPE_VECTOR4I:       	*type = 'i'; *size = 4; *count = 4;     break;
-      case TYPE_VECTOR2B:       	*type = 'c'; *size = 1; *count = 2;     break;
-      case TYPE_VECTOR3B:       	*type = 'c'; *size = 1; *count = 3;     break;
-      case TYPE_VECTOR4B:       	*type = 'c'; *size = 1; *count = 4;     break;
-      case TYPE_MATRIX2X2:		*type = 'f'; *size = 4; *count = 4;	break;
-      case TYPE_MATRIX2X3:		*type = 'f'; *size = 4; *count = 6;	break;
-      case TYPE_MATRIX3X2:		*type = 'f'; *size = 4; *count = 6;	break;
-      case TYPE_MATRIX3X3:		*type = 'f'; *size = 4; *count = 9;	break;
-      case TYPE_MATRIX4X3:		*type = 'f'; *size = 4; *count = 12;	break;
-      case TYPE_MATRIX3X4:		*type = 'f'; *size = 4; *count = 12;	break;
-      case TYPE_MATRIX4X2:		*type = 'f'; *size = 4; *count = 8;	break;
-      case TYPE_MATRIX2X4:		*type = 'f'; *size = 4; *count = 8;	break;
-      case TYPE_SHADER:			*type = 't'; *size = 4; *count = 1;	break;
-      case TYPE_PARTICLE_MAP:		*type = 't'; *size = 4; *count = 1;	break;
-      case TYPE_SPECTRUM:		*type = 'f'; *size = 4; *count = 3;     break;
-      case TYPE_ID:			*type = 'i'; *size = 4; *count = 1;	break;
-      case TYPE_PARAMETER:		*type = 'i'; *size = 4; *count = 1;	break;
-      case TYPE_TEMPORARY:		*type = 'i'; *size = 4; *count = 1;	break;
-      case TYPE_DMATRIX2X2:		*type = 'd'; *size = 8; *count = 4;	break;
-      case TYPE_DMATRIX2X3:		*type = 'd'; *size = 8; *count = 6;	break;
-      case TYPE_DMATRIX3X2:		*type = 'd'; *size = 8; *count = 6;	break;
-      case TYPE_DMATRIX3X3:		*type = 'd'; *size = 8; *count = 9;	break;
-      case TYPE_DMATRIX4X3:		*type = 'd'; *size = 8; *count = 12;	break;
-      case TYPE_DMATRIX3X4:		*type = 'd'; *size = 8; *count = 12;	break;
-      case TYPE_DMATRIX4X2:		*type = 'd'; *size = 8; *count = 8;	break;
-      case TYPE_DMATRIX2X4:		*type = 'd'; *size = 8; *count = 8;	break;
-      case TYPE_CALL:           	*type = '*'; *size = sizeof(void*); *count = 2;	break;
+      case TYPE_VECTOR2I:               *type = 'i'; *size = 4; *count = 2;     break;
+      case TYPE_VECTOR3I:               *type = 'i'; *size = 4; *count = 3;     break;
+      case TYPE_VECTOR4I:               *type = 'i'; *size = 4; *count = 4;     break;
+      case TYPE_VECTOR2B:               *type = 'c'; *size = 1; *count = 2;     break;
+      case TYPE_VECTOR3B:               *type = 'c'; *size = 1; *count = 3;     break;
+      case TYPE_VECTOR4B:               *type = 'c'; *size = 1; *count = 4;     break;
+      case TYPE_MATRIX2X2:              *type = 'f'; *size = 4; *count = 4;     break;
+      case TYPE_MATRIX2X3:              *type = 'f'; *size = 4; *count = 6;     break;
+      case TYPE_MATRIX3X2:              *type = 'f'; *size = 4; *count = 6;     break;
+      case TYPE_MATRIX3X3:              *type = 'f'; *size = 4; *count = 9;     break;
+      case TYPE_MATRIX4X3:              *type = 'f'; *size = 4; *count = 12;    break;
+      case TYPE_MATRIX3X4:              *type = 'f'; *size = 4; *count = 12;    break;
+      case TYPE_MATRIX4X2:              *type = 'f'; *size = 4; *count = 8;     break;
+      case TYPE_MATRIX2X4:              *type = 'f'; *size = 4; *count = 8;     break;
+      case TYPE_SHADER:                 *type = 't'; *size = 4; *count = 1;     break;
+      case TYPE_PARTICLE_MAP:           *type = 't'; *size = 4; *count = 1;     break;
+      case TYPE_SPECTRUM:               *type = 'f'; *size = 4; *count = 3;     break;
+      case TYPE_ID:                     *type = 'i'; *size = 4; *count = 1;     break;
+      case TYPE_PARAMETER:              *type = 'i'; *size = 4; *count = 1;     break;
+      case TYPE_TEMPORARY:              *type = 'i'; *size = 4; *count = 1;     break;
+      case TYPE_DMATRIX2X2:             *type = 'd'; *size = 8; *count = 4;     break;
+      case TYPE_DMATRIX2X3:             *type = 'd'; *size = 8; *count = 6;     break;
+      case TYPE_DMATRIX3X2:             *type = 'd'; *size = 8; *count = 6;     break;
+      case TYPE_DMATRIX3X3:             *type = 'd'; *size = 8; *count = 9;     break;
+      case TYPE_DMATRIX4X3:             *type = 'd'; *size = 8; *count = 12;    break;
+      case TYPE_DMATRIX3X4:             *type = 'd'; *size = 8; *count = 12;    break;
+      case TYPE_DMATRIX4X2:             *type = 'd'; *size = 8; *count = 8;     break;
+      case TYPE_DMATRIX2X4:             *type = 'd'; *size = 8; *count = 8;     break;
+      case TYPE_CALL:                   *type = '*'; *size = sizeof(void*); *count = 2; break;
 
       case TYPE_UNDEF:
       case TYPE_STRUCT:

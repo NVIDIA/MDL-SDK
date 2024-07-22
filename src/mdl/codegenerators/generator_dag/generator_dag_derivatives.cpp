@@ -215,14 +215,12 @@ public:
                 Func_deriv_info *infos = m_deriv_infos.get_or_calc_function_derivative_infos(
                     impl_cast<Module>(i_owner.get()), func_inst);
 
-                // any derivatives wanted at all?
-                if (infos->args_want_derivatives.test_bit(0)) {
-                    // visit all arguments for which the corresponding parameter wants derivatives
-                    for (size_t i = 1, n = infos->args_want_derivatives.get_size(); i < n; ++i) {
-                        if (infos->args_want_derivatives.test_bit(i)) {
-                            visit(call->get_argument(i - 1));
-                        }
-                    }
+                // visit all arguments and set want-derivatives according to the derivative info
+                for (size_t i = 1, n = infos->args_want_derivatives.get_size(); i < n; ++i) {
+                    Flag_scope flag_scope(
+                        m_want_derivatives,
+                        infos->args_want_derivatives.test_bit(i));
+                    visit(call->get_argument(i - 1));
                 }
             }
         }
@@ -933,12 +931,15 @@ IType_struct const *Deriv_DAG_builder::get_deriv_type(IType const *type)
         break;
     }
 
-    Symbol_table *sym_table = m_tf.get_symbol_table();
-    ISymbol const *sym = sym_table->get_user_type_symbol(name.c_str());
-    IType_struct *deriv_type = m_tf.create_struct(sym);
-    deriv_type->add_field(type, sym_val);
-    deriv_type->add_field(type, sym_dx);
-    deriv_type->add_field(type, sym_dy);
+    Symbol_table  *sym_table = m_tf.get_symbol_table();
+    ISymbol const *sym       = sym_table->get_user_type_symbol(name.c_str());
+    IType_struct::Field fields[3] = {
+        IType_struct::Field(type, sym_val),
+        IType_struct::Field(type, sym_dx),
+        IType_struct::Field(type, sym_dy)
+    };
+    IType_struct const *deriv_type = m_tf.create_struct(/*is_declarative=*/ false, sym, 
+        /*category_name=*/ NULL, fields, 3);
 
     m_deriv_type_map[type] = deriv_type;
     return deriv_type;

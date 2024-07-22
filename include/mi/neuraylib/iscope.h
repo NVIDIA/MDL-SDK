@@ -63,10 +63,6 @@ namespace neuraylib {
 /// shadowing of variables with the same name in programming languages.
 ///
 /// For scope management see the methods on #mi::neuraylib::IDatabase.
-///
-/// \if MDL_SDK_API
-/// \note The MDL SDK currently supports only \em one scope, the global scope.
-/// \endif
 class IScope : public
     mi::base::Interface_declare<0x578df0c5,0xab97,0x460a,0xb5,0x0a,0x2c,0xf8,0x54,0x22,0x31,0xb9>
 {

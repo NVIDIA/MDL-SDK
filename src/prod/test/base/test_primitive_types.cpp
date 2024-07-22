@@ -49,9 +49,8 @@ mi_static_assert(sizeof(mi::Float64)    == 8);
 
 struct Numeric_traits_test_dummy
 {
-    int i;
-    Numeric_traits_test_dummy() : i(0) {}
-    bool operator==( const Numeric_traits_test_dummy& rhs) { return i == rhs.i; }
+    int i = 0;
+    bool operator==( const Numeric_traits_test_dummy& rhs) const { return i == rhs.i; }
 };
 
 std::ostringstream& operator<<( std::ostringstream& out, Numeric_traits_test_dummy val) {
@@ -66,15 +65,17 @@ MI_TEST_AUTO_FUNCTION( test_pi_constants )
     MI_CHECK_CLOSE( sin( 2 * MI_PI_4), 1.0, 0.00001);
 }
 
+#define MI_CHECK_STATIC(expr) { bool b = (expr); MI_CHECK( b); }
+
 MI_TEST_AUTO_FUNCTION( test_numeric_traits )
 {
     {
         // generic case
-        typedef mi::base::numeric_traits<Numeric_traits_test_dummy> Traits;
-        MI_CHECK( ! Traits::is_specialized);
-        MI_CHECK( ! Traits::has_infinity);
-        MI_CHECK( ! Traits::has_quiet_NaN);
-        MI_CHECK( ! Traits::has_signaling_NaN);
+        using Traits = mi::base::numeric_traits<Numeric_traits_test_dummy>;
+        MI_CHECK_STATIC( ! Traits::is_specialized);
+        MI_CHECK_STATIC( ! Traits::has_infinity);
+        MI_CHECK_STATIC( ! Traits::has_quiet_NaN);
+        MI_CHECK_STATIC( ! Traits::has_signaling_NaN);
         Numeric_traits_test_dummy null;
         MI_CHECK_EQUAL( Traits::min(), null);
         MI_CHECK_EQUAL( Traits::max(), null);
@@ -85,11 +86,11 @@ MI_TEST_AUTO_FUNCTION( test_numeric_traits )
     }
     {
         // Uint8 specialization
-        typedef mi::base::numeric_traits<mi::Uint8> Traits;
-        MI_CHECK( Traits::is_specialized);
-        MI_CHECK( ! Traits::has_infinity);
-        MI_CHECK( ! Traits::has_quiet_NaN);
-        MI_CHECK( ! Traits::has_signaling_NaN);
+        using Traits = mi::base::numeric_traits<mi::Uint8>;
+        MI_CHECK_STATIC( Traits::is_specialized);
+        MI_CHECK_STATIC( ! Traits::has_infinity);
+        MI_CHECK_STATIC( ! Traits::has_quiet_NaN);
+        MI_CHECK_STATIC( ! Traits::has_signaling_NaN);
         MI_CHECK_EQUAL( Traits::min(), 0);
         MI_CHECK_EQUAL( Traits::max(), 255);
         MI_CHECK_EQUAL( Traits::negative_max(), 0);
@@ -99,11 +100,11 @@ MI_TEST_AUTO_FUNCTION( test_numeric_traits )
     }
     {
         // Uint16 specialization
-        typedef mi::base::numeric_traits<mi::Uint16> Traits;
-        MI_CHECK( Traits::is_specialized);
-        MI_CHECK( ! Traits::has_infinity);
-        MI_CHECK( ! Traits::has_quiet_NaN);
-        MI_CHECK( ! Traits::has_signaling_NaN);
+        using Traits = mi::base::numeric_traits<mi::Uint16>;
+        MI_CHECK_STATIC( Traits::is_specialized);
+        MI_CHECK_STATIC( ! Traits::has_infinity);
+        MI_CHECK_STATIC( ! Traits::has_quiet_NaN);
+        MI_CHECK_STATIC( ! Traits::has_signaling_NaN);
         MI_CHECK_EQUAL( Traits::min(), 0);
         MI_CHECK_EQUAL( Traits::max(), 65535);
         MI_CHECK_EQUAL( Traits::negative_max(), 0);
@@ -113,11 +114,11 @@ MI_TEST_AUTO_FUNCTION( test_numeric_traits )
     }
     {
         // Uint32 specialization
-        typedef mi::base::numeric_traits<mi::Uint32> Traits;
-        MI_CHECK( Traits::is_specialized);
-        MI_CHECK( ! Traits::has_infinity);
-        MI_CHECK( ! Traits::has_quiet_NaN);
-        MI_CHECK( ! Traits::has_signaling_NaN);
+        using Traits = mi::base::numeric_traits<mi::Uint32>;
+        MI_CHECK_STATIC( Traits::is_specialized);
+        MI_CHECK_STATIC( ! Traits::has_infinity);
+        MI_CHECK_STATIC( ! Traits::has_quiet_NaN);
+        MI_CHECK_STATIC( ! Traits::has_signaling_NaN);
         MI_CHECK_EQUAL( Traits::min(), 0);
         MI_CHECK_EQUAL( Traits::max(), 4294967295U);
         MI_CHECK_EQUAL( Traits::negative_max(), 0);
@@ -127,11 +128,11 @@ MI_TEST_AUTO_FUNCTION( test_numeric_traits )
     }
     {
         // Uint64 specialization
-        typedef mi::base::numeric_traits<mi::Uint64> Traits;
-        MI_CHECK( Traits::is_specialized);
-        MI_CHECK( ! Traits::has_infinity);
-        MI_CHECK( ! Traits::has_quiet_NaN);
-        MI_CHECK( ! Traits::has_signaling_NaN);
+        using Traits = mi::base::numeric_traits<mi::Uint64>;
+        MI_CHECK_STATIC( Traits::is_specialized);
+        MI_CHECK_STATIC( ! Traits::has_infinity);
+        MI_CHECK_STATIC( ! Traits::has_quiet_NaN);
+        MI_CHECK_STATIC( ! Traits::has_signaling_NaN);
         MI_CHECK_EQUAL( Traits::min(), 0);
         MI_CHECK_EQUAL( Traits::max(), 18446744073709551615ULL);
         MI_CHECK_EQUAL( Traits::negative_max(), 0);
@@ -141,11 +142,11 @@ MI_TEST_AUTO_FUNCTION( test_numeric_traits )
     }
     {
         // Sint8 specialization
-        typedef mi::base::numeric_traits<mi::Sint8> Traits;
-        MI_CHECK( Traits::is_specialized);
-        MI_CHECK( ! Traits::has_infinity);
-        MI_CHECK( ! Traits::has_quiet_NaN);
-        MI_CHECK( ! Traits::has_signaling_NaN);
+        using Traits = mi::base::numeric_traits<mi::Sint8>;
+        MI_CHECK_STATIC( Traits::is_specialized);
+        MI_CHECK_STATIC( ! Traits::has_infinity);
+        MI_CHECK_STATIC( ! Traits::has_quiet_NaN);
+        MI_CHECK_STATIC( ! Traits::has_signaling_NaN);
         MI_CHECK_EQUAL( Traits::min(), -128);
         MI_CHECK_EQUAL( Traits::max(), 127);
         MI_CHECK_EQUAL( Traits::negative_max(), -128);
@@ -155,11 +156,11 @@ MI_TEST_AUTO_FUNCTION( test_numeric_traits )
     }
     {
         // Sint16 specialization
-        typedef mi::base::numeric_traits<mi::Sint16> Traits;
-        MI_CHECK( Traits::is_specialized);
-        MI_CHECK( ! Traits::has_infinity);
-        MI_CHECK( ! Traits::has_quiet_NaN);
-        MI_CHECK( ! Traits::has_signaling_NaN);
+        using Traits = mi::base::numeric_traits<mi::Sint16>;
+        MI_CHECK_STATIC( Traits::is_specialized);
+        MI_CHECK_STATIC( ! Traits::has_infinity);
+        MI_CHECK_STATIC( ! Traits::has_quiet_NaN);
+        MI_CHECK_STATIC( ! Traits::has_signaling_NaN);
         MI_CHECK_EQUAL( Traits::min(), -32767 - 1);
         MI_CHECK_EQUAL( Traits::max(), 32767);
         MI_CHECK_EQUAL( Traits::negative_max(), -32767 - 1);
@@ -169,11 +170,11 @@ MI_TEST_AUTO_FUNCTION( test_numeric_traits )
     }
     {
         // Sint32 specialization
-        typedef mi::base::numeric_traits<mi::Sint32> Traits;
-        MI_CHECK( Traits::is_specialized);
-        MI_CHECK( ! Traits::has_infinity);
-        MI_CHECK( ! Traits::has_quiet_NaN);
-        MI_CHECK( ! Traits::has_signaling_NaN);
+        using Traits = mi::base::numeric_traits<mi::Sint32>;
+        MI_CHECK_STATIC( Traits::is_specialized);
+        MI_CHECK_STATIC( ! Traits::has_infinity);
+        MI_CHECK_STATIC( ! Traits::has_quiet_NaN);
+        MI_CHECK_STATIC( ! Traits::has_signaling_NaN);
         MI_CHECK_EQUAL( Traits::min(), -2147483647 - 1);
         MI_CHECK_EQUAL( Traits::max(),  2147483647);
         MI_CHECK_EQUAL( Traits::negative_max(), -2147483647 - 1);
@@ -183,11 +184,11 @@ MI_TEST_AUTO_FUNCTION( test_numeric_traits )
     }
     {
         // Sint64 specialization
-        typedef mi::base::numeric_traits<mi::Sint64> Traits;
-        MI_CHECK( Traits::is_specialized);
-        MI_CHECK( ! Traits::has_infinity);
-        MI_CHECK( ! Traits::has_quiet_NaN);
-        MI_CHECK( ! Traits::has_signaling_NaN);
+        using Traits = mi::base::numeric_traits<mi::Sint64>;
+        MI_CHECK_STATIC( Traits::is_specialized);
+        MI_CHECK_STATIC( ! Traits::has_infinity);
+        MI_CHECK_STATIC( ! Traits::has_quiet_NaN);
+        MI_CHECK_STATIC( ! Traits::has_signaling_NaN);
         MI_CHECK_EQUAL( Traits::min(), -9223372036854775807LL - 1LL);
         MI_CHECK_EQUAL( Traits::max(),  9223372036854775807LL);
         MI_CHECK_EQUAL( Traits::negative_max(), -9223372036854775807LL - 1LL);
@@ -197,11 +198,11 @@ MI_TEST_AUTO_FUNCTION( test_numeric_traits )
     }
     {
         // Float32 specialization
-        typedef mi::base::numeric_traits<mi::Float32> Traits;
-        MI_CHECK( Traits::is_specialized);
-        MI_CHECK( Traits::has_infinity);
-        MI_CHECK( Traits::has_quiet_NaN);
-        MI_CHECK( Traits::has_signaling_NaN);
+        using Traits = mi::base::numeric_traits<mi::Float32>;
+        MI_CHECK_STATIC( Traits::is_specialized);
+        MI_CHECK_STATIC( Traits::has_infinity);
+        MI_CHECK_STATIC( Traits::has_quiet_NaN);
+        MI_CHECK_STATIC( Traits::has_signaling_NaN);
         MI_CHECK_GREATER( Traits::min(), 0.0f);
         MI_CHECK_LESS( Traits::min(), 1.0e-37f);
         MI_CHECK_EQUAL( Traits::max(), 3.402823466e+38f);
@@ -212,11 +213,11 @@ MI_TEST_AUTO_FUNCTION( test_numeric_traits )
     }
     {
         // Float64 specialization
-        typedef mi::base::numeric_traits<mi::Float64> Traits;
-        MI_CHECK( Traits::is_specialized);
-        MI_CHECK( Traits::has_infinity);
-        MI_CHECK( Traits::has_quiet_NaN);
-        MI_CHECK( Traits::has_signaling_NaN);
+        using Traits = mi::base::numeric_traits<mi::Float64>;
+        MI_CHECK_STATIC( Traits::is_specialized);
+        MI_CHECK_STATIC( Traits::has_infinity);
+        MI_CHECK_STATIC( Traits::has_quiet_NaN);
+        MI_CHECK_STATIC( Traits::has_signaling_NaN);
         MI_CHECK_GREATER( Traits::min(), 0.0);
         MI_CHECK_LESS( Traits::min(), 1.0e-307);
         MI_CHECK_EQUAL( Traits::max(), 1.7976931348623158e+308);

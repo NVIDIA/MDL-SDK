@@ -221,34 +221,34 @@ public:
     virtual bool is_valid() const = 0;
 
     /// Get the number of imported modules.
-    virtual int get_import_count() const = 0;
+    virtual size_t get_import_count() const = 0;
 
     /// Get the imported module at index.
     ///
     /// \param index    The index of the imported module.
     ///
     /// \returns        The imported module.
-    virtual IModule const *get_import(int index) const = 0;
+    virtual IModule const *get_import(size_t index) const = 0;
 
     /// Get the number of exported definitions.
     ///
     /// \returns The number of exported definitions.
-    virtual int get_exported_definition_count() const = 0;
+    virtual size_t get_exported_definition_count() const = 0;
 
     /// Get the exported definition at index.
     ///
     /// \param index    The index of the exported definition.
     ///
     /// \returns        The exported definition at index.
-    virtual IDefinition const *get_exported_definition(int index) const = 0;
+    virtual IDefinition const *get_exported_definition(size_t index) const = 0;
 
     /// Get the number of declarations.
-    virtual int get_declaration_count() const = 0;
+    virtual size_t get_declaration_count() const = 0;
 
     /// Get the declaration at index.
     ///
     /// \param index  the index
-    virtual IDeclaration const *get_declaration(int index) const = 0;
+    virtual IDeclaration const *get_declaration(size_t index) const = 0;
 
     /// Add a declaration (to the end of the declaration list).
     ///
@@ -356,13 +356,13 @@ public:
     /// Get the number of builtin definitions.
     ///
     /// \returns The number of builtin definitions if this is the builtin module, else 0.
-    virtual int get_builtin_definition_count() const = 0;
+    virtual size_t get_builtin_definition_count() const = 0;
 
     /// Get the builtin definition at index.
     ///
     /// \param index    The index of the builtin definition.
     /// \returns        The exported definition at index.
-    virtual IDefinition const *get_builtin_definition(int index) const = 0;
+    virtual IDefinition const *get_builtin_definition(size_t index) const = 0;
 
     /// Returns true if this is a module from the standard library.
     virtual bool is_stdlib() const = 0;

@@ -150,10 +150,10 @@ class Expression_invalid : public Expr_base<IExpression_invalid>
     typedef Expr_base<IExpression_invalid> Base;
 public:
     /// Return the number of sub expressions of this expression.
-    int get_sub_expression_count() const MDL_FINAL { return 0; }
+    size_t get_sub_expression_count() const MDL_FINAL { return 0; }
 
     /// Return the i'th sub expression of this expression.
-    IExpression const *get_sub_expression(int) const MDL_FINAL { return NULL; }
+    IExpression const *get_sub_expression(size_t) const MDL_FINAL { return NULL; }
 
     /// Constructor.
     explicit Expression_invalid()
@@ -194,10 +194,10 @@ public:
     }
 
     /// Return the number of sub expressions of this expression.
-    int get_sub_expression_count() const MDL_FINAL { return 0; }
+    size_t get_sub_expression_count() const MDL_FINAL { return 0; }
 
     /// Return the i'th sub expression of this expression.
-    IExpression const *get_sub_expression(int) const MDL_FINAL { return NULL; }
+    IExpression const *get_sub_expression(size_t) const MDL_FINAL { return NULL; }
 
     /// Constructor.
     ///
@@ -287,10 +287,10 @@ public:
     void set_array_constructor() MDL_FINAL { m_is_array_constructor = true; }
 
     /// Return the number of sub expressions of this expression.
-    int get_sub_expression_count() const MDL_FINAL { return 0; }
+    size_t get_sub_expression_count() const MDL_FINAL { return 0; }
 
     /// Return the i'th sub expression of this expression.
-    IExpression const *get_sub_expression(int) const MDL_FINAL { return NULL; }
+    IExpression const *get_sub_expression(size_t) const MDL_FINAL { return NULL; }
 
     /// Constructor.
     ///
@@ -382,10 +382,10 @@ public:
     }
 
     /// Return the number of sub expressions of this expression.
-    int get_sub_expression_count() const MDL_FINAL { return 1; }
+    size_t get_sub_expression_count() const MDL_FINAL { return 1; }
 
     /// Return the i'th sub expression of this expression.
-    IExpression const *get_sub_expression(int i) const MDL_FINAL {
+    IExpression const *get_sub_expression(size_t i) const MDL_FINAL {
         return i == 0 ? m_expr : NULL;
     }
 
@@ -593,10 +593,10 @@ public:
     }
 
     /// Return the number of sub expressions of this expression.
-    int get_sub_expression_count() const MDL_FINAL { return 2; }
+    size_t get_sub_expression_count() const MDL_FINAL { return 2; }
 
     /// Return the i'th sub expression of this expression.
-    IExpression const *get_sub_expression(int i) const MDL_FINAL
+    IExpression const *get_sub_expression(size_t i) const MDL_FINAL
     {
         switch (i) {
         case 0:  return m_lhs;
@@ -654,10 +654,10 @@ public:
     void set_false(IExpression const *expr) MDL_FINAL { m_false_expr = expr; }
 
     /// Return the number of sub expressions of this expression.
-    int get_sub_expression_count() const MDL_FINAL { return 3; }
+    size_t get_sub_expression_count() const MDL_FINAL { return 3; }
 
     /// Return the i'th sub expression of this expression.
-    IExpression const *get_sub_expression(int i) const MDL_FINAL
+    IExpression const *get_sub_expression(size_t i) const MDL_FINAL
     {
         switch (i) {
         case 0:  return m_cond_expr;
@@ -1086,6 +1086,7 @@ public:
                             }
                         }
                     }
+                    break;
 
                 default:
                     {
@@ -1130,17 +1131,19 @@ public:
     }
 
     /// Return the number of sub expressions of this expression.
-    int get_sub_expression_count() const MDL_FINAL {
-        return int(1 + Base::argument_count());
+    size_t get_sub_expression_count() const MDL_FINAL {
+        return 1 + Base::argument_count();
     }
 
     /// Return the i'th sub expression of this expression.
-    IExpression const *get_sub_expression(int i) const MDL_FINAL
+    IExpression const *get_sub_expression(size_t i) const MDL_FINAL
     {
-        if (i < 0 || size_t(i) > Base::argument_count())
+        if (i > Base::argument_count()) {
             return NULL;
-        if (i == 0)
+        }
+        if (i == 0) {
             return m_callee;
+        }
         IArgument const *arg = Base::argument_at(i - 1);
         return arg->get_argument_expr();
     }
@@ -1173,10 +1176,10 @@ public:
     void set_expression(IExpression const *expr) MDL_FINAL { m_expr = expr; }
 
     /// Get the number of declarations in the let.
-    int get_declaration_count() const MDL_FINAL { return Base::argument_count(); }
+    size_t get_declaration_count() const MDL_FINAL { return Base::argument_count(); }
 
     /// Get the declaration at index.
-    IDeclaration const *get_declaration(int index) const MDL_FINAL {
+    IDeclaration const *get_declaration(size_t index) const MDL_FINAL {
         return Base::argument_at(index);
     }
 
@@ -1184,10 +1187,10 @@ public:
     void add_declaration(IDeclaration const *decl) MDL_FINAL { Base::add_argument(decl); }
 
     /// Return the number of sub expressions of this expression.
-    int get_sub_expression_count() const MDL_FINAL { return 1; }
+    size_t get_sub_expression_count() const MDL_FINAL { return 1; }
 
     /// Return the i'th sub expression of this expression.
-    IExpression const *get_sub_expression(int i) const MDL_FINAL {
+    IExpression const *get_sub_expression(size_t i) const MDL_FINAL {
         return i == 0 ? m_expr : NULL;
     }
 

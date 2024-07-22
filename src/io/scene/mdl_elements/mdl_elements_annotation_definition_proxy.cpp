@@ -40,10 +40,6 @@ namespace MI {
 
 namespace MDL {
 
-Mdl_annotation_definition_proxy::Mdl_annotation_definition_proxy()
-{
-}
-
 Mdl_annotation_definition_proxy::Mdl_annotation_definition_proxy( const char* module_name)
   : m_module_db_name( get_db_name( module_name))
 {
@@ -80,9 +76,9 @@ size_t Mdl_annotation_definition_proxy::get_size() const
 {
     return sizeof( *this)
         + SCENE::Scene_element<Mdl_annotation_definition_proxy,
-                               Mdl_annotation_definition_proxy::id>::get_size()
+                               ID_MDL_ANNOTATION_DEFINITION_PROXY>::get_size()
             - sizeof( SCENE::Scene_element<Mdl_annotation_definition_proxy,
-                                           Mdl_annotation_definition_proxy::id>)
+                                           ID_MDL_ANNOTATION_DEFINITION_PROXY>)
         + dynamic_memory_consumption( m_module_db_name);
 }
 

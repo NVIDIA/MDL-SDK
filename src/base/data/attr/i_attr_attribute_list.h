@@ -67,25 +67,25 @@ class Attribute_list : public Attribute
         m_listalloc(list_size)
     { init(id, override, list_size, false, false); }
     explicit Attribute_list(
-        Type_code	type,
-        const char	*name,
-        Uint		type_asize,
-        Uint		list_size,
+        Type_code       type,
+        const char      *name,
+        Uint            type_asize,
+        Uint            list_size,
         Attribute_propagation override,
-        bool		global,
-        bool		is_const)
+        bool            global,
+        bool            is_const)
       : Attribute(type, name, type_asize, list_size, override, global, is_const),
         m_listsize(list_size),
         m_listalloc(list_size)
     { init(Attribute::id_create(name), override, list_size, is_const, global); }
     explicit Attribute_list(
-        Attribute_id	id,
-        Type_code	type,
-        Uint		type_asize,
-        Uint		list_size,
+        Attribute_id    id,
+        Type_code       type,
+        Uint            type_asize,
+        Uint            list_size,
         Attribute_propagation override,
-        bool		global,
-        bool		is_const)
+        bool            global,
+        bool            is_const)
       : Attribute(id, type, type_asize, list_size, override, global, is_const),
         m_listsize(list_size),
         m_listalloc(list_size)
@@ -131,7 +131,7 @@ class Attribute_list : public Attribute
     /// Beginning of value byte block.
     /// \param i if attribute list, list index
     const char* get_list_values(
-        Uint i)	const;
+        Uint i) const;
     /// Beginning of value byte block.
     /// \param i if attribute list, list index
     char* set_list_values(
@@ -226,25 +226,25 @@ class Attribute_list : public Attribute
     /// \param n if array, get n-th value
     /// \return value
     template <typename T> inline const T& get_list_value_ref(
-        Uint		i = 0,
-        Uint		n = 0) const;
+        Uint            i = 0,
+        Uint            n = 0) const;
 
     /// Templatized get, to hide casts.
     /// \param i if attribute list, list index
     /// \param n if array, get n-th value
     /// \return value
     template <typename T> inline const T get_list_value(
-        Uint		i = 0,
-        Uint		n = 0) const;
+        Uint            i = 0,
+        Uint            n = 0) const;
 
     // Templatized set, to hide casts.
     /// \param v new value to set
     /// \param i if attribute list, list index
     /// \param n if array, set n-th value
     template <typename T> inline void set_list_value(
-        const T		&v,
-        Uint		i = 0,
-        Uint		n = 0);
+        const T         &v,
+        Uint            i = 0,
+        Uint            n = 0);
 
     /// If the attribute is a list, such as per-vertex motion paths, resize it.
     /// A non-list attribute is an attribute with list size 1.
@@ -258,7 +258,7 @@ class Attribute_list : public Attribute
     void list_reserve(
         Uint list_capacity );
     /// list size (number of data elements)
-    Uint get_listsize()	const override;
+    Uint get_listsize() const override;
     /// Explicitly shrink capacity to given size
     /// \param listsize new size
     void list_shrink(Uint listsize);
@@ -278,9 +278,9 @@ class Attribute_list : public Attribute
     virtual size_t flush() override;
 
   private:
-    Uint m_listsize;				///< the list size
+    Uint m_listsize;                            ///< the list size
     /// if greater 1: \c m_values is a consecutive array of \c m_listsize elements of type \c m_type
-    Uint m_listalloc;				///< actually allocated list size
+    Uint m_listalloc;                           ///< actually allocated list size
 };
 
 

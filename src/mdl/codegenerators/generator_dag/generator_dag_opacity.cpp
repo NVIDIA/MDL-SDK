@@ -48,7 +48,7 @@ class Opacity_analyzer {
     };
 
 public:
-    typedef IGenerated_code_dag::IMaterial_instance::Opacity Result;
+    typedef IMaterial_instance::Opacity Result;
 
     /// Constructor.
     ///
@@ -91,11 +91,11 @@ public:
             IValue_float const *f_value = get_cutout_opacity();
             if (f_value == NULL) {
                 // cannot analyze
-                return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
+                return IMaterial_instance::OPACITY_UNKNOWN;
             }
             if (f_value->get_value() < 1.0f) {
                 // not opaque
-                return IGenerated_code_dag::IMaterial_instance::OPACITY_TRANSPARENT;
+                return IMaterial_instance::OPACITY_TRANSPARENT;
             }
         }
         // We do not allow different transmission of front and back-side of an MDL material.
@@ -103,23 +103,23 @@ public:
         DAG_node const *frontside = skip_temp(m_constructor->get_argument("surface"));
         if (is<DAG_constant>(frontside)) {
             // only ONE invalid BSDF, this IS opaque
-            return IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE;
+            return IMaterial_instance::OPACITY_OPAQUE;
         }
         DAG_call const *fs = as<DAG_call>(frontside);
         if (fs == NULL) {
             // a parameter, cannot decide
-            return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
+            return IMaterial_instance::OPACITY_UNKNOWN;
         }
 
         DAG_node const *scattering = skip_temp(fs->get_argument("scattering"));
         if (is<DAG_constant>(scattering)) {
             // only ONE invalid BSDF, this IS opaque
-            return IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE;
+            return IMaterial_instance::OPACITY_OPAQUE;
         }
         DAG_call const *sc = as<DAG_call>(scattering);
         if (sc == NULL) {
             // a parameter, cannot decide
-            return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
+            return IMaterial_instance::OPACITY_UNKNOWN;
         }
 
         return analyze_bsdf(sc);
@@ -151,16 +151,16 @@ private:
         DAG_node const *components = skip_temp(bsdf->get_argument("components"));
         if (is<DAG_constant>(components)) {
             // can contain only invalid refs
-            return IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE;
+            return IMaterial_instance::OPACITY_OPAQUE;
         }
         DAG_call const *arr = as<DAG_call>(components);
         if (arr == NULL) {
             // a parameter, cannot decide
-            return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
+            return IMaterial_instance::OPACITY_UNKNOWN;
         }
         if (arr->get_semantic() != IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR) {
             // not an array constructor, unsupported
-            return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
+            return IMaterial_instance::OPACITY_UNKNOWN;
         }
 
         int n = arr->get_argument_count();
@@ -174,21 +174,21 @@ private:
             DAG_call const *elem_const = as<DAG_call>(elem);
             if (elem_const == NULL) {
                 // a parameter, cannot decide
-                return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
+                return IMaterial_instance::OPACITY_UNKNOWN;
             }
             if (elem_const->get_semantic() != IDefinition::DS_ELEM_CONSTRUCTOR) {
                 // not a struct constructor, cannot decide
-                return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
+                return IMaterial_instance::OPACITY_UNKNOWN;
             }
 
             DAG_node const *bsdf = elem_const->get_argument("component");
             Result res = analyze_bsdf(bsdf);
-            if (res != IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE)
-                return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
+            if (res != IMaterial_instance::OPACITY_OPAQUE)
+                return IMaterial_instance::OPACITY_UNKNOWN;
         }
 
         // all good
-        return IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE;
+        return IMaterial_instance::OPACITY_OPAQUE;
     }
 
     /// Analyze if a bsdf layerer is opaque or transparent.
@@ -208,7 +208,7 @@ private:
 
         if (low_res == up_res)
             return low_res;
-        return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
+        return IMaterial_instance::OPACITY_UNKNOWN;
     }
 
     /// Analyze if a bsdf modifier is opaque or transparent.
@@ -256,22 +256,22 @@ private:
 
         default:
             MDL_ASSERT(!"unhandled glossy BSDF");
-            return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
+            return IMaterial_instance::OPACITY_UNKNOWN;
         }
 
         if (has_mode) {
             IValue const *v = get_value(bsdf, "mode");
             if (v == NULL) {
-                return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
+                return IMaterial_instance::OPACITY_UNKNOWN;
             }
             IValue_int_valued const *i_v = cast<IValue_int_valued>(v);
             refl_type = static_cast<scatter_mode>(i_v->get_value());
         }
 
         if (refl_type == scatter_transmit || refl_type == scatter_reflect_transmit) {
-            return IGenerated_code_dag::IMaterial_instance::OPACITY_TRANSPARENT;
+            return IMaterial_instance::OPACITY_TRANSPARENT;
         }
-        return IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE;
+        return IMaterial_instance::OPACITY_OPAQUE;
     }
 
     /// Analyze if an elemental bsdf is opaque or transparent.
@@ -287,11 +287,11 @@ private:
         case IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF:
         case IDefinition::DS_INTRINSIC_DF_DUSTY_DIFFUSE_REFLECTION_BSDF:
             // MaterialLayerBSDF_DiffuseRefl
-            return IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE;
+            return IMaterial_instance::OPACITY_OPAQUE;
 
         case IDefinition::DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF:
             // MaterialLayerBSDF_DiffuseTrans;
-            return IGenerated_code_dag::IMaterial_instance::OPACITY_TRANSPARENT;
+            return IMaterial_instance::OPACITY_TRANSPARENT;
 
         case IDefinition::DS_INTRINSIC_DF_SPECULAR_BSDF:
         case IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF:
@@ -306,11 +306,12 @@ private:
             return analyze_glossy_bsdf(bsdf);
 
         case IDefinition::DS_INTRINSIC_DF_MEASURED_BSDF:
-            return IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE;
+            return IMaterial_instance::OPACITY_OPAQUE;
+
 
         default:
             MDL_ASSERT(!"unhandled BSDF");
-            return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
+            return IMaterial_instance::OPACITY_UNKNOWN;
         }
     }
 
@@ -326,11 +327,11 @@ private:
         node = skip_temp(node);
         if (is<DAG_constant>(node)) {
             // invalid ref, this IS opaque
-            return IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE;
+            return IMaterial_instance::OPACITY_OPAQUE;
         }
         DAG_call const *bsdf = as<DAG_call>(node);
         if (bsdf == NULL)
-            return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
+            return IMaterial_instance::OPACITY_UNKNOWN;
 
         IDefinition::Semantics sema = bsdf->get_semantic();
 
@@ -340,7 +341,7 @@ private:
 
             if (t_res == f_res)
                 return t_res;
-            return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
+            return IMaterial_instance::OPACITY_UNKNOWN;
         }
 
         switch (sema) {
@@ -360,6 +361,8 @@ private:
         case IDefinition::DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER:
         case IDefinition::DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER:
         case IDefinition::DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER:
+            return analyze_bsdf_layerer(bsdf);
+
 
         case IDefinition::DS_INTRINSIC_DF_TINT:
         case IDefinition::DS_INTRINSIC_DF_THIN_FILM:
@@ -387,7 +390,7 @@ private:
 
         default:
             MDL_ASSERT(!"unhandled BSDF");
-            return IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN;
+            return IMaterial_instance::OPACITY_UNKNOWN;
         }
     }
 
@@ -457,7 +460,7 @@ private:
 }  // anonymous
 
 // Returns the opacity of this instance.
-IGenerated_code_dag::IMaterial_instance::Opacity
+IMaterial_instance::Opacity
 Generated_code_dag::Material_instance::get_opacity() const
 {
     if (m_properties & IP_TARGET_MATERIAL_MODEL) {
@@ -471,7 +474,7 @@ Generated_code_dag::Material_instance::get_opacity() const
 }
 
 /// Returns the opacity of this instance.
-IGenerated_code_dag::IMaterial_instance::Opacity
+IMaterial_instance::Opacity
 Generated_code_dag::Material_instance::get_surface_opacity() const
 {
     if (m_properties & IP_TARGET_MATERIAL_MODEL) {

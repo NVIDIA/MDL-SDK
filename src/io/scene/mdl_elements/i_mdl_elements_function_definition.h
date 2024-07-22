@@ -75,14 +75,14 @@ public:
 
     /// Constructor.
     ///
-    /// \param transaction            The DB transaction to access the module and to resolved MDL
+    /// \param transaction            The DB transaction to access the module and to resolve
     ///                               resources.
     /// \param function_tag           The tag this definition will eventually get (needed to pass
     ///                               on to function calls later).
     /// \param function_ident         The identifier of this definition will be used to check if it
     ///                               is still valid and has not been removed/altered due to a
     ///                               module reload.
-    /// \param module                 The MDL module of this function definition.
+    /// \param module                 The core module of this function definition.
     /// \param code_dag               The DAG representation of the MDL module.
     /// \param is_material            Indicates whether this is a material or a function. Note that
     ///                               the elemental constructor and copy constructor for material
@@ -130,6 +130,8 @@ public:
 
     bool is_exported() const { return m_is_exported; }
 
+    bool is_declarative() const { return m_is_declarative; }
+
     bool is_uniform() const { return m_is_uniform; }
 
     bool is_material() const { return m_is_material; }
@@ -173,8 +175,7 @@ public:
        const IExpression_list* arguments,
        mi::Sint32* errors = nullptr) const;
 
-    const char *get_mdl_mangled_name(
-        DB::Transaction *transaction) const;
+    std::string get_mangled_name( DB::Transaction* transaction) const;
 
     // internal methods
 
@@ -189,7 +190,7 @@ public:
     //@{
 
     /// Implements #create_function_call() for the general case.
-    Mdl_function_call* create_function_call_internal(
+    Mdl_function_call* create_call_internal(
        DB::Transaction* transaction,
        const IExpression_list* arguments,
        bool allow_ek_parameter,
@@ -232,6 +233,12 @@ public:
         bool immutable,
         mi::Sint32* errors = nullptr) const;
 
+    /// Implements #create_function_call() for the decl_cast operator.
+    Mdl_function_call* create_decl_cast_operator_call_internal(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        bool immutable,
+        mi::Sint32* errors = nullptr) const;
     //@}
 
     /// \name Methods used to implement create_direct_call()
@@ -273,27 +280,33 @@ public:
         const IExpression_list* arguments,
         mi::Sint32* errors = nullptr) const;
 
+    /// Implements #create_direct_call() for the decl_cast operator.
+    IExpression_direct_call* create_decl_cast_operator_direct_call_internal(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        mi::Sint32* errors = nullptr) const;
+
     //@}
 
-    /// Returns the MDL semantic of this definition.
-    mi::mdl::IDefinition::Semantics get_mdl_semantic() const;
+    /// Returns the core semantic of this definition.
+    mi::mdl::IDefinition::Semantics get_core_semantic() const;
 
-    /// Returns the MDL type of an parameter.
+    /// Returns the core type of an parameter.
     ///
     /// \note The return type is an owned interface, not a \em reference-counted interface.
     ///
     /// \note This function returns a pointer that is owned by the DB element for the corresponding
     ///        module. Therefore, DB elements of type MDL module are not flushable.
-    const mi::mdl::IType* get_mdl_return_type( DB::Transaction* transaction) const;
+    const mi::mdl::IType* get_core_return_type( DB::Transaction* transaction) const;
 
-    /// Returns the MDL return type.
+    /// Returns the core return type.
     ///
     /// \note The return type is an owned interface, not a \em reference-counted interface.
     ///
     /// \note This function returns a pointer that is owned by the DB element for the corresponding
     ///        module. Therefore, DB elements of type MDL module are not flushable.
-    const mi::mdl::IType* get_mdl_parameter_type(
-        DB::Transaction* transaction, mi::Uint32 index) const;
+    const mi::mdl::IType* get_core_parameter_type(
+        DB::Transaction* transaction, mi::Size index) const;
 
     /// Returns the MDL name without parameter types, i.e.,, the MDL module name plus "::" plus the
     /// simple name.
@@ -418,6 +431,14 @@ private:
         bool copy_immutable_calls,
         mi::Sint32* errors) const;
 
+    /// Checks the arguments for call creation for the decl_cast operator.
+    std::tuple<IExpression_list*,IType_list*,const IType*>
+    check_and_prepare_arguments_decl_cast_operator(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        bool copy_immutable_calls,
+        mi::Sint32* errors) const;
+
     //@}
 
     mi::base::Handle<IType_factory> m_tf;         ///< The type factory.
@@ -429,7 +450,7 @@ private:
     std::string m_module_db_name;                 ///< The DB name of the corresponding module.
     DB::Tag m_function_tag;                       ///< The tag of this function definition.
     Mdl_ident m_function_ident;                   ///< The identifier of this function definition.
-    mi::mdl::IDefinition::Semantics m_mdl_semantic;  ///< The MDL semantic.
+    mi::mdl::IDefinition::Semantics m_core_semantic;            ///< The semantic.
     mi::neuraylib::IFunction_definition::Semantics m_semantic;  ///< The semantic.
     std::string m_mdl_name;                       ///< The MDL name of this function definition.
     std::string m_simple_name;                    ///< The simple MDL name of this fct. definition.
@@ -437,6 +458,7 @@ private:
     std::string m_original_name;                  ///< The original MDL function name (or empty).
     DB::Tag m_prototype_tag;                      ///< The prototype of this fct. def. (or invalid).
     bool m_is_exported;                           ///< The export flag.
+    bool m_is_declarative;                        ///< The declarative flag.
     bool m_is_uniform;                            ///< The uniform flag.
     bool m_is_material;                           ///< Material or function
     mi::neuraylib::Mdl_version m_since_version;   ///< The version when this def. was added.
@@ -450,11 +472,9 @@ private:
     mi::base::Handle<IAnnotation_list> m_parameter_annotations;
     mi::base::Handle<IAnnotation_block> m_return_annotations;
     mi::base::Handle<IExpression_list> m_enable_if_conditions;
-    std::vector<std::vector<mi::Size> > m_enable_if_users;
+    std::vector<std::vector<mi::Size>> m_enable_if_users;
 
     mi::base::Uuid m_function_hash;               ///< The function hash if any.
-
-    mutable std::string m_cached_mangled_name;    ///< Temporary to cache the mangled name.
 };
 
 } // namespace MDL

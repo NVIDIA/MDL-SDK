@@ -79,6 +79,8 @@ public:
 
     const char* get_mdl_function_definition() const final;
 
+    bool is_declarative() const final;
+
     bool is_material() const final;
 
     const mi::neuraylib::IType* get_return_type() const final;

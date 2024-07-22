@@ -214,17 +214,19 @@ bool Mdlc_module_impl::init()
     m_allocator = new mi::mdl::dbg::DebugMallocAllocator(m_allocator.get());
 #endif
 
-    m_mdl = mi::mdl::initialize(m_allocator.get());
-    if (!m_mdl)
-        return false;
-
-    mi::mdl::Node_types::init();
-
-    m_mdl->install_search_path(MDL_search_path::create(m_allocator.get()));
-
     // retrieve MDL parameters
     SYSTEM::Access_module<CONFIG::Config_module> config_module(/*deferred=*/false);
     CONFIG::Config_registry const                &registry = config_module->get_configuration();
+
+    bool varying = true;
+    registry.get_value("mdl_material_ior_is_varying", varying);
+
+    m_mdl = mi::mdl::initialize(varying, m_allocator.get());
+    if (!m_mdl)
+        return false;
+
+    m_mdl->install_search_path(MDL_search_path::create(m_allocator.get()));
+
     mi::mdl::Options                             &options = m_mdl->access_options();
 
     int opt_level = 0;
@@ -274,7 +276,6 @@ void Mdlc_module_impl::exit()
 {
 
     if (m_mdl) {
-        mi::mdl::Node_types::exit();
         m_mdl->release();
         m_mdl = nullptr;
     }
@@ -330,6 +331,22 @@ const mi::mdl::IGenerated_code_dag *Mdlc_module_impl::deserialize_code_dag(
 {
     MDL_deserializer mdl_deserializer(m_allocator.get(), deserializer);
     return m_mdl->deserialize_code_dag(&mdl_deserializer);
+}
+
+void Mdlc_module_impl::serialize_material_instance(
+    SERIAL::Serializer *serializer,
+    const mi::mdl::IMaterial_instance *instance)
+{
+    MDL_serializer mdl_serializer(serializer);
+
+    m_mdl->serialize_material_instance(instance, &mdl_serializer);
+}
+
+const mi::mdl::IMaterial_instance *Mdlc_module_impl::deserialize_material_instance(
+    SERIAL::Deserializer *deserializer)
+{
+    MDL_deserializer mdl_deserializer(m_allocator.get(), deserializer);
+    return m_mdl->deserialize_material_instance(&mdl_deserializer);
 }
 
 // Serializes the lambda function to the given serializer.

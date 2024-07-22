@@ -34,13 +34,16 @@
 #include <mi/base/handle.h>
 #include <mi/base/lock.h>
 
+#include <memory>
 #include <vector>
+
 #include <base/system/main/access_module.h>
 
-namespace mi { namespace base { class IPlugin_descriptor; } }
+namespace mi { class IMap; namespace base { class IPlugin_descriptor; } }
 
 namespace MI {
 
+namespace IDATA { class Factory; }
 namespace PLUG { class Plug_module; }
 
 namespace IMAGE {
@@ -49,6 +52,9 @@ namespace IMAGE {
 class Image_module_impl : public Image_module
 {
 public:
+
+    ~Image_module_impl();
+
     // methods of SYSTEM::IModule
 
     bool init();
@@ -205,21 +211,18 @@ public:
     bool export_canvas(
         const mi::neuraylib::ICanvas* canvas,
         const char* output_filename,
-        mi::Uint32 quality,
-        bool force_default_gamma) const;
+        const mi::IMap* export_options) const;
 
     bool export_mipmap(
         const IMipmap* mipmap,
         const char* output_filename,
-        mi::Uint32 quality,
-        bool force_default_gamma) const;
+        const mi::IMap* export_options) const;
 
     mi::neuraylib::IBuffer* create_buffer_from_canvas(
         const mi::neuraylib::ICanvas* canvas,
         const char* image_format,
         const char* pixel_type,
-        mi::Uint32 quality,
-        bool force_default_gamma) const;
+        const mi::IMap* export_options) const;
 
     mi::neuraylib::IImage_plugin* find_plugin_for_import(
         const char* extension, mi::neuraylib::IReader* reader) const;
@@ -233,9 +236,22 @@ public:
     mi::neuraylib::ICanvas* create_miplevel(
         const mi::neuraylib::ICanvas* prev_canvas, float gamma_override) const;
 
+    mi::IMap* convert_legacy_options( mi::Uint32 quality, bool force_default_gamma) const;
+
     void dump() const;
 
 private:
+    /// Adjusts the gamma value of a canvas depending on export options.
+    ///
+    /// If requested in \p export_options, and the gamma value of the canvas is sufficiently
+    /// different from \p export_default_gamma, then #adjust_gamma() is called on a copy of
+    /// \p canvas with \p export_default_gamma as new gamma value, and the modified copy is
+    /// returned. Otherwise, no copy is created, but \p canvas itself is returned.
+    const mi::neuraylib::ICanvas* enforce_default_gamma(
+        const mi::neuraylib::ICanvas* canvas,
+        const mi::IMap* export_options,
+        mi::Float32 export_default_gamma) const;
+
     /// Helper function to detect valid image plugin type names.
     ///
     /// \param type        Type of the plugin, should be MI_NEURAY_IMAGE_PLUGIN_TYPE.
@@ -276,13 +292,17 @@ private:
     /// Lock for #m_plugins.
     mutable mi::base::Lock m_plugins_lock;
 
-    typedef std::vector<mi::base::Handle<mi::base::IPlugin_descriptor> > Plugin_vector;
+    using Plugin_vector = std::vector<mi::base::Handle<mi::base::IPlugin_descriptor>>;
 
     /// The registered image plugins. Needs #m_plugins_lock.
     Plugin_vector m_plugins;
 
     /// Callback to support lazy loading of images in MDL containers.
     mi::base::Handle<IMdl_container_callback> m_mdl_container_callback;
+
+    /// The IData factory.
+    std::unique_ptr<IDATA::Factory> m_factory;
+
 };
 
 } // namespace IMAGE

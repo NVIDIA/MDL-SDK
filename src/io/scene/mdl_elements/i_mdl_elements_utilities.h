@@ -31,6 +31,7 @@
 #ifndef IO_SCENE_MDL_ELEMENTS_I_MDL_ELEMENTS_UTILITIES_H
 #define IO_SCENE_MDL_ELEMENTS_I_MDL_ELEMENTS_UTILITIES_H
 
+#include <any>
 #include <atomic>
 #include <condition_variable>
 #include <map>
@@ -40,8 +41,6 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
-
-#include <boost/any.hpp>
 
 #include <mi/base/ilogger.h>
 #include <mi/base/interface_implement.h>
@@ -280,6 +279,12 @@ const char* get_cast_operator_db_name();
 
 /// Returns the MDL name used for the cast operator.
 const char* get_cast_operator_mdl_name();
+
+/// Returns the DB element name used for the decl_cast operator.
+const char* get_decl_cast_operator_db_name();
+
+/// Returns the MDL name used for the decl_cast operator.
+const char* get_decl_cast_operator_mdl_name();
 
 /// Returns the DB name used for the builtins module ("mdl::%3Cbuiltins%3E").
 const char* get_builtins_module_db_name();
@@ -549,19 +554,19 @@ class Option
 {
 public:
 
-    using Validator = bool (*)(const boost::any&);
+    using Validator = bool (*)(const std::any&);
 
     // Default constructor. Required by the hash map.
     Option() = default;
 
     // Regular constructor.
-    Option( const boost::any& default_value, bool is_interface, Validator validator = nullptr)
+    Option( const std::any& default_value, bool is_interface, Validator validator = nullptr)
       : m_value( default_value),
         m_validator( validator),
         m_is_interface( is_interface)
     { }
 
-    bool set_value( const boost::any& value)
+    bool set_value( const std::any& value)
     {
         if( m_validator && !m_validator( value))
             return false;
@@ -569,13 +574,13 @@ public:
         return true;
     }
 
-    const boost::any& get_value() const { return m_value; }
+    const std::any& get_value() const { return m_value; }
 
     bool is_interface() const { return m_is_interface; }
 
 private:
 
-    boost::any m_value;
+    std::any m_value;
     Validator m_validator = nullptr;
     bool m_is_interface = false;
 };
@@ -610,6 +615,7 @@ private:
 #define MDL_CTX_OPTION_DEPRECATED_REPLACE_EXISTING         "replace_existing"
 #define MDL_CTX_OPTION_TARGET_MATERIAL_MODEL_MODE          "target_material_model_mode"
 #define MDL_CTX_OPTION_USER_DATA                           "user_data"
+#define MDL_CTX_OPTION_TARGET_TYPE                         "target_type"
 // Not documented in the API (used by the module transformer, but not for general use).
 #define MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS   "keep_original_resource_file_paths"
 
@@ -618,7 +624,7 @@ private:
 /// There is one instance holding all the defaults, and all other instances hold the explicitly
 /// set options (whose values might be identical to the default). Without the explicit instance
 /// with all the defaults, the time to create all the defaults for all temporaries becomes
-/// noticable in benchmarks.
+/// noticeable in benchmarks.
 class Execution_context
 {
 public:
@@ -667,9 +673,9 @@ public:
 
     const char* get_option_name( mi::Size index) const;
 
-    mi::Sint32 get_option( const std::string& name, boost::any& value) const;
+    mi::Sint32 get_option( const std::string& name, std::any& value) const;
 
-    mi::Sint32 set_option( const std::string& name, const boost::any& value);
+    mi::Sint32 set_option( const std::string& name, const std::any& value);
 
     const Option* get_option( const std::string& name) const;
 
@@ -681,7 +687,7 @@ public:
         ASSERT( M_SCENE, option);
         ASSERT( M_SCENE, !option->is_interface());
 
-        return boost::any_cast<T>( option->get_value());
+        return std::any_cast<T>( option->get_value());
     }
 
     /// The option's value type has to be mi::base::Handle<T>, otherwise an exception might be
@@ -694,14 +700,10 @@ public:
         ASSERT( M_SCENE, option->is_interface());
 
         mi::base::Handle<const mi::base::IInterface> handle(
-            boost::any_cast<mi::base::Handle<const mi::base::IInterface>>( option->get_value()));
+            std::any_cast<mi::base::Handle<const mi::base::IInterface>>( option->get_value()));
         if( !handle)
             return nullptr;
-        mi::base::Handle<T> handle_T( handle.get_interface<T>());
-        if( !handle_T)
-            return nullptr;
-        handle_T->retain();
-        return handle_T.get();
+        return handle->get_interface<T>();
     }
 
 private:
@@ -804,24 +806,24 @@ public:
     virtual bool has_error() const = 0;
 };
 
-/// Wraps an MDL input stream as IReader.
+/// Wraps an core input stream as IReader.
 mi::neuraylib::IReader* get_reader( mi::mdl::IInput_stream* stream);
 
-/// Wraps an MDL resource reader as IReader.
+/// Wraps an core resource reader as IReader.
 mi::neuraylib::IReader* get_reader( mi::mdl::IMDL_resource_reader* resource_reader);
 
-/// Wraps an IReader as MDL input stream.
+/// Wraps an IReader as core input stream.
 mi::mdl::IInput_stream* get_input_stream(
     mi::neuraylib::IReader* reader, const std::string& filename);
 
-/// Wraps an IWriter as MDL output stream.
+/// Wraps an IWriter as core output stream.
 MDL::IOutput_stream* get_output_stream( mi::neuraylib::IWriter* writer);
 
-/// Wraps an IReader as MDL MDLE input stream.
+/// Wraps an IReader as core MDLE input stream.
 mi::mdl::IMdle_input_stream* get_mdle_input_stream(
     mi::neuraylib::IReader* reader, const std::string& filename);
 
-/// Wraps an IReader as MDL resource reader. The reader needs to support absolute access.
+/// Wraps an IReader as core resource reader. The reader needs to support absolute access.
 mi::mdl::IMDL_resource_reader* get_resource_reader(
     mi::neuraylib::IReader* reader,
     const std::string& file_path,
@@ -906,43 +908,33 @@ void get_bsdf_measurement_attributes(
 
 // ********** Conversion from MI::MDL to mi::mdl ***************************************************
 
+/// Converts MI::MDL::IStruct_category to mi::mdl::IStruct_category.
+const mi::mdl::IStruct_category* int_struct_category_to_core_struct_category(
+    const IStruct_category* struct_category,
+    mi::mdl::IType_factory& tf);
+
 /// Converts MI::MDL::IType to mi::mdl::IType.
-const mi::mdl::IType* int_type_to_mdl_type(
-    const IType *type,
-    mi::mdl::IType_factory &tf);
+const mi::mdl::IType* int_type_to_core_type(
+    const IType* type,
+    mi::mdl::IType_factory& tf);
 
 /// Converts MI::MDL::IValue to mi::mdl::IValue.
-const mi::mdl::IValue* int_value_to_mdl_value(
+const mi::mdl::IValue* int_value_to_core_value(
     DB::Transaction* transaction,
     mi::mdl::IValue_factory* vf,
-    const mi::mdl::IType* mdl_type,
+    const mi::mdl::IType* core_type,
     const IValue* value);
 
 /// Converts MI::MDL::IExpression to mi::mdl::DAG_node.
-const mi::mdl::DAG_node* int_expr_to_mdl_dag_node(
+const mi::mdl::DAG_node* int_expr_to_core_dag_node(
     DB::Transaction* transaction,
     mi::mdl::IDag_builder* builder,
-    const mi::mdl::IType* type,
-    const IExpression* expr);
-
-/// Converts MI::MDL::IExpression to mi::mdl::DAG_node.
-const mi::mdl::DAG_node* int_expr_to_mdl_dag_node(
-    DB::Transaction* transaction,
-    mi::mdl::IGenerated_code_dag::DAG_node_factory* builder,
-    const mi::mdl::IType* type,
+    const mi::mdl::IType* core_type,
     const IExpression* expr);
 
 // **********  Mdl_dag_builder *********************************************************************
 
 /// Helper class to handle conversion from MDL::IExpression into mi::mdl::DAG_node.
-///
-/// \tparam T   Either mi::mdl::IDag_builder or mi::mdl::IGenerated_code_dag::DAG_node_factory.
-///
-/// \note The class behaves differently for temporaries:
-///       If T == IDag_builder, temporaries are re-converted each time they are encountered.
-///       If T == IGenerated_code_dag::DAG_node_factory, temporaries are converted only once, and
-///       referenced via DAG_temporary nodes.
-template<class T>
 class Mdl_dag_builder
 {
 public:
@@ -956,11 +948,11 @@ public:
     ///                                    converted do not contain any references to temporaries.
     Mdl_dag_builder(
         DB::Transaction* transaction,
-        T* dag_builder,
+        mi::mdl::IDag_builder* dag_builder,
         const Mdl_compiled_material* compiled_material);
 
     /// Destructor.
-    ~Mdl_dag_builder() { m_dag_builder->enable_opt(m_enable_opt); }
+    ~Mdl_dag_builder() { m_dag_builder->enable_opt( m_enable_opt); }
 
     /// Converts an MDL::IExpression plus mi::mdl::IType into an mi::mdl::DAG_node.
     ///
@@ -972,14 +964,13 @@ public:
     ///       Multiple calls to this method must not be made, unless the temporary indices among all
     ///       expressions refer to the same vector of temporaries.
     ///
-    /// \param mdl_type                    The MDL type corresponding to \p expr
+    /// \param core_type                   The core type corresponding to \p expr.
     /// \param expr                        The expression to convert.
     /// \return                            The created MDL DAG node, or \c NULL in case of failures,
     ///                                    e.g., argument type mismatches (including further down
     ///                                    the call graph).
-    const mi::mdl::DAG_node* int_expr_to_mdl_dag_node(
-        const mi::mdl::IType* mdl_type,
-        const IExpression* expr);
+    const mi::mdl::DAG_node* int_expr_to_core_dag_node(
+        const mi::mdl::IType* core_type, const IExpression* expr);
 
     /// Returns the cached converted temporaries.
     const std::vector<const mi::mdl::DAG_node*>& get_temporaries() const
@@ -990,41 +981,35 @@ public:
     { return m_parameter_types; }
 
     /// Disable optimizations on DAG_node construction and return the old value.
-    bool enable_opt(bool flag) { return m_dag_builder->enable_opt(flag); }
+    bool enable_opt( bool flag) { return m_dag_builder->enable_opt( flag); }
 
 private:
-    const mi::mdl::DAG_node* int_expr_constant_to_mdl_dag_node(
-        const mi::mdl::IType* mdl_type,
+    const mi::mdl::DAG_node* int_expr_constant_to_core_dag_node(
+        const mi::mdl::IType* core_type,
         const IExpression_constant* expr);
 
-    const mi::mdl::DAG_node* int_expr_parameter_to_mdl_dag_node(
-        const mi::mdl::IType* mdl_type,
-        const IExpression_parameter* expr);
-
-    const mi::mdl::DAG_node* int_expr_call_to_mdl_dag_node(
-        const mi::mdl::IType* mdl_type,
+    const mi::mdl::DAG_node* int_expr_call_to_core_dag_node(
+        const mi::mdl::IType* core_type,
         const IExpression_call* expr);
 
-    const mi::mdl::DAG_node* int_expr_direct_call_to_mdl_dag_node(
-        const mi::mdl::IType* mdl_type,
+    const mi::mdl::DAG_node* int_expr_direct_call_to_core_dag_node(
+        const mi::mdl::IType* core_type,
         const IExpression_direct_call* expr);
 
-    const mi::mdl::DAG_node* int_expr_temporary_to_mdl_dag_node(
-        const mi::mdl::IType* mdl_type,
+    const mi::mdl::DAG_node* int_expr_parameter_to_core_dag_node(
+        const mi::mdl::IType* core_type,
+        const IExpression_parameter* expr);
+
+    const mi::mdl::DAG_node* int_expr_temporary_to_core_dag_node(
+        const mi::mdl::IType* core_type,
         const IExpression_temporary* expr);
 
-    /// Clones a DAG node.
-    ///
-    /// \param node  The DAG IR node to clone.
-    /// \return      The clone of \p node.
-    const mi::mdl::DAG_node* clone_dag_node( const mi::mdl::DAG_node* node);
-
-    /// Shared between #int_expr_call_to_mdl_dag_node() and
-    /// #int_expr_direct_call_to_mdl_dag_node().
+    /// Shared between #int_expr_call_to_core_dag_node() and
+    /// #int_expr_direct_call_to_core_dag_node().
     ///
     /// \param call_name    DB name of the corresponding function definition.
-    const mi::mdl::DAG_node* int_expr_call_to_mdl_dag_node_shared(
-        const mi::mdl::IType* mdl_type,
+    const mi::mdl::DAG_node* int_expr_call_to_core_dag_node_shared(
+        const mi::mdl::IType* core_type,
         const Mdl_module* module,
         bool is_material,
         mi::Size definition_index,
@@ -1034,10 +1019,13 @@ private:
     /// Adds \p value to m_converted_call_expressions and returns it.
     const mi::mdl::DAG_node* add_cache_entry( DB::Tag tag, const mi::mdl::DAG_node* value);
 
+    /// Returns \c nullptr (explicit method for simpler debugging).
+    const mi::mdl::DAG_node* error_node();
+
     /// The DB transaction to use (needed to access attached function calls or material instances).
     DB::Transaction* m_transaction;
-    /// A DAG builder used to construct the DAG nodes.
-    T* m_dag_builder;
+    /// The DAG builder used to construct the DAG nodes.
+    mi::mdl::IDag_builder* m_dag_builder;
     /// The type factory of the DAG builder.
     mi::mdl::IType_factory* m_type_factory;
     /// The value factory of the DAG builder.
@@ -1046,10 +1034,10 @@ private:
     const Mdl_compiled_material* m_compiled_material;
     /// The converted temporaries.
     std::vector<const mi::mdl::DAG_node*> m_temporaries;
-    /// The MDL types of the parameter references.
+    /// The core types of the parameter references.
     std::vector<const mi::mdl::IType*> m_parameter_types;
     /// Set of indirect calls in the current call stack, used to check for cycles.
-    std::set<DB::Tag> m_set_indirect_calls;
+    robin_hood::unordered_set<DB::Tag> m_set_indirect_calls;
     /// Cache of already converted function calls or material instances.
     std::map<DB::Tag, const mi::mdl::DAG_node*> m_converted_call_expressions;
     /// Original setting of the optimize flag.
@@ -1143,7 +1131,7 @@ public:
         /// \param cache                The current instance of the module cache.
         /// \param parent_table         The table this entry belongs to.
         explicit Entry(
-            const std::string& name,
+            std::string name,
             const Module_cache* cache,
             Table* parent_table);
 
@@ -1200,10 +1188,7 @@ private:
     {
     public:
         /// Constructor.
-        explicit Table();
-
-        /// Destructor.
-        ~Table() = default;
+        explicit Table() = default;
 
         /// Removes an entry from the table.
         ///
@@ -1359,7 +1344,7 @@ public:
     explicit Module_cache(
         DB::Transaction* transaction,
         Mdl_module_wait_queue* queue,
-        const DB::Tag_set& module_ignore_list);
+        DB::Tag_set module_ignore_list);
 
     virtual ~Module_cache();
 
@@ -1445,6 +1430,8 @@ private:
 /// Evaluates calls during material compilation.
 ///
 /// Used to fold resource-related calls into constants.
+///
+/// \tparam T   Either mi::mdl::IGenerated_code_dag or mi::mdl::ILambda_function.
 template<typename T>
 class Call_evaluator : public mi::mdl::ICall_evaluator
 {
@@ -1574,21 +1561,6 @@ private:
     bool m_has_resource_attributes;
 };
 
-// ********** Mdl_material_instance_builder ********************************************************
-
-class Mdl_material_instance_builder
-{
-public:
-    /// Creates an MDL material instance from a compiled material.
-    ///
-    /// \param transaction    The DB transaction to use.
-    /// \param material       The compiled material to convert.
-    /// \return               The created MDL material instance for \p material, or \c NULL in case
-    ///                       of errors.
-    mi::mdl::IGenerated_code_dag::IMaterial_instance* create_material_instance(
-        DB::Transaction* transaction, const Mdl_compiled_material* material);
-};
-
 // **********  Resource names **********************************************************************
 
 namespace DETAIL {
@@ -1616,10 +1588,10 @@ std::string unresolve_resource_filename(
 
 } // namespace DETAIL
 
-/// Converts a hash from the MDL API representation to the base API representation.
+/// Converts a hash from the core representation to the API representation.
 mi::base::Uuid convert_hash( const unsigned char hash[16]);
 
-/// Converts a hash from the base API representation to the MDL API representation.
+/// Converts a hash from the API representation to the core representation.
 bool convert_hash( const mi::base::Uuid& hash_in, unsigned char hash_out[16]);
 
 /// Replaces the frame and/or uv-tile marker by coordinates of a given uv-tile.
@@ -1631,17 +1603,6 @@ bool convert_hash( const mi::base::Uuid& hash_in, unsigned char hash_out[16]);
 /// \return        String with the frame and/or uv-tile marker replaced by the coordinates of the
 ///                uv-tile, or the empty string in case of errors.
 std::string frame_uvtile_marker_to_string( std::string s, mi::Size f, mi::Sint32 u, mi::Sint32 v);
-
-/// Replaces the pattern describing the coordinates of a uv-tile by the given marker.
-///
-/// The methods simply replaces the first matching substring, this is not necessarily the correct
-/// semantic location, in particular for the "UDIM" marker scheme.
-///
-/// \param s        String containing the coordinate pattern, e.g., "_u1_v1"
-/// \param marker   The marker to replace the pattern with, e.g., "<UVTILE1>"
-/// \return         The string with the coordinate pattern replaced by the marker (if found), or the
-///                 empty string in case of errors.
-std::string deprecated_uvtile_string_to_marker( const std::string& s, const std::string& marker);
 
 /// Returns an absolute MDL file path for the given filename.
 ///
@@ -1656,7 +1617,7 @@ mi::Float32 convert_gamma_enum_to_float( mi::mdl::IValue_texture::gamma_mode gam
 /// different from 1.0f and 2.2f).
 mi::mdl::IValue_texture::gamma_mode convert_gamma_float_to_enum( mi::Float32 gamma);
 
-/// Functions in the MDL core use the special value 0xffffffffU, although it is not part of the
+/// Functions in the core use the special value 0xffffffffU, although it is not part of the
 /// corresponding enum.
 const mi::mdl::IMDL::MDL_version mi_mdl_IMDL_MDL_VERSION_INVALID
     = static_cast<mi::mdl::IMDL::MDL_version>( 0xffffffffU);

@@ -85,6 +85,8 @@
 
 namespace mi {
 
+class IMap;
+
 namespace neuraylib {
 class IBuffer;
 class ICanvas;
@@ -618,34 +620,26 @@ public:
     ///
     /// \param image                 The image to export.
     /// \param output_filename       The filename for the exported image.
-    /// \param quality               The desired quality (from 0 to 100, 100 is best quality),
-    ///                              might not be taken into account depending on the image format.
-    /// \param force_default_gamma   If enabled, adjusts the gamma value of the exported pixel data
-    ///                              according to the pixel type chosen for export (1.0 for HDR
-    ///                              pixel types, 2.2 for LDR pixel types).
+    /// \param export_options        See <mi/neuraylib/iimage_api.h> for supported export options.
+    ///                              Can be \c NULL.
     /// \return                      \c true in case of success, \c false in case of failure.
 
     virtual bool export_canvas(
         const mi::neuraylib::ICanvas* image,
         const char* output_filename,
-        mi::Uint32 quality = 100,
-        bool force_default_gamma = false) const = 0;
+        const mi::IMap* export_options = nullptr) const = 0;
 
     /// Exports a mipmap to an image file.
     ///
     /// \param image                 The image to export.
     /// \param output_filename       The filename for the exported image.
-    /// \param quality               The desired quality (from 0 to 100, 100 is best quality),
-    ///                              might not be taken into account depending on the image format.
-    /// \param force_default_gamma   If enabled, adjusts the gamma value of the exported pixel data
-    ///                              according to the pixel type chosen for export (1.0 for HDR
-    ///                              pixel types, 2.2 for LDR pixel types).
+    /// \param export_options        See <mi/neuraylib/iimage_api.h> for supported export options.
+    ///                              Can be \c NULL.
     /// \return                      \c true in case of success, \c false in case of failure.
     virtual bool export_mipmap(
         const IMipmap* image,
         const char* output_filename,
-        mi::Uint32 quality = 100,
-        bool force_default_gamma = false) const = 0;
+        const mi::IMap* export_options = nullptr) const = 0;
 
     /// Creates a buffer with encoded image data from a canvas.
     ///
@@ -657,18 +651,14 @@ public:
     /// \param image_format          The desired image format ("png", "jpg", etc.).
     /// \param pixel_type            The desired pixel type. Ignored if the plugin for the file
     ///                              format does not support the requested pixel type.
-    /// \param quality               The desired quality (from 0 to 100, 100 is best quality),
-    ///                              might not be taken into account depending on the image format.
-    /// \param force_default_gamma   If enabled, adjusts the gamma value of the exported pixel data
-    ///                              according to the pixel type chosen for export (1.0 for HDR
-    ///                              pixel types, 2.2 for LDR pixel types).
-    /// \return                     The encoded image, or \c NULL in case of failure.
+    /// \param export_options        See <mi/neuraylib/iimage_api.h> for supported export options.
+    ///                              Can be \c NULL.
+    /// \return                      The encoded image, or \c NULL in case of failure.
     virtual mi::neuraylib::IBuffer* create_buffer_from_canvas(
         const mi::neuraylib::ICanvas* canvas,
         const char* image_format,
         const char* pixel_type,
-        mi::Uint32 quality = 100,
-        bool force_default_gamma = false) const = 0;
+        const mi::IMap* export_options = nullptr) const = 0;
 
     // Misc methods
     // ============
@@ -711,6 +701,13 @@ public:
     virtual mi::neuraylib::ICanvas* create_miplevel(
         const mi::neuraylib::ICanvas* prev_canvas, float gamma_override) const = 0;
 
+    /// Converts the legacy export options into a map.
+    ///
+    /// This methods maps \p quality to \c "jpg:quality" and \c "exr:data_type", and
+    /// \p force_default_gamma to \c "force_default_gamma".
+    virtual mi::IMap* convert_legacy_options(
+        mi::Uint32 quality, bool force_default_gamma) const = 0;
+
     // Methods for testing
     // ===================
 
@@ -718,7 +715,6 @@ public:
     ///
     /// For testing only.
     virtual void dump() const = 0;
-
 };
 
 /// Callback to support lazy loading of images in MDL containers and MDLE

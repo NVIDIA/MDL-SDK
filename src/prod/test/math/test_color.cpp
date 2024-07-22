@@ -49,11 +49,11 @@ namespace mi { namespace math {
     //
     std::ostream & operator<< (std::ostream & os, Color const & c)
     {
-	return os << "Color(r = " << c.r
-		  << ", g = " << c.g
-		  << ", b = " << c.b
-		  << ", a = " << c.a
-		  << ")";
+        return os << "Color(r = " << c.r
+                  << ", g = " << c.g
+                  << ", b = " << c.b
+                  << ", a = " << c.a
+                  << ")";
     }
 }}
 

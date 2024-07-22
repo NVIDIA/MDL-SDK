@@ -33,6 +33,7 @@
 
 #include <mi/base/interface_declare.h>
 #include <mi/neuraylib/itype.h>
+#include <mi/neuraylib/version.h>
 
 namespace mi {
 
@@ -72,6 +73,8 @@ public:
     ///                                block to remove all annotations. Materials require \c NULL or
     ///                                an empty annotation block here.
     /// \param is_exported             Indicates whether the variant will have the 'export' keyword.
+    /// \param is_declarative          Indicates whether the variant will have the 'declarative'
+    ///                                keyword.
     /// \param context                 The execution context can be used to pass options and to
     ///                                retrieve error and/or warning messages. Can be \c NULL.
     /// \return                        0 in case of success, or -1 in case of failure.
@@ -82,14 +85,44 @@ public:
         const IAnnotation_block* annotations,
         const IAnnotation_block* return_annotations,
         bool is_exported,
+        bool is_declarative,
         IMdl_execution_context* context) = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_15_0
+    inline Sint32 add_variant(
+        const char* name,
+        const char* prototype_name,
+        const IExpression_list* defaults,
+        const IAnnotation_block* annotations,
+        const IAnnotation_block* return_annotations,
+        bool is_exported,
+        IMdl_execution_context* context)
+    {
+        return add_variant(
+            name,
+            prototype_name,
+            defaults,
+            annotations,
+            return_annotations,
+            is_exported,
+            false,
+            context);
+    }
+#endif // MI_NEURAYLIB_DEPRECATED_15_0
 
     /// Adds a material or function to the module.
     ///
     /// \param name                    The simple name of the material or function.
-    /// \param body                    The body of the new material or function (constants, direct
-    ///                                calls, and parameter references). Feasible sub-expression
-    ///                                kinds: constants, direct calls, and parameter references.
+    /// \param body                    The body of the new material or function (a constant, direct
+    ///                                call, or parameter reference). Feasible sub-expression
+    ///                                kinds: constants, direct calls, parameter references, and
+    ///                                temporary references.
+    /// \param temporaries             Temporaries referenced by the body. Feasible sub-expression
+    ///                                kinds: constants, direct calls, parameter references, and
+    ///                                temporary references with smaller index. The names associated
+    ///                                with the expressions in the expressions list are not relevant
+    ///                                (but need to unique as usual). Can be \c NULL (treated like
+    ///                                an empty expression list).
     /// \param parameters              Types and names of the parameters. Can be \c NULL (treated
     ///                                like an empty parameter list).
     /// \param defaults                Default values. Can be \c NULL or incomplete. Feasible
@@ -100,11 +133,28 @@ public:
     ///                                functions, must be \c NULL for materials.
     /// \param is_exported             Indicates whether the material or function will have the
     ///                                'export' keyword.
+    /// \param is_declarative          Indicates whether the material or function will have the
+    ///                                'declarative' keyword.
     /// \param frequency_qualifier     The frequency qualifier for functions, or
     ///                                #mi::neuraylib::IType::MK_NONE for materials.
     /// \param context                 The execution context can be used to pass options and to
     ///                                retrieve error and/or warning messages. Can be \c NULL.
     virtual Sint32 add_function(
+        const char* name,
+        const IExpression* body,
+        const IExpression_list* temporaries,
+        const IType_list* parameters,
+        const IExpression_list* defaults,
+        const IAnnotation_list* parameter_annotations,
+        const IAnnotation_block* annotations,
+        const IAnnotation_block* return_annotations,
+        bool is_exported,
+        bool is_declarative,
+        IType::Modifier frequency_qualifier,
+        IMdl_execution_context* context) = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_15_0
+    inline Sint32 add_function(
         const char* name,
         const IExpression* body,
         const IType_list* parameters,
@@ -114,7 +164,13 @@ public:
         const IAnnotation_block* return_annotations,
         bool is_exported,
         IType::Modifier frequency_qualifier,
-        IMdl_execution_context* context) = 0;
+        IMdl_execution_context* context)
+    {
+        return add_function(
+            name, body, 0, parameters, defaults, parameter_annotations, annotations,
+            return_annotations, is_exported, false, frequency_qualifier, context);
+    }
+#endif // MI_NEURAYLIB_DEPRECATED_15_0
 
     /// Adds an annotation to the module.
     ///
@@ -138,10 +194,24 @@ public:
         bool is_exported,
         IMdl_execution_context* context) = 0;
 
+    /// Adds a struct category the module.
+    ///
+    /// \param name                    The simple name of the struct category.
+    /// \param annotations             Annotations of the struct category. Can be \c NULL.
+    /// \param is_exported             Indicates whether the struct category will have the 'export'
+    ///                                keyword.
+    /// \param context                 The execution context can be used to pass options and to
+    ///                                retrieve error and/or warning messages. Can be \c NULL.
+    virtual Sint32 add_struct_category(
+        const char* name,
+        const IAnnotation_block* annotations,
+        bool is_exported,
+        IMdl_execution_context* context) = 0;
+
     /// Adds an enum type to the module.
     ///
     /// \note Changing a particular enum type, i.e., removing it and re-adding it differently, is
-    ////      \em not supported.
+    ///       \em not supported.
     ///
     /// \param name                    The simple name of the enum type.
     /// \param enumerators             Enumerators of the enum type. Must not be empty. Feasible
@@ -163,7 +233,7 @@ public:
     /// Adds a struct type to the module.
     ///
     /// \note Changing a particular struct type, i.e., removing it and re-adding it differently, is
-    ////      \em not supported.
+    ///       \em not supported.
     ///
     /// \param name                    The simple name of the enum type.
     /// \param fields                  Fields of the struct type. Must not be empty.
@@ -174,6 +244,9 @@ public:
     /// \param annotations             Annotations of the struct type. Can be \c NULL.
     /// \param is_exported             Indicates whether the struct type will have the 'export'
     ///                                keyword.
+    /// \param is_declarative          Indicates whether the struct type will have the 'declarative'
+    ///                                keyword.
+    /// \param struct_category         The corresponding struct category. Can be \c NULL.
     /// \param context                 The execution context can be used to pass options and to
     ///                                retrieve error and/or warning messages. Can be \c NULL.
     virtual Sint32 add_struct_type(
@@ -183,7 +256,32 @@ public:
         const IAnnotation_list* field_annotations,
         const IAnnotation_block* annotations,
         bool is_exported,
+        bool is_declarative,
+        const IStruct_category* struct_category,
         IMdl_execution_context* context) = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_15_0
+    inline Sint32 add_struct_type(
+        const char* name,
+        const IType_list* fields,
+        const IExpression_list* field_defaults,
+        const IAnnotation_list* field_annotations,
+        const IAnnotation_block* annotations,
+        bool is_exported,
+        IMdl_execution_context* context)
+    {
+        return add_struct_type(
+            name,
+            fields,
+            field_defaults,
+            field_annotations,
+            annotations,
+            is_exported,
+            false,
+            0,
+            context);
+    }
+#endif // MI_NEURAYLIB_DEPRECATED_15_0
 
     /// Adds a constant to the module.
     ///
@@ -209,24 +307,21 @@ public:
     /// \param context                 The execution context can be used to pass options and to
     ///                                retrieve error and/or warning messages. Can be \c NULL.
     virtual Sint32 set_module_annotations(
-        const IAnnotation_block* annotations,
-        IMdl_execution_context* context) = 0;
+        const IAnnotation_block* annotations, IMdl_execution_context* context) = 0;
 
     /// Removes a material, function, enum or struct type from the module.
     ///
     /// \param name                    The simple name of material, function, enum or struct type to
     ///                                be removed.
     /// \param index                   The index of the function with the given name to be removed.
-    ///                                Used to distinguish overloads of functions. Zero 0 for
+    ///                                Used to distinguish overloads of functions. Zero for
     ///                                materials, enum or struct types.
     /// \param context                 The execution context can be used to pass options and to
     ///                                retrieve error and/or warning messages. Can be \c NULL.
     virtual Sint32 remove_entity(
-        const char* name,
-        Size index,
-        IMdl_execution_context* context) = 0;
+        const char* name, Size index, IMdl_execution_context* context) = 0;
 
-    /// Clears the module, i.e., removes all declarations from the module.
+    /// Clears the module, i.e., removes all entities from the module.
     virtual Sint32 clear_module( IMdl_execution_context* context) = 0;
 
     /// Analyzes which parameters need to be uniform.
@@ -265,9 +360,7 @@ public:
     ///                                expected if trailing parameters are not referenced by \p
     ///                                root_expr.
     virtual const IArray* analyze_uniform(
-        const IExpression* root_expr,
-        bool root_expr_uniform,
-        IMdl_execution_context* context) = 0;
+        const IExpression* root_expr, bool root_expr_uniform, IMdl_execution_context* context) = 0;
 };
 
 /**@}*/ // end group mi_neuray_mdl_misc

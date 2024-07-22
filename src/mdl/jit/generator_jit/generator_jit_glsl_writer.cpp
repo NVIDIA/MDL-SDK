@@ -443,16 +443,18 @@ glsl::Symbol *GLSLWriterBasePass::get_unique_sym(
     char buffer[65];
     while (true) {
         if (name != nullptr) {
-            sym = m_symbol_table.lookup_symbol(name);
-            if (sym == nullptr) {
-                // this is the first occurrence of this symbol
-                sym = m_symbol_table.get_symbol(name);
-                break;
-            }
-            size_t id = sym->get_id();
-            if (id >= Symbol::SYM_USER && m_def_tab.get_definition(sym) == nullptr) {
-                // symbol exists, but is user defined and no definition in this scope, good
-                break;
+            if (!m_unit->get_glsl_keyword_map().keyword_or_reserved(name, strlen(name))) {
+                sym = m_symbol_table.lookup_symbol(name);
+                if (sym == nullptr) {
+                    // this is the first occurrence of this symbol
+                    sym = m_symbol_table.get_symbol(name);
+                    break;
+                }
+                size_t id = sym->get_id();
+                if (id >= Symbol::SYM_USER && m_def_tab.get_definition(sym) == nullptr) {
+                    // symbol exists, but is user defined and no definition in this scope, good
+                    break;
+                }
             }
         }
 
@@ -915,7 +917,9 @@ glsl::Type *GLSLWriterBasePass::convert_type(
             //   float4[4] -> float4x4
 
             llvm::Type *array_elem_type = array_type->getElementType();
-            if (llvm::FixedVectorType *vt = llvm::dyn_cast<llvm::FixedVectorType>(array_elem_type)) {
+            if (llvm::FixedVectorType *vt =
+                    llvm::dyn_cast<llvm::FixedVectorType>(array_elem_type))
+            {
                 llvm::Type         *vt_elem_type = vt->getElementType();
                 llvm::Type::TypeID type_id       = vt_elem_type->getTypeID();
 

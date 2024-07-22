@@ -52,7 +52,7 @@ class Image_file_writer_impl : public mi::base::Interface_implement<mi::neurayli
 public:
     /// Constructor.
     Image_file_writer_impl(
-        const std::string& oiio_format,
+        std::string oiio_format,
         const std::string& plugin_name,
         mi::neuraylib::IImage_api* image_api,
         mi::neuraylib::IWriter* writer,
@@ -61,7 +61,7 @@ public:
         mi::Uint32 resolution_y,
         mi::Uint32 resolution_z,
         mi::Float32 gamma,
-        mi::Uint32 quality);
+        const mi::IMap* export_options);
 
     /// Destructor.
     ~Image_file_writer_impl() override;
@@ -133,11 +133,14 @@ private:
     /// The gamma value of the image.
     mi::Float32 m_gamma;
 
-    /// The requested image quality.
-    mi::Uint32 m_quality;
-
     /// Indicates whether we pass unassociated alpha to the OIIO API for this format.
-    bool m_pass_unassociated_alpha;
+    bool m_pass_unassociated_alpha = false;
+
+    /// Indicates whether the exr:create_multipart_for_alpha option is active.
+    bool m_exr_create_multipart_for_alpha = false;
+
+    /// Image spec used if #m_exr_create_multipart_for_alpha is \c true.
+    OIIO::ImageSpec m_exr_multipart_image_spec[2];
 };
 
 } // namespace MI_OIIO

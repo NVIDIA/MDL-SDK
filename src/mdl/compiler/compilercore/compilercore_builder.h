@@ -33,18 +33,27 @@ namespace mi {
 namespace mdl {
 class Module;
 class Type_cache;
+class Type_factory;
 class MDL;
 
 /// Enter all compiler known definitions from compilercore_known_defs.h
 /// into the given module.
 ///
-/// \param module                  the module
-/// \param tc                      the type cache
-/// \param build_predefined_types  if true, fields of predefined types will be entered
+/// \param module                   the module
+/// \param tc                       the type cache
+/// \param extra_types_are_uniform  true: eXtra modifier means uniform, false eXtra means NONE
 void enter_predefined_entities(
-    Module        &module,
-    Type_cache    &tc,
-    bool          build_predefined_types);
+    Module     &module,
+    Type_cache &tc,
+    bool       extra_types_are_uniform);
+
+/// Enter all predefined types into the given type factory.
+///
+/// \param tf                       the type factory
+/// \param extra_types_are_uniform  true: eXtra modifier means uniform, false eXtra means NONE
+void enter_predefined_types(
+    Type_factory &tf,
+    bool         extra_types_are_uniform);
 
 } // mdl
 } // mi

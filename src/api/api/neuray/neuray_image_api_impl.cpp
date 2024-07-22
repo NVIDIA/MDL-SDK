@@ -34,10 +34,11 @@
 
 #include "pch.h"
 
+#include "neuray_class_factory.h"
 #include "neuray_image_api_impl.h"
-#include "neuray_array_impl.h"
 
 #include <mi/base/handle.h>
+#include <mi/neuraylib/iarray.h>
 #include <mi/neuraylib/icanvas.h>
 #include <mi/neuraylib/ipointer.h>
 
@@ -100,7 +101,9 @@ mi::IArray* Image_api_impl::create_mipmap(
     if( mipmaps.empty())
         return nullptr;
 
-    mi::IArray* array = new Array_impl( nullptr, "Pointer<Interface>", mipmaps.size());
+    std::string type_name = "Pointer<Interface>[" + std::to_string( mipmaps.size()) + "]";
+    auto* array = s_class_factory->create_type_instance<mi::IArray>(
+        /*transaction*/ nullptr, type_name.c_str());
     for( mi::Size i = 0; i < mipmaps.size(); ++i) {
         mi::base::Handle<mi::IPointer> element( array->get_element<mi::IPointer>( i));
         element->set_pointer( mipmaps[i].get());
@@ -173,10 +176,23 @@ mi::neuraylib::IBuffer* Image_api_impl::create_buffer_from_canvas(
     const mi::neuraylib::ICanvas* canvas,
     const char* image_format,
     const char* pixel_type,
+    const mi::IMap* export_options) const
+{
+    return m_impl.create_buffer_from_canvas(
+        canvas,
+        image_format,
+        pixel_type,
+        export_options);
+}
+
+mi::neuraylib::IBuffer* Image_api_impl::deprecated_create_buffer_from_canvas(
+    const mi::neuraylib::ICanvas* canvas,
+    const char* image_format,
+    const char* pixel_type,
     const char* quality,
     bool force_default_gamma) const
 {
-    return m_impl.create_buffer_from_canvas(
+    return m_impl.deprecated_create_buffer_from_canvas(
         canvas,
         image_format,
         pixel_type,

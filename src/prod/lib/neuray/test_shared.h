@@ -64,13 +64,15 @@ void keep_console_open() {
 
 // Checks that there are no error messages (and dumps them otherwise).
 #define MI_CHECK_CTX( context) \
-    if( context->get_error_messages_count() > 0) { \
-        for( mi::Size i = 0, n = context->get_messages_count(); i < n; ++i) { \
-            mi::base::Handle<const mi::neuraylib::IMessage> message( context->get_message( i)); \
-            std::cerr << message->get_string() << std::endl; \
+    do { \
+        if( context->get_error_messages_count() > 0) { \
+            for( mi::Size i = 0, n = context->get_messages_count(); i < n; ++i) { \
+                mi::base::Handle<const mi::neuraylib::IMessage> message( context->get_message( i));\
+                std::cerr << message->get_string() << std::endl; \
+            } \
+            MI_CHECK_EQUAL( context->get_error_messages_count(), 0); \
         } \
-        MI_CHECK_EQUAL( context->get_error_messages_count(), 0); \
-    } else { }
+    } while( false)
 
 // Checks that there is at least one error message and that the first one matches the given code.
 #define MI_CHECK_CTX_CODE( context, code) \
@@ -91,13 +93,15 @@ void keep_console_open() {
 // Checks that there are no error messages (and dumps them otherwise).
 //  Used by the examples, not by the tests (which use MI_CHECK_CTX()).
 #define check_ctx( context) \
-    if( context->get_error_messages_count() > 0) { \
-        for( mi::Size i = 0, n = context->get_messages_count(); i < n; ++i) { \
-            mi::base::Handle<const mi::neuraylib::IMessage> message( context->get_message( i)); \
-            std::cerr << message->get_string() << std::endl; \
+    do { \
+        if( context->get_error_messages_count() > 0) { \
+            for( mi::Size i = 0, n = context->get_messages_count(); i < n; ++i) { \
+                mi::base::Handle<const mi::neuraylib::IMessage> message( context->get_message( i));\
+                std::cerr << message->get_string() << std::endl; \
+            } \
+            check_success( context->get_error_messages_count() == 0); \
         } \
-        check_success( context->get_error_messages_count() == 0); \
-    } else { }
+    } while( false)
 
 // printf() format specifier for arguments of type LPTSTR (Windows only).
 #ifdef MI_PLATFORM_WINDOWS

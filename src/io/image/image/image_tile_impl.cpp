@@ -76,7 +76,7 @@ const char* Tile_impl<T>::get_type() const
 template <Pixel_type T>
 mi::Size Tile_impl<T>::get_size() const
 {
-    typedef typename Pixel_type_traits<T>::Base_type Base_type;
+    using Base_type = typename Pixel_type_traits<T>::Base_type;
     return sizeof( *this)
         + static_cast<mi::Size>( m_width) * m_height * s_components_per_pixel * sizeof( Base_type);
 }
@@ -120,7 +120,7 @@ void Tile_impl<PT_SINT32>::set_pixel(
         return;
 
     // treat PT_SINT32 as PT_RGBA
-    mi::Uint8* const position = reinterpret_cast<mi::Uint8*>(m_data.data()
+    auto* const position = reinterpret_cast<mi::Uint8*>(m_data.data()
             + (x_offset + y_offset * static_cast<mi::Size>( m_width)) * s_components_per_pixel);
     position[0] = IMAGE::quantize_unsigned<mi::Uint8>(floats[0]);
     position[1] = IMAGE::quantize_unsigned<mi::Uint8>(floats[1]);
@@ -136,7 +136,7 @@ void Tile_impl<PT_SINT32>::get_pixel(
         return;
 
     // treat PT_SINT32 as PT_RGBA
-    const mi::Uint8* const position = reinterpret_cast<const mi::Uint8*>(m_data.data()
+    const auto* const position = reinterpret_cast<const mi::Uint8*>(m_data.data()
             + (x_offset + y_offset * static_cast<mi::Size>( m_width)) * s_components_per_pixel);
     floats[0] = mi::Float32( position[0]) * mi::Float32( 1.0/255.0);
     floats[1] = mi::Float32( position[1]) * mi::Float32( 1.0/255.0);

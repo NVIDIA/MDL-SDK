@@ -44,7 +44,7 @@
 ///   bool  m_bool;
 ///
 ///   Mod_X::Mod_X() {
-///     m_integer  = 1;			// set defaults
+///     m_integer  = 1;                 // set defaults
 ///     m_array[0] = m_array[1] = 5;
 ///     m_const    = "hello, neuray";
 ///     m_alloc    = mod_string->dup("rayzilla");
@@ -92,10 +92,6 @@ class Config_registry;
 class Config_module : public SYSTEM::IModule
 {
   public:
-    /// Configure logging. Since now both the command line and the initrc are read, explicitly
-    /// tell the log module to use the read values to initialize itself finally.
-    virtual void configure_log_module() = 0;
-
     /// For command-line overrides. Variables set with this will be ignored in the config file
     /// (except that the file's help text is extracted). The string is parsed just like a
     /// config file line.

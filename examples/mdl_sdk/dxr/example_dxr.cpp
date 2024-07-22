@@ -43,8 +43,22 @@
 #include <gui/gui.h>
 #include <gui/gui_api_interface_dx12.h>
 #include <gui/gui_material_properties.h>
+#include <sdkddkver.h>
+#include <d3d12.h>
 
 #include <example_shared.h>
+
+// in order to get new D3D features that do not ship with older windows version
+// or to work with experimental features the DirectX 12 Agility SDK can used.
+// An easy way to do that is via nuget in Viusal Studio. Seach for `DirectX 12 Agility`
+// Note, the version number specified in `D3D12SDKVersion` might need adjustment.
+// (see https://devblogs.microsoft.com/directx/gettingstarted-dx12agility)
+// The Cmake scripts also allows to integrate the agility SDK by extracing a nuget package.
+// The latter approach also allows to use preview versions of the agility SDK.
+#if defined(AGILITY_SDK_ENABLED) && defined(D3D12_PREVIEW_SDK_VERSION)
+    extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = D3D12_PREVIEW_SDK_VERSION; }
+    extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = u8".\\D3D12\\"; }
+#endif
 
 #ifdef MDL_ENABLE_MATERIALX
     #include "mdl_d3d12/materialx/mdl_material_description_loader_mtlx.h"
@@ -55,26 +69,33 @@ namespace mi { namespace examples { namespace dxr
 using namespace mi::examples::mdl_d3d12;
 
 
+// The global root signature for the ray-tracing calls is fix
+static const uint32_t global_root_signature_environment_heap_index = 3;
+static const uint32_t global_root_signature_scene_data_heap_index = 3;
+
+
 // Shader hit record that connects mesh instances and geometry parts with their materials.
 struct Hit_record_root_arguments
 {
     // mesh data
-    D3D12_GPU_VIRTUAL_ADDRESS vbv_address;
-    D3D12_GPU_VIRTUAL_ADDRESS ibv_address;
+    D3D12_GPU_VIRTUAL_ADDRESS vbv_address;  // vertex buffer
+    D3D12_GPU_VIRTUAL_ADDRESS ibv_address;  // index buffer
+    uint32_t geomerty_mesh_resource_heap_index; // vertex and index buffers in the heap
 
-    // instance (object) data
-    D3D12_GPU_VIRTUAL_ADDRESS instance_scene_data_bv_address;
-    D3D12_GPU_VIRTUAL_ADDRESS instance_scene_data_info_bv_address;
+    // instance/object scene data
+    // - scene data info
+    // - scene data buffer (optional)
+    uint32_t geometry_instance_resource_heap_index;
 
     // geometry (mesh part) data
-    uint32_t geometry_vertex_buffer_byte_offset;
-    uint32_t geometry_vertex_stride;
-    uint32_t geometry_index_offset;
-    uint32_t geometry_scene_data_info_buffer_offset; // index of the first info
+    uint32_t geometry_part_vertex_buffer_byte_offset;
+    uint32_t geometry_part_vertex_stride;
+    uint32_t geometry_part_index_offset;
+    uint32_t geometry_part_scene_data_info_offset; // index of the first info
 
     // material data
-    D3D12_GPU_DESCRIPTOR_HANDLE target_heap_region_start;
-    D3D12_GPU_DESCRIPTOR_HANDLE material_heap_region_start;
+    uint32_t target_resource_heap_index;    // first resource view of material target
+    uint32_t material_resource_heap_index;  // first resource view of the individual material
 };
 
 // ------------------------------------------------------------------------------------------------
@@ -129,6 +150,7 @@ Example_dxr::Example_dxr()
     , m_scene_constants(nullptr)
     , m_camera_controls(nullptr)
     , m_environment(nullptr)
+    , m_global_root_signature_resource_heap_slot(-1)
     , m_take_screenshot(false)
     , m_toggle_fullscreen(false)
     , m_gui_mode(Example_dxr_gui_mode::None)
@@ -202,6 +224,16 @@ void Example_dxr::apply_dynamic_options()
     else
         scene_data.display_buffer_index = static_cast<uint32_t>(Display_buffer_options::Beauty);
 
+    if (active_lpe == "aov")
+    {
+        scene_data.display_buffer_index = static_cast<uint32_t>(Display_buffer_options::AOV);
+        scene_data.aov_index_to_render = options->get_active_aov();
+    }
+    else
+    {
+        scene_data.aov_index_to_render = -1;
+    }
+
     scene_data.restart_progressive_rendering();
 }
 
@@ -211,6 +243,7 @@ bool Example_dxr::load()
 {
     Timing t("loading application");
     const Example_dxr_options* options = static_cast<const Example_dxr_options*>(get_options());
+    Mdl_sdk& sdk = get_mdl_sdk();
 
     // initialize components that are not available before (window, GPU resources, MDL SDK)
     // ------------------------------------------------------------------------
@@ -218,10 +251,123 @@ bool Example_dxr::load()
 
     // register code generators
     #ifdef MDL_ENABLE_MATERIALX
-    get_mdl_sdk().get_library()->register_mdl_material_description_loader(
+        sdk.get_library()->register_mdl_material_description_loader(
         std::make_unique<mi::examples::mdl_d3d12::materialx::Mdl_material_description_loader_mtlx>(
             *options));
     #endif
+
+    // initialize the material type to be used for rendering
+    // ------------------------------------------------------------------------
+    std::vector<std::string> selected_aovs =
+        mi::examples::strings::split(options->aov_to_render, ',');
+
+    // load the module that contains the material type
+    mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(sdk.create_context());
+    sdk.get_impexp_api().load_module(
+        sdk.get_transaction().get(), options->material_type_module.c_str(), context.get());
+    if (!sdk.log_messages("Loading module for the selected material_type failed: " +
+        options->material_type_module, context.get()))
+        return false;
+
+    // get the predfined material type and check if it's supported
+    mi::base::Handle<mi::neuraylib::IType_factory> tf(
+        sdk.get_factory().create_type_factory(sdk.get_transaction().get()));
+    mi::base::Handle<const mi::neuraylib::IType_struct> selected_type_struct(
+        tf->create_struct(options->material_type.c_str()));
+    if (!selected_type_struct)
+    {
+        log_error("The selected material_type could not be found in the module: " +
+            options->material_type);
+        return false;
+    }
+    mi::base::Handle<const mi::neuraylib::IStruct_category> selected_type_struct_category(
+        selected_type_struct->get_struct_category());
+    if (selected_type_struct_category->get_predefined_id() != 
+        mi::neuraylib::IStruct_category::CID_MATERIAL_CATEGORY)
+    {
+        // this example only handles types of the material_category
+        log_error("The selected material_type is not a type of the `material_category`: " +
+            options->material_type);
+        return false;
+    }
+    if (!selected_type_struct->is_declarative())
+    {
+        // this example only handles types of the material_category
+        log_error("The selected material_type is not declarative: " + options->material_type);
+        return false;
+    }
+
+    // in case the selected material is not the default material
+    if (options->material_type != "::material")
+    {
+        // iterate over the fields of the type
+        // select paths for AOVs we can visualise as color
+        // Note, there certainly more useful things to do than just displaying
+        // them as color
+        if (selected_aovs.empty())
+        {
+            struct Element
+            {
+                mi::base::Handle<const mi::neuraylib::IType_struct> type;
+                std::string expression_path;
+            };
+            std::queue<Element> to_process;
+            to_process.push({ mi::base::make_handle_dup(selected_type_struct.get()), "" });
+            while (!to_process.empty())
+            {
+                const Element& current = to_process.front();
+                for (mi::Size i = 0; i < current.type->get_size(); ++i)
+                {
+                    mi::base::Handle<const mi::neuraylib::IType> field_type(
+                        current.type->get_field_type(i));
+                    field_type = field_type->skip_all_type_aliases();
+
+                    const std::string field_path = current.expression_path.empty()
+                        ? current.type->get_field_name(i)
+                        : current.expression_path + "." + current.type->get_field_name(i);
+
+                    // direct visualization
+                    mi::base::Handle<const mi::neuraylib::IType_atomic> field_type_atomic(
+                        field_type->get_interface<mi::neuraylib::IType_atomic>());
+                    if (field_type_atomic ||
+                        field_type->get_kind() == mi::neuraylib::IType::TK_VECTOR ||
+                        field_type->get_kind() == mi::neuraylib::IType::TK_COLOR)
+                    {
+                        selected_aovs.push_back(field_path);
+                        continue;
+                    }
+
+                    // nested structure
+                    mi::base::Handle<const mi::neuraylib::IType_struct> field_type_struct(
+                        field_type->get_interface<mi::neuraylib::IType_struct>());
+                    if (field_type_struct)
+                    {
+                        to_process.push({
+                            mi::base::make_handle_dup(field_type_struct.get()), 
+                            field_path
+                        });
+                    }
+                }
+                to_process.pop();
+            }
+        }
+
+        // enable the AOV output buffer if there is no surface.scattering
+        // this is just a simple heuristic
+        if (std::find(selected_aovs.begin(), selected_aovs.end(), "surface.scattering") ==
+            selected_aovs.end())
+        {
+            get_dynamic_options()->set_active_lpe("aov");
+        }
+    }
+
+    if (!selected_aovs.empty())
+    {
+        // allow multiple aov to be selected in the drop down
+        auto dynamic_options = get_dynamic_options();
+        dynamic_options->set_available_aovs(selected_aovs);
+        dynamic_options->set_active_aov(0); // the first one selected by the user
+    }
 
     // basic resource handling one large descriptor heap (array of different resource views)
     // ------------------------------------------------------------------------
@@ -234,7 +380,8 @@ bool Example_dxr::load()
         get_window()->get_width(), get_window()->get_height(),
         DXGI_FORMAT_R32G32B32A32_FLOAT, "RaytracingOutputBuffer");
 
-    m_output_buffer_uav = resource_heap->reserve_views(options->enable_auxiliary ? 6 : 2);
+    // reserve all views to have constant heap indices even when auxiliary output is disabled
+    m_output_buffer_uav = resource_heap->reserve_views(6);
     if (!resource_heap->create_unordered_access_view(m_output_buffer, m_output_buffer_uav))
         return false;
 
@@ -316,6 +463,9 @@ bool Example_dxr::load()
     scene_data.meters_per_scene_unit = options->meters_per_scene_unit;
     scene_data.background_color_enabled = options->background_color_enabled ? 1u : 0u;
     scene_data.background_color = options->background_color;
+    scene_data.enable_animiation = 0;
+    scene_data.aov_index_to_render = options->aov_to_render.empty() ? -1 : 0;
+    scene_data.bsdf_data_flags = options->allowed_scatter_mode;
 
     /// UV transformations
     scene_data.uv_scale = options->uv_scale;
@@ -372,9 +522,6 @@ bool Example_dxr::load()
     // load scene data
     // ------------------------------------------------------------------------
     {
-        // reserve a view for the scenes acceleration data structure
-        m_acceleration_structure_srv = resource_heap->reserve_views(1);
-
         // a camera code is assigned within load_scene
         m_camera_controls = new Camera_controls(this, nullptr);
 
@@ -532,14 +679,6 @@ bool Example_dxr::load_scene(
     m_scene = new_scene;
     if (old_scene)
         delete old_scene;
-
-    // add a SRV of the acceleration data structure to heap
-    if (!get_resource_descriptor_heap()->create_shader_resource_view(
-        m_scene->get_acceleration_structure(), m_acceleration_structure_srv))
-    {
-        set_scene_is_updating(false);
-        return false;
-    }
 
     // get the first camera
     bool camera_found = false;
@@ -933,9 +1072,20 @@ bool Example_dxr::update_rendering_pipeline()
         return false;
     };
 
-    // print debug info
-    get_render_target_descriptor_heap()->print_debug_infos();
-    get_resource_descriptor_heap()->print_debug_infos();
+    // allow dynamic resources
+    if (options->features.HLSL_dynamic_resources)
+    {
+#ifdef NTDDI_WIN10_FE
+        // these flags are defined in Windows SDK 10.0.20348.0 (21H1) or later
+        pipeline->get_global_root_signature()->add_flag(
+            D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED);
+        pipeline->get_global_root_signature()->add_flag(
+            D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED);
+#endif
+    }
+
+    // wait until all tasks are finished before potentially disposing resources
+    flush_command_queues();
 
     // get command list to upload data to the GPU
     Command_queue* command_queue = get_command_queue(D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -1015,40 +1165,29 @@ bool Example_dxr::update_rendering_pipeline()
             return true; // continue visits
         })) return after_cleanup();
 
-        // Global root signature that is applicable to all shader called from dispatch ray
-        Descriptor_table global_root_signature_dt;
-
-        // use register(u0,space0) for the output buffer
-        global_root_signature_dt.register_uav(0, 0, m_output_buffer_uav);
-
-        // use register(u1,space0) for the frame buffer
-        global_root_signature_dt.register_uav(1, 0, m_frame_buffer_uav);
-
-        if (options->enable_auxiliary)
+        if (!options->features.HLSL_dynamic_resources)
         {
-            // use register(u2/u3,space0) for the albedo buffers
-            global_root_signature_dt.register_uav(2, 0, m_albedo_diffuse_buffer_uav);
-            global_root_signature_dt.register_uav(3, 0, m_albedo_glossy_buffer_uav);
-
-            // use register(u4,space0) for the normal buffer
-            global_root_signature_dt.register_uav(4, 0, m_normal_buffer_uav);
-
-            // use register(u5,space0) for the roughness buffer
-            global_root_signature_dt.register_uav(5, 0, m_roughness_buffer_uav);
+            // before shader model 6.6 we use global table to access the heap
+            // a table for all CBVs, SRVs, and UAVs
+            m_global_root_signature_resource_heap_slot =
+                pipeline->get_global_root_signature()->register_unbounded_descriptor_ranges();
         }
 
-        // use register(b0) and (b1) for camera and camera constants
+        // use register(b0) and (b1) for camera and scene constants
         // place them directly into the root for easier double buffering
-        pipeline->get_global_root_signature()->register_cbv(0);
-        pipeline->get_global_root_signature()->register_cbv(1);
+        m_global_root_signature_camera_constants_slot =
+            pipeline->get_global_root_signature()->register_cbv(0, 0);
 
-        // use register(t0,space0) for the top-level acceleration structure
-        global_root_signature_dt.register_srv(0, 0, m_acceleration_structure_srv);
-        pipeline->get_global_root_signature()->register_dt(global_root_signature_dt);
+        m_global_root_signature_scene_constants_slot =
+            pipeline->get_global_root_signature()->register_cbv(1, 0);
 
-        // also bind environment resources
-        pipeline->get_global_root_signature()->register_dt(
-            m_environment->get_descriptor_table());
+        // the top-level acceleration structure
+        m_global_root_signature_bvh_slot =
+            pipeline->get_global_root_signature()->register_srv(0, 0);
+
+        // environment resources
+        m_global_root_signature_environment_slot = 
+            pipeline->get_global_root_signature()->register_constants<uint32_t>(2, 0);
 
         // MDL uses a small static set of texture samplers
         auto mdl_samplers = Mdl_material::get_sampler_descriptions();
@@ -1085,25 +1224,23 @@ bool Example_dxr::update_rendering_pipeline()
             signature->add_flag(D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE);
 
             // mesh data
-            signature->register_srv(1);                 // vertex buffer to shader register(t1)
-            signature->register_srv(2);                 // index buffer to shader register(t2)
+            signature->register_srv(1);                    // vertex buffer                  (t1)
+            signature->register_srv(2);                    // index buffer                   (t2)
+            signature->register_constants<uint32_t>(0, 1); // vertex/index buffer heap index (b0)
 
-            // instance (object) data
-            signature->register_srv(3);                 // scene data to register (t3)
-            signature->register_srv(4);                 // scene data infos to register (t4)
+            // instance data
+            signature->register_constants<uint32_t>(1, 1); // scene data heap index          (b1)
 
             // geometry (mesh part) data
-            signature->register_constants<uint32_t>(2); // vertex buffer byte offset    (b2)
-            signature->register_constants<uint32_t>(3); // vertex stride                (b3)
-            signature->register_constants<uint32_t>(4); // index offset                 (b4)
-            signature->register_constants<uint32_t>(5); // scene info offset            (b5)
+            signature->register_constants<uint32_t>(2, 1); // vertex buffer byte offset      (b2)
+            signature->register_constants<uint32_t>(3, 1); // vertex stride                  (b3)
+            signature->register_constants<uint32_t>(4, 1); // index offset                   (b4)
+            signature->register_constants<uint32_t>(5, 1); // scene info offset              (b5)
 
-            // all target level resource are handled by the target
-            signature->register_dt(mat->get_target_code()->get_descriptor_table());
+            // material data
+            signature->register_constants<uint32_t>(6, 1); // target heap index              (b6)
+            signature->register_constants<uint32_t>(7, 1); // material heap index            (b7)
 
-            // all material resource are handled by the material
-            auto material_descriptor_table = mat->get_descriptor_table();
-            signature->register_dt(material_descriptor_table);
             if (!signature->finalize()) return false;
 
             if (!pipeline->add_signature_association(signature, true,
@@ -1196,18 +1333,17 @@ bool Example_dxr::update_rendering_pipeline()
             // set mesh parameters for all parts
             Hit_record_root_arguments local_root_arguments;
 
+            // vertex and index buffer
             local_root_arguments.vbv_address =
                 mesh->get_vertex_buffer()->get_resource()->GetGPUVirtualAddress();
-
             local_root_arguments.ibv_address =
                 mesh->get_index_buffer()->get_resource()->GetGPUVirtualAddress();
+            local_root_arguments.geomerty_mesh_resource_heap_index =
+                mesh->get_resource_heap_index();
 
-            local_root_arguments.instance_scene_data_bv_address =
-                instance->get_scene_data_buffer() ?
-                instance->get_scene_data_buffer()->get_resource()->GetGPUVirtualAddress() : 0;
-
-            local_root_arguments.instance_scene_data_info_bv_address =
-                instance->get_scene_data_info_buffer()->get_resource()->GetGPUVirtualAddress();
+            // geometry and scene data resources
+            local_root_arguments.geometry_instance_resource_heap_index =
+                instance->get_resource_heap_index();
 
             // iterate over all mesh parts
             return mesh->visit_geometries([&](Mesh::Geometry* part)
@@ -1216,25 +1352,25 @@ bool Example_dxr::update_rendering_pipeline()
                 const IMaterial* material = instance->get_material(part);
 
                 // set parameters per mesh part
-                local_root_arguments.geometry_vertex_buffer_byte_offset =
+                local_root_arguments.geometry_part_vertex_buffer_byte_offset =
                     static_cast<uint32_t>(part->get_vertex_buffer_byte_offset());
-                local_root_arguments.geometry_vertex_stride =
+                local_root_arguments.geometry_part_vertex_stride =
                     static_cast<uint32_t>(part->get_vertex_stride());
-                local_root_arguments.geometry_index_offset =
+                local_root_arguments.geometry_part_index_offset =
                     static_cast<uint32_t>(part->get_index_offset());
-                local_root_arguments.geometry_scene_data_info_buffer_offset =
+                local_root_arguments.geometry_part_scene_data_info_offset =
                     static_cast<uint32_t>(part->get_scene_data_info_buffer_offset());
+
+                // target (link unit) specific resources
+                local_root_arguments.target_resource_heap_index =
+                    material->get_target_resource_heap_index();
+
+                // material specific resources
+                local_root_arguments.material_resource_heap_index =
+                    material->get_material_resource_heap_index();
 
                 // hash of the target code, used to map materials to hit groups
                 const std::string& hash = material->get_hash();
-
-                // target (link unit) specific resources
-                local_root_arguments.target_heap_region_start =
-                    material->get_target_descriptor_heap_region();
-
-                // material specific resources
-                local_root_arguments.material_heap_region_start =
-                    material->get_material_descriptor_heap_region();
 
                 // index in the shader binding table
                 // compute the hit record index based on ray-type,
@@ -1282,6 +1418,10 @@ bool Example_dxr::update_rendering_pipeline()
     // wait until all tasks are finished
     command_queue->flush();
 
+    // print debug info
+    get_render_target_descriptor_heap()->print_debug_infos();
+    get_resource_descriptor_heap()->print_debug_infos();
+
 
     // set the active one, and swap when updating
     size_t inactive = m_active_pipeline_index == 0 ? 1 : 0;
@@ -1319,10 +1459,16 @@ bool Example_dxr::unload()
 
 void Example_dxr::update(const Update_args& args)
 {
+#ifdef USE_PIX
+    Command_queue* command_queue = get_command_queue(D3D12_COMMAND_LIST_TYPE_DIRECT);
+    PIXScopedEvent(command_queue->get_queue(), PIX_COLOR_INDEX(0), "Update");
+#endif
+
     // swap pipeline after the rendering pipeline was updated due to scene changes
     if (m_swap_next_frame)
     {
         // simply swap pointers
+        flush_command_queues();
         size_t inactive = m_active_pipeline_index;
         m_active_pipeline_index = m_active_pipeline_index == 0 ? 1 : 0;
         m_swap_next_frame = false;
@@ -1522,6 +1668,10 @@ void Example_dxr::render(const Render_args& args)
     // get a command list
     Command_queue* command_queue = get_command_queue(D3D12_COMMAND_LIST_TYPE_DIRECT);
     D3DCommandList* command_list = command_queue->get_command_list();
+#ifdef USE_PIX
+    PIXSetMarker(command_list, PIX_COLOR_INDEX(0), "Render Begin Marker");
+    PIXScopedEvent(command_queue->get_queue(), PIX_COLOR_INDEX(0), "Render");
+#endif
 
     // bind resources
     // ----------------------------------------------------------------------------------------
@@ -1536,26 +1686,44 @@ void Example_dxr::render(const Render_args& args)
     // heap might not fit to the old pipeline and binding table.
     if (!args.scene_is_updating)
     {
+        #ifdef USE_PIX
+            PIXScopedEvent(command_queue->get_queue(), PIX_COLOR_INDEX(0), "Trace");
+        #endif
+
+        // for dynamic resources, the heaps need to be set first
+        ID3D12DescriptorHeap* heaps[] = {get_resource_descriptor_heap()->get_heap()};
+        command_list->SetDescriptorHeaps(1, heaps);
+
         // resources references in global root signature
         command_list->SetComputeRootSignature(
             m_pipeline[m_active_pipeline_index]->get_global_root_signature()->get_signature());
 
-        ID3D12DescriptorHeap* heaps[] = {get_resource_descriptor_heap()->get_heap()};
-        command_list->SetDescriptorHeaps(1, heaps);
-
         // global root signature
+
+        // - the global resource descriptor heap
+        if (m_global_root_signature_resource_heap_slot != -1)
+            command_list->SetComputeRootDescriptorTable(
+                m_global_root_signature_resource_heap_slot,
+                heaps[0]->GetGPUDescriptorHandleForHeapStart());
+
         // - direct entries for camera and scene constants
-        command_list->SetComputeRootConstantBufferView(0,
+        command_list->SetComputeRootConstantBufferView(
+            m_global_root_signature_camera_constants_slot,
             m_camera_controls->get_target()->get_camera()->get_constants()->bind(args));
-        command_list->SetComputeRootConstantBufferView(1,
+        command_list->SetComputeRootConstantBufferView(
+            m_global_root_signature_scene_constants_slot,
             m_scene_constants->bind(args));
 
-        // - first table: for output buffers, acceleration structure, and materials
-        command_list->SetComputeRootDescriptorTable(
-            2, heaps[0]->GetGPUDescriptorHandleForHeapStart());
-        // - second table  environment
-        command_list->SetComputeRootDescriptorTable(
-            3, heaps[0]->GetGPUDescriptorHandleForHeapStart());
+        // - top-level acceleration structure
+        command_list->SetComputeRootShaderResourceView(
+            m_global_root_signature_bvh_slot,
+            m_scene->get_acceleration_structure()->get_resource()->GetGPUVirtualAddress());
+
+        // - environment, heap index of first resource
+        command_list->SetComputeRoot32BitConstant(
+            m_global_root_signature_environment_slot,
+            m_environment->get_resource_heap_index(), 0);
+
 
         // dispatch rays
         D3D12_DISPATCH_RAYS_DESC desc =
@@ -1568,10 +1736,15 @@ void Example_dxr::render(const Render_args& args)
 
     // copy the ray-tracing buffer to the back buffer
     // ----------------------------------------------------------------------------------------
-    m_frame_buffer->transition_to(command_list, D3D12_RESOURCE_STATE_COPY_SOURCE);
-    args.back_buffer->transition_to(command_list, D3D12_RESOURCE_STATE_COPY_DEST);
-    command_list->CopyResource(
-        args.back_buffer->get_resource(), m_frame_buffer->get_resource());
+    {
+        #ifdef USE_PIX
+            PIXScopedEvent(command_queue->get_queue(), PIX_COLOR_INDEX(0), "Copy to Backbuffer");
+        #endif
+        m_frame_buffer->transition_to(command_list, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        args.back_buffer->transition_to(command_list, D3D12_RESOURCE_STATE_COPY_DEST);
+        command_list->CopyResource(
+            args.back_buffer->get_resource(), m_frame_buffer->get_resource());
+    }
 
     // write out an image before the UI is added on top
     if (m_take_screenshot)
@@ -1612,8 +1785,11 @@ void Example_dxr::render(const Render_args& args)
 
     // render UI on top
     mi::examples::gui::Root* gui = get_options()->no_gui ? nullptr : get_window()->get_gui();
-    if (gui)
+    if (gui && m_gui_mode != Example_dxr_gui_mode::None)
     {
+        #ifdef USE_PIX
+            PIXScopedEvent(command_queue->get_queue(), PIX_COLOR_INDEX(0), "Render Gui");
+        #endif
         args.back_buffer->transition_to(command_list, D3D12_RESOURCE_STATE_RENDER_TARGET);
         command_list->OMSetRenderTargets(1, &args.back_buffer_rtv, FALSE, NULL);
 
@@ -1723,13 +1899,6 @@ void Example_dxr::key_up(uint8_t key)
         case VK_SNAPSHOT:
             m_take_screenshot = true;
             break;
-
-        // toggle full screen
-        case VK_F11:
-        {
-            m_toggle_fullscreen = true;
-            break;
-        }
     }
 }
 
@@ -1760,6 +1929,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int nCmdSh
         freopen("CONOUT$", "w", stdout);
         freopen("CONOUT$", "w", stderr);
         SetConsoleOutputCP(CP_UTF8);
+        mi::examples::mdl_d3d12::enable_color_output(true);
+    }
+    else
+    {
+        // no coloring when writing to the log only
+        mi::examples::mdl_d3d12::enable_color_output(false);
     }
 
     mi::examples::dxr::Example_dxr_options options;

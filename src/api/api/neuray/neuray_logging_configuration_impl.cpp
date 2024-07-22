@@ -34,7 +34,6 @@
 
 #include "neuray_logging_configuration_impl.h"
 
-#include "neuray_log_utilities.h"
 
 #include <cstring>
 #include <new>
@@ -43,6 +42,7 @@
 
 #include <base/lib/log/i_log_assert.h>
 #include <base/lib/log/i_log_module.h>
+#include <base/lib/log/i_log_target.h>
 #include <base/lib/log/i_log_utilities.h>
 #include <base/lib/mem/mem.h>
 
@@ -64,6 +64,56 @@ void fatal_memory_callback()
     }
 }
 
+/// This logger adapts mi::base::ILogger to LOG::ILog_target and is used for the receiving logger.
+class Receiving_logger : public LOG::ILog_target, public boost::noncopyable
+{
+public:
+    /// Constructor.
+    Receiving_logger( mi::base::ILogger* logger);
+
+    bool message(
+        const char* module,
+        LOG::Mod_log::Category category,
+        LOG::Mod_log::Severity severity,
+        const mi::base::Message_details& det,
+        const char* prefix,
+        const char* message);
+
+private:
+
+    /// The adapted logger.
+    mi::base::Handle<mi::base::ILogger> m_logger;
+};
+
+Receiving_logger::Receiving_logger( mi::base::ILogger* logger)
+  : m_logger( logger, mi::base::DUP_INTERFACE)
+{
+}
+
+bool Receiving_logger::message(
+    const char* module,
+    LOG::Mod_log::Category category,
+    LOG::Mod_log::Severity severity,
+    const mi::base::Message_details& det,
+    const char* prefix,
+    const char* message)
+{
+    // Convert severity from LOG::Severity to mi::base::Message_severity
+    const mi::base::Message_severity severity_enum = LOG::convert_severity( severity);
+
+    // Convert module and category into a string separated by ":"
+    std::string module_category = module;
+    module_category += ':';
+    module_category += LOG::convert_category_to_string( category);
+
+    // Convert prefix and message into a string separated by " "
+    std::string full_message = prefix;
+    full_message += message;
+
+    m_logger->message( severity_enum, module_category.c_str(), det, full_message.c_str());
+    return true;
+}
+
 Logging_configuration_impl::Logging_configuration_impl( Neuray_impl* neuray_impl)
   : m_neuray_impl( neuray_impl),
     m_internal_receiving_logger( nullptr)
@@ -74,7 +124,7 @@ Logging_configuration_impl::Logging_configuration_impl( Neuray_impl* neuray_impl
     m_log_module.set();
     m_log_module->set_prefix( LOG::ILogger::P_SEVERITY);
 
-    m_forwarding_logger = new Forwarding_logger;
+    m_forwarding_logger = new LOG::Forwarding_logger;
 }
 
 Logging_configuration_impl::~Logging_configuration_impl()
@@ -160,7 +210,7 @@ mi::Sint32 Logging_configuration_impl::set_log_level_by_category(
     LOG::Mod_log::Category category_enum = LOG::Mod_log::C_MAIN; // avoid warning
     if( strcmp( category, "ALL") == 0)
         category_enum = LOG::Mod_log::C_ALL;
-    else if( !Log_utilities::convert_string_to_category( category, category_enum))
+    else if( !LOG::convert_string_to_category( category, category_enum))
         return -1;
 
     int severity = LOG::convert_severity( level);
@@ -175,7 +225,7 @@ mi::base::Message_severity Logging_configuration_impl::get_log_level_by_category
     const char* category) const
 {
     LOG::Mod_log::Category category_enum = LOG::Mod_log::C_MAIN; // avoid warning
-    if( !Log_utilities::convert_string_to_category( category, category_enum))
+    if( !LOG::convert_string_to_category( category, category_enum))
         return static_cast<mi::base::Message_severity>( -1);
 
     return LOG::convert_severity( m_log_module->get_severity_by_category( category_enum));

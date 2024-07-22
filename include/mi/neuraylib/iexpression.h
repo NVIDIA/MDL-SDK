@@ -32,6 +32,7 @@
 #define MI_NEURAYLIB_IEXPRESSION_H
 
 #include <mi/neuraylib/ivalue.h>
+#include <mi/neuraylib/version.h>
 
 namespace mi {
 
@@ -58,8 +59,9 @@ enum Mdl_version {
     MDL_VERSION_1_6,                       ///< MDL version 1.6
     MDL_VERSION_1_7,                       ///< MDL version 1.7
     MDL_VERSION_1_8,                       ///< MDL version 1.8
+    MDL_VERSION_1_9,                       ///< MDL version 1.9
     MDL_VERSION_EXP,                       ///< MDL experimental features.
-    MDL_VERSION_LATEST = MDL_VERSION_1_8,  ///< Latest MDL version
+    MDL_VERSION_LATEST = MDL_VERSION_1_9,  ///< Latest MDL version
     MDL_VERSION_INVALID = 0xffffffffU,     ///< Invalid MDL version
     MDL_VERSION_FORCE_32_BIT = 0xffffffffU // Undocumented, for alignment only
 };
@@ -745,6 +747,13 @@ public:
     virtual IExpression_direct_call* create_direct_call(
         const char* name, IExpression_list* arguments, Sint32* errors = 0) const = 0;
 
+    /// Creates a temporary reference.
+    ///
+    /// \param type         The type of the temporary.
+    /// \param index        The index of the temporary.
+    /// \return             The created temporary reference, or \c NULL in case of errors.
+    virtual IExpression_temporary* create_temporary( const IType* type, Size index) const = 0;
+
     /// Creates a new expression list.
     virtual IExpression_list* create_expression_list() const = 0;
 
@@ -935,8 +944,8 @@ public:
     /// \note The exact format of the textual representation is unspecified and might change in
     ///       future releases. The textual representation is primarily meant as a debugging aid. Do
     ///       \em not base application logic on it.
-    virtual const IString* dump( const IAnnotation_block* block, const char* name, Size depth = 0)
-        const = 0;
+    virtual const IString* dump(
+        const IAnnotation_block* block, const char* name, Size depth = 0) const = 0;
 
     /// Returns a textual representation of an annotation list.
     ///
@@ -947,46 +956,101 @@ public:
     /// \note The exact format of the textual representation is unspecified and might change in
     ///       future releases. The textual representation is primarily meant as a debugging aid. Do
     ///       \em not base application logic on it.
-    virtual const IString* dump( const IAnnotation_list* list, const char* name, Size depth = 0)
-        const = 0;
+    virtual const IString* dump(
+        const IAnnotation_list* list, const char* name, Size depth = 0) const = 0;
 
     //@}
     /// \name Miscellaneous methods
     //@{
 
-    /// Returns an expression which casts the source expression to the \p target_type.
+    /// Returns an expression which casts the source expression to a target type.
     ///
-    /// This is a convenience function that creates an instance of the cast operator with
-    /// the necessary arguments, stores it in the database and creates and returns an
-    /// #mi::neuraylib::IExpression_call using the just created function. If \p force_cast is
-    /// set to \c true, the cast will always be inserted, even if the types match. If \p force_cast
-    /// is set to \c false, the original expression is returned for identical types.
-    /// If the type of \p src_expr and \p target_type are not compatible, \c NULL is returned.
+    /// This is a convenience function that creates an instance of the cast operator with the
+    /// necessary arguments, stores it in the database, and returns a call expressions for the just
+    /// created function. Note that the cast operator requires that the type of the source
+    /// expression and the target type are compatible (see
+    /// #mi::neuraylib::IType_factory::is_compatible()).
     ///
-    /// \param src_expr     The expression whose type is supposed to be casted.
-    /// \param target_type  The result type of the cast. Note that the inserted cast operator acts
-    ///                     on types without qualifiers, i.e., modifiers on \p target_type are
-    ///                     ignored.
-    /// \param cast_db_name This name is used when storing the instance
-    ///                     of the cast-operator function into the database. If the name is already
-    ///                     taken by another DB element, this string will be used as the base for
-    ///                     generating a unique name. If \c NULL, a unique name is generated.
-    /// \param force_cast   If \c true, the cast will be created even if the types are
-    ///                     identical. Please note that a cast cannot be forced for
-    ///                     incompatible types.
-    /// \param errors       An optional pointer to an #mi::Sint32 to which an error code will be
-    ///                     written. The error codes have the following meaning:
-    ///                     - 0: Success.
-    ///                     - 1: Invalid parameters (\c NULL pointer).
-    ///                     - 2: The type of \p src_expr cannot be cast to \p target_type.
+    /// \see \ref mi_neuray_mdl_cast_operator
     ///
-    /// \return             The resulting expression or \c NULL in case of failure.
+    /// \param src_expr       The expression whose type is supposed to be cast.
+    /// \param target_type    The result type of the cast. Note that the inserted cast operator
+    ///                       acts on types without qualifiers, i.e., modifiers on \p target_type
+    ///                       are ignored.
+    /// \param cast_db_name   This name is used when storing the instance of the cast operator
+    ///                       in the database. If the name is already taken by another DB element,
+    ///                       this string will be used as the base for generating a unique name. If
+    ///                       \c NULL, a unique name is generated.
+    /// \param force_cast     This flag has only an effect if the type of the source expression is
+    ///                       identical to the target type. If \c true, then the cast
+    ///                       expression will still be created. If \c false, then \p src_expr itself
+    ///                       will be returned.
+    /// \param direct_call    Indicates whether to create a direct call expression or an (indirect)
+    ///                       call expression.
+    /// \param errors         An optional pointer to an #mi::Sint32 to which an error code will be
+    ///                       written. The error codes have the following meaning:
+    ///                       - 0: Success.
+    ///                       - 1: Invalid parameters (\c NULL pointer).
+    ///                       - 2: The type of \p src_expr cannot be cast to \p target_type.
+    /// \return               The resulting expression or \c NULL in case of failure.
     virtual IExpression* create_cast(
         IExpression* src_expr,
         const IType* target_type,
         const char* cast_db_name,
         bool force_cast,
-        Sint32 *errors = 0) const = 0;
+        bool direct_call,
+        Sint32* errors = 0) const = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_15_0
+    inline IExpression* create_cast(
+        IExpression* src_expr,
+        const IType* target_type,
+        const char* cast_db_name,
+        bool force_cast,
+        Sint32* errors = 0) const
+    {
+        return create_cast(
+            src_expr, target_type, cast_db_name, force_cast, false, errors);
+    }
+#endif // MI_NEURAYLIB_DEPRECATED_15_0
+
+    /// Returns an expression which casts the source expression to a target type.
+    ///
+    /// This is a convenience function that creates an instance of the decl_cast operator with the
+    /// necessary arguments, stores it in the database, and returns a call expressions for the just
+    /// created function. Note that the decl_cast operator requires that the type of the source
+    /// expression and the target type are struct types from the same struct category (see
+    /// #mi::neuraylib::IType_factory::from_same_struct_category()).
+    ///
+    /// \see \ref mi_neuray_mdl_decl_cast_operator
+    ///
+    /// \param src_expr       The expression whose type is supposed to be cast.
+    /// \param target_type    The result type of the cast. Note that the inserted decl_cast operator
+    ///                       acts on types without qualifiers, i.e., modifiers on \p target_type
+    ///                       are ignored.
+    /// \param cast_db_name   This name is used when storing the instance of the decl_cast operator
+    ///                       in the database. If the name is already taken by another DB element,
+    ///                       this string will be used as the base for generating a unique name. If
+    ///                       \c NULL, a unique name is generated.
+    /// \param force_cast     This flag has only an effect if the type of the source expression is
+    ///                       identical to the target type. If \c true, then the decl_cast
+    ///                       expression will still be created. If \c false, then \p src_expr itself
+    ///                       will be returned.
+    /// \param direct_call    Indicates whether to create a direct call expression or an (indirect)
+    ///                       call expression.
+    /// \param errors         An optional pointer to an #mi::Sint32 to which an error code will be
+    ///                       written. The error codes have the following meaning:
+    ///                       - 0: Success.
+    ///                       - 1: Invalid parameters (\c NULL pointer).
+    ///                       - 2: The type of \p src_expr cannot be cast to \p target_type.
+    /// \return               The resulting expression or \c NULL in case of failure.
+    virtual IExpression* create_decl_cast(
+        IExpression* src_expr,
+        const IType_struct* target_type,
+        const char* cast_db_name,
+        bool force_cast,
+        bool direct_call,
+        Sint32* errors = 0) const = 0;
 
     //@}
 };

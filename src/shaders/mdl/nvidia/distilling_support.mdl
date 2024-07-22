@@ -40,22 +40,6 @@ import ::base::*;
 // --------------------------------------------------------------------------------------------
 // Distiller support functions, added to Release 2017.1 (296300) unless noted otherwise
 
-//helper functions to support thin_film distilling
-//based on "A Practical Extension to Microfacet Theory for the Modeling of Varying Iridescence"
-//ADDED 2023.1
-float3 evalSensitivity(float opd, float shift)
-{
-    //dummy for now
-    return float3(opd*shift);
-}
-
-export color thin_film_color(float NV,  color R_0, color R_90, float ThinFilmIOR, float ThinFilmTickness)
-{
-    //dummy for now
-    return color(evalSensitivity(NV*ThinFilmIOR*ThinFilmTickness, math::max_value(R_90*R_0)));
-}
-
-//-------------
 
 // functions for helping with color arrays in curve df
 //ADDED 2022.1
@@ -88,6 +72,150 @@ export color ior_from_refl(color R_0)
     color i = (1+root_r)/(1-root_r);
     return i;
 }
+
+// Evaluation XYZ sensitivity curves in Fourier space
+//based on "A Practical Extension to Microfacet Theory for the Modeling of Varying Iridescence"
+//ADDED 2023.1
+float3 evalSensitivity(float opd, float3 shift)
+{
+    // Use Gaussian fits, given by 3 parameters: val, pos and var
+    float phase = 2.0*math::PI * opd;
+    float3 val = float3(5.4856e-13, 4.4201e-13, 5.2481e-13);
+    float3 pos = float3(1.6810e+06, 1.7953e+06, 2.2084e+06);
+    float3 var = float3(4.3278e+09, 9.3046e+09, 6.6121e+09);
+    float3 xyz = val * math::sqrt(2.0*math::PI * var) * math::cos(pos * phase + shift) * math::exp(- var * phase*phase);
+    xyz.x   += 9.7470e-14 * math::sqrt(2.0*math::PI * 4.5282e+09) * math::cos(2.2399e+06 * phase + shift[0]) * math::exp(- 4.5282e+09 * phase*phase);
+    return xyz / 1.0685e-7;
+}
+export color thin_film_color(float NV,  color R_0, color R_90, float ThinFilmIOR, float ThinFilmTickness)
+{
+    // Convert nm -> m
+    float d = ThinFilmTickness * 1.0e-9;
+
+    // Assume vacuum on the outside
+    float eta1 = 1.0;
+    float eta2 = math::max(ThinFilmIOR, eta1);
+    float3 eta3   = float3(ior_from_refl(R_0)) ;
+
+    // Compute the Spectral versions of the Fresnel reflectance and
+    // transmitance for each interface.
+    float R12p, T121p, R12s, T121s;
+    float3 R23p, R23s;
+
+    // Reflected and transmitted parts in the thin film
+    float NV2 = NV * NV;
+    float sinTheta2 = 1.0 - NV2;
+    float n = eta2/eta1;
+    float n2 = n * n;
+    float t0 = n2 - sinTheta2;
+    float a2plusb2 = math::sqrt(t0 * t0);
+    float t1 = a2plusb2 + NV2;
+    float a = math::sqrt(math::max(0.5 * (a2plusb2 + t0), 0.0));
+    float t2 = 2.0 * a * NV;
+    R12s = (t1 - t2) / (t1 + t2);
+    float t3 = NV2 * a2plusb2 + sinTheta2 * sinTheta2;
+    float t4 = t2 * sinTheta2;
+    R12p = R12s * (t3 - t4) / (t3 + t4);
+
+
+    // Reflected part by the base
+    float scale = eta1 / eta2;
+    float NVTSqr = 1.0 - (1.0-NV*NV) * scale*scale;
+    float NV_2 = math::sqrt(NVTSqr);
+    float3 f = float3(math::lerp(R_0,R_90,math::pow(NV_2,5.0)));
+    R23p = 0.5 * f;
+    R23s = 0.5 * f;
+
+    // Check for total internal reflection
+    if (NVTSqr <= 0.0f)
+    {
+        R12s = 1.0;
+        R12p = 1.0;
+    }
+
+    // Compute the transmission coefficients
+    T121p = 1.0 - R12p;
+    T121s = 1.0 - R12s;
+
+    // Optical path difference
+    float D = 2.0 * eta2 * d * NV_2;
+
+    float phi21p, phi21s;
+    float3 phi23p, phi23s, r123s, r123p;
+
+    // Evaluate the phase shift
+    float cosB = math::cos(math::atan(eta2 / eta1));    // Brewster's angle
+    if (eta2 > eta1) {
+        phi21p = NV < cosB ? math::PI : 0.0f;
+        phi21s = 0.0f;
+    } else {
+        phi21p = NV < cosB ? 0.0f : math::PI;
+        phi21s = math::PI;
+    }
+
+
+    phi23p = float3(
+        (eta3[0] < eta2) ? math::PI : 0.0,
+        (eta3[1] < eta2) ? math::PI : 0.0,
+        (eta3[2] < eta2) ? math::PI : 0.0);
+    phi23s = phi23p;
+
+
+    phi21p = math::PI - phi21p;
+    phi21s = math::PI - phi21s;
+
+    r123p = math::max(float3(0.0), math::sqrt(R12p*R23p));
+    r123s = math::max(float3(0.0), math::sqrt(R12s*R23s));
+
+    // Evaluate iridescence term
+    float3 I = float3(0.0);
+    float3 C0, Cm, Sm;
+
+    // Iridescence term using spectral antialiasing for Parallel polarization
+
+    float3 S0 = float3(1.0);
+
+    // Reflectance term for m=0 (DC term amplitude)
+    float3 Rs = (T121p*T121p*R23p) / (float3(1.0) - R12p*R23p);
+    C0 = R12p + Rs;
+    I += C0 * S0;
+
+    // Reflectance term for m>0 (pairs of diracs)
+    Cm = Rs - T121p;
+    for (int m=1; m<=2; ++m)
+    {
+        Cm *= r123p;
+        Sm  = 2.0 * evalSensitivity(float(m)*D, float(m)*(phi23p+float3(phi21p)));
+        I  += Cm*Sm;
+    }
+
+    // Iridescence term using spectral antialiasing for Perpendicular polarization
+
+    // Reflectance term for m=0 (DC term amplitude)
+    float3 Rp = (T121s*T121s*R23s) / (float3(1.0) - R12s*R23s);
+    C0 = R12s + Rp;
+    I += C0 * S0;
+
+    // Reflectance term for m>0 (pairs of diracs)
+    Cm = Rp - T121s ;
+    for (int m=1; m<=2; ++m)
+    {
+        Cm *= r123s;
+        Sm  = 2.0 * evalSensitivity(float(m)*D, float(m)*(phi23s+float3(phi21s)));
+        I  += Cm*Sm;
+    }
+
+    // Average parallel and perpendicular polarization
+    I *= 0.5;
+
+    // Convert back to RGB reflectance
+    I = math::clamp(float3x3(2.3706743, -0.5138850, 0.0052982, -0.9000405, 1.4253036, -0.0146949, -0.4706338, 0.0885814, 1.0093968) * I, float3(0.0), float3(1.0));
+
+    return color(I);
+}
+
+//-------------
+
 
 //access last element of an array, workaround for distiller rules not having context
 export float last_element(float[<count>] values)
@@ -382,6 +510,13 @@ export float3 affine_normal_sum( float w1, float3 n1, float w2, float3 n2, float
     return math::normalize( n + w1 * (n1 - n) + w2 * (n2 - n) + w3 * (n3 - n));
 }
 
+// Returns a normal for a weighted combination of four normal maps.
+export float3 affine_normal_sum( float w1, float3 n1, float w2, float3 n2, float w3, float3 n3, float w4, float3 n4)
+{
+    float3 n = state::normal();
+    return math::normalize( n + w1 * (n1 - n) + w2 * (n2 - n) + w3 * (n3 - n) + w4 * (n4 - n));
+}
+
 // Returns the combined roughness of two diffuse BSDFs.
 // Chooses the maximum roughness as the current heuristic.
 export float combine_diffuse_roughness(float w1 [[anno::unused()]], float r1,
@@ -397,6 +532,16 @@ export float combine_diffuse_roughness(float w1 [[anno::unused()]], float r1,
                                        float w3 [[anno::unused()]], float r3)
 {
     return math::max(r1,math::max(r2,r3));
+}
+
+// Returns the combined roughness of four diffuse BSDFs.
+// Chooses the maximum roughness as the current heuristic.
+export float combine_diffuse_roughness(float w1 [[anno::unused()]], float r1,
+                                       float w2 [[anno::unused()]], float r2,
+                                       float w3 [[anno::unused()]], float r3,
+                                       float w4 [[anno::unused()]], float r4)
+{
+    return math::max(r1,math::max(r2,math::max(r3,r4)));
 }
 
 // Returns the combined roughness of two diffuse BSDFs.
@@ -416,6 +561,17 @@ export float combine_diffuse_roughness(color w1 [[anno::unused()]], float r1,
                                        color w3 [[anno::unused()]], float r3)
 {
     return math::max(r1,math::max(r2,r3));
+}
+
+// Returns the combined roughness of four diffuse BSDFs.
+// Chooses the maximum roughness as the current heuristic.
+// ADDED for Release 2018.0
+export float combine_diffuse_roughness(color w1 [[anno::unused()]], float r1,
+                                       color w2 [[anno::unused()]], float r2,
+                                       color w3 [[anno::unused()]], float r3,
+                                       color w4 [[anno::unused()]], float r4)
+{
+    return math::max(r1,math::max(r2,math::max(r3,r4)));
 }
 
 // Used in dist_rules_dg.mdltl

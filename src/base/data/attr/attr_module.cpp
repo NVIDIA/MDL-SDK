@@ -60,7 +60,7 @@ SYSTEM::Module_registration_entry* Attr_module::get_instance()
 
 void Attr_module::retrieve_reserved_attr_default(
     const std::string& name,
-    STLEXT::Any& any) const
+    std::any& any) const
 {
     Attribute_id id = Attribute::id_lookup(name.c_str());
 
@@ -79,31 +79,10 @@ void Attr_module_impl::set_reserved_attr(
     const Type_code tc,
     const DB::Journal_type flags,
     bool inheritable,
-    const STLEXT::Any& def)
+    const std::any& def)
 {
     // fill new registry accordingly
     m_registry.add_entry(id, name? name : string(), tc, null_index, def, inheritable, flags);
-}
-
-// Add additional, deprecated name to an attribute.
-void Attr_module_impl::set_deprecated_attr_name(
-    Attribute_id id,
-    const char* name)
-{
-    // update new registry accordingly
-    m_registry.add_deprecated_name(name? name : string(), id);
-}
-
-// Return deprecated name, or 0 if there is none.
-const char* Attr_module_impl::get_deprecated_attr_name(
-    Attribute_id id)
-{
-    // check all reserved Attributes
-    const Attribute_spec* const spec = m_registry.get_attribute(id);
-    if (!spec || spec->get_deprecated_name().empty())
-        return 0;
-
-    return spec->get_deprecated_name().c_str();
 }
 
 // Register journal-flags for all user attributes.
@@ -129,7 +108,7 @@ const char* Attr_module_impl::get_reserved_attr(
         result = spec->get_name().c_str();
     }
     else {
-        if (tc)  *tc  = TYPE_UNDEF;	// don't know
+        if (tc)  *tc  = TYPE_UNDEF;     // don't know
         if (jf)  *jf  = m_user_attr_journal_flags;
         if (inh) *inh = true;
     }
@@ -207,7 +186,7 @@ bool Attr_module_impl::add_custom_attr_filter(const std::string& filter)
     if (p != m_custom_attr_filters.end()) {
         return false;
     }
-    const std::string filter_expr = (m_custom_attr_filters.size() == 0 ? "(" : " | (")  + filter + ')';
+    const std::string filter_expr = (m_custom_attr_filters.size() == 0 ? "(" : "|(")  + filter + ')';
     if (!build_regex(
         m_custom_attr_filter + filter_expr, m_custom_attr_regex)) {
         return false;
@@ -230,7 +209,7 @@ bool Attr_module_impl::remove_custom_attr_filter(const std::string& filter)
         if (!m_custom_attr_filters.empty()) {
             m_custom_attr_filter += '(' + m_custom_attr_filters[0] + ')';
             for (size_t i = 1; i < m_custom_attr_filters.size(); ++i) {
-                m_custom_attr_filter += "| (" + m_custom_attr_filters[i] + ')';
+                m_custom_attr_filter += "|(" + m_custom_attr_filters[i] + ')';
             }
             build_regex(m_custom_attr_filter, m_custom_attr_regex);
         }
@@ -257,8 +236,8 @@ void Attr_module_impl::register_for_serialization(
 {
     if (dm) {
         dm->register_class(Attribute_set::id, Attribute_set::factory);
-        dm->register_class(Attribute	::id, Attribute	   ::factory);
-        dm->register_class(Type		::id, Type	   ::factory);
+        dm->register_class(Attribute    ::id, Attribute    ::factory);
+        dm->register_class(Type         ::id, Type         ::factory);
     }
 }
 

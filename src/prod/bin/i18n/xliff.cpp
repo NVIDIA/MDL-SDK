@@ -31,8 +31,13 @@
 #include "errors.h"
 #include "traversal.h"
 #include "search_path.h"
+
 #include <base/lib/tinyxml2/tinyxml2.h>
+
+#include <filesystem>
 #include <stack>
+
+namespace fs = std::filesystem;
 
 using namespace i18n;
 using mi::base::Handle;
@@ -191,7 +196,7 @@ public: // From Traversal_context
                 m_group.m_element->SetAttribute("restype", "x-trolltech-linguist-context");
                 m_group.m_element->SetAttribute("resname", resname.c_str());
             }
-        }  
+        }
         m_qualified_name_stack.push(resname.c_str());
     }
 
@@ -231,7 +236,7 @@ private:
         unsigned int m_count;// Number of annotations in this group
 
     } m_group;
-    
+
     unsigned int m_unique_id;
     std::map<string /*source*/ , XMLElement * /*trans_unit*/ > m_already_output;
     string m_qualified_name;
@@ -293,7 +298,7 @@ private:
 
     bool translated_annotation(const char* name)
     {
-        // WARNING: To keep in sync with: 
+        // WARNING: To keep in sync with:
         //      mdl\integration\i18n\i18n_translator.cpp
         //      mdl\integration\i18n\i_i18n.h
         //      mdl\integration\i18n\i18n_translator.h
@@ -374,7 +379,7 @@ bool load_module(const std::string & qualified_name)
     Handle<mi::neuraylib::IScope> scope(database->get_global_scope());
     Handle<mi::neuraylib::ITransaction> transaction(scope->create_transaction());
     Handle<IMdl_impexp_api> mdl_impexp_api(nr->get_api_component<IMdl_impexp_api>());
-    
+
     mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(nr->get_api_component<mi::neuraylib::IMdl_factory>());
     mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(mdl_factory->create_execution_context());
     // mi::Sint32 rtn2 = context->set_option("mdl_next", true);
@@ -616,7 +621,7 @@ use --module | -m <module> or --package | -p <package>");
         Util::log_error("Can only process one package or one module at a time.");
         return ONLY_ONE_PACKAGE_OR_MODULE;
     }
-    
+
     log_settings();
 
     int rtn_code = SUCCESS;
@@ -636,7 +641,7 @@ use --module | -m <module> or --package | -p <package>");
 
 bool Create_xliff_command::check_file(const string & filename) const
 {
-    if (Util::File(filename).exist())
+    if (fs::exists(fs::u8path(filename)))
     {
         if (m_force)
         {
@@ -655,11 +660,11 @@ bool Create_xliff_command::check_file(const string & filename) const
 bool Create_xliff_command::build_filename(const IMdl_module_info * module, string & filename) const
 {
     Handle<const IString> ispath(module->get_resolved_path());
-    string path(ispath->get_c_str());
-    Util::File f(path);
-    string dir(f.get_directory());
-    filename = string(module->get_simple_name()) + "_" + m_locale + ".xlf";
-    filename = Util::path_appends(dir, filename);
+    fs::path module_path(fs::u8path(ispath->get_c_str()));
+    fs::path directory = module_path.parent_path();
+    std::string s = string(module->get_simple_name()) + "_" + m_locale + ".xlf";
+    fs::path xlf = directory / s;
+    filename = xlf.u8string();
     return true;
 }
 
@@ -803,7 +808,7 @@ int Create_xliff_command::handle_modules(
             rtn = FAILED_TO_CREATE_XLIFF_FILE;
         }
         else
-        { 
+        {
             Util::log_info("Successfully created XLIFF file: " + filename);
         }
     }

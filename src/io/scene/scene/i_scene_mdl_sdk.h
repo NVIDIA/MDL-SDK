@@ -32,15 +32,32 @@
 #ifndef IO_SCENE_SCENE_I_SCENE_MDL_SDK_H
 #define IO_SCENE_SCENE_I_SCENE_MDL_SDK_H
 
-#include "pch.h"
+#include <base/system/main/i_module.h>
 
 namespace MI {
 
 namespace DB { class Database; }
+namespace SYSTEM { class Module_registration_entry; }
 
 namespace SCENE {
 
-void register_db_elements( DB::Database* db);
+class Scene_module : public SYSTEM::IModule
+{
+public:
+    // methods of SYSTEM::IModule
+
+    bool init() { return true; }
+
+    void exit() { }
+
+    static const char* get_name() { return "SCENE"; }
+
+    static SYSTEM::Module_registration_entry* get_instance();
+
+    // own methods
+
+    void register_db_elements( DB::Database* db);
+};
 
 } // namespace SCENE
 

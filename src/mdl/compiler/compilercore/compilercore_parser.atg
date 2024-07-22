@@ -122,6 +122,17 @@ COMPILER mdl
 
     Module *get_module() { return m_module; }
 
+    void forbid_declarative(bool declarative_flag) {
+        if (declarative_flag) {
+            int sl = t->line;
+            int sc = t->col;
+            errors->Error(
+                sl, sc,
+                DECLARATIVE_NOT_ALLOWED,
+                Error_params(m_alloc));
+        }
+    }
+
     // Parses an expression instead of a full MDL document.
     IExpression const *parse_expression();
 
@@ -423,6 +434,10 @@ TOKENS
 
     EXPORT = "export" .
 
+    DECLARATIVE = "declarative" .
+
+    STRUCT_CATEGORY = "struct_category" .
+
     USING = "using" .
 
     EQUAL = '=' .
@@ -579,11 +594,15 @@ mdl
                                             (. add_declaration(declaration); .)
         ]
         {                                   (. bool exported = false; .)
+                                            (. bool declarative = false; .)
             [
                 "export"                    (. exported = true; .)
             ]
+            [
+                DECLARATIVE                 (. declarative = true; .)
+            ]
                                             (. IDeclaration const *declaration = ERR_DECL; .)
-            global_declaration<exported, declaration>
+            global_declaration<exported, declarative, declaration>
                                             (.  add_declaration(declaration); .)
         }
     .
@@ -1318,22 +1337,25 @@ module_declaration<IDeclaration const *&declaration>
         .)
     .
 
-global_declaration<bool exported, IDeclaration const *&declaration>
+global_declaration<bool exported, bool declarative, IDeclaration const *&declaration>
     =
-        annotation_declaration<exported,declaration>                                /// @break
+        annotation_declaration<exported,declarative,declaration>                    /// @break
     |
-        constant_declaration<exported,declaration>                                  /// @break
+        constant_declaration<exported,declarative,declaration>                      /// @break
     |
-        type_declaration<exported,declaration>                                      /// @break
+        type_declaration<exported,declarative,declaration>                          /// @break
     |
-        function_declaration<exported,declaration>
+        struct_category_declaration<exported,declarative,declaration>               /// @break
+    |
+        function_declaration<exported,declarative,declaration>
     .
 
-annotation_declaration<bool exported, IDeclaration const *&declaration>
+annotation_declaration<bool exported, bool declarative, IDeclaration const *&declaration>
     =
                                                 (.
                                                    declaration = ERR_DECL;
                                                    IAnnotation_block *annos = NULL;
+                                                   forbid_declarative(declarative);
                                                 .)
     "annotation"
                                                 (.
@@ -1361,6 +1383,37 @@ annotation_declaration<bool exported, IDeclaration const *&declaration>
                                                     for (size_t i = 0; i < count; ++i)
                                                         annotation->add_parameter(parameters[i]);
                                                     declaration = annotation;
+                                                .)
+    .
+
+struct_category_declaration<bool exported, bool declarative, IDeclaration const *&declaration>
+    =
+                                                (.
+                                                   declaration = ERR_DECL;
+                                                   IAnnotation_block *annos = NULL;
+                                                   forbid_declarative(declarative);
+                                                .)
+       STRUCT_CATEGORY
+                                                (.
+                                                    ISimple_name const *struct_category_name = NULL;
+                                                    int sl = t->line;
+                                                    int sc = t->col;
+                                                .)
+        simple_name<struct_category_name>
+        [ annotation_block<annos> ]
+        SYNC ';'
+                                                (.
+                                                    IDeclaration_struct_category *struct_category
+                                                        = m_declaration_factory
+                                                            ->create_struct_category(
+                                                                struct_category_name,
+                                                                annos,
+                                                                exported,
+                                                                sl,
+                                                                sc,
+                                                                t->line,
+                                                                t->col);
+                                                    declaration = struct_category;
                                                 .)
     .
 
@@ -1405,9 +1458,11 @@ constant_declarator<IDeclaration_constant *declaration>
                                                 .)
     .
 
-constant_declaration<bool exported, IDeclaration const *&declaration>
+constant_declaration<bool exported, bool declarative, IDeclaration const *&declaration>
     =
-                                                    (. declaration = ERR_DECL; .)
+                                                    (. declaration = ERR_DECL;
+                                                       forbid_declarative(declarative);
+                                                    .)
     "const"
                                                     (.
                                                         IType_name *type_name = ERR_TYPE;
@@ -1439,20 +1494,23 @@ constant_declaration<bool exported, IDeclaration const *&declaration>
                                                     .)
     .
 
-type_declaration<bool exported, IDeclaration const *&declaration>
+type_declaration<bool exported, bool declarative,IDeclaration const *&declaration>
     =
                                                     (. declaration = ERR_DECL; .)
-        alias_type_declaration<exported,declaration>                                /// @break
+        alias_type_declaration<exported,declarative,declaration>                    /// @break
     |
                                                     (. declaration = ERR_DECL; .)
-        struct_type_declaration<exported,declaration>                               /// @break
+        struct_type_declaration<exported,declarative,declaration>                   /// @break
     |
                                                     (. declaration = ERR_DECL; .)
-        enum_type_declaration<exported,declaration>
+        enum_type_declaration<exported,declarative,declaration>
     .
 
-alias_type_declaration<bool exported, IDeclaration const *&declaration>
-    =                                           (. declaration = ERR_DECL; .)
+alias_type_declaration<bool exported, bool declarative, IDeclaration const *&declaration>
+    =                                           (. 
+                                                   declaration = ERR_DECL;
+                                                   forbid_declarative(declarative);
+                                                .)
     "typedef"                                   (.
                                                     IType_name *type_name = ERR_TYPE;
                                                     ISimple_name const *alias_name = NULL;
@@ -1499,22 +1557,29 @@ struct_field_declarator<IDeclaration_type_struct *declaration>
                                                 .)
     .
 
-struct_type_declaration<bool exported, IDeclaration const *&declaration>
+struct_type_declaration<bool exported, bool declarative, IDeclaration const *&declaration>
     =                                           (. declaration = ERR_DECL; .)
     "struct"
                                                 (.
                                                     ISimple_name const *struct_name = NULL;
+                                                    IQualified_name *struct_category_name = NULL;
                                                     IAnnotation_block *annos = NULL;
                                                     int sl = t->line;
                                                     int sc = t->col;
                                                 .)
         simple_name<struct_name>
+        [
+        "in"
+        qualified_name<struct_category_name>
+        ]
         [ annotation_block<annos> ]
                                                 (.
                                                     IDeclaration_type_struct *struct_declaration
                                                         = m_declaration_factory
                                                             ->create_struct(
+                                                                declarative,
                                                                 struct_name,
+                                                                struct_category_name,
                                                                 annos,
                                                                 exported,
                                                                 sl,
@@ -1553,9 +1618,12 @@ enum_value_declarator<IDeclaration_type_enum *declaration>
                                                 .)
     .
 
-enum_type_declaration<bool exported, IDeclaration const *&declaration>
+enum_type_declaration<bool exported, bool declarative, IDeclaration const *&declaration>
     =
-                                                (. declaration = ERR_DECL; .)
+                                                (. 
+                                                    declaration = ERR_DECL; 
+                                                    forbid_declarative(declarative);
+                                                .)
     "enum"
                                                 (.
                                                     ISimple_name const *enum_name = NULL;
@@ -1635,7 +1703,9 @@ variable_declarator<IDeclaration_variable *declaration>
     .
 
 variable_declaration<bool exported, IDeclaration const *&declaration>
-    =                                           (. declaration = ERR_DECL; .)
+    =                                           (.
+                                                    declaration = ERR_DECL; 
+                                                .)
                                                 (.
                                                     IType_name *type_name = ERR_TYPE;
                                                     int sl = 0, sc = 0;
@@ -1665,7 +1735,7 @@ variable_declaration<bool exported, IDeclaration const *&declaration>
                                                 .)
     .
 
-function_declaration<bool exported, IDeclaration const *&declaration>
+function_declaration<bool exported, bool declarative, IDeclaration const *&declaration>
     =
                                                 (.
                                                     declaration = ERR_DECL;
@@ -1694,6 +1764,7 @@ function_declaration<bool exported, IDeclaration const *&declaration>
                                                     function
                                                         = m_declaration_factory
                                                             ->create_function(
+                                                                declarative,
                                                                 ret_type,
                                                                 ret_annos,
                                                                 function_name,
@@ -1730,6 +1801,7 @@ function_declaration<bool exported, IDeclaration const *&declaration>
                                                     function
                                                         = m_declaration_factory
                                                             ->create_function(
+                                                                declarative,
                                                                 ret_type,
                                                                 ret_annos,
                                                                 function_name,
@@ -1754,6 +1826,7 @@ function_declaration<bool exported, IDeclaration const *&declaration>
                                                     function
                                                         = m_declaration_factory
                                                             ->create_function(
+                                                                declarative,
                                                                 ret_type,
                                                                 ret_annos,
                                                                 function_name,
@@ -1780,6 +1853,7 @@ function_declaration<bool exported, IDeclaration const *&declaration>
                                                     function
                                                         = m_declaration_factory
                                                             ->create_function(
+                                                                declarative,
                                                                 ret_type,
                                                                 ret_annos,
                                                                 function_name,
@@ -1865,11 +1939,11 @@ statement<IStatement const *&stmnt>
       compound_statement<stmnt>                                                 /// @break
     |
                                                 (. IDeclaration const *declaration = NULL; .)
-      type_declaration<false,declaration>                                       /// @break
+      type_declaration<false,false,declaration>                                 /// @break
                                                 (. stmnt = create_declaration(declaration); .)
     |
                                                 (. IDeclaration const *declaration = NULL; .)
-      constant_declaration<false,declaration>                                   /// @break
+      constant_declaration<false,false,declaration>                             /// @break
                                                 (. stmnt = create_declaration(declaration); .)
     |
         if_statement<stmnt>                                                     /// @break

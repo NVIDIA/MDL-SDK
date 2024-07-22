@@ -89,8 +89,8 @@ void test_conversion()
     }
 
     // buffers for intermediate and final result
-    typedef typename IMAGE::Pixel_type_traits<Source>::Base_type Source_base_type;
-    typedef typename IMAGE::Pixel_type_traits<Dest>::Base_type   Dest_base_type;
+    using Source_base_type = typename IMAGE::Pixel_type_traits<Source>::Base_type;
+    using Dest_base_type   = typename IMAGE::Pixel_type_traits<Dest>::Base_type;
     std::vector<Source_base_type> source( 5*K);
     std::vector<Dest_base_type> dest( 5*K);
     std::vector<mi::math::Color> c_out( K);

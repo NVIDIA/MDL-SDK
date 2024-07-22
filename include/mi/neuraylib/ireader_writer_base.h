@@ -83,8 +83,7 @@ class IStream_position;
 /// and have your parser accept them correctly.
 ///
 /// Read and write sizes, as well as seek and tell positions, are consistently #mi::Sint64 types. It
-/// is a signed integer since some functions will use -1 as error indicator. Note: On 32 bit
-/// machines, all #mi::Sint64 sizes are limited to 32 bits and thus file sizes to 4 GB.
+/// is a signed integer since some functions will use -1 as error indicator.
 ///
 /// The #mi::neuraylib::IReader_writer_base class deals with the common part between reader and
 /// writer classes. This includes random access functions, access to an optionally available file
@@ -100,10 +99,13 @@ public:
     virtual Sint32 get_error_number() const = 0;
 
     /// Returns the error message of the last error that happened in this reader or writer.
-    /// Returns \c NULL if #get_error_number() returns 0.
+    ///
+    /// The returned string might be platform-dependent, e.g., by using \c strerror(). The method
+    /// \em might return \c NULL if #get_error_number() returns 0.
     virtual const char* get_error_message() const = 0;
 
     /// Returns \c true if the end of the file has been reached.
+    ///
     /// The result is undefined before reading or writing for the first time.
     virtual bool eof() const = 0;
 
@@ -120,12 +122,14 @@ public:
     virtual const IStream_position* tell_position() const = 0;
 
     /// Repositions the stream to the position \p stream_position.
+    ///
     /// \return \c true in case of success, or \c false in case of errors, e.g., if
     ///         \p stream_position is not valid or recorded access is not supported and the state of
     ///         the stream remains unchanged.
     virtual bool seek_position( const IStream_position* stream_position) = 0;
 
     /// Resets the stream position to the beginning.
+    ///
     /// \return \c true in case of success (and clears the error condition), and \c false in case
     /// of errors.
     virtual bool rewind() = 0;
@@ -142,16 +146,19 @@ public:
     virtual Sint64 tell_absolute() const = 0;
 
     /// Repositions the stream to the absolute position \p pos.
+    ///
     /// \return \c true in case of success, or \c false in case of errors, e.g., if \p pos is not
     ///         valid or absolute access is not supported and the state of the stream remains
     ///         unchanged.
     virtual bool seek_absolute(Sint64 pos) = 0;
 
     /// Returns the size in bytes of the data in the stream.
+    ///
     /// Based on random access, this is a fast operation.
     virtual Sint64 get_file_size() const = 0;
 
     /// Sets the stream position to the end of the file.
+    ///
     /// \return \c true in case of success, or \c false in case of errors.
     virtual bool seek_end() = 0;
 

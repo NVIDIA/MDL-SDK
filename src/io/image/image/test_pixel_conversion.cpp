@@ -66,14 +66,13 @@ public:
         g_image_module = m_image_module.operator->();
     }
 
+    Module_holder( const Module_holder&) = delete;
+    Module_holder& operator=( const Module_holder&) = delete;
+
     ~Module_holder()
     {
         g_image_module = nullptr;
     }
-
-private:
-    Module_holder( const Module_holder&) = delete;
-    Module_holder& operator=( const Module_holder&) = delete;
 
     SYSTEM::Access_module<MEM::Mem_module> m_mem_module;
     SYSTEM::Access_module<LOG::Log_module> m_log_module;
@@ -151,19 +150,19 @@ void test_conversion()
 
         // generate K source pixels in PT_COLOR format
         mi::math::Color c_in[K];
-        for( size_t k = 0; k < K; ++k) {
-            c_in[k] = mi::math::Color(
+        for( auto& c : c_in) {
+            c = mi::math::Color(
                 rand_float32(), rand_float32(), rand_float32(), rand_float32());
             if( source_cpp == 1 || dest_cpp == 1)
-                c_in[k].g = c_in[k].b = c_in[k].r;
+                c.g = c.b = c.r;
             if(    !IMAGE::Pixel_type_traits<Source>::s_has_alpha
                 || !IMAGE::Pixel_type_traits<Dest>::s_has_alpha)
-                c_in[k].a = 1.0f;
+                c.a = 1.0f;
         }
 
         // buffers for intermediate and final result
-        typedef typename IMAGE::Pixel_type_traits<Source>::Base_type Source_base_type;
-        typedef typename IMAGE::Pixel_type_traits<Dest>::Base_type   Dest_base_type;
+        using Source_base_type = typename IMAGE::Pixel_type_traits<Source>::Base_type;
+        using Dest_base_type   = typename IMAGE::Pixel_type_traits<Dest>::Base_type;
         Source_base_type source[5*K];
         Dest_base_type dest[5*K];
         mi::math::Color c_out[K];
@@ -221,7 +220,7 @@ void test_copy()
         }
 
         // buffers for intermediate and final result
-        typedef typename IMAGE::Pixel_type_traits<Type>::Base_type Base_type;
+        using Base_type = typename IMAGE::Pixel_type_traits<Type>::Base_type;
         Base_type source[5];
         Base_type dest[5];
         mi::math::Color c_out;

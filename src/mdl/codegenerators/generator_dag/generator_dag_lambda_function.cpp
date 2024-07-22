@@ -184,7 +184,7 @@ Lambda_function::Lambda_function(
 , m_mdl(mi::base::make_handle_dup(compiler))
 , m_arena(alloc)
 , m_sym_tab(m_arena)
-, m_type_factory(m_arena, compiler, &m_sym_tab)
+, m_type_factory(m_arena, *compiler, m_sym_tab)
 , m_value_factory(m_arena, m_type_factory)
 , m_node_factory(compiler, m_arena, m_value_factory, internal_space(context))
 , m_name(alloc)
@@ -2392,7 +2392,7 @@ void Lambda_function::set_resource_tag(
 // Remap a resource value according to the resource map.
 int Lambda_function::get_resource_tag(IValue_resource const *r) const
 {
-    char const *selector = NULL;
+    char const *selector = "";
 
     if (IValue_texture const *tex = as<IValue_texture>(r)) {
         selector = tex->get_selector();
@@ -2426,11 +2426,18 @@ int Lambda_function::find_resource_tag(
     char const                     *res_url,
     char const                     *res_sel) const
 {
+    // beware of NULL pointer
+    if (res_url == nullptr) {
+        res_url = "";
+    }
+    if (res_sel == nullptr) {
+        res_sel = "";
+    }
+
     // linear search so far
     for (size_t i = 0, n = m_resource_tag_map.size(); i < n; ++i) {
         Resource_tag_tuple const &e = m_resource_tag_map[i];
 
-        // beware of NULL pointer
         if (e.m_kind == res_kind &&
             (e.m_url      == res_url || strcmp(e.m_url,      res_url) == 0) &&
             (e.m_selector == res_sel || strcmp(e.m_selector, res_sel) == 0)) {
@@ -3350,20 +3357,25 @@ public:
 
             bool handle_normal = false;
 
-            // handle it, if geometry.normal is not state::normal()
-            if (DAG_call const *normal_call = as<DAG_call>(normal)) {
-                if (normal_call->get_semantic() != IDefinition::DS_INTRINSIC_STATE_NORMAL) {
+            if (normal != NULL) {
+                // handle it, if geometry.normal is not state::normal()
+                if (DAG_call const *normal_call = as<DAG_call>(normal)) {
+                    if (normal_call->get_semantic() != IDefinition::DS_INTRINSIC_STATE_NORMAL) {
+                        handle_normal = true;
+                    }
+                } else {
                     handle_normal = true;
                 }
-            } else {
-                handle_normal = true;
-            }
 
-            if (handle_normal) {
-                mat_builder.register_special_lambda(
-                    normal,
-                    IDistribution_function::SK_MATERIAL_GEOMETRY_NORMAL,
-                    ++walk_id);
+                if (handle_normal) {
+                    mat_builder.register_special_lambda(
+                        normal,
+                        IDistribution_function::SK_MATERIAL_GEOMETRY_NORMAL,
+                        ++walk_id);
+                }
+            } else {
+                // FIXME: no normal node but user requested it explicitly, should we
+                // generate an error here?
             }
         }
 
@@ -4668,7 +4680,7 @@ void Distribution_function::set_special_lambda_function(
     Special_kind     kind,
     ILambda_function *lambda)
 {
-    MDL_ASSERT(kind < SK_NUM_KINDS);
+    MDL_ASSERT(kind != SK_INVALID && kind < SK_NUM_KINDS);
 
     // add as expression lambda to use the same workflow for resource enumeration
     // and LLVM function construction. This will also increase the reference count.
@@ -4678,7 +4690,7 @@ void Distribution_function::set_special_lambda_function(
 // Get the expression lambda index for the given special lambda function kind.
 size_t Distribution_function::get_special_lambda_function_index(Special_kind kind) const
 {
-    MDL_ASSERT(kind < SK_NUM_KINDS);
+    MDL_ASSERT(kind != SK_INVALID && kind < SK_NUM_KINDS);
     return m_special_lambdas[kind];
 }
 
@@ -4706,14 +4718,21 @@ void Distribution_function::set_resource_tag(
 // Find the resource tag of a resource.
 int Distribution_function::find_resource_tag(
     Resource_tag_tuple::Kind const res_kind,
-    char const *res_url,
-    char const *res_sel) const
+    char const                     *res_url,
+    char const                     *res_sel) const
 {
+    // beware of NULL pointer
+    if (res_url == nullptr) {
+        res_url = "";
+    }
+    if (res_sel == nullptr) {
+        res_sel = "";
+    }
+
     // linear search so far
     for (size_t i = 0, n = m_resource_tag_map.size(); i < n; ++i) {
         Resource_tag_tuple const &e = m_resource_tag_map[i];
 
-        // beware of NULL pointer
         if (e.m_kind == res_kind &&
             (e.m_url      == res_url || strcmp(e.m_url,      res_url) == 0) &&
             (e.m_selector == res_sel || strcmp(e.m_selector, res_sel) == 0)) {

@@ -407,7 +407,7 @@ if __name__ == "__main__":
     try:
         # optional binding debugging:
         # some more simple memory debugging output
-        # pymdlsdk._enable_print_ref_counts(False)
+        pymdlsdk._enable_print_ref_counts(False)
 
         main()
 
@@ -415,7 +415,7 @@ if __name__ == "__main__":
         # some more simple memory debugging output
         # unreachable = gc.collect()
         # print("\n%d unreachable objects detected during garbage collection.\n" % unreachable)
-        # pymdlsdk._print_open_handle_statistic()
+        pymdlsdk._print_open_handle_statistic()
 
         # sleep to be able to read the output when starting from VS
         time.sleep(2.0)

@@ -73,17 +73,20 @@ public:
         const mi::neuraylib::IAnnotation_block* annotations,
         const mi::neuraylib::IAnnotation_block* return_annotations,
         bool is_exported,
+        bool is_declarative,
         mi::neuraylib::IMdl_execution_context* context) final;
 
     mi::Sint32 add_function(
         const char* name,
         const mi::neuraylib::IExpression* body,
+        const mi::neuraylib::IExpression_list* temporaries,
         const mi::neuraylib::IType_list* parameters,
         const mi::neuraylib::IExpression_list* defaults,
         const mi::neuraylib::IAnnotation_list* parameter_annotations,
         const mi::neuraylib::IAnnotation_block* annotations,
         const mi::neuraylib::IAnnotation_block* return_annotations,
         bool is_exported,
+        bool is_declarative,
         mi::neuraylib::IType::Modifier frequency_qualifier,
         mi::neuraylib::IMdl_execution_context* context) final;
 
@@ -92,6 +95,12 @@ public:
         const mi::neuraylib::IType_list* parameters,
         const mi::neuraylib::IExpression_list* defaults,
         const mi::neuraylib::IAnnotation_list* parameter_annotations,
+        const mi::neuraylib::IAnnotation_block* annotations,
+        bool is_exported,
+        mi::neuraylib::IMdl_execution_context* context) final;
+
+    mi::Sint32 add_struct_category(
+        const char* name,
         const mi::neuraylib::IAnnotation_block* annotations,
         bool is_exported,
         mi::neuraylib::IMdl_execution_context* context) final;
@@ -111,6 +120,8 @@ public:
         const mi::neuraylib::IAnnotation_list* field_annotations,
         const mi::neuraylib::IAnnotation_block* annotations,
         bool is_exported,
+        bool is_declarative,
+        const mi::neuraylib::IStruct_category* struct_category,
         mi::neuraylib::IMdl_execution_context* context) final;
 
     mi::Sint32 add_constant(

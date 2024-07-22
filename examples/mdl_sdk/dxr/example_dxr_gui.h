@@ -95,6 +95,8 @@ namespace mi { namespace examples { namespace dxr
         uint32_t m_default_output_buffer_index;
         bool m_enable_firefly_clamping;
         bool m_enable_animation;
+        uint32_t m_current_aov_index;
+        uint32_t m_default_aov_index;
     };
 
     // --------------------------------------------------------------------------------------------

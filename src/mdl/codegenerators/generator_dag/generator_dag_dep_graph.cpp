@@ -1314,12 +1314,12 @@ DAG_dependence_graph::DAG_dependence_graph(
     IModule const *module = m_dag_builder.tos_module();
     m_is_builtins = module->is_builtins();
 
-    int def_count     = module->get_exported_definition_count();
-    int builtin_count = m_is_builtins ? module->get_builtin_definition_count() : 0;
+    size_t def_count     = module->get_exported_definition_count();
+    size_t builtin_count = m_is_builtins ? module->get_builtin_definition_count() : 0;
 
     if (m_is_builtins) {
         // add builtins
-        for (int i = 0; i < builtin_count; ++i) {
+        for (size_t i = 0; i < builtin_count; ++i) {
             IDefinition const *def = module->get_builtin_definition(i);
 
             create_exported_nodes(module, def);
@@ -1327,7 +1327,7 @@ DAG_dependence_graph::DAG_dependence_graph(
     }
 
     // add normal exports
-    for (int i = 0; i < def_count; ++i) {
+    for (size_t i = 0; i < def_count; ++i) {
         IDefinition const *def = module->get_exported_definition(i);
 
         create_exported_nodes(module, def);
@@ -1347,6 +1347,8 @@ DAG_dependence_graph::DAG_dependence_graph(
         create_dag_array_constructor(array_type);
         // Generate the cast operator.
         create_dag_cast_operator(any_type);
+        // Generate the decl_cast operator.
+        create_dag_decl_cast_operator(any_type);
         // Generate the ternary operator
         create_dag_ternary_operator(any_type, bool_type);
         // Generate the index operator
@@ -1424,6 +1426,10 @@ Dependence_node *DAG_dependence_graph::get_node(
 
     IModule const *module = m_dag_builder.tos_module();
 
+    if (def->get_property(IDefinition::DP_IS_DECLARATIVE)) {
+        flags |= Dependence_node::FL_IS_DECLARATIVE;
+    }
+
     if (def->get_property(IDefinition::DP_IS_IMPORTED)) {
         // imported
         flags |= Dependence_node::FL_IS_IMPORTED;
@@ -1474,8 +1480,8 @@ Dependence_node *DAG_dependence_graph::get_node(
             flags |= m_is_builtins ? 0 : Dependence_node::FL_IS_BUILTIN;
         } else {
             dag_name = Arena_strdup(m_arena, m_dag_builder.def_to_name(def, module, true).c_str());
-            dag_simple_name
-                = Arena_strdup(m_arena, m_dag_builder.def_to_name(def, (char const *)NULL, false).c_str());
+            dag_simple_name = Arena_strdup(
+                m_arena, m_dag_builder.def_to_name(def, (char const *)NULL, false).c_str());
         }
 
         // check for preset
@@ -1759,15 +1765,16 @@ void DAG_dependence_graph::create_exported_nodes(
                         name += simple_name;
                     }
 
-                    for (int l = 0, n_fields = s_type->get_field_count(); l < n_fields; ++l) {
-                        IType const   *field_type;
-                        ISymbol const *field_symbol;
-
-                        s_type->get_field(l, field_type, field_symbol);
+                    unsigned flags = Dependence_node::FL_IS_EXPORTED;
+                    if (s_type->is_declarative()) {
+                        flags |= Dependence_node::FL_IS_DECLARATIVE;
+                    }
+                    for (size_t l = 0, n_fields = s_type->get_field_count(); l < n_fields; ++l) {
+                        IType_struct::Field const *field = s_type->get_field(l);
 
                         string field_access(m_arena.get_allocator());
                         field_access += '.';
-                        field_access += field_symbol->get_name();
+                        field_access += field->get_symbol()->get_name();
 
                         string signature_suffix(m_arena.get_allocator());
                         signature_suffix += '(';
@@ -1790,9 +1797,9 @@ void DAG_dependence_graph::create_exported_nodes(
                             dag_alias_name.empty() ? NULL : dag_alias_name.c_str(),
                             /*dag_preset_name=*/NULL,
                             IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS,
-                            field_type,
+                            field->get_type(),
                             param,
-                            Dependence_node::FL_IS_EXPORTED);
+                            flags);
                         m_exported_nodes.push_back(n);
                     }
                 }
@@ -1938,6 +1945,28 @@ void DAG_dependence_graph::create_dag_cast_operator(IType const *any_type)
         any_type,
         params,
         Dependence_node::FL_IS_EXPORTED);
+    m_exported_nodes.push_back(n);
+}
+
+// Create the one-and-only cast operator.
+void DAG_dependence_graph::create_dag_decl_cast_operator(IType const *any_type)
+{
+    MDL_ASSERT(m_is_builtins);
+
+    Dependence_node::Parameter params[] = {
+        Dependence_node::Parameter(any_type, "cast")
+    };
+
+    // Create the magic cast operator. There is only one.
+    Dependence_node *n = get_node(
+        "operator_decl_cast(<0>)",
+        "operator_decl_cast",
+        /*dag_alias_name=*/NULL,
+        /*dag_preset_name=*/NULL,
+        IDefinition::DS_INTRINSIC_DAG_DECL_CAST,
+        any_type,
+        params,
+        Dependence_node::FL_IS_EXPORTED | Dependence_node::FL_IS_DECLARATIVE);
     m_exported_nodes.push_back(n);
 }
 

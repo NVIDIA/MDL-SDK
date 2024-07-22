@@ -188,7 +188,7 @@ public:
     ///
     /// \return if type is a deferred size array type and instancing is enabled, the immediate
     /// size instance of this type, else -1
-    int instantiate_type_size(IType const *type) const MDL_WARN_UNUSED_RESULT;
+    MDL_CHECK_RESULT int instantiate_type_size(IType const *type) const;
 
     /// Get the storage modifier of the i'th parameter.
     Storage_modifier get_parameter_storage_modifier(size_t i) const {

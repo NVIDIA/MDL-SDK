@@ -190,9 +190,9 @@ public:
         return m_transaction->get_tag_privacy_level( tag);
     }
 
-    Privacy_level get_tag_storage_level( Tag tag)
+    Privacy_level get_tag_store_level( Tag tag)
     {
-        return m_transaction->get_tag_storage_level( tag);
+        return m_transaction->get_tag_store_level( tag);
     }
 
     Tag_version get_tag_version( Tag tag) { return m_transaction->get_tag_version( tag); }

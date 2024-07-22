@@ -34,110 +34,30 @@
 #define API_API_NEURAY_NEURAY_STRING_IMPL_H
 
 #include <mi/base/interface_implement.h>
-#include <mi/base/interface_merger.h>
-#include <mi/base/handle.h>
 #include <mi/neuraylib/istring.h>
 
-#include "i_neuray_proxy.h"
+#include <string>
 
 #include <boost/core/noncopyable.hpp>
-
-// see documentation of mi::base::Interface_merger
-#include <mi/base/config.h>
-#ifdef MI_COMPILER_MSC
-#pragma warning( disable : 4505 )
-#endif
-
-namespace mi { namespace neuraylib { class ITransaction; } }
 
 namespace MI {
 
 namespace NEURAY {
 
-/// Default implementation of IString
+/// Convenience implementation of IString.
 ///
-/// The default implementation String_impl of IString owns the memory used to store the actual
-/// value. See the proxy implementation String_impl_proxy for a variant that does not own the
-/// memory.
-class String_impl
-  : public mi::base::Interface_implement<mi::IString>,
-    public boost::noncopyable
+/// Exists for code that wants to do "return new String_impl(...)" without invoking the class
+/// factory.
+class String_impl : public mi::base::Interface_implement<mi::IString>, public boost::noncopyable
 {
 public:
-
-    static mi::base::IInterface* create_api_class(
-        mi::neuraylib::ITransaction* transaction,
-        mi::Uint32 argc,
-        const mi::base::IInterface* argv[]);
-
-    /// Constructor
-    ///
-    /// The string is initialized to the empty string.
-    String_impl(const char* str=nullptr);
-
-    /// Destructor
-    ~String_impl();
-
-    // public API methods
-
-    const char* get_type_name() const;
-
-    const char* get_c_str() const;
-
-    void set_c_str( const char* str);
-
-    // internal methods
+    String_impl( const char* str = nullptr) {  set_c_str( str); }
+    const char* get_type_name() const { return "String"; }
+    const char* get_c_str() const { return m_storage.c_str(); }
+    void set_c_str( const char* str) { m_storage = str ? str : ""; }
 
 private:
-    /// Storage
-    const char* m_storage;
-};
-
-/// Proxy implementation of IString
-///
-/// The proxy implementation String_impl_proxy of IString does not own the memory used to store the
-/// actual value. See the default implementation String_impl for a variant that does own the
-/// memory.
-///
-/// Users are not supposed to construct instances of this class directly. They might get
-/// an instance of this class though, e.g., when accessing attributes.
-class String_impl_proxy
-  : public mi::base::Interface_merger<mi::base::Interface_implement<mi::IString>, IProxy>,
-    public boost::noncopyable
-{
-public:
-
-    static mi::base::IInterface* create_api_class(
-        mi::neuraylib::ITransaction* transaction,
-        mi::Uint32 argc,
-        const mi::base::IInterface* argv[]);
-
-    /// Constructor
-    String_impl_proxy();
-
-    // public API methods
-
-    const char* get_type_name() const;
-
-    const char* get_c_str() const;
-
-    void set_c_str( const char* str);
-
-    // internal methods (of IProxy)
-
-    void set_pointer_and_owner( void* pointer, const mi::base::IInterface* owner);
-
-    void release_referenced_memory();
-
-private:
-    /// Pointer to the storage
-    const char** m_pointer;
-
-    /// Owner of the storage
-    ///
-    /// The class uses reference counting on the owner to ensure that the pointer to the storage
-    /// is valid.
-    mi::base::Handle<const mi::base::IInterface> m_owner;
+    std::string m_storage;
 };
 
 } // namespace NEURAY

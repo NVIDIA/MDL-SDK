@@ -86,14 +86,14 @@ public:
     /// function results in C4291 "no matching operator delete found; memory will not be freed
     /// if initialization throws an exception".
 
-    void* operator new ( size_t	sz )    { return Impl::amalloc(sz); }
+    void* operator new ( size_t sz )    { return Impl::amalloc(sz); }
     void* operator new[] ( size_t sz )  { return Impl::amalloc(sz); }
 
     void operator delete ( void* p )    { Impl::afree(p); }
     void operator delete[] ( void* p )  { Impl::afree(p); }
 
 
-    void* operator new ( size_t	sz, const char* file, int line )
+    void* operator new ( size_t sz, const char* file, int line )
     { return Impl::amalloc(file, line, sz); }
 
     void* operator new[] ( size_t sz, const char* file, int line )
@@ -186,4 +186,4 @@ class Make_allocatable
 
 }}
 
-#endif	// BASE_LIB_MEM_ALLOCATABLE_H
+#endif  // BASE_LIB_MEM_ALLOCATABLE_H

@@ -50,7 +50,7 @@ void fill_data( void* data, size_t n)
    ASSERT( M_IMAGE, n % sizeof( size_t) == 0);
 
    n /= sizeof( size_t);
-   size_t* p = static_cast<size_t*>( data);
+   auto* p = static_cast<size_t*>( data);
 
    for( size_t i = 0; i < n; ++i)
        p[i] = i;
@@ -61,7 +61,7 @@ void verify_data( void* data, size_t n)
    ASSERT( M_IMAGE, n % sizeof( size_t) == 0);
 
    n /= sizeof( size_t);
-   size_t* p = static_cast<size_t*>( data);
+   auto* p = static_cast<size_t*>( data);
 
    for( size_t i = 0; i < n; ++i)
        MI_CHECK_EQUAL( p[i], i);

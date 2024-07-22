@@ -81,6 +81,10 @@ enum Compilation_error {
     PARAMETERS_ARE_RVALUES_HERE,
     SIDE_EFFECT_EXPRESSION_IN_RETURN,
     ASSIGNMENT_EXPRESSION_IN_RETURN,
+    VOID_RETURN,
+    PROMOTED_TO_DECLARATIVE,
+    FUNC_DECL_NOT_DECLARATIVE,
+    DEF_ARG_OF_NOT_DECLARATIVE_FUNC,
 
     SYNTAX_ERROR = 100,
     ILLEGAL_BOM_IGNORED,
@@ -338,8 +342,18 @@ enum Compilation_error {
     INCOMPLETE_UNIVERSAL_CHARACTER_NAME,
     INVALID_UNIVERSAL_CHARACTER_ENCODING,
     UTF8_DECODER_ERROR,
+    NOT_A_STRUCT_CATEGORY,
+    DECLARATIVE_NOT_ALLOWED,
+    DECLARATIVE_FUNCTION_REQUIRES_EXPR_BODY,
+    DECLARATIVE_FUNCTION_CALLED_IN_NON_DECL_FUNCTION,
+    DECLARATIVE_FUNCTION_CALLED_IN_NON_DECL_CONTEXT,
+    DECLARATIVE_TYPE_USED_IN_NON_DECL_CONTEXT,
+    MATERIAL_FUNCTION_OVERLOADED,
+    CAST_ON_DECLARATIVE_STRUCT,
+    MEMBER_OF_SAME_CATEGORY,
+    DECLARATIVE_INDEX_NOT_UNIFORM,
 
-    MAX_ERROR_NUM = UTF8_DECODER_ERROR,
+    MAX_ERROR_NUM = MEMBER_OF_SAME_CATEGORY,
     EXTERNAL_APPLICATION_ERROR = 998,
     INTERNAL_COMPILER_ERROR = 999,
 };
@@ -434,6 +448,7 @@ enum Jit_backend_error {
     STATE_MODULE_IS_INCOMPLETE,
     GLSL_SSBO_UNAVAILABLE,
     SPECTRUM_CONVERTED_TO_RGB,
+    SCENE_DATA_CALL_IN_ENVIRONMENT_FUNCTION,
     INTERNAL_JIT_UNSUPPORTED_PTR_TYPE,
     INTERNAL_JIT_UNSUPPORTED_VECTOR_TYPE,
     INTERNAL_JIT_UNSUPPORTED_INTEGER_TYPE,
@@ -474,6 +489,7 @@ enum Comparator_error {
     ANNOTATION_PARAM_DEF_ARG_CHANGED,
     SEMA_VERSION_IS_HIGHER,
     ARCHIVE_DOES_NOT_CONTAIN_MODULE,
+    STRUCT_CATEGORY_DOES_NOT_EXIST,
 
     INTERNAL_COMPARATOR_ERROR = 999,
 };
@@ -572,7 +588,10 @@ private:
             IExpression const       *expr;
             IExpression::Operator   op;
             Direction               dir;
-            IDefinition const       *sig;
+            struct {
+                IDefinition const   *def;
+                bool                forced_decl;
+            }                       sig;
             IValue const            *val;
             Qualifier               qual;
             File_path_prefix        file_path_prefix;
@@ -725,8 +744,11 @@ public:
 
     /// Add a function signature (including return type).
     ///
-    /// \param def  a definition of a function of constructor
-    Error_params &add_signature(IDefinition const *def);
+    /// \param def                a definition of a function of constructor
+    /// \param force_declarative  if true, force declarative flag
+    Error_params &add_signature(
+        IDefinition const *def,
+        bool              force_declarative = false);
 
     /// Add a function signature (without return type).
     ///
@@ -737,6 +759,11 @@ public:
     ///
     /// \param index  the argument index
     IDefinition const *get_signature_arg(size_t index) const;
+
+    /// Return true if the signature argument of given index is forced to declarative.
+    ///
+    /// \param index  the argument index
+    bool is_signature_forced_decl(size_t index) const;
 
     /// Add a value argument.
     ///

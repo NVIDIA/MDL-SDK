@@ -36,10 +36,28 @@
 
 #include <mi/base/types.h>
 
+#include <base/hal/thread/i_thread_lock.h>
+#include <base/hal/thread/i_thread_rw_lock.h>
+
 /// Enable this macro to collect some statistics.
 ///
 /// The statistics are dumped when the database is destroyed.
 // #define DBLIGHT_ENABLE_STATISTICS
+
+/// Enable this macro to acquire the shared lock always exclusively.
+// #define DBLIGHT_NO_BLOCK_SHARED
+
+/// Enable this macro to replace the shared lock by a standard (exclusive) lock.
+// #define DBLIGHT_NO_SHARED_LOCK
+
+#if defined( DBLIGHT_NO_BLOCK_SHARED) || defined( DBLIGHT_NO_SHARED_LOCK)
+#define Block_shared Block
+#define check_is_owned_shared_or_exclusive check_is_owned
+#endif
+
+#if defined( DBLIGHT_NO_SHARED_LOCK)
+#define Shared_lock Lock
+#endif
 
 namespace MI {
 
@@ -69,19 +87,26 @@ public:
 #endif // DBLIGHT_ENABLE_STATISTICS
 };
 
-extern Statistics_data g_name_to_tag;
-extern Statistics_data g_tag_to_name;
+extern Statistics_data g_commit;
+extern Statistics_data g_abort;
 extern Statistics_data g_access;
 extern Statistics_data g_edit;
 extern Statistics_data g_finish_edit;
 extern Statistics_data g_store;
+extern Statistics_data g_localize;
 extern Statistics_data g_remove;
-extern Statistics_data g_commit;
-extern Statistics_data g_abort;
+extern Statistics_data g_name_to_tag;
+extern Statistics_data g_tag_to_name;
+extern Statistics_data g_get_class_id;
+extern Statistics_data g_get_tag_privacy_level;
+extern Statistics_data g_get_tag_store_level;
 extern Statistics_data g_get_tag_reference_count;
+extern Statistics_data g_get_tag_version;
+extern Statistics_data g_can_reference_tag;
 extern Statistics_data g_get_tag_is_removed;
 extern Statistics_data g_lookup_info_by_tag;
 extern Statistics_data g_lookup_info_by_name;
+extern Statistics_data g_garbage_collection;
 
 } // namespace DBLIGHT
 

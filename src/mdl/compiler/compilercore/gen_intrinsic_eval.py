@@ -323,6 +323,14 @@ class SignatureParser:
 				# support average with one argument
 				self.intrinsic_modes[name + signature] = "math::average"
 				return True
+			elif name == "round" or name == "round_away_from_zero":
+				vt = self.get_vector_type_and_size(params[0])
+				if (params[0] == "FF" or params[0] == "DD" or
+					(vt and (vt[0] == "float" or vt[0] == "double"))):
+					# support round(floatX) and round_away_from_zero(floatX)
+					self.intrinsic_modes[name + signature] = "math::round"
+					return True
+				return False  # Not yet supported modes may not be handled via component_wise
 			elif name == "DX" or name == "DY":
 				vt = self.get_vector_type_and_size(params[0])
 				if (params[0] == "FF" or params[0] == "DD" or
@@ -838,6 +846,22 @@ class SignatureParser:
 					if mk == "IType::TK_FLOAT":
 						self.write(f, "return do_%s<float>(value_factory, arguments);\n" % intrinsic)
 					elif mk == "IType::TK_DOUBLE":
+						self.write(f, "return do_%s<double>(value_factory, arguments);\n" % intrinsic)
+				return
+
+		elif mode == "math::round":
+			if len(params) == 1:
+				if params[0] == "FF":
+					self.write(f, "return do_%s<float>(value_factory, arguments);\n" % intrinsic)
+					return
+				if params[0] == "DD":
+					self.write(f, "return do_%s<double>(value_factory, arguments);\n" % intrinsic)
+					return
+				vt = self.get_vector_type_and_size(params[0])
+				if vt and params[0] != "CC":
+					if vt[0] == "float":
+						self.write(f, "return do_%s<float>(value_factory, arguments);\n" % intrinsic)
+					elif vt[0] == "double":
 						self.write(f, "return do_%s<double>(value_factory, arguments);\n" % intrinsic)
 				return
 

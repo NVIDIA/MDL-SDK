@@ -178,6 +178,10 @@ int MAIN_UTF8(int argc, char* argv[])
                 continue;
             }
 
+            // Create execution context
+            mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
+                mdl_factory->create_execution_context());
+
             const mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
                 material_instance_se->get_interface<mi::neuraylib::IMaterial_instance>());
 
@@ -186,9 +190,22 @@ int MAIN_UTF8(int argc, char* argv[])
                 ? mi::neuraylib::IMaterial_instance::CLASS_COMPILATION
                 : mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS;
 
+            // When distilling, we need to convert material to standard material.
+            if (!g_distilling_target.empty())
+            {
+                // convert to target type SID_MATERIAL
+                mi::base::Handle<mi::neuraylib::IType_factory> tf(
+                    mdl_factory->create_type_factory(transaction.get()));
+                mi::base::Handle<const mi::neuraylib::IType> standard_material_type(
+                    tf->get_predefined_struct(mi::neuraylib::IType_struct::SID_MATERIAL));
+                context->set_option("target_type", standard_material_type.get());
+            }
+            
+
             mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
                 material_instance->create_compiled_material(
-                    flags));
+                    flags,
+                    context.get()));
 
             // Distill the material
             if (!g_distilling_target.empty())
@@ -275,10 +292,6 @@ int MAIN_UTF8(int argc, char* argv[])
             s << mdl_module->get_mdl_name() << "_" << i << "_printed";
             const std::string printed_module_name = s.str();
 
-            // Create execution context
-            mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
-                mdl_factory->create_execution_context());
-
             mi::base::Handle<mi::neuraylib::IMdl_impexp_api> mdl_impexp_api(
                 neuray->get_api_component<mi::neuraylib::IMdl_impexp_api>());
 
@@ -333,7 +346,7 @@ int MAIN_UTF8(int argc, char* argv[])
 void print_help()
 {
     std::cerr << R"(
-traversal [options] <qualified_material_name>
+traversal [options] <qualified_module_name>
 
 options:
 

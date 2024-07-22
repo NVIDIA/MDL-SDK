@@ -118,7 +118,7 @@ static void test_buffer_serializer_1()
     Test_type_1 src;
     src.m_int = 99;
     for (size_t i=0; i<9; ++i){
-	src.m_array.push_back(i*10);
+        src.m_array.push_back(i*10);
     }
 
 #ifdef MI_TEST_VERBOSE

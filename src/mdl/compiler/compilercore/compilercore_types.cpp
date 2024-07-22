@@ -35,12 +35,14 @@
 #include <vector>
 
 #include "compilercore_cc_conf.h"
-#include "compilercore_factories.h"
-#include "compilercore_symbols.h"
-#include "compilercore_tools.h"
+
 #include "compilercore_assert.h"
+#include "compilercore_builder.h"
+#include "compilercore_factories.h"
 #include "compilercore_memory_arena.h"
 #include "compilercore_serializer.h"
+#include "compilercore_symbols.h"
+#include "compilercore_tools.h"
 
 namespace mi {
 namespace mdl {
@@ -81,6 +83,11 @@ public:
         return tp;
     }
 
+    /// Get the declarativeness of the base type.
+    bool is_declarative() const MDL_OVERRIDE {
+        return false;
+    }
+
 protected:
     /// Constructor.
     explicit Type_base()
@@ -103,29 +110,34 @@ public:
 
 protected:
     /// Constructor.
-    ///
-    /// \param arena  the memory arena variadic parts are allocated on
-    explicit Type_base_variadic(Memory_arena *arena)
+    explicit Type_base_variadic()
     : Base()
-    , m_args(arena)
+    , m_args(nullptr)
+    , m_size(0u)
     {
     }
 
     /// Return the number of variadic arguments.
-    size_t argument_count() const { return m_args.size(); }
+    size_t size() const { return m_size; }
 
-    /// Add a new argument.
-    size_t add_argument(ArgIf arg) {
-        size_t res = m_args.size();
-        m_args.push_back(arg);
-        return res;
+    /// Set arguments.
+    void set_arguments(Memory_arena *arena, ArgIf const *args, size_t size) {
+        m_size = size;
+        if (size > 0) {
+            // Note: no default constructor is called here, so this works only for PODs or POD-like objects
+            m_args = (ArgIf *)arena->allocate(sizeof(ArgIf) * size);
+            std::copy(args, args + size, m_args);
+        } else {
+            m_args = nullptr;
+        }
     }
 
     /// Get the argument at given position.
-    ArgIf argument_at(size_t pos) const { return m_args.at(pos); }
+    ArgIf *at(size_t pos) const { return pos < m_size ? &m_args[pos] : nullptr; }
 
 protected:
-    typename Arena_vector<ArgIf>::Type m_args;
+    ArgIf  *m_args;
+    size_t m_size;
 };
 
 /// Implementation of the type of kind alias.
@@ -137,6 +149,10 @@ class Type_alias : public Type_base<IType_alias>
     friend class Arena_builder;
 public:
 
+    /// Get the declarativeness of the aliased type.
+    bool is_declarative() const MDL_FINAL {
+        return m_aliased_type->is_declarative();
+    }
     /// Get the name of the type.
     ISymbol const *get_symbol() const MDL_FINAL { return m_name; }
 
@@ -235,88 +251,40 @@ public:
     }
 };
 
-/// A member of a enum type.
-class Enum_member
-{
-public:
-    /// Return the name of this member.
-    ISymbol const *get_symbol() const { return m_name; }
-
-    /// Return the code of this member.
-    int get_code() const { return m_code; }
-
-    /// Constructor.
-    ///
-    /// \param name  the name of this enum member
-    /// \param code  the code if this enum member
-    explicit Enum_member(ISymbol const *name, int code)
-    : m_name(name)
-    , m_code(code)
-    {
-    }
-
-private:
-    /// The name of this member.
-    ISymbol const *m_name;
-
-    /// The code of this member.
-    int m_code;
-};
-
 /// Implementation of the enum type.
-class Type_enum : public Type_base_variadic<IType_enum, Enum_member>
+class Type_enum : public Type_base_variadic<IType_enum, IType_enum::Value>
 {
-    typedef Type_base_variadic<IType_enum, Enum_member> Base;
+    typedef Type_base_variadic<IType_enum, IType_enum::Value> Base;
     friend class Arena_builder;
 public:
     /// Get the name of the enum type.
     ISymbol const *get_symbol() const MDL_FINAL { return m_name; }
 
-    /// Add a value.
-    ///
-    /// \param name The name of the value.
-    /// \param code The code of the value.
-    ///
-    /// \return The index of this new value.
-    int add_value(ISymbol const *name, int code) MDL_FINAL {
-        return Base::add_argument(Enum_member(name, code));
-    }
-
     /// Get the number of values.
-    int get_value_count() const MDL_FINAL { return Base::argument_count(); }
+    size_t get_value_count() const MDL_FINAL { return Base::size(); }
 
     /// Get a value.
     ///
     /// \param index    The index of the value.
-    /// \param name     The name of the value.
-    /// \param code     The code of the value.
     ///
     /// \return  true of success, false on index error.
-    bool get_value(int index, ISymbol const *&symbol, int &code) const MDL_FINAL {
-        if (0 <= index && size_t(index) < Base::argument_count()) {
-            Enum_member const &member = Base::argument_at(index);
-            symbol = member.get_symbol();
-            code = member.get_code();
-            return true;
-        }
-        return false;
+    Value const *get_value(size_t index) const MDL_FINAL {
+        return Base::at(index);
     }
 
     /// Lookup a value in O(N).
     ///
     /// \param name     The name of the value.
-    /// \param code     The code of the value.
     ///
     /// \return true if the name was found, false otherwise.
-    bool lookup(ISymbol const *symbol, int &code) const MDL_FINAL {
-        for (size_t idx = 0, end = Base::argument_count(); idx < end; ++idx) {
-            Enum_member const &member = Base::argument_at(idx);
-            if (symbol == member.get_symbol()) {
-                code = member.get_code();
-                return true;
+    Value const *lookup(ISymbol const *symbol) const MDL_FINAL {
+        for (size_t idx = 0, end = Base::size(); idx < end; ++idx) {
+            Value const *value = Base::at(idx);
+            if (symbol == value->get_symbol()) {
+                return value;
             }
         }
-        return false;
+        return nullptr;
     }
 
     /// If this enum is a predefined one, return its ID, else EID_USER.
@@ -335,17 +303,22 @@ private:
     /// \param owner_id   the id of the type factory owning this type
     /// \param arena      the memory arena the enum values are allocated on
     /// \param name       the fully qualified name of this type
+    /// \param values     the values of this type
+    /// \param n_values   the number of values
     /// \param id         the predefined id of this enum
     explicit Type_enum(
-        size_t        owner_id,
-        Memory_arena  *arena,
-        ISymbol const *name,
-        Predefined_id id = EID_USER)
-    : Base(arena)
+        size_t           owner_id,
+        Memory_arena     *arena,
+        ISymbol const    *name,
+        Value const      *values,
+        size_t           n_values,
+        Predefined_id    id = EID_USER)
+    : Base()
     , m_owner_id(owner_id)
     , m_name(name)
     , m_predefined_id(id)
     {
+        Base::set_arguments(arena, values, n_values);
     }
 
 private:
@@ -422,6 +395,11 @@ public:
     : Base()
     {
     }
+
+    /// Get the declarativeness of the bsdf type.
+    bool is_declarative() const MDL_FINAL {
+        return true;
+    }
 };
 
 /// Implementation of the hair_bsdf type.
@@ -433,6 +411,11 @@ public:
     explicit Type_hair_bsdf()
     : Base()
     {
+    }
+
+    /// Get the declarativeness of the hair_bsdf type.
+    bool is_declarative() const MDL_FINAL {
+        return true;
     }
 };
 
@@ -446,6 +429,11 @@ public:
     : Base()
     {
     }
+
+    /// Get the declarativeness of the edf type.
+    bool is_declarative() const MDL_FINAL {
+        return true;
+    }
 };
 
 /// Implementation of the vdf type.
@@ -457,6 +445,11 @@ public:
     explicit Type_vdf()
     : Base()
     {
+    }
+
+    /// Get the declarativeness of the vdf type.
+    bool is_declarative() const MDL_FINAL {
+        return true;
     }
 };
 
@@ -587,6 +580,11 @@ class Type_array : public Type_base<IType_array>
     typedef Type_base<IType_array> Base;
     friend class Arena_builder;
 public:
+
+    /// Get the declarativeness of the base type.
+    bool is_declarative() const MDL_FINAL {
+        return m_element_type->is_declarative();
+    }
 
     /// Get the type of the array elements.
     IType const *get_element_type() const MDL_FINAL { return m_element_type; }
@@ -794,146 +792,20 @@ private:
     size_t m_n_parameters;
 };
 
-/// A structure member.
-class Struct_member {
-public:
-    /// Return the type of this member.
-    IType const *get_type() const { return m_type; }
-
-    /// Return the name of this member.
-    ISymbol const *get_symbol() const { return m_name; }
-
-    /// Constructor.
-    ///
-    /// \param type  the type of this structure member
-    /// \param name  the name of this structure member
-    explicit Struct_member(IType const *type, ISymbol const *name)
-    : m_type(type)
-    , m_name(name)
-    {
-    }
-
-private:
-    /// The type of this field.
-    IType const *m_type;
-
-    /// The name of this field.
-    ISymbol const *m_name;
-};
-
-/// Implementation of the structure type.
-class Type_struct : public Type_base_variadic<IType_struct, Struct_member>
+/// Implementation of the struct category type.
+class Struct_category : public IStruct_category
 {
-    typedef Type_base_variadic<IType_struct, Struct_member> Base;
+    typedef IStruct_category Base;
     friend class Arena_builder;
 public:
 
     /// Get the name of the struct type.
     ISymbol const *get_symbol() const MDL_FINAL { return m_name; }
 
-    /// Add a field to the struct type.
-    /// \param type The type of the field.
-    /// \param name The name of the field.
-    void add_field(IType const *type, ISymbol const *name) MDL_FINAL {
-        MDL_ASSERT(m_predefined_id != SID_USER || Type_factory::is_owned(m_owner_id, type));
-        Base::add_argument(Struct_member(type, name));
-    }
-
-    /// Get the number of fields.
-    int get_field_count() const MDL_FINAL { return Base::argument_count(); }
-
-    /// Get a field.
-    /// \param index    The index of the field.
-    /// \param type     The type of the field.
-    /// \param symbol   The symbol of the field.
-    void get_field(
-        int index,
-        IType const *&type,
-        ISymbol const *&symbol) const MDL_FINAL
-    {
-        Struct_member const &field = Base::argument_at(index);
-        type = field.get_type();
-        symbol = field.get_symbol();
-    }
-
-    /// Return the index of a field in O(N) if it is present and -1 otherwise.
-    /// \param symbol   The name of the field.
-    int find_field(ISymbol const *symbol) const MDL_FINAL {
-        for (size_t idx = 0, end = Base::argument_count(); idx < end; ++idx) {
-            Struct_member const &field = Base::argument_at(idx);
-            if (symbol == field.get_symbol()) {
-                return int(idx);
-            }
-        }
-        return -1;
-    }
-
-    /// Return the index of a field in O(N) if it is present and -1 otherwise.
-    /// \param symbol   The name of the field.
-    int find_field(char const *name) const MDL_FINAL {
-        for (size_t idx = 0, end = Base::argument_count(); idx < end; ++idx) {
-            Struct_member const &field = Base::argument_at(idx);
-            if (strcmp(field.get_symbol()->get_name(), name) == 0) {
-                return int(idx);
-            }
-        }
-        return -1;
-    }
-
-    /// Return the index of a method in O(N) if it is present and -1 otherwise.
-    /// \param symbol   The name of the method.
-    int find_method(ISymbol const *symbol) const MDL_FINAL
-    {
-        for (size_t idx = 0, end = m_methods.size(); idx < end; ++idx) {
-            Struct_member const &field = m_methods.at(idx);
-            if (symbol == field.get_symbol()) {
-                return int(idx);
-            }
-        }
-        return -1;
-
-    }
-
-    /// Add a method.
-    /// \param type The type of the method.
-    /// \param name The name of the method.
-    void add_method(IType_function const *type, ISymbol const *name) MDL_FINAL {
-        MDL_ASSERT(Type_factory::is_owned(m_owner_id, type));
-        m_methods.push_back(Struct_member(type, name));
-    }
-
-    /// Get the number of methods.
-    int get_method_count() const MDL_FINAL{ return m_methods.size(); }
-
-    /// Get a method.
-    /// \param index    The index of the method.
-    /// \param type     The type of the field.
-    /// \param symbol   The symbol of the field.
-    void get_method(int index,
-        IType_function const *&type,
-        ISymbol const *&symbol) const MDL_FINAL
-    {
-        Struct_member const &field = m_methods.at(index);
-        type = static_cast<const IType_function *>(field.get_type());
-        symbol = field.get_symbol();
-    }
-
     /// If this struct is a predefined one, return its ID, else SID_USER.
     Predefined_id get_predefined_id() const MDL_FINAL {
         return m_predefined_id;
     }
-
-    /// Get the compound type at index i.
-    IType const *get_compound_type(int index) const MDL_FINAL {
-        if (0 <= index && index < Type_struct::get_field_count()) {
-            Struct_member const &field = Base::argument_at(index);
-            return field.get_type();
-        }
-        return NULL;
-    }
-
-    /// Get the number of compound elements.
-    int get_compound_size() const  MDL_FINAL{ return Type_struct::get_field_count(); }
 
     // ---------------------- non-interface ----------------------
 
@@ -944,19 +816,17 @@ private:
     /// Constructor.
     ///
     /// \param owner_id  the id of the type factory owning this type
-    /// \param arena     the arena used to allocate the structure members on
-    /// \param name      the absolute name of this structure
-    /// \param id        the predefined id of this structure
-    explicit Type_struct(
+    /// \param name      the absolute name of this struct type
+    /// \param fields    the fields of this struct type
+    /// \param n_fields  the number of fields
+    /// \param id        the predefined id of this struct type
+    explicit Struct_category(
         size_t        owner_id,
-        Memory_arena  *arena,
         ISymbol const *name,
-        Predefined_id id = SID_USER)
-    : Base(arena)
-    , m_owner_id(owner_id)
+        Predefined_id id = CID_USER)
+    : m_owner_id(owner_id)
     , m_name(name)
     , m_predefined_id(id)
-    , m_methods(arena)
     {
     }
 
@@ -969,9 +839,126 @@ private:
 
     /// The predefined ID of this structure type.
     Predefined_id const m_predefined_id;
+};
 
-    /// All methods of this struct.
-    Arena_vector<Struct_member>::Type m_methods;
+/// Implementation of the structure type.
+class Type_struct : public Type_base_variadic<IType_struct, IType_struct::Field>
+{
+    typedef Type_base_variadic<IType_struct, IType_struct::Field> Base;
+    friend class Arena_builder;
+public:
+
+    /// Get the declarativeness of the base type.
+    bool is_declarative() const MDL_FINAL {
+        return m_is_declarative;
+    }
+
+    /// Get the name of the struct type.
+    ISymbol const *get_symbol() const MDL_FINAL { return m_name; }
+
+    /// Get the number of fields.
+    size_t get_field_count() const MDL_FINAL { return Base::size(); }
+
+    /// Get a field.
+    /// \param index    The index of the field.
+    Field const *get_field(
+        size_t index) const MDL_FINAL
+    {
+        return Base::at(index);
+    }
+
+    /// Return the index of a field in O(N) if it is present and -1 otherwise.
+    /// \param symbol   The name of the field.
+    size_t find_field_index(ISymbol const *symbol) const MDL_FINAL {
+        for (size_t idx = 0, end = Base::size(); idx < end; ++idx) {
+            Field const *field = Base::at(idx);
+            if (symbol == field->get_symbol()) {
+                return idx;
+            }
+        }
+        return ~0;
+    }
+
+    /// Return the index of a field in O(N) if it is present and -1 otherwise.
+    /// \param symbol   The name of the field.
+    size_t find_field_index(char const *name) const MDL_FINAL {
+        for (size_t idx = 0, end = Base::size(); idx < end; ++idx) {
+            Field const *field = Base::at(idx);
+            if (strcmp(field->get_symbol()->get_name(), name) == 0) {
+                return idx;
+            }
+        }
+        return ~0;
+    }
+
+    /// If this struct is a predefined one, return its ID, else SID_USER.
+    Predefined_id get_predefined_id() const MDL_FINAL {
+        return m_predefined_id;
+    }
+
+    /// Get the compound type at index i.
+    IType const *get_compound_type(int index) const MDL_FINAL {
+        if (0 <= index && index < Type_struct::get_field_count()) {
+            Field const *field = Base::at(index);
+            return field->get_type();
+        }
+        return nullptr;
+    }
+
+    /// Get the number of compound elements.
+    int get_compound_size() const  MDL_FINAL { return Type_struct::get_field_count(); }
+
+    /// Get the struct type's category or NULL if it does not have any.
+    IStruct_category const *get_category() const MDL_FINAL { return m_category; }
+
+    // ---------------------- non-interface ----------------------
+
+    /// Get the owner id.
+    size_t get_owner_id() const { return m_owner_id; }
+
+private:
+    /// Constructor.
+    ///
+    /// \param owner_id  the id of the type factory owning this type
+    /// \param arena     the arena used to allocate the structure members on
+    /// \param name      the absolute name of this struct type
+    /// \param fields    the fields of this struct type
+    /// \param n_fields  the number of fields
+    /// \param id        the predefined id of this struct type
+    explicit Type_struct(
+        size_t        owner_id,
+        Memory_arena *arena,
+        bool          is_declarative,
+        ISymbol const *name,
+        IStruct_category const *category,
+        Field const *fields,
+        size_t        n_fields,
+        Predefined_id id = SID_USER)
+    : Base()
+    , m_owner_id(owner_id)
+    , m_is_declarative(is_declarative)
+    , m_name(name)
+    , m_category(category)
+    , m_predefined_id(id)
+    {
+        Base::set_arguments(arena, fields, n_fields);
+    }
+
+private:
+    /// An id representing the owner of this type (for debugging).
+    size_t const m_owner_id;
+
+    /// Declarative flag.
+    bool m_is_declarative;
+
+    /// The name of this structure type.
+    ISymbol const *const m_name;
+
+    /// This structure type's category.
+    IStruct_category const *m_category;
+
+    /// The predefined ID of this structure type.
+    Predefined_id const m_predefined_id;
 };
 
 /// Implementation of the texture type.
@@ -1030,77 +1017,120 @@ static size_t g_id = 0;
 
 Type_factory::Type_factory(
     Memory_arena  &arena,
-    IMDL          *compiler,
-    Symbol_table  *symtab)
+    MDL           &compiler,
+    Symbol_table  &symtab)
 : Base()
 , m_builder(arena)
 , m_id(++g_id)
-, m_compiler_factory(compiler != NULL ? compiler->get_type_factory() : NULL)
-, m_symtab(symtab)
+, m_compiler_factory(compiler.type_factory_is_valid() ? compiler.get_type_factory() : NULL)
+, m_symtab(&symtab)
 , m_type_cache(0, Type_cache::hasher(), Type_cache::key_equal(), &arena)
 , m_array_size_cache(0, Array_size_cache::hasher(), Array_size_cache::key_equal(), &arena)
 , m_imported_types_cache(0, Type_import_map::hasher(), Type_import_map::key_equal(), &arena)
+, m_imported_category_cache(0, Category_import_map::hasher(), Category_import_map::key_equal(), &arena)
 {
-    if (compiler == NULL) {
-        // must be create on heap, so do it here
-
-        // Note: create only the types here, its members will be added by the builder
-        // from compilercore_known_defs.h
-        m_predefined_structs[IType_struct::SID_MATERIAL_EMISSION] = m_builder.create<Type_struct>(
-            m_id,
-            m_builder.get_arena(),
-            Symbol_table::get_predefined_symbol(ISymbol::SYM_TYPE_MATERIAL_EMISSION),
-            IType_struct::SID_MATERIAL_EMISSION);
-        m_predefined_structs[IType_struct::SID_MATERIAL_SURFACE]  = m_builder.create<Type_struct>(
-            m_id,
-            m_builder.get_arena(),
-            Symbol_table::get_predefined_symbol(ISymbol::SYM_TYPE_MATERIAL_SURFACE),
-            IType_struct::SID_MATERIAL_SURFACE);
-        m_predefined_structs[IType_struct::SID_MATERIAL_VOLUME]   = m_builder.create<Type_struct>(
-            m_id,
-            m_builder.get_arena(),
-            Symbol_table::get_predefined_symbol(ISymbol::SYM_TYPE_MATERIAL_VOLUME),
-            IType_struct::SID_MATERIAL_VOLUME);
-        m_predefined_structs[IType_struct::SID_MATERIAL_GEOMETRY] = m_builder.create<Type_struct>(
-            m_id,
-            m_builder.get_arena(),
-            Symbol_table::get_predefined_symbol(ISymbol::SYM_TYPE_MATERIAL_GEOMETRY),
-            IType_struct::SID_MATERIAL_GEOMETRY);
-        m_predefined_structs[IType_struct::SID_MATERIAL] = m_builder.create<Type_struct>(
-            m_id,
-            m_builder.get_arena(),
-            Symbol_table::get_predefined_symbol(ISymbol::SYM_TYPE_MATERIAL),
-            IType_struct::SID_MATERIAL);
-
-        // This IS ugly: the texture type constructors depend on the ::tex::gamma_mode type.
-        // However, these types are builtin, so we must create them in every module and than
-        // means ::tex::gamma_mode must be available in advance ...
-        // Build the type here!
-        Type_enum *gamma_mode =
-            m_builder.create<Type_enum>(
-                m_id,
-                m_builder.get_arena(),
-                Symbol_table::get_predefined_symbol(ISymbol::SYM_TYPE_TEX_GAMMA_MODE),
-                IType_enum::EID_TEX_GAMMA_MODE);
-
-        // Note: values for the builtin gamma_mode enum are added when the ::tex module
-        // is processed inside NT_analysis::pre_visit(IDeclaration_type_enum *enum_decl).
-
-        m_predefined_enums[IType_enum::EID_TEX_GAMMA_MODE] = gamma_mode;
-
-        // MDL 1.1 intensity mode enum. Its values will be added by the builder
-        // from compilercore_known_defs.h
-        Type_enum *intensity_mode =
-            m_builder.create<Type_enum>(
-            m_id,
-            m_builder.get_arena(),
-            Symbol_table::get_predefined_symbol(ISymbol::SYM_TYPE_INTENSITY_MODE),
-            IType_enum::EID_INTENSITY_MODE);
-        m_predefined_enums[IType_enum::EID_INTENSITY_MODE] = intensity_mode;
+    if (!compiler.type_factory_is_valid()) {
+        // we are creating the compiler owned TF, insert the predefined types here
+        enter_predefined_types(*this, !compiler.mat_ior_is_varying());
     } else {
-        memset(m_predefined_structs, 0, sizeof(m_predefined_structs));
-        memset(m_predefined_enums,   0, sizeof(m_predefined_enums));
+        // module owned TF, no predefined types
+        memset(m_predefined_structs,    0, sizeof(m_predefined_structs));
+        memset(m_predefined_enums,      0, sizeof(m_predefined_enums));
+        memset(m_predefined_categories, 0, sizeof(m_predefined_categories));
     }
+}
+
+/// Get the predefined struct id for a given predefined symbol.
+static IType_struct::Predefined_id get_predef_struct_id(ISymbol const *sym)
+{
+    switch (sym->get_id()) {
+    case ISymbol::SYM_TYPE_MATERIAL_EMISSION: return IType_struct::SID_MATERIAL_EMISSION;
+    case ISymbol::SYM_TYPE_MATERIAL_SURFACE:  return IType_struct::SID_MATERIAL_SURFACE;
+    case ISymbol::SYM_TYPE_MATERIAL_VOLUME:   return IType_struct::SID_MATERIAL_VOLUME;
+    case ISymbol::SYM_TYPE_MATERIAL_GEOMETRY: return IType_struct::SID_MATERIAL_GEOMETRY;
+    case ISymbol::SYM_TYPE_MATERIAL:          return IType_struct::SID_MATERIAL;
+    default:
+        MDL_ASSERT(!"Unexpected predefined type");
+        return IType_struct::SID_USER;
+    }
+}
+
+/// Get the predefined enum id for a given predefined symbol.
+static IType_enum::Predefined_id get_predef_enum_id(ISymbol const *sym)
+{
+    switch (sym->get_id()) {
+    case ISymbol::SYM_TYPE_INTENSITY_MODE: return IType_enum::EID_INTENSITY_MODE;
+    case ISymbol::SYM_TYPE_TEX_GAMMA_MODE: return IType_enum::EID_TEX_GAMMA_MODE;
+    default:
+        MDL_ASSERT(!"Unexpected predefined type");
+        return IType_enum::EID_USER;
+    }
+}
+
+/// Get the predefined struct category id for a given predefined symbol.
+static IStruct_category::Predefined_id get_predef_category_id(ISymbol const *sym)
+{
+    switch (sym->get_id()) {
+    case ISymbol::SYM_CAT_MATERIAL_CATEGORY: return IStruct_category::CID_MATERIAL_CATEGORY;
+    default:
+        MDL_ASSERT(!"Unexpected predefined type");
+        return IStruct_category::CID_USER;
+    }
+}
+
+// Insert a predefined struct type.
+IType_struct const *Type_factory::insert_predef_struct(
+    ISymbol const               *name,
+    IType_struct::Field const   *fields,
+    size_t                      n_fields)
+{
+    IType_struct::Predefined_id struct_id = get_predef_struct_id(name);
+    IStruct_category const *category = nullptr;
+    if (struct_id == IType_struct::SID_MATERIAL) {
+        category = m_predefined_categories[IStruct_category::CID_MATERIAL_CATEGORY];
+    }
+    Type_struct const *s_type = m_builder.create<Type_struct>(
+        m_id,
+        m_builder.get_arena(),
+        /*is_declarative=*/true,
+        name,
+        category,
+        fields,
+        n_fields,
+        struct_id);
+    m_predefined_structs[struct_id] = s_type;
+    return s_type;
+}
+
+// Insert a predefined enum type.
+IType_enum const *Type_factory::insert_predef_enum(
+    ISymbol const           *name,
+    IType_enum::Value const *values,
+    size_t                  n_values)
+{
+    IType_enum::Predefined_id enum_id = get_predef_enum_id(name);
+    Type_enum const *e_type = m_builder.create<Type_enum>(
+        m_id,
+        m_builder.get_arena(),
+        name,
+        values,
+        n_values,
+        enum_id);
+    m_predefined_enums[enum_id] = e_type;
+    return e_type;
+}
+
+// Insert a predefined struct category.
+IStruct_category const *Type_factory::insert_predef_category(
+    ISymbol const *name)
+{
+    IStruct_category::Predefined_id cat_id = get_predef_category_id(name);
+    Struct_category const *cat = m_builder.create<Struct_category>(
+        m_id,
+        name,
+        cat_id);
+    m_predefined_categories[cat_id] = cat;
+    return cat;
 }
 
 // Create a new type alias instance.
@@ -1110,7 +1140,7 @@ IType const *Type_factory::create_alias(
     IType::Modifiers modifiers)
 {
     // only allowed on the module factories
-    if (m_compiler_factory == NULL) {
+    if (m_compiler_factory == NULL && name != NULL) {
         return NULL;
     }
 
@@ -1183,16 +1213,33 @@ const IType_int *Type_factory::create_int()
 }
 
 // Create a new type enum instance.
-IType_enum *Type_factory::create_enum(ISymbol const *name)
+IType_enum const *Type_factory::create_enum(
+    ISymbol const           *name,
+    IType_enum::Value const *values,
+    size_t                  n_values)
 {
     // only allowed on the module factories
     if (m_compiler_factory == NULL) {
         return NULL;
     }
 
+    IType_enum const *e_type = NULL;
+
     // import the name
     name = m_symtab->get_user_type_symbol(name->get_name());
-    IType_enum *e_type = m_builder.create<Type_enum>(m_id, m_builder.get_arena(), name);
+
+    Type_cache_key key(name, values, n_values);
+
+    Type_cache::const_iterator it = m_type_cache.find(key);
+    if (it == m_type_cache.end()) {
+        e_type = m_builder.create<Type_enum>(
+            m_id, m_builder.get_arena(), name, values, n_values);
+
+        it = m_type_cache.insert(Type_cache::value_type(e_type, e_type)).first;
+    } else {
+        // this type is already known
+        e_type = cast<IType_enum>(it->second);
+    }
 
     // register this enum type, so we can "import" it
     m_imported_types_cache[name->get_name()] = e_type;
@@ -1503,6 +1550,43 @@ IType_color const *Type_factory::create_color()
     return &the_color_type;
 }
 
+// Create a new struct category.
+IStruct_category const *Type_factory::create_struct_category(
+    ISymbol const *category_name)
+{
+    // only allowed on the module factories
+    if (m_compiler_factory == NULL) {
+        return NULL;
+    }
+
+    // import the name
+    category_name = m_symtab->get_user_type_symbol(category_name->get_name());
+
+    IStruct_category const *cat = m_builder.create<Struct_category>(
+        m_id, category_name);
+
+    // register this struct category, so we can "import" it
+    m_imported_category_cache[category_name->get_name()] = cat;
+    return cat;
+}
+
+// Lookup a struct type.
+IStruct_category const *Type_factory::lookup_struct_category(char const *name)
+{
+    // only allowed on the module factories
+    if (m_compiler_factory == NULL) {
+        return NULL;
+    }
+
+    Category_import_map::const_iterator it = m_imported_category_cache.find(name);
+    if (it == m_imported_category_cache.end()) {
+        return NULL;
+    }
+
+    // cast to struct type or NULL, if it's not a struct type
+    return it->second;
+}
+
 // Create a new type function instance.
 IType_function const *Type_factory::create_function(
     IType const                      *return_type,
@@ -1527,7 +1611,12 @@ IType_function const *Type_factory::create_function(
 }
 
 // Create a new type struct instance.
-IType_struct *Type_factory::create_struct(ISymbol const *name)
+IType_struct const *Type_factory::create_struct(
+    bool                      is_declarative,
+    ISymbol const             *name,
+    IStruct_category const    *category,
+    IType_struct::Field const *fields,
+    size_t                    n_fields)
 {
     // only allowed on the module factories
     if (m_compiler_factory == NULL) {
@@ -1536,7 +1625,25 @@ IType_struct *Type_factory::create_struct(ISymbol const *name)
 
     // import the name
     name = m_symtab->get_user_type_symbol(name->get_name());
-    IType_struct *s_type = m_builder.create<Type_struct>(m_id, m_builder.get_arena(), name);
+    if (category != NULL) {
+        // import the category.
+        category = import_category(category);
+    }
+
+    IType_struct const *s_type = NULL;
+
+    Type_cache_key key(name, fields, n_fields, category, is_declarative);
+
+    Type_cache::const_iterator it = m_type_cache.find(key);
+    if (it == m_type_cache.end()) {
+        s_type = m_builder.create<Type_struct>(m_id, m_builder.get_arena(),
+            is_declarative, name, category, fields, n_fields);
+
+        it = m_type_cache.insert(Type_cache::value_type(s_type, s_type)).first;
+    } else {
+        // this type is already known
+        s_type = cast<IType_struct>(it->second);
+    }
 
     // register this struct type, so we can "import" it
     m_imported_types_cache[name->get_name()] = s_type;
@@ -1580,6 +1687,25 @@ IType_texture const *Type_factory::create_texture(
 IType_bsdf_measurement const *Type_factory::create_bsdf_measurement()
 {
     return &the_bsdf_measurement_type;
+}
+
+// Import a type from another type factory.
+IStruct_category const *Type_factory::import_category(IStruct_category const *cat)
+{
+    IStruct_category::Predefined_id id = cat->get_predefined_id();
+
+    if (id != IStruct_category::CID_USER) {
+        // a builtin-material struct
+        return get_predefined_struct_category(id);
+    }
+
+    ISymbol const *cat_sym = cat->get_symbol();
+
+    Category_import_map::iterator it = m_imported_category_cache.find(cat_sym->get_name());
+    if (it != m_imported_category_cache.end()) {
+        return it->second;
+    }
+    return create_struct_category(cat_sym);
 }
 
 // Import a type from another type factory.
@@ -1627,18 +1753,18 @@ IType const *Type_factory::import(IType const *type)
                 // Except something really bad happens.
             }
 
-            IType_enum *n_type = create_enum(e_type_sym);
+            VLA<IType_enum::Value> values(get_allocator(), e_type->get_value_count());
 
-            for (int i = 0, n = e_type->get_value_count(); i < n; ++i) {
-                ISymbol const *v_sym;
-                int           v_code;
-                e_type->get_value(i, v_sym, v_code);
+            for (size_t i = 0, n = values.size(); i < n; ++i) {
+                IType_enum::Value const *e_value = e_type->get_value(i);
 
-                // FIXME: add_value is dangerous
-                v_sym = m_symtab->get_symbol(v_sym->get_name());
-                n_type->add_value(v_sym, v_code);
+                new (&values[i]) IType_enum::Value(
+                    m_symtab->get_symbol(e_value->get_symbol()->get_name()),
+                    e_value->get_code()
+                );
             }
-            return n_type;
+
+            return create_enum(e_type_sym, values.data(), values.size());
         }
     case IType::TK_FLOAT:
         return create_float();
@@ -1744,21 +1870,22 @@ IType const *Type_factory::import(IType const *type)
                 // Except something really bad happens.
             }
 
-            IType_struct *n_type = create_struct(s_sym);
-
-            for (int i = 0, n = s_type->get_field_count(); i < n; ++i) {
-                IType const   *f_type;
-                ISymbol const *f_sym;
-
-                s_type->get_field(i, f_type, f_sym);
-
-                f_type = import(f_type);
-                f_sym  = m_symtab->get_symbol(f_sym->get_name());
-
-                // FIXME: add_field is dangerous
-                n_type->add_field(f_type, f_sym);
+            IStruct_category const *cat = s_type->get_category();
+            if (cat != NULL) {
+                cat = import_category(cat);
             }
-            return n_type;
+
+            VLA<IType_struct::Field> fields(get_allocator(), s_type->get_field_count());
+
+            for (size_t i = 0, n = fields.size(); i < n; ++i) {
+                IType_struct::Field const *s_field = s_type->get_field(i);
+
+                new (&fields[i]) IType_struct::Field(
+                    import(s_field->get_type()),
+                    m_symtab->get_symbol(s_field->get_symbol()->get_name())
+                );
+            }
+            return create_struct(s_type->is_declarative(), s_sym, cat, fields.data(), fields.size());
         }
     case IType::TK_TEXTURE:
         {
@@ -1828,8 +1955,22 @@ IType const *Type_factory::create_array(
     return it->second;
 }
 
+IStruct_category const *Type_factory::get_predefined_struct_category(IStruct_category::Predefined_id part)
+{
+    if (m_compiler_factory != NULL) {
+        // this cast IS ugly, but we know that the top level type factory
+        // is of type Type_factory (and not a proxy), so it's ok
+        return static_cast<Type_factory *>(m_compiler_factory)->get_predefined_struct_category(part);
+    }
+    if (0 <= part && part <= IStruct_category::CID_LAST) {
+        // get those from the compiler factory
+        return m_predefined_categories[part];
+    }
+    return NULL;
+}
+
 // Return a predefined struct.
-IType_struct *Type_factory::get_predefined_struct(IType_struct::Predefined_id part)
+IType_struct const *Type_factory::get_predefined_struct(IType_struct::Predefined_id part)
 {
     if (m_compiler_factory != NULL) {
         // this cast IS ugly, but we know that the top level type factory
@@ -1844,7 +1985,7 @@ IType_struct *Type_factory::get_predefined_struct(IType_struct::Predefined_id pa
 }
 
 // Return a predefined enum.
-IType_enum *Type_factory::get_predefined_enum(IType_enum::Predefined_id part)
+IType_enum const *Type_factory::get_predefined_enum(IType_enum::Predefined_id part)
 {
     if (m_compiler_factory != NULL) {
         // this cast IS ugly, but we know that the top level type factory

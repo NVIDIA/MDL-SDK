@@ -101,10 +101,10 @@ struct Attachment
 {
     Attachment();
 
-    std::string m_member_name;			///< ""=whole attr, else target field
-    DB::Tag m_target;					///< src shader that provides values
-    std::string m_target_name;			///< ""=whole return,else result field
-    bool m_is_interface;				///< target is a phen interface param
+    std::string m_member_name;                  ///< ""=whole attr, else target field
+    DB::Tag m_target;                                   ///< src shader that provides values
+    std::string m_target_name;                  ///< ""=whole return,else result field
+    bool m_is_interface;                                ///< target is a phen interface param
 };
 
 
@@ -158,12 +158,12 @@ class Attribute : public SERIAL::Serializable
     /// \param global not inheritance, nailed to element
     /// \param is_const is value immutable?
     explicit Attribute(
-        Type_code	type,
-        const char	*name,
-        Uint		type_asize = 1,
+        Type_code       type,
+        const char      *name,
+        Uint            type_asize = 1,
         Attribute_propagation override=PROPAGATION_STANDARD,
-        bool		global=false,
-        bool		is_const=false);
+        bool            global=false,
+        bool            is_const=false);
 
     /// Another convenience constructor for the derived Attribute_object.
     /// \param id identifies attribute for lookups
@@ -173,12 +173,12 @@ class Attribute : public SERIAL::Serializable
     /// \param global not inheritance, nailed to element
     /// \param is_const is value immutable?
     explicit Attribute(
-        Attribute_id	id,
-        Type_code	type,
-        Uint		type_asize = 1,
+        Attribute_id    id,
+        Type_code       type,
+        Uint            type_asize = 1,
         Attribute_propagation override=PROPAGATION_STANDARD,
-        bool		global=false,
-        bool		is_const=false);
+        bool            global=false,
+        bool            is_const=false);
 
     // Destructor.
     ~Attribute();
@@ -194,11 +194,11 @@ class Attribute : public SERIAL::Serializable
     /// case of string attributes that's a *pointer* to chars, not a char array.
     // @{
     /// identifies attribute for lookups
-    Attribute_id get_id()	const;
+    Attribute_id get_id()       const;
     /// root of type tree
-    const Type& get_type()	const;
+    const Type& get_type()      const;
     /// attribute name (toplevel type name)
-    const char* get_name()	const;
+    const char* get_name()      const;
     /// @}
 
     /// Retrieve the global state.
@@ -211,7 +211,7 @@ class Attribute : public SERIAL::Serializable
     /// Inheritance: parent overrides child.
     Attribute_propagation get_override() const;
     /// Change the override status for inheritance: parent overrides child.
-    void	 set_override(
+    void         set_override(
         Attribute_propagation ov);
     /// Beginning of value byte block.
     const char* get_values() const;
@@ -425,12 +425,12 @@ class Attribute : public SERIAL::Serializable
     virtual size_t flush();
 
   private:
-    Attribute_id m_id;				///< identifies attribute for lookups
-    Attribute_propagation m_override;		///< inheritance: parent overrides child
+    Attribute_id m_id;                          ///< identifies attribute for lookups
+    Attribute_propagation m_override;           ///< inheritance: parent overrides child
   protected:
-    Type m_type;				///< data type, toplevel member type provides name
-    char* m_values;				///< binary data block described by type tree
-    CONT::Array<Attachment> m_attachments;	///< a list of attachments, may be empty
+    Type m_type;                                ///< data type, toplevel member type provides name
+    char* m_values;                             ///< binary data block described by type tree
+    CONT::Array<Attachment> m_attachments;      ///< a list of attachments, may be empty
 
     /// Constructors for Attribute_object.
     //@{
@@ -443,9 +443,9 @@ class Attribute : public SERIAL::Serializable
     /// \param list_size if attribute list, list size > 1
     /// \param override inheritance: parent overrides child
     explicit Attribute(
-        Attribute_id	id,
-        const Type	&type,
-        Uint		list_size,
+        Attribute_id    id,
+        const Type      &type,
+        Uint            list_size,
         Attribute_propagation override);
 
     /// A convenience constructor like the preceding one, except it takes care
@@ -459,13 +459,13 @@ class Attribute : public SERIAL::Serializable
     /// \param global not inheritance, nailed to element
     /// \param is_const is value immutable?
     explicit Attribute(
-        Type_code	type,
-        const char	*name,
-        Uint		type_asize,
-        Uint		list_size,
+        Type_code       type,
+        const char      *name,
+        Uint            type_asize,
+        Uint            list_size,
         Attribute_propagation override,
-        bool		global,
-        bool		is_const);
+        bool            global,
+        bool            is_const);
 
     /// Another convenience constructor for the derived Attribute_object.
     /// \param id identifies attribute for lookups
@@ -476,13 +476,13 @@ class Attribute : public SERIAL::Serializable
     /// \param global not inheritance, nailed to element
     /// \param is_const is value immutable?
     explicit Attribute(
-        Attribute_id	id,
-        Type_code	type,
-        Uint		type_asize,
-        Uint		list_size,
+        Attribute_id    id,
+        Type_code       type,
+        Uint            type_asize,
+        Uint            list_size,
         Attribute_propagation override,
-        bool		global,
-        bool		is_const);
+        bool            global,
+        bool            is_const);
     //@}
 
     /// Internal list-aware functions to access the binary value block for Attribute_objects.
@@ -491,7 +491,7 @@ class Attribute : public SERIAL::Serializable
     /// Retrieve beginning of value byte block. Internal function.
     /// \param i if attribute list, list index
     const char* get_values_i(
-        Uint i)	const;
+        Uint i) const;
     /// Retrieve beginning of value byte block. Internal function.
     /// \param i if attribute list, list index
     char* set_values_i(
@@ -501,80 +501,80 @@ class Attribute : public SERIAL::Serializable
     /// \param n if array, get n-th value
     /// \return boolean value
     bool get_value_bool_i(
-        Uint		i,
-        Uint		n = 0) const;
+        Uint            i,
+        Uint            n = 0) const;
 
     /// \param v new value to set
     /// \param i if attribute list, list index
     /// \param n if array, set n-th value
     void set_value_bool_i(
-        bool		v,
-        Uint		i,
-        Uint		n = 0);
+        bool            v,
+        Uint            i,
+        Uint            n = 0);
 
     /// Typed read-only value access for convenience (could use get_values).
     /// \param i if attribute list, list index
     /// \param n if array, get n-th value
     /// \return int value
     int get_value_int_i(
-        Uint		i,
-        Uint		n = 0) const;
+        Uint            i,
+        Uint            n = 0) const;
 
     /// \param v new value to set
     /// \param i if attribute list, list index
     /// \param n if array, set n-th value
     void set_value_int_i(
-        int		v,
-        Uint		i,
-        Uint		n = 0);
+        int             v,
+        Uint            i,
+        Uint            n = 0);
 
     /// Typed read-only value access for convenience (could use get_values).
     /// \param i if attribute list, list index
     /// \param n if array, get n-th value
     /// \return scalar value
     Scalar get_value_scalar_i(
-        Uint		i,
-        Uint		n = 0) const;
+        Uint            i,
+        Uint            n = 0) const;
 
     /// Typed read-only value access for convenience (could use get_values).
     /// \param i if attribute list, list index
     /// \param n if array, get n-th value
     /// \return scalar value
     Dscalar get_value_dscalar_i(
-        Uint		i,
-        Uint		n = 0) const;
+        Uint            i,
+        Uint            n = 0) const;
 
     /// Typed read-only value access for convenience (could use get_values).
     /// \param i if attribute list, list index
     /// \param n if array, get n-th value
     /// \return Vector3 value
     Vector3 get_value_vector3_i(
-        Uint		i,
-        Uint		n = 0) const;
+        Uint            i,
+        Uint            n = 0) const;
 
     /// Typed read-only value access for convenience (could use get_values).
     /// \param i if attribute list, list index
     /// \param n if array, get n-th value
     /// \return Color value
     mi::math::Color get_value_color_i(
-        Uint		i,
-        Uint		n = 0) const;
+        Uint            i,
+        Uint            n = 0) const;
 
     /// \param v new value to set
     /// \param i if attribute list, list index
     /// \param n if array, set n-th value
     void set_value_scalar_i(
-        Scalar		v,
-        Uint		i,
-        Uint		n = 0);
+        Scalar          v,
+        Uint            i,
+        Uint            n = 0);
 
     /// \param v new value to set
     /// \param i if attribute list, list index
     /// \param n if array, set n-th value
     void set_value_dscalar_i(
-        Dscalar		v,
-        Uint		i,
-        Uint		n = 0);
+        Dscalar         v,
+        Uint            i,
+        Uint            n = 0);
 
     /// \param v new value to set (string will be copied)
     /// \param i if attribute list, list index
@@ -588,9 +588,9 @@ class Attribute : public SERIAL::Serializable
     /// \param i if attribute list, list index
     /// \param n if array, set n-th value
     void set_value_vector3_i(
-        const Vector3&	v,
-        Uint		i,
-        Uint		n = 0);
+        const Vector3&  v,
+        Uint            i,
+        Uint            n = 0);
 
     /// Typed read-only value access for convenience (could use get_values).
     /// \param i if attribute list, list index
@@ -606,32 +606,32 @@ class Attribute : public SERIAL::Serializable
     /// \param n if array, get n-th value
     /// \return value
     template <typename T> inline const T& get_value_ref_i(
-        Uint		i = 0,
-        Uint		n = 0) const;
+        Uint            i = 0,
+        Uint            n = 0) const;
 
     /// Templatized get, to hide casts.
     /// \param i if attribute list, list index
     /// \param n if array, get n-th value
     /// \return value
     template <typename T> inline T get_value_i(
-        Uint		i = 0,
-        Uint		n = 0) const;
+        Uint            i = 0,
+        Uint            n = 0) const;
 
     // Templatized set, to hide casts.
     /// \param v new value to set
     /// \param i if attribute list, list index
     /// \param n if array, set n-th value
     template <typename T> inline void set_value_i(
-        const T		&v,
-        Uint		i = 0,
-        Uint		n = 0);
+        const T         &v,
+        Uint            i = 0,
+        Uint            n = 0);
     //}
 
     /// Retrieve the listsize. Since this base class has no list, we can simply return 1.
     virtual Uint get_listsize() const { return 1; }
 
   private:
-    bool m_global;				///< participates in inheritance
+    bool m_global;                              ///< participates in inheritance
 
     /// Test code needs to be able to test internal variables
     friend void test_attribute();

@@ -46,8 +46,8 @@ class ICall_name_resolver;
 /// The rule engine handles the transformation of a compiled material by a rule set.
 ///
 class Distiller_plugin_api_impl :
-        public IDistiller_plugin_api,
-        private IGenerated_code_dag::DAG_node_factory
+    public IDistiller_plugin_api,
+    private IGenerated_code_dag::DAG_node_factory
 {
     typedef IDistiller_plugin_api Base;
 public:
@@ -55,30 +55,32 @@ public:
 
     /// Constructor.
     ///
+    /// \param alloc          the allocator
     /// \param inst           a material instance used to retrieve an allocator
     /// \param call_resolver  a MDL call name resolver for the IR checker
     Distiller_plugin_api_impl(
-        IGenerated_code_dag::IMaterial_instance const *instance,
-        ICall_name_resolver                           *call_resolver);
+        IAllocator               *alloc,
+        IMaterial_instance const *instance,
+        ICall_name_resolver      *call_resolver);
 
     virtual ~Distiller_plugin_api_impl() {}
 
     virtual void debug_node(IOutput_stream *outs, DAG_node const *node);
 
-    void dump_attributes(IGenerated_code_dag::IMaterial_instance const *inst);
-    void dump_attributes(IGenerated_code_dag::IMaterial_instance const *inst,
+    void dump_attributes(IMaterial_instance const *inst);
+    void dump_attributes(IMaterial_instance const *inst,
                          DAG_node const *node);
 
-    void dump_attributes(IGenerated_code_dag::IMaterial_instance const *inst, std::ostream &outs);
-    void dump_attributes(IGenerated_code_dag::IMaterial_instance const *inst,
+    void dump_attributes(IMaterial_instance const *inst, std::ostream &outs);
+    void dump_attributes(IMaterial_instance const *inst,
                          DAG_node const *node, std::ostream &outs);
 
     void set_attribute(DAG_node const * node, char const *name,
                        DAG_node const *value) MDL_FINAL;
-    void set_attribute(IGenerated_code_dag::IMaterial_instance const *inst,
+    void set_attribute(IMaterial_instance const *inst,
                        DAG_node const * node, char const *name,
                        mi::Float32 value) MDL_FINAL;
-    void set_attribute(IGenerated_code_dag::IMaterial_instance const *inst,
+    void set_attribute(IMaterial_instance const *inst,
                        DAG_node const * node, char const *name,
                        mi::Sint32 value) MDL_FINAL;
     void remove_attributes(DAG_node const * node) MDL_FINAL;
@@ -94,12 +96,12 @@ public:
     /// \param strategy       the strategy to use
     ///
     /// \return a new compiled material
-    IGenerated_code_dag::IMaterial_instance *apply_rules(
-        IGenerated_code_dag::IMaterial_instance const *inst,
-        IRule_matcher                                 &matcher,
-        IRule_matcher_event                           *event_handler,
-        const mi::mdl::Distiller_options              *options,
-        mi::Sint32                                    &error)  MDL_FINAL;
+    IMaterial_instance *apply_rules(
+        IMaterial_instance const         *inst,
+        IRule_matcher                    &matcher,
+        IRule_matcher_event              *event_handler,
+        const mi::mdl::Distiller_options *options,
+        mi::Sint32                       &error)  MDL_FINAL;
 
     /// Returns a new material instance as a merge of two material instances based
     /// on a material field selection mask choosing the top-level material fields
@@ -110,10 +112,10 @@ public:
     /// \param field_selector    mask to select the fields from m0 or m1 respectively.
     ///
     /// \return a new compiled material instance.
-    IGenerated_code_dag::IMaterial_instance *merge_materials(
-        IGenerated_code_dag::IMaterial_instance const *m0,
-        IGenerated_code_dag::IMaterial_instance const *m1,
-        IDistiller_plugin_api::Field_selector  field_selector)  MDL_FINAL;
+    IMaterial_instance *merge_materials(
+        IMaterial_instance const              *m0,
+        IMaterial_instance const              *m1,
+        IDistiller_plugin_api::Field_selector field_selector)  MDL_FINAL;
 
     /// Create a constant.
     ///
@@ -195,6 +197,11 @@ public:
     /// \param flag  If true, unsafe math optimizations will be enabled, else disabled.
     /// \return      The old value of the flag.
     bool enable_unsafe_math_opt(bool flag) MDL_FINAL;
+
+    /// Return unsafe math optimization setting.
+     ///
+    /// \return      The value of the flag.
+    bool get_unsafe_math_opt() const MDL_FINAL;
 
     /// Get the type factory associated with this expression factory.
     ///
@@ -426,11 +433,11 @@ public:
     bool set_normalize_mixers( bool new_value)  MDL_FINAL;
 
     /// Normalize mixer nodes and set respective flag to keep them normalized
-    IGenerated_code_dag::IMaterial_instance *normalize_mixers(
-        IGenerated_code_dag::IMaterial_instance const *inst,
-        IRule_matcher_event                           *event_handler,
-        const mi::mdl::Distiller_options              *options,
-        mi::Sint32                                    &error) MDL_FINAL;
+    IMaterial_instance *normalize_mixers(
+        IMaterial_instance const         *inst,
+        IRule_matcher_event              *event_handler,
+        mi::mdl::Distiller_options const *options,
+        mi::Sint32                       &error) MDL_FINAL;
 
     /// Immediately deletes this distiller plugin API
     void release() const MDL_FINAL;
@@ -526,15 +533,15 @@ private:
     /// Retrieve the allocator.
     IAllocator *get_allocator() const { return m_alloc; }
 
-    void import_attributes(IGenerated_code_dag::IMaterial_instance const *inst);
+    void import_attributes(IMaterial_instance const *inst);
 
-    void pprint_attributes(IGenerated_code_dag::IMaterial_instance const *inst,
+    void pprint_attributes(IMaterial_instance const *inst,
                            DAG_node const *node,
                            int level, std::ostream &outs);
-    void pprint_node(IGenerated_code_dag::IMaterial_instance const *inst,
+    void pprint_node(IMaterial_instance const *inst,
                      DAG_node const *node,
                      int level, std::ostream &outs);
-    void pprint_material(IGenerated_code_dag::IMaterial_instance const *inst, std::ostream &outs);
+    void pprint_material(IMaterial_instance const *inst, std::ostream &outs);
 
 private:
     /// The allocator.
@@ -593,6 +600,10 @@ private:
 
     Attr_map m_attribute_map;
 };
+
+IDistiller_plugin_api *create_distiller_plugin_api(
+    IMaterial_instance const *instance,
+    ICall_name_resolver      *call_resolver);
 
 } // mdl
 } // mi

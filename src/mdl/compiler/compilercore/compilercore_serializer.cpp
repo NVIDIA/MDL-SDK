@@ -681,21 +681,9 @@ void Factory_serializer::dfs_type(IType const *type, bool is_child_type)
         {
             IType_struct const *s_type = cast<IType_struct>(type);
 
-            for (int i = 0, n = s_type->get_field_count(); i < n; ++i) {
-                IType const   *f_type;
-                ISymbol const *f_sym;
-
-                s_type->get_field(i, f_type, f_sym);
-
-                dfs_type(f_type);
-            }
-            for (int i = 0, n = s_type->get_method_count(); i < n; ++i) {
-                IType_function const *m_type;
-                ISymbol const        *m_sym;
-
-                s_type->get_method(i, m_type, m_sym);
-
-                dfs_type(m_type);
+            for (size_t i = 0, n = s_type->get_field_count(); i < n; ++i) {
+                IType_struct::Field const *field = s_type->get_field(i);
+                dfs_type(field->get_type());
             }
             push_type(s_type);
         }
@@ -1518,6 +1506,25 @@ void Factory_serializer::write_value(IValue const *v)
     }
 }
 
+// Write the given category.
+void Factory_serializer::write_category(IStruct_category const *cat)
+{
+    IStruct_category::Predefined_id pid = cat->get_predefined_id();
+    if (pid == IStruct_category::CID_USER) {
+        // a user defined struct
+        write_bool(false);
+
+        // write the category name
+        ISymbol const *sym = cat->get_symbol();
+        Tag_t sym_tag = get_symbol_tag(sym);
+        write_encoded_tag(sym_tag);
+    } else {
+        // a predefined category
+        write_bool(true);
+        write_encoded_tag(pid);
+    }
+}
+
 // Write the given type.
 void Factory_serializer::write_type(IType const *type)
 {
@@ -1609,21 +1616,19 @@ void Factory_serializer::write_type(IType const *type)
 
                 DOUT(("type name %u (%s)\n", unsigned(sym_tag), sym->get_name()));
 
-                int n = e_type->get_value_count();
-                write_unsigned(n);
+                size_t n = e_type->get_value_count();
+                write_encoded_tag(n);
 
-                DOUT(("#values %d\n", n));
+                DOUT(("#values %u\n", unsigned(n)));
                 INC_SCOPE();
 
-                for (int i = 0; i < n; ++i) {
-                    ISymbol const *sym;
-                    int           code;
-
-                    e_type->get_value(i, sym, code);
+                for (size_t i = 0; i < n; ++i) {
+                    IType_enum::Value const *val = e_type->get_value(i);
+                    ISymbol const *sym = val->get_symbol();
 
                     Tag_t sym_tag = get_symbol_tag(sym);
                     write_encoded_tag(sym_tag);
-                    write_int(code);
+                    write_int(val->get_code());
 
                     DOUT(("value sym_tag %u code %d (%s)\n",
                         unsigned(sym_tag), code, sym->get_name()));
@@ -1728,10 +1733,20 @@ void Factory_serializer::write_type(IType const *type)
                 // a user defined struct
                 write_bool(false);
 
+                write_bool(s_type->is_declarative());
+
                 // write the struct name
                 ISymbol const *sym = s_type->get_symbol();
                 Tag_t sym_tag = get_symbol_tag(sym);
                 write_encoded_tag(sym_tag);
+
+                IStruct_category const *cat = s_type->get_category();
+                if (cat) {
+                    write_bool(true);
+                    write_category(cat);
+                } else {
+                    write_bool(false);
+                }
 
                 DOUT(("name %u (%s)\n", unsigned(sym_tag), sym->get_name()));
 
@@ -1744,42 +1759,16 @@ void Factory_serializer::write_type(IType const *type)
 
                 // write the fields
                 for (int i = 0; i < n; ++i) {
-                    IType const   *f_type;
-                    ISymbol const *f_sym;
+                    IType_struct::Field const *field = s_type->get_field(i);
+                    ISymbol const             *f_sym = field->get_symbol();
 
-                    s_type->get_field(i, f_type, f_sym);
-
-                    Tag_t f_type_tag = get_type_tag(f_type);
+                    Tag_t f_type_tag = get_type_tag(field->get_type());
                     write_encoded_tag(f_type_tag);
                     Tag_t f_sym_tag = get_symbol_tag(f_sym);
                     write_encoded_tag(f_sym_tag);
 
                     DOUT(("field %u %u (%s)\n",
                         unsigned(f_type_tag), unsigned(f_sym_tag), f_sym->get_name()));
-                }
-                DEC_SCOPE();
-
-                // write the method count
-                n = s_type->get_method_count();
-                write_unsigned(n);
-
-                DOUT(("#methods %d\n", n));
-                INC_SCOPE();
-
-                // write the methods
-                for (int i = 0; i < n; ++i) {
-                    IType_function const *m_type;
-                    ISymbol const        *m_sym;
-
-                    s_type->get_method(i, m_type, m_sym);
-
-                    Tag_t m_type_tag = get_type_tag(m_type);
-                    write_encoded_tag(m_type_tag);
-                    Tag_t m_sym_tag = get_symbol_tag(m_sym);
-                    write_encoded_tag(m_sym_tag);
-
-                    DOUT(("method %u %u (%s)\n",
-                        unsigned(m_type_tag), unsigned(m_sym_tag), m_sym->get_name()));
                 }
                 DEC_SCOPE();
             } else {
@@ -1902,6 +1891,26 @@ void Module_serializer::write_decl(
         DEC_SCOPE();
         break;
 
+    case IDeclaration::DK_STRUCT_CATEGORY:
+        DOUT(("Struct_category_decl\n"));
+        INC_SCOPE();
+        {
+            IDeclaration_struct_category const *a_decl = cast<IDeclaration_struct_category>(decl);
+
+            ISimple_name const *cat_name = a_decl->get_name();
+            write_name(cat_name);
+
+            IDefinition const *def = a_decl->get_definition();
+            Tag_t def_tag = get_definition_tag(def);
+            write_encoded_tag(def_tag);
+            DOUT(("def %u\n", unsigned(def_tag)));
+
+            IAnnotation_block const *annos = a_decl->get_annotations();
+            write_annos(annos);
+        }
+        DEC_SCOPE();
+        break;
+
     case IDeclaration::DK_CONSTANT:
         DOUT(("Const_decl\n"));
         INC_SCOPE();
@@ -1955,6 +1964,20 @@ void Module_serializer::write_decl(
             ISimple_name const *sname = s_decl->get_name();
             write_name(sname);
 
+            IQualified_name const* cname = s_decl->get_struct_category_name();
+            if (cname) {
+                write_bool(true);
+                write_name(cname);
+
+                IDefinition const* cat_def = s_decl->get_struct_category_definition();
+                Tag_t cat_def_tag = get_definition_tag(cat_def);
+                write_encoded_tag(cat_def_tag);
+                DOUT(("cat_def %u\n", unsigned(cat_def_tag)));
+            } else {
+                write_bool(false);
+            }
+            write_bool(s_decl->is_declarative());
+
             IAnnotation_block const *annos = s_decl->get_annotations();
             write_annos(annos);
 
@@ -2007,12 +2030,12 @@ void Module_serializer::write_decl(
             write_encoded_tag(def_tag);
             DOUT(("def %u\n", unsigned(def_tag)));
 
-            int v_count = e_decl->get_value_count();
-            write_unsigned(v_count);
-            DOUT(("#values %d\n", v_count));
+            size_t v_count = e_decl->get_value_count();
+            write_encoded_tag(v_count);
+            DOUT(("#values %u\n", unsigned(v_count)));
             INC_SCOPE();
 
-            for (int i = 0; i < v_count; ++i) {
+            for (size_t i = 0; i < v_count; ++i) {
                 ISimple_name const *sname = e_decl->get_value_name(i);
                 write_name(sname);
 
@@ -2092,6 +2115,7 @@ void Module_serializer::write_decl(
             } else {
                 write_bool(false);
             }
+            write_bool(f_decl->is_declarative());
 
             IAnnotation_block const *annos = f_decl->get_annotations();
             write_annos(annos);
@@ -2339,16 +2363,16 @@ void Module_serializer::write_expr(IExpression const *expr)
     IExpression::Kind kind = expr->get_kind();
     write_unsigned(kind);
 
-    int s_count = expr->get_sub_expression_count();
+    size_t s_count = expr->get_sub_expression_count();
     if (kind == IExpression::EK_CALL) {
         // for calls, dump only the callee reference
         s_count = 1;
     }
-    write_unsigned(s_count);
-    DOUT(("#sub-expr %d\n", s_count));
+    write_size_t(s_count);
+    DOUT(("#sub-expr %u\n", unsigned(s_count)));
     INC_SCOPE();
 
-    for (int i = 0; i < s_count; ++i) {
+    for (size_t i = 0; i < s_count; ++i) {
         IExpression const *child = expr->get_sub_expression(i);
         write_expr(child);
     }
@@ -2456,11 +2480,11 @@ void Module_serializer::write_expr(IExpression const *expr)
         {
             IExpression_let const *l_expr = cast<IExpression_let>(expr);
 
-            int d_count = l_expr->get_declaration_count();
-            write_unsigned(d_count);
-            DOUT(("#decls %d\n", d_count));
+            size_t d_count = l_expr->get_declaration_count();
+            write_size_t(d_count);
+            DOUT(("#decls %u\n", unsigned(d_count)));
 
-            for (int i = 0; i < d_count; ++i) {
+            for (size_t i = 0; i < d_count; ++i) {
                 IDeclaration const *decl = l_expr->get_declaration(i);
                 write_decl(decl);
             }
@@ -2570,12 +2594,12 @@ void Module_serializer::write_stmt(IStatement const *stmt)
             DOUT(("Block_stmt\n"));
             IStatement_compound const *c_stmt = cast<IStatement_compound>(stmt);
 
-            int s_count = c_stmt->get_statement_count();
-            write_unsigned(s_count);
-            DOUT(("#stmts %d\n", s_count));
+            size_t s_count = c_stmt->get_statement_count();
+            write_size_t(s_count);
+            DOUT(("#stmts %u\n", unsigned(s_count)));
             INC_SCOPE();
 
-            for (int i = 0; i < s_count; ++i) {
+            for (size_t i = 0; i < s_count; ++i) {
                 IStatement const *child = c_stmt->get_statement(i);
                 write_stmt(child);
             }
@@ -2639,12 +2663,12 @@ void Module_serializer::write_stmt(IStatement const *stmt)
                 write_bool(false);
             }
 
-            int s_count = c_stmt->get_statement_count();
-            write_unsigned(s_count);
-            DOUT(("#stmts %d\n", s_count));
+            size_t s_count = c_stmt->get_statement_count();
+            write_size_t(s_count);
+            DOUT(("#stmts %u\n", unsigned(s_count)));
             INC_SCOPE();
 
-            for (int i = 0; i < s_count; ++i) {
+            for (size_t i = 0; i < s_count; ++i) {
                 IStatement const *child = c_stmt->get_statement(i);
                 write_stmt(child);
             }
@@ -2660,12 +2684,12 @@ void Module_serializer::write_stmt(IStatement const *stmt)
             IExpression const *cond = s_stmt->get_condition();
             write_expr(cond);
 
-            int c_count = s_stmt->get_case_count();
-            write_unsigned(c_count);
-            DOUT(("#cases %d\n", c_count));
+            size_t c_count = s_stmt->get_case_count();
+            write_size_t(c_count);
+            DOUT(("#cases %u\n", unsigned(c_count)));
             INC_SCOPE();
 
-            for (int i = 0; i < c_count; ++i) {
+            for (size_t i = 0; i < c_count; ++i) {
                 IStatement const *child = s_stmt->get_case(i);
                 write_stmt(child);
             }
@@ -2951,6 +2975,27 @@ Factory_deserializer::Factory_deserializer(
 {
 }
 
+// Read a category.
+IStruct_category const *Factory_deserializer::read_category(Type_factory &tf)
+{
+    IStruct_category const *cat = nullptr;
+    if (read_bool()) {
+        // a predefined type
+        IStruct_category::Predefined_id pid = IStruct_category::Predefined_id(read_encoded_tag());
+        cat = tf.get_predefined_struct_category(pid);
+    } else {
+        // a user defined category
+
+        // read the category name
+        Tag_t sym_tag = read_encoded_tag();
+        ISymbol const *sym = get_symbol(sym_tag);
+
+        cat = tf.create_struct_category(sym);
+    }
+
+    return cat;
+}
+
 // Read a type.
 IType const *Factory_deserializer::read_type(Type_factory &tf)
 {
@@ -3019,7 +3064,7 @@ IType const *Factory_deserializer::read_type(Type_factory &tf)
 
     case IType::TK_ENUM:
         {
-            IType_enum *e_type = NULL;
+            IType_enum const *e_type = NULL;
 
             Tag_t e_type_tag = read_encoded_tag();
 
@@ -3038,24 +3083,25 @@ IType const *Factory_deserializer::read_type(Type_factory &tf)
 
                 DOUT(("type name %u (%s)\n", unsigned(sym_tag), sym->get_name()));
 
-                e_type = tf.create_enum(sym);
+                size_t n = read_size_t();
 
-                int n = read_unsigned();
-
-                DOUT(("#values %d\n", n));
+                DOUT(("#values %u\n", unsigned(n)));
                 INC_SCOPE();
 
-                for (int i = 0; i < n; ++i) {
+                Small_VLA<IType_enum::Value, 8> values(get_allocator(), n);
+                for (size_t i = 0; i < n; ++i) {
                     Tag_t         sym_tag = read_encoded_tag();
                     ISymbol const *sym    = get_symbol(sym_tag);
                     int           code    = read_int();
 
-                    e_type->add_value(sym, code);
+                    values[i] = IType_enum::Value(sym, code);
 
                     DOUT(("value sym_tag %u code %d (%s)\n",
                         unsigned(sym_tag), code, sym->get_name()));
                 }
                 DEC_SCOPE();
+
+                e_type = tf.create_enum(sym, values.data(), values.size());
             }
 
             register_type(e_type_tag, e_type);
@@ -3132,7 +3178,7 @@ IType const *Factory_deserializer::read_type(Type_factory &tf)
 
     case IType::TK_STRUCT:
         {
-            IType_struct *s_type = NULL;
+            IType_struct const *s_type = NULL;
 
             Tag_t s_type_tag = read_encoded_tag();
 
@@ -3145,49 +3191,39 @@ IType const *Factory_deserializer::read_type(Type_factory &tf)
             } else {
                 // a user defined type
 
+                bool is_declarative = read_bool();
+
                 // read the struct name
                 Tag_t sym_tag = read_encoded_tag();
                 ISymbol const *sym = get_symbol(sym_tag);
 
+                bool has_cat = read_bool();
+                IStruct_category const *cat = NULL;
+                if (has_cat) {
+                    cat = read_category(tf);
+                }
+
                 DOUT(("name %u (%s)\n", unsigned(sym_tag), sym->get_name()));
 
-                s_type = tf.create_struct(sym);
-
                 // read the field count
-                int n = read_unsigned();
+                size_t n = read_size_t();
 
-                DOUT(("#fields %d\n", n));
+                DOUT(("#fields %u\n", unsigned(n)));
 
+                Small_VLA<IType_struct::Field, 8> fields(get_allocator(), n);
                 // read the fields
-                for (int i = 0; i < n; ++i) {
+                for (size_t i = 0; i < n; ++i) {
                     Tag_t f_type_tag = read_encoded_tag();
-                    IType const   *f_type = get_type(f_type_tag);
+                    IType const *f_type = get_type(f_type_tag);
                     Tag_t f_sym_tag = read_encoded_tag();
-                    ISymbol const *f_sym  = get_symbol(f_sym_tag);
+                    ISymbol const *f_sym = get_symbol(f_sym_tag);
 
-                    s_type->add_field(f_type, f_sym);
+                    fields[i] = IType_struct::Field(f_type, f_sym);
 
                     DOUT(("field %u %u (%s)\n",
                         unsigned(f_type_tag), unsigned(f_sym_tag), f_sym->get_name()));
                 }
-
-                // read the method count
-                n = read_unsigned();
-
-                DOUT(("#methods %d\n", n));
-
-                // read the methods
-                for (int i = 0; i < n; ++i) {
-                    Tag_t m_type_tag = read_encoded_tag();
-                    IType_function const *m_type = cast<IType_function>(get_type(m_type_tag));
-                    Tag_t m_sym_tag = read_encoded_tag();
-                    ISymbol const        *m_sym  = get_symbol(m_sym_tag);
-
-                    s_type->add_method(m_type, m_sym);
-
-                    DOUT(("method %u %u (%s)\n",
-                        unsigned(m_type_tag), unsigned(m_sym_tag), m_sym->get_name()));
-                }
+                s_type = tf.create_struct(is_declarative, sym, cat, fields.data(), fields.size());
             }
 
             register_type(s_type_tag, s_type);
@@ -3596,6 +3632,26 @@ IDeclaration *Module_deserializer::read_decl(Module &mod)
         DEC_SCOPE();
         break;
 
+    case IDeclaration::DK_STRUCT_CATEGORY:
+        DOUT(("Strruct_category_decl\n"));
+        INC_SCOPE();
+        {
+            ISimple_name const      *cat_name = read_sname(mod);
+            IDeclaration_struct_category *c_decl = df->create_struct_category(cat_name, NULL, exported);
+
+            Tag_t def_tag = read_encoded_tag();
+            IDefinition const *def = get_definition(def_tag);
+            c_decl->set_definition(def);
+            DOUT(("def %u\n", unsigned(def_tag)));
+
+            IAnnotation_block const *annos = read_annos(mod);
+            c_decl->set_annotations(annos);
+
+            decl = c_decl;
+        }
+        DEC_SCOPE();
+        break;
+
     case IDeclaration::DK_CONSTANT:
         DOUT(("Const_decl\n"));
         INC_SCOPE();
@@ -3637,15 +3693,26 @@ IDeclaration *Module_deserializer::read_decl(Module &mod)
         DOUT(("Struct_decl\n"));
         INC_SCOPE();
         {
-            ISimple_name const      *sname = read_sname(mod);
+            ISimple_name const* sname = read_sname(mod);
+            IQualified_name const* cname = nullptr;
+            IDefinition const* cat_def = nullptr;
+            bool category_present = read_bool();
+            if (category_present) {
+                // Read struct category definition and set it below.
+                cname = read_qname(mod);
+                Tag_t def_tag = read_encoded_tag();
+                cat_def = get_definition(def_tag);
+            }
+            bool is_declarative = read_bool();
             IAnnotation_block const *annos = read_annos(mod);
-
-            IDeclaration_type_struct *s_decl = df->create_struct(sname, annos, exported);
+            IDeclaration_type_struct *s_decl = df->create_struct(is_declarative, sname, cname, annos, exported);
 
             Tag_t def_tag = read_encoded_tag();
             IDefinition const *def = get_definition(def_tag);
             s_decl->set_definition(def);
             DOUT(("def %u\n", unsigned(def_tag)));
+
+            s_decl->set_struct_category_definition(cat_def);
 
             int f_count = read_unsigned();
             DOUT(("#fields %d\n", f_count));
@@ -3752,11 +3819,12 @@ IDeclaration *Module_deserializer::read_decl(Module &mod)
                 stmt = read_stmt(mod);
                 DEC_SCOPE();
             }
+            bool is_declarative = read_bool();
 
             IAnnotation_block const *annos = read_annos(mod);
 
             IDeclaration_function *f_decl = df->create_function(
-                tname, ret_annos, sname, is_pr, stmt, annos, exported);
+                is_declarative, tname, ret_annos, sname, is_pr, stmt, annos, exported);
 
             Tag_t def_tag = read_encoded_tag();
             IDefinition const *def = get_definition(def_tag);
@@ -4016,12 +4084,12 @@ IExpression *Module_deserializer::read_expr(Module &mod)
 
     IExpression::Kind kind = IExpression::Kind(read_unsigned());
 
-    int s_count = read_unsigned();
-    DOUT(("#sub-expr %d\n", s_count));
+    size_t s_count = read_size_t();
+    DOUT(("#sub-expr %u\n", unsigned(s_count)));
     INC_SCOPE();
 
     VLA<IExpression const *> children(m_alloc, s_count);
-    for (int i = 0; i < s_count; ++i) {
+    for (size_t i = 0; i < s_count; ++i) {
         children[i] = read_expr(mod);
     }
     DEC_SCOPE();
@@ -4129,10 +4197,10 @@ IExpression *Module_deserializer::read_expr(Module &mod)
         {
             IExpression_let *l_expr = ef->create_let(children[0]);
 
-            int d_count = read_unsigned();
-            DOUT(("#decls %d\n", d_count));
+            size_t d_count = read_size_t();
+            DOUT(("#decls %u\n", unsigned(d_count)));
 
-            for (int i = 0; i < d_count; ++i) {
+            for (size_t i = 0; i < d_count; ++i) {
                 IDeclaration const *decl = read_decl(mod);
 
                 l_expr->add_declaration(decl);
@@ -4252,11 +4320,11 @@ IStatement const *Module_deserializer::read_stmt(Module &mod)
             DOUT(("Block_stmt\n"));
             IStatement_compound *c_stmt = sf->create_compound();
 
-            int s_count = read_unsigned();
-            DOUT(("#stmts %d\n", s_count));
+            size_t s_count = read_size_t();
+            DOUT(("#stmts %u\n", unsigned(s_count)));
             INC_SCOPE();
 
-            for (int i = 0; i < s_count; ++i) {
+            for (unsigned i = 0; i < s_count; ++i) {
                 IStatement const *child = read_stmt(mod);
 
                 c_stmt->add_statement(child);
@@ -4309,11 +4377,11 @@ IStatement const *Module_deserializer::read_stmt(Module &mod)
 
             IStatement_case *c_stmt = sf->create_switch_case(label);
 
-            int s_count = read_unsigned();
-            DOUT(("#stmts %d\n", s_count));
+            size_t s_count = read_size_t();
+            DOUT(("#stmts %u\n", unsigned(s_count)));
             INC_SCOPE();
 
-            for (int i = 0; i < s_count; ++i) {
+            for (size_t i = 0; i < s_count; ++i) {
                 IStatement const *child = read_stmt(mod);
 
                 c_stmt->add_statement(child);
@@ -4329,11 +4397,11 @@ IStatement const *Module_deserializer::read_stmt(Module &mod)
             IExpression const *cond   = read_expr(mod);
             IStatement_switch *s_stmt = sf->create_switch(cond);
 
-            int c_count = read_unsigned();
-            DOUT(("#cases %d\n", c_count));
+            size_t c_count = read_size_t();
+            DOUT(("#cases %u\n", unsigned(c_count)));
             INC_SCOPE();
 
-            for (int i = 0; i < c_count; ++i) {
+            for (size_t i = 0; i < c_count; ++i) {
                 IStatement const *child = read_stmt(mod);
 
                 s_stmt->add_case(child);

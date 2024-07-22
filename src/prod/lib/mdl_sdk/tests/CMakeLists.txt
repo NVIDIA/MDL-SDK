@@ -42,6 +42,7 @@ function(CREATE_UNIT_TEST_TEMPLATE)
             ../../neuray/${CREATE_UNIT_TEST_TEMPLATE_NAME}.cpp
         HEADERS
             ../../neuray/test_shared.h
+            ../../neuray/test_shared_mdl.h
         DEPENDS
             boost
         LINK_LIBRARIES
@@ -64,18 +65,22 @@ endfunction()
 # add unit tests using the template
 create_unit_test_template(NAME test_class_factory)
 create_unit_test_template(NAME test_db_elements)
+create_unit_test_template(NAME test_icompiled_material)
 create_unit_test_template(NAME test_idebug_configuration)
 create_unit_test_template(NAME test_ifactory)
 create_unit_test_template(NAME test_i18n)
 create_unit_test_template(NAME test_iimage)
 create_unit_test_template(NAME test_ilogging_configuration)
 create_unit_test_template(NAME test_imdl_configuration)
-create_unit_test_template(NAME test_imdl_module)
+create_unit_test_template(NAME test_imodule_advanced)
+create_unit_test_template(NAME test_imodule_basics)
+create_unit_test_template(NAME test_imodule_creation)
 create_unit_test_template(NAME test_ineuray)
+create_unit_test_template(NAME test_iscope)
 create_unit_test_template(NAME test_itransaction)
+create_unit_test_template(NAME test_mdl_decl_struct)
 create_unit_test_template(NAME test_neuray_factory)
 create_unit_test_template(NAME test_set_get)
-create_unit_test_template(NAME test_target_materials)
 create_unit_test_template(NAME test_types)
 create_unit_test_template(NAME test_types_array)
 create_unit_test_template(NAME test_types_compound)

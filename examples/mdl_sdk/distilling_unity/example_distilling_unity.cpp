@@ -320,6 +320,8 @@ mi::neuraylib::IFunction_call* create_material_instance(
 // Compiles the given material instance in the given compilation modes and stores
 // it in the DB.
 mi::neuraylib::ICompiled_material* compile_material_instance(
+    mi::neuraylib::IMdl_factory *mdl_factory,
+    mi::neuraylib::ITransaction *transaction,
     const mi::neuraylib::IFunction_call* material_instance,
     mi::neuraylib::IMdl_execution_context* context,
     bool class_compilation)
@@ -327,6 +329,14 @@ mi::neuraylib::ICompiled_material* compile_material_instance(
     mi::Uint32 flags = class_compilation
         ? mi::neuraylib::IMaterial_instance::CLASS_COMPILATION
         : mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS;
+
+    // convert to target type SID_MATERIAL
+    mi::base::Handle<mi::neuraylib::IType_factory> tf(
+        mdl_factory->create_type_factory(transaction));
+    mi::base::Handle<const mi::neuraylib::IType> standard_material_type(
+        tf->get_predefined_struct(mi::neuraylib::IType_struct::SID_MATERIAL));
+    context->set_option("target_type", standard_material_type.get());
+
     mi::base::Handle<const mi::neuraylib::IMaterial_instance> material_instance2(
         material_instance->get_interface<const mi::neuraylib::IMaterial_instance>());
     mi::neuraylib::ICompiled_material* compiled_material =
@@ -1738,7 +1748,12 @@ int MAIN_UTF8(int argc, char* argv[])
 
             // Compile the material instance
             mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
-                compile_material_instance(instance.get(), context.get(), false));
+                compile_material_instance(
+                    mdl_factory.get(),
+                    transaction.get(),
+                    instance.get(),
+                    context.get(),
+                    false));
 
             // Acquire distilling api used for material distilling and baking
             mi::base::Handle<mi::neuraylib::IMdl_distiller_api> distilling_api(

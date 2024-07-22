@@ -63,8 +63,6 @@ public:
         const char* module_name,
         const mi::mdl::IModule* mdl_module);
 
-    ~Mdl_module_transformer_impl();
-
     // public API methods
 
     mi::Sint32 upgrade_mdl_version(

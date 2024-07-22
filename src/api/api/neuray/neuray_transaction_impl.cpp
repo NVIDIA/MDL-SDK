@@ -484,14 +484,13 @@ mi::IArray* Transaction_impl::list_elements(
             nullptr, "String[]", 0, nullptr));
 
     // start DFS post-order graph traversal at root_tag
-    std::set<DB::Tag> tags_seen;
+    robin_hood::unordered_set<DB::Tag> tags_seen;
     tags_seen.insert( root_tag); // not really needed if the graph is acyclic
     list_elements_internal(
         root_tag, name_pattern ? &name_regex : nullptr, type_names ? &class_ids : nullptr,
         result.get(), tags_seen);
 
-    result->retain();
-    return result.get();
+    return result.extract();
 }
 
 mi::Sint32 Transaction_impl::get_privacy_level( const char* name) const
@@ -646,8 +645,8 @@ Expression_factory* Transaction_impl::get_expression_factory()
 void Transaction_impl::check_no_referenced_elements( const char* committed_or_aborted)
 {
     mi::base::Lock::Block block( &m_elements_lock);
-    for( Elements::const_iterator it = m_elements.begin(); it != m_elements.end(); ++it) {
-        DB::Tag tag = (*it)->get_tag();
+    for( auto m_element : m_elements) {
+        DB::Tag tag = m_element->get_tag();
         const char* name = m_db_transaction->tag_to_name( tag);
         std::string s;
         if( name) {
@@ -669,7 +668,7 @@ void Transaction_impl::list_elements_internal(
     const std::wregex* name_regex,
     const std::set<SERIAL::Class_id>* class_ids,
     mi::IDynamic_array* result,
-    std::set<DB::Tag>& tags_seen) const
+    robin_hood::unordered_set<DB::Tag>& tags_seen) const
 {
     // Skip DB elements that have not been registered with the API's class factory.
     SERIAL::Class_id class_id = m_class_factory->get_class_id( this, tag);
@@ -688,10 +687,10 @@ void Transaction_impl::list_elements_internal(
     element->get_references( &references);
 
     // call recursively for all references not yet in tags_seen
-    for( DB::Tag_set::const_iterator it = references.begin(); it != references.end(); ++it)
-        if( tags_seen.find( *it) == tags_seen.end()) {
-            tags_seen.insert( *it);
-            list_elements_internal( *it, name_regex, class_ids, result, tags_seen);
+    for( auto reference : references)
+        if( tags_seen.find( reference) == tags_seen.end()) {
+            tags_seen.insert( reference);
+            list_elements_internal( reference, name_regex, class_ids, result, tags_seen);
         }
 
     // skip tag if it has the wrong class ID

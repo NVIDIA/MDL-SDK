@@ -74,12 +74,12 @@ export material gun_metal (
         anno::display_name("Particle Size"), 
         anno::soft_range(0.0, 1.0),
         anno::description("The size of the particles in millimeters. If the particles don't appear "
-		"at all, check whether you are using the correct units in your scene. The materials is built to "
-		"use meters as scene unit")
+                "at all, check whether you are using the correct units in your scene. The materials is built to "
+                "use meters as scene unit")
     ]]
 ) [[ 
     anno::copyright_notice (
-    "Copyright 2023 NVIDIA Corporation. All rights reserved."),
+    "Copyright 2024 NVIDIA Corporation. All rights reserved."),
     anno::author("NVIDIA corporation"),
     anno::display_name("Gun Metal")
 ]] = let
@@ -88,12 +88,12 @@ export material gun_metal (
     float flake_intensity           = .8;
     float flake_roughness           = .3;
     float flake_bumpiness           = .25;
-	
-	// Scaling the particle size parameters to give the right average size of
-	// the particles in the render
-	uniform float flake_scale  = particle_size * 0.0008;
-	
-	float flake_amount_2 = math::lerp(0.2,0.6,flake_amount);
+        
+        // Scaling the particle size parameters to give the right average size of
+        // the particles in the render
+        uniform float flake_scale  = particle_size * 0.0008;
+        
+        float flake_amount_2 = math::lerp(0.2,0.6,flake_amount);
     
     base::texture_coordinate_info uvw = base::coordinate_source(coordinate_system: base::texture_coordinate_object);
 

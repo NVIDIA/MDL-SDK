@@ -276,7 +276,7 @@ void Encapsulate_tool::translate_container_error(
                 .add(file_name));
             return;
         }
-        // fall-through
+        MDL_FALLTHROUGH
     case EC_INVALID_CONTAINER:
         error(
             MDLE_INVALID_MDLE,

@@ -42,6 +42,7 @@ class IArgument_named;
 class IArgument_positional;
 class IDeclaration;
 class IDeclaration_annotation;
+class IDeclaration_struct_category;
 class IDeclaration_constant;
 class IDeclaration_function;
 class IDeclaration_module;
@@ -213,6 +214,9 @@ public:
     virtual bool pre_visit(IDeclaration_annotation *anno);
     virtual void post_visit(IDeclaration_annotation *anno);
 
+    virtual bool pre_visit(IDeclaration_struct_category *anno);
+    virtual void post_visit(IDeclaration_struct_category *anno);
+
     virtual bool pre_visit(IDeclaration_constant *con);
     virtual void post_visit(IDeclaration_constant *con);
 
@@ -347,6 +351,7 @@ private:
     void do_type_name(IType_name const *tn);
     void do_parameter(IParameter const *param);
     void do_declaration_annotation(IDeclaration_annotation const *anno);
+    void do_declaration_struct_category(IDeclaration_struct_category const *cat);
     void do_declaration_constant(IDeclaration_constant const *c);
     void do_qualified_name(IQualified_name const *name);
     void do_simple_name(ISimple_name const *name);

@@ -103,6 +103,11 @@ public:
     mi::Sint32 export_canvas(
         const char* filename,
         const mi::neuraylib::ICanvas* canvas,
+        const mi::IMap* export_options) const final;
+
+    mi::Sint32 deprecated_export_canvas(
+        const char* filename,
+        const mi::neuraylib::ICanvas* canvas,
         mi::Uint32 quality,
         bool force_default_gamma) const final;
 
@@ -117,12 +122,6 @@ public:
 
     const mi::IString* frame_uvtile_marker_to_string(
         const char* marker, mi::Size f, mi::Sint32 u, mi::Sint32 v) const final;
-
-    const mi::IString* deprecated_uvtile_string_to_marker(
-        const char* str, const char* marker) const final;
-
-    const mi::IString* deprecated_frame_string_to_marker(
-        const char* str, mi::Size digits) const final;
 
     const mi::IString* get_mdl_module_name(
         const char* filename, mi::neuraylib::IMdl_impexp_api::Search_option option) const final;

@@ -37,7 +37,7 @@ namespace mi {
 namespace mdl {
 namespace glsl {
 
-class Scanner;
+class GLSLKeywordMap;
 
 /// Supported GLSLang versions.
 enum GLSLang_version
@@ -413,6 +413,8 @@ public:
     /// Get the state of a given keyword.
     GLSL_keyword_state keyword(GLSL_keyword k) const;
 
+    /// Register the keyword map for feedback on changed version properties.
+    void register_keywords(GLSLKeywordMap *keywords);
 
     /// Returns true if the GLSLang version requires an explicit #version directive.
     bool needs_explicit_version() const;
@@ -535,6 +537,8 @@ private:
     /// True, if grammar is strict, false if relaxed.
     bool m_strict;
 
+    /// The keyword map once registered.
+    GLSLKeywordMap *m_keywords;
 
     /// Extension behaviors.
     Extension_behavior m_extension_behavior[LAST_EXTENSION + 1];
@@ -545,4 +549,3 @@ private:
 }  // mi
 
 #endif
-

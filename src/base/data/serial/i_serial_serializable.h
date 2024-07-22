@@ -62,7 +62,7 @@ class Serializable : public MI::MEM::Allocatable
     /// \param serializer serialize to this serializer
     /// \return pointer behind itself
     virtual const Serializable* serialize(
-	Serializer* serializer) const = 0;
+        Serializer* serializer) const = 0;
 
     /// This will deserialize the object from the given deserializer including all sub elements
     /// pointed to but serialized together with this object. The function must return a pointer
@@ -70,7 +70,7 @@ class Serializable : public MI::MEM::Allocatable
     /// \param deserializer deserialize from here
     /// \return pointer behind itself
     virtual Serializable* deserialize(
-	Deserializer* deserializer) = 0;
+        Deserializer* deserializer) = 0;
 
     /// Optional function to dump the contents of the element for debugging purposes to stdout.
     virtual void dump() const {}
@@ -93,7 +93,7 @@ public:
     /// is derived from Serializable.
     /// \param class_id Class identifier of the class to be created
     virtual Serializable* serializable_factory(
-	Class_id class_id) = 0;
+        Class_id class_id) = 0;
 };
 
 }

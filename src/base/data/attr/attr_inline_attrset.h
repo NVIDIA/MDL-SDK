@@ -46,7 +46,7 @@ inline size_t Attribute_set::size() const
 // be more correct.
 inline bool get_bool_attrib(
     const Attribute_set& attr_set,
-    Attribute_id id)	// which flag?
+    Attribute_id id)    // which flag?
 {
     const Attribute* attr = attr_set.lookup(id);
     if (attr)
@@ -60,7 +60,7 @@ inline bool get_bool_attrib(
 // that during inheritance causes parent values to override child values.
 inline Attribute_propagation get_override(
     const Attribute_set& attr_set,
-    Attribute_id id)	// which flag?
+    Attribute_id id)    // which flag?
 {
     const Attribute* attr = attr_set.lookup(id);
     // you shouldn't ask this for non-existing attributes
@@ -115,8 +115,8 @@ inline SERIAL::Class_id Attribute_set::get_class_id() const
 //
 
 inline void swap(
-    Attribute_set &one,		// the one
-    Attribute_set &other) 	// the other
+    Attribute_set &one,         // the one
+    Attribute_set &other)       // the other
 {
     one.swap(other);
 }

@@ -47,6 +47,8 @@
 #include <io/scene/mdl_elements/mdl_elements_utilities.h>
 #include <mdl/compiler/compilercore/compilercore_positions.h>
 
+#include <utility>
+
 namespace MI {
 
 namespace NEURAY {
@@ -578,9 +580,9 @@ bool Core_mdl_resource_element_impl::get_resource_hash( size_t i, unsigned char 
 
 Core_mdl_resource_set_impl::Core_mdl_resource_set_impl(
     mi::neuraylib::IMdl_resolved_resource* resolved_resource,
-    const std::map<size_t, size_t>& frame_number_to_id)
+    std::map<size_t, size_t> frame_number_to_id)
   : m_resolved_resource( resolved_resource, mi::base::DUP_INTERFACE),
-    m_frame_number_to_id( frame_number_to_id)
+    m_frame_number_to_id( std::move( frame_number_to_id))
 {
 }
 

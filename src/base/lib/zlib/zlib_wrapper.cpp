@@ -99,4 +99,4 @@ int get_z_verbose()
 #endif // DEBUG    
 }
 
-}}	// namespace MI::ZLIB
+}}      // namespace MI::ZLIB

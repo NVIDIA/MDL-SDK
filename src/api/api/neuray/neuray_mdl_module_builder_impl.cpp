@@ -32,15 +32,18 @@
 
 #include "pch.h"
 
+#include "neuray_class_factory.h"
 #include "neuray_mdl_module_builder_impl.h"
 
+#include <memory>
+
+#include <mi/neuraylib/iarray.h>
 #include <mi/neuraylib/inumber.h>
 #include <base/data/db/i_db_transaction.h>
 #include <base/util/string_utils/i_string_utils.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module_builder.h>
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
 
-#include "neuray_array_impl.h"
 #include "neuray_expression_impl.h"
 #include "neuray_mdl_execution_context_impl.h"
 #include "neuray_transaction_impl.h"
@@ -60,7 +63,7 @@ Mdl_module_builder_impl::Mdl_module_builder_impl(
     MDL::Execution_context default_context;
     MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
 
-    Transaction_impl* transaction_impl
+    auto* transaction_impl
         = static_cast<Transaction_impl*>( transaction);
     m_db_transaction = transaction_impl->get_db_transaction();
     m_db_transaction->pin();
@@ -70,13 +73,13 @@ Mdl_module_builder_impl::Mdl_module_builder_impl(
     mi::mdl::IMDL::MDL_version max_mdl_module_version
         = MDL::convert_mdl_version( max_module_version);
 
-    m_impl.reset( new MDL::Mdl_module_builder(
+    m_impl = std::make_unique<MDL::Mdl_module_builder>(
         m_db_transaction,
         module_name,
         min_mdl_module_version,
         max_mdl_module_version,
         /*export_to_db*/ true,
-        context_impl));
+        context_impl);
 }
 
 Mdl_module_builder_impl::~Mdl_module_builder_impl()
@@ -91,6 +94,7 @@ mi::Sint32 Mdl_module_builder_impl::add_variant(
     const mi::neuraylib::IAnnotation_block* annotations,
     const mi::neuraylib::IAnnotation_block* return_annotations,
     bool is_exported,
+    bool is_declarative,
     mi::neuraylib::IMdl_execution_context* context)
 {
     MDL::Execution_context default_context;
@@ -122,18 +126,21 @@ mi::Sint32 Mdl_module_builder_impl::add_variant(
         int_annotations.get(),
         int_return_annotations.get(),
         is_exported,
+        is_declarative,
         context_impl);
 }
 
 mi::Sint32 Mdl_module_builder_impl::add_function(
     const char* name,
     const mi::neuraylib::IExpression* body,
+    const mi::neuraylib::IExpression_list* temporaries,
     const mi::neuraylib::IType_list* parameters,
     const mi::neuraylib::IExpression_list* defaults,
     const mi::neuraylib::IAnnotation_list* parameter_annotations,
     const mi::neuraylib::IAnnotation_block* annotations,
     const mi::neuraylib::IAnnotation_block* return_annotations,
     bool is_exported,
+    bool is_declarative,
     mi::neuraylib::IType::Modifier frequency_qualifier,
     mi::neuraylib::IMdl_execution_context* context)
 {
@@ -147,6 +154,8 @@ mi::Sint32 Mdl_module_builder_impl::add_function(
 
     mi::base::Handle<const MDL::IExpression> int_body(
         get_internal_expression( body));
+    mi::base::Handle<const MDL::IExpression_list> int_temporaries(
+        get_internal_expression_list( temporaries));
     mi::base::Handle<const MDL::IType_list> int_parameters(
         get_internal_type_list( parameters));
     mi::base::Handle<const MDL::IExpression_list> int_defaults(
@@ -157,18 +166,20 @@ mi::Sint32 Mdl_module_builder_impl::add_function(
         get_internal_annotation_block( annotations));
     mi::base::Handle<const MDL::IAnnotation_block> int_return_annotations(
         get_internal_annotation_block( return_annotations));
-    MDL::IType::Modifier int_frequency_modifier
+    auto int_frequency_modifier
         = static_cast<MDL::IType::Modifier>( ext_modifiers_to_int_modifiers( frequency_qualifier));
 
     return m_impl->add_function(
         name,
         int_body.get(),
+        int_temporaries.get(),
         int_parameters.get(),
         int_defaults.get(),
         int_parameter_annotations.get(),
         int_annotations.get(),
         int_return_annotations.get(),
         is_exported,
+        is_declarative,
         int_frequency_modifier,
         context_impl);
 }
@@ -204,6 +215,30 @@ mi::Sint32 Mdl_module_builder_impl::add_annotation(
         int_parameters.get(),
         int_defaults.get(),
         int_parameter_annotations.get(),
+        int_annotations.get(),
+        is_exported,
+        context_impl);
+}
+
+mi::Sint32 Mdl_module_builder_impl::add_struct_category(
+    const char* name,
+    const mi::neuraylib::IAnnotation_block* annotations,
+    bool is_exported,
+    mi::neuraylib::IMdl_execution_context* context)
+{
+    MDL::Execution_context default_context;
+    MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
+
+    if( !name) {
+        add_error_message( context_impl, "Invalid parameters (NULL pointer).", -1);
+        return -1;
+    }
+
+    mi::base::Handle<const MDL::IAnnotation_block> int_annotations(
+        get_internal_annotation_block( annotations));
+
+    return m_impl->add_struct_category(
+        name,
         int_annotations.get(),
         is_exported,
         context_impl);
@@ -248,6 +283,8 @@ mi::Sint32 Mdl_module_builder_impl::add_struct_type(
     const mi::neuraylib::IAnnotation_list* field_annotations,
     const mi::neuraylib::IAnnotation_block* annotations,
     bool is_exported,
+    bool is_declarative,
+    const mi::neuraylib::IStruct_category* struct_category,
     mi::neuraylib::IMdl_execution_context* context)
 {
     MDL::Execution_context default_context;
@@ -266,6 +303,8 @@ mi::Sint32 Mdl_module_builder_impl::add_struct_type(
         get_internal_annotation_list( field_annotations));
     mi::base::Handle<const MDL::IAnnotation_block> int_annotations(
         get_internal_annotation_block( annotations));
+    mi::base::Handle<const MDL::IStruct_category> int_struct_category(
+        get_internal_struct_category( struct_category));
 
     return m_impl->add_struct_type(
         name,
@@ -274,6 +313,8 @@ mi::Sint32 Mdl_module_builder_impl::add_struct_type(
         int_field_annotations.get(),
         int_annotations.get(),
         is_exported,
+        is_declarative,
+        int_struct_category.get(),
         context_impl);
 }
 
@@ -361,14 +402,15 @@ const mi::IArray* Mdl_module_builder_impl::analyze_uniform(
         return nullptr;
 
     mi::Size n = result.size();
-    mi::base::Handle<mi::IArray> array( new Array_impl( nullptr, "Boolean", n));
+    std::string type_name = "Boolean[" + std::to_string( n) + "]";
+    auto* array = s_class_factory->create_type_instance<mi::IArray>(
+        /*transaction*/ nullptr, type_name.c_str());
     for( mi::Size i = 0; i < n; ++i) {
         mi::base::Handle<mi::IBoolean> element( array->get_element<mi::IBoolean>( i));
         element->set_value( result[i]);
     }
 
-    array->retain();
-    return array.get();
+    return array;
 }
 
 } // namespace NEURAY

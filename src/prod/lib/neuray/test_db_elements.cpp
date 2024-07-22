@@ -68,12 +68,12 @@ void test_texture( mi::neuraylib::IScope* scope)
     mi::base::Handle<mi::neuraylib::IImage> image( transaction->create<mi::neuraylib::IImage>( "Image"));
     MI_CHECK( image.is_valid_interface());
     MI_CHECK_EQUAL( 0, transaction->store( image.get(), "referenced_image_1"));
-    image = 0;
+    image = nullptr;
 
     image = transaction->create<mi::neuraylib::IImage>( "Image");
     MI_CHECK( image.is_valid_interface());
     MI_CHECK_EQUAL( 0, transaction->store( image.get(), "referenced_image_2"));
-    image = 0;
+    image = nullptr;
 
     // test create() and store()
 
@@ -81,35 +81,35 @@ void test_texture( mi::neuraylib::IScope* scope)
     MI_CHECK( texture.is_valid_interface());
     texture->set_image( "referenced_image_1");
     MI_CHECK_EQUAL( 0, transaction->store( texture.get(), "texture_foo"));
-    texture = 0;
+    texture = nullptr;
 
     // test access()
 
     mi::base::Handle<const mi::neuraylib::ITexture> c_texture( transaction->access<mi::neuraylib::ITexture>( "texture_foo"));
     MI_CHECK( c_texture.is_valid_interface());
     MI_CHECK_EQUAL_CSTR( c_texture->get_image(), "referenced_image_1");
-    c_texture = 0;
+    c_texture = nullptr;
 
     // test edit()
 
     mi::base::Handle<mi::neuraylib::ITexture> m_texture( transaction->edit<mi::neuraylib::ITexture>( "texture_foo"));
     MI_CHECK( m_texture.is_valid_interface());
     m_texture->set_image( "referenced_image_2");
-    m_texture = 0;
+    m_texture = nullptr;
 
     // test access() on modified element
 
     c_texture = transaction->access<mi::neuraylib::ITexture>( "texture_foo");
     MI_CHECK( c_texture.is_valid_interface());
     MI_CHECK_EQUAL_CSTR( c_texture->get_image(), "referenced_image_2");
-    c_texture = 0;
+    c_texture = nullptr;
 
     // test edit() on modified element
 
     m_texture = transaction->edit<mi::neuraylib::ITexture>( "texture_foo");
     MI_CHECK( m_texture.is_valid_interface());
     MI_CHECK_EQUAL_CSTR( m_texture->get_image(), "referenced_image_2");
-    m_texture = 0;
+    m_texture = nullptr;
 
     // test concurrent access()'s and edit()'s
 
@@ -119,18 +119,18 @@ void test_texture( mi::neuraylib::IScope* scope)
     c_texture2 = transaction->access<mi::neuraylib::ITexture>( "texture_foo");
     m_texture  = transaction->edit<mi::neuraylib::ITexture>( "texture_foo");
     m_texture2 = transaction->edit<mi::neuraylib::ITexture>( "texture_foo");
-    c_texture  = 0;
-    c_texture2 = 0;
-    m_texture  = 0;
-    m_texture2 = 0;
+    c_texture  = nullptr;
+    c_texture2 = nullptr;
+    m_texture  = nullptr;
+    m_texture2 = nullptr;
     c_texture  = transaction->access<mi::neuraylib::ITexture>( "texture_foo");
     c_texture2 = transaction->access<mi::neuraylib::ITexture>( "texture_foo");
     m_texture  = transaction->edit<mi::neuraylib::ITexture>( "texture_foo");
     m_texture2 = transaction->edit<mi::neuraylib::ITexture>( "texture_foo");
-    m_texture2 = 0;
-    m_texture  = 0;
-    c_texture2 = 0;
-    c_texture  = 0;
+    m_texture2 = nullptr;
+    m_texture  = nullptr;
+    c_texture2 = nullptr;
+    c_texture  = nullptr;
 
     // test copy()
 
@@ -140,12 +140,12 @@ void test_texture( mi::neuraylib::IScope* scope)
     c_texture = transaction->access<mi::neuraylib::ITexture>( "texture_copy");
     MI_CHECK( c_texture.is_valid_interface());
     MI_CHECK_EQUAL_CSTR( c_texture->get_image(), "referenced_image_2");
-    c_texture = 0;
+    c_texture = nullptr;
 
     m_texture = transaction->edit<mi::neuraylib::ITexture>( "texture_copy");
     MI_CHECK( m_texture.is_valid_interface());
     MI_CHECK_EQUAL_CSTR( m_texture->get_image(), "referenced_image_2");
-    m_texture = 0;
+    m_texture = nullptr;
 
     // test remove()
 
@@ -158,12 +158,12 @@ void test_texture( mi::neuraylib::IScope* scope)
     c_texture = transaction->access<mi::neuraylib::ITexture>( "texture_foo");
     MI_CHECK( c_texture.is_valid_interface());
     MI_CHECK_EQUAL_CSTR( "texture_foo", transaction->name_of( c_texture.get()));
-    c_texture = 0;
+    c_texture = nullptr;
 
     m_texture = transaction->edit<mi::neuraylib::ITexture>( "texture_foo");
     MI_CHECK( m_texture.is_valid_interface());
     MI_CHECK_EQUAL_CSTR( "texture_foo", transaction->name_of( m_texture.get()));
-    m_texture = 0;
+    m_texture = nullptr;
 
     // test get_timestamp() / has_changed_since_timestamp()
 
@@ -172,7 +172,7 @@ void test_texture( mi::neuraylib::IScope* scope)
     mi::base::Handle<mi::neuraylib::ITexture> x_texture( transaction->create<mi::neuraylib::ITexture>( "Texture"));
     MI_CHECK( x_texture.is_valid_interface());
     MI_CHECK_EQUAL( 0, transaction->store( x_texture.get(), "texture_bar"));
-    x_texture = 0;
+    x_texture = nullptr;
 
     std::string time_stamp2a = transaction->get_time_stamp();
     std::string time_stamp2b = transaction->get_time_stamp( "texture_bar");
@@ -208,7 +208,7 @@ void test_string( mi::neuraylib::IScope* scope)
     str->set_c_str( "foo");
     MI_CHECK_EQUAL_CSTR( "foo", str->get_c_str());
     MI_CHECK_EQUAL( -4, transaction->store( str.get(), "string_foo"));
-    str = 0;
+    str = nullptr;
 
     MI_CHECK_EQUAL( 0, transaction->commit());
 }
@@ -256,7 +256,7 @@ MI_TEST_AUTO_FUNCTION( test_db_elements )
         run_tests( neuray.get());
     }
 
-    neuray = 0;
+    neuray = nullptr;
     MI_CHECK( unload());
 }
 

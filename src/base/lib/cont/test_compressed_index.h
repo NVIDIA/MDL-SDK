@@ -94,41 +94,41 @@ void test_compressed_push_back()
 
     for (int i = 7; i < 10000; i++)
     {
-	array.push_back(i);
-	MI_REQUIRE_EQUAL(array.size(), size_t(i+1));
-	MI_REQUIRE_EQUAL(array[i], i);
+        array.push_back(i);
+        MI_REQUIRE_EQUAL(array.size(), size_t(i+1));
+        MI_REQUIRE_EQUAL(array[i], i);
     }
 
     array = Compressed_index<int>();
     for (int i = 1000; i < 5000; i++)
-	array.push_back((i * 33555 + 21211) % 65536);
+        array.push_back((i * 33555 + 21211) % 65536);
 
     std::vector<int> array_copy( array.size() );
     for (size_t i = 0; i < array.size(); i++)
-	array_copy[i] = array[i];
+        array_copy[i] = array[i];
 
     array.pack();
     array.shrink();
 
     for (size_t i = 0; i < array.size(); i++)
-	MI_REQUIRE_EQUAL(array[i], array_copy[i] );
+        MI_REQUIRE_EQUAL(array[i], array_copy[i] );
 
     array = Compressed_index<int>(array_copy.begin(), array_copy.end());
 
     for (size_t i = 0; i < array.size(); i++)
-	MI_REQUIRE_EQUAL(array[i], array_copy[i] );
+        MI_REQUIRE_EQUAL(array[i], array_copy[i] );
 
     array = Compressed_index<int>(array.get_min(), array.get_max(),
-	array_copy.begin(), array_copy.end());
+        array_copy.begin(), array_copy.end());
 
     for (size_t i = 0; i < array.size(); i++)
-	MI_REQUIRE_EQUAL(array[i], array_copy[i] );
+        MI_REQUIRE_EQUAL(array[i], array_copy[i] );
 
     array = Compressed_index<int>(0, 10, size_t(10), 9);
 
     MI_REQUIRE_EQUAL(array.size(), 10 );
     for (size_t i = 0; i < array.size(); i++)
-	MI_REQUIRE_EQUAL(array[i], 9 );
+        MI_REQUIRE_EQUAL(array[i], 9 );
 }
 
 #endif

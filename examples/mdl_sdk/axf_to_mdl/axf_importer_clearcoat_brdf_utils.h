@@ -73,8 +73,8 @@ static float refract_cosine(
 {
     const float sintheta_t = eta * sqrt(1.0f - costheta_i * costheta_i);
     return (sintheta_t >= 1.0f)
-	? -1.0f /* TIR */
-	: sqrt(1.0f - sintheta_t * sintheta_t);
+        ? -1.0f /* TIR */
+        : sqrt(1.0f - sintheta_t * sintheta_t);
 }
 
 // Fresnel for unpolarized light

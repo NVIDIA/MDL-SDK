@@ -249,8 +249,7 @@ std::vector<Shader_library> Shader_compiler::compile_shader_library_from_string(
     std::string dump_dir = mi::examples::io::get_working_directory() + "/dxc";
     std::string base_file_name = dump_dir + "/" + filename;
 
-    std::wstring file_name_hlsl = mi::examples::strings::str_to_wstr(
-        dump_dir + "/" + filename + ".hlsl");
+    std::wstring file_name_hlsl = mi::examples::strings::str_to_wstr(base_file_name + ".hlsl");
 
     // we only need this directory when dumping shader files
     if (options->gpu_debug)
@@ -297,10 +296,22 @@ std::vector<Shader_library> Shader_compiler::compile_shader_library_from_string_
         mi::examples::io::get_executable_folder());
     arguments.push_back(L"-I");
     arguments.push_back(inc.c_str());
+    LPCWSTR sm_version = L"lib_6_3";
+
+    // enable features depending on the system
+    if (options->features.HLSL_dynamic_resources)
+    {
+        arguments.push_back(L"-DFEATURE_DYNAMIC_RESOURCES=1");
+        sm_version = L"lib_6_6";
+    }
+    else
+    {
+        arguments.push_back(L"-DFEATURE_DYNAMIC_RESOURCES=0");
+    }
 
     // target profile
     arguments.push_back(L"-T");
-    arguments.push_back(L"lib_6_3");
+    arguments.push_back(sm_version);
 
     // add debug symbols
     if (options->gpu_debug)
@@ -745,18 +756,18 @@ Root_signature::~Root_signature()
 
 // ------------------------------------------------------------------------------------------------
 
-bool Root_signature::register_constants(size_t slot, size_t size_in_byte)
+uint32_t Root_signature::register_constants(size_t slot, size_t space, size_t size_in_byte)
 {
     if (m_is_finalized) {
         log_error("Root signature '" + m_debug_name +
                     "' is already finalized. No further changes possible.", SRC);
-        return false;
+        return static_cast<uint32_t>(-1);
     }
 
     if (m_root_elements_b.find(slot) != m_root_elements_b.end()) {
         log_error("Root signature '" + m_debug_name +
                     "' already contains a constant at slot " + std::to_string(slot) + ".", SRC);
-        return false;
+        return static_cast<uint32_t>(-1);
     }
 
     Element e;
@@ -766,26 +777,102 @@ bool Root_signature::register_constants(size_t slot, size_t size_in_byte)
     m_root_elements_b[slot] = e;
     m_root_parameters.push_back(CD3DX12_ROOT_PARAMETER1());
     m_root_parameters.back().InitAsConstants(
-        static_cast<UINT>(e.size_in_word), static_cast<UINT>(slot));
-    return true;
+        static_cast<UINT>(e.size_in_word), static_cast<UINT>(slot), static_cast<UINT>(space));
+    return uint32_t(m_root_parameters.size() - 1);
 }
 
 // ------------------------------------------------------------------------------------------------
 
-bool Root_signature::register_cbv(size_t slot)
+uint32_t Root_signature::register_unbounded_descriptor_ranges()
+{
+    if (m_is_finalized)
+    {
+        log_error("Root signature '" + m_debug_name +
+            "' is already finalized. No further changes possible.", SRC);
+        return static_cast<uint32_t>(-1);
+    }
+
+    if (m_unbounded_descriptor_ranges.size() != 0)
+    {
+        log_error("Root signature '" + m_debug_name +
+            "' unbounded descriptor ranges already registered.", SRC);
+        return static_cast<uint32_t>(-1);
+    }
+
+    // unordered access views
+    // overlapping ranges for all types:
+    // - Global_UAVs_Texture2D_float4
+    m_unbounded_descriptor_ranges.push_back({});
+    D3D12_DESCRIPTOR_RANGE1& uav_range = m_unbounded_descriptor_ranges.back();
+    uav_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+    uav_range.NumDescriptors = UINT_MAX;
+    uav_range.BaseShaderRegister = 0;
+    uav_range.RegisterSpace = 100;
+    uav_range.OffsetInDescriptorsFromTableStart = 0;
+    uav_range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
+
+    // shader resource views
+    // overlapping ranges for all types:
+    // - 100: Texture2D<float4>
+    // - 101: Texture3D<float4>
+    // - 102: RaytracingAccelerationStructure
+    // - 103: ByteAddressBuffer
+    // - 104: StructuredBuffer<float>
+    // - 105: StructuredBuffer<uint>
+    // - 106: StructuredBuffer<Env_Sample>
+    // - 107: StructuredBuffer<SceneDataInfo>
+    // - 108: StructuredBuffer<Mdl_texture_info>
+    // - 109: StructuredBuffer<Mdl_light_profile_info>
+    // - 110: StructuredBuffer<Mdl_mbsdf_info>
+    for (size_t i = 0; i < 11; ++i)
+    {
+        m_unbounded_descriptor_ranges.push_back({});
+        D3D12_DESCRIPTOR_RANGE1& srv_range = m_unbounded_descriptor_ranges.back();
+        srv_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+        srv_range.NumDescriptors = UINT_MAX;
+        srv_range.BaseShaderRegister = 0;
+        srv_range.RegisterSpace = UINT(100 + i);
+        srv_range.OffsetInDescriptorsFromTableStart = 0;
+        srv_range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
+    }
+
+    // constant buffer views
+    m_unbounded_descriptor_ranges.push_back({});
+    D3D12_DESCRIPTOR_RANGE1& cbv_range = m_unbounded_descriptor_ranges.back();
+    cbv_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+    cbv_range.NumDescriptors = UINT_MAX;
+    cbv_range.BaseShaderRegister = 0;
+    cbv_range.RegisterSpace = UINT(100);
+    cbv_range.OffsetInDescriptorsFromTableStart = 0;
+    cbv_range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE;
+
+    Element e;
+    e.kind = Element::Kind::DescriptorTable;
+    e.size_in_word = 1;
+    e.root_signature_index = m_root_parameters.size();
+    m_root_elements_dt.push_back(std::move(e));
+    m_root_parameters.push_back(CD3DX12_ROOT_PARAMETER1());
+    m_root_parameters.back().InitAsDescriptorTable(
+        m_unbounded_descriptor_ranges.size(), m_unbounded_descriptor_ranges.data());
+    return uint32_t(m_root_parameters.size() - 1);
+}
+
+// ------------------------------------------------------------------------------------------------
+
+uint32_t Root_signature::register_cbv(size_t slot, size_t space)
 {
     if (m_is_finalized)
     {
         log_error("Root signature '" + m_debug_name +
                     "' is already finalized. No further changes possible.", SRC);
-        return false;
+        return static_cast<uint32_t>(-1);
     }
 
     if (m_root_elements_b.find(slot) != m_root_elements_b.end())
     {
         log_error("Root signature '" + m_debug_name +
-                    "' already contains a UAV at slot " + std::to_string(slot) + ".", SRC);
-        return false;
+                    "' already contains an CBV at slot " + std::to_string(slot) + ".", SRC);
+        return static_cast<uint32_t>(-1);
     }
 
     Element e;
@@ -794,24 +881,25 @@ bool Root_signature::register_cbv(size_t slot)
     e.root_signature_index = m_root_parameters.size();
     m_root_elements_b[slot] = e;
     m_root_parameters.push_back(CD3DX12_ROOT_PARAMETER1());
-    m_root_parameters.back().InitAsConstantBufferView(static_cast<UINT>(slot));
-    return true;
+    m_root_parameters.back().InitAsConstantBufferView(
+        static_cast<UINT>(slot), static_cast<UINT>(space));
+    return uint32_t(m_root_parameters.size() - 1);
 }
 
 // ------------------------------------------------------------------------------------------------
 
-bool Root_signature::register_uav(size_t slot)
+uint32_t Root_signature::register_uav(size_t slot, size_t space)
 {
     if (m_is_finalized) {
         log_error("Root signature '" + m_debug_name +
                     "' is already finalized. No further changes possible.", SRC);
-        return false;
+        return static_cast<uint32_t>(-1);
     }
 
     if (m_root_elements_u.find(slot) != m_root_elements_u.end()) {
         log_error("Root signature '" + m_debug_name +
-                    "' already contains a UAV at slot " + std::to_string(slot) + ".", SRC);
-        return false;
+                    "' already contains an UAV at slot " + std::to_string(slot) + ".", SRC);
+        return static_cast<uint32_t>(-1);
     }
 
     Element e;
@@ -819,26 +907,26 @@ bool Root_signature::register_uav(size_t slot)
     m_root_parameters.push_back(CD3DX12_ROOT_PARAMETER1());
     e.kind = Element::Kind::UAV;
     e.size_in_word = 2;
-    m_root_parameters.back().InitAsUnorderedAccessView(static_cast<UINT>(slot));
+    m_root_parameters.back().InitAsUnorderedAccessView(
+        static_cast<UINT>(slot), static_cast<UINT>(space));
     m_root_elements_u[slot] = e;
-
-    return true;
+    return uint32_t(m_root_parameters.size() - 1);
 }
 
 // ------------------------------------------------------------------------------------------------
 
-bool Root_signature::register_srv(size_t slot)
+uint32_t Root_signature::register_srv(size_t slot, size_t space)
 {
     if (m_is_finalized) {
         log_error("Root signature '" + m_debug_name +
                     "' is already finalized. No further changes possible.", SRC);
-        return false;
+        return static_cast<uint32_t>(-1);
     }
 
     if (m_root_elements_t.find(slot) != m_root_elements_t.end()) {
         log_error("Root signature '" + m_debug_name +
-                    "' already contains a SRC at slot " + std::to_string(slot) + ".", SRC);
-        return false;
+                    "' already contains a SRV at slot " + std::to_string(slot) + ".", SRC);
+        return static_cast<uint32_t>(-1);
     }
 
     Element e;
@@ -847,19 +935,20 @@ bool Root_signature::register_srv(size_t slot)
     e.size_in_word = 2;
 
     m_root_parameters.push_back(CD3DX12_ROOT_PARAMETER1());
-    m_root_parameters.back().InitAsShaderResourceView(static_cast<UINT>(slot));
+    m_root_parameters.back().InitAsShaderResourceView(
+        static_cast<UINT>(slot), static_cast<UINT>(space));
     m_root_elements_t[slot] = e;
-    return true;
+    return uint32_t(m_root_parameters.size() - 1);
 }
 
 // ------------------------------------------------------------------------------------------------
 
-bool Root_signature::register_dt(const Descriptor_table& descriptor_table)
+uint32_t Root_signature::register_dt(const Descriptor_table& descriptor_table)
 {
     if (m_is_finalized) {
         log_error("Root signature '" + m_debug_name +
                     "' is already finalized. No further changes possible.", SRC);
-        return false;
+        return static_cast<uint32_t>(-1);
     }
 
     // TODO check the table for duplicated assignments
@@ -868,13 +957,12 @@ bool Root_signature::register_dt(const Descriptor_table& descriptor_table)
     e.kind = Element::Kind::DescriptorTable;
     e.size_in_word = 1;
     e.root_signature_index = m_root_parameters.size();
-
     m_root_parameters.push_back(CD3DX12_ROOT_PARAMETER1());
     m_root_parameters.back().InitAsDescriptorTable(
         static_cast<UINT>(descriptor_table.m_descriptor_ranges.size()),
         descriptor_table.m_descriptor_ranges.data());
-    m_root_elements_dt.emplace_back(std::move(e));
-    return true;
+    m_root_elements_dt.push_back(std::move(e));
+    return uint32_t(m_root_parameters.size() - 1);
 }
 
 // ------------------------------------------------------------------------------------------------

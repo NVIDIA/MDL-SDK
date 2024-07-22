@@ -25,7 +25,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
-mdl 1.7;
+mdl 1.9;
 
 export const float PI = 3.14159265358979323846f;
 export const float TWO_PI = 6.28318530717958647692f;
@@ -483,6 +483,15 @@ export double round(double a) [[ intrinsic(), const_expr() ]];
 export double2 round(double2 a) [[ intrinsic(), const_expr() ]];
 export double3 round(double3 a) [[ intrinsic(), const_expr() ]];
 export double4 round(double4 a) [[ intrinsic(), const_expr() ]];
+
+export float round_away_from_zero(float a) [[ intrinsic(), const_expr(), since(1,9) ]];
+export float2 round_away_from_zero(float2 a) [[ intrinsic(), const_expr(), since(1,9) ]];
+export float3 round_away_from_zero(float3 a) [[ intrinsic(), const_expr(), since(1,9) ]];
+export float4 round_away_from_zero(float4 a) [[ intrinsic(), const_expr(), since(1,9) ]];
+export double round_away_from_zero(double a) [[ intrinsic(), const_expr(), since(1,9) ]];
+export double2 round_away_from_zero(double2 a) [[ intrinsic(), const_expr(), since(1,9) ]];
+export double3 round_away_from_zero(double3 a) [[ intrinsic(), const_expr(), since(1,9) ]];
+export double4 round_away_from_zero(double4 a) [[ intrinsic(), const_expr(), since(1,9) ]];
 
 export float rsqrt(float a) [[ intrinsic(), const_expr() ]];
 export float2 rsqrt(float2 a) [[ intrinsic(), const_expr() ]];

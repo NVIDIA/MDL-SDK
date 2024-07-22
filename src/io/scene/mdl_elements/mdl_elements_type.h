@@ -52,6 +52,51 @@ namespace MI {
 
 namespace MDL {
 
+class Struct_category_list : public mi::base::Interface_implement<IStruct_category_list>
+{
+public:
+    Struct_category_list( mi::Size initial_capacity);
+
+    // public API methods
+
+    mi::Size get_size() const override;
+
+    mi::Size get_index( const char* name) const override;
+
+    const char* get_name( mi::Size index) const override;
+
+    const IStruct_category* get_struct_category( mi::Size index) const override;
+
+    const IStruct_category* get_struct_category( const char* name) const override;
+
+    mi::Sint32 set_struct_category(
+        mi::Size index, const IStruct_category* struct_category) override;
+
+    mi::Sint32 set_struct_category(
+        const char* name, const IStruct_category* struct_category) override;
+
+    mi::Sint32 add_struct_category(
+        const char* name, const IStruct_category* struct_category) override;
+
+    // internal methods
+
+    void add_struct_category_unchecked(
+        const char* name, const IStruct_category* struct_category) override;
+
+    mi::Size get_memory_consumption() const override;
+
+    friend class Type_factory; // for serialization/deserialization
+
+private:
+
+    using Index_name_vector = std::vector<std::string>;
+    Index_name_vector m_index_name;
+
+    using Struct_categories_vector = std::vector<mi::base::Handle<const IStruct_category> >;
+    Struct_categories_vector m_struct_categories;
+};
+
+
 class Type_list : public mi::base::Interface_implement<IType_list>
 {
 public:
@@ -97,6 +142,28 @@ class Type_factory : public mi::base::Interface_implement<IType_factory>
 {
 public:
     // public API methods
+
+    const IStruct_category* create_struct_category( const char* symbol) const override;
+
+    IStruct_category_list* create_struct_category_list(
+        mi::Size initial_capacity) const override;
+
+    const IStruct_category* get_predefined_struct_category(
+        IStruct_category::Predefined_id id) const override;
+
+    IStruct_category_list* clone( const IStruct_category_list* list) const override;
+
+    mi::Sint32 compare( const IStruct_category* lhs, const IStruct_category* rhs) const override;
+
+    mi::Sint32 compare(
+        const IStruct_category_list* lhs, const IStruct_category_list* rhs) const override;
+
+    const mi::IString* dump(
+        const IStruct_category* struct_category, mi::Size depth) const override;
+
+    const mi::IString* dump(
+        const IStruct_category_list* list, mi::Size depth) const override;
+
 
     const IType_alias* create_alias(
         const IType* type, mi::Uint32 modifiers, const char* symbol) const override;
@@ -156,15 +223,24 @@ public:
 
     mi::Sint32 compare( const IType_list* lhs, const IType_list* rhs) const override;
 
-    mi::Sint32 is_compatible(const IType* src, const IType* dst) const override;
+    mi::Sint32 is_compatible(const IType* lhs, const IType* rhs) const override;
 
-    const mi::IString* dump( const IType* type, mi::Size depth = 0) const override;
+    mi::Sint32 from_same_struct_category( const IType* lhs, const IType* rhs) const override;
 
-    const mi::IString* dump( const IType_list* list, mi::Size depth = 0) const override;
+    const mi::IString* dump( const IType* type, mi::Size depth) const override;
+
+    const mi::IString* dump( const IType_list* list, mi::Size depth) const override;
 
     std::string get_mdl_type_name( const IType* type) const override;
 
     const IType* create_from_mdl_type_name( const char* name) const  override;
+
+
+    const IStruct_category* create_struct_category(
+        const char* symbol,
+        IStruct_category::Predefined_id id,
+        mi::base::Handle<const IAnnotation_block>& annotations,
+        mi::Sint32* errors) override;
 
     const IType_enum* create_enum(
         const char* symbol,
@@ -180,7 +256,21 @@ public:
         const IType_struct::Fields& fields,
         mi::base::Handle<const IAnnotation_block>& annotations,
         const IType_struct::Field_annotations& field_annotations,
+        bool is_declarative,
+        const IStruct_category* struct_category,
         mi::Sint32* errors) override;
+
+    void serialize_struct_category(
+        SERIAL::Serializer* serializer, const IStruct_category* struct_category) const override;
+
+    const IStruct_category* deserialize_struct_category(
+        SERIAL::Deserializer* deserializer) override;
+
+    void serialize_struct_category_list(
+        SERIAL::Serializer* serializer,  const IStruct_category_list* list) const override;
+
+    IStruct_category_list* deserialize_struct_category_list(
+        SERIAL::Deserializer* deserializer) override;
 
     void serialize( SERIAL::Serializer* serializer, const IType* type) const override;
 
@@ -193,6 +283,11 @@ public:
     IType_list* deserialize_list( SERIAL::Deserializer* deserializer) override;
 
     // internal methods
+
+    static mi::Sint32 compare_static( const IStruct_category* lhs, const IStruct_category* rhs);
+
+    static mi::Sint32 compare_static(
+        const IStruct_category_list* lhs, const IStruct_category_list* rhs);
 
     static mi::Sint32 compare_static( const IType* lhs, const IType* rhs);
 
@@ -214,6 +309,9 @@ public:
     void unlock() const { m_mutex.unlock(); }
 
     /// Caller needs to hold the mutex.
+    void unregister_struct_category( const IStruct_category* struct_category);
+
+    /// Caller needs to hold the mutex.
     void unregister_enum_type( const IType_enum* type);
 
     /// Caller needs to hold the mutex.
@@ -231,10 +329,21 @@ private:
 
     static mi::Sint32 compare_static( const IType_texture* lhs, const IType_texture* rhs);
 
+    static void dump(
+        const IStruct_category* struct_category, mi::Size depth, std::ostringstream& s);
+
+    static void dump( const IStruct_category_list* list, mi::Size depth, std::ostringstream& s);
+
     static void dump( const IType* type, mi::Size depth, std::ostringstream& s);
 
     static void dump( const IType_list* list, mi::Size depth, std::ostringstream& s);
 
+
+    /// Performs the checks for create_struct_category() that need to happen under the lock.
+    const IStruct_category* lookup_struct_category(
+        const char* symbol,
+        IStruct_category::Predefined_id id,
+        mi::Sint32* errors);
 
     /// Performs the checks for create_enum() that need to happen under the lock.
     const IType_enum* lookup_enum(
@@ -248,8 +357,15 @@ private:
         const char* symbol,
         IType_struct::Predefined_id id,
         const IType_struct::Fields& fields,
+        bool is_declarative,
+        const IStruct_category* struct_category,
         mi::Sint32* errors);
 
+
+    /// Checks whether \p struct_cateory and \p id are equivalent types (ignoring annotations).
+    static bool equivalent_struct_categories(
+        const IStruct_category* struct_category,
+        IStruct_category::Predefined_id id);
 
     /// Checks whether \p type and (\p id, \p values) are equivalent types (ignoring annotations).
     static bool equivalent_enum_types(
@@ -261,8 +377,16 @@ private:
     static bool equivalent_struct_types(
         const IType_struct* type,
         IType_struct::Predefined_id id,
-        const IType_struct::Fields& fields);
+        const IType_struct::Fields& fields,
+        bool is_declarative,
+        const IStruct_category* struct_category);
 
+
+    using Weak_struct_category_symbol_map
+        = robin_hood::unordered_map<std::string, const IStruct_category*>;
+
+    using Weak_struct_category_id_map
+        = robin_hood::unordered_map<IStruct_category::Predefined_id, const IStruct_category*>;
 
     using Weak_enum_symbol_map
         = robin_hood::unordered_map<std::string, const IType_enum*>;
@@ -279,6 +403,12 @@ private:
 
     /// Mutex for the four weak map members below.
     mutable std::shared_mutex m_mutex;
+
+    /// All registered struct categories by symbol. Needs #m_mutex.
+    Weak_struct_category_symbol_map m_struct_category_symbols;
+
+    /// All registered struct categories by ID. Needs #m_mutex.
+    Weak_struct_category_id_map m_struct_category_ids;
 
     /// All registered enum types by symbol. Needs #m_mutex.
     Weak_enum_symbol_map m_enum_symbols;

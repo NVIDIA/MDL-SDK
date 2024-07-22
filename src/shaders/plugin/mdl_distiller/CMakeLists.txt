@@ -113,7 +113,6 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         boost
         ${LINKER_WHOLE_ARCHIVE}
         ${LINKER_START_GROUP}
-        mdl::mdl_sdk
         mdl::base-system-version
         ${LINKER_END_GROUP}
         ${LINKER_NO_WHOLE_ARCHIVE}

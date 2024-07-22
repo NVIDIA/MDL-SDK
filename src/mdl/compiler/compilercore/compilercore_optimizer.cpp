@@ -234,9 +234,9 @@ IExpression_binary *Optimizer::create_binary(
 // Execute a function on the bodies of all MDL functions.
 void Optimizer::run_on_function(void (Optimizer::* func)(IStatement *))
 {
-    int n = m_module.get_declaration_count();
+    size_t n = m_module.get_declaration_count();
 
-    for (int i = 0; i < n; ++i) {
+    for (size_t i = 0; i < n; ++i) {
         IDeclaration const *decl = m_module.get_declaration(i);
 
         if (IDeclaration_function const *fdecl = as<IDeclaration_function>(decl)) {
@@ -251,9 +251,9 @@ void Optimizer::run_on_function(
     IStatement const *(Optimizer::* body_func)(IStatement const *),
     IExpression const *(Optimizer::* expr_func)(IExpression const *))
 {
-    int n = m_module.get_declaration_count();
+    size_t n = m_module.get_declaration_count();
 
-    for (int i = 0; i < n; ++i) {
+    for (size_t i = 0; i < n; ++i) {
         IDeclaration *decl = const_cast<IDeclaration *>(m_module.get_declaration(i));
 
         if (IDeclaration_function *fdecl = as<IDeclaration_function>(decl)) {
@@ -332,12 +332,12 @@ void Optimizer::remove_unused_function(
 // Remove unused functions from the AST.
 void Optimizer::remove_unused_functions()
 {
-    int n = m_module.get_declaration_count();
+    size_t n = m_module.get_declaration_count();
 
     VLA<IDeclaration const *>n_decls(m_module.get_allocator(), n);
 
-    int j = 0;
-    for (int i = 0; i < n; ++i) {
+    size_t j = 0;
+    for (size_t i = 0; i < n; ++i) {
         IDeclaration const *decl = m_module.get_declaration(i);
 
         if (IDeclaration_function const *fdecl = as<IDeclaration_function>(decl)) {
@@ -378,9 +378,9 @@ void Optimizer::remove_dead_code(IStatement *stmt)
         {
             IStatement_compound *c_smtm = cast<IStatement_compound>(stmt);
 
-            int n = c_smtm->get_statement_count();
-            int j = 0;
-            for (int i = 0; i < n; ++i) {
+            size_t n = c_smtm->get_statement_count();
+            size_t j = 0;
+            for (size_t i = 0; i < n; ++i) {
                 IStatement const *s = c_smtm->get_statement(i);
 
                 Stmt_info const &info = m_stmt_info_data.get_stmt_info(s);
@@ -416,7 +416,7 @@ void Optimizer::remove_dead_code(IStatement *stmt)
     case IStatement::SK_SWITCH:
         {
             IStatement_switch *switch_stmt = cast<IStatement_switch>(stmt);
-            for (int i = 0, n = switch_stmt->get_case_count(); i < n; ++i) {
+            for (size_t i = 0, n = switch_stmt->get_case_count(); i < n; ++i) {
                 IStatement *s = const_cast<IStatement *>(switch_stmt->get_case(i));
                 remove_dead_code(s);
             }
@@ -461,6 +461,7 @@ IDeclaration const *Optimizer::local_opt(IDeclaration const *c_decl)
         break;
     case IDeclaration::DK_IMPORT:
     case IDeclaration::DK_ANNOTATION:
+    case IDeclaration::DK_STRUCT_CATEGORY:
     case IDeclaration::DK_CONSTANT:
     case IDeclaration::DK_TYPE_ALIAS:
     case IDeclaration::DK_TYPE_STRUCT:
@@ -704,7 +705,7 @@ IStatement const *Optimizer::local_opt(IStatement const *c_stmt)
     case IStatement::SK_SWITCH:
         {
             IStatement_switch *switch_stmt = cast<IStatement_switch>(stmt);
-            for (int i = 0, n = switch_stmt->get_case_count(); i < n; ++i) {
+            for (size_t i = 0, n = switch_stmt->get_case_count(); i < n; ++i) {
                 IStatement const *s = switch_stmt->get_case(i);
                 local_opt(s);
             }
@@ -895,7 +896,7 @@ static bool should_be_folded(IExpression const *expr)
             return is<IExpression_literal>(bin_expr->get_left_argument());
         }
     }
-    for (int i = 0, n = expr->get_sub_expression_count(); i < n; ++i) {
+    for (size_t i = 0, n = expr->get_sub_expression_count(); i < n; ++i) {
         if (!is<IExpression_literal>(expr->get_sub_expression(i))) {
             return false;
         }
@@ -1059,7 +1060,7 @@ IExpression const *Optimizer::local_opt(IExpression const *cexpr)
                     // matrix multiplication is not symmetric
                     break;
                 }
-                // fall through
+                MDL_FALLTHROUGH
             case IExpression_binary::OK_PLUS:
             case IExpression_binary::OK_BITWISE_AND:
             case IExpression_binary::OK_BITWISE_XOR:
@@ -1446,7 +1447,7 @@ IExpression const *Optimizer::local_opt(IExpression const *cexpr)
         {
             IExpression_let *let = cast<IExpression_let>(expr);
 
-            for (int i = 0, n = let->get_declaration_count(); i < n; ++i) {
+            for (size_t i = 0, n = let->get_declaration_count(); i < n; ++i) {
                 IDeclaration const *decl = let->get_declaration(i);
 
                 // it is not expected that the declaration is exchange or will disappear
@@ -1585,6 +1586,7 @@ IExpression const *Optimizer::do_inline(IExpression_call *call)
                 break;
             }
         }
+        break;
     default:
         break;
     }

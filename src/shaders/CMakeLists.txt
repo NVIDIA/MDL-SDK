@@ -26,6 +26,10 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #*****************************************************************************
 
+if(NOT MDL_BUILD_SDK)
+    return()
+endif()
+
 if(MDL_BUILD_DDS_PLUGIN)
     add_subdirectory(${MDL_SRC_FOLDER}/shaders/plugin/dds)
 endif()

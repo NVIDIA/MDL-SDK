@@ -47,25 +47,33 @@ namespace NEURAY {
 
 class Type_factory;
 
+/// Converts MI::MDL::IType_struct IDs into mi::neuraylib::IStruct_category IDs.
+mi::neuraylib::IStruct_category::Predefined_id int_struct_category_id_to_ext_struct_category_id(
+    MDL::IStruct_category::Predefined_id struct_category_id);
+
+/// Converts mi::neuraylib::IStruct_category IDs into MI::MDL::IStruct_category IDs.
+MDL::IStruct_category::Predefined_id ext_struct_category_id_to_int_struct_category_id(
+    mi::neuraylib::IStruct_category::Predefined_id struct_category_id);
+
 /// Converts MI::MDL::IType_alias modifiers into mi::neuraylib::IType_alias modifiers.
 mi::Uint32 int_modifiers_to_ext_modifiers( mi::Uint32 modifiers);
 
 /// Converts mi::neuraylb::IType_alias modifiers into MI::MDL::IType_alias modifiers.
 mi::Uint32 ext_modifiers_to_int_modifiers( mi::Uint32 modifiers);
 
-/// Converts predefined MI::MDL::IType_enum IDs into mi::neuraylib::IType_enum IDs.
+/// Converts MI::MDL::IType_enum IDs into mi::neuraylib::IType_enum IDs.
 mi::neuraylib::IType_enum::Predefined_id int_enum_id_to_ext_enum_id(
     MDL::IType_enum::Predefined_id enum_id);
 
-/// Converts predefined mi::neuraylib::IType_enum IDs into MI::MDL::IType_enum IDs.
+/// Converts mi::neuraylib::IType_enum IDs into MI::MDL::IType_enum IDs.
 MDL::IType_enum::Predefined_id ext_enum_id_to_int_enum_id(
     mi::neuraylib::IType_enum::Predefined_id enum_id);
 
-/// Converts predefined MI::MDL::IType_struct IDs into mi::neuraylib::IType_struct IDs.
+/// Converts MI::MDL::IType_struct IDs into mi::neuraylib::IType_struct IDs.
 mi::neuraylib::IType_struct::Predefined_id int_struct_id_to_ext_struct_id(
     MDL::IType_struct::Predefined_id struct_id);
 
-/// Converts predefined mi::neuraylib::IType_struct IDs into MI::MDL::IType_struct IDs.
+/// Converts mi::neuraylib::IType_struct IDs into MI::MDL::IType_struct IDs.
 MDL::IType_struct::Predefined_id ext_struct_id_to_int_struct_id(
     mi::neuraylib::IType_struct::Predefined_id struct_id);
 
@@ -74,6 +82,38 @@ mi::neuraylib::IType_texture::Shape int_shape_to_ext_shape( MDL::IType_texture::
 
 /// Converts mi::neuraylib::IType_texture shapes into MI::MDL::IType_texture shapes.
 MDL::IType_texture::Shape ext_shape_to_int_shape( mi::neuraylib::IType_texture::Shape shape);
+
+
+/// All implementations of mi::neuraylib::IStruct_category also implement this interface which
+/// allows access to the wrapped MI::MDL::IStruct_category instance.
+class IStruct_category_wrapper : public
+    mi::base::Interface_declare<0xa7ffd80a,0x6e36,0x40db,0xb3,0x92,0x83,0x6f,0x7e,0x36,0x0c,0x56>
+{
+public:
+    /// Returns the internal struct category wrapped by this wrapper.
+    virtual const MDL::IStruct_category* get_internal_struct_category() const = 0;
+};
+
+/// Returns the internal struct category wrapped by \p struct_category (or \c NULL if
+/// \p struct_category is \c NULL or not a wrapper).
+const MDL::IStruct_category* get_internal_struct_category(
+    const mi::neuraylib::IStruct_category* struct_category);
+
+/// The implementation of mi::neuraylib::IStruct_category_list also implement this interface which
+/// allows access to the wrapped MI::MDL::IStruct_category_list instance.
+class IStruct_category_list_wrapper : public
+    mi::base::Interface_declare<0xd1245986,0x0197,0x473d,0xbe,0x5a,0xc6,0x58,0xc7,0x1b,0xe0,0xd4>
+{
+public:
+    /// Returns the internal struct category list wrapped by this wrapper.
+    virtual const MDL::IStruct_category_list* get_internal_struct_category_list() const = 0;
+};
+
+/// Returns the internal struct category list wrapped by \p struct_category_list (or \c NULL if
+/// \p struct_category_list is \c NULL or not a wrapper).
+const MDL::IStruct_category_list* get_internal_struct_category_list(
+    const mi::neuraylib::IStruct_category_list* struct_category_list);
+
 
 /// All implementations of mi::neuraylib::IType also implement this interface which allows access
 /// to the wrapped MI::MDL::IType instance.
@@ -114,6 +154,93 @@ public:
 /// not a wrapper).
 const MDL::IType_list* get_internal_type_list( const mi::neuraylib::IType_list* type_list);
 
+
+class Struct_category : public mi::base::Interface_implement_2<
+    mi::neuraylib::IStruct_category, IStruct_category_wrapper>
+{
+public:
+    Struct_category(
+        const Type_factory* tf,
+        mi::neuraylib::ITransaction* transaction,
+        const MDL::IStruct_category* struct_category,
+        const mi::base::IInterface* owner)
+      : m_tf( tf, mi::base::DUP_INTERFACE),
+        m_transaction( transaction, mi::base::DUP_INTERFACE),
+        m_struct_category( struct_category, mi::base::DUP_INTERFACE),
+        m_owner( owner, mi::base::DUP_INTERFACE)
+    {
+        ASSERT( M_NEURAY_API, tf);
+        ASSERT( M_NEURAY_API, struct_category);
+    }
+
+    /// public API methods
+
+    const char* get_symbol() const final;
+
+    mi::neuraylib::IStruct_category::Predefined_id get_predefined_id() const final;
+
+    const mi::neuraylib::IAnnotation_block* get_annotations() const final;
+
+    /// internal methods
+
+    const MDL::IStruct_category* get_internal_struct_category() const;
+
+private:
+    const mi::base::Handle<const Type_factory> m_tf;
+    const mi::base::Handle<mi::neuraylib::ITransaction> m_transaction;
+    const mi::base::Handle<const MDL::IStruct_category> m_struct_category;
+    const mi::base::Handle<const mi::base::IInterface> m_owner;
+};
+
+
+class Struct_category_list : public mi::base::Interface_implement_2<
+    mi::neuraylib::IStruct_category_list, IStruct_category_list_wrapper>
+{
+public:
+    Struct_category_list(
+        const Type_factory* tf,
+        MDL::IStruct_category_list* struct_category_list,
+        const mi::base::IInterface* owner)
+      : m_tf( tf, mi::base::DUP_INTERFACE),
+        m_struct_category_list( struct_category_list, mi::base::DUP_INTERFACE),
+        m_owner( owner, mi::base::DUP_INTERFACE)
+    {
+        ASSERT( M_NEURAY_API, m_tf);
+        ASSERT( M_NEURAY_API, m_struct_category_list);
+    }
+
+    // public API methods
+
+    mi::Size get_size() const { return m_struct_category_list->get_size(); }
+
+    mi::Size get_index( const char* name) const { return m_struct_category_list->get_index( name); }
+
+    const char* get_name( mi::Size index) const { return m_struct_category_list->get_name( index); }
+
+    const mi::neuraylib::IStruct_category* get_struct_category( mi::Size index) const;
+
+    const mi::neuraylib::IStruct_category* get_struct_category( const char* name) const;
+
+    mi::Sint32 set_struct_category(
+        mi::Size index, const mi::neuraylib::IStruct_category* struct_category);
+
+    mi::Sint32 set_struct_category(
+        const char* name, const mi::neuraylib::IStruct_category* struct_category);
+
+    mi::Sint32 add_struct_category(
+        const char* name, const mi::neuraylib::IStruct_category* struct_category);
+
+    // internal methods (IStruct_category_wrapper)
+
+    const MDL::IStruct_category_list* get_internal_struct_category_list() const;
+
+private:
+    const mi::base::Handle<const Type_factory> m_tf;
+    const mi::base::Handle<MDL::IStruct_category_list> m_struct_category_list;
+    const mi::base::Handle<const mi::base::IInterface> m_owner;
+};
+
+
 /// Wrapper that implements an external type interface by wrapping an internal one.
 ///
 /// \tparam E   The external interface implemented by this class.
@@ -122,9 +249,9 @@ template <class E, class I>
 class Type_base : public mi::base::Interface_implement_2<E, IType_wrapper>
 {
 public:
-    typedef E External_type;
-    typedef I Internal_type;
-    typedef Type_base<E, I> Base;
+    using External_type = E;
+    using Internal_type = I;
+    using Base = Type_base<E, I>;
 
     Type_base( const Type_factory* tf, const I* type, const mi::base::IInterface* owner)
       : m_tf( tf, mi::base::DUP_INTERFACE),
@@ -139,11 +266,13 @@ public:
 
     // public API methods
 
-    mi::neuraylib::IType::Kind get_kind() const { return E::s_kind; };
+    mi::neuraylib::IType::Kind get_kind() const final { return E::s_kind; };
 
-    mi::Uint32 get_all_type_modifiers() const;
+    mi::Uint32 get_all_type_modifiers() const final;
 
-    const mi::neuraylib::IType* skip_all_type_aliases() const;
+    const mi::neuraylib::IType* skip_all_type_aliases() const final;
+
+    bool is_declarative() const final { return m_type->is_declarative(); }
 
     // internal methods (IType_wrapper)
 
@@ -196,8 +325,8 @@ public:
         mi::neuraylib::ITransaction* transaction,
         const Internal_type* type,
         const mi::base::IInterface* owner)
-      : Base( tf, type, owner)
-      , m_transaction(transaction, mi::base::DUP_INTERFACE) { }
+      : Base( tf, type, owner),
+        m_transaction( transaction, mi::base::DUP_INTERFACE) { }
 
     const char* get_symbol() const { return m_type->get_symbol(); }
 
@@ -319,8 +448,8 @@ public:
         mi::neuraylib::ITransaction* transaction,
         const Internal_type* type,
         const mi::base::IInterface* owner)
-      : Base( tf, type, owner)
-      , m_transaction(transaction, mi::base::DUP_INTERFACE) { }
+      : Base( tf, type, owner),
+        m_transaction( transaction, mi::base::DUP_INTERFACE) { }
 
     const mi::neuraylib::IType* get_component_type( mi::Size index) const;
 
@@ -339,6 +468,8 @@ public:
     const mi::neuraylib::IAnnotation_block* get_annotations() const;
 
     const mi::neuraylib::IAnnotation_block* get_field_annotations( mi::Size index) const;
+
+    const mi::neuraylib::IStruct_category* get_struct_category() const;
 
 private:
     const mi::base::Handle<mi::neuraylib::ITransaction> m_transaction;
@@ -390,7 +521,7 @@ class Type_hair_bsdf : public Type_base<mi::neuraylib::IType_hair_bsdf, MDL::ITy
 public:
     Type_hair_bsdf(
         const Type_factory* tf, const Internal_type* type, const mi::base::IInterface* owner)
-      : Base(tf, type, owner) { }
+      : Base( tf, type, owner) { }
 };
 
 
@@ -454,6 +585,7 @@ private:
     const mi::base::Handle<const mi::base::IInterface> m_owner;
 };
 
+
 class Type_factory : public mi::base::Interface_implement<mi::neuraylib::IType_factory>
 {
 public:
@@ -462,87 +594,130 @@ public:
 
     // public API methods
 
+    const mi::neuraylib::IStruct_category* create_struct_category( const char* symbol) const final;
+
+    mi::neuraylib::IStruct_category_list* create_struct_category_list() const final;
+
+    const mi::neuraylib::IStruct_category* get_predefined_struct_category(
+        mi::neuraylib::IStruct_category::Predefined_id id) const final;
+
+    mi::neuraylib::IStruct_category_list* clone(
+        const mi::neuraylib::IStruct_category_list* struct_category_list) const final;
+
+    mi::Sint32 compare(
+        const mi::neuraylib::IStruct_category* lhs,
+        const mi::neuraylib::IStruct_category* rhs) const final;
+
+    mi::Sint32 compare(
+        const mi::neuraylib::IStruct_category_list* lhs,
+        const mi::neuraylib::IStruct_category_list* rhs) const final;
+
+    const mi::IString* dump(
+        const mi::neuraylib::IStruct_category* struct_category, mi::Size depth) const final;
+
+    const mi::IString* dump(
+        const mi::neuraylib::IStruct_category_list* list, mi::Size depth) const final;
+
+
     const mi::neuraylib::IType_alias* create_alias(
         const mi::neuraylib::IType* type,
         mi::Uint32 modifiers,
-        const char* symbol) const override;
+        const char* symbol) const final;
 
-    const mi::neuraylib::IType_bool* create_bool() const override;
+    const mi::neuraylib::IType_bool* create_bool() const final;
 
-    const mi::neuraylib::IType_int* create_int() const override;
+    const mi::neuraylib::IType_int* create_int() const final;
 
-    const mi::neuraylib::IType_enum* create_enum( const char* symbol) const override;
+    const mi::neuraylib::IType_enum* create_enum( const char* symbol) const final;
 
-    const mi::neuraylib::IType_float* create_float() const override;
+    const mi::neuraylib::IType_float* create_float() const final;
 
-    const mi::neuraylib::IType_double* create_double() const override;
+    const mi::neuraylib::IType_double* create_double() const final;
 
-    const mi::neuraylib::IType_string* create_string() const override;
+    const mi::neuraylib::IType_string* create_string() const final;
 
     const mi::neuraylib::IType_vector* create_vector(
-        const mi::neuraylib::IType_atomic* element_type, mi::Size size) const override;
+        const mi::neuraylib::IType_atomic* element_type, mi::Size size) const final;
 
     const mi::neuraylib::IType_matrix* create_matrix(
-        const mi::neuraylib::IType_vector* column_type, mi::Size columns) const override;
+        const mi::neuraylib::IType_vector* column_type, mi::Size columns) const final;
 
-    const mi::neuraylib::IType_color* create_color() const override;
+    const mi::neuraylib::IType_color* create_color() const final;
 
     const mi::neuraylib::IType_array* create_immediate_sized_array(
-        const mi::neuraylib::IType* element_type, mi::Size size) const override;
+        const mi::neuraylib::IType* element_type, mi::Size size) const final;
 
     const mi::neuraylib::IType_array* create_deferred_sized_array(
-        const mi::neuraylib::IType* element_type, const char* size) const override;
+        const mi::neuraylib::IType* element_type, const char* size) const final;
 
-    const mi::neuraylib::IType_struct* create_struct( const char* symbol) const override;
+    const mi::neuraylib::IType_struct* create_struct( const char* symbol) const final;
 
     const mi::neuraylib::IType_texture* create_texture(
-        mi::neuraylib::IType_texture::Shape shape) const override;
+        mi::neuraylib::IType_texture::Shape shape) const final;
 
-    const mi::neuraylib::IType_light_profile* create_light_profile() const override;
+    const mi::neuraylib::IType_light_profile* create_light_profile() const final;
 
-    const mi::neuraylib::IType_bsdf_measurement* create_bsdf_measurement() const override;
+    const mi::neuraylib::IType_bsdf_measurement* create_bsdf_measurement() const final;
 
-    const mi::neuraylib::IType_bsdf* create_bsdf() const override;
+    const mi::neuraylib::IType_bsdf* create_bsdf() const final;
 
-    const mi::neuraylib::IType_hair_bsdf* create_hair_bsdf() const override;
+    const mi::neuraylib::IType_hair_bsdf* create_hair_bsdf() const final;
 
-    const mi::neuraylib::IType_edf* create_edf() const override;
+    const mi::neuraylib::IType_edf* create_edf() const final;
 
-    const mi::neuraylib::IType_vdf* create_vdf() const override;
+    const mi::neuraylib::IType_vdf* create_vdf() const final;
 
-    mi::neuraylib::IType_list* create_type_list() const override;
 
-    const mi::neuraylib::IType* create_from_mdl_type_name( const char* name) const override;
+    mi::neuraylib::IType_list* create_type_list() const final;
+
+    const mi::neuraylib::IType* create_from_mdl_type_name( const char* name) const final;
 
     const mi::neuraylib::IType_enum* get_predefined_enum(
-        mi::neuraylib::IType_enum::Predefined_id id) const override;
+        mi::neuraylib::IType_enum::Predefined_id id) const final;
 
     const mi::neuraylib::IType_struct* get_predefined_struct(
-        mi::neuraylib::IType_struct::Predefined_id id) const override;
+        mi::neuraylib::IType_struct::Predefined_id id) const final;
 
-    mi::neuraylib::IType_list* clone( const mi::neuraylib::IType_list* type_list) const override;
-
-    mi::Sint32 compare(
-        const mi::neuraylib::IType* lhs, const mi::neuraylib::IType* rhs) const override;
+    mi::neuraylib::IType_list* clone( const mi::neuraylib::IType_list* type_list) const final;
 
     mi::Sint32 compare(
-        const mi::neuraylib::IType_list* lhs, const mi::neuraylib::IType_list* rhs) const override;
+        const mi::neuraylib::IType* lhs, const mi::neuraylib::IType* rhs) const final;
+
+    mi::Sint32 compare(
+        const mi::neuraylib::IType_list* lhs, const mi::neuraylib::IType_list* rhs) const final;
 
     mi::Sint32 is_compatible(
-        const mi::neuraylib::IType* src, const mi::neuraylib::IType* dst) const override;
+        const mi::neuraylib::IType* lhs, const mi::neuraylib::IType* rhs) const final;
 
-    const mi::IString* dump( const mi::neuraylib::IType* type, mi::Size depth) const override;
+    mi::Sint32 from_same_struct_category(
+        const mi::neuraylib::IType* lhs, const mi::neuraylib::IType* rhs) const final;
 
-    const mi::IString* dump( const mi::neuraylib::IType_list* list, mi::Size depth) const override;
+    const mi::IString* dump( const mi::neuraylib::IType* type, mi::Size depth) const final;
 
-    const mi::IString* get_mdl_type_name( const mi::neuraylib::IType* type) const override;
+    const mi::IString* dump( const mi::neuraylib::IType_list* list, mi::Size depth) const final;
 
-    const mi::IString* get_mdl_module_name( const mi::neuraylib::IType* type) const override;
+    const mi::IString* get_mdl_type_name( const mi::neuraylib::IType* type) const final;
+
+    const mi::IString* get_mdl_module_name( const mi::neuraylib::IType* type) const final;
 
     // internal methods
 
     /// Returns the wrapped internal type factory.
     MDL::IType_factory* get_internal_type_factory() const { m_tf->retain(); return m_tf.get(); }
+
+    /// Creates a wrapper for the internal struct category.
+    const mi::neuraylib::IStruct_category* create_struct_category(
+        const MDL::IStruct_category* struct_category, const mi::base::IInterface* owner) const;
+
+    /// Creates a wrapper for the internal struct category list.
+    mi::neuraylib::IStruct_category_list* create_struct_category_list(
+        MDL::IStruct_category_list* struct_category_list,
+        const mi::base::IInterface* owner) const;
+
+    /// Creates a wrapper for the internal struct category list.
+    const mi::neuraylib::IStruct_category_list* create_struct_category_list(
+        const MDL::IStruct_category_list* struct_category_list,
+        const mi::base::IInterface* owner) const;
 
     /// Creates a wrapper for the internal type.
     const mi::neuraylib::IType* create(

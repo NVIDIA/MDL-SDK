@@ -234,7 +234,7 @@ mi::neuraylib::IImage_file* Image_plugin_impl::open_for_reading(
     if( !reader->supports_absolute_access())
         return nullptr;
 
-    Image_file_reader_impl* result = new Image_file_reader_impl(
+    auto* result = new Image_file_reader_impl(
         m_oiio_format,
         m_name,
         m_image_api.get(),
@@ -257,7 +257,7 @@ mi::neuraylib::IImage_file* Image_plugin_impl::open_for_writing(
     mi::Uint32 miplevels,
     bool is_cubemap,
     mi::Float32 gamma,
-    mi::Uint32 quality) const
+    const mi::IMap* export_options) const
 {
    if( !writer || !pixel_type)
         return nullptr;
@@ -281,7 +281,7 @@ mi::neuraylib::IImage_file* Image_plugin_impl::open_for_writing(
     if( pixel_type_enum == IMAGE::PT_UNDEF)
         return nullptr;
 
-    Image_file_writer_impl* result = new Image_file_writer_impl(
+    auto* result = new Image_file_writer_impl(
         m_oiio_format,
         m_name,
         m_image_api.get(),
@@ -291,7 +291,7 @@ mi::neuraylib::IImage_file* Image_plugin_impl::open_for_writing(
         resolution_y,
         nr_of_layers,
         gamma,
-        quality);
+        export_options);
     if( !result->is_valid()) {
         delete result;
         return nullptr;

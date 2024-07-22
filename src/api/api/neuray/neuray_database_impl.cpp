@@ -53,10 +53,6 @@ Database_impl::Database_impl( mi::neuraylib::INeuray::Status& status)
 {
 }
 
-Database_impl::~Database_impl()
-{
-}
-
 mi::neuraylib::IScope* Database_impl::get_global_scope() const
 {
     if( m_status != mi::neuraylib::INeuray::STARTED)
@@ -92,7 +88,7 @@ mi::neuraylib::IScope* Database_impl::create_scope(
     if( privacy_level <= parent->get_privacy_level())
         return nullptr;
 
-    Scope_impl* parent_scope_impl = static_cast<Scope_impl *>( parent);
+    auto* parent_scope_impl = static_cast<Scope_impl *>( parent);
     DB::Scope* parent_db_scope = parent_scope_impl->get_scope();
     DB::Scope* child_db_scope = parent_db_scope->create_child( privacy_level, temp, "");
     if( !child_db_scope)
@@ -126,7 +122,7 @@ mi::neuraylib::IScope* Database_impl::create_or_get_named_scope(
     if( privacy_level <= parent->get_privacy_level())
         return nullptr;
 
-    Scope_impl* parent_scope_impl = static_cast<Scope_impl *>( parent);
+    auto* parent_scope_impl = static_cast<Scope_impl *>( parent);
     DB::Scope* parent_db_scope = parent_scope_impl->get_scope();
     DB::Scope* child_db_scope = parent_db_scope->create_child( privacy_level, false, name);
     if( !child_db_scope)
@@ -142,10 +138,10 @@ mi::neuraylib::IScope* Database_impl::get_scope( const char* id_string) const
     if( m_status != mi::neuraylib::INeuray::STARTED)
         return nullptr;
 
-    STLEXT::Likely<mi::Uint32> id_likely = STRING::lexicographic_cast_s<mi::Uint32>( id_string);
-    if( !id_likely.get_status())
+    std::optional<mi::Uint32> id_optional = STRING::lexicographic_cast_s<mi::Uint32>( id_string);
+    if( !id_optional.has_value())
         return nullptr;
-    mi::Uint32 id = *id_likely.get_ptr(); //-V522 PVS
+    mi::Uint32 id = id_optional.value();
     DB::Scope_id scope_id( id);
 
     DB::Scope* scope = m_database->lookup_scope( scope_id);
@@ -176,15 +172,15 @@ mi::Sint32 Database_impl::remove_scope( const char* id_string) const
     if( m_status != mi::neuraylib::INeuray::STARTED)
         return -1;
 
-    STLEXT::Likely<mi::Uint32> id_likely = STRING::lexicographic_cast_s<mi::Uint32>( id_string);
-    if( !id_likely.get_status())
+    std::optional<mi::Uint32> id_optional = STRING::lexicographic_cast_s<mi::Uint32>( id_string);
+    if( !id_optional.has_value())
         return -1;
-    mi::Uint32 id = *id_likely.get_ptr(); //-V522 PVS
+    mi::Uint32 id = id_optional.value();
     if( id == 0)
         return -1;
 
     DB::Scope_id scope_id( id);
-    return m_database->remove( scope_id) ? 0 : -1;
+    return m_database->remove_scope( scope_id) ? 0 : -1;
 }
 
 void Database_impl::garbage_collection(

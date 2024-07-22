@@ -40,16 +40,17 @@
 
 /// Reference counting strategy in base/data/db
 ///
-/// The interfaces in base/data/db and its implementation in based/data/dbnr predate
-/// mi::base::IInterface and the reference counting strategy used in the public APIs. The following
-/// abbreviations are used to denote the convention for each pointer in parameters and return
-/// values.
+/// The interfaces in base/data/db and some implementation classes predate mi::base::IInterface and
+/// the reference counting strategy used in the public APIs. The following abbreviations are used
+/// to denote the convention for each pointer in parameters and return values.
 ///
-/// - RCS:NEU neutral, for parameters and return values
-/// - RCS:ICE incremented by callee, for return values
-/// - RCS:ICR incremented by caller, for parameters, rare
+/// - RCS:NEU reference count unchanged/neutral, for parameters and return values
+/// - RCS:ICE reference count incremented by callee, for return values
+/// - RCS:ICR reference count incremented by caller, for parameters, rare, e.g.,
+///           Transaction::finish_edit()
 /// - RCS:TRO transfers ownership, for parameters and return values, rare, e.g.,
-///           Transaction::store()
+///           Transaction::store(), Transaction::construct_empty_element(),
+///           Element_base_base::copy(), and Element::copy().
 ///
 /// Pointers of classes derived from mi::base::IInterface are not annotated since the standard
 /// reference counting strategy as in the public APIs is assumed (RCS:NEU for parameters and
@@ -99,13 +100,15 @@ public:
 
     /// Removes a scope from the database.
     ///
-    /// \note Without explicit pinning the corresponding scope must no longer be used in any way
-    ///       after a call to this method without.
+    /// The global scope can not be removed.
+    ///
+    /// \note The corresponding scope must no longer be used in any way after a call to this method
+    ///       \em without explicitly pinning it beforehand.
     ///
     /// \param id     The ID of the scope to remove
-    /// \return       \c true in case of success, \c false otherwise (invalid scope ID, or already
-    ///               marked for removal).
-    virtual bool remove( Scope_id id) = 0;
+    /// \return       \c true in case of success, \c false otherwise (global scope, invalid scope,
+    ///               ID, or already marked for removal).
+    virtual bool remove_scope( Scope_id id) = 0;
 
     //@}
     /// \name Closing
@@ -252,6 +255,7 @@ public:
     ///                                       zero).
     ///                                 - -2: Invalid scheduling mode (transaction-less or
     ///                                       asynchronous execution is restricted to local jobs).
+    ///                                 - -3: Invalid job priority (negative value).
     virtual mi::Sint32 execute_fragmented( Fragmented_job* job, size_t count) = 0;
 
     /// Executes a job, splitting it into the given number of fragments (asynchronous).
@@ -275,6 +279,7 @@ public:
     ///                                       zero).
     ///                                 - -2: Invalid scheduling mode (transaction-less or
     ///                                       asynchronous execution is restricted to local jobs).
+    ///                                 - -3: Invalid job priority (negative value).
     virtual mi::Sint32 execute_fragmented_async(
         Fragmented_job* job, size_t count, IExecution_listener* listener) = 0;
 

@@ -167,15 +167,11 @@ protected:
     // The callback to update the application logic. Is called directly after
     // a new swapchain image is acquired and after waiting for the fence for
     // the current frame's command buffer.
-    virtual void update(float elapsed_seconds, uint32_t image_index) = 0;
+    virtual void update(float elapsed_seconds, uint32_t frame_index) = 0;
 
     // The callback to fill the current frame's command buffer. Is called directly
     // after vkBeginCommandBuffer and before vkEndCommandBuffer.
-    virtual void render(VkCommandBuffer command_buffer, uint32_t image_index) = 0;
-
-    // Called directly after the current command buffer is submitted, but before
-    // the next frame is presented (before potential vsync).
-    virtual void after_submit_callback(uint32_t image_index) {}
+    virtual void render(VkCommandBuffer command_buffer, uint32_t frame_index, uint32_t image_index) = 0;
 
     // Called when a keyboard key is pressed or released.
     virtual void key_callback(int key, int action) {}
@@ -225,8 +221,8 @@ protected:
     VkSwapchainKHR m_swapchain = nullptr;
     std::vector<VkImage> m_swapchain_images;
     std::vector<VkImageView> m_swapchain_image_views;
-    VkSemaphore m_image_available_semaphore = nullptr;
-    VkSemaphore m_render_finished_semaphore = nullptr;
+    std::vector<VkSemaphore> m_image_available_semaphores;
+    std::vector<VkSemaphore> m_render_finished_semaphores;
 
     // For no window mode we have to handle device memory ourselves
     std::vector<VkDeviceMemory> m_swapchain_device_memories;
@@ -265,7 +261,7 @@ private:
 
     void recreate_swapchain_or_framebuffer_image();
 
-    void render_loop_iteration(uint32_t image_index, double& last_frame_time);
+    void render_loop_iteration(uint32_t frame_index, uint32_t image_index, double& last_frame_time);
 
     static void internal_key_callback(
         GLFWwindow* window, int key, int scancode, int action, int mods);

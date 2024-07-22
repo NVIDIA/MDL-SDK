@@ -74,6 +74,8 @@ namespace IMAGE {
 /// \param data       The pixel data to be manipulated.
 /// \param count      The number of pixels in \p data.
 /// \param components The number of components of each pixel (3 for PT_RGB_FP, 4 for PT_COLOR).
+///                   Note that only up to 3 channels are gamma-corrected, the 4th channels is
+///                   assumed to be the alpha channel and is left as is.
 /// \param exponent   The exponent that is applied to all channels. For arbitrary gamma changes
 ///                   this exponent is the quotient of the old and new gamma value. For decoding
 ///                   gamma compressed data into linear data the exponent is the gamma value
@@ -232,10 +234,10 @@ template <Pixel_type Source, Pixel_type Dest>
 struct Pixel_converter
 {
     /// Typedef for the underlying base type of Source
-    typedef typename Pixel_type_traits<Source>::Base_type Source_base_type;
+    using Source_base_type = typename Pixel_type_traits<Source>::Base_type;
 
     /// Typedef for the underlying base type of Dest
-    typedef typename Pixel_type_traits<Dest>::Base_type   Dest_base_type;
+    using Dest_base_type = typename Pixel_type_traits<Dest>::Base_type;
 
     /// Converts a single pixel from the source format to the destination format.
     ///contiguous region of pixels
@@ -311,7 +313,7 @@ template <Pixel_type Type>
 struct Pixel_copier
 {
     /// Typedef for the underlying base type
-    typedef typename Pixel_type_traits<Type>::Base_type Base_type;
+    using Base_type = typename Pixel_type_traits<Type>::Base_type;
 
     /// Copies a single pixel.
     ///
@@ -403,15 +405,17 @@ MI_HOST_DEVICE_INLINE void adjust_gamma(
     const mi::Uint32 components,
     const mi::Float32 exponent)
 {
+    mi::Uint32 rgb_components = std::min( components, 3U);
+
     for( mi::Size i = 0; i < count * components; i += components) {
 #ifdef __CUDACC__
 #pragma unroll
 #endif
-        for ( mi::Uint32 c = 0; c < components; ++c) {
+        for ( mi::Uint32 c = 0; c < rgb_components; ++c) {
 #ifdef __CUDACC__
             data[i+c] = powf( data[i+c], exponent);
 #else
-            data[i+c] = mi::math::fast_pow( data[i+c], exponent); //!!
+            data[i+c] = mi::math::fast_pow( data[i+c], exponent);
 #endif
         }
     }

@@ -105,7 +105,7 @@ int Mdltlc::run(int argc, char *argv[])
     bool opt_error = false;
     bool show_version = false;
 
-    m_imdl = mi::mdl::initialize();
+    m_imdl = mi::mdl::initialize(true);
 
     mi::base::Handle<Compiler> compiler = create_compiler();
 

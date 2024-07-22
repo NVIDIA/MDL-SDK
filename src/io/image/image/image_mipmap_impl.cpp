@@ -138,7 +138,7 @@ Mipmap_impl::Mipmap_impl(
         plugin->open_for_reading( &reader, plugin_selector));
     if( !image_file) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-            "The image plugin \"%s\" failed to import \"%s\".",
+            R"(The image plugin "%s" failed to import "%s".)",
             plugin->get_name(), filename.c_str());
         *errors = -7;
         return;
@@ -146,8 +146,8 @@ Mipmap_impl::Mipmap_impl(
 
     m_levels.clear();
 
-    const mi::Uint32 width  = image_file->get_resolution_x();
-    const mi::Uint32 height = image_file->get_resolution_y();
+    const mi::Uint32 width  = image_file->get_resolution_x( 0);
+    const mi::Uint32 height = image_file->get_resolution_y( 0);
 
     m_nr_of_levels = 1 + mi::math::log2_int( std::min( width, height));
     m_nr_of_provided_levels = only_first_level ? 1 : image_file->get_miplevels();
@@ -217,7 +217,7 @@ Mipmap_impl::Mipmap_impl(
         = image_module->find_plugin_for_import( extension.c_str(), reader);
     if( !plugin) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-            "No image plugin found to handle \"%s\" in \"%s\".",
+            R"(No image plugin found to handle "%s" in "%s".)",
             member_filename.c_str(), container_filename.c_str());
         *errors = -3;
         return;
@@ -229,7 +229,7 @@ Mipmap_impl::Mipmap_impl(
         plugin->open_for_reading( reader, plugin_selector));
     if( !image_file) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-            "The image plugin \"%s\" failed to import \"%s\" in \"%s\".",
+            R"(The image plugin "%s" failed to import "%s" in "%s".)",
             plugin->get_name(), member_filename.c_str(), container_filename.c_str());
         *errors = -7;
         return;
@@ -237,8 +237,8 @@ Mipmap_impl::Mipmap_impl(
 
     m_levels.clear();
 
-    const mi::Uint32 width  = image_file->get_resolution_x();
-    const mi::Uint32 height = image_file->get_resolution_y();
+    const mi::Uint32 width  = image_file->get_resolution_x( 0);
+    const mi::Uint32 height = image_file->get_resolution_y( 0);
 
     m_nr_of_levels = 1 + mi::math::log2_int( std::min( width, height));
     m_nr_of_provided_levels = only_first_level ? 1 : image_file->get_miplevels();
@@ -326,8 +326,8 @@ Mipmap_impl::Mipmap_impl(
 
     m_levels.clear();
 
-    const mi::Uint32 width  = image_file->get_resolution_x();
-    const mi::Uint32 height = image_file->get_resolution_y();
+    const mi::Uint32 width  = image_file->get_resolution_x( 0);
+    const mi::Uint32 height = image_file->get_resolution_y( 0);
 
     m_nr_of_levels = 1 + mi::math::log2_int( std::min( width, height));
     m_nr_of_provided_levels = only_first_level ? 1 : image_file->get_miplevels();
@@ -456,7 +456,7 @@ mi::Size Mipmap_impl::get_size() const
 
     for( mi::Uint32 i = 0; i <= m_last_created_level; ++i) {     // m_level[i]
         mi::base::Handle<ICanvas> canvas_internal( m_levels[i]->get_interface<ICanvas>());
-        if( canvas_internal)                // exact memory usage
+        if( canvas_internal)                                     // exact memory usage
             size += canvas_internal->get_size();
         else  {                                                  // approximate memory usage
             const mi::Size width  = m_levels[i]->get_resolution_x();

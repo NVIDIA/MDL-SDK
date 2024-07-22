@@ -391,6 +391,21 @@ public:
         size_t                 n_arguments) const = 0;
 };
 
+// forward
+class IMaterial_instance;
+
+/// The possible error codes on DAG.
+enum Dag_error_code {
+    EC_NONE,                   ///< No error has occurred.
+    EC_INVALID_INDEX,          ///< The given index is invalid.
+    EC_MATERIAL_HAS_ERROR,     ///< The material cannot be instantiated because it has errors.
+    EC_TOO_FEW_ARGUMENTS,      ///< Not enough arguments were supplied for the material.
+    EC_TOO_MANY_ARGUMENTS,     ///< Too many arguments were supplied for the material.
+    EC_INSTANTIATION_ERROR,    ///< An error occurred during instantiation.
+    EC_ARGUMENT_TYPE_MISMATCH, ///< An instance argument is of wrong type.
+    EC_WRONG_TRANSMISSION_ON_THIN_WALLED,  ///< Different transmission on thin_walled material.
+};
+
 /// A container of DAG representations of a module containing materials, functions, constants,
 /// types and module annotations.
 ///
@@ -411,6 +426,7 @@ public:
         FP_CAN_THROW_DIVZERO = 4, ///< True, if this function can throw a div-by-zero exception.
         FP_IS_UNIFORM        = 5, ///< True, if this function is uniform.
         FP_IS_NATIVE         = 6, ///< True, if this function was declared native.
+        FP_IS_DECLARATIVE    = 7, ///< True, if this function is declarative.
     };
 
     /// Properties of DAG annotations.
@@ -475,6 +491,11 @@ public:
         /// \return      The old value of the flag.
         virtual bool enable_unsafe_math_opt(bool flag) = 0;
 
+        /// Return unsafe math optimization setting.
+        ///
+        /// \return      The value of the flag.
+        virtual bool get_unsafe_math_opt() const = 0;
+
         /// Get the type factory associated with this expression factory.
         ///
         /// \returns            The type factory.
@@ -488,320 +509,7 @@ public:
 
     static char const MESSAGE_CLASS = 'C';
 
-    /// The possible error codes.
-    enum Error_code {
-        EC_NONE,                   ///< No error has occurred.
-        EC_INVALID_INDEX,          ///< The given index is invalid.
-        EC_MATERIAL_HAS_ERROR,     ///< The material cannot be instantiated because it has errors.
-        EC_TOO_FEW_ARGUMENTS,      ///< Not enough arguments were supplied for the material.
-        EC_TOO_MANY_ARGUMENTS,     ///< Too many arguments were supplied for the material.
-        EC_INSTANTIATION_ERROR,    ///< An error occurred during instantiation.
-        EC_ARGUMENT_TYPE_MISMATCH, ///< An instance argument is of wrong type.
-        EC_WRONG_TRANSMISSION_ON_THIN_WALLED,  ///< Different transmission on thin_walled material.
-    };
-
-    /// An instantiated material.
-    ///
-    /// With an IGenerated_code_dag at hand, creating an instantiated material usually
-    /// consists of these steps:
-    ///  - Create the object with IGenerated_code_dag::create_material_instance().
-    ///  - Build the argument list using the IValue_factory retrieved from
-    ///    IGenerated_code_dag::IMaterial_instance::get_value_factory().
-    ///    Material parameter defaults retrieved from
-    ///    IGenerated_code_dag::get_material_parameter_default() can be used directly.
-    ///  - Call IGenerated_code_dag::IMaterial_instance::initialize().
-    class IMaterial_instance : public
-        mi::base::Interface_declare
-        <0x29c36255,0x7558,0x4865,0xa7,0x7e,0xaa,0x3a,0x50,0x4f,0x70,0xbc,
-        IDag_builder>
-    {
-    public:
-        /// Instantiation flags.
-        enum Flags {
-            INSTANCE_COMPILATION = 0 << 0,  ///< Do an instance compilation, default.
-            CLASS_COMPILATION    = 1 << 0,  ///< Do a class compilation.
-            NO_ARGUMENT_INLINE   = 1 << 1,  ///< CLASS_COMPILATION: Do not inline any arguments.
-            NO_RESOURCE_SHARING  = 1 << 2,  ///< CLASS_COMPILATION: Do not share resource arguments.
-            NO_TERNARY_ON_DF     = 1 << 3,  ///< CLASS_COMPILATION: Do not allow ?: on df.
-            NO_DEAD_PARAMS       = 1 << 4,  ///< CLASS_COMPILATION: Remove dead parameters.
-            NO_STRING_PARAMS     = 1 << 5,  ///< CLASS_COMPILATION: Do not create string parameters.
-            NO_BOOL_PARAMS       = 1 << 6,  ///< CLASS_COMPILATION: Do not create bool parameters.
-            NO_ENUM_PARAMS       = 1 << 7,  ///< CLASS_COMPILATION: Do not create enum parameters.
-            /// CLASS_COMPILATION: Do not create a parameter for geometry.cutout_opacity if its
-            /// value is constant 0.0f or 1.0f.
-            NO_TRIVIAL_CUTOUT_OPACITY = 1 <<  8,
-            /// CLASS_COMPILATION: Do not create layering calls for transparent layers, i.e., with
-            /// weight 0.0f.
-            NO_TRANSPARENT_LAYERS     = 1 <<  9,
-            IGNORE_NOINLINE           = 1 << 10, ///< Ignore anno::noinline() annotations.
-            TARGET_MATERIAL_MODEL     = 1 << 11, ///< Target material model mode.
-
-            DEFAULT_CLASS_COMPILATION =  ///< Do class compilation with default flags.
-                CLASS_COMPILATION |
-                NO_ARGUMENT_INLINE |
-                NO_RESOURCE_SHARING |
-                NO_DEAD_PARAMS
-        };
-
-        /// Material slots on which hashes are calculated.
-        enum Slot {
-            MS_THIN_WALLED,                     ///< .thin_walled
-
-            MS_SURFACE_BSDF_SCATTERING,         ///< .surface.scattering
-            MS_SURFACE_EMISSION_EDF_EMISSION,   ///< .surface.emission.emission
-            MS_SURFACE_EMISSION_INTENSITY,      ///< .surface.emission.intensity
-            MS_SURFACE_EMISSION_MODE,           ///< .surface.emission.mode
-
-            MS_BACKFACE_BSDF_SCATTERING,        ///< .backface.scattering
-            MS_BACKFACE_EMISSION_EDF_EMISSION,  ///< .backface.emission.emission
-            MS_BACKFACE_EMISSION_INTENSITY,     ///< .backface.emission.intensity
-            MS_BACKFACE_EMISSION_MODE,          ///< .backface.emission.mode
-
-            MS_IOR,                             ///< .ior
-
-            MS_VOLUME_VDF_SCATTERING,           ///< .volume.scattering
-            MS_VOLUME_ABSORPTION_COEFFICIENT,   ///< .volume.absorption_coefficient
-            MS_VOLUME_SCATTERING_COEFFICIENT,   ///< .volume.scattering_coefficient
-            MS_VOLUME_EMISSION_INTENSITY,       ///< .volume.emission_intensity
-
-            MS_GEOMETRY_DISPLACEMENT,           ///< .geometry.displacement
-            MS_GEOMETRY_CUTOUT_OPACITY,         ///< .geometry.cutout_opacity
-            MS_GEOMETRY_NORMAL,                 ///< .geometry.normal
-
-            MS_HAIR,                            ///< .hair
-
-            MS_LAST = MS_HAIR
-        };
-
-        /// Property flags of an instance.
-        enum Property {
-            IP_DEPENDS_ON_TRANSFORM           = 0x001,   ///< depends on object transforms
-            IP_DEPENDS_ON_OBJECT_ID           = 0x002,   ///< depends of the object id
-            IP_DEPENDS_ON_GLOBAL_DISTRIBUTION = 0x004,   ///< depends on global distribution (edf)
-            IP_USES_TERNARY_OPERATOR          = 0x008,   ///< uses the ternary operator '?:'
-            IP_USES_TERNARY_OPERATOR_ON_DF    = 0x010,   ///< uses the ternary operator '?:' on *df
-            IP_CLASS_COMPILED                 = 0x020,   ///< was class compiled
-            IP_DISTILLED                      = 0x040,   ///< was created by the distiller
-            IP_DEPENDS_ON_UNIFORM_SCENE_DATA  = 0x080,   ///< depends on uniform scene data
-            IP_TARGET_MATERIAL_MODEL          = 0x100,   ///< instance is in target material mode
-        };
-
-        /// Opacity of an instance.
-        enum Opacity {
-            OPACITY_OPAQUE,             ///< opaque for sure
-            OPACITY_TRANSPARENT,        ///< transparent for sure
-            OPACITY_UNKNOWN             ///< opacity unknown (depends on parameter
-                                        ///  or complex user expression)
-        };
-
-        typedef unsigned Properties;
-
-    public:
-        // ----------------- from IDAG_builder -----------------
-
-        /// Get the type factory of this instance.
-        ///
-        /// Use this factory to create or import types owned by this instance.
-        virtual IType_factory *get_type_factory() = 0;
-
-        /// Get the value factory of this instance.
-        ///
-        /// Use this factory to create or import values owned by this instance.
-        virtual IValue_factory *get_value_factory() = 0;
-
-        /// Create a constant node.
-        ///
-        /// \param value       The value of the constant.
-        /// \returns           The created constant.
-        ///
-        /// \note Use this method to create arguments of the instance.
-        virtual DAG_constant const *create_constant(IValue const *value) = 0;
-
-        /// Create a call node.
-        ///
-        /// \param signature       The signature of the called function.
-        /// \param sema            The semantic of the called function.
-        /// \param call_args       The call arguments of the called function.
-        /// \param num_call_args   The number of call arguments.
-        /// \param ret_type        The return type of the called function.
-        /// \returns               The created call.
-        ///
-        /// \note Use this method to create arguments of the instance.
-        virtual DAG_node const *create_call(
-            char const                    *signature,
-            IDefinition::Semantics        sema,
-            DAG_call::Call_argument const call_args[],
-            int                           num_call_args,
-            IType const                   *ret_type) = 0;
-
-        /// Create a parameter reference node.
-        ///
-        /// \param type        The type of the parameter
-        /// \param index       The index of the parameter.
-        /// \returns           The created parameter reference.
-        virtual DAG_parameter const *create_parameter(
-            IType const *type,
-            int         index) = 0;
-
-        // ----------------- own methods -----------------
-
-        /// Initialize this material instance.
-        ///
-        /// \param resolver                   The call name resolver.
-        /// \param resource_modifier          The resource modifier or NULL.
-        /// \param code_dag                   The generated code DAG.
-        /// \param argc                       The number of arguments.
-        /// \param argv                       An array of pointers to argument DAG nodes.
-        ///                                   The nodes will be imported into the material instance.
-        /// \param use_temporaries            If true, hide multiple used subexpressions behind
-        ///                                   temporaries, if false, generate a true DAG.
-        /// \param flags                      Instantiation flags.
-        /// \param evaluator                  If non-NULL, use this evaluator additionally to fold
-        ///                                   intrinsic functions first.
-        /// \param fold_meters_per_scene_unit
-        ///                                   If true, occurrences of the functions
-        ///                                   state::meters_per_scene_unit() and
-        ///                                   state::scene_units_per_meter() will be folded
-        ///                                   using the \c mdl_meters_per_scene_unit parameter.
-        /// \param mdl_meters_per_scene_unit  The value for the meter/scene unit conversion
-        ///                                   only used when folding is enabled.
-        /// \param wavelength_min             The value for the state::wavelength_min() function.
-        /// \param wavelength_max             The value for the state::wavelength_max() function.
-        /// \param fold_params                Names of parameters to be folded in class-compilation
-        ///                                   mode (in addition to flags).
-        /// \param num_fold_params            The number of parameter names to be folded.
-        ///
-        /// \returns                The error code of the initialization.
-        ///
-        /// Arguments are always given by position.
-        /// If a NULL argument is given an EC_INSTANTIATION_ERROR is returned in error_code.
-        virtual Error_code initialize(
-            ICall_name_resolver       *resolver,
-            IResource_modifier        *resource_modifier,
-            IGenerated_code_dag const *code_dag,
-            size_t                    argc,
-            DAG_node const            *argv[],
-            bool                      use_temporaries,
-            unsigned                  flags,
-            ICall_evaluator           *evaluator,
-            bool                      fold_meters_per_scene_unit,
-            float                     mdl_meters_per_scene_unit,
-            float                     wavelength_min,
-            float                     wavelength_max,
-            char const * const        fold_params[],
-            size_t                    num_fold_params) = 0;
-
-        /// Return the material constructor of this instance.
-        ///
-        /// This method returns the body expression of a material instance. This is always
-        /// a call to the MDL material constructor.
-        virtual DAG_call const *get_constructor() const = 0;
-
-        /// Return the number of temporaries of this instance.
-        virtual size_t get_temporary_count() const = 0;
-
-        /// Return the value of the temporary at index.
-        ///
-        /// \param index  the index of the temporary
-        virtual DAG_node const *get_temporary_value(size_t index) const = 0;
-
-        /// Return the number of parameters of this instance.
-        ///
-        /// \note: Returns always 0 in instance compilation mode.
-        virtual size_t get_parameter_count() const = 0;
-
-        /// Return the default value of a parameter of this instance.
-        ///
-        /// \param index  the index of the parameter
-        virtual IValue const *get_parameter_default(size_t index) const = 0;
-
-        /// Return the hash value of this material instance.
-        ///
-        /// This returns the hash-value of the body expression of this material instance.
-        virtual DAG_hash const *get_hash() const = 0;
-
-        /// Return the hash value of one material slot of this material instance.
-        ///
-        /// \param slot  the material slot
-        ///
-        /// This returns the hash value of a sub expression of the material instance.
-        virtual DAG_hash const *get_slot_hash(Slot slot) const = 0;
-
-        /// Return the canonical parameter name of the given parameter.
-        ///
-        /// \param index  the index of the parameter
-        virtual char const *get_parameter_name(size_t index) const = 0;
-
-        /// Returns true if this instance depends on object transforms.
-        ///
-        /// If this returns \c true, the material body expression of this material instance
-        /// might depend on the MDL uniform \c state::transform_*() state functions.
-        virtual bool depends_on_transform() const = 0;
-
-        /// Returns true if this instance depends on the object id.
-        ///
-        /// If this returns \c true, the material body expression of this material instance
-        /// might depend on the MDL uniform \c state::object_id() state function.
-        virtual bool depends_on_object_id() const = 0;
-
-        /// Returns true if this instance depends on the global distribution (edf).
-        ///
-        /// If this returns \c true, the material body expression of this material instance
-        /// might depend on the MDL edf with global distribution.
-        virtual bool depends_on_global_distribution() const = 0;
-
-        /// Returns true if this instance depends on uniform scene data.
-        virtual bool depends_on_uniform_scene_data() const = 0;
-
-        /// Returns the number of scene data attributes referenced by this instance.
-        virtual size_t get_referenced_scene_data_count() const = 0;
-
-        /// Return the name of a scene data attribute referenced by this instance.
-        ///
-        /// \param index  the index of the scene data attribute
-        virtual char const *get_referenced_scene_data_name(size_t index) const = 0;
-
-        /// Returns the opacity of this instance.
-        virtual Opacity get_opacity() const = 0;
-
-        /// Returns the surface opacity of this instance.
-        virtual Opacity get_surface_opacity() const = 0;
-
-        /// Returns the cutout opacity of this instance if it is constant.
-        ///
-        /// \return if the cutout opacity is a constant (and was read),
-        ///         NULL if it depends on parameters / complex user expressions
-        virtual IValue_float const *get_cutout_opacity() const = 0;
-
-        /// Access messages.
-        virtual Messages const &access_messages() const = 0;
-
-        /// Get the instance properties.
-        virtual Properties get_properties() const = 0;
-
-        /// Get the internal space.
-        virtual char const *get_internal_space() const = 0;
-
-        /// Set a tag, version pair for a resource constant that might be reachable from this
-        /// instance.
-        ///
-        /// \param res             a resource
-        /// \param tag             the tag value
-        virtual void set_resource_tag(
-            IValue_resource const *res,
-            int                   tag) = 0;
-
-        /// Get the number of resource tag map entries.
-        virtual size_t get_resource_tag_map_entries_count() const = 0;
-
-        /// Get the i'th resource tag map entry or NULL if the index is out of bounds;
-        ///
-        /// \param index  the index of the resource map entry.
-        virtual Resource_tag_tuple const *get_resource_tag_map_entry(size_t index) const = 0;
-
-        /// Get the resource tagger for this material instance.
-        virtual IResource_tagger *get_resource_tagger() const = 0;
-    };
+    typedef Dag_error_code Error_code;
 
     // -------------------------- methods --------------------------
 
@@ -944,6 +652,16 @@ public:
     /// \returns    The number of materials in this generated code.
     virtual size_t get_material_count() const = 0;
 
+    /// Get the return type of the material at material_index.
+    /// \param      material_index  The index of the material.
+    /// \returns                    The return type of the material.
+    virtual IType const *get_material_return_type(size_t material_index) const = 0;
+
+    /// Get the semantics of the material at material_index.
+    /// \param      material_index  The index of the material.
+    /// \returns                    The semantics of the material.
+    virtual IDefinition::Semantics get_material_semantics(size_t material_index) const = 0;
+
     /// Get the name of the material at material_index.
     ///
     /// \param material_index  The index of the material.
@@ -1035,6 +753,14 @@ public:
         size_t material_index,
         size_t parameter_index,
         size_t user_index) const = 0;
+
+    /// Get the material hash value for the given material index if available.
+    ///
+    /// \param material_index  The index of the material.
+    /// \returns               The material hash of the material or NULL if no hash
+    ///                        value is available or the index is out of bounds.
+    virtual DAG_hash const *get_material_hash(
+        size_t material_index) const = 0;
 
     /// Get the node factory.
     virtual DAG_node_factory *get_node_factory() = 0;
@@ -1135,6 +861,20 @@ public:
     virtual DAG_node const *get_function_body(
         size_t function_index) const = 0;
 
+    /// Get the body of the function at function_index.
+    /// Equivalent to get_function_body.
+    ///
+    /// \param function_index      The index of the function.
+    /// \returns                   The body of the function.
+    virtual DAG_node const *get_function_value(
+        size_t function_index) const = 0;
+
+    /// Get the export flags of the function at function_index.
+    ///
+    /// \param      function_index  The index of the function.
+    /// \returns                    True if this is an exported function, false if it is local.
+    virtual bool get_function_exported(size_t function_index) const = 0;
+
     /// Get the property flag of the function at function_index.
     ///
     /// \param function_index  The index of the function.
@@ -1154,7 +894,7 @@ public:
     ///
     /// \param function_index  The index of the function.
     /// \param callee_index    The index of the callee.
-    /// \returns               Number of function that might be called by this function
+    /// \returns               Name of function that might be called by this function
     virtual char const *get_function_reference(
         size_t function_index,
         size_t callee_index) const = 0;
@@ -1263,11 +1003,41 @@ public:
     virtual DAG_node const *get_material_value(
         size_t material_index) const = 0;
 
+    /// Get the body expression of the material at material_index.
+    /// This is equivalent to get_material_value().
+    /// \param material_index  The index of the material.
+    /// \returns               The value of the material.
+    virtual DAG_node const *get_material_body(
+        size_t material_index) const = 0;
+
     /// Get the export flags of the material at material_index.
     ///
     /// \param material_index  The index of the material.
     /// \returns               True if this is an exported material, false if it is local.
     virtual bool get_material_exported(size_t material_index) const = 0;
+
+    /// Get the property flag of the material at material_index.
+    /// \param      material_index  The index of the material.
+    /// \param      fp              The property.
+    /// \returns                    True if this material has the property, false if not.
+    virtual bool get_material_property(
+        size_t            material_index,
+        Function_property fp) const = 0;
+
+    /// Get the number of entities referenced by a material.
+    ///
+    /// \param material_index  The index of the material.
+    /// \returns               Number of material that might be called by this material
+    virtual size_t get_material_references_count(size_t material_index) const = 0;
+
+    /// Get the signature of the i'th reference of a material.
+    ///
+    /// \param material_index  The index of the material.
+    /// \param callee_index    The index of the callee.
+    /// \returns               Name of material that might be called by this material
+    virtual char const *get_material_reference(
+        size_t material_index,
+        size_t callee_index) const = 0;
 
     /// Return the original material name of a cloned material or "" if the material
     /// is not a clone.
@@ -1286,6 +1056,48 @@ public:
     virtual IMaterial_instance *create_material_instance(
         size_t     index,
         Error_code *error_code = NULL) const = 0;
+
+    /// Get the number of (exported and non-exported) user defined struct categories
+    /// of this compiled module.
+    virtual size_t get_struct_category_count() const = 0;
+
+    /// Get the name of the user-defined struct category at index.
+    ///
+    /// \param index  The index of the struct category.
+    /// \returns      The name of the struct category.
+    virtual char const *get_struct_category_name(
+        size_t index) const = 0;
+
+    /// Get the user defined struct category at index.
+    ///
+    /// \param index  The index of the struct category.
+    /// \returns      The struct category.
+    virtual IStruct_category const *get_struct_category(
+        size_t index) const = 0;
+
+    /// Get the number of annotations of the user defined struct category at index.
+    ///
+    /// \param index  The index of the struct category.
+    /// \return       The number of annotations of the struct category.
+    virtual size_t get_struct_category_annotation_count(
+        size_t index) const = 0;
+
+    /// Get the annotation at annotation_index of the user defined struct category
+    ///  at cat_index.
+    ///
+    /// \param cat_index           The index of the struct category.
+    /// \param annotation_index    The index of the annotation.
+    /// \returns                   The annotation.
+    virtual DAG_node const *get_struct_category_annotation(
+        size_t cat_index,
+        size_t annotation_index) const = 0;
+
+    /// Returns true if the user defined struct category at index is exported.
+    ///
+    /// \param index  The index of the struct category.
+    /// \returns      true for exported types.
+    virtual bool is_struct_category_exported(
+        size_t index) const = 0;
 
     /// Get the number of (exported and non-exported) user defined types of this compiled module.
     virtual size_t get_type_count() const = 0;
@@ -1577,6 +1389,354 @@ public:
     virtual IResource_tagger *get_resource_tagger() const = 0;
 };
 
+
+/// An instantiated material.
+///
+/// With an IGenerated_code_dag at hand, creating an instantiated material usually
+/// consists of these steps:
+///  - Create the object with IGenerated_code_dag::create_material_instance().
+///  - Build the argument list using the IValue_factory retrieved from
+///    IMaterial_instance::get_value_factory().
+///    Material parameter defaults retrieved from
+///    IGenerated_code_dag::get_material_parameter_default() can be used directly.
+///  - Call IMaterial_instance::initialize().
+class IMaterial_instance : public
+    mi::base::Interface_declare
+    <0x29c36255,0x7558,0x4865,0xa7,0x7e,0xaa,0x3a,0x50,0x4f,0x70,0xbc,
+    IDag_builder>
+{
+public:
+    typedef Dag_error_code Error_code;
+
+    /// Instantiation flags.
+    enum Flags {
+        INSTANCE_COMPILATION = 0 << 0,  ///< Do an instance compilation, default.
+        CLASS_COMPILATION    = 1 << 0,  ///< Do a class compilation.
+        NO_ARGUMENT_INLINE   = 1 << 1,  ///< CLASS_COMPILATION: Do not inline any arguments.
+        NO_RESOURCE_SHARING  = 1 << 2,  ///< CLASS_COMPILATION: Do not share resource arguments.
+        NO_TERNARY_ON_DF     = 1 << 3,  ///< CLASS_COMPILATION: Do not allow ?: on df.
+        NO_DEAD_PARAMS       = 1 << 4,  ///< CLASS_COMPILATION: Remove dead parameters.
+        NO_STRING_PARAMS     = 1 << 5,  ///< CLASS_COMPILATION: Do not create string parameters.
+        NO_BOOL_PARAMS       = 1 << 6,  ///< CLASS_COMPILATION: Do not create bool parameters.
+        NO_ENUM_PARAMS       = 1 << 7,  ///< CLASS_COMPILATION: Do not create enum parameters.
+        /// CLASS_COMPILATION: Do not create a parameter for geometry.cutout_opacity if its
+        /// value is constant 0.0f or 1.0f.
+        NO_TRIVIAL_CUTOUT_OPACITY = 1 <<  8,
+        /// CLASS_COMPILATION: Do not create layering calls for transparent layers, i.e., with
+        /// weight 0.0f.
+        NO_TRANSPARENT_LAYERS     = 1 <<  9,
+        IGNORE_NOINLINE           = 1 << 10, ///< Ignore anno::noinline() annotations.
+        TARGET_MATERIAL_MODEL     = 1 << 11, ///< Target material model mode.
+
+        DEFAULT_CLASS_COMPILATION =  ///< Do class compilation with default flags.
+            CLASS_COMPILATION |
+            NO_ARGUMENT_INLINE |
+            NO_RESOURCE_SHARING |
+            NO_DEAD_PARAMS
+    };
+
+    /// Material slots on which hashes are calculated.
+    enum Slot {
+        MS_THIN_WALLED,                     ///< .thin_walled
+
+        MS_SURFACE_BSDF_SCATTERING,         ///< .surface.scattering
+        MS_SURFACE_EMISSION_EDF_EMISSION,   ///< .surface.emission.emission
+        MS_SURFACE_EMISSION_INTENSITY,      ///< .surface.emission.intensity
+        MS_SURFACE_EMISSION_MODE,           ///< .surface.emission.mode
+
+        MS_BACKFACE_BSDF_SCATTERING,        ///< .backface.scattering
+        MS_BACKFACE_EMISSION_EDF_EMISSION,  ///< .backface.emission.emission
+        MS_BACKFACE_EMISSION_INTENSITY,     ///< .backface.emission.intensity
+        MS_BACKFACE_EMISSION_MODE,          ///< .backface.emission.mode
+
+        MS_IOR,                             ///< .ior
+
+        MS_VOLUME_VDF_SCATTERING,           ///< .volume.scattering
+        MS_VOLUME_ABSORPTION_COEFFICIENT,   ///< .volume.absorption_coefficient
+        MS_VOLUME_SCATTERING_COEFFICIENT,   ///< .volume.scattering_coefficient
+        MS_VOLUME_EMISSION_INTENSITY,       ///< .volume.emission_intensity
+
+        MS_GEOMETRY_DISPLACEMENT,           ///< .geometry.displacement
+        MS_GEOMETRY_CUTOUT_OPACITY,         ///< .geometry.cutout_opacity
+        MS_GEOMETRY_NORMAL,                 ///< .geometry.normal
+
+        MS_HAIR,                            ///< .hair
+
+        MS_LAST = MS_HAIR
+    };
+
+    /// Property flags of an instance.
+    enum Property {
+        IP_DEPENDS_ON_TRANSFORM           = 0x001,   ///< depends on object transforms
+        IP_DEPENDS_ON_OBJECT_ID           = 0x002,   ///< depends of the object id
+        IP_DEPENDS_ON_GLOBAL_DISTRIBUTION = 0x004,   ///< depends on global distribution (edf)
+        IP_USES_TERNARY_OPERATOR          = 0x008,   ///< uses the ternary operator '?:'
+        IP_USES_TERNARY_OPERATOR_ON_DF    = 0x010,   ///< uses the ternary operator '?:' on *df
+        IP_CLASS_COMPILED                 = 0x020,   ///< was class compiled
+        IP_DISTILLED                      = 0x040,   ///< was created by the distiller
+        IP_DEPENDS_ON_UNIFORM_SCENE_DATA  = 0x080,   ///< depends on uniform scene data
+        IP_TARGET_MATERIAL_MODEL          = 0x100,   ///< instance is in target material mode
+    };
+
+    /// Opacity of an instance.
+    enum Opacity {
+        OPACITY_OPAQUE,             ///< opaque for sure
+        OPACITY_TRANSPARENT,        ///< transparent for sure
+        OPACITY_UNKNOWN             ///< opacity unknown (depends on parameter
+                                    ///  or complex user expression)
+    };
+
+    typedef unsigned Properties;
+
+public:
+    // ----------------- from IDAG_builder -----------------
+
+    /// Get the type factory of this instance.
+    ///
+    /// Use this factory to create or import types owned by this instance.
+    virtual IType_factory *get_type_factory() = 0;
+
+    /// Get the value factory of this instance.
+    ///
+    /// Use this factory to create or import values owned by this instance.
+    virtual IValue_factory *get_value_factory() = 0;
+
+    /// Create a constant node.
+    ///
+    /// \param value       The value of the constant.
+    /// \returns           The created constant.
+    ///
+    /// \note Use this method to create arguments of the instance.
+    virtual DAG_constant const *create_constant(IValue const *value) = 0;
+
+    /// Create a call node.
+    ///
+    /// \param signature       The signature of the called function.
+    /// \param sema            The semantic of the called function.
+    /// \param call_args       The call arguments of the called function.
+    /// \param num_call_args   The number of call arguments.
+    /// \param ret_type        The return type of the called function.
+    /// \returns               The created call.
+    ///
+    /// \note Use this method to create arguments of the instance.
+    virtual DAG_node const *create_call(
+        char const                    *signature,
+        IDefinition::Semantics        sema,
+        DAG_call::Call_argument const call_args[],
+        int                           num_call_args,
+        IType const                   *ret_type) = 0;
+
+    /// Create a parameter reference node.
+    ///
+    /// \param type        The type of the parameter
+    /// \param index       The index of the parameter.
+    /// \returns           The created parameter reference.
+    virtual DAG_parameter const *create_parameter(
+        IType const *type,
+        int         index) = 0;
+
+    // ----------------- own methods -----------------
+
+    /// Initialize this material instance.
+    ///
+    /// \param resolver                   The call name resolver.
+    /// \param resource_modifier          The resource modifier or NULL.
+    /// \param code_dag                   The generated code DAG.
+    /// \param argc                       The number of arguments.
+    /// \param argv                       An array of pointers to argument DAG nodes.
+    ///                                   The nodes will be imported into the material instance.
+    /// \param use_temporaries            If true, hide multiple used subexpressions behind
+    ///                                   temporaries, if false, generate a true DAG.
+    /// \param flags                      Instantiation flags.
+    /// \param evaluator                  If non-NULL, use this evaluator additionally to fold
+    ///                                   intrinsic functions first.
+    /// \param fold_meters_per_scene_unit
+    ///                                   If true, occurrences of the functions
+    ///                                   state::meters_per_scene_unit() and
+    ///                                   state::scene_units_per_meter() will be folded
+    ///                                   using the \c mdl_meters_per_scene_unit parameter.
+    /// \param mdl_meters_per_scene_unit  The value for the meter/scene unit conversion
+    ///                                   only used when folding is enabled.
+    /// \param wavelength_min             The value for the state::wavelength_min() function.
+    /// \param wavelength_max             The value for the state::wavelength_max() function.
+    /// \param fold_params                Names of parameters to be folded in class-compilation
+    ///                                   mode (in addition to flags).
+    /// \param num_fold_params            The number of parameter names to be folded.
+    /// \param target_type                Requested type of the material return type, or 
+    ///                                   \c NULL for the return type of the material call 
+    ///                                   itself.
+    ///
+    /// \returns                The error code of the initialization.
+    ///
+    /// Arguments are always given by position.
+    /// If a NULL argument is given an EC_INSTANTIATION_ERROR is returned in error_code.
+    virtual Error_code initialize(
+        ICall_name_resolver       *resolver,
+        IResource_modifier        *resource_modifier,
+        IGenerated_code_dag const *code_dag,
+        size_t                    argc,
+        DAG_node const            *argv[],
+        bool                      use_temporaries,
+        unsigned                  flags,
+        ICall_evaluator           *evaluator,
+        bool                      fold_meters_per_scene_unit,
+        float                     mdl_meters_per_scene_unit,
+        float                     wavelength_min,
+        float                     wavelength_max,
+        char const * const        fold_params[],
+        size_t                    num_fold_params,
+        IType const *target_type) = 0;
+
+    /// Return the material constructor of this instance.
+    ///
+    /// This method returns the body expression of a material instance. This is always
+    /// a call to the MDL material constructor.
+    virtual DAG_call const *get_constructor() const = 0;
+
+    /// Return the number of temporaries of this instance.
+    virtual size_t get_temporary_count() const = 0;
+
+    /// Return the value of the temporary at index.
+    ///
+    /// \param index  the index of the temporary
+    virtual DAG_node const *get_temporary_value(size_t index) const = 0;
+
+    /// Return the number of parameters of this instance.
+    ///
+    /// \note: Returns always 0 in instance compilation mode.
+    virtual size_t get_parameter_count() const = 0;
+
+    /// Return the default value of a parameter of this instance.
+    ///
+    /// \param index  the index of the parameter
+    virtual IValue const *get_parameter_default(size_t index) const = 0;
+
+    /// Return the node determined by the path, starting from the root expression of the
+    /// material instance.
+    /// 
+    /// If the path is invalid, both result parameters will contain NULL on return.
+    /// Note that constants can be return as constant nodes, or as values, depending on
+    /// how they are nested within other nodes or values.
+    /// 
+    /// \param path         Path of the sub expression to return.
+    /// \param node_result  If the path names a node that is not nested within a constant,
+    ///                     its value is stored here on return. Otherwise, NULL is stored.
+    /// \param value_result If the node named at the path is a nested constant, its value is stored
+    ///                     here on return. Otherwise, NULL is stored.
+    virtual void lookup_sub_expression(
+        char const *path,
+        DAG_node const *&node_result,
+        IValue const *&value_result) const = 0;
+
+    /// Calculate the hash for the node determined by the path, starting from the root 
+    /// expression of the material instance.
+    /// 
+    /// When the path is empty, the result is equivalent to get_hash().
+    /// When the path corresponds to one of the predefined slots (see #Slot),
+    /// the result is equivalent to get_slot_hash().
+    /// 
+    /// \param path    Path of the sub expression to calculate the hash for.
+    /// 
+    /// \return the hash of the subexpression, or the null hash if the path is invalid.
+    virtual DAG_hash get_sub_expression_hash(char const *path) const = 0;
+
+    /// Return the hash value of this material instance.
+    ///
+    /// This is equivalent to the call get_sub_expression_hash() with the
+    /// empty path \c "".
+    /// 
+    /// This returns the hash-value of the body expression of this material instance.
+    virtual DAG_hash const *get_hash() const = 0;
+
+    /// Return the hash value of one material slot of this material instance.
+    ///
+    /// This is equivalent to a call to get_sub_expression_path() with the
+    /// path that corresponds to \c slot.
+    /// 
+    /// \param slot  the material slot
+    ///
+    /// This returns the hash value of a sub expression of the material instance.
+    virtual DAG_hash const *get_slot_hash(Slot slot) const = 0;
+
+    /// Return the canonical parameter name of the given parameter.
+    ///
+    /// \param index  the index of the parameter
+    virtual char const *get_parameter_name(size_t index) const = 0;
+
+    /// Returns true if this instance depends on object transforms.
+    ///
+    /// If this returns \c true, the material body expression of this material instance
+    /// might depend on the MDL uniform \c state::transform_*() state functions.
+    virtual bool depends_on_transform() const = 0;
+
+    /// Returns true if this instance depends on the object id.
+    ///
+    /// If this returns \c true, the material body expression of this material instance
+    /// might depend on the MDL uniform \c state::object_id() state function.
+    virtual bool depends_on_object_id() const = 0;
+
+    /// Returns true if this instance depends on the global distribution (edf).
+    ///
+    /// If this returns \c true, the material body expression of this material instance
+    /// might depend on the MDL edf with global distribution.
+    virtual bool depends_on_global_distribution() const = 0;
+
+    /// Returns true if this instance depends on uniform scene data.
+    virtual bool depends_on_uniform_scene_data() const = 0;
+
+    /// Returns the number of scene data attributes referenced by this instance.
+    virtual size_t get_referenced_scene_data_count() const = 0;
+
+    /// Return the name of a scene data attribute referenced by this instance.
+    ///
+    /// \param index  the index of the scene data attribute
+    virtual char const *get_referenced_scene_data_name(size_t index) const = 0;
+
+    /// Returns the opacity of this instance.
+    virtual Opacity get_opacity() const = 0;
+
+    /// Returns the surface opacity of this instance.
+    virtual Opacity get_surface_opacity() const = 0;
+
+    /// Returns the cutout opacity of this instance if it is constant.
+    ///
+    /// \return if the cutout opacity is a constant (and was read),
+    ///         NULL if it depends on parameters / complex user expressions
+    virtual IValue_float const *get_cutout_opacity() const = 0;
+
+    /// Access messages.
+    virtual Messages const &access_messages() const = 0;
+
+    /// Returns the amount of used memory by this code material instance.
+    virtual size_t get_memory_size() const = 0;
+
+    /// Get the instance properties.
+    virtual Properties get_properties() const = 0;
+
+    /// Get the internal space.
+    virtual char const *get_internal_space() const = 0;
+
+    /// Set a tag, version pair for a resource constant that might be reachable from this
+    /// instance.
+    ///
+    /// \param res             a resource
+    /// \param tag             the tag value
+    virtual void set_resource_tag(
+        IValue_resource const *res,
+        int                   tag) = 0;
+
+    /// Get the number of resource tag map entries.
+    virtual size_t get_resource_tag_map_entries_count() const = 0;
+
+    /// Get the i'th resource tag map entry or NULL if the index is out of bounds;
+    ///
+    /// \param index  the index of the resource map entry.
+    virtual Resource_tag_tuple const *get_resource_tag_map_entry(size_t index) const = 0;
+
+    /// Get the resource tagger for this material instance.
+    virtual IResource_tagger *get_resource_tagger() const = 0;
+};
+
 /// Check if a DAG node is of a certain type.
 template<typename T>
 bool is(DAG_node const *node)
@@ -1653,7 +1813,7 @@ enabled during construction, like
  - reassociation of sub-expressions
 
 If not explicitly requested via the \c use_temporaries parameter of
-IGenerated_code_dag::IMaterial_instance::initialize(), the DAG backend will not create
+IMaterial_instance::initialize(), the DAG backend will not create
 \c DAG_temporary nodes.
 An application should operate on the DAG IR directly to get the most out of this representation.
 */

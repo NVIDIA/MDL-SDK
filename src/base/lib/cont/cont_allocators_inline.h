@@ -73,8 +73,8 @@ namespace CONT
 template <typename T>
 inline
 void Default_allocator<T>::construct(
-    Pointer p,				// pointer/place of element in memory
-    Const_reference val)		// init value
+    Pointer p,                          // pointer/place of element in memory
+    Const_reference val)                // init value
 {
     // init memory with placement new
     new(p) T(val);
@@ -85,7 +85,7 @@ void Default_allocator<T>::construct(
 template <typename T>
 inline
 void Default_allocator<T>::destroy(
-    Pointer p)				// pointer to element to destroy
+    Pointer p)                          // pointer to element to destroy
 {
     // calling p's destructor
     p->~T();
@@ -97,13 +97,13 @@ void Default_allocator<T>::destroy(
 template <typename T>
 inline
 void Default_allocator<T>::construct_n(
-    Pointer p,				// starting pointer in memory
-    Const_reference val,		// value for all elements
-    size_t size)			// number of elements to be constructed
+    Pointer p,                          // starting pointer in memory
+    Const_reference val,                // value for all elements
+    size_t size)                        // number of elements to be constructed
 {
     // will be optimized soon
     for (size_t i=0; i<size; ++i, ++p)
-	construct(p, val);
+        construct(p, val);
 }
 
 
@@ -111,13 +111,13 @@ void Default_allocator<T>::construct_n(
 template <typename T>
 inline
 void Default_allocator<T>::construct(
-    Pointer start,			// place of first element in memory
-    Pointer end,			// place of last element in memory
-    Const_reference val)		// value for all elements
+    Pointer start,                      // place of first element in memory
+    Pointer end,                        // place of last element in memory
+    Const_reference val)                // value for all elements
 {
     // will be optimized soon
     for (; start != end; ++start)
-	construct(start, val);
+        construct(start, val);
 }
 
 
@@ -129,11 +129,11 @@ void Default_allocator<T>::construct(
 template <typename T>
 inline
 void Default_allocator<T>::destroy_n(
-    Pointer p,				// first element to be destroyed
-    size_t size)			// number of elements to destroy
+    Pointer p,                          // first element to be destroyed
+    size_t size)                        // number of elements to destroy
 {
     typedef typename Type_traits<T>::has_trivial_destructor
-	Has_trivial_destructor;
+        Has_trivial_destructor;
     // simply call the type-dependent optimized or default variant
     destroy_n_aux(p, size, Has_trivial_destructor());
 }
@@ -147,11 +147,11 @@ void Default_allocator<T>::destroy_n(
 template <typename T>
 inline
 void Default_allocator<T>::destroy(
-    Pointer start,			// place of first element in memory
-    Pointer end)			// place of last element in memory
+    Pointer start,                      // place of first element in memory
+    Pointer end)                        // place of last element in memory
 {
     typedef typename Type_traits<T>::has_trivial_destructor
-	Has_trivial_destructor;
+        Has_trivial_destructor;
     // simply call the type-dependent optimized or default variant
     destroy_aux(start, end, Has_trivial_destructor());
 }
@@ -161,7 +161,7 @@ void Default_allocator<T>::destroy(
 template <typename T>
 inline
 typename Default_allocator<T>::Pointer Default_allocator<T>::allocate(
-    size_t size)			// number of elements
+    size_t size)                        // number of elements
 {
     // allocate memory with global new
 #ifdef MI_MEM_TRACKER
@@ -178,8 +178,8 @@ typename Default_allocator<T>::Pointer Default_allocator<T>::allocate(
 template <typename T>
 inline
 void Default_allocator<T>::deallocate(
-    Pointer p,				// starting memory location
-    size_t)				// dummy parameter
+    Pointer p,                          // starting memory location
+    size_t)                             // dummy parameter
 {
     // free memory with global delete
     ::operator delete((void*)p);
@@ -191,9 +191,9 @@ template <typename T>
 inline
 typename Default_allocator<T>::Pointer
 Default_allocator<T>::uninitialized_copy(
-    Pointer src,			// source objects memory location
-    Pointer target,			// destination objects memory location
-    size_t count)			// number of elements to copy
+    Pointer src,                        // source objects memory location
+    Pointer target,                     // destination objects memory location
+    size_t count)                       // number of elements to copy
 {
     typedef typename Type_traits<T>::is_POD_type Is_POD;
     // simply call the type-dependent optimized or default variant
@@ -207,9 +207,9 @@ template <typename T>
 inline
 typename Default_allocator<T>::Pointer
 Default_allocator<T>::uninitialized_fill_n(
-    Pointer target,			// dest begin
-    size_t count,			// number of copies to be made
-    const T& value)			// value to copy
+    Pointer target,                     // dest begin
+    size_t count,                       // number of copies to be made
+    const T& value)                     // value to copy
 {
     typedef typename Type_traits<T>::is_POD_type Is_POD;
     // simply call the type-dependent optimized or default variant
@@ -222,9 +222,9 @@ template <typename T>
 inline
 typename Default_allocator<T>::Pointer
 Default_allocator<T>::uninitialized_copy(
-    Pointer start,			// range begin
-    Pointer end,			// range end
-    Pointer target)			// destination objects memory location
+    Pointer start,                      // range begin
+    Pointer end,                        // range end
+    Pointer target)                     // destination objects memory location
 {
     typedef typename Type_traits<T>::is_POD_type Is_POD;
     // simply call the type-dependent optimized or default variant
@@ -238,9 +238,9 @@ template <typename T>
 inline
 typename Default_allocator<T>::Pointer
 Default_allocator<T>::uninitialized_fill(
-    Pointer target,			// range begin
-    Pointer end,			// range end
-    const T& value)			// init value
+    Pointer target,                     // range begin
+    Pointer end,                        // range end
+    const T& value)                     // init value
 {
     typedef typename Type_traits<T>::is_POD_type Is_POD;
     // simply call the type-dependent optimized or default variant
@@ -256,12 +256,12 @@ Default_allocator<T>::uninitialized_fill(
 // This is a helper function used only by destroy().
 template <typename T>
 inline void Default_allocator<T>::destroy_n_aux(
-    Pointer p,				// first element to destroy
-    size_t count,			// number of elements to destroy
-    const STLEXT::False_type&)			// type to differ
+    Pointer p,                          // first element to destroy
+    size_t count,                       // number of elements to destroy
+    const STLEXT::False_type&)                  // type to differ
 {
     for (size_t i=0; i<count; ++i)
-	destroy(p++);
+        destroy(p++);
 }
 
 
@@ -270,9 +270,9 @@ inline void Default_allocator<T>::destroy_n_aux(
 // entirely optimized away.
 template <typename T>
 inline void Default_allocator<T>::destroy_n_aux(
-    Pointer p,				// first element to destroy
-    size_t count,			// number of elements to destroy
-    const STLEXT::True_type&)			// type to differ
+    Pointer p,                          // first element to destroy
+    size_t count,                       // number of elements to destroy
+    const STLEXT::True_type&)                   // type to differ
 {}
 
 
@@ -280,12 +280,12 @@ inline void Default_allocator<T>::destroy_n_aux(
 // This is a helper function used only by destroy().
 template <typename T>
 inline void Default_allocator<T>::destroy_aux(
-    Pointer start,			// first element to destroy
-    Pointer end,			// second element to destroy
-    const STLEXT::False_type&)			// type to differ
+    Pointer start,                      // first element to destroy
+    Pointer end,                        // second element to destroy
+    const STLEXT::False_type&)                  // type to differ
 {
     while (start != end)
-	destroy(start++);
+        destroy(start++);
 }
 
 
@@ -294,9 +294,9 @@ inline void Default_allocator<T>::destroy_aux(
 // entirely optimized away.
 template <typename T>
 inline void Default_allocator<T>::destroy_aux(
-    Pointer start,			// first element to destroy
-    Pointer end,			// second element to destroy
-    const STLEXT::True_type&)			// type to differ
+    Pointer start,                      // first element to destroy
+    Pointer end,                        // second element to destroy
+    const STLEXT::True_type&)                   // type to differ
 {}
 
 
@@ -306,10 +306,10 @@ template<typename T>
 inline
 typename Default_allocator<T>::Pointer
 Default_allocator<T>::uninitialized_copy_aux(
-    Pointer start,			// source begin
-    Pointer end,			// source end
-    Pointer target,			// destination objects memory location
-    const STLEXT::True_type&)			// type to differ
+    Pointer start,                      // source begin
+    Pointer end,                        // source end
+    Pointer target,                     // destination objects memory location
+    const STLEXT::True_type&)                   // type to differ
 {
     memmove(target, start, sizeof(T) * (end - start));
     return target + (end - start);
@@ -321,14 +321,14 @@ template<typename T>
 inline
 typename Default_allocator<T>::Pointer
 Default_allocator<T>::uninitialized_copy_aux(
-    Pointer start,			// source begin
-    Pointer end,			// source end
-    Pointer target,			// destination objects memory location
-    const STLEXT::False_type&)			// type to differ
+    Pointer start,                      // source begin
+    Pointer end,                        // source end
+    Pointer target,                     // destination objects memory location
+    const STLEXT::False_type&)                  // type to differ
 {
     Pointer current = target;
     for (; start != end; ++start, ++current)
-	construct(current, *start);
+        construct(current, *start);
 
     return current;
 }
@@ -340,10 +340,10 @@ template<typename T>
 inline
 typename Default_allocator<T>::Pointer
 Default_allocator<T>::uninitialized_copy_aux(
-    Pointer src,			// source begin
-    Pointer target,			// destination objects memory location
-    size_t count,			// number of elements to copy
-    const STLEXT::True_type&)			// type to differ
+    Pointer src,                        // source begin
+    Pointer target,                     // destination objects memory location
+    size_t count,                       // number of elements to copy
+    const STLEXT::True_type&)                   // type to differ
 {
     memmove(target, src, sizeof(T) * count);
     return target + count;
@@ -355,15 +355,15 @@ template<typename T>
 inline
 typename Default_allocator<T>::Pointer
 Default_allocator<T>::uninitialized_copy_aux(
-    Pointer src,			// source begin
-    Pointer target,			// destination objects memory location
-    size_t count,			// number of elements to copy
-    const STLEXT::False_type&)			// type to differ
+    Pointer src,                        // source begin
+    Pointer target,                     // destination objects memory location
+    size_t count,                       // number of elements to copy
+    const STLEXT::False_type&)                  // type to differ
 {
     Pointer current = target;
 
     for (size_t i=0; i<count; ++i, ++src, ++current)
-	construct(current, *src);
+        construct(current, *src);
 
     return current;
 }
@@ -374,13 +374,13 @@ template <typename T>
 inline
 typename Default_allocator<T>::Pointer
 Default_allocator<T>::uninitialized_fill_aux(
-    Pointer target,			// range begin
-    Pointer end,			// range end
-    const T& value,			// init value
-    const STLEXT::False_type&)			// type to differ
+    Pointer target,                     // range begin
+    Pointer end,                        // range end
+    const T& value,                     // init value
+    const STLEXT::False_type&)                  // type to differ
 {
     while (target != end)
-	construct(target++, value);
+        construct(target++, value);
     return target;
 }
 
@@ -390,13 +390,13 @@ template <typename T>
 inline
 typename Default_allocator<T>::Pointer
 Default_allocator<T>::uninitialized_fill_aux(
-    Pointer target,			// range begin
-    Pointer end,			// range end
-    const T& value,			// init value
-    const STLEXT::True_type&)			// type to differ
+    Pointer target,                     // range begin
+    Pointer end,                        // range end
+    const T& value,                     // init value
+    const STLEXT::True_type&)                   // type to differ
 {
     while (target != end)
-	*target++ = value;
+        *target++ = value;
     return target;
 }
 
@@ -407,13 +407,13 @@ template <typename T>
 inline
 typename Default_allocator<T>::Pointer
 Default_allocator<T>::uninitialized_fill_n_aux(
-    Pointer target,			// target begin
-    size_t count,			// number of copies to be made
-    const T& value,			// init value
-    const STLEXT::False_type&)			// type to differ
+    Pointer target,                     // target begin
+    size_t count,                       // number of copies to be made
+    const T& value,                     // init value
+    const STLEXT::False_type&)                  // type to differ
 {
     for (size_t i=0; i<count; ++i)
-	construct(target+i, value);
+        construct(target+i, value);
     return target + count;
 }
 
@@ -424,13 +424,13 @@ template <typename T>
 inline
 typename Default_allocator<T>::Pointer
 Default_allocator<T>::uninitialized_fill_n_aux(
-    Pointer target,			// target begin
-    size_t count,			// number of copies to be made
-    const T& value,			// init value
-    const STLEXT::True_type&)			// type to differ
+    Pointer target,                     // target begin
+    size_t count,                       // number of copies to be made
+    const T& value,                     // init value
+    const STLEXT::True_type&)                   // type to differ
 {
     for (size_t i=0; i<count; ++i)
-	*(target+i) = value;
+        *(target+i) = value;
     return target + count;
 }
 

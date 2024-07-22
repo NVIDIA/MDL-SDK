@@ -203,8 +203,8 @@ protected:
 
 private:
     typedef std::map<Uint64, Serializable*> Reference_map;
-    Reference_map m_objects;				// map of all known objects
-    Deserialization_manager* m_deserialization_manager;	// for deserialization
+    Reference_map m_objects;                            // map of all known objects
+    Deserialization_manager* m_deserialization_manager; // for deserialization
     Deserializer_marker_helper m_helper;
 
     /// What to do in case of error.
@@ -242,26 +242,26 @@ public:
     // this Class_id it will call the given factory function to create an appropriate object. This
     // object then provides the applicable deserialize function.
     virtual void register_class(
-    Class_id class_identifier,			// class id to be registered
-    Factory_function* factory) = 0;			// factory for this class id
+    Class_id class_identifier,                  // class id to be registered
+    Factory_function* factory) = 0;                     // factory for this class id
 
     // Trivial wrapper that allows convenient registration of classes that derive from Element<T>.
-    template <class T> void register_class()	{ register_class(T::id, &factory<T>); }
+    template <class T> void register_class()    { register_class(T::id, &factory<T>); }
 
     // Any module may register a factory function for a given Class_id. When the deserializer finds
     // this Class_id it will call use the given factory class to create an appropriate object. This
     // object then provides the applicable deserialize function.
     virtual void register_class(
-    Class_id class_identifier,			// class id to be registered
-    IDeserialization_factory* factory) = 0;		// factory class for this class id
+    Class_id class_identifier,                  // class id to be registered
+    IDeserialization_factory* factory) = 0;             // factory class for this class id
 
     // Call the appropriate factory function for the given class id and return it.
     virtual Serializable* construct(
-    Class_id class_identifier) = 0;			// class id to be constructed
+    Class_id class_identifier) = 0;                     // class id to be constructed
 
     // Check if an appropriate factory function for the given class id is registered.
     virtual bool is_registered(
-    Class_id class_identifier) = 0;			// class id to be checked
+    Class_id class_identifier) = 0;                     // class id to be checked
 };
 
 } // namespace SERIAL

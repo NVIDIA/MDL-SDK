@@ -404,7 +404,7 @@ unsigned __stdcall
 void *
 #endif
 Thread::do_run(
-    void *thread)			// thread class instance
+    void *thread)                       // thread class instance
 {
     // for clarification: in neuray, all threads except for the system thread
     // allocate and delete their thread specific memory here. for the system
@@ -427,7 +427,7 @@ Thread::do_run(
 #endif
 
     set_thread_id(thread_attr);
-    ((Thread *)thread)->run();		// invoke thread mainline
+    ((Thread *)thread)->run();          // invoke thread mainline
     reclaim_thread_id(thread_attr);
 
 #ifdef WIN_NT
@@ -449,7 +449,7 @@ Thread::Thread(bool create_detached)
     m_params.sched_priority = 0;
     pthread_attr_init(&m_attributes);
     if (m_create_detached)
-	pthread_attr_setdetachstate(&m_attributes, PTHREAD_CREATE_DETACHED);
+        pthread_attr_setdetachstate(&m_attributes, PTHREAD_CREATE_DETACHED);
 }
 
 // Start the thread, invoking the run method.
@@ -470,12 +470,12 @@ void Thread::join()
 {
     THREAD::Lock::Block locker(&m_lock);
     if (m_was_started && !m_create_detached)
-	pthread_join(m_tid, NULL);
+        pthread_join(m_tid, NULL);
 }
 
 // Set thread scheduling priority
 void Thread::set_priority(
-	const int prio)			// set thread priority to this
+        const int prio)                 // set thread priority to this
 {
     m_params.sched_priority = prio;
 #ifdef _POSIX_THREAD_PRIORITY_SCHEDULING
@@ -531,10 +531,10 @@ Thread::Thread(bool create_detached)
 bool Thread::start()
 {
     {
-	THREAD::Lock::Block locker(&m_lock);
-	if (m_was_started)
-	    return false;
-	m_was_started = true;
+        THREAD::Lock::Block locker(&m_lock);
+        if (m_was_started)
+            return false;
+        m_was_started = true;
     }
     const DWORD result = ResumeThread(m_handle);
     return (result != -1);
@@ -545,13 +545,13 @@ void Thread::join()
 {
     THREAD::Lock::Block locker(&m_lock);
     if (m_was_started)
-	// The thread handle is signaled when the thread terminates.
-	WaitForSingleObject(m_handle, INFINITE);
+        // The thread handle is signaled when the thread terminates.
+        WaitForSingleObject(m_handle, INFINITE);
 }
 
 // Set thread scheduling priority
 void Thread::set_priority(
-    const int prio)			// set thread priority to this
+    const int prio)                     // set thread priority to this
 {
     SetThreadPriority(m_handle, prio);
 }

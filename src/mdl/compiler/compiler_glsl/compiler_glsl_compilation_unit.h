@@ -39,6 +39,7 @@
 #include "compiler_glsl_declarations.h"
 #include "compiler_glsl_definitions.h"
 #include "compiler_glsl_exprs.h"
+#include "compiler_glsl_keywords.h"
 #include "compiler_glsl_stmts.h"
 #include "compiler_glsl_messages.h"
 
@@ -77,6 +78,12 @@ public:
 
     /// Get the language context.
     virtual GLSLang_context const &get_glslang_context() const = 0;
+
+    /// Get the keyboard map of this unit.
+    virtual GLSLKeywordMap &get_glsl_keyword_map() = 0;
+
+    /// Get the keyboard map of this unit.
+    virtual GLSLKeywordMap const &get_glsl_keyword_map() const = 0;
 
     /// Analyze the unit.
     ///
@@ -150,6 +157,12 @@ public:
 
     /// Get the language context.
     GLSLang_context const &get_glslang_context() const GLSL_FINAL;
+
+    /// Get the keyboard map of this unit.
+    GLSLKeywordMap &get_glsl_keyword_map() GLSL_FINAL;
+
+    /// Get the keyboard map of this unit.
+    GLSLKeywordMap const &get_glsl_keyword_map() const GLSL_FINAL;
 
     /// Analyze the unit.
     ///
@@ -240,6 +253,9 @@ private:
 
     /// The GLSL language context.
     GLSLang_context m_glslang_context;
+
+    /// The GLSl keyword map.
+    GLSLKeywordMap m_glsl_keyword_map;
 
     /// The symbol table of this module.
     Symbol_table m_sym_tab;

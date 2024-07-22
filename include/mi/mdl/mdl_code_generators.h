@@ -205,7 +205,7 @@ public:
     ///
     /// \param entity_name    the entity name (note: this cannot be a module name)
     ///
-    /// \returns the owning module of this entity if found, NULL otherwise
+    /// \returns the owning module of this entity, may not be NULL
     virtual IModule const *get_owner_module(char const *entity_name) const = 0;
 
     /// Find the owner code DAG of a given entity name.
@@ -214,7 +214,7 @@ public:
     ///
     /// \param entity_name    the entity name (note: this cannot be a module name)
     ///
-    /// \returns the owning module of this entity if found, NULL otherwise
+    /// \returns the owning module of this entity, may not be NULL
     virtual IGenerated_code_dag const *get_owner_dag(char const *entity_name) const = 0;
 };
 
@@ -333,7 +333,7 @@ public:
 
 /// A lambda function used to express MDL expressions that are part of a material.
 ///
-/// With an #mi::mdl::IGenerated_code_dag::IMaterial_instance at hand, compiling a lambda function
+/// With an #mi::mdl::IMaterial_instance at hand, compiling a lambda function
 /// usually consists of these steps:
 ///  - Create the object with #mi::mdl::ICode_generator_dag::create_lambda_function().
 ///  - Set the function name via #mi::mdl::ILambda_function::set_name().
@@ -685,7 +685,7 @@ public:
 
 /// An interface used to manage the DF and non-DF parts of an MDL material surface.
 ///
-/// With an #mi::mdl::IGenerated_code_dag::IMaterial_instance at hand, compiling a distribution
+/// With an #mi::mdl::IMaterial_instance at hand, compiling a distribution
 /// function usually consists of these steps:
 ///  - Create the object with #mi::mdl::ICode_generator_dag::create_distribution_function().
 ///  - Get the root lambda function with #mi::mdl::IDistribution_function::get_root_lambda().
@@ -1103,6 +1103,9 @@ class ICode_generator_jit : public
 
     /// The name of the option to steer linking version of libbsdf to be linked.
     #define MDL_JIT_OPTION_LINK_LIBBSDF_DF_HANDLE_SLOT_MODE "jit_link_libbsdf_df_handle_slot_mode"
+
+    /// The name of the option to add a flags field in the BSDF data structures in libbsdf.
+    #define MDL_JIT_OPTION_LIBBSDF_FLAGS_IN_BSDF_DATA "jit_libbsdf_flags_in_bsdf_data"
 
     /// The name of the option to map strings to IDs.
     #define MDL_JIT_OPTION_MAP_STRINGS_TO_IDS "jit_map_strings_to_ids"
@@ -1649,6 +1652,7 @@ These options are specific to the MDL JIT code generator:
 - \ref mdl_option_jit_llvm_state_module          "jit_llvm_state_module"
 - \ref mdl_option_jit_llvm_renderer_module       "jit_llvm_renderer_module"
 - \ref mdl_option_jit_map_strings_to_ids         "jit_map_strings_to_ids"
+- \ref mdl_option_jit_libbsdf_flags_in_bsdf_data "jit_libbsdf_flags_in_bsdf_data"
 - \ref mdl_option_jit_opt_level                  "jit_opt_level"
 - \ref mdl_option_jit_tex_lookup_call_mode       "jit_tex_lookup_call_mode"
 - \ref mdl_option_jit_lambda_return_mode         "jit_lambda_return_mode"
@@ -1752,6 +1756,11 @@ These options are specific to the MDL JIT code generator:
 
 \anchor mdl_option_jit_map_strings_to_ids
 - <b>jit_map_strings_to_ids</b>: If set to \c "true", strings become mapped to 32-bit IDs.
+  Default: \c "false"
+
+\anchor mdl_option_jit_libbsdf_flags_in_bsdf_data
+- <b>jit_libbsdf_flags_in_bsdf_data</b>: If set to \c "true", the BSDF data structures are expected
+  to have an additional uint32 flags field as last field.
   Default: \c "false"
 
 \anchor mdl_option_jit_opt_level

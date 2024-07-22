@@ -184,6 +184,9 @@ public:
         char const  *name,
         IType const *type);
 
+    /// Hash a value.
+    void hash(IValue const *v);
+
 private:
     /// Hash a DAG IR staring at a given node.
     ///
@@ -208,9 +211,6 @@ private:
 
     /// Hash a type.
     void hash(IType const *tp);
-
-    /// Hash a value.
-    void hash(IValue const *v);
 
 private:
     /// The allocator.

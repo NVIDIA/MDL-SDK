@@ -31,6 +31,7 @@
 // Introduces the distillation of mdl materials to a fixed target model
 // and showcases how to bake material paths to a texture
 
+#include <cassert>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -49,6 +50,21 @@ using namespace mi::examples::profiling;
 // of a material sub expression
 struct Material_parameter
 {
+    // Small struct used to store the UV tiles
+    // This approach assumes that there are no u/v transformations, otherwise it ends up baking the wrong u/v pairs
+    struct UVTile
+    {
+        UVTile(mi::Sint32 u, mi::Sint32 v)
+            :min_uv(u, v)
+        {}
+        std::pair<mi::Sint32, mi::Sint32> min_uv;
+        bool operator < (const UVTile & o) const
+        {
+            return min_uv < o.min_uv;
+        }
+    };
+    std::map<UVTile, mi::base::Handle<mi::neuraylib::ICanvas>> uv_tile_textures;
+
     typedef void (Remap_func(mi::base::IInterface*));
 
     mi::base::Handle<mi::IData>                 value;
@@ -126,6 +142,8 @@ mi::neuraylib::IFunction_call* create_material_instance(
 // Compiles the given material instance in the given compilation modes and stores
 // it in the DB.
 mi::neuraylib::ICompiled_material* compile_material_instance(
+    mi::neuraylib::IMdl_factory *mdl_factory,
+    mi::neuraylib::ITransaction *transaction,
     const mi::neuraylib::IFunction_call* material_instance,
     mi::neuraylib::IMdl_execution_context* context,
     bool class_compilation)
@@ -134,6 +152,14 @@ mi::neuraylib::ICompiled_material* compile_material_instance(
     mi::Uint32 flags = class_compilation
         ? mi::neuraylib::IMaterial_instance::CLASS_COMPILATION
         : mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS;
+
+    // convert to target type SID_MATERIAL
+    mi::base::Handle<mi::neuraylib::IType_factory> tf(
+        mdl_factory->create_type_factory(transaction));
+    mi::base::Handle<const mi::neuraylib::IType> standard_material_type(
+        tf->get_predefined_struct(mi::neuraylib::IType_struct::SID_MATERIAL));
+    context->set_option("target_type", standard_material_type.get());
+
     mi::base::Handle<const mi::neuraylib::IMaterial_instance> material_instance2(
         material_instance->get_interface<mi::neuraylib::IMaterial_instance>());
     mi::neuraylib::ICompiled_material* compiled_material =
@@ -436,12 +462,142 @@ void setup_target_material(
     }
 }
 
+// If \p value is a texture, add all its u/v pairs to \p param.
+mi::Size search_for_uv_textures(
+    mi::neuraylib::ITransaction* transaction,
+    const mi::neuraylib::IValue* value,
+    Material_parameter& param)
+{
+    if( value->get_kind() !=  mi::neuraylib::IValue::VK_TEXTURE)
+        return 0;
+
+    mi::base::Handle<const mi::neuraylib::IValue_texture> value_texture(
+        value->get_interface<mi::neuraylib::IValue_texture>());
+    const char* texture_name = value_texture->get_value();
+    if( !texture_name)
+        return 0;
+
+    mi::base::Handle<const mi::neuraylib::ITexture> texture(
+        transaction->access<mi::neuraylib::ITexture>( texture_name));
+    if( !texture)
+        return 0;
+
+    const char* image_name = texture->get_image();
+    if( !image_name)
+        return 0;
+
+    mi::base::Handle<const mi::neuraylib::IImage> image(
+        transaction->access<mi::neuraylib::IImage>( image_name));
+    if( !image)
+        return 0;
+
+    mi::Size count = 0;
+    mi::Size length = image->get_length();
+    for( mi::Size i = 0; i < length; ++i) {
+
+        mi::Size frame_length = image->get_frame_length( i);
+        count += frame_length;
+
+        for( mi::Size j = 0; j < frame_length; ++j) {
+            mi::Sint32 u = 0;
+            mi::Sint32 v = 0;
+            image->get_uvtile_uv( i, j, u, v);
+            param.uv_tile_textures[Material_parameter::UVTile(u, v)] = NULL;
+        }
+    }
+
+    return count;
+}
+
+// Adds u/v pairs of all found textures to \p param.
+//
+// Note that this simple traversal does not keeep track of referenced temporaries and parameters
+// and traverses them once for each reference.
+mi::Size search_for_uv_textures(
+    mi::neuraylib::ITransaction* transaction,
+    const mi::neuraylib::IExpression* expression,
+    const mi::neuraylib::ICompiled_material* cm,
+    Material_parameter& param)
+{
+    switch( expression->get_kind()) {
+        case mi::neuraylib::IExpression::EK_CONSTANT: {
+            mi::base::Handle<const mi::neuraylib::IExpression_constant> constant(
+                expression->get_interface<mi::neuraylib::IExpression_constant>());
+            mi::base::Handle<const mi::neuraylib::IValue> value( constant->get_value());
+            return search_for_uv_textures( transaction, value.get(), param);
+        }
+        case mi::neuraylib::IExpression::EK_DIRECT_CALL: {
+            mi::base::Handle<const mi::neuraylib::IExpression_direct_call> direct_call(
+                expression->get_interface<mi::neuraylib::IExpression_direct_call>());
+            mi::base::Handle<const mi::neuraylib::IExpression_list> args(
+                direct_call->get_arguments());
+            mi::Size count = 0;
+            for( mi::Size i = 0; i < args->get_size(); ++i) {
+                mi::base::Handle<const mi::neuraylib::IExpression> arg( args->get_expression( i));
+                count += search_for_uv_textures( transaction, arg.get(), cm, param);
+            }
+            return count;
+        }
+        case mi::neuraylib::IExpression::EK_TEMPORARY: {
+            mi::base::Handle<const mi::neuraylib::IExpression_temporary> temporary_ref(
+                expression->get_interface<mi::neuraylib::IExpression_temporary>());
+            mi::Size index = temporary_ref->get_index();
+            mi::base::Handle<const mi::neuraylib::IExpression> temporary(
+                cm->get_temporary( index));
+            return search_for_uv_textures( transaction, temporary.get(), cm, param);
+        }
+        case mi::neuraylib::IExpression::EK_PARAMETER: {
+            mi::base::Handle<const mi::neuraylib::IExpression_parameter> parameter_ref(
+                expression->get_interface<mi::neuraylib::IExpression_parameter>());
+            mi::Size index = parameter_ref->get_index();
+            mi::base::Handle<const mi::neuraylib::IValue> parameter(
+                cm->get_argument( index));
+            return search_for_uv_textures( transaction, parameter.get(), param);
+        }
+        case mi::neuraylib::IExpression::EK_CALL:
+            break;
+        case mi::neuraylib::IExpression::EK_FORCE_32_BIT:
+            break;
+    }
+
+    assert( false);
+    return 0;
+}
+
+mi::Size search_for_uv_textures(
+    mi::neuraylib::ITransaction* transaction,
+    const mi::neuraylib::ICompiled_material* cm,
+    Material& out_material)
+{
+    mi::Size count = 0;
+
+    for (Material::iterator it = out_material.begin(); it != out_material.end(); ++it)
+    {
+        Material_parameter& param = it->second;
+
+        // Do not attempt to bake empty paths
+        if (param.bake_path.empty())
+            continue;
+
+        mi::base::Handle<const mi::neuraylib::IExpression> expr(
+            cm->lookup_sub_expression(param.bake_path.c_str()));
+
+        count += search_for_uv_textures(transaction, expr.get(), cm, param);
+    }
+
+    return count;
+}
+
 // Constructs a material for the target model, extracts the bake paths relevant for this
 // model from the compiled material and bakes those paths into textures or constant values
 void bake_target_material_inputs(
     mi::neuraylib::Baker_resource baker_resource,
     mi::Uint32 baking_samples,
     mi::Uint32 baking_resolution,
+    mi::Float32 min_u,
+    mi::Float32 max_u,
+    mi::Float32 min_v,
+    mi::Float32 max_v,
     mi::neuraylib::ITransaction* transaction,
     const mi::neuraylib::ICompiled_material* cm,
     mi::neuraylib::IMdl_distiller_api* distiller_api,
@@ -502,18 +658,44 @@ void bake_target_material_inputs(
         }
         else
         {
-            // Create a canvas
-            mi::base::Handle<mi::neuraylib::ICanvas> canvas(
-                image_api->create_canvas(param.value_type.c_str(), baking_resolution, baking_resolution));
+            if (!param.uv_tile_textures.empty())
+            {
+                std::map<Material_parameter::UVTile, mi::base::Handle<mi::neuraylib::ICanvas>>::iterator it;
+                for (it = param.uv_tile_textures.begin(); it != param.uv_tile_textures.end(); it++)
+                {
+                    // Create a canvas
+                    mi::base::Handle<mi::neuraylib::ICanvas> canvas(
+                        image_api->create_canvas(param.value_type.c_str(), baking_resolution, baking_resolution));
 
-            // Bake texture
-            mi::Sint32 result = baker->bake_texture(canvas.get(), baking_samples);
-            check_success(result == 0);
+                    // Bake texture
+                    mi::Float32 min_u(mi::Float32(it->first.min_uv.first));
+                    mi::Float32 max_u(min_u + 1);
+                    mi::Float32 min_v(mi::Float32(it->first.min_uv.second));
+                    mi::Float32 max_v(min_v + 1);
+                    mi::Sint32 result = baker->bake_texture(canvas.get(), min_u, max_u, min_v, max_v, baking_samples);
+                    check_success(result == 0);
 
-            if(param.remap_func)
-                param.remap_func(canvas.get());
+                    if (param.remap_func)
+                        param.remap_func(canvas.get());
 
-            param.texture = canvas;
+                    it->second = canvas;
+                }
+            }
+            else
+            {
+                // Create a canvas
+                mi::base::Handle<mi::neuraylib::ICanvas> canvas(
+                    image_api->create_canvas(param.value_type.c_str(), baking_resolution, baking_resolution));
+
+                // Bake texture
+                mi::Sint32 result = baker->bake_texture(canvas.get(), min_u, max_u, min_v, max_v, baking_samples);
+                check_success(result == 0);
+
+                if (param.remap_func)
+                    param.remap_func(canvas.get());
+
+                param.texture = canvas;
+            }
         }
     }
 }
@@ -666,16 +848,48 @@ void process_target_material(
         else 
             std::cout << "path '"<< param.bake_path << "' baked to ";
 
-        if(param.texture)
+        if (!param.uv_tile_textures.empty())
         {
-            std::cout << "texture." << std::endl << std::endl;
+            // UV Tiles
+            std::cout << "texture" << (param.uv_tile_textures.size() > 1 ? "s:" : ":") << std::endl << std::endl;
+            std::map<Material_parameter::UVTile, mi::base::Handle<mi::neuraylib::ICanvas>>::const_iterator it;
+            for (it = param.uv_tile_textures.begin(); it != param.uv_tile_textures.end(); it++)
+            {
+                if (!it->second) // texture
+                    continue;
 
-            // write texture to disc
-            std::stringstream file_name;
-            file_name << material_name << "-" << param_name << ".png";
-            
-            if(save_baked_textures)
+                if (save_baked_textures)
+                {
+                    // write texture to disc
+                    // these filenames match the UVTILE0 convention (independent of the convention used for the input)
+                    // 0-based uv-tileset, expands to "_u"u"_v"v
+                    std::stringstream file_name;
+                    file_name << material_name << "-" << param_name << "_u" << it->first.min_uv.first << "_v" << it->first.min_uv.second << ".png";
+
+                    canvas_exporter.add_canvas(file_name.str(), it->second.get());
+                    std::cout << file_name.str() << std::endl;
+                }
+                else
+                {
+                    std::cout << "<Not saved>" << std::endl;
+                }
+            }
+        }
+        else if (param.texture)
+        {
+            std::cout << "texture:" << std::endl << std::endl;
+            if (save_baked_textures)
+            {
+                // write texture to disc
+                std::stringstream file_name;
+                file_name << material_name << "-" << param_name << ".png";
                 canvas_exporter.add_canvas(file_name.str(), param.texture.get());
+                std::cout << file_name.str() << std::endl;
+            }
+            else
+            {
+                std::cout << "<Not saved>" << std::endl;
+            }
         }
         else if(param.value)
         {
@@ -727,6 +941,7 @@ static void usage(const char *name)
         << "--baker_resource        baking device: gpu|cpu|gpu_with_cpu_fallback (default: cpu)\n"
         << "--samples               baking samples (default: 4)\n"
         << "--resolution            baking resolution (default: 1024)\n"
+        << "--uv_range              baking UV range: min_u max_u min_v max_v (default: 0 1 0 1)\n"
         << "--material_file <file>  file containing fully qualified names of materials to distill\n"
         << "--do_not_save_textures  if set, avoid saving baked textures to file\n"
         << "--module <module_name>  distill all materials from the module, can occur multiple times\n"
@@ -794,6 +1009,11 @@ int MAIN_UTF8(int argc, char* argv[])
     mi::neuraylib::Baker_resource   baker_resource = mi::neuraylib::BAKE_ON_CPU;
     mi::Uint32                      baking_samples = 4;
     mi::Uint32                      baking_resolution = 1024;
+    bool                            uv_range_set(false);
+    mi::Float32                     min_u = 0;
+    mi::Float32                     max_u = 1;
+    mi::Float32                     min_v = 0;
+    mi::Float32                     max_v = 1;
     bool                            parallel = true;
     std::vector<std::string>        material_names;
     std::vector<std::string>        module_names;
@@ -861,6 +1081,34 @@ int MAIN_UTF8(int argc, char* argv[])
                 }
                 else
                     usage(argv[0]);
+            }
+            else if (strcmp(opt, "--uv_range") == 0)
+            {
+                mi::Float32 uv_range[4];
+                for (int idx = 0; idx < 4; idx++)
+                {
+                    if (i < argc - 1)
+                    {
+                        mi::Float32 val;
+                        int ok = sscanf(argv[++i], "%f", &val);
+                        if (ok != 1)
+                        {
+                            std::cout << "Invalid UV range\n";
+                            usage(argv[0]);
+                        }
+                        uv_range[idx] = val;
+                    }
+                    else
+                    {
+                        std::cout << "Invalid UV range\n";
+                        usage(argv[0]);
+                    }
+                }
+                min_u = uv_range[0];
+                max_u = uv_range[1];
+                min_v = uv_range[2];
+                max_v = uv_range[3];
+                uv_range_set = true;
             }
             else if (strcmp(opt, "--material_file") == 0) {
                 if (i < argc - 1)
@@ -962,7 +1210,12 @@ int MAIN_UTF8(int argc, char* argv[])
 
             // Compile the material instance
             mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
-                compile_material_instance(instance.get(), context.get(), false));
+                compile_material_instance(
+                    mdl_factory.get(),
+                    transaction.get(),
+                    instance.get(), 
+                    context.get(), 
+                    false));
 
             // Acquire distilling API used for material distilling and baking
             mi::base::Handle<mi::neuraylib::IMdl_distiller_api> distilling_api(
@@ -988,11 +1241,26 @@ int MAIN_UTF8(int argc, char* argv[])
                 distilled_material.get(),
                 out_material);
 
+            // Search for UV textures
+            mi::Size uv_texture_count = search_for_uv_textures(
+                transaction.get(),
+                distilled_material.get(),
+                out_material);
+
+            if (uv_texture_count > 0 && uv_range_set)
+            {
+                std::cerr << "WARNING: UV range will be ignored for UV tile textured parameters\n";
+            }
+
             // Bake material inputs
             bake_target_material_inputs(
                 baker_resource,
                 baking_samples,
                 baking_resolution,
+                min_u,
+                max_u,
+                min_v,
+                max_v,
                 transaction.get(),
                 distilled_material.get(),
                 distilling_api.get(),

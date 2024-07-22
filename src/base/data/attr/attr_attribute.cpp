@@ -75,8 +75,8 @@ Attribute::Attribute()
 // have a type, including structured types, but dynamic arrays are not allowed
 // because it's unclear how the pointers get allocated and deleted.
 Attribute::Attribute(
-    const Type		&type,		// data type, may be list or tree
-    Attribute_propagation override)	// inheritance: parent overrides child
+    const Type          &type,          // data type, may be list or tree
+    Attribute_propagation override)     // inheritance: parent overrides child
   : m_type(type)
 {
     init(id_create(m_type.get_name()), override, 1, false, false);
@@ -101,9 +101,9 @@ Attribute::Attribute(
 // have a type, including structured types, but dynamic arrays are not allowed
 // because it's unclear how the pointers get allocated and deleted.
 Attribute::Attribute(
-    Attribute_id	id,		// identifies attribute for lookups
-    const Type		&type,		// data type, may be list or tree
-    Attribute_propagation override)	// inheritance: parent overrides child
+    Attribute_id        id,             // identifies attribute for lookups
+    const Type          &type,          // data type, may be list or tree
+    Attribute_propagation override)     // inheritance: parent overrides child
   : m_type(type)
 {
     if (!m_type.get_name()) {
@@ -123,12 +123,12 @@ Attribute::Attribute(
 // of simple, non-structured types automatically. Also creates an attribute
 // ID from the attribute name.
 Attribute::Attribute(
-    Type_code		type,		// primitive type: bool, int, ...
-    const char		*name,		// name of attribute (stored in type)
-    Uint		type_asize,	// number of elements, > 0
-    Attribute_propagation override,	// inheritance: parent overrides child
-    bool		global,		// not inheritable, nailed to element
-    bool		is_const)	// is value immutable?
+    Type_code           type,           // primitive type: bool, int, ...
+    const char          *name,          // name of attribute (stored in type)
+    Uint                type_asize,     // number of elements, > 0
+    Attribute_propagation override,     // inheritance: parent overrides child
+    bool                global,         // not inheritable, nailed to element
+    bool                is_const)       // is value immutable?
   : m_type(type, name, type_asize)
 {
     ASSERT(M_ATTR,                      // that's most probably an error
@@ -145,12 +145,12 @@ Attribute::Attribute(
 
 // another convenience constructor for the derived Attribute_object.
 Attribute::Attribute(
-    Attribute_id	id,		// identifies attribute for lookups
-    Type_code		type,		// primitive type: bool, int, ...
-    Uint		type_asize,	// number of elements > 0
-    Attribute_propagation override,	// inheritance: parent overrides child
-    bool		global,		// not inheritable, nailed to element
-    bool		is_const)	// is value immutable?
+    Attribute_id        id,             // identifies attribute for lookups
+    Type_code           type,           // primitive type: bool, int, ...
+    Uint                type_asize,     // number of elements > 0
+    Attribute_propagation override,     // inheritance: parent overrides child
+    bool                global,         // not inheritable, nailed to element
+    bool                is_const)       // is value immutable?
   : m_type(type, 0, type_asize)
 {
     SYSTEM::Access_module<ATTR::Attr_module> attr_module(false);
@@ -294,7 +294,7 @@ size_t Attribute::flush()
         Type_iterator iter(&get_type(), set_values_i(l));
         destructor(iter);
     }
-    char* junk = m_values;			// set memory pointer to 0
+    char* junk = m_values;                      // set memory pointer to 0
     m_values = 0;
     deallocate_storage(junk);
 
@@ -309,14 +309,14 @@ size_t Attribute::flush()
 // they are reserved for the fixed boolean attributes in Attribute_set and
 // fast predefined IDs in SCENE.
 Attribute_id Attribute::id_create(
-    const char		*name)		// new name to register
+    const char          *name)          // new name to register
 {
-    return id_lookup(name);		// just hashing, no net symtab
+    return id_lookup(name);             // just hashing, no net symtab
 }
 
 
 Attribute_id Attribute::id_lookup(
-    const char		*name)		// name to look up
+    const char          *name)          // name to look up
 {
     if (!name)
         return null_index;
@@ -334,7 +334,7 @@ Attribute_id Attribute::id_lookup(
 
 // Add an attachment to the internal list.
 void Attribute::add_attachment(
-    const Attachment &attachment)	// the attachment
+    const Attachment &attachment)       // the attachment
 {
     m_attachments.append(attachment);
 }
@@ -359,7 +359,7 @@ void Attribute::remove_attachment(
 // serialize the object to the given serializer including all sub elements.
 // It must return a pointer behind itself (e.g. this + 1) to handle arrays.
 const SERIAL::Serializable* Attribute::serialize(
-    SERIAL::Serializer* serializer) const	// useful functions for byte streams
+    SERIAL::Serializer* serializer) const       // useful functions for byte streams
 {
     serializer->write(m_id);
     const Uint32 override_as_uint = m_override;
@@ -420,7 +420,7 @@ const SERIAL::Serializable * Attribute::serialize_no_values(
 // deserialize the object and all sub-objects from the given deserializer.
 // It must return a pointer behind itself (e.g. this + 1) to handle arrays.
 SERIAL::Serializable* Attribute::deserialize(
-    SERIAL::Deserializer* deser)		// useful functions for byte streams
+    SERIAL::Deserializer* deser)                // useful functions for byte streams
 {
     deser->read(&m_id);
     Uint32 override_as_uint = PROPAGATION_STANDARD;
@@ -552,8 +552,8 @@ Attribute& Attribute::operator=(const Attribute& other)
 /// memory and is used from inside the copy constructor. Hence its very name.
 /// Note that this function is not aware of listsize, ie the client has to take care of that!
 void copy_constructor(
-    Type_iterator& in_it,		// in iterator
-    Type_iterator& out_it)		// out iterator
+    Type_iterator& in_it,               // in iterator
+    Type_iterator& out_it)              // out iterator
 {
     // iterate over all elements of the type and copy them type-accordingly
     // Please note that the client's code takes care of the listsize.
@@ -780,10 +780,10 @@ void Attribute::init(
 // because it's unclear how the pointers get allocated and deleted.
 //
 Attribute::Attribute(
-    Attribute_id	id,		// identifies attribute for lookups
-    const Type		&type,		// data type, may be list or tree
-    Uint		list_size,	// if attribute list, list size > 1
-    Attribute_propagation override)	// inheritance: parent overrides child
+    Attribute_id        id,             // identifies attribute for lookups
+    const Type          &type,          // data type, may be list or tree
+    Uint                list_size,      // if attribute list, list size > 1
+    Attribute_propagation override)     // inheritance: parent overrides child
 : m_id(~0u)
 , m_override(PROPAGATION_UNDEF)
 , m_type(type)
@@ -801,13 +801,13 @@ Attribute::Attribute(
 
 
 Attribute::Attribute(
-    Type_code		type,		// primitive type: bool, int, ...
-    const char		*name,		// name of attribute (stored in type)
-    Uint		type_asize,	// number of elements, > 0
-    Uint		list_size,	// if attribute list, list size > 1
-    Attribute_propagation override,	// inheritance: parent overrides child
-    bool		global,		// not inheritable, nailed to element
-    bool		is_const)	// is value immutable?
+    Type_code           type,           // primitive type: bool, int, ...
+    const char          *name,          // name of attribute (stored in type)
+    Uint                type_asize,     // number of elements, > 0
+    Uint                list_size,      // if attribute list, list size > 1
+    Attribute_propagation override,     // inheritance: parent overrides child
+    bool                global,         // not inheritable, nailed to element
+    bool                is_const)       // is value immutable?
 : m_id(~0u)
 , m_override(PROPAGATION_UNDEF)
 , m_type(type, name, type_asize)
@@ -828,13 +828,13 @@ Attribute::Attribute(
 //
 
 Attribute::Attribute(
-    Attribute_id	id,		// identifies attribute for lookups
-    Type_code		type,		// primitive type: bool, int, ...
-    Uint		type_asize,	// number of elements > 0
-    Uint		list_size,	// if attribute list, list size > 1
-    Attribute_propagation override,	// inheritance: parent overrides child
-    bool		global,		// not inheritable, nailed to element
-    bool		is_const)	// is value immutable?
+    Attribute_id        id,             // identifies attribute for lookups
+    Type_code           type,           // primitive type: bool, int, ...
+    Uint                type_asize,     // number of elements > 0
+    Uint                list_size,      // if attribute list, list size > 1
+    Attribute_propagation override,     // inheritance: parent overrides child
+    bool                global,         // not inheritable, nailed to element
+    bool                is_const)       // is value immutable?
 : m_id(~0u)
 , m_override(PROPAGATION_UNDEF)
 , m_type(type, 0, type_asize)

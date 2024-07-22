@@ -29,16 +29,23 @@
 #include "example_shared.h"
 #include "mdl_python.h"
 
+mi::neuraylib::INeuray* g_neuray;
+
 mi::neuraylib::INeuray* load_and_get_ineuray(const char* filename)
 {
-    if (!filename || strlen(filename) == 0)
-        return mi::examples::mdl::load_and_get_ineuray();
+    if (!filename || strlen(filename) == 0) {
+        mi::neuraylib::INeuray* result = mi::examples::mdl::load_and_get_ineuray();
+        g_neuray = result;
+        return result;
+    }
 
     std::string lib = filename;
     if (!mi::examples::strings::ends_with(lib, MI_BASE_DLL_FILE_EXT))
         lib += MI_BASE_DLL_FILE_EXT;
 
-    return mi::examples::mdl::load_and_get_ineuray(lib.c_str());
+    mi::neuraylib::INeuray* result = mi::examples::mdl::load_and_get_ineuray(lib.c_str());
+    g_neuray = result;
+    return result;
 }
 
 bool load_plugin(mi::neuraylib::INeuray* neuray, const char* filename)
@@ -55,5 +62,6 @@ bool load_plugin(mi::neuraylib::INeuray* neuray, const char* filename)
 
 bool unload()
 {
+    g_neuray = nullptr;
     return mi::examples::mdl::unload();
 }

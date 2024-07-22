@@ -36,6 +36,8 @@
 #include "mdltlc_analysis.h"
 #include "mdltlc_compilation_unit.h"
 
+#define MDLTLC_DEBUG_POSTCOND 0
+
 static char const *copyright_string =
 R"(/******************************************************************************
  * Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
@@ -96,105 +98,123 @@ char const* node_name(Expr const* expr) {
     return nullptr;
 }
 
-/// Returns arity of a mixer node (1, 2, or 3), or 0 otherwise.
-int get_n_ary_mixer(Type_function const *tf) {
+/// Returns arity of a mixer node (1, 2, 3, or 4), or 0 otherwise.
+int get_n_ary_mixer(mi::mdl::Node_types *node_types, Type_function const *tf) {
     int n = 0;
     mi::mdl::Node_type const *node_type = tf->get_node_type();
 
     if (!node_type)
         return 0;
 
-    int node_type_idx = mi::mdl::Node_types::static_idx_from_type(node_type->type_name.c_str());
+    int node_type_idx = node_types->idx_from_type(node_type->type_name);
 
     switch (node_type_idx) {
     case mi::mdl::bsdf_mix_1:
     case mi::mdl::bsdf_mix_2:
     case mi::mdl::bsdf_mix_3:
+    case mi::mdl::bsdf_mix_4:
         n = 1 + node_type_idx - mi::mdl::bsdf_mix_1;
         break;
     case mi::mdl::bsdf_clamped_mix_1:
     case mi::mdl::bsdf_clamped_mix_2:
     case mi::mdl::bsdf_clamped_mix_3:
+    case mi::mdl::bsdf_clamped_mix_4:
         n = 1 + node_type_idx - mi::mdl::bsdf_clamped_mix_1;
         break;
     case mi::mdl::bsdf_unbounded_mix_1:
     case mi::mdl::bsdf_unbounded_mix_2:
     case mi::mdl::bsdf_unbounded_mix_3:
+    case mi::mdl::bsdf_unbounded_mix_4:
         n = 1 + node_type_idx - mi::mdl::bsdf_unbounded_mix_1;
         break;
     case mi::mdl::bsdf_color_mix_1:
     case mi::mdl::bsdf_color_mix_2:
     case mi::mdl::bsdf_color_mix_3:
+    case mi::mdl::bsdf_color_mix_4:
         n = 1 + node_type_idx - mi::mdl::bsdf_color_mix_1;
         break;
     case mi::mdl::bsdf_color_clamped_mix_1:
     case mi::mdl::bsdf_color_clamped_mix_2:
     case mi::mdl::bsdf_color_clamped_mix_3:
+    case mi::mdl::bsdf_color_clamped_mix_4:
         n = 1 + node_type_idx - mi::mdl::bsdf_color_clamped_mix_1;
         break;
     case mi::mdl::bsdf_color_unbounded_mix_1:
     case mi::mdl::bsdf_color_unbounded_mix_2:
     case mi::mdl::bsdf_color_unbounded_mix_3:
+    case mi::mdl::bsdf_color_unbounded_mix_4:
         n = 1 + node_type_idx - mi::mdl::bsdf_color_unbounded_mix_1;
         break;
     case mi::mdl::edf_mix_1:
     case mi::mdl::edf_mix_2:
     case mi::mdl::edf_mix_3:
+    case mi::mdl::edf_mix_4:
         n = 1 + node_type_idx - mi::mdl::edf_mix_1;
         break;
     case mi::mdl::edf_clamped_mix_1:
     case mi::mdl::edf_clamped_mix_2:
     case mi::mdl::edf_clamped_mix_3:
+    case mi::mdl::edf_clamped_mix_4:
         n = 1 + node_type_idx - mi::mdl::edf_clamped_mix_1;
         break;
     case mi::mdl::edf_unbounded_mix_1:
     case mi::mdl::edf_unbounded_mix_2:
     case mi::mdl::edf_unbounded_mix_3:
+    case mi::mdl::edf_unbounded_mix_4:
         n = 1 + node_type_idx - mi::mdl::edf_unbounded_mix_1;
         break;
     case mi::mdl::edf_color_mix_1:
     case mi::mdl::edf_color_mix_2:
     case mi::mdl::edf_color_mix_3:
+    case mi::mdl::edf_color_mix_4:
         n = 1 + node_type_idx - mi::mdl::edf_color_mix_1;
         break;
     case mi::mdl::edf_color_clamped_mix_1:
     case mi::mdl::edf_color_clamped_mix_2:
     case mi::mdl::edf_color_clamped_mix_3:
+    case mi::mdl::edf_color_clamped_mix_4:
         n = 1 + node_type_idx - mi::mdl::edf_color_clamped_mix_1;
         break;
     case mi::mdl::edf_color_unbounded_mix_1:
     case mi::mdl::edf_color_unbounded_mix_2:
     case mi::mdl::edf_color_unbounded_mix_3:
+    case mi::mdl::edf_color_unbounded_mix_4:
         n = 1 + node_type_idx - mi::mdl::edf_color_unbounded_mix_1;
         break;
     case mi::mdl::vdf_mix_1:
     case mi::mdl::vdf_mix_2:
     case mi::mdl::vdf_mix_3:
+    case mi::mdl::vdf_mix_4:
         n = 1 + node_type_idx - mi::mdl::vdf_mix_1;
         break;
     case mi::mdl::vdf_clamped_mix_1:
     case mi::mdl::vdf_clamped_mix_2:
     case mi::mdl::vdf_clamped_mix_3:
+    case mi::mdl::vdf_clamped_mix_4:
         n = 1 + node_type_idx - mi::mdl::vdf_clamped_mix_1;
         break;
     case mi::mdl::vdf_unbounded_mix_1:
     case mi::mdl::vdf_unbounded_mix_2:
     case mi::mdl::vdf_unbounded_mix_3:
+    case mi::mdl::vdf_unbounded_mix_4:
         n = 1 + node_type_idx - mi::mdl::vdf_unbounded_mix_1;
         break;
     case mi::mdl::vdf_color_mix_1:
     case mi::mdl::vdf_color_mix_2:
     case mi::mdl::vdf_color_mix_3:
+    case mi::mdl::vdf_color_mix_4:
         n = 1 + node_type_idx - mi::mdl::vdf_color_mix_1;
         break;
     case mi::mdl::vdf_color_clamped_mix_1:
     case mi::mdl::vdf_color_clamped_mix_2:
     case mi::mdl::vdf_color_clamped_mix_3:
+    case mi::mdl::vdf_color_clamped_mix_4:
         n = 1 + node_type_idx - mi::mdl::vdf_color_clamped_mix_1;
         break;
     case mi::mdl::vdf_color_unbounded_mix_1:
     case mi::mdl::vdf_color_unbounded_mix_2:
     case mi::mdl::vdf_color_unbounded_mix_3:
+    case mi::mdl::vdf_color_unbounded_mix_4:
         n = 1 + node_type_idx - mi::mdl::vdf_color_unbounded_mix_1;
         break;
     default:
@@ -205,42 +225,51 @@ int get_n_ary_mixer(Type_function const *tf) {
 }
 
 /// Returns true if the node is mixer with color weights.
-bool is_color_mixer(Type_function const *tf) {
+bool is_color_mixer(mi::mdl::Node_types *node_types, Type_function const *tf) {
     mi::mdl::Node_type const* node_type = tf->get_node_type();
 
     if (!node_type)
         return false;
 
-    int node_type_idx = mi::mdl::Node_types::static_idx_from_type(node_type->type_name.c_str());
+    int node_type_idx = node_types->idx_from_type(node_type->type_name);
 
     switch (node_type_idx) {
     case mi::mdl::bsdf_color_mix_1:
     case mi::mdl::bsdf_color_mix_2:
     case mi::mdl::bsdf_color_mix_3:
+    case mi::mdl::bsdf_color_mix_4:
     case mi::mdl::bsdf_color_clamped_mix_1:
     case mi::mdl::bsdf_color_clamped_mix_2:
     case mi::mdl::bsdf_color_clamped_mix_3:
+    case mi::mdl::bsdf_color_clamped_mix_4:
     case mi::mdl::bsdf_color_unbounded_mix_1:
     case mi::mdl::bsdf_color_unbounded_mix_2:
     case mi::mdl::bsdf_color_unbounded_mix_3:
+    case mi::mdl::bsdf_color_unbounded_mix_4:
     case mi::mdl::edf_color_mix_1:
     case mi::mdl::edf_color_mix_2:
     case mi::mdl::edf_color_mix_3:
+    case mi::mdl::edf_color_mix_4:
     case mi::mdl::edf_color_clamped_mix_1:
     case mi::mdl::edf_color_clamped_mix_2:
     case mi::mdl::edf_color_clamped_mix_3:
+    case mi::mdl::edf_color_clamped_mix_4:
     case mi::mdl::edf_color_unbounded_mix_1:
     case mi::mdl::edf_color_unbounded_mix_2:
     case mi::mdl::edf_color_unbounded_mix_3:
+    case mi::mdl::edf_color_unbounded_mix_4:
     case mi::mdl::vdf_color_mix_1:
     case mi::mdl::vdf_color_mix_2:
     case mi::mdl::vdf_color_mix_3:
+    case mi::mdl::vdf_color_mix_4:
     case mi::mdl::vdf_color_clamped_mix_1:
     case mi::mdl::vdf_color_clamped_mix_2:
     case mi::mdl::vdf_color_clamped_mix_3:
+    case mi::mdl::vdf_color_clamped_mix_4:
     case mi::mdl::vdf_color_unbounded_mix_1:
     case mi::mdl::vdf_color_unbounded_mix_2:
     case mi::mdl::vdf_color_unbounded_mix_3:
+    case mi::mdl::vdf_color_unbounded_mix_4:
         return true;
         break;
     default:
@@ -270,7 +299,7 @@ void Compilation_unit::output_cpp_match_variables(
 
             mi::mdl::string prefix2(m_arena.get_allocator());
 
-            if (get_n_ary_mixer(callee_type) > 0) {
+            if (get_n_ary_mixer(m_node_types, callee_type) > 0) {
                 prefix2 = "e.get_remapped_argument(";
             } else {
                 prefix2 = "e.get_compound_argument(";
@@ -511,7 +540,7 @@ void Compilation_unit::output_cpp_mixer_call(
     Type_function const *callee_type)
 {
     p.string("e.create_");
-    if (is_color_mixer(callee_type))
+    if (is_color_mixer(m_node_types, callee_type))
         p.string("color_");
     p.string("mixer_call");
     p.with_parens([&] (pp::Pretty_print &p) {
@@ -621,7 +650,7 @@ void Compilation_unit::output_cpp_bsdf_call(
                     } else {
                         // Extended Distiller semantics value.
                         p.string("static_cast<mi::mdl::IDefinition::Semantics>(");
-                        p.string(find_selector(call));
+                        p.integer(find_semantics(call));
                         p.string(")");
                     }
                     p.comma();
@@ -735,9 +764,9 @@ void Compilation_unit::output_cpp_call(pp::Pretty_print &p,Expr_call const *call
     // If the name of the callee is defined as one of the node types,
     // we generate either a BSDF constant or a node call.
 
-    if (mi::mdl::Node_types::is_type(callee_ref->get_name()->get_name())) {
+    if (m_node_types->is_type(callee_ref->get_name()->get_name())) {
 
-        int n_ary_mixer = get_n_ary_mixer(callee_type);
+        int n_ary_mixer = get_n_ary_mixer(m_node_types, callee_type);
         if (n_ary_mixer > 0) {
             output_cpp_mixer_call(p, call, n_ary_mixer, callee_type);
             return;
@@ -747,7 +776,7 @@ void Compilation_unit::output_cpp_call(pp::Pretty_print &p,Expr_call const *call
         mi::mdl::Node_type const *node_type = callee_type->get_node_type();
 
         if (node_type) {
-            int node_type_idx = mi::mdl::Node_types::static_idx_from_type(node_type->type_name.c_str());
+            int node_type_idx = m_node_types->idx_from_type(node_type->type_name);
 
             if ((node_type_idx == mi::mdl::bsdf
                  || node_type_idx == mi::mdl::edf
@@ -1526,7 +1555,7 @@ void Compilation_unit::output_cpp_pattern_condition(
 
             mi::mdl::string prefix2(m_arena.get_allocator());
 
-            if (get_n_ary_mixer(callee_type) > 0) {
+            if (get_n_ary_mixer(m_node_types, callee_type) > 0) {
                 prefix2 = "e.get_remapped_argument(";
             } else {
                 prefix2 = "e.get_compound_argument(";
@@ -1618,6 +1647,58 @@ void Compilation_unit::output_cpp_pattern_condition(
     }
 }
 
+int Compilation_unit::find_semantics(Expr const* expr) {
+    // Ignore all attributes and node aliases.
+    for (;;) {
+        if (Expr_attribute const* call = as<Expr_attribute>(expr)) {
+            expr = call->get_argument();
+        }
+        else if (Expr_binary const* eb = as<Expr_binary>(expr)) {
+            if (eb->get_operator() == Expr_binary::Operator::OK_TILDE) {
+                expr = eb->get_right_argument();
+            }
+            else {
+                break;
+            }
+        }
+        else {
+            break;
+        }
+    }
+
+    if (Expr_call const* call = as<Expr_call>(expr)) {
+        expr = call->get_callee();
+    }
+
+    if (is<Expr_ref>(expr)) {
+        Type* expr_t = expr->get_type();
+        if (Type_function* tf = as<Type_function>(expr_t)) {
+            char const* sel = tf->get_selector();
+            if (sel)
+                return tf->get_semantics();
+            else {
+                error(expr->get_location(),
+                    "[BUG] null selector found when looking up selector");
+                MDL_ASSERT(!"[BUG] null selector found when looking up selector");
+                return 0; // "::FIXME:: null selector found when looking up selector";
+            }
+        }
+        else {
+            error(expr->get_location(),
+                "[BUG] invalid (non-function) argument found when looking up selector");
+            MDL_ASSERT(!"[BUG] invalid (non-function) argument found when looking up selector");
+            return 0; // "::FIXME:: invalid (non-function) argument found when looking up selector";
+        }
+    }
+    else {
+        error(expr->get_location(),
+            "[BUG] invalid (non-node) argument found when looking up selector");
+        MDL_ASSERT(!"[BUG] invalid (non-node) argument found when looking up selector");
+        return 0; // "::FIXME:: invalid (non-node) argument found when looking up selector";
+    }
+}
+
+
 char const *Compilation_unit::find_selector(Expr const *expr) {
     // Ignore all attributes and node aliases.
     for(;;) {
@@ -1697,8 +1778,9 @@ void Compilation_unit::output_cpp_postcond_helpers(pp::Pretty_print &p,
 
                             char const *selector = find_selector(argument);
 
+                            p.string("bool result = ");
                             if ( e->get_operator() == Expr_unary::Operator::OK_MATCH) {
-                                p.string("return ((selector == ");
+                                p.string(" ((selector == ");
                                 p.string(selector);
                                 p.string(")");
 
@@ -1708,11 +1790,32 @@ void Compilation_unit::output_cpp_postcond_helpers(pp::Pretty_print &p,
 
                                 p.rparen();
                                 p.semicolon();
+                                p.nl();
+#if MDLTLC_DEBUG_POSTCOND
+                                p.string("printf(\"[");
+                                p.string(ruleset.get_name());
+                                p.string(": checking match(");
+                                p.string(selector);
+                                p.string(")=%d]\\n\", result);");
+                                p.nl();
+#endif
                             } else { // NONODE_KIND
-                                p.string("return selector != ");
+                                p.string("selector != ");
                                 p.string(selector);
                                 p.semicolon();
+                                p.nl();
+
+#if MDLTLC_DEBUG_POSTCOND
+                                p.string("printf(\"[");
+                                p.string(ruleset.get_name());
+                                p.string(": checking nonode(");
+                                p.string(selector);
+                                p.string(")=%d]\\n\", result);");
+                                p.nl();
+#endif
                             }
+                            p.nl();
+                            p.string_with_nl("return result;\n");
                         });
                     p.nl();
                 });

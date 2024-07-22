@@ -94,6 +94,7 @@ public:
         , texture_cube_type(tf.create_texture(IType_texture::TS_CUBE))
         , texture_ptex_type(tf.create_texture(IType_texture::TS_PTEX))
         , bsdf_measurement_type(tf.create_bsdf_measurement())
+        , material_category(tf.get_predefined_struct_category(IStruct_category::CID_MATERIAL_CATEGORY))
         , material_emission_type(tf.get_predefined_struct(IType_struct::SID_MATERIAL_EMISSION))
         , material_surface_type(tf.get_predefined_struct(IType_struct::SID_MATERIAL_SURFACE))
         , material_volume_type(tf.get_predefined_struct(IType_struct::SID_MATERIAL_VOLUME))
@@ -118,6 +119,16 @@ public:
     ///
     /// \param return_type   The return type of the function.
     /// \param parameters    The parameters of the function.
+    IStruct_category const *create_category(
+        ISymbol const *category_name)
+    {
+        return m_tf.create_struct_category(category_name);
+    }
+
+    /// Create a new type function type instance.
+    ///
+    /// \param return_type   The return type of the function.
+    /// \param parameters    The parameters of the function.
     IType_function const *create_function(
         IType const               *return_type,
         Function_parameters const &parameters)
@@ -127,15 +138,30 @@ public:
 
     /// Create a new type struct instance.
     ///
-    /// \param name The name of the struct.
-    IType_struct *create_struct(ISymbol const *name) {
-        return m_tf.create_struct(name);
+    /// \param name      The name of the struct type.
+    /// \param fields    The fields of the struct type.
+    /// \param n_fields  The number of fields.
+    IType_struct const *create_struct(
+        bool                      is_declarative,
+        ISymbol const             *name,
+        IStruct_category const      *category,
+        IType_struct::Field const *fields,
+        size_t                    n_fields)
+    {
+        return m_tf.create_struct(is_declarative, name, category, fields, n_fields);
     }
 
     /// Create a new type enum instance.
-    /// \param name The name of the enum.
-    IType_enum *create_enum(ISymbol const *name) {
-        return m_tf.create_enum(name);
+    ///
+    /// \param name      The name of the enum type.
+    /// \param values    The values of this enum type.
+    /// \param n_values  The number of values.
+    IType_enum const *create_enum(
+        ISymbol const           *name,
+        IType_enum::Value const *values,
+        size_t                  n_values)
+    {
+        return m_tf.create_enum(name, values, n_values);
     }
 
     /// Create a new type alias instance.
@@ -237,6 +263,7 @@ public:
     IType_texture const          * const texture_cube_type;
     IType_texture const          * const texture_ptex_type;
     IType_bsdf_measurement const * const bsdf_measurement_type;
+    IStruct_category const         * const material_category;
     IType_struct const           * const material_emission_type;
     IType_struct const           * const material_surface_type;
     IType_struct const           * const material_volume_type;

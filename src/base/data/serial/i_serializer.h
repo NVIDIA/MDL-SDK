@@ -117,6 +117,7 @@
 #include <base/system/stlext/i_stlext_safe_cast.h>
 #include <map>
 #include <set>
+#include <unordered_set>
 #include <array>
 #include <list>
 #include <string>
@@ -596,6 +597,12 @@ void write_enum(S* serializer, Enum_type enum_value );
 template <typename Enum_type, typename D, typename = enable_if_deserializer_t<D>>
 void read_enum(D* deserializer, Enum_type* enum_value );
 
+template <typename S, typename = enable_if_serializer_t<S>>
+void write(S* serializer, const std::monostate&);
+
+template <typename D, typename = enable_if_deserializer_t<D>>
+void read(D* deserializer, std::monostate*);
+
 template <typename... Tp, typename S, typename = enable_if_serializer_t<S>>
 void write(S* ser, const std::variant<Tp...>& val);
 
@@ -607,6 +614,13 @@ void write(S* ser, const std::array<T,N>& val);
 
 template <typename T, std::size_t N, typename D, typename = enable_if_deserializer_t<D>>
 void read(D* deser, std::array<T,N>* vp);
+
+template <typename T, typename H, typename KE, typename A, typename S, typename = enable_if_serializer_t<S>>
+void write(S* ser, const std::unordered_set<T, H, KE, A>& set);
+
+template <typename T, typename H, typename KE, typename A, typename D, typename = enable_if_deserializer_t<D>>
+void read(D* deser, std::unordered_set<T, H, KE, A>* set);
+
 
 } /// namespace SERIAL
 

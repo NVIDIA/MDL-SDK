@@ -487,18 +487,15 @@ llvm::Type *Type_mapper::lookup_type(
                 return it->second;
 
             // build the struct
-            int n_fields = s_type->get_field_count();
+            size_t n_fields = s_type->get_field_count();
 
             llvm::SmallVector<llvm::Type *, 16> member_types;
             member_types.resize(n_fields);
 
-            for (int i = 0; i < n_fields; ++i) {
-                mdl::IType const   *m_type;
-                mdl::ISymbol const *m_sym;
+            for (size_t i = 0; i < n_fields; ++i) {
+                mdl::IType_struct::Field const *field = s_type->get_field(i);
 
-                s_type->get_field(i, m_type, m_sym);
-
-                member_types[i] = lookup_type(context, m_type);
+                member_types[i] = lookup_type(context, field->get_type());
             }
 
             llvm::Type *res = llvm::StructType::create(
@@ -569,7 +566,7 @@ bool Type_mapper::is_deriv_type(mi::mdl::IType const *type) const
     return false;
 }
 
-// Check whether the given type is based on a floating point type.
+// Checks whether the given type is based on a floating point type.
 bool Type_mapper::is_floating_point_based_type(IType const *type) const
 {
     type = type->skip_type_alias();
@@ -593,6 +590,47 @@ bool Type_mapper::is_floating_point_based_type(IType const *type) const
             IType_array const *array_type = as<IType_array>(type);
             IType const *elem_type = array_type->get_element_type();
             return is_floating_point_based_type(elem_type);
+        }
+
+    default:
+        return false;
+    }
+}
+
+// Checks if the given MDL type is or contains a floating point type.
+bool Type_mapper::contains_floating_point_type(IType const *type) const
+{
+    type = type->skip_type_alias();
+    switch (type->get_kind()) {
+    case IType::TK_FLOAT:
+    case IType::TK_DOUBLE:
+    case IType::TK_COLOR:
+    case IType::TK_MATRIX:  // there are only float and double matrix types
+        return true;
+
+    case IType::TK_VECTOR:
+        {
+            IType_vector const *vec_type = as<IType_vector>(type);
+            IType_atomic const *elem_type = vec_type->get_element_type();
+            IType::Kind elem_kind = elem_type->get_kind();
+            return elem_kind == IType::TK_FLOAT || elem_kind == IType::TK_DOUBLE;
+        }
+
+    case IType::TK_ARRAY:
+        {
+            IType_array const *array_type = as<IType_array>(type);
+            IType const *elem_type = array_type->get_element_type();
+            return contains_floating_point_type(elem_type);
+        }
+
+    case IType::TK_STRUCT:
+        {
+            IType_struct const *struct_type = as<IType_struct>(type);
+            for (int i = 0, n = struct_type->get_compound_size(); i < n; ++i) {
+                if (contains_floating_point_type(struct_type->get_compound_type(i)))
+                    return true;
+            }
+            return false;
         }
 
     default:
@@ -877,13 +915,11 @@ llvm::DIType *Type_mapper::get_debug_info_type(
             mi::mdl::IType_enum const *e_type = cast<mi::mdl::IType_enum>(type);
 
             std::vector<llvm::Metadata *> enumeratorDescriptors;
-            for (int i = 0, n = e_type->get_value_count(); i < n; ++i) {
-                mi::mdl::ISymbol const *sym;
-                int                    code;
+            for (size_t i = 0, n = e_type->get_value_count(); i < n; ++i) {
+                mi::mdl::IType_enum::Value const *val = e_type->get_value(i);
 
-                e_type->get_value(i, sym, code);
-
-                llvm::Metadata *descriptor = diBuilder->createEnumerator(sym->get_name(), code);
+                llvm::Metadata *descriptor = diBuilder->createEnumerator(
+                    val->get_symbol()->get_name(), val->get_code());
                 enumeratorDescriptors.push_back(descriptor);
             }
             llvm::DINodeArray elementArray = diBuilder->getOrCreateArray(enumeratorDescriptors);
@@ -1057,13 +1093,11 @@ llvm::DIType *Type_mapper::get_debug_info_type(
             uint64_t currentSize = 0;
             uint32_t align = 0;
 
-            for (int i = 0, n = s_tp->get_field_count(); i < n; ++i) {
-                mi::mdl::IType const   *f_tp;
-                mi::mdl::ISymbol const *f_sym;
+            for (size_t i = 0, n = s_tp->get_field_count(); i < n; ++i) {
+                mi::mdl::IType_struct::Field const *field  = s_tp->get_field(i);
+                mi::mdl::IType const               *f_type = field->get_type();
 
-                s_tp->get_field(i, f_tp, f_sym);
-
-                llvm::DIType *eltType = get_debug_info_type(diBuilder, file, scope, f_tp);
+                llvm::DIType *eltType = get_debug_info_type(diBuilder, file, scope, f_type);
                 uint32_t eltAlign = eltType->getAlignInBits();
                 uint64_t eltSize  = eltType->getSizeInBits();
 
@@ -1071,7 +1105,7 @@ llvm::DIType *Type_mapper::get_debug_info_type(
                 if (eltAlign == 0)
                     eltAlign = uint32_t(eltSize);
 
-                MDL_ASSERT(eltAlign != 0);
+                MDL_ASSERT((eltAlign != 0 || eltSize == 0) && "align of non void type is zero");
 
                 // The alignment for the entire structure is the maximum of the
                 // required alignments of its elements
@@ -1086,6 +1120,7 @@ llvm::DIType *Type_mapper::get_debug_info_type(
                 // FIXME: position of the fields
                 int line = 0;
 
+                mi::mdl::ISymbol const *f_sym = field->get_symbol();
                 llvm::DIType *fieldType = diBuilder->createMemberType(
                     scope,
                     f_sym->get_name(),

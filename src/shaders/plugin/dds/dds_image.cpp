@@ -637,9 +637,9 @@ void Image::flip_surface( Surface& surface)
 
             for( mi::Uint32 y = 0; y < blocks_y / 2; ++y) {
 
-                DXT_color_block* top = reinterpret_cast<DXT_color_block*>(
+                auto* top = reinterpret_cast<DXT_color_block*>(
                     surface.get_pixels() + z * layer_size + y * row_size);
-                DXT_color_block* bottom = reinterpret_cast<DXT_color_block*>(
+                auto* bottom = reinterpret_cast<DXT_color_block*>(
                     surface.get_pixels() + z * layer_size + (blocks_y-y-1) * row_size);
                 flip_blocks( top, blocks_x);
                 flip_blocks( bottom, blocks_x);
@@ -648,7 +648,7 @@ void Image::flip_surface( Surface& surface)
 
             if( blocks_y % 2 == 1) {
 
-                DXT_color_block* middle = reinterpret_cast<DXT_color_block*>(
+                auto* middle = reinterpret_cast<DXT_color_block*>(
                     surface.get_pixels() + z * layer_size + blocks_y/2 * row_size);
                 flip_blocks( middle, blocks_x);
 
@@ -674,7 +674,7 @@ void Image::flip_blocks_dxtc3( DXT_color_block* line, mi::Uint32 num_blocks)
 
     for( mi::Uint32 i = 0; i < num_blocks; ++i) {
 
-        DXT3_alpha_block* alpha_block = reinterpret_cast<DXT3_alpha_block*>( block);
+        auto* alpha_block = reinterpret_cast<DXT3_alpha_block*>( block);
         std::swap( alpha_block->m_row[0], alpha_block->m_row[3]);
         std::swap( alpha_block->m_row[1], alpha_block->m_row[2]);
         block++;
@@ -716,8 +716,8 @@ void Image::flip_dxt5_alpha( DXT5_alpha_block* block)
     flipped_bits |= (bits << 36) & 0x0fff000000000ull;
 
     // Write flipped bits back.
-    for( int i = 0; i < 6; ++i) {
-        block->m_row[i] = static_cast<mi::Uint8>( flipped_bits & 0xff);
+    for( unsigned char& row : block->m_row) {
+        row = static_cast<mi::Uint8>( flipped_bits & 0xff);
         flipped_bits >>= 8;
     }
 }
@@ -811,8 +811,8 @@ void Image::expand_half( std::vector<mi::Uint8>& buffer)
 {
     mi::Size n = buffer.size() / 2;
     buffer.resize( buffer.size() * 2);
-    const unsigned short* hp = reinterpret_cast<const unsigned short*>( buffer.data());
-    float* fp = reinterpret_cast<float*>( buffer.data());
+    const auto* hp = reinterpret_cast<const unsigned short*>( buffer.data());
+    auto* fp = reinterpret_cast<float*>( buffer.data());
     for( mi::Size i = 0; i < n; ++i)
         fp[n-1-i] = half_to_float( hp[n-1-i] );
 }

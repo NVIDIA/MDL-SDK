@@ -71,7 +71,7 @@ mi::Sint32 Memory_reader_writer_base_impl<T,B>::get_error_number() const
 template <typename T, typename B>
 const char* Memory_reader_writer_base_impl<T,B>::get_error_message() const
 {
-    return 0;
+    return nullptr;
 }
 
 template <typename T, typename B>
@@ -107,8 +107,7 @@ bool Memory_reader_writer_base_impl<T,B>::seek_position(
     if( !stream_position->is_valid())
         return false;
 
-    const Stream_position_impl* stream_position_impl
-        = static_cast<const Stream_position_impl*>( stream_position);
+    const auto* stream_position_impl = static_cast<const Stream_position_impl*>( stream_position);
     m_position = static_cast<mi::Size>( stream_position_impl->get_stream_position());
     return true;
 }

@@ -72,6 +72,7 @@ inline void Serializer::write(const std::set<T, SWO>& set)
     write_range(*this, set.begin(), set.end());
 }
 
+
 template <typename T1, typename T2>
 inline void Serializer::write(const std::pair<T1, T2>& pair)
 {
@@ -557,6 +558,8 @@ void write(S* serializer, const std::set<T,SWO>& set)
     write_range( *serializer, set.begin(), set.end() );
 }
 
+
+
 template <typename T, typename SWO, typename D, typename>
 void read(D* deserializer, std::set<T,SWO>* set)
 {
@@ -660,7 +663,8 @@ void read_variant(D* deser, std::variant<Tp...>* vp, const std::size_t idx)
 {
     if constexpr (I < sizeof...(Tp)) {
         if (idx == 0) {
-            auto& element = vp->template emplace<I>();
+            auto& element = vp->template emplace<I>(
+                    std::variant_alternative_t<I,std::variant<Tp...>>{});
             read(deser,&element);
         }
         else {
@@ -672,6 +676,16 @@ void read_variant(D* deser, std::variant<Tp...>* vp, const std::size_t idx)
 }
 
 }
+
+
+template <typename S, typename>
+void write(S*, const std::monostate&)
+{}
+
+
+template <typename D, typename>
+void read(D*, std::monostate*)
+{}
 
 
 template <typename... Tp, typename S, typename>
@@ -708,6 +722,26 @@ template <typename T, std::size_t N, typename D, typename>
 void read(D* deser, std::array<T,N>* vp)
 {
     read_range(*deser,vp->begin(),vp->end());
+}
+
+template <typename T, typename H, typename KE, typename A, typename S, typename>
+void write(S* ser, const std::unordered_set<T, H, KE, A>& set)
+{
+    write(ser, (Uint64)set.size());
+    write_range(*ser, set.begin(), set.end());
+}
+
+template <typename T, typename H, typename KE, typename A, typename D, typename>
+void read(D* deser, std::unordered_set<T, H, KE, A>* set)
+{
+    Uint64 n;
+    read(deser, &n);
+    set->clear();
+    for (Uint64 i=0; i<n; ++i) {
+        T item;
+        read(deser, &item);
+        set->emplace(std::move(item));
+    }
 }
 
 

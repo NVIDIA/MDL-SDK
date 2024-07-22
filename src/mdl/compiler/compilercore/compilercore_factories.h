@@ -48,8 +48,9 @@
 namespace mi {
 namespace mdl {
 
-class IMDL;
+class MDL;
 class Type_material;
+class Struct_category;
 class Type_struct;
 class Type_array_size;
 class Type_enum;
@@ -100,6 +101,15 @@ public:
         int                     end_line = 0,
         int                     end_column = 0) MDL_FINAL;
 
+    IDeclaration_struct_category *create_struct_category(
+        ISimple_name const      *name = NULL,
+        IAnnotation_block const *annotations = NULL,
+        bool                    exported = false,
+        int                     start_line = 0,
+        int                     start_column = 0,
+        int                     end_line = 0,
+        int                     end_column = 0) MDL_FINAL;
+
     /// Create a new constant declaration.
     IDeclaration_constant *create_constant(
         IType_name const *type_name = NULL,
@@ -121,7 +131,9 @@ public:
 
     /// Create a new struct type declaration.
     IDeclaration_type_struct *create_struct(
+        bool                    is_declarative = false,
         ISimple_name const      *struct_name = NULL,
+        IQualified_name const   *category_name = NULL,
         IAnnotation_block const *annotations = NULL,
         bool                    exported = false,
         int                     start_line = 0,
@@ -151,6 +163,7 @@ public:
 
     /// Create a new function declaration.
     IDeclaration_function *create_function(
+        bool                    is_declarative = false,
         IType_name const        *return_type_name = NULL,
         IAnnotation_block const *ret_annotations = NULL,
         ISimple_name const      *function_name = NULL,
@@ -454,6 +467,7 @@ class Type_factory : public IType_factory
 {
     typedef IType_factory Base;
     friend class Type_cache;
+    friend class Type_builder;
 
     /// A type cache key.
     struct Type_cache_key {
@@ -463,12 +477,30 @@ class Type_factory : public IType_factory
             KEY_ALIAS,          ///< an alias search key
             KEY_SIZED_ARRAY,    ///< a sized array search key
             KEY_ABSTRACT_ARRAY, ///< an abstract array search key
+            KEY_STRUCT_TYPE,    ///< a struct type itself
+            KEY_STRUCT_KEY,     ///< a struct search key
+            KEY_ENUM_TYPE,      ///< an enum type itself
+            KEY_ENUM_KEY,       ///< an enum search key
         };
         Kind kind;
 
         struct Function_type {
             IType_factory::Function_parameter const * params;
             size_t                                    n_params;
+        };
+
+        struct Struct_type {
+            ISymbol const             *sym;
+            IType_struct::Field const *fields;
+            size_t                    n_fields;
+            IStruct_category const    *category;
+            bool                      is_declarative;
+        };
+
+        struct Enum_type {
+            ISymbol const           *sym;
+            IType_enum::Value const *values;
+            size_t                  n_values;
         };
 
         IType const *type;
@@ -492,15 +524,28 @@ class Type_factory : public IType_factory
             struct {
                 Type_array_size const *size;
             } abstract_array;
+
+            // for KEY_STRUCT_KEY
+            Struct_type struct_tp;
+
+            // for KEY_ENUM_KEY
+            Enum_type enum_tp;
         } u;  // PVS: -V730_NOINIT
 
         /// Create a key for a function type.
-        /*implicit*/ Type_cache_key(IType_function const *func)
+        ///
+        /// \param func  a function type
+        /*implicit*/ Type_cache_key(
+            IType_function const *func)
         : kind(KEY_FUNC_TYPE), type(func)
         {
         }
 
         /// Create a key for a function type.
+        ///
+        /// \param ret     the function return type
+        /// \param params  the function parameters
+        /// \param n       number of parameters
         Type_cache_key(
             IType const                                     *ret,
             IType_factory::Function_parameter const * const params,
@@ -512,7 +557,14 @@ class Type_factory : public IType_factory
         }
 
         /// Create a key for an alias type.
-        Type_cache_key(IType const *t, ISymbol const *sym, IType::Modifiers m)
+        ///
+        /// \param t     the aliased type
+        /// \param sym   the symbol of the new alias
+        /// \param m     additional modifiers if any
+        Type_cache_key(
+            IType const      *t,
+            ISymbol const    *sym,
+            IType::Modifiers m)
         : kind(KEY_ALIAS), type(t)
         {
             u.alias.sym = sym;
@@ -520,17 +572,83 @@ class Type_factory : public IType_factory
         }
 
         /// Create a key for a sized array type.
-        Type_cache_key(int size, IType const *t)
+        ///
+        /// \param size   the array size
+        /// \param t      the element type of the array
+        Type_cache_key(
+            int         size,
+            IType const *t)
         : kind(KEY_SIZED_ARRAY), type(t)
         {
             u.fixed_array.size = size;
         }
 
         /// Create a key for an abstract array type.
-        Type_cache_key(IType const *t, Type_array_size const *abs_size)
+        ///
+        /// \param t         the element type of the array
+        /// \param abs_size  the abstract array size
+        Type_cache_key(
+            IType const           *t,
+            Type_array_size const *abs_size)
         : kind(KEY_ABSTRACT_ARRAY), type(t)
         {
             u.abstract_array.size = abs_size;
+        }
+
+        /// Create a key for a struct type.
+        ///
+        /// \param s_type  a struct type
+        /*implicit*/ Type_cache_key(
+            IType_struct const *s_type)
+        : kind(KEY_STRUCT_TYPE), type(s_type)
+        {
+        }
+
+        /// Create a key for a struct type.
+        ///
+        /// \param sym             the symbol of the struct type
+        /// \param fields          the struct fields
+        /// \param n               number of fields
+        /// \param category        the struct category or NULL
+        /// \param is_declarative  true, if this is a declarative struct type
+        Type_cache_key(
+            ISymbol const             *sym,
+            IType_struct::Field const *fields,
+            size_t                    n_fields,
+            IStruct_category const    *category,
+            bool                      is_declarative)
+        : kind(KEY_STRUCT_KEY), type(NULL)
+        {
+            u.struct_tp.sym            = sym;
+            u.struct_tp.fields         = fields;
+            u.struct_tp.n_fields       = n_fields;
+            u.struct_tp.category       = category;
+            u.struct_tp.is_declarative = is_declarative;
+        }
+
+        /// Create a key for an enum type.
+        ///
+        /// \param e_type  an enum type
+        /*implicit*/ Type_cache_key(
+            IType_enum const *e_type)
+        : kind(KEY_ENUM_TYPE), type(e_type)
+        {
+        }
+
+        /// Create a key for an enum type.
+        ///
+        /// \param sym     the symbol of the enum type
+        /// \param values  the enum values
+        /// \param n       number of values
+        Type_cache_key(
+            ISymbol const                  *sym,
+            IType_enum::Value const *const values,
+            size_t                         n)
+        : kind(KEY_ENUM_KEY), type(NULL)
+        {
+            u.enum_tp.sym      = sym;
+            u.enum_tp.values   = values;
+            u.enum_tp.n_values = n;
         }
 
         /// Functor to hash a type cache keys.
@@ -540,9 +658,10 @@ class Type_factory : public IType_factory
                 switch (key.kind) {
                 case KEY_FUNC_TYPE:
                     {
-                        IType_function const *ft = static_cast<IType_function const *>(key.type);
-                        IType const *ret_type = ft->get_return_type();
-                        size_t n_params = size_t(ft->get_parameter_count());
+                        IType_function const *ft       =
+                            static_cast<IType_function const *>(key.type);
+                        IType const          *ret_type = ft->get_return_type();
+                        size_t               n_params  = size_t(ft->get_parameter_count());
 
                         size_t t = size_t(ret_type) >> 4;
                         t = ((t) >> 3) ^ (t >> 16) ^                     //-V2007
@@ -594,6 +713,75 @@ class Type_factory : public IType_factory
                             size_t(key.kind) ^
                             (size_t(key.u.abstract_array.size) >> 4);
                     }
+                case KEY_STRUCT_TYPE:
+                    {
+                        IType_struct const *st      = static_cast<IType_struct const *>(key.type);
+                        ISymbol const      *sym     = st->get_symbol();
+                        size_t             n_fields = st->get_field_count();
+
+                        size_t t = size_t(sym) >> 4;
+                        t = ((t) >> 3) ^ (t >> 16) ^                     //-V2007
+                            size_t(KEY_STRUCT_TYPE) ^ n_fields;
+
+                        t = (t * 3) ^ size_t(st->get_category());
+
+                        for (size_t i = 0; i < n_fields; ++i) {
+                            IType_struct::Field const *f = st->get_field(i);
+                            t *= 3;
+                            t ^= (size_t(f->get_symbol()) >> 4) ^ (size_t(f->get_type()) >> 4);
+                        }
+
+                        t = (t * 3) ^ size_t(st->is_declarative());
+                        return t;
+                    }
+                case KEY_STRUCT_KEY:
+                    {
+                        size_t t = size_t(key.u.struct_tp.sym) >> 4;
+                        t = ((t) >> 3) ^ (t >> 16) ^                     //-V2007
+                            size_t(KEY_STRUCT_TYPE) ^ key.u.struct_tp.n_fields;
+
+                        t = (t * 3) ^ size_t(key.u.struct_tp.category);
+
+                        IType_struct::Field const *f = key.u.struct_tp.fields;
+                        for (size_t i = 0; i < key.u.struct_tp.n_fields; ++i) {
+                            t *= 3;
+                            t ^= (size_t(f[i].get_symbol()) >> 4) ^ (size_t(f[i].get_type()) >> 4);
+                        }
+
+                        t = (t * 3) ^ size_t(key.u.struct_tp.is_declarative);
+                        return t;
+                    }
+                case KEY_ENUM_TYPE:
+                    {
+                        IType_enum const *et      = static_cast<IType_enum const *>(key.type);
+                        ISymbol const    *sym     = et->get_symbol();
+                        size_t           n_values = et->get_value_count();
+
+                        size_t t = size_t(sym) >> 4;
+                        t = ((t) >> 3) ^ (t >> 16) ^                     //-V2007
+                            size_t(KEY_ENUM_TYPE) ^ n_values;
+
+                        for (size_t i = 0; i < n_values; ++i) {
+                            IType_enum::Value const *v = et->get_value(i);
+
+                            t *= 3;
+                            t ^= (size_t(v->get_code()) * 3) ^ (size_t(v->get_symbol()) >> 4);
+                        }
+                        return t;
+                    }
+                case KEY_ENUM_KEY:
+                    {
+                        size_t t = size_t(key.u.enum_tp.sym) >> 4;
+                        t = ((t) >> 3) ^ (t >> 16) ^                     //-V2007
+                            size_t(KEY_ENUM_TYPE) ^ key.u.enum_tp.n_values;
+
+                        IType_enum::Value const *v = key.u.enum_tp.values;
+                        for (size_t i = 0; i < key.u.enum_tp.n_values; ++i) {
+                            t *= 3;
+                            t ^= (size_t(v[i].get_code()) * 3) ^ (size_t(v[i].get_symbol()) >> 4);
+                        }
+                        return t;
+                    }
                 default:
                     return 0;
                 }
@@ -604,27 +792,29 @@ class Type_factory : public IType_factory
         struct Equal {
             bool operator() (Type_cache_key const &a, Type_cache_key const &b) const
             {
+                // check first for *_TYPE vs *_KEY matches
                 if (a.kind != b.kind) {
-                    IType_function const *ft = NULL;
-                    IType const          *rt = NULL;
-                    Function_type const  *sk = NULL;
+                    Type_cache_key const *pa = &a;
+                    Type_cache_key const *pb = &b;
 
-                    // compare a function type and a function search key
-                    if (a.kind == KEY_FUNC_TYPE && b.kind == KEY_FUNC_KEY) {
-                        ft = static_cast<IType_function const *>(a.type);
-                        sk = &b.u.func;
-                        rt = b.type;
-                    } else if (a.kind == KEY_FUNC_KEY && b.kind == KEY_FUNC_TYPE) {
-                        ft = static_cast<IType_function const *>(b.type);
-                        sk = &a.u.func;
-                        rt = a.type;
+                    // order them for less cases
+                    if (pa->kind > pb->kind) {
+                        pa = &b;
+                        pb = &a;
                     }
 
-                    if (ft != NULL) {
-                        if (rt != ft->get_return_type())
+                    // compare a function type and a function search key
+                    if (pa->kind == KEY_FUNC_TYPE && pb->kind == KEY_FUNC_KEY) {
+                        IType_function const *ft = static_cast<IType_function const *>(pa->type);
+                        Function_type const  *sk = &pb->u.func;
+                        IType const          *rt = pb->type;
+
+                        if (rt != ft->get_return_type()) {
                             return false;
-                        if (size_t(ft->get_parameter_count()) != sk->n_params)
+                        }
+                        if (size_t(ft->get_parameter_count()) != sk->n_params) {
                             return false;
+                        }
 
                         for (size_t i = 0; i < sk->n_params; ++i) {
                             IType const   *p_type;
@@ -633,13 +823,69 @@ class Type_factory : public IType_factory
                             ft->get_parameter(i, p_type, p_sym);
 
                             if (p_type != sk->params[i].p_type ||
-                                p_sym  != sk->params[i].p_sym)
+                                p_sym != sk->params[i].p_sym)
+                            {
                                 return false;
+                            }
                         }
+                        // match
+                        return true;
+                    } else if (pa->kind == KEY_STRUCT_TYPE && pb->kind == KEY_STRUCT_KEY) {
+                        IType_struct const *st  = static_cast<IType_struct const *>(pa->type);
+                        Struct_type const  *sk  = &pb->u.struct_tp;
+
+                        if (st->get_symbol() != sk->sym) {
+                            return false;
+                        }
+                        if (st->get_field_count() != sk->n_fields) {
+                            return false;
+                        }
+                        if (st->get_category() != sk->category) {
+                            return false;
+                        }
+                        if (st->is_declarative() != sk->is_declarative) {
+                            return false;
+                        }
+
+                        // check fields
+                        for (size_t i = 0; i < sk->n_fields; ++i) {
+                            IType_struct::Field const *field = st->get_field(i);
+
+                            if (field->get_symbol() != sk->fields[i].get_symbol() ||
+                                field->get_type() != sk->fields[i].get_type())
+                            {
+                                return false;
+                            }
+                        }
+                        // match
+                        return true;
+                    } else if (pa->kind == KEY_ENUM_TYPE && pb->kind == KEY_ENUM_KEY) {
+                        IType_enum const *et = static_cast<IType_enum const *>(pa->type);
+                        Enum_type const  *sk = &pb->u.enum_tp;
+
+                        if (et->get_symbol() != sk->sym) {
+                            return false;
+                        }
+                        if (et->get_value_count() != sk->n_values) {
+                            return false;
+                        }
+
+                        // check values
+                        for (size_t i = 0; i < sk->n_values; ++i) {
+                            IType_enum::Value const *value = et->get_value(i);
+
+                            if (value->get_symbol() != sk->values[i].get_symbol() ||
+                                value->get_code() != sk->values[i].get_code())
+                            {
+                                return false;
+                            }
+                        }
+                        // match
                         return true;
                     }
                     return false;
                 }
+
                 switch (a.kind) {
                 case KEY_FUNC_TYPE:
                     return
@@ -668,6 +914,20 @@ class Type_factory : public IType_factory
                     return
                         a.type == b.type &&
                         a.u.abstract_array.size == b.u.abstract_array.size;
+                case KEY_STRUCT_TYPE:
+                    return
+                        a.type == b.type;
+                case KEY_STRUCT_KEY:
+                    // should be NEVER inside the type hash
+                    MDL_ASSERT(!"struct search key in type cache detected");
+                    return false;
+                case KEY_ENUM_TYPE:
+                    return
+                        a.type == b.type;
+                case KEY_ENUM_KEY:
+                    // should be NEVER inside the type hash
+                    MDL_ASSERT(!"enum search key in type cache detected");
+                    return false;
                 default:
                     return false;
                 }
@@ -682,70 +942,75 @@ public:
     /// \param type       The aliased type.
     /// \param name       The alias name, may be NULL.
     /// \param modifiers  The type modifiers.
-    IType const *create_alias(
-        IType const *type,
-        ISymbol const *name,
+    MDL_CHECK_RESULT IType const *create_alias(
+        IType const      *type,
+        ISymbol const    *name,
         IType::Modifiers modifiers) MDL_FINAL;
 
     /// Create a new type error instance.
-    IType_error const *create_error() MDL_FINAL;
+    MDL_CHECK_RESULT IType_error const *create_error() MDL_FINAL;
 
     /// Create a new type auto (non-deduced incomplete type) instance.
-    IType_auto const *create_auto() MDL_FINAL;
+    MDL_CHECK_RESULT IType_auto const *create_auto() MDL_FINAL;
 
     /// Create a new type bool instance.
-    IType_bool const *create_bool() MDL_FINAL;
+    MDL_CHECK_RESULT IType_bool const *create_bool() MDL_FINAL;
 
     /// Create a new type int instance.
-    IType_int const *create_int() MDL_FINAL;
+    MDL_CHECK_RESULT IType_int const *create_int() MDL_FINAL;
 
     /// Create a new type enum instance.
     ///
-    /// \param name The name of the enum.
-    IType_enum *create_enum(ISymbol const *name) MDL_FINAL;
+    /// \param name      The name of the enum type.
+    /// \param values    The values of this enum type.
+    /// \param n_values  The number of values.
+    MDL_CHECK_RESULT IType_enum const *create_enum(
+        ISymbol const           *name,
+        IType_enum::Value const *values,
+        size_t                  n_values) MDL_FINAL;
 
     /// Lookup an enum type.
     /// \param name The name of the enum.
     /// \returns the type enum instance or NULL if it does not exist.
-    IType_enum const *lookup_enum(char const *name) const MDL_FINAL;
+    MDL_CHECK_RESULT IType_enum const *lookup_enum(char const *name) const MDL_FINAL;
 
     /// Create a new type float instance.
-    IType_float const *create_float() MDL_FINAL;
+    MDL_CHECK_RESULT IType_float const *create_float() MDL_FINAL;
 
     /// Create a new type double instance.
-    IType_double const *create_double() MDL_FINAL;
+    MDL_CHECK_RESULT IType_double const *create_double() MDL_FINAL;
 
     /// Create a new type string instance.
-    IType_string const *create_string() MDL_FINAL;
+    MDL_CHECK_RESULT IType_string const *create_string() MDL_FINAL;
 
     /// Create a new type bsdf instance.
-    IType_bsdf const *create_bsdf() MDL_FINAL;
+    MDL_CHECK_RESULT IType_bsdf const *create_bsdf() MDL_FINAL;
 
     /// Create a new type hair_bsdf instance.
-    IType_hair_bsdf const *create_hair_bsdf() MDL_FINAL;
+    MDL_CHECK_RESULT IType_hair_bsdf const *create_hair_bsdf() MDL_FINAL;
 
     /// Create a new type edf instance.
-    IType_edf const *create_edf() MDL_FINAL;
+    MDL_CHECK_RESULT IType_edf const *create_edf() MDL_FINAL;
 
     /// Create a new type vdf instance.
-    IType_vdf const *create_vdf() MDL_FINAL;
+    MDL_CHECK_RESULT IType_vdf const *create_vdf() MDL_FINAL;
 
     /// Create a new type light profile instance.
-    IType_light_profile const *create_light_profile() MDL_FINAL;
+    MDL_CHECK_RESULT IType_light_profile const *create_light_profile() MDL_FINAL;
 
     /// Create a new type vector instance.
     ///
     /// \param element_type The type of the vector elements.
     /// \param size         The size of the vector.
-    IType_vector const *create_vector(
+    MDL_CHECK_RESULT IType_vector const *create_vector(
         IType_atomic const *element_type,
-        int size) MDL_FINAL;
+        int                size) MDL_FINAL;
 
     /// Create a new type matrix instance.
     ///
     /// \param element_type The type of the matrix elements.
     /// \param columns      The number of columns.
-    IType_matrix const *create_matrix(
+    MDL_CHECK_RESULT IType_matrix const *create_matrix(
         IType_vector const *element_type,
         int                columns) MDL_FINAL;
 
@@ -756,7 +1021,7 @@ public:
     /// \param sym            The symbol of the abstract array size.
     ///
     /// \return IType_error if element_type was of IType_error, an IType_array instance else.
-    IType const *create_array(
+    MDL_CHECK_RESULT IType const *create_array(
         IType const   *element_type,
         ISymbol const *abs_name,
         ISymbol const *sym) MDL_FINAL;
@@ -767,58 +1032,95 @@ public:
     /// \param size         The size of the array.
     ///
     /// \return IType_error if element_type was of IType_error, an IType_array instance else.
-    IType const *create_array(
+    MDL_CHECK_RESULT IType const *create_array(
         IType const *element_type,
         size_t      size) MDL_FINAL;
 
     /// Create a new type color instance.
-    IType_color const *create_color() MDL_FINAL;
+    MDL_CHECK_RESULT IType_color const *create_color() MDL_FINAL;
+
+    /// Lookup a struct category.
+    ///
+    /// \param name  The name of the struct category.
+    ///
+    /// \returns the struct category or NULL if it does not exist.
+    MDL_CHECK_RESULT IStruct_category const *lookup_struct_category(
+        char const *name) MDL_FINAL;
+
+    /// Create a new category instance.
+    ///
+    /// \param category_name    Name of the category.
+    MDL_CHECK_RESULT IStruct_category const *create_struct_category(
+        ISymbol const *name) MDL_FINAL;
 
     /// Create a new type function type instance.
     ///
     /// \param return_type   The return type of the function.
     /// \param parameters    The parameters of the function.
     /// \param n_parameters  The number of parameters.
-    IType_function const *create_function(
+    MDL_CHECK_RESULT IType_function const *create_function(
         IType const                      *return_type,
         Function_parameter const * const parameters,
         size_t                           n_parameters) MDL_FINAL;
 
     /// Create a new type struct instance.
     ///
-    /// \param name  The name of the struct.
-    IType_struct *create_struct(ISymbol const *name) MDL_FINAL;
+    /// \param name      The name of the struct type.
+    /// \param fields    The fields of the struct type.
+    /// \param n_fields  The number of fields.
+    MDL_CHECK_RESULT IType_struct const *create_struct(
+        bool                      is_declarative,
+        ISymbol const             *name,
+        IStruct_category const      *category,
+        IType_struct::Field const *fields,
+        size_t                    n_fields) MDL_FINAL;
 
     /// Lookup a struct type.
     /// \param name The name of the struct.
     /// \returns the type struct instance or NULL if it does not exist.
-    IType_struct const *lookup_struct(char const *name) const MDL_FINAL;
+    MDL_CHECK_RESULT IType_struct const *lookup_struct(
+        char const *name) const MDL_FINAL;
 
     /// Create a new type texture sampler instance.
     /// \param texture_type The texture type.
-    IType_texture const *create_texture(
+    MDL_CHECK_RESULT IType_texture const *create_texture(
         IType_texture::Shape shape) MDL_FINAL;
 
     /// Create a new type bsdf_measurement instance.
-    IType_bsdf_measurement const *create_bsdf_measurement() MDL_FINAL;
+    MDL_CHECK_RESULT IType_bsdf_measurement const *create_bsdf_measurement() MDL_FINAL;
+
+    /// Import a category from another type factory.
+    ///
+    /// \param cat  the category to import
+    MDL_CHECK_RESULT IStruct_category const *import_category(
+        IStruct_category const *cat);
 
     /// Import a type from another type factory.
     ///
     /// \param type  the type to import
-    IType const *import(IType const *type) MDL_FINAL;
+    MDL_CHECK_RESULT IType const *import(
+        IType const *type) MDL_FINAL;
+
+    /// Return a predefined struct category.
+    ///
+    /// \param id  the ID of the predefined enum
+    MDL_CHECK_RESULT IStruct_category const *get_predefined_struct_category(
+        IStruct_category::Predefined_id id) MDL_FINAL;
 
     /// Return a predefined struct.
     ///
     /// \param part  the ID of the predefined struct
-    IType_struct *get_predefined_struct(IType_struct::Predefined_id part) MDL_FINAL;
+    MDL_CHECK_RESULT IType_struct const *get_predefined_struct(
+        IType_struct::Predefined_id part) MDL_FINAL;
 
     /// Return a predefined enum.
     ///
     /// \param part  the ID of the predefined enum
-    IType_enum *get_predefined_enum(IType_enum::Predefined_id part) MDL_FINAL;
+    MDL_CHECK_RESULT IType_enum const *get_predefined_enum(
+        IType_enum::Predefined_id part) MDL_FINAL;
 
     /// Return the symbol table of this type factory.
-    Symbol_table *get_symbol_table() MDL_FINAL;
+    MDL_CHECK_RESULT Symbol_table *get_symbol_table() MDL_FINAL;
 
     // Non interface methods
 public:
@@ -898,6 +1200,9 @@ public:
     /// Checks if this type factory owns the given type
     bool is_owner(IType const *type) const;
 
+    /// Get the allocator.
+    IAllocator *get_allocator() { return m_builder.get_arena()->get_allocator(); }
+
     /// Constructs a new type factory.
     ///
     /// \param arena         the memory arena used to allocate new types
@@ -905,8 +1210,8 @@ public:
     /// \param sym_tab       the symbol table for symbols inside types
     explicit Type_factory(
         Memory_arena  &arena,
-        IMDL          *compiler,
-        Symbol_table  *sym_tab);
+        MDL           &compiler,
+        Symbol_table  &sym_tab);
 
 private:
     // non copyable
@@ -914,6 +1219,34 @@ private:
     Type_factory &operator=(Type_factory const &) MDL_DELETED_FUNCTION;
 
 private:
+    /// Insert a predefined struct type.
+    ///
+    /// \param is_declarative  true if the struct is declarative
+    /// \param name            the name of this struct type
+    /// \param fields          the fields of this struct type
+    /// \param n_fields        the number of fields
+    ///
+    /// \return the created struct type
+    IType_struct const *insert_predef_struct(
+        ISymbol const               *name,
+        IType_struct::Field const   *fields,
+        size_t                      n_fields);
+
+    /// Insert a predefined enum type.
+    ///
+    /// \param name       the fully qualified name of this type
+    /// \param values     the values of this type
+    /// \param n_values   the number of values
+    ///
+    /// \return the created enum type
+    IType_enum const *insert_predef_enum(
+        ISymbol const           *name,
+        IType_enum::Value const *values,
+        size_t                  n_values);
+
+    IStruct_category const *insert_predef_category(
+        ISymbol const *name);
+
     /// Register builtin-types.
     ///
     /// \param serializer  the factory serializer
@@ -938,10 +1271,13 @@ private:
     Symbol_table * const m_symtab;
 
     /// Predefined structs (material parts).
-    Type_struct *m_predefined_structs[IType_struct::SID_LAST + 1];
+    Type_struct const *m_predefined_structs[IType_struct::SID_LAST + 1];
 
     /// Predefined enums (used in constructors of default types).
-    Type_enum *m_predefined_enums[IType_enum::EID_LAST + 1];
+    Type_enum const *m_predefined_enums[IType_enum::EID_LAST + 1];
+
+    /// Predefined categories (used in predefined structs).
+    Struct_category const *m_predefined_categories[IStruct_category::CID_LAST + 1];
 
     /// Hashtable of cached types.
     typedef Arena_hash_map<
@@ -972,6 +1308,16 @@ private:
 
     // Cache of imported user types (struct and enums).
     Type_import_map m_imported_types_cache;
+
+    /// Hashtable of imported user types.
+    typedef Arena_hash_map<
+        char const *,
+        IStruct_category const *,
+        cstring_hash,
+        cstring_equal_to>::Type Category_import_map;
+
+    // Cache of imported user struct categories.
+    Category_import_map m_imported_category_cache;
 };
 
 /// Implementation of the Annotation factory.

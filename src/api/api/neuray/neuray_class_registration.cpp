@@ -36,34 +36,20 @@
 
 #include "neuray_class_factory.h"
 
+#include <mi/neuraylib/ienum_decl.h>
 #include <mi/neuraylib/iextension_api.h>
+#include <mi/neuraylib/istructure_decl.h>
 
 #include <boost/core/ignore_unused.hpp>
 
 #include <base/system/main/access_module.h>
 #include <base/data/serial/serial.h>
 
-// for the factory methods
-#include "neuray_array_impl.h"
-#include "neuray_compound_impl.h"
-#include "neuray_enum_decl_impl.h"
-#include "neuray_enum_impl.h"
-#include "neuray_map_impl.h"
-#include "neuray_pointer_impl.h"
-#include "neuray_ref_impl.h"
-#include "neuray_string_impl.h"
-#include "neuray_structure_decl_impl.h"
-#include "neuray_structure_impl.h"
-#include "neuray_uuid_impl.h"
-#include "neuray_number_impl.h"
-#include "neuray_void_impl.h"
-
 
 
 #include <base/data/dblight/dblight_database.h>
 
 // for the factory methods
-#include "neuray_array_impl_proxy.h"
 #include "neuray_attribute_container_impl.h"
 #include "neuray_bsdf_measurement_impl.h"
 #include "neuray_compiled_material_impl.h"
@@ -91,148 +77,6 @@ namespace MI {
 
 namespace NEURAY {
 
-
-void Class_registration::register_classes_part1( Class_factory* factory)
-{
-    mi::Sint32 result = 0;
-    boost::ignore_unused( result);
-
-#define REG2( a, b) \
-    result = factory->register_class( a, b); \
-    ASSERT( M_NEURAY_API, result == 0)
-
-#define REG3( a, b, c) \
-    result = factory->register_class( a, b, c); \
-    ASSERT( M_NEURAY_API, result == 0)
-
-    // IData_simple
-    REG3( "Boolean",         Number_impl<mi::IBoolean,    bool>::create_api_class);
-    REG3( "Sint8",           Number_impl<mi::ISint8,      mi::Sint8>::create_api_class);
-    REG3( "Sint16",          Number_impl<mi::ISint16,     mi::Sint16>::create_api_class);
-    REG3( "Sint32",          Number_impl<mi::ISint32,     mi::Sint32>::create_api_class);
-    REG3( "Sint64",          Number_impl<mi::ISint64,     mi::Sint64>::create_api_class);
-    REG3( "Uint8",           Number_impl<mi::IUint8,      mi::Uint8>::create_api_class);
-    REG3( "Uint16",          Number_impl<mi::IUint16,     mi::Uint16>::create_api_class);
-    REG3( "Uint32",          Number_impl<mi::IUint32,     mi::Uint32>::create_api_class);
-    REG3( "Uint64",          Number_impl<mi::IUint64,     mi::Uint64>::create_api_class);
-    REG3( "Float32",         Number_impl<mi::IFloat32,    mi::Float32>::create_api_class);
-    REG3( "Float64",         Number_impl<mi::IFloat64,    mi::Float64>::create_api_class);
-    REG3( "Size",            Number_impl<mi::ISize,       mi::Size>::create_api_class);
-    REG3( "Difference",      Number_impl<mi::IDifference, mi::Difference>::create_api_class);
-    REG2( "String",          String_impl::create_api_class);
-    REG2( "Ref",             Ref_impl::create_api_class);
-    REG2( "Uuid",            Uuid_impl::create_api_class);
-    REG2( "Void",            Void_impl::create_api_class);
-    REG2( "__Pointer",       Pointer_impl::create_api_class);
-    REG2( "__Const_pointer", Const_pointer_impl::create_api_class);
-    REG2( "__Enum",          Enum_impl::create_api_class);
-    REG2( "Enum_decl",       Enum_decl_impl::create_api_class);
-
-    // vector variants of ICompound interface
-    REG2( "Boolean<2>", Boolean_2_impl::create_api_class);
-    REG2( "Boolean<3>", Boolean_3_impl::create_api_class);
-    REG2( "Boolean<4>", Boolean_4_impl::create_api_class);
-    REG2( "Sint32<2>",  Sint32_2_impl::create_api_class );
-    REG2( "Sint32<3>",  Sint32_3_impl::create_api_class );
-    REG2( "Sint32<4>",  Sint32_4_impl::create_api_class );
-    REG2( "Uint32<2>",  Uint32_2_impl::create_api_class );
-    REG2( "Uint32<3>",  Uint32_3_impl::create_api_class );
-    REG2( "Uint32<4>",  Uint32_4_impl::create_api_class );
-    REG2( "Float32<2>", Float32_2_impl::create_api_class);
-    REG2( "Float32<3>", Float32_3_impl::create_api_class);
-    REG2( "Float32<4>", Float32_4_impl::create_api_class);
-    REG2( "Float64<2>", Float64_2_impl::create_api_class);
-    REG2( "Float64<3>", Float64_3_impl::create_api_class);
-    REG2( "Float64<4>", Float64_4_impl::create_api_class);
-
-    // matrix variants of ICompound interface
-    REG2( "Boolean<2,2>", Boolean_2_2_impl::create_api_class);
-    REG2( "Boolean<2,3>", Boolean_2_3_impl::create_api_class);
-    REG2( "Boolean<2,4>", Boolean_2_4_impl::create_api_class);
-    REG2( "Boolean<3,2>", Boolean_3_2_impl::create_api_class);
-    REG2( "Boolean<3,3>", Boolean_3_3_impl::create_api_class);
-    REG2( "Boolean<3,4>", Boolean_3_4_impl::create_api_class);
-    REG2( "Boolean<4,2>", Boolean_4_2_impl::create_api_class);
-    REG2( "Boolean<4,3>", Boolean_4_3_impl::create_api_class);
-    REG2( "Boolean<4,4>", Boolean_4_4_impl::create_api_class);
-
-    REG2( "Sint32<2,2>",  Sint32_2_2_impl::create_api_class );
-    REG2( "Sint32<2,3>",  Sint32_2_3_impl::create_api_class );
-    REG2( "Sint32<2,4>",  Sint32_2_4_impl::create_api_class );
-    REG2( "Sint32<3,2>",  Sint32_3_2_impl::create_api_class );
-    REG2( "Sint32<3,3>",  Sint32_3_3_impl::create_api_class );
-    REG2( "Sint32<3,4>",  Sint32_3_4_impl::create_api_class );
-    REG2( "Sint32<4,2>",  Sint32_4_2_impl::create_api_class );
-    REG2( "Sint32<4,3>",  Sint32_4_3_impl::create_api_class );
-    REG2( "Sint32<4,4>",  Sint32_4_4_impl::create_api_class );
-
-    REG2( "Uint32<2,2>",  Uint32_2_2_impl::create_api_class );
-    REG2( "Uint32<2,3>",  Uint32_2_3_impl::create_api_class );
-    REG2( "Uint32<2,4>",  Uint32_2_4_impl::create_api_class );
-    REG2( "Uint32<3,2>",  Uint32_3_2_impl::create_api_class );
-    REG2( "Uint32<3,3>",  Uint32_3_3_impl::create_api_class );
-    REG2( "Uint32<3,4>",  Uint32_3_4_impl::create_api_class );
-    REG2( "Uint32<4,2>",  Uint32_4_2_impl::create_api_class );
-    REG2( "Uint32<4,3>",  Uint32_4_3_impl::create_api_class );
-    REG2( "Uint32<4,4>",  Uint32_4_4_impl::create_api_class );
-
-    REG2( "Float32<2,2>", Float32_2_2_impl::create_api_class);
-    REG2( "Float32<2,3>", Float32_2_3_impl::create_api_class);
-    REG2( "Float32<2,4>", Float32_2_4_impl::create_api_class);
-    REG2( "Float32<3,2>", Float32_3_2_impl::create_api_class);
-    REG2( "Float32<3,3>", Float32_3_3_impl::create_api_class);
-    REG2( "Float32<3,4>", Float32_3_4_impl::create_api_class);
-    REG2( "Float32<4,2>", Float32_4_2_impl::create_api_class);
-    REG2( "Float32<4,3>", Float32_4_3_impl::create_api_class);
-    REG2( "Float32<4,4>", Float32_4_4_impl::create_api_class);
-
-    REG2( "Float64<2,2>", Float64_2_2_impl::create_api_class);
-    REG2( "Float64<2,3>", Float64_2_3_impl::create_api_class);
-    REG2( "Float64<2,4>", Float64_2_4_impl::create_api_class);
-    REG2( "Float64<3,2>", Float64_3_2_impl::create_api_class);
-    REG2( "Float64<3,3>", Float64_3_3_impl::create_api_class);
-    REG2( "Float64<3,4>", Float64_3_4_impl::create_api_class);
-    REG2( "Float64<4,2>", Float64_4_2_impl::create_api_class);
-    REG2( "Float64<4,3>", Float64_4_3_impl::create_api_class);
-    REG2( "Float64<4,4>", Float64_4_4_impl::create_api_class);
-
-    // other variants of the ICompound interface
-    REG2( "Color", Color_impl::create_api_class);
-    REG2( "Color3", Color3_impl::create_api_class);
-    REG2( "Spectrum", Spectrum_impl::create_api_class);
-    REG2( "Bbox3", Bbox3_impl::create_api_class);
-
-    // IData_collection
-    REG2( "__Array", Array_impl::create_api_class);
-    REG2( "__Dynamic_array", Dynamic_array_impl::create_api_class);
-    REG2( "__Map", Map_impl::create_api_class);
-    REG2( "__Structure", Structure_impl::create_api_class);
-    REG2( "Structure_decl", Structure_decl_impl::create_api_class);
-
-    // proxies (for attributes and elements of compounds)
-    REG3( "__Boolean_proxy", Number_impl_proxy<mi::IBoolean, bool>::create_api_class);
-    REG3( "__Sint32_proxy",  Number_impl_proxy<mi::ISint32,  mi::Sint32>::create_api_class);
-    REG3( "__Uint32_proxy",  Number_impl_proxy<mi::IUint32,  mi::Uint32>::create_api_class);
-    REG3( "__Float32_proxy", Number_impl_proxy<mi::IFloat32, mi::Float32>::create_api_class);
-    REG3( "__Float64_proxy", Number_impl_proxy<mi::IFloat64, mi::Float64>::create_api_class);
-
-    // remaining proxies (for attributes)
-    REG3( "__Sint8_proxy",  Number_impl_proxy<mi::ISint8,   mi::Sint8>::create_api_class);
-    REG3( "__Sint16_proxy", Number_impl_proxy<mi::ISint16,  mi::Sint16>::create_api_class);
-    REG3( "__Sint64_proxy", Number_impl_proxy<mi::ISint64,  mi::Sint64>::create_api_class);
-    REG3( "__Uint8_proxy",  Number_impl_proxy<mi::IUint8,   mi::Uint8>::create_api_class);
-    REG3( "__Uint16_proxy", Number_impl_proxy<mi::IUint16,  mi::Uint16>::create_api_class);
-    REG3( "__Uint64_proxy", Number_impl_proxy<mi::IUint64,  mi::Uint64>::create_api_class);
-    REG2( "__String_proxy", String_impl_proxy::create_api_class);
-    REG2( "__Ref_proxy", Ref_impl_proxy::create_api_class);
-    REG2( "__Enum_proxy", Enum_impl_proxy::create_api_class);
-    REG2( "__Array_proxy", Array_impl_proxy::create_api_class);
-    REG2( "__Dynamic_array_proxy", Dynamic_array_impl_proxy::create_api_class);
-    REG2( "__Structure_proxy", Structure_impl_proxy::create_api_class);
-
-#undef REG2
-#undef REG3
-}
 
 void Class_registration::register_classes_part2( Class_factory* factory, DB::Database* db)
 {
@@ -270,7 +114,7 @@ void Class_registration::register_classes_part2( Class_factory* factory, DB::Dat
     REG( "Export_result_ext", Export_result_ext_impl::create_api_class);
 
     // register DB classes
-    DBLIGHT::Database_impl* db_impl = static_cast<DBLIGHT::Database_impl*>( db);
+    auto* db_impl = static_cast<DBLIGHT::Database_impl*>( db);
     SERIAL::Deserialization_manager* manager = db_impl->get_deserialization_manager();
     manager->register_class( Attribute_container::id, Attribute_container::factory);
 
@@ -344,9 +188,9 @@ void Class_registration::unregister_structure_declarations( Class_factory* facto
     boost::ignore_unused( result);
 
 #define UNREG(s) \
-    if (mi::base::make_handle(factory->get_structure_decl(s)).is_valid_interface()) { \
-        result = factory->unregister_structure_decl(s); \
-        ASSERT(M_NEURAY_API, result == 0); \
+    if( make_handle( factory->get_structure_decl( s))) { \
+        result = factory->unregister_structure_decl( s); \
+        ASSERT( M_NEURAY_API, result == 0); \
     }
 
 

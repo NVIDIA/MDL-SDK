@@ -122,10 +122,10 @@ template <class E, class I, class T>
 class Value_base : public mi::base::Interface_implement_2<E, IValue_wrapper>
 {
 public:
-    typedef E External_value;
-    typedef I Internal_value;
-    typedef T External_type;
-    typedef Value_base<E, I, T> Base;
+    using External_value = E;
+    using Internal_value = I;
+    using External_type = T;
+    using Base = Value_base<E, I, T>;
 
     Value_base( const Value_factory* vf, I* value, const mi::base::IInterface* owner)
       : m_vf( vf, mi::base::DUP_INTERFACE),
@@ -393,6 +393,7 @@ public:
 
 private:
     const mi::base::Handle<mi::neuraylib::ITransaction> m_transaction;
+    mutable std::string m_cached_file_path;
     mutable std::string m_cached_selector;
 };
 
@@ -419,6 +420,7 @@ public:
 
 private:
     const mi::base::Handle<mi::neuraylib::ITransaction> m_transaction;
+    mutable std::string m_cached_file_path;
 };
 
 
@@ -444,6 +446,7 @@ public:
 
 private:
     const mi::base::Handle<mi::neuraylib::ITransaction> m_transaction;
+    mutable std::string m_cached_file_path;
 };
 
 

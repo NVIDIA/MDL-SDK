@@ -35,6 +35,7 @@
 #include <mi/neuraylib/imdl_backend_api.h>
 #include <mi/neuraylib/ivalue.h>
 #include <mi/neuraylib/target_code_types.h>
+#include <mi/neuraylib/typedefs.h>
 #include <mi/neuraylib/version.h>
 
 namespace mi {
@@ -91,6 +92,9 @@ public:
     ///                             Possible values: \c "none", \c "fixed_1", \c "fixed_2",
     ///                             \c "fixed_4", \c "fixed_8", and \c "pointer", while \c "pointer"
     ///                             is not available for all backends. Default: \c "none".
+    /// - \c "libbsdf_flags_in_bsdf_data": If enabled, the generated code will use the optional
+    ///   \c "flags" field in the BSDF data structures.
+    ///   Possible values: \c "on", \c "off". Default: \c "off".
     ///
     /// The following options are supported by the NATIVE backend only:
     /// - \c "use_builtin_resource_handler": Enables/disables the built-in texture runtime.

@@ -53,18 +53,13 @@ void LLVM_code_generator::sl_compile(
     Options_impl const    &options,
     Generated_code_source &code)
 {
-    std::unique_ptr<llvm::Module> loaded_module;
-
-    char const *load_env  = nullptr;
     char const *store_env = nullptr;
 
     switch (target) {
     case ICode_generator::TL_HLSL:
-        load_env  = "MI_MDL_HLSL_LOAD_MODULE";
         store_env = "MI_MDL_HLSL_SAVE_MODULE";
         break;
     case ICode_generator::TL_GLSL:
-        load_env  = "MI_MDL_GLSL_LOAD_MODULE";
         store_env = "MI_MDL_GLSL_SAVE_MODULE";
         break;
     default:
@@ -72,6 +67,10 @@ void LLVM_code_generator::sl_compile(
         return;
     }
 
+#if 0
+    std::unique_ptr<llvm::Module> loaded_module;
+    char const *load_env = target == ICode_generator::TL_HLSL
+        ? "MI_MDL_HLSL_LOAD_MODULE" : "MI_MDL_GLSL_LOAD_MODULE";
     if (char const *load_module_name = getenv(load_env)) {
         llvm::SMDiagnostic err;
         loaded_module = std::move(llvm::parseIRFile(load_module_name, err, m_llvm_context));
@@ -84,6 +83,7 @@ void LLVM_code_generator::sl_compile(
             llvm::dbgs() << "\nsl_compile: Loaded module from \"" << load_module_name << "\"!\n";
         }
     }
+#endif
 
     if (char const *save_module_name = getenv(store_env)) {
         std::error_code ec;

@@ -590,3 +590,20 @@ export material example_diffuse_glossy_blend(
     )
 );
 
+export material example_tiled(
+    uniform texture_2d base = texture_2d("./resources/tiled_resource.<##>.<UDIM>.png")
+) = let {
+    float3 tex_coord = state::texture_coordinate(0);
+} in material(
+    surface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(
+            tint: tex::lookup_color(base, float2(tex_coord.x, tex_coord.y))
+        )
+    )
+);
+
+export int example_let_expressions(int x) =
+  let {
+    int x_plus_1 = x + 1;
+    int x_minus_1 = x - 1;
+  } in x_plus_1 + x_minus_1;

@@ -202,7 +202,7 @@ inline void Condition::timed_wait(double timeout_seconds, bool& timed_out)
     gettimeofday(&tval, NULL);
     timeout_time.tv_sec = tval.tv_sec + static_cast<long>(floor(timeout_seconds));
     timeout_time.tv_nsec = tval.tv_usec * 1000
-	+ static_cast<long>((timeout_seconds - floor(timeout_seconds)) * 1e9);
+        + static_cast<long>((timeout_seconds - floor(timeout_seconds)) * 1e9);
 #endif
     if(timeout_time.tv_nsec > 1000000000) // overflow?
     {

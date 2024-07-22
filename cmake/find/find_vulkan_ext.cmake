@@ -38,6 +38,11 @@ function(FIND_VULKAN_EXT)
         set(VULKAN_SDK_DIR $ENV{VULKAN_SDK} CACHE PATH "")
     endif()
 
+    if(NOT EXISTS ${VULKAN_SDK_DIR})
+        message(FATAL_ERROR "The dependency \"Vulkan SDK\" could not be resolved. Please specify 'VULKAN_SDK_DIR' or disable 'MDL_ENABLE_VULKAN_EXAMPLES'")
+        return()
+    endif()
+
     if(WIN32)
         find_path(_VULKAN_INCLUDE
             NAMES vulkan/vulkan.h
@@ -67,6 +72,15 @@ function(FIND_VULKAN_EXT)
                 "${VULKAN_SDK_DIR}/lib"
             NO_DEFAULT_PATH
             )
+    endif()
+
+    # detect Vulkan SDK patch version
+    if(_VULKAN_INCLUDE)
+        set(_VULKAN_CORE_H ${_VULKAN_INCLUDE}/vulkan/vulkan_core.h)
+        if(EXISTS ${_VULKAN_CORE_H})
+            file(STRINGS  ${_VULKAN_CORE_H} _VULKAN_HEADER_LINE REGEX "^#define VK_HEADER_VERSION ")
+            string(REGEX MATCHALL "[0-9]+" _VULKAN_VERSION_PATCH "${_VULKAN_HEADER_LINE}")
+        endif()
     endif()
 
     # store paths that are later used in add_vulkan.cmake
@@ -104,7 +118,6 @@ function(FIND_VULKAN_EXT)
             "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}SPIRV-Tools${CMAKE_STATIC_LIBRARY_SUFFIX}"
             "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}MachineIndependent${CMAKE_STATIC_LIBRARY_SUFFIX}"
             "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}OSDependent${CMAKE_STATIC_LIBRARY_SUFFIX}"
-            "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}OGLCompiler${CMAKE_STATIC_LIBRARY_SUFFIX}"
             "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}GenericCodeGen${CMAKE_STATIC_LIBRARY_SUFFIX}"
             )
 
@@ -117,9 +130,16 @@ function(FIND_VULKAN_EXT)
                 "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}SPIRV-Toolsd${CMAKE_STATIC_LIBRARY_SUFFIX}"
                 "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}MachineIndependentd${CMAKE_STATIC_LIBRARY_SUFFIX}"
                 "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}OSDependentd${CMAKE_STATIC_LIBRARY_SUFFIX}"
-                "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}OGLCompilerd${CMAKE_STATIC_LIBRARY_SUFFIX}"
                 "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}GenericCodeGend${CMAKE_STATIC_LIBRARY_SUFFIX}"
                 )
+        endif()
+
+        # since Vulkan SDK version 1.3.275 the OGLCompiler library is not included anymore for glslang
+        if(_VULKAN_VERSION_PATCH LESS 275)
+            list(APPEND _GLSLANG_LIB "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}OGLCompiler${CMAKE_STATIC_LIBRARY_SUFFIX}")
+            if(WIN32)
+                list(APPEND _GLSLANG_LIB_DEBUG "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}OGLCompilerd${CMAKE_STATIC_LIBRARY_SUFFIX}")
+            endif()
         endif()
     endif()
 

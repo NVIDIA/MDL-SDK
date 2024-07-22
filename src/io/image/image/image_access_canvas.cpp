@@ -144,7 +144,7 @@ bool Access_canvas::read_rect(
     const mi::Difference source_stride
         = static_cast<mi::Difference>( m_canvas_width) * canvas_bytes_per_pixel;
     mi::base::Handle<const mi::neuraylib::ITile> tile( m_canvas->get_tile( canvas_layer));
-    const mi::Uint8* tile_data = static_cast<const mi::Uint8*>( tile->get_data());
+    const auto* tile_data = static_cast<const mi::Uint8*>( tile->get_data());
     const mi::Uint8* source = tile_data + canvas_y * source_stride
         + static_cast<mi::Difference>( canvas_x) * canvas_bytes_per_pixel;
 
@@ -285,7 +285,7 @@ bool Edit_canvas::read_rect(
     const mi::Difference source_stride
         = static_cast<mi::Difference>( m_canvas_width) * canvas_bytes_per_pixel;
     mi::base::Handle<const mi::neuraylib::ITile> tile( m_canvas->get_tile( canvas_layer));
-    const mi::Uint8* const tile_data = static_cast<const mi::Uint8*>( tile->get_data());
+    const auto* const tile_data = static_cast<const mi::Uint8*>( tile->get_data());
     const mi::Uint8* const source = tile_data + canvas_y * source_stride
          + static_cast<mi::Difference>( canvas_x) * canvas_bytes_per_pixel;
 
@@ -340,7 +340,7 @@ bool Edit_canvas::write_rect(
     const mi::Difference dest_stride
         = static_cast<mi::Difference>( m_canvas_width) * canvas_bytes_per_pixel;
     mi::base::Handle<mi::neuraylib::ITile> tile( m_canvas->get_tile( canvas_layer));
-    mi::Uint8* const tile_data = static_cast<mi::Uint8*>( tile->get_data());
+    auto* const tile_data = static_cast<mi::Uint8*>( tile->get_data());
     mi::Uint8* const dest = tile_data + canvas_y * dest_stride
         + static_cast<mi::Difference>( canvas_x) * canvas_bytes_per_pixel;
 

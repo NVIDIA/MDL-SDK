@@ -80,6 +80,10 @@
 #include <utils/os.h>
 #include <utils/strings.h>
 
+#ifdef USE_PIX
+#include <pix3.h>
+#endif
+
 namespace mi { namespace examples { namespace mdl_d3d12
 {
     using namespace DirectX;
@@ -101,9 +105,17 @@ namespace mi { namespace examples { namespace mdl_d3d12
         virtual ~Descriptor_heap_handle() = default;
 
         bool is_valid() const { return m_descriptor_heap != 0; }
-        size_t get_heap_index() const { return m_index; }
+        uint32_t get_heap_index() const 
+        {
+            return m_descriptor_heap == 0 ? 0 : static_cast<uint32_t>(m_index);
+        }
 
-        operator size_t() const { return m_index; }
+        /// used for indexing into the global heap
+        operator size_t() const 
+        {
+            assert(is_valid());
+            return m_index;
+        }
 
         Descriptor_heap_handle create_offset(size_t offset);
 
@@ -115,7 +127,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
     private:
         explicit Descriptor_heap_handle(Descriptor_heap* heap, size_t index);
         Descriptor_heap* m_descriptor_heap;
-        size_t m_index;
+        size_t m_index = 0;
     };
 
     /// Shared base class for all textures and buffers.

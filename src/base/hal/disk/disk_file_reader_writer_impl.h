@@ -27,8 +27,8 @@
  **************************************************************************************************/
 
 /// \file
-/// \brief Header for an implementations of mi::neuraylib::IReader and mi::neuraylib::IWriter
-///        backed by DISK::File.
+/// \brief Header for implementations of mi::neuraylib::IReader and mi::neuraylib::IWriter
+///        backed by an instance of FILE*.
 
 #ifndef BASE_HAL_DISKDISK_FILE_READER_WRITER_BASE_IMPL_H
 #define BASE_HAL_DISKDISK_FILE_READER_WRITER_BASE_IMPL_H
@@ -39,7 +39,9 @@
 #include <mi/neuraylib/iwriter.h>
 
 #include <boost/core/noncopyable.hpp>
-#include <base/hal/disk/disk.h>
+
+#include <cstdio>
+#include <string>
 
 namespace mi { namespace neuraylib { class IStream_position; } }
 
@@ -90,24 +92,53 @@ public:
 
     // internal methods
 
+    /// Opens the file.
+    ///
+    /// \param path          The file to open.
+    /// \param for_reading   \c true for readers, \c false for writers
+    /// \return              \c true in case of success, \c false otherwise.
+    bool open( const char* path, bool for_reading);
+
+    /// Returns the path of the file (or empty string if not available).
+    const char* get_path();
+
+    // Closes the file.
+    /// \return      \c true on success, \c false on failure
+    bool close();
+
+    /// Repositions the file position indicator.
+    ///
+    /// \param pos      The new position.
+    /// \param whence   Supports the same values as fseek():
+    ///                 -  0: \p pos is relative to the start of the file.
+    ///                 -  1: \p pos is relative to the current position.
+    ///                 -  2: \p pos is relative to the end of the file.
+    /// \return         \c true in case of success, \c false otherwise.
+    bool seek_absolute_internal( mi::Sint64 pos, int whence);
+
 protected:
 
-    /// The file handle.
-    ///
-    /// The "mutable" modifier is necessary because DISK::File::tell() is not const.
-    mutable DISK::File m_file;
+    /// Last error code (or 0 if none).
+    mutable int m_error = 0;
+    /// File pointer (or nullptr if not open).
+    FILE* m_fp = nullptr;
 
 private:
 
+    /// File path (or empty string if not open).
+    std::string m_path;
     /// Caches the error message.
     mutable std::string m_error_message;
 };
 
-/// This implementation of mi::neuraylib::IReader basically wraps DISK::File.
+/// This implementation of mi::neuraylib::IReader wraps FILE*.
 class File_reader_impl
   : public File_reader_writer_base_impl<mi::base::Interface_implement<mi::neuraylib::IReader> >
 {
 public:
+
+    using Base
+        = File_reader_writer_base_impl<mi::base::Interface_implement<mi::neuraylib::IReader> >;
 
     // public API methods
 
@@ -130,20 +161,16 @@ public:
     /// \param path  The file to open.
     /// \return      \c true on success, \c false on failure
     bool open( const char* path);
-
-    /// Returns the path of the file.
-    const char* get_path();
-
-    // Closes the file.
-    /// \return      \c true on success, \c false on failure
-    bool close();
 };
 
-/// This implementation of mi::neuraylib::IWriter basically wraps DISK::File.
+/// This implementation of mi::neuraylib::IWriter wraps FILE*.
 class File_writer_impl
   : public File_reader_writer_base_impl<mi::base::Interface_implement<mi::neuraylib::IWriter> >
 {
 public:
+
+    using Base
+        = File_reader_writer_base_impl<mi::base::Interface_implement<mi::neuraylib::IWriter> >;
 
     // public API methods
 
@@ -160,13 +187,6 @@ public:
     /// \param path  The file to open.
     /// \return      \c true on success, \c false on failure
     bool open( const char* path);
-
-    /// Returns the path of the file.
-    const char* get_path();
-
-    // Closes the file.
-    /// \return      \c true on success, \c false on failure
-    bool close();
 };
 
 } // namespace DISK

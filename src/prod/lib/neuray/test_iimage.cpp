@@ -107,7 +107,7 @@ mi::IArray* create_array_for_canvases(
 {
     std::ostringstream type_name;
     type_name << "Uvtile[" << data_N << "]";
-    mi::IArray* array = transaction->create<mi::IArray>( type_name.str().c_str());
+    auto* array = transaction->create<mi::IArray>( type_name.str().c_str());
 
     for( mi::Size i = 0; i < data_N; ++i) {
         mi::base::Handle<mi::IStructure> elem( array->get_element<mi::IStructure>( i));
@@ -148,8 +148,8 @@ void check_set_from_canvas(
     MI_CHECK_EQUAL( c_image->get_frame_length( 2), 2);
     MI_CHECK_EQUAL( c_image->get_frame_length( 3), 1);
 
-    for( mi::Size i = 0; i < data_ok_N; ++i)
-        check_uvtile( c_image.get(), data_ok[i]);
+    for( auto& d : data_ok)
+        check_uvtile( c_image.get(), d);
 
     mi::base::Handle<mi::IArray> array_uv( create_array_for_canvases(
         transaction, image_api, data_uv, data_uv_N));
@@ -204,7 +204,7 @@ MI_TEST_AUTO_FUNCTION( test_iimage )
         run_tests( neuray.get());
     }
 
-    neuray = 0;
+    neuray = nullptr;
     MI_CHECK( unload());
 }
 

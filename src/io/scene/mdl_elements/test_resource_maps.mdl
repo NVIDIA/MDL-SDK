@@ -1,0 +1,34 @@
+mdl 1.5;
+
+import ::df::*;
+import ::tex::*;
+
+// Textures in a function body that gets inlined into the compiled material.
+export color func_inline()
+{
+    return   tex::lookup_color(texture_2d("./resources/test1001.png"), float2(1,0))
+           + tex::lookup_color(texture_2d("resources/test1001.png"),   float2(0,1));
+}
+
+// Textures in a function body that does not get inlined into the compiled material.
+export color func_noinline()
+{
+    color c;
+    for(int i = 0; i < 10; ++i)
+        c += tex::lookup_color(texture_2d("./resources/test1002.png"), float2(i,0))
+          +  tex::lookup_color(texture_2d("resources/test1002.png"),   float2(0,i));
+    return c;
+}
+
+// Textures as arguments of the compiled material.
+export material test_resources(
+    uniform texture_2d param0 = texture_2d("./resources/test1011.png"),
+    uniform texture_2d param1 = texture_2d("resources/test1011.png"))
+= let {
+    color r = tex::lookup_color(param0, float2(1,0)) + tex::lookup_color(param1, float2(0,1));
+    color g = func_inline();
+    color b = func_noinline();
+    color tint = (r+g+b)/3;
+} in material(
+    surface: material_surface(scattering: df::diffuse_reflection_bsdf(tint: tint))
+);

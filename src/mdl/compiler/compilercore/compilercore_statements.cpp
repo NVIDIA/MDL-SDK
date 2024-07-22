@@ -108,8 +108,9 @@ protected:
     void replace_arguments(ArgIf const args[], size_t len)
     {
         m_args.resize(len, ArgIf(0));
-        for (size_t i = 0; i < len; ++i)
+        for (size_t i = 0; i < len; ++i) {
             m_args[i] = args[i];
+        }
     }
 
     std::vector<ArgIf, Memory_arena_allocator<ArgIf> > m_args;
@@ -123,12 +124,12 @@ class Stmt_base_compound : public Stmt_base_variadic<Interface, IStatement const
 public:
 
     /// Get the statement count.
-    int get_statement_count() const MDL_FINAL { return Base::argument_count(); }
+    size_t get_statement_count() const MDL_FINAL { return Base::argument_count(); }
 
     /// Get the statement at index.
     ///
     /// \params index  the index of the requested sub-statement
-    IStatement const *get_statement(int index) const MDL_FINAL {
+    IStatement const *get_statement(size_t index) const MDL_FINAL {
         return Base::argument_at(index);
     }
 
@@ -141,7 +142,7 @@ public:
     ///
     /// \param index  starting at this index, this all further sub-statements
     ///               are removed
-    void drop_statements_after(int index) MDL_FINAL {
+    void drop_statements_after(size_t index) MDL_FINAL {
         Base::drop_after(index);
     }
 
@@ -153,6 +154,9 @@ public:
         Base::replace_arguments(stmts, len);
     }
 
+    /// Constructor.
+    ///
+    /// \param arena  the arena to construct on
     explicit Stmt_base_compound(Memory_arena *arena)
     : Base(arena)
     {
@@ -177,11 +181,14 @@ class Statement_declaration : public Stmt_base<IStatement_declaration>
 public:
 
     /// Get the declaration.
-    const IDeclaration *get_declaration() const MDL_FINAL { return m_decl; }
+    IDeclaration const *get_declaration() const MDL_FINAL { return m_decl; }
 
     /// Set the declaration.
     void set_declaration(IDeclaration const *decl) MDL_FINAL { m_decl = decl; }
 
+    /// Constructor.
+    ///
+    /// \param decl  the declaration
     explicit Statement_declaration(IDeclaration const *decl)
     : Base()
     , m_decl(decl)
@@ -199,6 +206,9 @@ class Statement_compound : public Stmt_base_compound<IStatement_compound>
     typedef Stmt_base_compound<IStatement_compound> Base;
 public:
 
+    /// Constructor.
+    ///
+    /// \param arena  the arena to construct on
     explicit Statement_compound(Memory_arena *arena)
     : Base(arena)
     {
@@ -313,10 +323,10 @@ public:
     void set_condition(IExpression const *expr) MDL_FINAL { m_switch_expr = expr; }
 
     /// Get the case count.
-    int get_case_count() const MDL_FINAL { return Base::argument_count(); }
+    size_t get_case_count() const MDL_FINAL { return Base::argument_count(); }
 
     /// Get the case at index, either an IStatement_invalid or an IStatement_case.
-    IStatement const *get_case(int index) const MDL_FINAL {
+    IStatement const *get_case(size_t index) const MDL_FINAL {
         return Base::argument_at(index);
     }
 

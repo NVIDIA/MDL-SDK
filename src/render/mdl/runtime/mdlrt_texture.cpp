@@ -85,7 +85,6 @@ void apply_gamma4(mi::math::Color &c, const float gamma_val)
         c.r = gamma_func(c.r, gamma_val);
         c.g = gamma_func(c.g, gamma_val);
         c.b = gamma_func(c.b, gamma_val);
-        c.a = gamma_func(c.a, gamma_val);
     }
 }
 
@@ -232,13 +231,13 @@ mi::Float32_4 interpolate_biquintic(
     const unsigned int layer_offset = 0)
 {
     if (texture_res.x == 0 || texture_res.y == 0)
-        return mi::Float32_4(0.0f, 0.0f , 0.0f, 0.0f);
+        return {0.0f, 0.0f , 0.0f, 0.0f};
 
     if(((wrap_u == mi::mdl::stdlib::wrap_clip) && (texo.x < 0.0f || texo.x > 1.0f))
         ||
        ((wrap_v == mi::mdl::stdlib::wrap_clip) && (texo.y < 0.0f || texo.y > 1.0f)))
 
-        return mi::Float32_4(0.0f, 0.0f, 0.0f, 0.0f);
+        return {0.0f, 0.0f, 0.0f, 0.0f};
 
     const mi::Uint32_2 full_texres(texture_res.x, texture_res.y);
     const mi::Sint32_2 crop_ofs(
@@ -257,7 +256,7 @@ mi::Float32_4 interpolate_biquintic(
     // check for LLONG_MAX as texremapll overflows otherwise
     if((texres.x == 0) || (texres.y == 0) || (((float_as_uint(tex.x))&0x7FFFFFFF) >= 0x5f000000) ||
        (((float_as_uint(tex.y))&0x7FFFFFFF) >= 0x5f000000))
-        return mi::Float32_4(0.0f, 0.0f, 0.0f, 0.0f);
+        return {0.0f, 0.0f, 0.0f, 0.0f};
 
     const mi::Uint32_2 texi0 = texremapll(wrap_u, wrap_v, texres, crop_ofs, tex);
     //!! +1 in float can screw-up bilerp
@@ -277,7 +276,7 @@ mi::Float32_4 interpolate_biquintic(
     if(texture_res.z > 1)
     {
         if((wrap_w == mi::mdl::stdlib::wrap_clip) && (texo.z < 0.0f || texo.z > 1.0f))
-            return mi::Float32_4(0.0f, 0.0f, 0.0f, 0.0f);
+            return {0.0f, 0.0f, 0.0f, 0.0f};
 
         const int crop_ofs_z = __float2int_rz(__uint2float_rn(texture_res.z-1) * crop_w.x);
 
@@ -290,7 +289,7 @@ mi::Float32_4 interpolate_biquintic(
 
         // check for LLONG_MAX as texremapll overflows otherwise
         if((crop_texres_z == 0) || (((float_as_uint(tex_z))&0x7FFFFFFF) >= 0x5f000000))
-            return mi::Float32_4(0.0f, 0.0f, 0.0f, 0.0f);
+            return {0.0f, 0.0f, 0.0f, 0.0f};
 
         texi0_z = texremapzll(wrap_w, crop_texres_z, crop_ofs_z, tex_z);
         //!! +1 in float can screw-up bilerp if precision maps it to same texel again
@@ -342,7 +341,6 @@ mi::Float32_4 interpolate_biquintic(
         rgba.x = gamma_func(rgba.x, gamma_val);
         rgba.y = gamma_func(rgba.y, gamma_val);
         rgba.z = gamma_func(rgba.z, gamma_val);
-        rgba.w = gamma_func(rgba.w, gamma_val);
     }
     return rgba;
 }
@@ -490,8 +488,8 @@ Texture_2d::Texture_2d(
             mi::base::Handle<const IMAGE::IMipmap> mipmap(image_impl->get_mipmap(i, j));
             mi::base::Handle<const mi::neuraylib::ICanvas> canvas(mipmap->get_level(/*level*/ 0));
 
-            // Convert to linear gamma first if derivatives are enabled. For non-derivative mode,
-            // the gamma is still (incorrectly) applied after filtering.
+            // Convert to linear gamma first if derivatives are enabled. TODO For non-derivative
+            // mode, the gamma is still (incorrectly) applied after filtering.
             if (use_derivatives && uvtile.m_gamma != 1.0f) {
                 canvas = convert_to_fp_type_with_linear_gamma(
                     image_module.get(), canvas.get(), uvtile.m_gamma);
@@ -531,15 +529,15 @@ mi::Uint32_2 Texture_2d::get_resolution(const mi::Sint32_2& uv_tile, mi::Float32
 {
     mi::Size frame_id = get_frame_id(frame_param);
     if (frame_id == static_cast<mi::Size>(-1))
-        return mi::Uint32_2(0, 0);
+        return {0, 0};
 
     const Frame& frame = m_frames[frame_id];
     mi::Uint32 uvtile_id = frame.m_uv_to_id.get(uv_tile.x, uv_tile.y);
     if (uvtile_id == ~0u)
-        return mi::Uint32_2(0, 0);
+        return {0, 0};
 
     const Uvtile& uvtile = frame.m_uvtiles[uvtile_id];
-    return mi::Uint32_2(uvtile.m_resolution[0].x, uvtile.m_resolution[0].y);
+    return {uvtile.m_resolution[0].x, uvtile.m_resolution[0].y};
 }
 
 float Texture_2d::lookup_float(
@@ -562,7 +560,7 @@ mi::Float32_2 Texture_2d::lookup_float2(
     mi::Float32 frame) const
 {
     const mi::Float32_4& res = lookup_float4(coord, wrap_u, wrap_v, crop_u, crop_v, frame);
-    return mi::Float32_2(res.x, res.y);
+    return {res.x, res.y};
 }
 
 mi::Float32_3 Texture_2d::lookup_float3(
@@ -574,7 +572,7 @@ mi::Float32_3 Texture_2d::lookup_float3(
     mi::Float32 frame) const
 {
     const mi::Float32_4& res = lookup_float4(coord, wrap_u, wrap_v, crop_u, crop_v, frame);
-    return mi::Float32_3(res.x, res.y, res.z);
+    return {res.x, res.y, res.z};
 }
 
 mi::Float32_4 Texture_2d::lookup_float4(
@@ -781,7 +779,7 @@ mi::Float32_4 Texture_2d::lookup_deriv_float4_frame(
         // just read the single pixel of the smallest mipmap
         mi::math::Color col;
         uvtile.m_canvas[n_levels-1].lookup(col, 0, 0);
-        return mi::Float32_4(col.r, col.g, col.b, col.a);
+        return {col.r, col.g, col.b, col.a};
     }
 
     // do trilinear filtering between the two mipmap levels
@@ -814,7 +812,7 @@ mi::Spectrum Texture_2d::lookup_color(
     mi::Float32 frame) const
 {
     const mi::Float32_4& res = lookup_float4(coord, wrap_u, wrap_v, crop_u, crop_v, frame);
-    return mi::Spectrum(res.x, res.y, res.z);
+    return {res.x, res.y, res.z};
 }
 
 float Texture_2d::texel_float(
@@ -860,7 +858,7 @@ mi::Float32_2 Texture_2d::texel_float2(
     mi::math::Color res(0.0f);
     uvtile.m_canvas[0].lookup(res, coord.x, coord.y, 0);
     apply_gamma2(res, uvtile.m_gamma);
-    return mi::Float32_2(res.r, res.g);
+    return {res.r, res.g};
 }
 
 mi::Float32_3 Texture_2d::texel_float3(
@@ -884,7 +882,7 @@ mi::Float32_3 Texture_2d::texel_float3(
     mi::math::Color res(0.0f);
     uvtile.m_canvas[0].lookup(res, coord.x, coord.y, 0);
     apply_gamma3(res, uvtile.m_gamma);
-    return mi::Float32_3(res.r, res.g, res.b);
+    return {res.r, res.g, res.b};
 }
 
 mi::Float32_4 Texture_2d::texel_float4(
@@ -908,7 +906,7 @@ mi::Float32_4 Texture_2d::texel_float4(
     mi::math::Color res(0.0f);
     uvtile.m_canvas[0].lookup(res, coord.x, coord.y, 0);
     apply_gamma4(res, uvtile.m_gamma);
-    return mi::Float32_4(res.r, res.g, res.b, res.a);
+    return {res.r, res.g, res.b, res.a};
 }
 
 mi::Spectrum Texture_2d::texel_color(
@@ -932,7 +930,7 @@ mi::Spectrum Texture_2d::texel_color(
     mi::math::Color res(0.0f);
     uvtile.m_canvas[0].lookup(res, coord.x, coord.y, 0);
     apply_gamma3(res, uvtile.m_gamma);
-    return mi::Spectrum(res.r, res.g, res.b);
+    return {res.r, res.g, res.b};
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -990,7 +988,7 @@ mi::Uint32_3 Texture_3d::get_resolution(mi::Float32 frame) const
 {
     mi::Size frame_id = get_frame_id(frame);
     if (frame_id == static_cast<mi::Size>(-1))
-        return mi::Uint32_3(0, 0, 0);
+        return {0, 0, 0};
 
     return m_frames[frame_id].m_resolution;
 }
@@ -1022,7 +1020,7 @@ mi::Float32_2 Texture_3d::lookup_float2(
 {
     const mi::Float32_4& res = lookup_float4(
         coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w, frame);
-    return mi::Float32_2(res.x, res.y);
+    return {res.x, res.y};
 }
 
 mi::Float32_3 Texture_3d::lookup_float3(
@@ -1037,7 +1035,7 @@ mi::Float32_3 Texture_3d::lookup_float3(
 {
     const mi::Float32_4& res = lookup_float4(
         coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w, frame);
-    return mi::Float32_3(res.x, res.y, res.z);
+    return {res.x, res.y, res.z};
 }
 
 mi::Float32_4 Texture_3d::lookup_float4(
@@ -1111,7 +1109,7 @@ mi::Spectrum Texture_3d::lookup_color(
 {
     const mi::Float32_4& res = lookup_float4(
         coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w, frame);
-    return mi::Spectrum(res.x, res.y, res.z);
+    return {res.x, res.y, res.z};
 }
 
 float Texture_3d::texel_float(const mi::Sint32_3& coord, mi::Float32 frame) const
@@ -1142,7 +1140,7 @@ mi::Float32_2 Texture_3d::texel_float2(const mi::Sint32_3& coord, mi::Float32 fr
     mi::math::Color c(0.0f);
     m_frames[frame_id].m_canvas.lookup(c, coord.x, coord.y, coord.z);
     apply_gamma2(c, m_frames[frame_id].m_gamma);
-    return mi::Float32_2(c.r, c.g);
+    return {c.r, c.g};
 }
 
 mi::Float32_3 Texture_3d::texel_float3(const mi::Sint32_3& coord, mi::Float32 frame) const
@@ -1157,7 +1155,7 @@ mi::Float32_3 Texture_3d::texel_float3(const mi::Sint32_3& coord, mi::Float32 fr
     mi::math::Color c(0.0f);
     m_frames[frame_id].m_canvas.lookup(c, coord.x, coord.y, coord.z);
     apply_gamma3(c, m_frames[frame_id].m_gamma);
-    return mi::Float32_3(c.r, c.g, c.b);
+    return {c.r, c.g, c.b};
 }
 
 mi::Float32_4 Texture_3d::texel_float4(const mi::Sint32_3& coord, mi::Float32 frame) const
@@ -1172,7 +1170,7 @@ mi::Float32_4 Texture_3d::texel_float4(const mi::Sint32_3& coord, mi::Float32 fr
     mi::math::Color c(0.0f);
     m_frames[frame_id].m_canvas.lookup(c, coord.x, coord.y, coord.z);
     apply_gamma4(c, m_frames[frame_id].m_gamma);
-    return mi::Float32_4(c.r, c.g, c.b, c.a);
+    return {c.r, c.g, c.b, c.a};
 }
 
 mi::Spectrum Texture_3d::texel_color(const mi::Sint32_3& coord, mi::Float32 frame) const
@@ -1187,7 +1185,7 @@ mi::Spectrum Texture_3d::texel_color(const mi::Sint32_3& coord, mi::Float32 fram
     mi::math::Color c(0.0f);
     m_frames[frame_id].m_canvas.lookup(c, coord.x, coord.y, coord.z);
     apply_gamma3(c, m_frames[frame_id].m_gamma);
-    return mi::Spectrum(c.r, c.g, c.b);
+    return {c.r, c.g, c.b};
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -1232,13 +1230,13 @@ float Texture_cube::lookup_float(const mi::Float32_3& direction) const
 mi::Float32_2 Texture_cube::lookup_float2(const mi::Float32_3& direction) const
 {
     const mi::Float32_4& res = lookup_float4(direction);
-    return mi::Float32_2(res.x, res.y);
+    return {res.x, res.y};
 }
 
 mi::Float32_3 Texture_cube::lookup_float3(const mi::Float32_3& direction) const
 {
     const mi::Float32_4& res = lookup_float4(direction);
-    return mi::Float32_3(res.x, res.y, res.z);
+    return {res.x, res.y, res.z};
 }
 
 mi::Float32_4 Texture_cube::lookup_float4(const mi::Float32_3& direction) const
@@ -1277,7 +1275,7 @@ mi::Float32_4 Texture_cube::lookup_float4(const mi::Float32_3& direction) const
 mi::Spectrum Texture_cube::lookup_color(const mi::Float32_3& direction) const
 {
     const mi::Float32_4& res = lookup_float4(direction);
-    return mi::Spectrum(res.x, res.y, res.z);
+    return {res.x, res.y, res.z};
 }
 
 //-------------------------------------------------------------------------------------------------

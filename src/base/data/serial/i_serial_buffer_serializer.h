@@ -31,13 +31,13 @@
 /// Provide a serializer/deserializer pair which serializes to and deserializes from memory.
 /// This can be used for different purposes including implementing tests for correct serialization.
 /// The following example explains how to use it:
-/// 	Some_serializable serializable(...);
-/// 	Buffer_serializer serializer;
-/// 	serializable.serialize(serializer);
-/// 	Buffer_deserializer deserializer;
-/// 	Some_serializable deserialized;
-/// 	deserializer.deserialize(&deserialized, serializer->get_buffer(),
-///	    serializer->get_buffer_size());
+///     Some_serializable serializable(...);
+///     Buffer_serializer serializer;
+///     serializable.serialize(serializer);
+///     Buffer_deserializer deserializer;
+///     Some_serializable deserialized;
+///     deserializer.deserialize(&deserialized, serializer->get_buffer(),
+///         serializer->get_buffer_size());
 
 #ifndef BASE_DATA_SERIAL_I_SERIAL_BUFFER_SERIALIZER_H
 #define BASE_DATA_SERIAL_I_SERIAL_BUFFER_SERIALIZER_H
@@ -78,21 +78,21 @@ public:
     // Give a hint to the serializer that the given number of bytes
     // are written to the serializer soon.
     void reserve(
-	size_t size);
+        size_t size);
 
 protected:
     // Write out various value types
     void write_impl(
-	const char* buffer,				// read data from here
-	size_t size);					// write this amount of data
+        const char* buffer,                             // read data from here
+        size_t size);                                   // write this amount of data
 
 private:
-    std::vector<Uint8> m_buffer;			// the buffer which receives the data
-    size_t m_written_size;				// which part of buffer is already used
+    std::vector<Uint8> m_buffer;                        // the buffer which receives the data
+    size_t m_written_size;                              // which part of buffer is already used
 
     // ensure that the buffer has the needed number of bytes free
     void ensure_size(
-	size_t needed_size);				// the needed size
+        size_t needed_size);                            // the needed size
 };
 
 // The Deserializer will abstract from the concrete deserialization source.
@@ -106,29 +106,29 @@ public:
     // the class's constructor function. The global manager instance can be obtained from
     // Mod_data::get_deserialization_manager().
     explicit Buffer_deserializer(
-	Deserialization_manager* manager = NULL);	// the set of registered classes
+        Deserialization_manager* manager = NULL);       // the set of registered classes
 
     // Set the deserializer to use the given buffer for input
     void reset(
-	const Uint8* buffer,				// the buffer
-	size_t buffer_size);				// the size of the buffer
+        const Uint8* buffer,                            // the buffer
+        size_t buffer_size);                            // the size of the buffer
 
     // Deserialize from a buffer of known size
     Serializable* deserialize(
-	const Uint8* buffer,				// buffer storing the serialized data
-	size_t buffer_size);				// size of the given buffer
+        const Uint8* buffer,                            // buffer storing the serialized data
+        size_t buffer_size);                            // size of the given buffer
 
     // Deserialize a given object from a buffer of known size
     void deserialize(
-    	Serializable* serializable,			// deserialize to here
-	const Uint8* buffer,				// buffer storing the serialized data
-	size_t buffer_size);				// size of the given buffer
+        Serializable* serializable,                     // deserialize to here
+        const Uint8* buffer,                            // buffer storing the serialized data
+        size_t buffer_size);                            // size of the given buffer
 
     using Deserializer_impl::read;
 
     // ensure that the buffer has the needed number of bytes free
     bool ensure_size(
-	size_t needed_size);				// the needed size
+        size_t needed_size);                            // the needed size
 
     bool is_valid() const;
 
@@ -136,14 +136,14 @@ protected:
 
     // Read back various value types
     void read_impl(
-	char* buffer,					// destination for writing data
-	size_t size);					// number of bytes to read
+        char* buffer,                                   // destination for writing data
+        size_t size);                                   // number of bytes to read
 
 
 private:
-    const Uint8* m_buffer;			// read the data from here
-    const Uint8* m_read_pointer;			// pointer to next byte to be read
-    size_t m_buffer_size;				// size of all data
+    const Uint8* m_buffer;                      // read the data from here
+    const Uint8* m_read_pointer;                        // pointer to next byte to be read
+    size_t m_buffer_size;                               // size of all data
     bool m_valid;
 };
 

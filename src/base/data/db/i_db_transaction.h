@@ -74,20 +74,20 @@ using Journal_query_result = std::vector<std::pair<Tag, Journal_type>>;
 /// See #mi::neuraylib::ITransaction for semantics of concurrent transactions, and for concurrent
 /// accesses to the very same database element within one particular transaction.
 ///
-/// \section Storage (or store) level and privacy level
+/// \section Store level and privacy level
 ///
-/// When storing database elements one can specify two parameters, the storage level and the privacy
+/// When storing database elements one can specify two parameters, the store level and the privacy
 /// level. These two parameters control in which scope the element is stored, from which scopes it
 /// is visible for later accesses, and what happens if an element is edited. ("Edit level" might be
-/// a better name for privacy level). Note that the storage level is always less than or equal to
-/// the privacy level (at least conceptually, actual arguments might violate that rule and are
-/// clamped accordingly).
+/// a better name for privacy level). Note that the store level is always less than or equal to the
+/// privacy level (at least conceptually, actual arguments might violate that rule and are clamped
+/// accordingly).
 ///
-/// The storage level indicates in which scope of the scope stack an element is stored. The scope
+/// The store level indicates in which scope of the scope stack an element is stored. The scope
 /// is selected as follows:
-/// - If the storage level is larger than the privacy level, then it is set to the privacy level.
+/// - If the store level is larger than the privacy level, then it is set to the privacy level.
 /// - Pick the most local scope from the scope stack of the current transaction whose level is less
-///   than or equal to the requested storage level (scope levels do not need to be consecutive).
+///   than or equal to the requested store level (scope levels do not need to be consecutive).
 ///
 /// Such an element is visible for transactions associated with the selected scope or its child
 /// scopes. It is not visible for transactions associated with any parent or other scopes.
@@ -97,10 +97,10 @@ using Journal_query_result = std::vector<std::pair<Tag, Journal_type>>;
 /// - Pick the most local scope from the scope stack of the current transaction whose level is less
 ///   than or equal to the requested privacy level (scope levels do not need to be consecutive).
 /// In other words, when editing a database element, it is automatically localized to its privacy
-/// level.
+/// level (and avoids one additional copy of the database element).
 ///
-/// \note The API does not distinguish between storage level and privacy level. It only exposes the
-///       privacy level and uses the default storage level (currently 255, which is internally
+/// \note The API does not distinguish between store level and privacy level. It only exposes the
+///       privacy level and uses the default store level (currently 255, which is internally
 ///       effectively clamped to the privacy level). The API also rejects privacy levels larger
 ///       than the level of the current scope, instead of silently adjusting them -- but note the
 ///       special meaning of the constant mi::neuraylib::ITransaction::LOCAL_SCOPE = 255.
@@ -123,7 +123,7 @@ public:
     /// Returns the ID of this transaction.
     virtual Transaction_id get_id() const = 0;
 
-    /// Return the parent scope of this transaction. RCS:NEU
+    /// Returns the scope of this transaction. RCS:NEU
     virtual Scope* get_scope() = 0;
 
     /// Returns the sequence number for the next update within this transaction.
@@ -142,8 +142,8 @@ public:
     /// later. Although the user may no longer use the transaction after committing it, the
     /// transaction might continue living in the database for an unspecified amount of time.
     ///
-    /// \note Without explicit pinning the transaction must no longer be used in any way after a
-    ///       call to this method without.
+    /// \note The transaction must no longer be used in any way after a call to this method
+    ///       \em without explicitly pinning it beforehand.
     ///
     /// \return   \c true in case of success, \c false otherwise, e.g., if a host contributing to
     ///           the transaction failed, before the transaction was committed.
@@ -156,8 +156,8 @@ public:
     /// ever see them. Although the user may no longer use the transaction after aborting it, the
     /// transaction might continue living in the database for an unspecified amount of time.
     ///
-    /// \note Without explicit pinning the transaction must no longer be used in any way after a
-    ///       call to this method without.
+    /// \note The transaction must no longer be used in any way after a call to this method
+    ///       \em without explicitly pinning it beforehand.
     virtual void abort() = 0;
 
     /// Indicates whether a transaction is still open.
@@ -406,22 +406,40 @@ public:
 
     /// Marks a tag for removal from the database.
     ///
-    /// Note that the element continues to be stored in the database as long as it is referenced by
-    /// other elements. If it is no longer referenced, and the last transaction where it was
-    /// referenced has been committed, it will be lazily removed by the garbage collection of the
-    /// DB. There is no guarantee when this will happen.
+    /// \par Global removals
+    ///
+    /// The purpose of global removals is to mark all versions of a tag for garbage collection.
+    /// Such a marker has no effect while the tag is still referenced (in any scope) by other
+    /// database elements or while the transaction where the removal request was made is still open.
+    /// When these conditions do no longer apply, the tag becomes eligible for garbage collection
+    /// and must no longer be used in any way. There is no guarantee when the garbage collection
+    /// will actually remove the tag.
     ///
     /// This implies that a #remove() call might actually remove an element that was stored later
-    /// under the same name. This can potentially lead to invalid tag accesses. Those cases can be
+    /// under the same tag. This can potentially lead to invalid tag accesses. Those cases can be
     /// avoided by using #Database::garbage_collection() after a transaction was committed and
     /// before starting the next one to force garbage collection of all possible elements.
     ///
+    /// \par Local removals
+    ///
+    /// The purpose of local removals is to undo the effects of an earlier localization via
+    /// #DB::Transaction::localize(). A local removal request requires that a tag version exists in
+    /// the scope of the transaction, and at least one more tag version exists in one of the parent
+    /// scopes. The effect of a local removal request is to immediately hide the tag version the
+    /// scope of the transaction (the \em local copy), and to make the next tag version in one of
+    /// the parent scopes accessible from the very same transaction. The hidden local copy will be
+    /// lazily removed by the garbage collection of the DB. There is no guarantee when this will
+    /// happen.
+    ///
     /// \param tag                      The tag to be marked for removal.
-    /// \param remove_local_copy        If \c true, then the tag is only marked for removal if it
-    ///                                 exists in the scope of the transaction. This can be used to
-    ///                                 undo effects of a #localize() call.
-    /// \return                         \c true in case of success (including subsequent calls on
-    ///                                 tags already marked for removal), or \c false otherwise.
+    /// \param remove_local_copy        \c false for global removals (the default) or \c true for
+    ///                                 local removals. The flag is ignored in favor of global
+    ///                                 removals if the transaction belongs to the global scope.
+    /// \return                         \c true in case of success (including subsequent global
+    ///                                 removals on tags already marked for global removal), or \c
+    ///                                 false otherwise (local removal and the tag version is
+    ///                                 missing in the the scope of the transaction or missing in
+    ///                                 the parent scopes).
     virtual bool remove( Tag tag, bool remove_local_copy = false) = 0;
 
     //@}
@@ -472,25 +490,25 @@ public:
     /// Return the privacy level of a tag.
     ///
     /// \param tag   The tag to look up.
-    /// \return      The privacy level.
+    /// \return      The privacy level, or 0 in case of failure.
     virtual Privacy_level get_tag_privacy_level( Tag tag) = 0;
 
-    /// Return the storage level of a tag.
+    /// Return the store level of a tag.
     ///
     /// \param tag   The tag to look up.
-    /// \return      The storage level.
-    virtual Privacy_level get_tag_storage_level( Tag tag) = 0;
+    /// \return      The store level, or 0 in case of failure
+    virtual Privacy_level get_tag_store_level( Tag tag) = 0;
 
     /// Returns the unique ID of a tag.
     ///
     /// \param tag   The tag to look up.
-    /// \return      The corresponding tag version.
+    /// \return      The corresponding tag version, or default-constructed in case of failure.
     virtual Tag_version get_tag_version( Tag tag) = 0;
 
     /// Returns the reference count for a tag.
     ///
     /// \param tag   The tag to look up.
-    /// \return      The reference count.
+    /// \return      The reference count, or 0 in case of failure
     virtual mi::Uint32 get_tag_reference_count( Tag tag) = 0;
 
     /// Indicates whether another tag can be referenced from a given scope level.
@@ -599,8 +617,8 @@ public:
     ///                                 -  0: Success.
     ///                                 - -1: Invalid parameters (\p job is \c NULL or \c count is
     ///                                       zero).
-    ///                                 - -2: Invalid scheduling mode (transaction-less or
-    ///                                       asynchronous execution is restricted to local jobs).
+    ///                                 - -2: Invalid scheduling mode (asynchronous execution is
+    ///                                       restricted to local jobs).
     ///                                 - -3: Invalid job priority (negative value).
     virtual mi::Sint32 execute_fragmented_async(
         Fragmented_job* job, size_t count, IExecution_listener* listener) = 0;

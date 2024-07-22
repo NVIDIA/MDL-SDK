@@ -106,9 +106,10 @@ public:
 
     /// Possible flags.
     enum Flags {
-        FL_IS_BUILTIN  = 1 << 0,  ///< This node is a built-in entity.
-        FL_IS_IMPORTED = 1 << 1,  ///< This node is imported.
-        FL_IS_EXPORTED = 1 << 2,  ///< This node is exported.
+        FL_IS_BUILTIN     = 1 << 0,  ///< This node is a built-in entity.
+        FL_IS_IMPORTED    = 1 << 1,  ///< This node is imported.
+        FL_IS_EXPORTED    = 1 << 2,  ///< This node is exported.
+        FL_IS_DECLARATIVE = 1 << 3,  ///< This node is declarative.
     };
 
     /// A value class for handling DAG intrinsic parameters.
@@ -229,6 +230,8 @@ public:
 
     /// Mark the node to by on the stack.
     void mark_on_stack(bool flag) { m_on_stack = flag; }
+
+    unsigned get_flags() const { return m_flags; }
 
 private:
     /// Constructor from a definition.
@@ -472,6 +475,11 @@ private:
     ///
     /// \param int_type  the any type
     void create_dag_cast_operator(IType const *any_type);
+
+    /// Create the one-and-only decl_cast operator.
+    ///
+    /// \param int_type  the any type
+    void create_dag_decl_cast_operator(IType const *any_type);
 
 private:
     /// The memory arena for all dependency nodes.

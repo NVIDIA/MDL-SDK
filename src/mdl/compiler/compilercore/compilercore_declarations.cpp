@@ -360,6 +360,48 @@ private:
     Parameter_vector m_parameters;
 };
 
+/// A struct category declaration.
+class Declaration_struct_category : public Single_decl<IDeclaration_struct_category>
+{
+    typedef Single_decl<IDeclaration_struct_category> Base;
+public:
+    /// Get the name of the struct category.
+    ISimple_name const *get_name() const MDL_FINAL { return m_name; }
+
+    /// Set the name of the category.
+    void set_name(ISimple_name const *name) MDL_FINAL { m_name = name; }
+
+    /// Get the annotation block of this category declaration if any.
+    IAnnotation_block const *get_annotations() const MDL_FINAL { return m_annotations; }
+
+    /// Set the annotation block of this category declaration.
+    ///
+    /// \param annos  the category annotations
+    void set_annotations(IAnnotation_block const *annos) MDL_FINAL { m_annotations = annos; }
+
+    /// Constructor.
+    ///
+    /// \param name          the name of the struct category
+    /// \param annotations   category annotations if any
+    /// \param is_exported   true if this category is exported
+    explicit Declaration_struct_category(
+        ISimple_name const      *name,
+        IAnnotation_block const *annotations,
+        bool                    is_exported)
+    : Base(is_exported)
+    , m_name(name)
+    , m_annotations(annotations)
+    {
+    }
+
+private:
+    /// The name of this struct category.
+    ISimple_name const *m_name;
+
+    /// The annotations of this entity (if any).
+    IAnnotation_block const *m_annotations;
+};
+
 /// A declared entity (variable or constant).
 class Entity {
 public:
@@ -554,9 +596,33 @@ public:
     /// Set the name of the struct type.
     void set_name(ISimple_name const *name) MDL_FINAL { m_name = name; }
 
+    /// Get the name of the category of the struct type.
+    /// Return NULL if the struct does not have a category.
+    IQualified_name const *get_struct_category_name() const MDL_FINAL {
+        return m_struct_category_name;
+    }
+
+    /// Get the declaration of the category of the struct type.
+    /// Return NULL if the struct does not have a category.
+    IDefinition const *get_struct_category_definition() const MDL_FINAL {
+        return m_struct_category_definition;
+    }
+
+    /// Set the declaration of the category of the struct type.
+    void set_struct_category_definition(IDefinition const *struct_category_definition) MDL_FINAL {
+        m_struct_category_definition = struct_category_definition; 
+    }
+
+    /// Return whether the struct declaration is marked as declarative or not.
+    bool is_declarative() const MDL_FINAL { return m_is_declarative; }
+
+    /// Mark this struct declaration explicitly as declarative or not.
+    ///
+    /// \param flag  the new declarative setting
+    void set_declarative(bool flag) MDL_FINAL { m_is_declarative = flag; }
+
     /// Get the annotations of the struct if any.
-    IAnnotation_block const *get_annotations() const MDL_FINAL
-    {
+    IAnnotation_block const *get_annotations() const MDL_FINAL {
         return m_annotations;
     }
 
@@ -607,18 +673,32 @@ public:
 
     explicit Declaration_type_struct(
         Memory_arena            *arena,
+        bool                    is_declarative,
         ISimple_name const      *name,
+        IQualified_name const      *struct_category_name,
         IAnnotation_block const *annotations,
         bool                    is_exported)
     : Base(arena, is_exported)
+    , m_is_declarative(is_declarative)
     , m_name(name)
+    , m_struct_category_name(struct_category_name)
+    , m_struct_category_definition(nullptr)
     , m_annotations(annotations)
     {
     }
 
 private:
+    /// Flags whether this struct declaration is declarative or not.
+    bool m_is_declarative;
+
     /// The name of this struct type.
     ISimple_name const *m_name;
+
+    /// The name of the struct category of this struct type, NULL if none.
+    IQualified_name const* m_struct_category_name;
+
+    /// The definition of the struct category of this struct type, NULL if none.
+    IDefinition const* m_struct_category_definition;
 
     /// The annotations of the struct.
     IAnnotation_block const *m_annotations;
@@ -679,7 +759,7 @@ public:
     }
 
     /// Get the number of enum values.
-    int get_value_count() const MDL_FINAL { return Base::argument_count(); };
+    size_t get_value_count() const MDL_FINAL { return Base::argument_count(); };
 
     /// Get the name of the value at index.
     ISimple_name const *get_value_name(int index) const MDL_FINAL {
@@ -694,7 +774,7 @@ public:
     }
 
     /// Set the initializer of the value at index.
-    void set_value_init(int index, IExpression const *init) MDL_FINAL {
+    void set_value_init(size_t index, IExpression const *init) MDL_FINAL {
         Enum_value &value = Base::argument_at(index);
         value.set_init_expr(init);
     }
@@ -880,8 +960,17 @@ public:
         m_return_annotations = annotations;
     }
 
+    /// Return whether the function declaration is marked as declarative or not.
+    bool is_declarative() const MDL_FINAL { return m_is_declarative; }
+
+    /// Set the function declaration declarative flag.
+    ///
+    /// \param flag  the new declarative setting
+    void set_declarative(bool flag) MDL_FINAL { m_is_declarative = flag; }
+
     explicit Declaration_function(
         Memory_arena *arena,
+        bool is_declarative,
         IType_name const        *type_name,
         IAnnotation_block const *ret_annotations,
         ISimple_name const      *name,
@@ -890,6 +979,7 @@ public:
         IAnnotation_block const *annotations,
         bool is_exported)
     : Base(is_exported)
+    , m_is_declarative(is_declarative)
     , m_return_type_name(type_name)
     , m_name(name)
     , m_is_preset(preset)
@@ -902,6 +992,9 @@ public:
     }
 
 private:
+    /// Flags whether this struct declaration is declarative or not.
+    bool m_is_declarative;
+
     /// The name of the return type.
     IType_name const *m_return_type_name;
 
@@ -925,6 +1018,7 @@ private:
 
     /// The annotations of this functions return type (if any).
     IAnnotation_block const *m_return_annotations;
+
 };
 
 /// A module declaration.
@@ -1032,8 +1126,10 @@ public:
 
 private:
     // non copyable
-    Declaration_namespace_alias(Declaration_namespace_alias const &) MDL_DELETED_FUNCTION;
-    Declaration_namespace_alias &operator=(Declaration_namespace_alias const &) MDL_DELETED_FUNCTION;
+    Declaration_namespace_alias(
+        Declaration_namespace_alias const &) MDL_DELETED_FUNCTION;
+    Declaration_namespace_alias &operator=(
+        Declaration_namespace_alias const &) MDL_DELETED_FUNCTION;
 
 protected:
     /// The position of this declaration.
@@ -1144,6 +1240,22 @@ IDeclaration_annotation *Declaration_factory::create_annotation(
     return result;
 }
 
+/// Create a new struct category declaration.
+IDeclaration_struct_category *Declaration_factory::create_struct_category(
+    ISimple_name const      *name,
+    IAnnotation_block const *annotations,
+    bool                    exported,
+    int                     start_line,
+    int                     start_column,
+    int                     end_line,
+    int                     end_column)
+{
+    IDeclaration_struct_category *result = m_builder.create<Declaration_struct_category>(
+        name, annotations, exported);
+    set_position(result,start_line, start_column, end_line, end_column);
+    return result;
+}
+
 /// Create a new constant declaration.
 IDeclaration_constant *Declaration_factory::create_constant(
     IType_name const *type_name,
@@ -1177,7 +1289,9 @@ IDeclaration_type_alias *Declaration_factory::create_alias(
 
 /// Create a new struct type declaration.
 IDeclaration_type_struct *Declaration_factory::create_struct(
+    bool                    is_declarative,
     ISimple_name const      *struct_name,
+    IQualified_name const   *category_name,
     IAnnotation_block const *annotations,
     bool                    exported,
     int                     start_line,
@@ -1188,7 +1302,9 @@ IDeclaration_type_struct *Declaration_factory::create_struct(
     IDeclaration_type_struct *result =
         m_builder.create<Declaration_type_struct>(
             m_builder.get_arena(),
+            is_declarative,
             struct_name,
+            category_name,
             annotations,
             exported);
     set_position(result,start_line, start_column, end_line, end_column);
@@ -1233,6 +1349,7 @@ IDeclaration_variable *Declaration_factory::create_variable(
 
 /// Create a new function declaration.
 IDeclaration_function *Declaration_factory::create_function(
+    bool                    is_declarative,
     IType_name const        *return_type_name,
     IAnnotation_block const *ret_annotations,
     ISimple_name const      *function_name,
@@ -1247,7 +1364,7 @@ IDeclaration_function *Declaration_factory::create_function(
 {
     IDeclaration_function *result =
         m_builder.create<Declaration_function>(
-            m_builder.get_arena(), return_type_name, ret_annotations,
+            m_builder.get_arena(), is_declarative, return_type_name, ret_annotations,
             function_name, is_preset, body, annotations, is_exported);
     set_position(result,start_line, start_column, end_line, end_column);
     return result;

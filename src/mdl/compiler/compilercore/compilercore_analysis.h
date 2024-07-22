@@ -73,7 +73,9 @@ struct Resource_table_key;
 /// \param def  the definition to check
 extern inline bool is_error(IDefinition const *def)
 {
-    if (def->get_kind() != IDefinition::DK_NAMESPACE) {
+    IDefinition::Kind kind = def->get_kind();
+    if (kind != IDefinition::DK_NAMESPACE &&
+        kind != IDefinition::DK_STRUCT_CATEGORY) {
         IType const *type = def->get_type();
         if (is<IType_error>(type)) {
             return true;
@@ -258,31 +260,47 @@ public:
 
     /// Checks if the given type is allowed for function return types.
     ///
+    /// \param allow_declarative  true, if the declarative types are allowed
+    /// \param type               the type to check
+    /// \param mdl_version        the MDL language version
+    /// \param is_std_mod         true if the current module is a standard module
+    ///
+    /// \returns  the forbidden type or NULL if the type is ok
+    static IType const *has_forbidden_function_return_type(
+        bool        allow_declarative,
+        IType const *type,
+        unsigned    mdl_version,
+        bool        is_std_mod);
+
+    /// Checks if the given type is "void", i.e. its only value is void.
+    ///
     /// \param type         the type to check
     /// \param mdl_version  the MDL language version
     /// \param is_std_mod   true if the current module is a standard module
     ///
     /// \returns  the forbidden type or NULL if the type is ok
-    static IType const *has_forbidden_function_return_type(
-        IType const *type,
-        unsigned    mdl_version,
-        bool        is_std_mod);
+    bool is_void_type(
+        IType const *type);
 
     /// Checks if the given type is allowed for variable types.
     ///
-    /// \param type         the type to check
-    /// \param mdl_version  the MDL language version
+    /// \param allow_declarative  true, if declarative types are allowed
+    /// \param type               the type to check
+    /// \param mdl_version        the MDL language version
     ///
     /// \returns  the forbidden type or NULL if the type is ok
     static IType const *has_forbidden_variable_type(
+        bool        allow_declarative,
         IType const *type,
         unsigned    mdl_version);
 
     /// Checks if the given type is allowed for structure field types.
     ///
-    /// \param type         the type to check
-    /// \param mdl_version  the MDL language version
+    /// \param allow_declarative  true, if declarative types are allowed
+    /// \param type               the type to check
+    /// \param mdl_version        the MDL language version
     static bool is_allowed_field_type(
+        bool        allow_declarative,
         IType const *type,
         unsigned    mdl_version);
 
@@ -944,6 +962,9 @@ private:
     /// Enter builtin annotations for pre 1.8 native modules and 1.8+ native functions.
     void enter_native_annotations();
 
+    /// Enter builtin categories for stdlib modules.
+    void enter_builtin_categories();
+
     /// Create an exported constant declaration for a given value and add it to the current module.
     void create_exported_decl(ISymbol const *sym, IValue const *val, int line);
 
@@ -1156,13 +1177,15 @@ private:
 
     /// Checks if the given type is allowed for function return types.
     ///
-    /// \param type        the type to check
-    /// \param pos         position for error report
-    /// \param func_name   the name of the function to check
-    /// \param is_std_mod  a standard module is compiled (rules are relaxed)
+    /// \param allow_declarative  true, if the declarative types are allowed
+    /// \param type               the type to check
+    /// \param pos                position for error report
+    /// \param func_name          the name of the function to check
+    /// \param is_std_mod         a standard module is compiled (rules are relaxed)
     ///
     /// \return true if type is an allowed return type, false otherwise
     bool check_function_return_type(
+        bool           allow_declarative,
         IType const    *type,
         Position const &pos,
         ISymbol const  *func_name,
@@ -1174,7 +1197,9 @@ private:
     /// \param curr_def   the current definition
     ///
     /// If a prototype is given, default parameters can only be defined at the prototype.
-    void check_prototype_default_parameter(Definition const *proto_def, Definition *curr_def);
+    void check_prototype_default_parameter(
+        Definition const *proto_def,
+        Definition       *curr_def);
 
     /// Check if a function is redeclared or redefined.
     ///
@@ -1941,12 +1966,14 @@ private:
 
     /// Handle allowed variable types.
     ///
-    /// \param var_type  the variable type to check
-    /// \param pos       the position for error reports
+    /// \param allow_declarative  true, if the declarative types are allowed
+    /// \param var_type           the variable type to check
+    /// \param pos                the position for error reports
     ///
     /// \return \c type if is is an allowed variable type, else issue an error and returns the
     ///         error type
     IType const *handle_allowed_var_type(
+        bool           allow_declarative,
         IType const    *var_type,
         Position const &pos);
 
@@ -1967,6 +1994,18 @@ private:
     IExpression const *handle_return_expression(
         IExpression const *expr);
 
+    /// Check whether a type is a struct type that contains a struct type
+    /// in a certain category.
+    ///
+    /// \param ty    the type to check
+    /// \param cat   the category to check for
+    /// 
+    /// \return true if \c type_def contains (directly or indirectly) a struct in
+    ///         category \c cat
+    bool has_member_in_category(
+        IType const *ty,
+        IStruct_category const *cat);
+        
     bool pre_visit(IDeclaration_import *import_decl) MDL_OVERRIDE;
 
     bool pre_visit(IDeclaration_constant *con_decl) MDL_OVERRIDE;
@@ -1976,6 +2015,8 @@ private:
     bool pre_visit(IDeclaration_type_struct *type_struct) MDL_OVERRIDE;
 
     bool pre_visit(IDeclaration_annotation *anno_decl) MDL_OVERRIDE;
+
+    bool pre_visit(IDeclaration_struct_category *cat_decl) MDL_OVERRIDE;
 
     bool pre_visit(IDeclaration_type_alias *alias_decl) MDL_OVERRIDE;
 
@@ -2042,6 +2083,9 @@ private:
     /// The currently processed "preset-overload".
     IExpression_call const *m_preset_overload;
 
+    /// If true, material.ior is varying, else uniform.
+    bool const m_material_ior_is_varying;
+
     /// Set if we analyze a standard module;
     bool m_is_stdlib;
 
@@ -2069,7 +2113,7 @@ private:
     /// If set to true, we are inside the material defaults visitor.
     bool m_inside_material_defaults;
 
-    /// If set, we are inside a perameter initializer context;
+    /// If set, we are inside a parameter initializer context;
     bool m_inside_param_initializer;
 
     /// If set, the current function can throw a bounds exception.
@@ -2099,6 +2143,19 @@ private:
     /// If true, parameters are rvalue, else lvalues.
     bool m_parameters_are_rvalues;
 
+
+    /// Declarative state of a function during analyse.
+    enum Declarative_state {
+        DS_MUST_BE_NON_DECLARATIVE,  ///< Function must be non-declarative.
+        DS_MAYBE_DECLARATIVE,        ///< Function maybe declaration.
+        DS_IS_DECLARATIVE,           ///< Function is declarative.
+    };
+
+    /// If set, we are inside a parameter initializer context;
+    char m_declarative_fkt_state;
+
+    /// If non-NULL, we visit this function declaration only, else false.
+    IDeclaration_function *m_inside_func_decl_only;
 
     /// The current module cache.
     IModule_cache *m_module_cache;
@@ -2665,7 +2722,6 @@ private:
     void process_function(Definition const *def);
 
     bool pre_visit(IDeclaration_function *decl) MDL_FINAL;
-    void post_visit(IDeclaration_function *decl) MDL_FINAL;
 
     bool pre_visit(IDeclaration_variable *decl) MDL_FINAL;
 

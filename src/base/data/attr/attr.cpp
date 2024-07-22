@@ -59,8 +59,8 @@ using namespace std;
 // to the given serializer. This is able to handle structs as well as static
 // and dynamic arrays
 static void do_serialize_data(
-    SERIAL::Serializer	*serializer,	// useful functions for byte streams
-    Type_iterator	*it)		// parameter iterator
+    SERIAL::Serializer  *serializer,    // useful functions for byte streams
+    Type_iterator       *it)            // parameter iterator
 {
     // iterate over all elements of the type
     for (; !it->at_end(); it->to_next()) {
@@ -152,8 +152,8 @@ static void do_serialize_data(
 // serialize the given data assuming that the data is described by this
 // type.
 void Type::serialize_data(
-    SERIAL::Serializer	*serializer,	// useful functions for byte streams
-    char		*values) const	// the actual data to be serialized
+    SERIAL::Serializer  *serializer,    // useful functions for byte streams
+    char                *values) const  // the actual data to be serialized
 {
     Type_iterator it(this, values);
     do_serialize_data(serializer, &it);
@@ -164,8 +164,8 @@ void Type::serialize_data(
 // to the given deserializer. This is able to handle structs as well as static
 // and dynamic arrays
 static void do_deserialize_data(
-    SERIAL::Deserializer *deser,	// useful functions for byte streams
-    Type_iterator	 *it)		// parameter iterator
+    SERIAL::Deserializer *deser,        // useful functions for byte streams
+    Type_iterator        *it)           // parameter iterator
 {
     // iterate over all elements of the type
     for (; !it->at_end(); it->to_next()) {
@@ -252,8 +252,8 @@ static void do_deserialize_data(
 // serialize the given data assuming that the data is described by this
 // type.
 void Type::deserialize_data(
-    SERIAL::Deserializer *deser,	// useful functions for byte streams
-    char		 *values)		// deserialize to here
+    SERIAL::Deserializer *deser,        // useful functions for byte streams
+    char                 *values)               // deserialize to here
 {
     Type_iterator it(this, values);
     do_deserialize_data(deser, &it);

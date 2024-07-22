@@ -110,6 +110,7 @@ Sema_analysis::Sema_analysis(
 , m_inside_single_expr_body(false)
 , m_curr_assigned_def(NULL)
 , m_curr_entity_decl(NULL)
+, m_curr_entity_def(NULL)
 , m_context_stack(module.get_allocator())
 , m_context_depth(0)
 , m_loop_depth(0)
@@ -364,7 +365,7 @@ void Sema_analysis::check_exported_constant_completeness(
 // (in a default initializer) of an exported entity are exported too.
 void Sema_analysis::check_exported_completeness()
 {
-    for (int i = 0, n = m_module.get_exported_definition_count(); i < n; ++i) {
+    for (size_t i = 0, n = m_module.get_exported_definition_count(); i < n; ++i) {
         Definition const *def = m_module.get_exported_definition(i);
 
         if (def->has_flag(Definition::DEF_IS_IMPORTED)) {
@@ -427,7 +428,8 @@ void Sema_analysis::mark_used(Definition const *def, Position const &pos)
 
     if (def->has_flag(Definition::DEF_IS_DEPRECATED)) {
         // don't report deprecated warning, if the current entity is already deprecated
-        if (m_curr_entity_def && m_curr_entity_def->has_flag(Definition::DEF_IS_DEPRECATED)) {
+        if (m_curr_entity_def != NULL &&
+            m_curr_entity_def->has_flag(Definition::DEF_IS_DEPRECATED)) {
             return;
         }
 
@@ -641,8 +643,8 @@ bool Sema_analysis::has_one_case_reachable_exit(
     typedef hash_set<int>::Type Case_set;
     Case_set case_set(0, Case_set::hasher(), Case_set::key_equal(), m_module.get_allocator());
 
-    int n = switch_stmt->get_case_count();
-    for (int i = 0; i < n; ++i) {
+    size_t n = switch_stmt->get_case_count();
+    for (size_t i = 0; i < n; ++i) {
         IStatement_case const *case_stmt = as<IStatement_case>(switch_stmt->get_case(i));
 
         if (case_stmt == NULL) {
@@ -692,13 +694,10 @@ bool Sema_analysis::has_one_case_reachable_exit(
     if (def_node == NULL) {
         if (IType_enum const *e_type = as<IType_enum>(switch_type)) {
             // Enum switch: check if all cases are handled ...
-            for (int i = 0, n_vals = e_type->get_value_count(); i < n_vals; ++i) {
-                ISymbol const *e_sym;
-                int           e_code;
+            for (size_t i = 0, n_vals = e_type->get_value_count(); i < n_vals; ++i) {
+                IType_enum::Value const *value = e_type->get_value(i);
 
-                e_type->get_value(i, e_sym, e_code);
-
-                Case_set::const_iterator it = case_set.find(e_code);
+                Case_set::const_iterator it = case_set.find(value->get_code());
                 if (it == case_set.end()) {
                     // we found a case that is not handled, so we can fall through the switch
                     return true;
@@ -716,13 +715,10 @@ bool Sema_analysis::has_one_case_reachable_exit(
 
         if (IType_enum const *e_type = as<IType_enum>(switch_type)) {
             // Enum switch: check if all cases are handled ...
-            for (int i = 0, n_vals = e_type->get_value_count(); i < n_vals; ++i) {
-                ISymbol const *e_sym;
-                int           e_code;
+            for (size_t i = 0, n_vals = e_type->get_value_count(); i < n_vals; ++i) {
+                IType_enum::Value const *value = e_type->get_value(i);
 
-                e_type->get_value(i, e_sym, e_code);
-
-                Case_set::const_iterator it = case_set.find(e_code);
+                Case_set::const_iterator it = case_set.find(value->get_code());
                 if (it == case_set.end()) {
                     // we found a case that is not handled, so the default is not dead
                     is_dead = false;
@@ -730,7 +726,7 @@ bool Sema_analysis::has_one_case_reachable_exit(
                 }
             }
         } else {
-            // Int switch: default is never dead
+            // integer switch: default is never dead
             is_dead = false;
         }
 
@@ -1197,8 +1193,8 @@ void Sema_analysis::post_visit(IStatement_switch *stmt)
 
     if (info.m_reachable_start) {
         // fix simple fall-through labels
-        int n = stmt->get_case_count();
-        for (int i = 0; i < n; ++i) {
+        size_t n = stmt->get_case_count();
+        for (size_t i = 0; i < n; ++i) {
             IStatement_case const *case_stmt = as<IStatement_case>(stmt->get_case(i));
 
             if (case_stmt == NULL) {
@@ -1209,7 +1205,7 @@ void Sema_analysis::post_visit(IStatement_switch *stmt)
             if (case_stmt->get_statement_count() == 0) {
                 // this is just a label, the statements are in the next case
                 IStatement_case const *next = NULL;
-                int j = i + 1;
+                size_t j = i + 1;
                 for (; j < n; ++j) {
                     next = as<IStatement_case>(stmt->get_case(j));
                     if (next == NULL) {
@@ -1662,11 +1658,11 @@ bool Sema_analysis::identical_statements(
             IStatement_compound const *c_lhs = cast<IStatement_compound>(lhs);
             IStatement_compound const *c_rhs = cast<IStatement_compound>(rhs);
 
-            int n_stmts = c_lhs->get_statement_count();
+            size_t n_stmts = c_lhs->get_statement_count();
             if (n_stmts != c_rhs->get_statement_count()) {
                 return false;
             }
-            for (int i = 0; i < n_stmts; ++i) {
+            for (size_t i = 0; i < n_stmts; ++i) {
                 IStatement const *l_sub = c_lhs->get_statement(i);
                 IStatement const *r_sub = c_rhs->get_statement(i);
 
@@ -1892,6 +1888,7 @@ bool Sema_analysis::identical_declarations(
 
     case IDeclaration::DK_IMPORT:
     case IDeclaration::DK_ANNOTATION:
+    case IDeclaration::DK_STRUCT_CATEGORY:
     case IDeclaration::DK_CONSTANT:
     case IDeclaration::DK_FUNCTION:
     case IDeclaration::DK_MODULE:
@@ -2249,7 +2246,7 @@ bool Sema_analysis::pre_visit(IExpression_binary *expr)
     case IExpression_binary::OK_BITWISE_XOR_ASSIGN:
     case IExpression_binary::OK_BITWISE_OR_ASSIGN:
         is_read = true;
-        // fall through
+        MDL_FALLTHROUGH
     case IExpression_binary::OK_ASSIGN:
         is_assignment = true;
         break;

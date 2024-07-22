@@ -80,6 +80,8 @@ public:
 
     const char* get_import( mi::Size index) const;
 
+    const mi::neuraylib::IStruct_category_list* get_struct_categories() const;
+
     const mi::neuraylib::IType_list* get_types() const;
 
     const mi::neuraylib::IValue_list* get_constants() const;

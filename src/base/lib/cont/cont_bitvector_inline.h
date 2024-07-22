@@ -35,7 +35,7 @@ namespace
 {
 // return size of a Uint8 bitmap vector with n bits
 inline size_t b8size(
-    size_t	n)			// number of bits
+    size_t      n)                      // number of bits
 {
     return (n + 7) / 8;
 }
@@ -54,7 +54,7 @@ inline void Bitvector::clear()
 
 // constructor
 inline Bitvector::Bitvector(
-    size_t	n_bits)				// bits to be allocated
+    size_t      n_bits)                         // bits to be allocated
   : m_nbits(n_bits), m_nb8(b8size(n_bits))
 {
     m_data = MI::MEM::new_array<Uint8>(m_nb8);
@@ -63,7 +63,7 @@ inline Bitvector::Bitvector(
 
 // copy constructor
 inline Bitvector::Bitvector(
-    const Bitvector &other)			// copy this
+    const Bitvector &other)                     // copy this
   : m_nbits(other.m_nbits), m_nb8(b8size(other.m_nbits))
 {
     m_data = MI::MEM::new_array<Uint8>(m_nb8);
@@ -84,18 +84,18 @@ inline size_t Bitvector::capacity() const
 
 // assignement operator
 inline Bitvector &Bitvector::operator=(
-    const Bitvector &other)			// assign this to other
+    const Bitvector &other)                     // assign this to other
 {
     // check for self assignment
     if (this == &other)
-	return *this;
+        return *this;
 
     clear();
     // allocate more memory
     if (capacity() < other.size()) {
-	MI::MEM::delete_array<Uint8>(m_data);
-	m_nb8 = b8size(other.size());
-	m_data = MI::MEM::new_array<Uint8>(m_nb8);
+        MI::MEM::delete_array<Uint8>(m_data);
+        m_nb8 = b8size(other.size());
+        m_data = MI::MEM::new_array<Uint8>(m_nb8);
     }
     m_nbits = other.size();
     memcpy(m_data, other.m_data, sizeof(Uint8) * b8size(m_nbits));
@@ -110,32 +110,32 @@ inline Bitvector::~Bitvector()
 
 // set new size, new bits cleared
 inline void Bitvector::resize(
-    size_t	n_bits)				// new number of bits
+    size_t      n_bits)                         // new number of bits
 {
     // allocate new data if necessary
     if (n_bits > capacity()) {
-	Uint8 * newdata = MI::MEM::new_array<Uint8>(b8size(n_bits));
-	memcpy(newdata, m_data, sizeof(Uint8) * b8size(m_nbits));
-	MI::MEM::delete_array<Uint8>(m_data);
-	m_nb8 = b8size(n_bits);
-	m_data = newdata;
+        Uint8 * newdata = MI::MEM::new_array<Uint8>(b8size(n_bits));
+        memcpy(newdata, m_data, sizeof(Uint8) * b8size(m_nbits));
+        MI::MEM::delete_array<Uint8>(m_data);
+        m_nb8 = b8size(n_bits);
+        m_data = newdata;
     }
 
     // clear the new bits, including the formerly unused bits of the last b8
     if (n_bits > m_nbits) {
-	memset(m_data+b8size(m_nbits), 0,
-	    sizeof(Uint8)*(m_nb8-b8size(m_nbits)));
+        memset(m_data+b8size(m_nbits), 0,
+            sizeof(Uint8)*(m_nb8-b8size(m_nbits)));
 
-	size_t b8index = m_nbits/8;
-	for (size_t i = m_nbits - 8*b8index; i < 8; ++i)
-	    m_data[b8index]  &= ~(1 << (i & 7));
+        size_t b8index = m_nbits/8;
+        for (size_t i = m_nbits - 8*b8index; i < 8; ++i)
+            m_data[b8index]  &= ~(1 << (i & 7));
     }
     m_nbits = n_bits;
 }
 
 // return true if index has set the flag
 inline bool Bitvector::is_set(
-    size_t	index) const			// bit index
+    size_t      index) const                    // bit index
 {
     ASSERT(M_CONT, index < m_nbits);
     return (m_data[index/8] & (1 << (index & 7))) != 0;
@@ -143,19 +143,19 @@ inline bool Bitvector::is_set(
 
 // set flag for a given index
 inline void Bitvector::set(
-    size_t	index,				// bit index
-    bool	value)				// flag for bit
+    size_t      index,                          // bit index
+    bool        value)                          // flag for bit
 {
     ASSERT(M_CONT, index < m_nbits);
     if (value)
-	m_data[index/8] |= 1 << (index & 7);
+        m_data[index/8] |= 1 << (index & 7);
     else
-	m_data[index/8] &= ~(1 << (index & 7));
+        m_data[index/8] &= ~(1 << (index & 7));
 }
 
 // set flag for a given index
 inline void Bitvector::set(
-    size_t	index)				// bit index
+    size_t      index)                          // bit index
 {
     ASSERT(M_CONT, index < m_nbits);
     m_data[index/8] |= 1 << (index & 7);
@@ -174,8 +174,8 @@ inline size_t   Bitvector::get_binary_size() const
 
 // set from binary data
 inline void Bitvector::set_binary_data(
-    const size_t	nbits,			// bits
-    const Uint8*	data)			// data
+    const size_t        nbits,                  // bits
+    const Uint8*        data)                   // data
 {
     m_nb8 = b8size( nbits );
     m_data = MI::MEM::new_array<Uint8>(m_nb8);
@@ -189,7 +189,7 @@ inline size_t Bitvector::get_num_base_type_bits()
     return sizeof(Uint8) * 8;
 }
  
-}}	// namespace MI::CONT
+}}      // namespace MI::CONT
 
 
 

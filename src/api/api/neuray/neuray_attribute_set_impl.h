@@ -38,7 +38,8 @@
 
 #include "neuray_attribute_set_impl_helper.h"
 
-#include <base/lib/robin_hood/robin_hood.h>
+#include <unordered_map>
+
 #include <base/lib/log/i_log_assert.h>
 
 // disable C4505: <class::method>: unreferenced local function has been removed
@@ -158,7 +159,7 @@ private:
     /// that the last one remains valid we'd need only to cache the last string. But since the
     /// implementation cached all strings and these strings might still be valid, leave it now as
     /// is.
-    mutable robin_hood::unordered_map<std::string, std::string> m_cached_type_names;
+    mutable std::unordered_map<std::string, std::string> m_cached_type_names;
 };
 
 template <typename T>
@@ -222,13 +223,7 @@ const char* Attribute_set_impl<T>::get_attribute_type_name( const char* name) co
         Attribute_set_impl_helper::get_attribute_type_name( attribute_set, this, name);
     if( result.empty())
         return nullptr;
-#ifdef __clang__
-    return m_cached_type_names.insert(
-        robin_hood::pair<std::string,std::string>( name, result)).first->second.c_str();
-#else
-    return m_cached_type_names.insert(
-    robin_hood::pair<const std::string,std::string>( name, result)).first->second.c_str();
-#endif
+    return m_cached_type_names.insert( {name, result}).first->second.c_str();
 }
 
 template <typename T>
@@ -261,7 +256,7 @@ ATTR::Attribute_set* Attribute_set_impl<T>::get_attribute_set()
     // to NULL which means that the default attribute set of scene elements should be used).
     if( m_attribute_set == (ATTR::Attribute_set*) 0x1) //-V566 PVS
         return nullptr;
-    if( m_attribute_set == 0)
+    if( m_attribute_set == nullptr)
         m_attribute_set = this->get_db_element()->get_attributes();
     return m_attribute_set;
 }
@@ -269,7 +264,7 @@ ATTR::Attribute_set* Attribute_set_impl<T>::get_attribute_set()
 template <typename T>
 const ATTR::Attribute_set* Attribute_set_impl<T>::get_attribute_set() const
 {
-    if( m_const_attribute_set == 0)
+    if( m_const_attribute_set == nullptr)
         m_const_attribute_set = this->get_db_element()->get_attributes();
     return m_const_attribute_set;
 }

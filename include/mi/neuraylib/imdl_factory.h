@@ -35,7 +35,7 @@
 #include <mi/neuraylib/iexpression.h>
 #include <mi/neuraylib/version.h>
 
-#if defined (MI_NEURAYLIB_DEPRECATED_12_1) || defined(MI_NEURAYLIB_DEPRECATED_14_0)
+#ifdef MI_NEURAYLIB_DEPRECATED_14_0
 #include <mi/neuraylib/imdl_execution_context.h>
 #endif
 
@@ -141,26 +141,6 @@ public:
         const char* selector,
         bool shared,
         IMdl_execution_context* context) = 0;
-
-#ifdef MI_NEURAYLIB_DEPRECATED_12_1
-    inline IValue_texture* create_texture(
-        ITransaction* transaction,
-        const char* file_path,
-        IType_texture::Shape shape,
-        Float32 gamma,
-        bool shared,
-        Sint32* errors = 0)
-    {
-        mi::base::Handle<IMdl_execution_context> context( create_execution_context());
-        IValue_texture* result = create_texture(
-            transaction, file_path, shape, gamma, 0, shared, context.get());
-        if( errors) {
-            mi::base::Handle<const IMessage> msg( context->get_error_message( 0));
-            *errors = msg ? msg->get_code() : 0;
-        }
-        return result;
-    }
-#endif // MI_NEURAYLIB_DEPRECATED_12_1
 
 #ifdef MI_NEURAYLIB_DEPRECATED_14_0
     inline IValue_texture* create_texture(

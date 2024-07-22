@@ -73,8 +73,8 @@ namespace mdlm
 
         /// Get archive version.
         /// \return
-        ///		-  0: Success
-        ///		-  -1: Failure
+        ///             -  0: Success
+        ///             -  -1: Failure
         mi::Sint32 get_version(Version & version) const;
 
         /// Return archive version.
@@ -82,9 +82,9 @@ namespace mdlm
 
         /// Get archive first value given a key.
         /// \return
-        ///		-  0: Success
-        ///		-  -1: Failure to retrieve manifest from archive
-        ///		-  -2: Key not found
+        ///             -  0: Success
+        ///             -  -1: Failure to retrieve manifest from archive
+        ///             -  -2: Key not found
         mi::Sint32 get_value(const std::string & key, std::string & value) const
         {
             std::vector<std::string> values;
@@ -99,9 +99,9 @@ namespace mdlm
         /// Get all (by default) archive values given a key.
         /// If all_values is false, then retrieve only the first value
         /// \return
-        ///		-  0: Success
-        ///		-  -1: Failure
-        ///		-  -2: Key not found
+        ///             -  0: Success
+        ///             -  -1: Failure
+        ///             -  -2: Key not found
         mi::Sint32 get_values(
             const std::string & key
             , std::vector<std::string> & values

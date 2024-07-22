@@ -939,7 +939,7 @@ public:
 ///                        -  0: Success.
 ///                        - -1: The dynamic type of \p value does not match the static type of
 ///                              \p v.
-///                        - -2: The value of v is not valid.
+///                        - -2: The value of \p v is not valid.
 ///
 /// This general template handles #mi::neuraylib::IValue_int and #mi::neuraylib::IValue_enum and
 /// expects #mi::Uint32 as second argument. Since it is a template it will handle other types as
@@ -1167,6 +1167,7 @@ inline mi::Sint32 set_value( mi::neuraylib::IValue* value, const mi::math::Spect
 ///                        -  0: Success.
 ///                        - -1: The dynamic type of \p value does not match the static type of
 ///                              \p v.
+///                        - -2: The value of \p v is not valid.
 ///                        - -3: The index is not valid.
 template<class T>
 mi::Sint32 set_value( mi::neuraylib::IValue* value, mi::Size index, const T& v)
@@ -1194,6 +1195,7 @@ mi::Sint32 set_value( mi::neuraylib::IValue* value, mi::Size index, const T& v)
 ///                        -  0: Success.
 ///                        - -1: The dynamic type of \p value does not match the static type of
 ///                              \p v.
+///                        - -2: The value of \p v is not valid.
 ///                        - -3: The field name is not valid.
 template<class T>
 mi::Sint32 set_value( mi::neuraylib::IValue* value, const char* name, const T& v)
@@ -1215,13 +1217,14 @@ mi::Sint32 set_value( mi::neuraylib::IValue* value, const char* name, const T& v
 /// See also #mi::neuraylib::set_value() for more details about overloads.
 ///
 /// \param value           The instance of #mi::neuraylib::IValue to modify.
-/// \param v               The new value to be set (as pointer to a C array).
-/// \param n               The size of the C array (needs to match the size of \p value).
+/// \param v               The new values to be set (as pointer to a C-like array).
+/// \param n               The size of the C-like array (needs to match the size of \p value).
 /// \return
 ///                        -  0: Success.
-///                        - -1: The dynamic type of \p value does not match the static type of
-///                              \p v.
-///                        - -4: The array sizes do not match.
+///                        - -1: The dynamic type of \p value is not an array, or the dynamic type
+///                              of the array elements does not match the static type of \p v.
+///                        - -2: The value of \p v is not valid.
+///                        - -5: The array sizes do not match.
 template<class T>
 mi::Sint32 set_value( mi::neuraylib::IValue* value, const T* v, mi::Size n)
 {
@@ -1229,7 +1232,7 @@ mi::Sint32 set_value( mi::neuraylib::IValue* value, const T* v, mi::Size n)
         value->get_interface<mi::neuraylib::IValue_array>());
     if( value_array) {
         if( value_array->get_size() != n)
-            return -3;
+            return -5;
         for( mi::Size i = 0; i < n; ++i) {
             mi::base::Handle<mi::neuraylib::IValue> element( value_array->get_value( i));
             mi::Sint32 result = set_value( element.get(), v[i]);
@@ -1540,13 +1543,13 @@ mi::Sint32 get_value( const mi::neuraylib::IValue* value, const char* name, T& v
 /// See also #mi::neuraylib::get_value() for more details about overloads.
 ///
 /// \param value           The instance of #mi::neuraylib::IValue to read.
-/// \param v               The new value will be stored here (as pointer to a C array).
-/// \param n               The size of the C array (needs to match the size of \p value).
+/// \param v               The new values will be stored here (as pointer to a C-like array).
+/// \param n               The size of the C-like array (needs to match the size of \p value).
 /// \return
 ///                        -  0: Success.
-///                        - -1: The dynamic type of \p value does not match the static type of
-///                              \p v.
-///                        - -4: The array sizes do not match.
+///                        - -1: The dynamic type of \p value is not an array, or the dynamic type
+///                              of the array elements does not match the static type of \p v.
+///                        - -5: The array sizes do not match.
 template<class T>
 mi::Sint32 get_value( const mi::neuraylib::IValue* value, T* v, mi::Size n)
 {
@@ -1554,7 +1557,7 @@ mi::Sint32 get_value( const mi::neuraylib::IValue* value, T* v, mi::Size n)
         value->get_interface<mi::neuraylib::IValue_array>());
     if( value_array) {
         if( value_array->get_size() != n)
-            return -3;
+            return -5;
         for( mi::Size i = 0; i < n; ++i) {
             mi::base::Handle<const  mi::neuraylib::IValue> element( value_array->get_value( i));
             mi::Sint32 result = get_value( element.get(), v[i]);

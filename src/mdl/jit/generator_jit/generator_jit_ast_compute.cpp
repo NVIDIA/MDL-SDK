@@ -260,6 +260,11 @@ private:
         BasicBlock          *BB,
         Region              *&region);
 
+    /// Compute the depth of the AST.
+    ///
+    /// \param root   the AST root
+    void compute_depth(Region *root);
+
     /// Helper: dump a node to the graph.
     ///
     /// \param region          the region
@@ -839,11 +844,18 @@ bool StructuredFunction::dominates(
     return m_domTree.dominates(A, B);
 }
 
+// Get the region of a basic block.
+Region *StructuredFunction::getRegion(BasicBlock *bb) const
+{
+    auto it = m_mapping.find(bb);
+    return it->second;
+}
+
 // Get top-most region for a basic block.
 Region *StructuredFunction::getTopRegion(
-    BasicBlock *bb)
+    BasicBlock *bb) const
 {
-    Region *cur_node = m_mapping[bb];
+    Region *cur_node = m_mapping.find(bb)->second;
 
     while (RegionComplex *owner = cur_node->getOwnerRegion()) {
         cur_node = owner;
@@ -996,6 +1008,33 @@ BasicBlock *RegionBuilder::processLoop(
     region = m_func.createNaturalLoopRegion(bodyRegion);
 
     return ctx.getBreakTarget();
+}
+
+// Compute the depth of the AST.
+void RegionBuilder::compute_depth(
+    Region *root)
+{
+    class Depth_compute : public Region_walker {
+    public:
+        /// Constructor.
+        Depth_compute(
+            Region        *root)
+        : Region_walker(root)
+        {
+        }
+
+        /// Pre visit a region.
+        void visit_pre(Region *region) final
+        {
+            if (RegionComplex const *parent = region->getOwnerRegion()) {
+                region->set_depth(parent->get_depth() + 1);
+            }
+        }
+    };
+
+    // start with 1, so we can distinguish with "not set" whch would be 0
+    root->set_depth(1);
+    Depth_compute(root).walk();
 }
 
 /// Get the unique exit target of a loop.
@@ -1153,9 +1192,17 @@ StructuredFunction *RegionBuilder::buildRegions()
 
     BasicBlock *entry = &m_func.getFunction().getEntryBlock();
 
+    // compute the region graph and compute the depth on the AST part
     Region *body = discoverRegion(ctx, /*processLoopBody=*/false, entry);
+    compute_depth(body);
 
     m_func.setBody(body);
+
+    /*
+    dumpRegionGraph(body, "ast", DUMP_AS_AST);
+    dumpRegionGraph(body, "sub", DUMP_AS_SUBGRAPHS);
+    dumpRegionGraph(body, "cg",  DUMP_AS_CG);
+    */
 
     return &m_func;
 }
@@ -1611,11 +1658,12 @@ Pass *createASTComputePass(mi::mdl::Type_mapper &type_mapper)
 unsigned RegionBuilder::dumpRegion(FILE *file, Region const *region)
 {
     std::string kind_str = getKindString(region);
-    fprintf(file, "n%u [label=\"%s %u %s\"];\n",
+    fprintf(file, "n%u [label=\"%s %u %s depth %u\"];\n",
         unsigned(region->get_id()), kind_str.c_str(), unsigned(region->get_id()),
         region->get_bb() != nullptr ?
             std::string(region->get_bb()->getName()).c_str() :
-            "");
+            "",
+        region->get_depth());
     return unsigned(region->get_id());
 }
 

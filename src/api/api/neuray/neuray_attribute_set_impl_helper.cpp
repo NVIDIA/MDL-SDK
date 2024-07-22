@@ -49,15 +49,15 @@
 #include <base/lib/log/i_log_logger.h>
 
 #include <base/data/attr/attr.h>
-#include <base/data/db/i_db_transaction.h>
 #include <base/data/attr/i_attr_utilities.h>
+#include <base/data/db/i_db_transaction.h>
+#include <base/data/idata/idata_interfaces.h>
+
 #include <io/scene/scene/i_scene_journal_types.h>
 #include <io/scene/scene/i_scene_attr_resv_id.h>
 #include <io/scene/mdl_elements/i_mdl_elements_type.h>
 
-#include "i_neuray_attribute_context.h"
 #include "i_neuray_db_element.h"
-#include "i_neuray_proxy.h"
 #include "neuray_class_factory.h"
 #include "neuray_transaction_impl.h"
 #include "neuray_type_utilities.h"
@@ -69,9 +69,9 @@ namespace MI {
 
 namespace NEURAY {
 
-typedef std::vector<std::pair<int, std::string> > Enum_collection;
+using Enum_collection = std::vector<std::pair<int, std::string>>;
 
-class Attribute_context : public mi::base::Interface_implement<IAttribute_context>
+class Attribute_context : public mi::base::Interface_implement<IDATA::IAttribute_context>
 {
 public:
     Attribute_context(
@@ -85,13 +85,13 @@ public:
         m_attribute = attribute;
     }
 
-    const IDb_element* get_db_element() const
+    const IDb_element* get_db_element() const final
     {
         m_db_element->retain();
         return m_db_element.get();
     }
 
-    const ATTR::Type* get_type( const char* attribute_name) const
+    const ATTR::Type* get_type( const char* attribute_name) const final
     {
         ASSERT( M_NEURAY_API, attribute_name);
 
@@ -102,7 +102,7 @@ public:
             attribute_name, base_address, &address);
     }
 
-    void* get_address( const char* attribute_name) const
+    void* get_address( const char* attribute_name) const final
     {
         ASSERT( M_NEURAY_API, attribute_name);
 
@@ -115,6 +115,22 @@ public:
             return nullptr;
 
         return address;
+    }
+
+    mi::IData* get_attribute( const char* attribute_name) const final
+    {
+        return Attribute_set_impl_helper::get_attribute( this, attribute_name);
+    }
+
+    mi::Size get_sizeof_elem( const char* attribute_name) const final
+    {
+        const ATTR::Type* type = get_type( attribute_name);
+        return type ? type->sizeof_elem() : 0;
+    }
+
+    bool can_reference_tag( DB::Tag tag) const final
+    {
+        return m_db_element->can_reference_tag( tag);
     }
 
 private:
@@ -139,7 +155,7 @@ mi::IData* Attribute_set_impl_helper::create_attribute(
         || strcmp( type_name, "Ref<Lightprofile>") == 0
         || strcmp( type_name, "Ref<Bsdf_measurement>") == 0) {
         LOG::mod_log->error( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
-            "Using attributes of type \"%s\" is no longer supported. Use type \"Ref\" instead.",
+            R"(Using attributes of type "%s" is no longer supported. Use type "Ref" instead.)",
             type_name);
         return nullptr;
     }
@@ -217,7 +233,8 @@ const mi::IData* Attribute_set_impl_helper::access_attribute(
     if( !attribute)
         return nullptr;
 
-    mi::base::Handle<IAttribute_context> owner( new Attribute_context( db_element, attribute));
+    mi::base::Handle<IDATA::IAttribute_context> owner(
+        new Attribute_context( db_element, attribute));
     return get_attribute( owner.get(), name_str);
 }
 
@@ -239,7 +256,8 @@ mi::IData* Attribute_set_impl_helper::edit_attribute(
 
     db_element->add_journal_flag( compute_journal_flags( attribute.get(), attribute_id));
 
-    mi::base::Handle<IAttribute_context> owner( new Attribute_context( db_element, attribute));
+    mi::base::Handle<IDATA::IAttribute_context> owner(
+        new Attribute_context( db_element, attribute));
     return get_attribute( owner.get(), name_str);
 }
 
@@ -269,7 +287,7 @@ std::string Attribute_set_impl_helper::get_attribute_type_name(
     const char* name)
 {
     if( !name)
-        return std::string();
+        return {};
     ASSERT( M_NEURAY_API, attribute_set);
 
     const std::string name_str(name);
@@ -277,12 +295,12 @@ std::string Attribute_set_impl_helper::get_attribute_type_name(
     const ATTR::Attribute_id attribute_id = ATTR::Attribute::id_lookup( top_level_name.c_str());
     std::shared_ptr<ATTR::Attribute> attribute = attribute_set->lookup_shared_ptr( attribute_id);
     if( !attribute)
-        return std::string();
+        return {};
 
     Attribute_context owner( db_element, attribute);
     const ATTR::Type* attribute_type = owner.get_type( name);
     if( !attribute_type)
-        return std::string();
+        return {};
 
     register_decls( *attribute_type);
 
@@ -317,7 +335,7 @@ mi::Sint32 Attribute_set_impl_helper::set_attribute_propagation(
 
     attribute->set_override( new_value);
     db_element->add_journal_flag( compute_journal_flags( attribute, attribute_id));
-   
+
     return 0;
 }
 
@@ -352,8 +370,8 @@ const char* Attribute_set_impl_helper::enumerate_attributes(
     ASSERT( M_NEURAY_API, attribute_set);
 
     const ATTR::Attributes& attributes = attribute_set->get_attributes();
-    ATTR::Attributes::const_iterator it     = attributes.begin();
-    ATTR::Attributes::const_iterator it_end = attributes.end();
+    auto it     = attributes.begin();
+    auto it_end = attributes.end();
 
     while( (it != it_end) && ( (index > 0) || !has_valid_api_type( it->second.get()))) {
         if( has_valid_api_type( it->second.get()))
@@ -369,7 +387,7 @@ const char* Attribute_set_impl_helper::enumerate_attributes(
 }
 
 mi::IData* Attribute_set_impl_helper::get_attribute(
-    const IAttribute_context* owner, const std::string& attribute_name)
+    const IDATA::IAttribute_context* owner, const std::string& attribute_name)
 {
     ASSERT( M_NEURAY_API, owner);
 
@@ -409,7 +427,7 @@ mi::IData* Attribute_set_impl_helper::get_attribute(
         return nullptr;
 
     const ATTR::Type_code attribute_type_code = attribute_type->get_typecode();
-    mi::base::Handle<IProxy> attribute_proxy;
+    mi::base::Handle<IDATA::IProxy> attribute_proxy;
 
     // array attribute types
     if(    (attribute_type_code == ATTR::TYPE_ARRAY)
@@ -427,14 +445,14 @@ mi::IData* Attribute_set_impl_helper::get_attribute(
             const mi::base::IInterface* argv[2];
             argv[0] = type_name.get();
             argv[1] = name.get();
-            attribute_proxy = transaction->create<IProxy>( "__Dynamic_array_proxy", 2, argv);
+            attribute_proxy = transaction->create<IDATA::IProxy>( "__Dynamic_array_proxy", 2, argv);
         } else {
             // static arrays
             const mi::base::IInterface* argv[3];
             argv[0] = type_name.get();
             argv[1] = length.get();
             argv[2] = name.get();
-            attribute_proxy = transaction->create<IProxy>( "__Array_proxy", 3, argv);
+            attribute_proxy = transaction->create<IDATA::IProxy>( "__Array_proxy", 3, argv);
         }
 
     // structure attribute types
@@ -449,7 +467,7 @@ mi::IData* Attribute_set_impl_helper::get_attribute(
         argv[0] = decl.get();
         argv[1] = type_name_string.get();
         argv[2] = name.get();
-        attribute_proxy = transaction->create<IProxy>( "__Structure_proxy", 3, argv);
+        attribute_proxy = transaction->create<IDATA::IProxy>( "__Structure_proxy", 3, argv);
 
     // enum attribute types
     } else if( attribute_type_code == ATTR::TYPE_ENUM) {
@@ -462,7 +480,7 @@ mi::IData* Attribute_set_impl_helper::get_attribute(
         name->set_c_str( attribute_name.c_str());
         argv[0] = decl.get();
         argv[1] = type_name_string.get();
-        attribute_proxy = transaction->create<IProxy>( "__Enum_proxy", 2, argv);
+        attribute_proxy = transaction->create<IDATA::IProxy>( "__Enum_proxy", 2, argv);
 
     // simple attribute types
     } else {
@@ -490,7 +508,7 @@ mi::IData* Attribute_set_impl_helper::get_attribute(
         // handle INumber, IString
         else
             proxy_type_name = "__" + attribute_type_name + "_proxy";
-        attribute_proxy = transaction->create<IProxy>( proxy_type_name.c_str());
+        attribute_proxy = transaction->create<IDATA::IProxy>( proxy_type_name.c_str());
     }
 
     ASSERT( M_NEURAY_API, attribute_proxy);
@@ -509,7 +527,7 @@ std::string Attribute_set_impl_helper::get_attribute_type_name(
         const ATTR::Type* element_type = (type_code == ATTR::TYPE_ARRAY) ? type.get_child() : &type;
         std::string attribute_type_name = get_attribute_type_name( *element_type, true);
         if( attribute_type_name.empty())
-            return std::string();
+            return {};
         attribute_type_name += '[';
         const mi::Size length = element_type->get_arraysize();
         if( length > 0)
@@ -534,7 +552,7 @@ std::string Attribute_set_impl_helper::get_attribute_type_name(
         while( member_type) {
             std::string member_type_name = get_attribute_type_name( *member_type, false);
             if( member_type_name.empty())
-                return std::string();
+                return {};
             attribute_type_name += ' ';
             attribute_type_name += member_type_name;
             attribute_type_name += ' ';
@@ -574,7 +592,7 @@ std::string Attribute_set_impl_helper::get_attribute_type_name(
     // simple attribute types
     const char* result = Type_utilities::convert_type_code_to_attribute_type_name( type_code);
     if( !result)
-        return std::string();
+        return {};
 
     return result;
 }
@@ -642,7 +660,7 @@ ATTR::Type Attribute_set_impl_helper::get_attribute_type(
         ATTR::Type enum_type( ATTR::TYPE_ENUM, name.c_str(), 1);
         enum_type.set_type_name( type_name);
         mi::Size n = decl->get_length();
-        Enum_collection* enum_collection = new Enum_collection();
+        auto* enum_collection = new Enum_collection();
         for( mi::Size i = 0; i < n; ++i)
             enum_collection->push_back( std::make_pair( decl->get_value( i), decl->get_name( i)));
         *enum_type.set_enum() = enum_collection;
@@ -728,8 +746,7 @@ const mi::IStructure_decl* Attribute_set_impl_helper::create_structure_decl( con
         }
     }
 
-    decl->retain();
-    return decl.get();
+    return decl.extract();
 }
 
 const mi::IEnum_decl* Attribute_set_impl_helper::create_enum_decl( const ATTR::Type& type)
@@ -745,8 +762,7 @@ const mi::IEnum_decl* Attribute_set_impl_helper::create_enum_decl( const ATTR::T
     for( mi::Size i = 0; i < n; ++i)
         decl->add_enumerator( (*enum_collection)[i].second.c_str(), (*enum_collection)[i].first);
 
-    decl->retain();
-    return decl.get();
+    return decl.extract();
 }
 
 namespace {

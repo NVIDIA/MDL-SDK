@@ -38,6 +38,4 @@ create_unit_test(
         ${LINKER_DEPENDENCIES_BASE}
         ${LINKER_END_GROUP}
         boost
-    LINK_LIBRARIES
-        Boost::filesystem
     )

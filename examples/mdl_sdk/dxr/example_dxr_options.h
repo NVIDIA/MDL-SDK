@@ -93,6 +93,8 @@ namespace mi { namespace examples { namespace dxr
         << "-o|--output <outputfile>  Image file to write result to (default: "
                                       << defaults.output_file << ")\n"
 
+        << "--no-color                Disable colored console output for warnings and errors\n"
+
         << "-g|--generated <path>     File path to write generated MDL (e.g. from MaterialX) to.\n"
         << "                          If the specified path is a folder, the filename will be \n"
         << "                          generated with names defined by the loader.\n"
@@ -104,7 +106,7 @@ namespace mi { namespace examples { namespace dxr
         << "--gpu <num>               Select a specific (non-default GPU) in case there are.\n"
         << "                          multiple available. See log output for option.\n"
 
-        << "--gpu-debug               Enable the D3D Debug Layer and DRED\n"
+        << "--gpu_debug               Enable the D3D Debug Layer and DRED\n"
 
         << "--nogui                   Don't open interactive display\n"
 
@@ -178,7 +180,8 @@ namespace mi { namespace examples { namespace dxr
            "                          (default: " << defaults.meters_per_scene_unit << ")\n"
 
         << "--lpe <value>             LPE expression used on startup. Currently only 'beauty',\n"
-           "                          'albedo_diffuse', 'albedo_glossy', and 'normal' are valid options.\n"
+           "                          'albedo_diffuse', 'albedo_glossy', and 'normal', 'roughness',\n"
+           "                          and 'aov' are valid options.\n"
            "                          Also combinations seperated by ',' are valid with '--nogui'.\n"
            "                          (default: " << defaults.lpe[0]<< ")\n"
 
@@ -194,11 +197,30 @@ namespace mi { namespace examples { namespace dxr
         << "--warning                 Set log level to 'warning' (default is 'info').\n"
         << "--verbose                 Set log level to 'verbose' (default is 'info').\n"
 
-        << "--shader_opt Od|O0|O1|O2|O3  Set optimization level of the shader compiler (DXC or Slang). (default: O3)\n"
+        << "--shader_opt Od|O0|O1|O2|O3     Set optimization level of the shader compiler (DXC or Slang).\n"
+           "                                (default: O3)\n"
 
         << "--use_slang               Use the Slang shader compiler instead of DXC.\n"
 
         << "--distill <target>        Distill the material before running the code generation.\n"
+        << "--distill_debug           Dumps the orignal and distilled material (default is 'false').\n"
+
+        << "--slot_mode <mode>        Slot mode for BSDF handles, one of 'none', '1', '2', '4', '8'.\n"
+           "                          (default: 'none')\n"
+
+        << "--material_type <type>    Qualified name of the the material type (default: <empty>).\n"
+           "                          If a type is specified and no --aov option is set,\n"
+           "                          it's fields will be made available as AOVs.\n"
+
+        << "--avo <field>             Field name of the material type to render. Return types that are\n"
+           "                          not supported for visualization will be filtered out. Combinations,\n"
+           "                          seperated by ',' are valid, too. The first is used for rendering while\n"
+           "                          the following will be available on the UI. (default: <empty>)\n"
+           "                          See also the --material_type option for interactions.\n"
+
+        << "--allowed_scatter_mode <m>      Limits the allowed scatter mode to \"none\", \"reflect\", \n"
+           "                                \"transmit\" or \"reflect_and_transmit\"\n"
+           "                                (default: restriction disabled)\n"
 
         #if MDL_ENABLE_MATERIALX
         << "--mtlx_path <path>        Specify an additional absolute search path location\n"
@@ -211,7 +233,7 @@ namespace mi { namespace examples { namespace dxr
            "                          at the root of this folder will be included in all content\n"
            "                          documents. Can occur multiple times.\n"
 
-        << "--mtlx_to_mdl <version>   Specify the MDL version to generate (WIP for MaterialX 1.38.9).\n"
+        << "--mtlx_to_mdl <version>   Specify the MDL version to generate (requires MaterialX 1.38.9).\n"
             "                         Supported values are \"1.6\", \"1.7\", \"1.8\", ... and \"latest\".\n"
             "                         (default: \"latest\")\n"
 
@@ -279,8 +301,13 @@ namespace mi { namespace examples { namespace dxr
                 {
                     options.gpu = std::max(_wtoi(argv[++i]), -1);
                 }
+                else if (wcscmp(opt, L"--gpu_debug") == 0)
+                {
+                    options.gpu_debug = true;
+                }
                 else if (wcscmp(opt, L"--gpu-debug") == 0)
                 {
+                    log_warning("Deprecated argument `--gpu-debug`. Please use `--gpu_debug` instead.");
                     options.gpu_debug = true;
                 }
                 else if ((wcscmp(opt, L"-o" ) == 0 || wcscmp(opt, L"--output") == 0) && i < argc - 1)
@@ -317,6 +344,10 @@ namespace mi { namespace examples { namespace dxr
                         return false;
                     }
                 }
+                else if (wcscmp(opt, L"--no-color") == 0)
+                {
+                    mi::examples::mdl_d3d12::enable_color_output(false);
+                }
                 else if (wcscmp(opt, L"--lpe") == 0 && i < argc - 1)
                 {
                     std::string argument = mi::examples::strings::wstr_to_str(argv[++i]);
@@ -333,7 +364,8 @@ namespace mi { namespace examples { namespace dxr
                             expr != "albedo_diffuse" &&
                             expr != "albedo_glossy" &&
                             expr != "normal" &&
-                            expr != "roughness")
+                            expr != "roughness" &&
+                            expr != "aov")
                         {
                             log_error("Invalid LPE option: '" + expr + "'.");
                             return_code = EXIT_FAILURE;
@@ -545,7 +577,11 @@ namespace mi { namespace examples { namespace dxr
                 }
                 else if (wcscmp(opt, L"--distill") == 0 && i < argc - 1)
                 {
-                    options.distilling_target = mi::examples::strings::wstr_to_str(argv[++i]);
+                    options.distill_target = mi::examples::strings::wstr_to_str(argv[++i]);
+                }
+                else if (wcscmp(opt, L"--distill_debug") == 0)
+                {
+                    options.distill_debug = true;
                 }
                 else if (wcscmp(opt, L"--use_slang") == 0)
                 {
@@ -555,6 +591,63 @@ namespace mi { namespace examples { namespace dxr
                         log_error("Application not built with slang support. '--use_slang' will be ignored.");
                     #endif
                 }
+                else if (wcscmp(opt, L"--slot_mode") == 0 && i < argc - 1)
+                {
+                    ++i;
+                    if (wcscmp(argv[i], L"none") == 0) {
+                        options.slot_mode = Base_options::SM_NONE;
+                    } else if (wcscmp(argv[i], L"1") == 0) {
+                        options.slot_mode = Base_options::SM_FIXED_1;
+                    } else if (wcscmp(argv[i], L"2") == 0) {
+                        options.slot_mode = Base_options::SM_FIXED_2;
+                    } else if (wcscmp(argv[i], L"4") == 0) {
+                        options.slot_mode = Base_options::SM_FIXED_4;
+                    } else if (wcscmp(argv[i], L"8") == 0) {
+                        options.slot_mode = Base_options::SM_FIXED_8;
+                    } else {
+                        log_error("Unsupported slot mode: " + mi::examples::strings::wstr_to_str(argv[i]) + ".");
+                        return_code = EXIT_FAILURE;
+                        return false;
+                    }
+                }
+                else if (wcscmp(opt, L"--material_type") == 0 && i < argc - 1)
+                {
+                    options.material_type = mi::examples::strings::wstr_to_str(argv[++i]);
+                    std::string simple_type_name;
+                    if (!mi::examples::mdl::parse_cmd_argument_material_name(
+                        options.material_type, options.material_type_module, simple_type_name, false))
+                    {
+                        log_error("Type specified by --material_type is not a fully qualified name: " +
+                            options.material_type);
+                        return_code = EXIT_FAILURE;
+                        return false;
+                    }
+                }
+                else if (wcscmp(opt, L"--aov") == 0 && i < argc - 1)
+                {
+                    options.aov_to_render = mi::examples::strings::wstr_to_str(argv[++i]);
+                }
+                else if (wcscmp(opt, L"--allowed_scatter_mode") == 0 && i < argc - 1)
+				{
+                    options.enable_bsdf_flags = true;
+                    LPWSTR mode = argv[++i];
+                    if (wcscmp(mode, L"none") == 0) {
+                        options.allowed_scatter_mode = Base_options::DF_FLAGS_NONE;
+                    } else if (wcscmp(mode, L"reflect") == 0) {
+                        options.allowed_scatter_mode = Base_options::DF_FLAGS_ALLOW_REFLECT;
+                    } else if (wcscmp(mode, L"transmit") == 0) {
+                        options.allowed_scatter_mode = Base_options::DF_FLAGS_ALLOW_TRANSMIT;
+                    } else if (wcscmp(mode, L"reflect_and_transmit") == 0) {
+                        options.allowed_scatter_mode =
+                            Base_options::DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT;
+                    } else {
+                        log_error("Unknown allowed_scatter_mode: \"" +
+                            mi::examples::strings::wstr_to_str(mode) + "\".");
+                        return_code = EXIT_FAILURE;
+                        return false;
+                    }
+                }
+
                 #if MDL_ENABLE_MATERIALX
                     else if (wcscmp(opt, L"--mtlx_path") == 0 && i < argc - 1)
                     {
@@ -588,7 +681,7 @@ namespace mi { namespace examples { namespace dxr
                             return false;
                         }
                         options.mtlx_to_mdl = version;
-                        }
+                    }
                 #endif
                 else
                 {

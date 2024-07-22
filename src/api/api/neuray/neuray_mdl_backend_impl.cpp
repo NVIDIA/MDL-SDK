@@ -370,8 +370,7 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::deserialize_target_code(
         return nullptr;
     }
 
-    info->retain();
-    return info.get();
+    return info.extract();
 }
 
 namespace {
@@ -385,8 +384,8 @@ namespace {
     public:
         Buffer_wrapper(const mi::Uint8* data, mi::Size data_size)
             : m_data(data), m_data_size(data_size) { }
-        const mi::Uint8* get_data() const { return m_data; }
-        mi::Size get_data_size() const { return m_data_size; }
+        const mi::Uint8* get_data() const final { return m_data; }
+        mi::Size get_data_size() const final { return m_data_size; }
     private:
         const mi::Uint8* m_data;
         const mi::Size m_data_size;

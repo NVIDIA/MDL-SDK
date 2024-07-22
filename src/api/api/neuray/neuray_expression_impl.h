@@ -149,9 +149,9 @@ template <class E, class I>
 class Expression_base : public mi::base::Interface_implement_2<E, IExpression_wrapper>
 {
 public:
-    typedef E External_expr;
-    typedef I Internal_expr;
-    typedef Expression_base<E, I> Base;
+    using External_expr = E;
+    using Internal_expr = I;
+    using Base = Expression_base<E, I>;
 
     Expression_base( const Expression_factory* ef, I* expr, const mi::base::IInterface* owner)
       : m_ef( ef, mi::base::DUP_INTERFACE),
@@ -505,6 +505,9 @@ public:
     mi::neuraylib::IExpression_direct_call* create_direct_call(
         const char* name, mi::neuraylib::IExpression_list* arguments, mi::Sint32* errors) const;
 
+    mi::neuraylib::IExpression_temporary* create_temporary(
+        const mi::neuraylib::IType* type, mi::Size index) const;
+
     mi::neuraylib::IExpression_list* create_expression_list() const;
 
     mi::neuraylib::IAnnotation* create_annotation(
@@ -552,17 +555,18 @@ public:
         const mi::neuraylib::IType* target_type,
         const char* cast_db_name,
         bool force_cast,
+        bool direct_call,
+        mi::Sint32* errors) const;
+
+    mi::neuraylib::IExpression* create_decl_cast(
+        mi::neuraylib::IExpression* src_expr,
+        const mi::neuraylib::IType_struct* target_type,
+        const char* cast_db_name,
+        bool force_cast,
+        bool direct_call,
         mi::Sint32* errors) const;
 
     // internal methods
-
-    /// Creates a temporary reference.
-    ///
-    /// \param type         The type of the temporary.
-    /// \param index        The index of the temporary.
-    /// \return             The created temporary reference.
-    mi::neuraylib::IExpression_temporary* create_temporary(
-        const mi::neuraylib::IType* type, mi::Size index) const;
 
     /// Returns the wrapped internal expression factory.
     MDL::IExpression_factory* get_internal_expression_factory() const

@@ -341,6 +341,8 @@ void process(llvm::Module *module)
     roots.insert("__nv_sqrt");
     roots.insert("__nv_tanf");
     roots.insert("__nv_tan");
+    roots.insert("__nv_truncf");
+    roots.insert("__nv_trunc");
     roots.insert("__nv_copysignf");
     roots.insert("__nv_copysign");
     roots.insert("__nv_sincosf");

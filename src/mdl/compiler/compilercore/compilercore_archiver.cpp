@@ -1430,7 +1430,7 @@ void Archive_builder::update_manifest(
     size_t id = m_manifest->add_module(mod_name.c_str());
 
     // check if a module export comes from an archive
-    for (int i = 0, n = mod->get_import_count(); i < n; ++i) {
+    for (size_t i = 0, n = mod->get_import_count(); i < n; ++i) {
         mi::base::Handle<Module const> imp_mod(mod->get_import(i));
 
         if (Module::Archive_version const *a_ver = imp_mod->get_owner_archive_version()) {
@@ -1448,7 +1448,7 @@ void Archive_builder::update_manifest(
     typedef ptr_hash_set<ISymbol const>::Type Symbol_set;
     Symbol_set exported_entities(0, Symbol_set::hasher(), Symbol_set::key_equal(), m_alloc);
 
-    for (int i = 0, n = mod->get_exported_definition_count(); i < n; ++i) {
+    for (size_t i = 0, n = mod->get_exported_definition_count(); i < n; ++i) {
         Definition const *def = mod->get_exported_definition(i);
         ISymbol const    *sym = def->get_sym();
 
@@ -1493,6 +1493,10 @@ void Archive_builder::update_manifest(
 
         case IDefinition::DK_ANNOTATION:
             m_manifest->add_export(Manifest::EK_ANNOTATION, id, sym->get_name());
+            break;
+
+        case IDefinition::DK_STRUCT_CATEGORY:
+            m_manifest->add_export(Manifest::EK_STRUCT_CATEGORY, id, sym->get_name());
             break;
 
         case IDefinition::DK_ERROR:
@@ -1778,7 +1782,7 @@ void Archive_extractor::handle_file_error(
                     .add(file_name));
             return;
         }
-        // fall-through
+        MDL_FALLTHROUGH
     case EC_INVALID_CONTAINER:
         error(
             INVALID_MDL_ARCHIVE,
@@ -2345,6 +2349,8 @@ void Manifest_builder::add_pair(u32string const &key, u32string const &value)
             ver = IMDL::MDL_VERSION_1_7;
         } else if (v == "1.8") {
             ver = IMDL::MDL_VERSION_1_8;
+        } else if (v == "1.9") {
+            ver = IMDL::MDL_VERSION_1_9;
         } else {
             error(EC_UNSUPPORTED_MDL_VERSION);
         }

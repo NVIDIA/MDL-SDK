@@ -32,27 +32,31 @@
 
 #include <ostream>
 
-#include <base/hal/thread/i_thread_lock.h>
-#include <base/hal/thread/i_thread_block.h>
-
 namespace MI {
 
 namespace DBLIGHT {
 
 THREAD::Lock g_stats_lock;
-Statistics_data g_name_to_tag;
-Statistics_data g_tag_to_name;
+Statistics_data g_commit;
+Statistics_data g_abort;
 Statistics_data g_access;
 Statistics_data g_edit;
 Statistics_data g_finish_edit;
 Statistics_data g_store;
+Statistics_data g_localize;
 Statistics_data g_remove;
-Statistics_data g_commit;
-Statistics_data g_abort;
+Statistics_data g_name_to_tag;
+Statistics_data g_tag_to_name;
+Statistics_data g_get_class_id;
+Statistics_data g_get_tag_privacy_level;
+Statistics_data g_get_tag_store_level;
 Statistics_data g_get_tag_reference_count;
+Statistics_data g_get_tag_version;
+Statistics_data g_can_reference_tag;
 Statistics_data g_get_tag_is_removed;
 Statistics_data g_lookup_info_by_tag;
 Statistics_data g_lookup_info_by_name;
+Statistics_data g_garbage_collection;
 
 #define dump( x, y) \
     snprintf( buffer, sizeof( buffer), "%-44s %7zu, %6.3lf ms, %8.3lf μs\n", \
@@ -62,35 +66,48 @@ Statistics_data g_lookup_info_by_name;
 void dump_statistics( std::ostream& s, mi::Uint32 next_tag)
 {
 #ifdef DBLIGHT_ENABLE_STATISTICS
-    // Do not include g_lookup_info_by_tag.m_time and g_lookup_info_by_name.m_time which is already
-    // included in other calls.
-    double sum = g_name_to_tag.m_time
-               + g_tag_to_name.m_time
+    // Do not include g_lookup_info_by_tag, g_lookup_info_by_name, and g_garbage_collection which
+    // are already included in other calls.
+    double sum = g_commit.m_time
+               + g_abort.m_time
                + g_access.m_time
                + g_edit.m_time
                + g_finish_edit.m_time
                + g_store.m_time
+               + g_localize.m_time
                + g_remove.m_time
-               + g_commit.m_time
-               + g_abort.m_time
+               + g_name_to_tag.m_time
+               + g_tag_to_name.m_time
+               + g_get_class_id.m_time
+               + g_get_tag_privacy_level.m_time
+               + g_get_tag_store_level.m_time
                + g_get_tag_reference_count.m_time
+               + g_get_tag_version.m_time
+               + g_can_reference_tag.m_time
                + g_get_tag_is_removed.m_time;
 
     char buffer[256];
     dump( "Transaction_impl::commit():", g_commit);
     dump( "Transaction_impl::abort():", g_abort);
+    dump( "Transaction_impl::access_element():", g_access);
+    dump( "Transaction_impl::edit_element():", g_edit);
+    dump( "Transaction_impl::finish_edit():", g_finish_edit);
+    dump( "Transaction_impl::store():", g_store);
+    dump( "Transaction_impl::localize():", g_localize);
+    dump( "Transaction_impl::remove():", g_remove);
     dump( "Transaction_impl::name_to_tag():", g_name_to_tag);
     dump( "Transaction_impl::tag_to_name():", g_tag_to_name);
-    dump( "Transaction_impl::store():", g_store);
-    dump( "Transaction_impl::remove():", g_remove);
-    dump( "Transaction_impl::access():", g_access);
-    dump( "Transaction_impl::edit():", g_edit);
-    dump( "Transaction_impl::finish_edit():", g_finish_edit);
+    dump( "Transaction_impl::get_class_id():", g_get_class_id);
+    dump( "Transaction_impl::get_tag_privacy_level():", g_get_tag_privacy_level);
+    dump( "Transaction_impl::get_tag_store_level():", g_get_tag_store_level);
     dump( "Transaction_impl::get_tag_reference_count():", g_get_tag_reference_count);
+    dump( "Transaction_impl::get_tag_version():", g_get_tag_version);
+    dump( "Transaction_impl::can_reference_tag():", g_can_reference_tag);
     dump( "Transaction_impl::get_tag_is_removed():", g_get_tag_is_removed);
     s << std::endl;
     dump( "Info_manager::lookup_info_by_tag():", g_lookup_info_by_tag);
     dump( "Info_manager::lookup_info_by_name():", g_lookup_info_by_name);
+    dump( "Info_manager::garbage_collection():", g_garbage_collection);
     s << std::endl;
 
     s << "sum: " << 1000.0 * sum << "ms" << std::endl;
@@ -109,6 +126,7 @@ Statistics_helper::~Statistics_helper()
 {
     auto stop_time = std::chrono::system_clock::now();
     double duration = std::chrono::duration<double>( stop_time - m_start_time).count();
+    // std::atomic<double> needs C++20, use a lock until then.
     THREAD::Block block( g_stats_lock);
     ++m_data.m_count;
     m_data.m_time += duration;

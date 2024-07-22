@@ -572,6 +572,13 @@ public:
         m_serializer->write_int(v);
     }
 
+    /// Write a size_t value.
+    ///
+    /// \param v  the value
+    void write_size_t(size_t v) {
+        m_serializer->write_encoded_tag(v);
+    }
+
     /// Write a float value.
     ///
     /// \param v  the value
@@ -913,6 +920,11 @@ private:
     /// \param type           the type
     /// \param is_child_type  if true, this type is a sub-type of another type
     void dfs_type(IType const *type, bool is_child_type = true);
+
+    /// Write the given struct category.
+    ///
+    /// \param cat  the struct category
+    void write_category(IStruct_category const *cat);
 
     /// Write the given type.
     ///
@@ -1500,6 +1512,11 @@ public:
         MDL_ASSERT(m_bin_deserializer != NULL && "not in binary mode");
         return m_bin_deserializer->is_known_module(tag);
     }
+
+    /// Read a category.
+    ///
+    /// \param tf  the type factory used to restore the category
+    IStruct_category const *read_category(Type_factory &tf);
 
     /// Read a type.
     ///

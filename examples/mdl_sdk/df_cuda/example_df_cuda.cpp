@@ -172,6 +172,18 @@ static std::string to_string(Display_buffer_options option)
     }
 }
 
+static std::string to_string(mi::neuraylib::Df_flags option)
+{
+    switch (option)
+    {
+    case mi::neuraylib::DF_FLAGS_NONE: return "None";
+    case mi::neuraylib::DF_FLAGS_ALLOW_REFLECT: return "Reflect only";
+    case mi::neuraylib::DF_FLAGS_ALLOW_TRANSMIT: return "Transmit only";
+    case mi::neuraylib::DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT: return "Reflect+Transmit";
+    default: return "";
+    }
+}
+
 // GLFW scroll callback
 static void handle_scroll(GLFWwindow *window, double xoffset, double yoffset)
 {
@@ -427,6 +439,7 @@ static void save_result(
     const unsigned int width,
     const unsigned int height,
     const std::string &filename,
+    mi::base::Handle<mi::neuraylib::IFactory> factory,
     mi::base::Handle<mi::neuraylib::IImage_api> image_api,
     mi::base::Handle<mi::neuraylib::IMdl_impexp_api> mdl_impexp_api)
 {
@@ -436,7 +449,11 @@ static void save_result(
     float3 *data = static_cast<float3 *>(tile->get_data());
     check_cuda_success(cuMemcpyDtoH(data, cuda_buffer, width * height * sizeof(float3)));
 
-    mdl_impexp_api->export_canvas(filename.c_str(), canvas.get(), 100u, true);
+    mi::base::Handle<mi::IBoolean> option_force_default_gamma(factory->create<mi::IBoolean>());
+    option_force_default_gamma->set_value(true);
+    mi::base::Handle<mi::IMap> export_options(factory->create<mi::IMap>("Map<Interface>"));
+    export_options->insert("force_default_gamma", option_force_default_gamma.get());
+    mdl_impexp_api->export_canvas(filename.c_str(), canvas.get(), export_options.get());
 }
 
 // Application options
@@ -461,6 +478,8 @@ struct Options {
     float3 cam_pos;
     float3 light_pos;
     float3 light_intensity;
+    bool enable_bsdf_flags;
+    mi::neuraylib::Df_flags allowed_scatter_mode;
 
     std::string hdrfile;
     float hdr_rot;
@@ -490,6 +509,8 @@ struct Options {
     , cam_pos(make_float3(0, 0, 3))
     , light_pos(make_float3(10, 0, 5))
     , light_intensity(make_float3(0, 0, 0))
+    , enable_bsdf_flags(false)
+    , allowed_scatter_mode(mi::neuraylib::DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT)
     , hdrfile("nvidia/sdk_examples/resources/environment.hdr")
     , hdr_rot(0.0f)
     , outputfile("output.exr")
@@ -915,6 +936,7 @@ static void launch_subframe(
 static void render_scene(
     const Options &options,
     mi::base::Handle<mi::neuraylib::ITransaction>         transaction,
+    mi::base::Handle<mi::neuraylib::IFactory>             factory,
     mi::base::Handle<mi::neuraylib::IImage_api>           image_api,
     mi::base::Handle<mi::neuraylib::IMdl_impexp_api>      mdl_impexp_api,
     mi::base::Handle<mi::neuraylib::ITarget_code const>   target_code,
@@ -988,6 +1010,7 @@ static void render_scene(
     kernel_params.max_path_length = options.max_path_length;
     kernel_params.exposure_scale = powf(2.0f, options.exposure);
     kernel_params.disable_aa = options.no_aa;
+    kernel_params.bsdf_data_flags = options.allowed_scatter_mode;
     kernel_params.use_derivatives = options.enable_derivatives;
     kernel_params.enable_auxiliary_output = options.enable_auxiliary_output;
     kernel_params.display_buffer_index = 0;
@@ -1317,17 +1340,17 @@ static void render_scene(
                 save_result(
                     accum_buffer, width, height,
                     next_filename_base + filename_ext,
-                    image_api, mdl_impexp_api);
+                    factory, image_api, mdl_impexp_api);
 
                 save_result(
                     aux_albedo_buffer, width, height,
                     next_filename_base + "_albedo" + filename_ext,
-                    image_api, mdl_impexp_api);
+                    factory, image_api, mdl_impexp_api);
 
                 save_result(
                     aux_normal_buffer, width, height,
                     next_filename_base + "_normal" + filename_ext,
-                    image_api, mdl_impexp_api);
+                    factory, image_api, mdl_impexp_api);
 
                 // All materials have been rendered? -> done
                 if (kernel_params.current_material + 1 >= material_bundle.size())
@@ -1453,6 +1476,28 @@ static void render_scene(
                             if (ImGui::Selectable(name.c_str(), is_selected))
                             {
                                 kernel_params.display_buffer_index = i;
+                                kernel_params.iteration_start = 0;
+                            }
+                            if (is_selected)
+                                ImGui::SetItemDefaultFocus();
+                        }
+                        ImGui::EndCombo();
+                    }
+                }
+
+                if (options.enable_bsdf_flags)
+                {
+                    std::string current_allow_mode = to_string(kernel_params.bsdf_data_flags);
+                    if (ImGui::BeginCombo("BSDF flags", current_allow_mode.c_str()))
+                    {
+                        for (unsigned i = 0;
+                            i <= (unsigned) mi::neuraylib::DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT; ++i)
+                        {
+                            const std::string &name = to_string((mi::neuraylib::Df_flags) i);
+                            bool is_selected = (current_allow_mode == name);
+                            if (ImGui::Selectable(name.c_str(), is_selected))
+                            {
+                                kernel_params.bsdf_data_flags = (mi::neuraylib::Df_flags) i;
                                 kernel_params.iteration_start = 0;
                             }
                             if (is_selected)
@@ -1712,19 +1757,19 @@ static void render_scene(
                         accum_buffer,
                         width, height,
                         options.outputfile,
-                        image_api, mdl_impexp_api);
+                        factory, image_api, mdl_impexp_api);
 
                     save_result(
                         aux_albedo_buffer,
                         width, height,
                         filename_base + "_albedo" + filename_ext,
-                        image_api, mdl_impexp_api);
+                        factory, image_api, mdl_impexp_api);
 
                     save_result(
                         aux_normal_buffer,
                         width, height,
                         filename_base + "_normal" + filename_ext,
-                        image_api, mdl_impexp_api);
+                        factory, image_api, mdl_impexp_api);
                 }
                 if (ctx->exposure_event && !ImGui::GetIO().WantCaptureKeyboard) {
                     kernel_params.exposure_scale = powf(2.0f, ctx->exposure);
@@ -2108,6 +2153,8 @@ static void usage(const char *name)
         << "--noaa                      disable pixel oversampling\n"
         << "-d                          enable use of derivatives\n"
         << "--fold_ternary_on_df        fold all ternary operators on *df types (default: false)\n"
+        << "--allowed_scatter_mode <m>  limits the allowed scatter mode to \"none\", \"reflect\", "
+        << "\"transmit\" or \"reflect_and_transmit\" (default: restriction disabled)\n"
         << "\n"
         << "Note: material names can end with an '*' as a wildcard\n"
         << "      and alternatively, full MDLE file paths can be passed as material name\n";
@@ -2190,6 +2237,22 @@ int MAIN_UTF8(int argc, char* argv[])
                 options.enable_derivatives = true;
             } else if (strcmp(opt, "--fold_ternary_on_df") == 0) {
                 options.fold_ternary_on_df = true;
+            } else if (strcmp(opt, "--allowed_scatter_mode") == 0 && i < argc - 1) {
+                options.enable_bsdf_flags = true;
+                char const *mode = argv[++i];
+                if (strcmp(mode, "none") == 0) {
+                    options.allowed_scatter_mode = mi::neuraylib::DF_FLAGS_NONE;
+                } else if (strcmp(mode, "reflect") == 0) {
+                    options.allowed_scatter_mode = mi::neuraylib::DF_FLAGS_ALLOW_REFLECT;
+                } else if (strcmp(mode, "transmit") == 0) {
+                    options.allowed_scatter_mode = mi::neuraylib::DF_FLAGS_ALLOW_TRANSMIT;
+                } else if (strcmp(mode, "reflect_and_transmit") == 0) {
+                    options.allowed_scatter_mode =
+                        mi::neuraylib::DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT;
+                } else {
+                    std::cout << "Unknown allowed_scatter_mode: \"" << mode << "\"" << std::endl;
+                    usage(argv[0]);
+                }
             } else if (strcmp(opt, "-v") == 0 || strcmp(opt, "--version") == 0) {
                 print_version_and_exit = true;
             } else {
@@ -2316,6 +2379,7 @@ int MAIN_UTF8(int argc, char* argv[])
                 options.enable_auxiliary_output,
                 options.enable_pdf,
                 options.use_adapt_normal,
+                options.enable_bsdf_flags,
                 /*df_handle_mode=*/ "pointer",
                 /*lambda_return_mode=*/ "value");
 
@@ -2459,6 +2523,9 @@ int MAIN_UTF8(int argc, char* argv[])
             for (auto& mat : material_bundle)
                 create_cuda_material_handles(mat, target_code.get(), lpe_state_machine);
 
+            mi::base::Handle<mi::neuraylib::IFactory> factory(
+                neuray->get_api_component<mi::neuraylib::IFactory>());
+
             // Acquire image API needed to prepare the textures
             mi::base::Handle<mi::neuraylib::IImage_api> image_api(
                 neuray->get_api_component<mi::neuraylib::IImage_api>());
@@ -2471,6 +2538,7 @@ int MAIN_UTF8(int argc, char* argv[])
             render_scene(
                 options,
                 transaction,
+                factory,
                 image_api,
                 mdl_impexp_api,
                 target_code,

@@ -30,6 +30,7 @@
 
 #include "compiler_glsl_version.h"
 #include "compiler_glsl_assert.h"
+#include "compiler_glsl_keywords.h"
 
 namespace mi {
 namespace mdl {
@@ -236,6 +237,7 @@ GLSLang_context::GLSLang_context(
 , m_profile(GLSL_PROFILE_CORE)
 , m_extensions()
 , m_strict(false)
+, m_keywords(NULL)
 {
     m_extension_behavior[GL_OES_texture_3D                  ] = EB_DISABLE;
     m_extension_behavior[GL_OES_standard_derivatives        ] = EB_DISABLE;
@@ -363,9 +365,14 @@ bool GLSLang_context::set_version(unsigned version, unsigned profile)
         }
     }
 
+    bool needs_update = m_version != version || m_profile != profile;
 
     m_version = version;
     m_profile = profile;
+
+    if (m_keywords != NULL && needs_update) {
+        m_keywords->glsl_version_changed(*this);
+    }
 
     return true;
 }
@@ -387,6 +394,9 @@ void GLSLang_context::enable_extension(GLSL_extensions ext, bool enable)
 
     enable_extension_no_update(ext, enable);
 
+    if (m_keywords != NULL && old != m_extensions) {
+        m_keywords->glsl_version_changed(*this);
+    }
 }
 
 // Update an extension.
@@ -426,6 +436,9 @@ GLSLang_context::Ext_error_code GLSLang_context::update_extension(
                 m_extension_behavior[i] = eb;
                 enable_extension_no_update(GLSL_extensions(i), enabled);
             }
+        }
+        if (m_keywords != NULL) {
+            m_keywords->glsl_version_changed(*this);
         }
 
         return EC_OK;
@@ -491,6 +504,11 @@ char const *GLSLang_context::get_extension_name(
 #undef CASE
 }
 
+// Register the keyword map for feedback on changed version properties.
+void GLSLang_context::register_keywords(GLSLKeywordMap *keywords)
+{
+    m_keywords = keywords;
+}
 
 // Returns true if the GLSLang version requires an explicit #version directive.
 bool GLSLang_context::needs_explicit_version() const
@@ -1219,4 +1237,3 @@ GLSL_keyword_state GLSLang_context::keyword(GLSL_keyword f) const
 }  // glsl
 }  // mdl
 }  // mi
-

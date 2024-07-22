@@ -53,7 +53,7 @@ class Plugin_descriptor_impl
     public STLEXT::Non_copyable
 {
 public:
-	using Plugin_ptr = std::unique_ptr<mi::base::Plugin,void (*)(mi::base::Plugin*)>;
+        using Plugin_ptr = std::unique_ptr<mi::base::Plugin,void (*)(mi::base::Plugin*)>;
 
     /// Constructor
     ///
@@ -74,7 +74,7 @@ public:
 
 private:
     mi::base::Handle<LINK::ILibrary>    m_library;
-    Plugin_ptr  						m_plugin;
+    Plugin_ptr                                                  m_plugin;
     std::string                         m_path;
 };
 

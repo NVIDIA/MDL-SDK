@@ -255,9 +255,9 @@ void spectrum_resample(
     const float step = (target_lambda_max - target_lambda_min) / (float)(target_num_values - 1);
     for (unsigned int i = 0; i < target_num_values; ++i)
     {
-	const float lambda = target_lambda_min + (float)i * step;
-	target[i] = 
-	    get_value_lerp(source, source_num_values, source_lambda_min, source_lambda_max, lambda);
+        const float lambda = target_lambda_min + (float)i * step;
+        target[i] = 
+            get_value_lerp(source, source_num_values, source_lambda_min, source_lambda_max, lambda);
     }
 }
 
@@ -271,18 +271,18 @@ static float get_value_incremental(
 {
     unsigned int p1 = *search_pos;
     while (p1 < num_values && lambda > table_lambda[p1]){
-	++p1;
+        ++p1;
     }
     const unsigned int p0 = p1 > 0 ? p1 - 1 : p1;
     *search_pos = p1;
     if (p1 >= num_values)
-	p1 = num_values - 1;
+        p1 = num_values - 1;
     if (p0 == p1)
-	return table_values[p0];
+        return table_values[p0];
     
     const float w1 = (lambda - table_lambda[p0]) / (table_lambda[p1] - table_lambda[p0]);
     return 
-	table_values[p1] * w1 + table_values[p0] * (1.0f - w1);
+        table_values[p1] * w1 + table_values[p0] * (1.0f - w1);
 }
 
 void spectrum_resample_input(
@@ -296,9 +296,9 @@ void spectrum_resample_input(
     unsigned int search_pos = 0;
     for (unsigned int i = 0; i < target_num_values; ++i)
     {
-	const float lambda = target_lambda_min + (float)i * step;
-	target[i] = 
-	    get_value_incremental(lambda_source, source, source_num_values, &search_pos, lambda);
+        const float lambda = target_lambda_min + (float)i * step;
+        target[i] = 
+            get_value_incremental(lambda_source, source, source_num_values, &search_pos, lambda);
     }
 }
 
@@ -330,9 +330,9 @@ void create_blackbody_spectrum(
     const float step = (lambda_max - lambda_min) / (float)(num_lambda - 1);
     for (unsigned int i = 0; i < num_lambda; ++i)
     {
-	const float lambda = lambda_min + step * (float)i;
-	
-	spectrum[i] = blackbody(lambda, temperature);
+        const float lambda = lambda_min + step * (float)i;
+        
+        spectrum[i] = blackbody(lambda, temperature);
     }
 }
 #endif

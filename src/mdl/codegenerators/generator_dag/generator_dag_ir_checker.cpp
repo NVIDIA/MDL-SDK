@@ -246,6 +246,11 @@ size_t DAG_ir_checker::check_call(DAG_call const *call)
         def_is_uniform = false;
         n_params       = 0;
         break;
+    case IDefinition::DS_INTRINSIC_DAG_DECL_CAST:
+        has_def        = false;
+        def_is_uniform = false;
+        n_params       = 1;
+        break;
     default:
         if (sema == operator_to_semantic(IExpression::OK_TERNARY)) {
             // ternary operator has no def
@@ -468,6 +473,7 @@ void DAG_ir_checker::error(DAG_node const *node, Error_code code)
         break;
     case EC_NULL_ARG:
         MDL_ASSERT(!"Call argument is NULL");
+        break;
     case EC_ARG_TYPE_MISMATCH:
         MDL_ASSERT(!"Call argument type mismatch");
         break;

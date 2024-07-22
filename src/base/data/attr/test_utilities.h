@@ -54,10 +54,10 @@ class Type;
 // Set the given \p data at the looked-up \p address to the given \p value.
 template <typename T>
 inline void set_value(
-    const Type& root,					// the root's type
-    char* data,						// the data block
-    const char* address,				// the name of the address
-    const T& value)					// the given value
+    const Type& root,                                   // the root's type
+    char* data,                                         // the data block
+    const char* address,                                // the name of the address
+    const T& value)                                     // the given value
 {
     char *ret_address;
     const Type* type = root.lookup(address, data, &ret_address);
@@ -107,10 +107,10 @@ inline void set_value(
 // values of type string.
 template <>
 inline void set_value<std::string>(
-    const Type& root,					// the root's type
-    char* data,						// the data block
-    const char* address,				// the name of the address
-    const std::string& value)				// the given value
+    const Type& root,                                   // the root's type
+    char* data,                                         // the data block
+    const char* address,                                // the name of the address
+    const std::string& value)                           // the given value
 {
     set_value(root,data,address,value.c_str());
 }
@@ -122,10 +122,10 @@ inline void set_value<std::string>(
 // values of type Tag.
 template <>
 inline void set_value<DB::Tag>(
-    const Type& root,					// the root's type
-    char* data,						// the data block
-    const char* address,				// the name of the address
-    const DB::Tag& value)				// the given value
+    const Type& root,                                   // the root's type
+    char* data,                                         // the data block
+    const char* address,                                // the name of the address
+    const DB::Tag& value)                               // the given value
 {
     char *ret_address;
     if(root.lookup(address, data, &ret_address)) {
@@ -144,10 +144,10 @@ inline void set_value<DB::Tag>(
 /// dynamic arrays. The attribute (or rather \p data) takes over owenership of value.m_value.
 template<>
 inline void set_value<ATTR::Dynamic_array>(
-    const Type& root,					// the root's type
-    char* data,						// the data block
-    const char* address,				// the name of the address
-    const ATTR::Dynamic_array& value)			// the given value
+    const Type& root,                                   // the root's type
+    char* data,                                         // the data block
+    const char* address,                                // the name of the address
+    const ATTR::Dynamic_array& value)                   // the given value
 {
     char *ret_address;
     root.lookup(address, data, &ret_address);
@@ -165,10 +165,10 @@ inline void set_value<ATTR::Dynamic_array>(
 // std::string addresses).
 template <typename T>
 inline void set_value(
-    const Type& root,					// the root's type
-    char* data,						// the data block
-    const std::string& address,			// the name of the address
-    const T& value)					// the given value
+    const Type& root,                                   // the root's type
+    char* data,                                         // the data block
+    const std::string& address,                 // the name of the address
+    const T& value)                                     // the given value
 {
     set_value<T>(root,data,address.c_str(),value);
 }
@@ -179,9 +179,9 @@ inline void set_value(
 /// Get the given \p data at the looked-up \p address as type T.
 template<typename T>
 inline T get_value(
-    const Type& root,				        // the root's type
-    const char* data,				        // the data block
-    const char* address)				// the name of the address
+    const Type& root,                                   // the root's type
+    const char* data,                                   // the data block
+    const char* address)                                // the name of the address
 {
     if (!address)
        return *reinterpret_cast<const T *>(data);
@@ -196,9 +196,9 @@ inline T get_value(
 /// Specialization for type bool.
 template<>
 inline bool get_value<bool>(
-    const Type& root,				// the root's type
-    const char* data,				// the data block
-    const char* address)			// the name of the address
+    const Type& root,                           // the root's type
+    const char* data,                           // the data block
+    const char* address)                        // the name of the address
 {
     if (!address)
        return !!*data;
@@ -213,9 +213,9 @@ inline bool get_value<bool>(
 /// addresses).
 template<typename T>
 inline T get_value(
-    const Type& root,				        // the root's type
-    const char* data,				        // the data block
-    const std::string& address)			// the name of the address
+    const Type& root,                                   // the root's type
+    const char* data,                                   // the data block
+    const std::string& address)                 // the name of the address
 {
     return get_value<T>(root,data,address.c_str());
 }

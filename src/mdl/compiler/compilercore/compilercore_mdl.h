@@ -375,6 +375,22 @@ public:
     /// \return the code DAG
     IGenerated_code_dag const *deserialize_code_dag(IDeserializer *ds) MDL_FINAL;
 
+    /// Serialize a material instance to the given serializer.
+    ///
+    /// \param instance              the material instance to serialize
+    /// \param is                    the serializer data is written to
+    virtual void serialize_material_instance(
+        IMaterial_instance const *instance,
+        ISerializer              *is) const MDL_FINAL;
+
+    /// Deserialize a material instancefrom a given deserializer.
+    ///
+    /// \param ds  the deserializer data is read from
+    ///
+    /// \return the material instance
+    virtual IMaterial_instance const *deserialize_material_instance(
+        IDeserializer *ds) MDL_FINAL;
+
     /// Create a new MDL lambda function.
     ///
     /// \param context  the execution context for this lambda function.
@@ -505,7 +521,27 @@ public:
     bool remove_foreign_module_translator(
         IMDL_foreign_module_translator *translator) MDL_FINAL;
 
+    /// Create a distiller plugin API using this compiler.
+    /// The plugin API is required for distilling.
+    ///
+    /// The interface is not reference counted. A call to \c release()
+    /// immediately deletes it.
+    ///
+    /// \param instance       a material instance used to retrieve an allocator
+    /// \param call_resolver  a MDL call name resolver for the IR checker
+    ///
+    /// \return
+    IDistiller_plugin_api *create_distiller_plugin_api(
+        IMaterial_instance const *instance,
+        ICall_name_resolver      *call_resolver) MDL_FINAL;
+
     // ------------------- non interface methods ---------------------------
+
+    ///  Returns true if the compiler type factory is valid.
+    bool type_factory_is_valid() const { return m_type_factory_is_valid; }
+
+    ///  Returns true if material.ior is varying
+    bool mat_ior_is_varying() const { return m_mat_ior_is_varying; }
 
     /// Create an empty module.
     ///
@@ -726,9 +762,6 @@ public:
     ///       module, do NOT decrease it just because of this call.
     Module const *get_builtin_module(size_t idx) const;
 
-    /// Returns true if predefined types must be build, false otherwise.
-    bool build_predefined_types();
-
     /// Get the "weak module reference lock".
     mi::base::Lock &get_weak_module_lock() const;
 
@@ -789,8 +822,11 @@ public:
 public:
     /// Constructor.
     ///
-    /// \param alloc  the allocator
-    explicit MDL(IAllocator *alloc);
+    /// \param alloc               the allocator
+    /// \param mat_ior_is_varying  true if material.ior is varying
+    explicit MDL(
+        IAllocator *alloc,
+        bool       mat_ior_is_varying);
 
 private:
     /// Destructor.
@@ -847,8 +883,17 @@ private:
     /// Next unique module id.
     size_t m_next_module_id;
 
+    /// True, if material.ior is varying.
+    bool const m_mat_ior_is_varying;
+
+    /// false until the compiler factory is initialized.
+    bool m_type_factory_is_valid;
+
     /// Arena for the compiler.
     Memory_arena m_arena;
+
+    /// The compiler owned symbol table, necessary for compiler owned types.
+    mutable Symbol_table m_sym_tab;
 
     /// The global type factory of this compiler.
     mutable Type_factory m_type_factory;
@@ -889,9 +934,6 @@ private:
     /// The shared lock for all module's weak import tables.
     mutable mi::base::Lock m_weak_module_lock;
 
-    /// Set to true after predefined types are created.
-    bool m_predefined_types_build;
-
     /// The Jitted code singleton if any.
     Jitted_code *m_jitted_code;
 
@@ -903,11 +945,14 @@ private:
 
 /// Implementation of the factory function mi_mdl_factory().
 ///
-/// \param allocator  An allocator interface that will be used for all
-///                   memory allocations in this compiler.
+/// \param material_ior_is_varying  if true, material.ior is varying, else uniform
+/// \param allocator                An allocator interface that will be used for all
+///                                 memory allocations in this compiler.
 ///
 /// \return A new MDL compiler interface.
-mi::mdl::IMDL *initialize(IAllocator *allocator = NULL);
+mi::mdl::IMDL *initialize(
+    bool       material_ior_is_varying,
+    IAllocator *allocator = NULL);
 
 } // mdl
 } // mi

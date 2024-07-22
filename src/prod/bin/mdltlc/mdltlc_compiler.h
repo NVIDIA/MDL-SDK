@@ -151,6 +151,8 @@ private:
     /// Downcasted and referenced version of the MDL interface above.
     mi::mdl::MDL &m_mdl;
 
+    mi::mdl::Node_types m_node_types;
+
     /// The type factory of the MDL instance.
     mi::mdl::Type_factory &m_mdl_type_factory;
 

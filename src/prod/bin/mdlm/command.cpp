@@ -30,13 +30,18 @@
 #include "util.h"
 #include "options.h"
 #include "errors.h"
-#include "version.h"
+#include "version_helper.h"
 #include "search_path.h"
+
 #include <base/util/string_utils/i_string_utils.h>
 #include <base/hal/hal/i_hal_ospath.h>
-#include <base/hal/disk/disk.h>
-#include <map>
+
+#include <filesystem>
 #include <iostream>
+#include <map>
+
+namespace fs = std::filesystem;
+
 using namespace mdlm;
 using std::vector;
 using std::string;
@@ -128,7 +133,7 @@ private:
     }
 
 public:
-    Compatibility_api_helper() 
+    Compatibility_api_helper()
     {
         mi::neuraylib::INeuray * neuray(mdlm::neuray());
         mi::base::Handle<mi::neuraylib::IMdl_compatibility_api> compatibility_api
@@ -230,7 +235,7 @@ int Compatibility::execute()
 
     if (oldarch.base_name() != newarch.base_name())
     {
-        Util::log_fatal("Archives are incompatible: different names");
+        Util::log_error("Archives are incompatible: different names");
         m_compatible = NOT_COMPATIBLE;
         report_compatibility_result();
         return ARCHIVE_DIFFERENT_NAME;
@@ -385,8 +390,8 @@ int Create_archive::execute()
 
     transaction->commit();
 
-    std::map<int, string> errors = 
-    { 
+    std::map<int, string> errors =
+    {
           { -1, "Invalid parameters" }
         , { -2, "archive does not end with \""+ Archive::extension +"\"" }
         , { -3, string("An array element of manifest_fields or a struct member ") +
@@ -521,15 +526,15 @@ public:
             {
                 // Higher priority path
                 // --------------------
-                // - Compatible versions: 
+                // - Compatible versions:
                 //      "Earlier version of the archive is installed at a higher priority path
-                //      No install / error"	
+                //      No install / error"
                 //  - Identical versions
                 //      "This version of the archive is installed at a higher priority path
                 //      No install / warning"
                 // - Incompatible versions
                 //      "More recent version of the archive is installed at a higher priority path
-                //      No install / warning"	
+                //      No install / warning"
                 // - No archive installed
                 //      Install
                 //
@@ -565,16 +570,16 @@ public:
             {
                 // Destination path
                 // --------------------
-                // - Compatible versions: 
+                // - Compatible versions:
                 //      "Earlier version of the archive is installed in the destination directory
-                //      Install / fine"	
+                //      Install / fine"
                 //  - Identical versions
                 //      "This version of the archive is installed in the destination directory
                 //      No install / warning"
                 // - Incompatible versions
                 //      "More recent version of the archive is installed in the destination
                 //       directory
-                //      No install / warning"	
+                //      No install / warning"
                 // - No archive installed
                 //      Install
                 switch (it->m_compatibility)
@@ -610,7 +615,7 @@ public:
             {
                 // Lower priority path
                 // --------------------
-                // - Compatible versions: 
+                // - Compatible versions:
                 //      "Earlier version of the archive is installed at lower priority path.
                 //      This will be shadowed by the new archive
                 //      No install / warning"
@@ -713,7 +718,7 @@ int Install::execute()
         }
         const std::vector<std::string> & paths(sp.paths());
         for(auto & p : paths)
-        { 
+        {
             if (new_archive.conflict(p))
             {
                 Util::log_warning("Archive conflict detected");
@@ -921,20 +926,26 @@ int Extract::execute()
     }
 
     bool proceed(true);
-    Util::File folder(m_directory);
-    if (folder.is_directory())
+    fs::path folder(fs::u8path(m_directory));
+    std::error_code ec;
+    if (fs::is_directory(folder, ec))
     {
         // Folder exists
-        if (! folder.is_empty())
-        {
-            Util::log_warning("Directory is not empty");
-            proceed = false;
+        try {
+            for(const auto& entry: fs::directory_iterator(folder)) {
+                (void) entry;
+                Util::log_warning("Directory is not empty");
+                proceed = false;
+                break;
+            }
+        } catch(...) {
+            return proceed = false;
         }
     }
     else
     {
         // create folder
-        if (!Util::create_directory(m_directory))
+        if (!fs::create_directories(m_directory, ec))
         {
             Util::log_error("Can not create directory: " + m_directory);
             return CAN_NOT_CREATE_PATH;
@@ -1096,7 +1107,7 @@ int Create_mdle::execute()
             default: // if there are overloads, check if the selected one exists
             {
                 unknown_signature = true;
-                potential_msg = 
+                potential_msg =
                     "multiple functions with name: '" + function_name + "' found in module: '" + module_name + "'.\n"
                     "Valid function names are:\n";
 
@@ -1259,19 +1270,19 @@ int List_cmd::execute()
         // List all archives installed
         for (auto& directory : sp.paths())
         {
-            MI::DISK::Directory d;
-            if (d.open(directory.c_str()))
-            {
-                std::string testFile;
-                while (!(testFile = d.read()).empty())
+            fs::path fs_directory(fs::u8path(directory));
+            try {
+                for(const auto& entry: fs::directory_iterator(fs_directory))
                 {
-                    Archive testArchive(Util::path_appends(directory, testFile));
+                    Archive testArchive(entry.path().u8string());
                     if (testArchive.is_valid())
                     {
                         m_result.m_archives.push_back(testArchive);
                         Util::log_report("Found archive: " + Util::normalize(testArchive.full_name()));
                     }
                 }
+            } catch(...) {
+                return UNSPECIFIED_FAILURE;
             }
         }
         return SUCCESS;
@@ -1287,7 +1298,7 @@ int List_cmd::execute()
             if (found == true)
             {
                 // Already found one installed archive report a warning
-                Util::log_warning("Found shadowed archive (inconsistent installation): " + 
+                Util::log_warning("Found shadowed archive (inconsistent installation): " +
                     Util::normalize(testArchive.full_name()));
             }
             found = true;
@@ -1340,7 +1351,7 @@ int Remove_cmd::Remove_cmd::execute()
     {
         return rtn;
     }
-    
+
     // Look for dependencies on the archive being uninstalled
     Util::log_verbose("Looking for dependencies on archive: " + toRemove.full_name());
     List_cmd listAll("");
@@ -1382,7 +1393,7 @@ int Remove_cmd::Remove_cmd::execute()
     Util::log_report("Removing archive: " + Util::normalize(toRemove.full_name()));
 
     Util::delete_file_or_directory(Util::normalize(toRemove.full_name()));
-         
+
     return SUCCESS;
 }
 

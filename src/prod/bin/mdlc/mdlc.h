@@ -128,8 +128,27 @@ private:
     /// The program name.
     const char *m_program;
 
+    /// Optimization level.
+    char m_opt_level;
+
+    /// true, if material.ior is varying.
+    bool m_mat_ior_is_varying;
+
     /// If set, dump DAGs in the DAG backend.
     bool m_dump_dag;
+
+    /// If set, dump dependence graph.
+    bool m_dump_dg;
+
+    /// If set, dump call graph.
+    bool m_dump_cg;
+
+    /// If true, compile in strict mode (default).
+    bool m_strict;
+
+    /// If true, resolve resources (default).
+    bool m_resolve_resources;
+
 
     /// True if verbose mode enabled.
     bool m_verbose;
@@ -168,3 +187,4 @@ private:
 };
 
 #endif
+

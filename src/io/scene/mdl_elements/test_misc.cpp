@@ -53,13 +53,13 @@
 #include <mi/neuraylib/istring.h>
 #include <mi/mdl/mdl_mdl.h>
 #include <mi/mdl/mdl_modules.h>
-#include <mi/mdl/mdl_distiller_rules.h>
-#include <base/hal/hal/i_hal_ospath.h>
+
 #include <base/hal/time/i_time.h>
 #include <base/hal/thread/i_thread_thread.h>
 #include <base/hal/thread/i_thread_condition.h>
 #include <base/lib/config/config.h>
-#include <base/lib/log/i_log_target.h>
+#include <base/lib/log/i_log_logger.h>
+#include <base/lib/log/i_log_module.h>
 #include <base/lib/path/i_path.h>
 #include <base/lib/plug/i_plug.h>
 #include <base/data/db/i_db_access.h>
@@ -90,9 +90,9 @@ using namespace MI;
 // Check the default compiled material
 void test_get_default_compiled_material( DB::Transaction* transaction)
 {
-    MDL::Mdl_compiled_material* cm = MDL::get_default_compiled_material( transaction);
+    std::unique_ptr<MDL::Mdl_compiled_material> cm(
+        MDL::get_default_compiled_material( transaction));
     MI_CHECK( cm);
-    delete cm;
 }
 
 void check_texture(
@@ -111,19 +111,14 @@ void check_texture(
         constant->get_value<MDL::IValue_resource>());
     DB::Tag resource_tag = resource->get_value();
 
-    if( !success) {
-        MI_CHECK( !resource_tag);
-        return;
-    }
-
-    MI_CHECK( !!resource_tag == !!resolve_resources);
+    MI_CHECK_EQUAL( !resource_tag, !resolve_resources || !success);
 
     if( !file_path)
-        MI_CHECK( !resource->get_file_path( transaction));
+        MI_CHECK( resource->get_file_path( transaction).empty());
     else
-        MI_CHECK_EQUAL_CSTR( resource->get_file_path( transaction), file_path);
+        MI_CHECK_EQUAL( resource->get_file_path( transaction), file_path);
 
-    if( !resolve_resources)
+    if( !resource_tag)
         return;
 
     DB::Access<TEXTURE::Texture> texture( resource_tag, transaction);
@@ -177,19 +172,14 @@ void check_light_profile(
         constant->get_value<MDL::IValue_resource>());
     DB::Tag resource_tag = resource->get_value();
 
-    if( !success) {
-        MI_CHECK( !resource_tag);
-        return;
-    }
-
-    MI_CHECK( !!resource_tag == !!resolve_resources);
+    MI_CHECK_EQUAL( !resource_tag, !resolve_resources || !success);
 
     if( !file_path)
-        MI_CHECK( !resource->get_file_path( transaction));
+        MI_CHECK( resource->get_file_path( transaction).empty());
     else
-        MI_CHECK_EQUAL_CSTR( resource->get_file_path( transaction), file_path);
+        MI_CHECK_EQUAL( resource->get_file_path( transaction), file_path);
 
-    if( !resolve_resources)
+    if( !resource_tag)
         return;
 
     DB::Access<LIGHTPROFILE::Lightprofile> lightprofile( resource_tag, transaction);
@@ -242,19 +232,14 @@ void check_bsdf_measurement(
         constant->get_value<MDL::IValue_resource>());
     DB::Tag resource_tag = resource->get_value();
 
-    if( !success) {
-        MI_CHECK( !resource_tag);
-        return;
-    }
-
-    MI_CHECK( !!resource_tag == !!resolve_resources);
+    MI_CHECK_EQUAL( !resource_tag, !resolve_resources || !success);
 
     if( !file_path)
-        MI_CHECK( !resource->get_file_path( transaction));
+        MI_CHECK( resource->get_file_path( transaction).empty());
     else
-        MI_CHECK_EQUAL_CSTR( resource->get_file_path( transaction), file_path);
+        MI_CHECK_EQUAL( resource->get_file_path( transaction), file_path);
 
-    if( !resolve_resources)
+    if( !resource_tag)
         return;
 
     DB::Access<BSDFM::Bsdf_measurement> bsdf_measurement( resource_tag, transaction);
@@ -355,7 +340,7 @@ void test_jitted_environment_function( DB::Transaction* transaction)
         transaction, /*environment_context*/ true, /*mdl_meters_per_scene_unit*/ 1.0f,
         /*mdl_wavelength_min*/ 380.0f, /*mdl_wavelength_max*/ 780.0f, &errors));
     MI_CHECK_EQUAL( 0, errors);
-    MI_CHECK( lf.is_valid_interface());
+    MI_CHECK( lf);
 
     lf->init( transaction, nullptr, nullptr);
     mi::mdl::RGB_color result;
@@ -375,18 +360,16 @@ void get_hash_values(
     MDL::Execution_context* context)
 {
     DB::Access<MDL::Mdl_function_call> mi( mi_tag, transaction);
-    MDL::Mdl_compiled_material* cm_ic = mi->create_compiled_material(
-        transaction, /*class_compilation*/ false, context);
-    MDL::Mdl_compiled_material* cm_cc = mi->create_compiled_material(
-        transaction, /*class_compilation*/ true, context);
+    std::unique_ptr<MDL::Mdl_compiled_material> cm_ic( mi->create_compiled_material(
+        transaction, /*class_compilation*/ false, /*target_type*/ nullptr, context));
+    std::unique_ptr<MDL::Mdl_compiled_material> cm_cc( mi->create_compiled_material(
+        transaction, /*class_compilation*/ true, /*target_type*/ nullptr, context));
     MI_CHECK( cm_ic);
     MI_CHECK( cm_cc);
     MI_CHECK_EQUAL( 0, cm_ic->get_parameter_count());
     MI_CHECK_EQUAL( 1, cm_cc->get_parameter_count());
     hash_ic = cm_ic->get_hash();
     hash_cc = cm_cc->get_hash();
-    delete cm_ic;
-    delete cm_cc;
 }
 
 // Check that gamma changes of texture are taken into account for hashes (MDL file path still
@@ -409,7 +392,7 @@ void test_resources_and_hashes_edit_gamma(
             argument->get_interface<MDL::IExpression_constant>());
         mi::base::Handle<const MDL::IValue_texture> value(
             argument_constant->get_value<MDL::IValue_texture>());
-        MI_CHECK( value->get_file_path( transaction));
+        MI_CHECK( !value->get_file_path( transaction).empty());
         DB::Tag texture_tag = value->get_value();
         MI_CHECK( texture_tag.is_valid());
         DB::Edit<TEXTURE::Texture> texture( texture_tag, transaction);
@@ -424,8 +407,8 @@ void test_resources_and_hashes_edit_gamma(
 }
 
 // Check that clearing the MDL file path is taken into account for hashes.
-void test_resources_and_hashes_clear_mdl_file_path( DB::Transaction* transaction,
-    MDL::Execution_context* context)
+void test_resources_and_hashes_clear_mdl_file_path(
+    DB::Transaction* transaction, MDL::Execution_context* context)
 {
     DB::Tag mi_tag = transaction->name_to_tag( "mdl::mdl_elements::test_misc::mi_textured");
 
@@ -442,7 +425,7 @@ void test_resources_and_hashes_clear_mdl_file_path( DB::Transaction* transaction
             argument->get_interface<MDL::IExpression_constant>());
         mi::base::Handle<const MDL::IValue_texture> value(
             argument_constant->get_value<MDL::IValue_texture>());
-        MI_CHECK( value->get_file_path( transaction));
+        MI_CHECK( !value->get_file_path( transaction).empty());
         DB::Tag texture_tag = value->get_value();
         MI_CHECK( texture_tag.is_valid());
         DB::Access<TEXTURE::Texture> texture( texture_tag, transaction);
@@ -450,7 +433,7 @@ void test_resources_and_hashes_clear_mdl_file_path( DB::Transaction* transaction
         {
             DB::Edit<DBIMAGE::Image> image( image_tag, transaction);
         }
-        MI_CHECK( !value->get_file_path( transaction));
+        MI_CHECK( value->get_file_path( transaction).empty());
     }
 
     // compare hash value
@@ -462,8 +445,8 @@ void test_resources_and_hashes_clear_mdl_file_path( DB::Transaction* transaction
 
 // Check that tag version changes of textures are taken into account for hashes (MDL file path not
 // valid).
-void test_resources_and_hashes_modify_texture( DB::Transaction* transaction,
-    MDL::Execution_context* context)
+void test_resources_and_hashes_modify_texture(
+    DB::Transaction* transaction, MDL::Execution_context* context)
 {
     DB::Tag mi_tag = transaction->name_to_tag( "mdl::mdl_elements::test_misc::mi_textured");
 
@@ -480,7 +463,7 @@ void test_resources_and_hashes_modify_texture( DB::Transaction* transaction,
             argument->get_interface<MDL::IExpression_constant>());
         mi::base::Handle<const MDL::IValue_texture> value(
             argument_constant->get_value<MDL::IValue_texture>());
-        MI_CHECK( !value->get_file_path( transaction));
+        MI_CHECK( value->get_file_path( transaction).empty());
         DB::Tag texture_tag = value->get_value();
         MI_CHECK( texture_tag.is_valid());
         DB::Edit<TEXTURE::Texture> texture( texture_tag, transaction);
@@ -495,8 +478,8 @@ void test_resources_and_hashes_modify_texture( DB::Transaction* transaction,
 
 // Check that tag version changes of images are taken into account for hashes (MDL file path not
 // valid).
-void test_resources_and_hashes_modify_image( DB::Transaction* transaction,
-    MDL::Execution_context* context)
+void test_resources_and_hashes_modify_image(
+    DB::Transaction* transaction, MDL::Execution_context* context)
 {
     DB::Tag mi_tag = transaction->name_to_tag( "mdl::mdl_elements::test_misc::mi_textured");
 
@@ -513,7 +496,7 @@ void test_resources_and_hashes_modify_image( DB::Transaction* transaction,
             argument->get_interface<MDL::IExpression_constant>());
         mi::base::Handle<const MDL::IValue_texture> value(
             argument_constant->get_value<MDL::IValue_texture>());
-        MI_CHECK( !value->get_file_path( transaction));
+        MI_CHECK( value->get_file_path( transaction).empty());
         DB::Tag texture_tag = value->get_value();
         MI_CHECK( texture_tag.is_valid());
         DB::Access<TEXTURE::Texture> texture( texture_tag, transaction);
@@ -874,7 +857,7 @@ void test_parsing( MDL::Execution_context* context)
             { "/dir1/dir2/file.mdl",      true  },
             { "file.mdl",                 false },
             { "::mod",                    false },
-            { "C:\\dir1\\dir2\\file.mdl", false }, // This is not an MDL file path!
+            { R"(C:\dir1\dir2\file.mdl)", false }, // This is not an MDL file path!
         };
 
         for( const auto& s: absolute_file_path)
@@ -1077,17 +1060,14 @@ void test_parsing( MDL::Execution_context* context)
 
         std::vector<triple> load_module_arg = {
             { "::p1::p2::mod",       false, "::p1::p2::mod" },
+#ifndef MI_PLATFORM_WINDOWS
             { "/mod.mdle",           true,  "::/mod.mdle" },
             { "/./mod.mdle",         true,  "::/mod.mdle" },
             { "/a/../mod.mdle",      true,  "::/mod.mdle" },
-#ifdef MI_PLATFORM_WINDOWS
+#else
             { "C:\\mod.mdle",        true,  "::/C%3A/mod.mdle" },
             { "C:\\.\\mod.mdle",     true,  "::/C%3A/mod.mdle" },
             { "C:\\a\\..\\mod.mdle", true,  "::/C%3A/mod.mdle" },
-#else
-            { "C:\\mod.mdle",        true,  "::C%3A/mod.mdle" },
-            { "C:\\.\\mod.mdle",     true,  "::C%3A/mod.mdle" },
-            { "C:\\a\\..\\mod.mdle", true,  "::C%3A/mod.mdle" },
 #endif
         };
 
@@ -1185,9 +1165,9 @@ void test_parsing( MDL::Execution_context* context)
             { "/p1/p2/mod.mdr:main.mdl",       true  },
             { "/p1/p2/mod.mdle:main.mdl",      true  },
             { "/p1/p2/mod.mdl",                false },
-            { "C:\\p1\\p2\\mod.mdr:main.mdl",  true  },
-            { "C:\\p1\\p2\\mod.mdle:main.mdl", true  },
-            { "C:\\p1\\p2\\mod.mdl",           false }
+            { R"(C:\p1\p2\mod.mdr:main.mdl)",  true  },
+            { R"(C:\p1\p2\mod.mdle:main.mdl)", true  },
+            { R"(C:\p1\p2\mod.mdl)",           false }
         };
 
         for( const auto& s: container_member)
@@ -1198,9 +1178,9 @@ void test_parsing( MDL::Execution_context* context)
             { "/p1/p2/mod.mdr:main.mdl",       "/p1/p2/mod.mdr"       },
             { "/p1/p2/mod.mdle:main.mdl",      "/p1/p2/mod.mdle"      },
             { "/p1/p2/mod.mdl",                ""     ,               },
-            { "C:\\p1\\p2\\mod.mdr:main.mdl",  "C:\\p1\\p2\\mod.mdr"  },
-            { "C:\\p1\\p2\\mod.mdle:main.mdl", "C:\\p1\\p2\\mod.mdle" },
-            { "C:\\p1\\p2\\mod.mdl",           ""                     }
+            { R"(C:\p1\p2\mod.mdr:main.mdl)",  R"(C:\p1\p2\mod.mdr)"  },
+            { R"(C:\p1\p2\mod.mdle:main.mdl)", R"(C:\p1\p2\mod.mdle)" },
+            { R"(C:\p1\p2\mod.mdl)",           ""                     }
         };
 
         for( const auto& s: container_filename)
@@ -1211,9 +1191,9 @@ void test_parsing( MDL::Execution_context* context)
             { "/p1/p2/mod.mdr:main.mdl",       "main.mdl" },
             { "/p1/p2/mod.mdle:main.mdl",      "main.mdl" },
             { "/p1/p2/mod.mdl",                ""         },
-            { "C:\\p1\\p2\\mod.mdr:main.mdl",  "main.mdl" },
-            { "C:\\p1\\p2\\mod.mdle:main.mdl", "main.mdl" },
-            { "C:\\p1\\p2\\mod.mdl",           ""         }
+            { R"(C:\p1\p2\mod.mdr:main.mdl)",  "main.mdl" },
+            { R"(C:\p1\p2\mod.mdle:main.mdl)", "main.mdl" },
+            { R"(C:\p1\p2\mod.mdl)",           ""         }
         };
 
         for( const auto& s: container_membername)
@@ -1367,28 +1347,6 @@ void test_parsing( MDL::Execution_context* context)
             MI_CHECK_EQUAL( MDL::frame_uvtile_marker_to_string( i.s, i.f, i.u, i.v), s.second);
         }
     }
-    {
-        struct Input { std::string s; std::string m; };
-
-        std::vector<std::pair<Input, std::string>> string_to_marker = {
-            { { "1001.png",               "<UDIM>"    }, "<UDIM>.png"               },
-            { { "test.11.22222.1111.png", "<UDIM>"    }, "test.11.<UDIM>2.1111.png" },
-            { { "1001",                   "<UDIM>"    }, "<UDIM>"                   },
-            { { "0001.png",               "<UDIM>"    }, ""                         },
-            { { "test.11.png",            "<UDIM>"    }, ""                         },
-            { { "test_u0_v-4.png",        "<UVTILE0>" }, "test<UVTILE0>.png"        },
-            { { "_u-3_v001",              "<UVTILE0>" }, "<UVTILE0>"                },
-            { { "test.u_11_.png",         "<UVTILE0>" }, ""                         },
-            { { "test_u0_v-4.png",        "<UVTILE1>" }, "test<UVTILE1>.png"        },
-            { { "_u-3_v001",              "<UVTILE1>" }, "<UVTILE1>"                },
-            { { "test.u_11_.png",         "<UVTILE1>" }, ""                         },
-        };
-
-        for( const auto& s: string_to_marker) {
-            const Input& i = s.first;
-            MI_CHECK_EQUAL( MDL::deprecated_uvtile_string_to_marker( i.s, i.m), s.second);
-        }
-    }
 }
 
 void test_module_comparator( DB::Transaction* transaction, MDL::Execution_context* context)
@@ -1403,9 +1361,9 @@ void test_module_comparator( DB::Transaction* transaction, MDL::Execution_contex
 
     DB::Tag tag = transaction->name_to_tag( "mdl::nvidia::core_definitions");
     DB::Access<MDL::Mdl_module> module( tag, transaction);
-    mi::base::Handle<const mi::mdl::IModule> mdl_module( module->get_mdl_module());
+    mi::base::Handle<const mi::mdl::IModule> core_module( module->get_core_module());
 
-    MI_CHECK( mi::mdl::equal( mdl_module.get(), mdl_module.get()));
+    MI_CHECK( mi::mdl::equal( core_module.get(), core_module.get()));
 }
 
 void test_create_value_with_range_annotation(
@@ -1999,7 +1957,7 @@ public:
         m_module_db_name  = std::string( "mdl") + m_module_mdl_name;
     }
 
-    void run()
+    void run() final
     {
         MDL::Execution_context context;
         for( mi::Size i = 0; i < m_iteration_count; ++i) {
@@ -2050,12 +2008,17 @@ private:
 // module works.
 void test_module_pointers( DB::Database* database, DB::Scope* scope)
 {
+    // Temporarily skip log messages at INFO level.
+    SYSTEM::Access_module<LOG::Log_module> log_module( false);
+    unsigned int old_value = log_module->get_severity_limit();
+    log_module->set_severity_limit( LOG::ILogger::S_TERSE);
+
     mi::Size thread_count = 10;
     mi::Size iteration_count = 10;
 
-    Test_thread* threads = new Test_thread[thread_count];
-    THREAD::Condition* before = new THREAD::Condition[thread_count-1];
-    THREAD::Condition* after = new THREAD::Condition[thread_count-1];
+    auto* threads = new Test_thread[thread_count];
+    auto* before = new THREAD::Condition[thread_count-1];
+    auto* after = new THREAD::Condition[thread_count-1];
     for( mi::Size i = 0; i < thread_count; ++i) {
         std::ostringstream s;
         s << i;
@@ -2068,6 +2031,8 @@ void test_module_pointers( DB::Database* database, DB::Scope* scope)
     delete[] after;
     delete[] before;
     delete[] threads;
+
+    log_module->set_severity_limit( old_value);
 }
 
 void create_function_call(
@@ -2087,7 +2052,8 @@ void test_main( DB::Scope* global_scope)
     mi::base::Handle<MDL::IValue_factory> vf( MDL::get_value_factory());
     mi::base::Handle<MDL::IExpression_factory> ef( MDL::get_expression_factory());
 
-    DB::Transaction* transaction = global_scope->start_transaction();
+    DB::Scope* child_scope = global_scope->create_child( 1);
+    DB::Transaction* transaction = child_scope->start_transaction();
 
     // load the MDL "mdl_elements::test_misc" and "mdl_elements::test_resolver_failures" modules
     mi::Sint32 result = MDL::Mdl_module::create_module(
@@ -2178,12 +2144,133 @@ void test_main( DB::Scope* global_scope)
     transaction->commit();
 }
 
+void test_unresolved_resources( DB::Scope* global_scope)
+{
+    // Separate scope to avoid interactions with the resources loaded above.
+
+    DB::Scope* child_scope = global_scope->create_child( 1);
+    DB::Transaction* transaction = child_scope->start_transaction();
+
+    MDL::Execution_context context;
+    test_unresolved_resources_factory( transaction, &context);
+    test_unresolved_resources_load( transaction, &context);
+
+    transaction->commit();
+}
+
+std::set<std::string> expected[2] = {
+    {
+        // resolve_resources=true
+        "/mdl_elements/resources/test1001.png",
+        "/mdl_elements/resources/test1002.png",
+        "/mdl_elements/resources/test1011.png"
+    },
+    {
+        // resolve_resources=false
+        "/mdl_elements/resources/test1001.png",
+        "/mdl_elements/resources/test1002.png",
+        "/mdl_elements/resources/test1011.png",
+        "::mdl_elements::test_resource_maps::resources/test1001.png",
+        "::mdl_elements::test_resource_maps::resources/test1002.png",
+        "::mdl_elements::test_resource_maps::resources/test1011.png",
+    }
+};
+
+template <class T>
+void check_resource_map( const T* object, bool resolve_resources)
+{
+    mi::Size index = resolve_resources ? 0 : 1;
+    mi::Size n = object->get_resources_count();
+    MI_CHECK_EQUAL( n, expected[index].size());
+
+    std::set<std::string> got;
+    for( mi::Size i = 0; i < n; ++i) {
+        const MDL::Resource_tag_tuple* rtt = object->get_resource_tag_tuple( i);
+        got.insert( rtt->m_mdl_file_path);
+        MI_CHECK_EQUAL( resolve_resources, rtt->m_tag.is_valid());
+    }
+
+    MI_CHECK_EQUAL( n, got.size());
+    MI_CHECK_EQUAL_COLLECTIONS(
+        expected[index].begin(), expected[index].end(), got.begin(), got.end());
+}
+
+void check_resource_ivalue(
+    DB::Transaction* transaction, const MDL::Mdl_module* module, bool resolve_resources)
+{
+    mi::Size index = resolve_resources ? 0 : 1;
+    mi::Size n = module->get_resources_count();
+    MI_CHECK_EQUAL( n, expected[index].size());
+
+    std::set<std::string> got;
+
+    for( mi::Size i = 0; i < n; ++i) {
+        mi::base::Handle<const MDL::IValue_resource> res( module->get_resource( i));
+        if( resolve_resources) {
+            got.insert( res->get_file_path( transaction));
+        } else {
+            // get_file_path() does not include the owner module for weak relative paths
+            const char* unresolved_file_path = res->get_unresolved_file_path();
+            const char* owner_module = res->get_owner_module();
+            std::string s2 = owner_module;
+            if( !s2.empty())
+                s2 += "::";
+            s2 += unresolved_file_path;
+            got.insert( s2);
+        }
+        MI_CHECK_EQUAL( resolve_resources, res->get_value().is_valid());
+    }
+
+    MI_CHECK_EQUAL( n, got.size());
+    MI_CHECK_EQUAL_COLLECTIONS(
+        expected[index].begin(), expected[index].end(), got.begin(), got.end());
+}
+
+void test_resource_maps( DB::Scope* global_scope, bool resolve_resources)
+{
+    // Separate scope to allow running the test twice with different values for resolve_resources.
+
+    DB::Scope* child_scope = global_scope->create_child( 1);
+    DB::Transaction* transaction = child_scope->start_transaction();
+
+    MDL::Execution_context context;
+    context.set_option( MDL_CTX_OPTION_RESOLVE_RESOURCES, resolve_resources);
+
+    mi::base::Handle<MDL::IType_factory> tf( MDL::get_type_factory());
+    mi::base::Handle<MDL::IValue_factory> vf( MDL::get_value_factory());
+    mi::base::Handle<MDL::IExpression_factory> ef( MDL::get_expression_factory());
+
+    mi::Sint32 result = MDL::Mdl_module::create_module(
+        transaction, "::mdl_elements::test_resource_maps", &context);
+    MI_CHECK_EQUAL( 0, result);
+
+    DB::Tag module_tag = transaction->name_to_tag( "mdl::mdl_elements::test_resource_maps");
+    DB::Access<MDL::Mdl_module> module( module_tag, transaction);
+    check_resource_map( module.get_ptr(), resolve_resources);
+    check_resource_ivalue( transaction, module.get_ptr(), resolve_resources);
+
+    DB::Tag fd_tag = transaction->name_to_tag(
+        "mdl::mdl_elements::test_resource_maps::test_resources(texture_2d,texture_2d)");
+    DB::Access<MDL::Mdl_function_definition> fd( fd_tag, transaction);
+
+    std::unique_ptr<MDL::Mdl_function_call> fc(
+        fd->create_function_call( transaction, /*arguments*/ nullptr));
+
+    std::unique_ptr<MDL::Mdl_compiled_material> cm_i( fc->create_compiled_material(
+        transaction, /*class_compilation*/ false, /*target_type*/ nullptr, &context));
+    check_resource_map( cm_i.get(), resolve_resources);
+
+    std::unique_ptr<MDL::Mdl_compiled_material> cm_c( fc->create_compiled_material(
+        transaction, /*class_compilation*/ true, /*target_type*/ nullptr, &context));
+    // TODO Should resources only used in the arguments show up here (with class compilation)?
+    check_resource_map( cm_c.get(), resolve_resources);
+
+    transaction->commit();
+}
 
 void test_multithreading( DB::Database* database, DB::Scope* global_scope)
 {
-// Skip test on Windows since the machine might become quite unresponsive.
-#ifndef MI_PLATFORM_WINDOWS
-    DB::Scope* scope = global_scope;
+    DB::Scope* scope = global_scope->create_child( 1);
     DB::Transaction* transaction = scope->start_transaction();
 
     MDL::Execution_context context;
@@ -2193,7 +2280,6 @@ void test_multithreading( DB::Database* database, DB::Scope* global_scope)
     transaction->commit();
 
     test_module_pointers( database, scope);
-#endif // MI_PLATFORM_WINDOWS
 }
 
 MI_TEST_AUTO_FUNCTION( test )
@@ -2221,6 +2307,10 @@ MI_TEST_AUTO_FUNCTION( test )
 
     test_main( scope);
 
+    test_unresolved_resources( scope);
+
+    test_resource_maps( scope, /*resolve_resources*/ true);
+    test_resource_maps( scope, /*resolve_resources*/ false);
 
     test_multithreading( database, scope);
 }

@@ -384,7 +384,7 @@ public:
     /// Requires the empty string to clear (instead of \c NULL which is ignored).
     virtual void set_owner_module( const char* module) = 0;
 
-    virtual const char* get_file_path( DB::Transaction* transaction) const = 0;
+    virtual std::string get_file_path( DB::Transaction* transaction) const = 0;
 };
 
 class IValue_texture : public
@@ -466,7 +466,7 @@ public:
     /// A variant of #add_value() without sanity checks.
     ///
     /// This variant should only be used if correctness is guaranteed, e.g., when converting from
-    /// the MDL core API representation, or from another instance known to be correct.
+    /// the core representation, or from another instance known to be correct.
     virtual void add_value_unchecked( const char* name, const IValue* value) = 0;
 
     virtual mi::Size get_memory_consumption() const = 0;

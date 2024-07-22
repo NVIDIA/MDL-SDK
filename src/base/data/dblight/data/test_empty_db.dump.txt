@@ -1,3 +1,6 @@
+Count of all scopes: 1
+ID 0: name = (null), pin count = 1, level = 0, parent ID = (null), removed = 0
+
 Count of all transactions: 0
 Count of open transactions: 0
 Count of infos by distinct names: 0

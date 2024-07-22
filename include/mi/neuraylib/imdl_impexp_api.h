@@ -36,6 +36,7 @@
 
 namespace mi {
 
+class IMap;
 class IString;
 
 namespace neuraylib {
@@ -248,23 +249,16 @@ public:
     ///                              \c ".jpg". Note that support for a given image format requires
     ///                              an image plugin capable of handling that format.
     /// \param canvas                The canvas to export.
-    /// \param quality               The compression quality is an integer in the range from 0 to
-    ///                              100, where 0 is the lowest quality, and 100 is the highest
-    ///                              quality.
-    /// \param force_default_gamma   If enabled, adjusts the gamma value of the exported pixel data
-    ///                              according to the pixel type chosen for export (1.0 for HDR
-    ///                              pixel types, 2.2 for LDR pixel types).
+    /// \param export_options        See \ref mi_image_export_options for supported options.
     /// \return
     ///                             -  0: Success.
     ///                             - -1: Invalid file name.
     ///                             - -2: Invalid canvas.
-    ///                             - -3: Invalid quality.
     ///                             - -4: Unspecified failure.
     virtual Sint32 export_canvas(
         const char* filename,
         const ICanvas* canvas,
-        Uint32 quality = 100,
-        bool force_default_gamma = false) const = 0;
+        const IMap* export_options = 0) const = 0;
 
     /// Exports a light profile to disk.
     ///
@@ -336,11 +330,6 @@ public:
     ///                 the uv-tile, or \c NULL in case of errors.
     virtual const IString* frame_uvtile_marker_to_string(
         const char* marker, Size f, Sint32 u, Sint32 v) const = 0;
-
-#ifdef MI_NEURAYLIB_DEPRECATED_12_1
-    inline const IString* uvtile_marker_to_string( const char* marker, Sint32 u, Sint32 v)
-    { return frame_uvtile_marker_to_string( marker, 0, u, v); }
-#endif
 
     //@}
     /// \name Serialized names
@@ -460,11 +449,20 @@ public:
 
     //@}
 
-    virtual const IString* MI_NEURAYLIB_DEPRECATED_METHOD_12_1(uvtile_string_to_marker)(
-        const char* str, const char* marker) const = 0;
+    virtual Sint32 deprecated_export_canvas(
+        const char* filename,
+        const ICanvas* canvas,
+        Uint32 quality,
+        bool force_default_gamma) const = 0;
 
-    virtual const IString* MI_NEURAYLIB_DEPRECATED_METHOD_12_1(frame_string_to_marker)(
-        const char* str, Size digits) const = 0;
+#ifdef MI_NEURAYLIB_DEPRECATED_15_0
+    inline Sint32 export_canvas(
+        const char* filename,
+        const ICanvas* canvas,
+        Uint32 quality,
+        bool force_default_gamma = false) const
+    { return deprecated_export_canvas( filename, canvas, quality, force_default_gamma); }
+#endif
 };
 
 mi_static_assert( sizeof( IMdl_impexp_api::Search_option) == sizeof( Uint32));

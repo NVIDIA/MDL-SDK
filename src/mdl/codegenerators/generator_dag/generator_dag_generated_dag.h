@@ -51,7 +51,7 @@
 
 #include "generator_dag_ir.h"
 
-namespace MI { namespace MDL {  class Mdl_material_instance_builder; } }
+//namespace MI { namespace MDL {  class Mdl_material_instance_builder; } }
 
 namespace mi {
 namespace mdl {
@@ -90,6 +90,8 @@ public:
 private:
     Resource_tag_map const &m_resource_tag_map;
 };
+
+MI_MEM_HAS_NO_DYNAMIC_MEMORY_CONSUMPTION(Resource_tag_tuple)
 
 ///
 // Implementation of generated code for DAGs.
@@ -234,125 +236,6 @@ public:
 
     typedef vector<Parameter_info>::Type Param_vector;
 
-    /// Helper class describing one material.
-    class Material_info {
-        // Helper for dynamic memory consumption: Arena strings have no EXTRA memory allocated.
-        friend bool has_dynamic_memory_consumption(Material_info const &);
-        friend size_t dynamic_memory_consumption(Material_info const &);
-        friend class Generated_code_dag;
-
-    public:
-        /// Constructor.
-        ///
-        /// \param alloc         The allocator.
-        /// \param name          The name of the material.
-        /// \param simple_name   The simple name of the function.
-        /// \param orig_name     The original name of the material if this is an alias, "" else.
-        Material_info(
-            IAllocator *alloc,
-            char const *name,
-            char const *simple_name,
-            char const *orig_name)
-        : m_name(name, alloc)
-        , m_simple_name(simple_name, alloc)
-        , m_original_name(orig_name, alloc)
-        , m_cloned(alloc)
-        , m_parameters(alloc)
-        , m_annotations(alloc)
-        , m_return_annos(alloc)
-        , m_temporaries(alloc)
-        , m_temporary_names(alloc)
-        , m_body(NULL)
-        {
-        }
-
-        /// Set the original cloned material name.
-        void set_cloned_name(char const *name) { m_cloned = name; }
-
-        /// Add a parameter.
-        void add_parameter(Parameter_info const &param) { m_parameters.push_back(param); }
-
-        /// Add an annotation.
-        void add_annotation(DAG_node const *anno) { m_annotations.push_back(anno); }
-
-        /// Add a return annotation.
-        void add_return_annotation(DAG_node const *anno) { m_return_annos.push_back(anno); }
-
-        /// Add a temporary.
-        size_t add_temporary(DAG_node const *temp, char const *name) {
-            m_temporaries.push_back(temp);
-            m_temporary_names.emplace_back(name, m_temporary_names.get_allocator());
-            return m_temporaries.size() - 1;
-        }
-
-        /// Set the material body.
-        void set_body(DAG_node const *body) { m_body = body; }
-
-        /// Get the name.
-        char const *get_name() const { return m_name.c_str(); }
-
-        /// Get the simple name.
-        char const *get_simple_name() const { return m_simple_name.c_str(); }
-
-        /// Get the original name if any.
-        char const *get_original_name() const {
-            return m_original_name.empty() ? NULL : m_original_name.c_str();
-        }
-
-        /// Get the cloned material name if any.
-        char const *get_cloned_name() const {
-            return m_cloned.empty() ? NULL : m_cloned.c_str(); }
-
-        /// Get the parameter count.
-        size_t get_parameter_count() const { return m_parameters.size(); }
-
-        /// Get the parameter at index.
-        Parameter_info const &get_parameter(size_t idx) const { return m_parameters[idx]; }
-
-        /// Get the parameter at index.
-        Parameter_info &get_parameter(size_t idx) { return m_parameters[idx]; }
-
-        /// Get the annotation count.
-        size_t get_annotation_count() const { return m_annotations.size(); }
-
-        /// Get the annotation at index.
-        DAG_node const *get_annotation(size_t idx) const { return m_annotations[idx]; }
-
-        /// Get the return annotation count.
-        size_t get_return_annotation_count() const { return m_return_annos.size(); }
-
-        /// Get the return annotation at index.
-        DAG_node const *get_return_annotation(size_t idx) const { return m_return_annos[idx]; }
-
-        /// Get the temporary count.
-        size_t get_temporary_count() const { return m_temporaries.size(); }
-
-        /// Get the temporary at index.
-        DAG_node const *get_temporary(size_t idx) const { return m_temporaries[idx]; }
-
-        /// Get the temporary name at index.
-        char const *get_temporary_name(size_t idx) const {
-            return m_temporary_names[idx].empty() ? NULL : m_temporary_names[idx].c_str();
-        }
-
-        /// Get the material body.
-        DAG_node const *get_body() const { return m_body; }
-
-    private:
-        string         m_name;            ///< The name of the material.
-        string         m_simple_name;     ///< The simple name of the material.
-        string         m_original_name;   ///< If this is an alias name, the original name, else "".
-        string         m_cloned;          ///< The name of the cloned material or "".
-        Param_vector   m_parameters;      ///< The material parameters.
-        Dag_vector     m_annotations;     ///< The material annotations.
-        Dag_vector     m_return_annos;    ///< The return annotations of the material.
-        Dag_vector     m_temporaries;     ///< The material temporaries.
-        String_vector  m_temporary_names; ///< The material temporary names.
-        DAG_node const *m_body;           ///< The IR body of the material.
-    };
-
-    typedef vector<Material_info>::Type Material_vector;
-
     /// Helper class describing one function.
     class Function_info {
         // Helper for dynamic memory consumption: Arena strings have no EXTRA memory allocated.
@@ -447,6 +330,10 @@ public:
             return m_cloned.empty() ? NULL : m_cloned.c_str();
         }
 
+        void set_cloned_name(char const *cloned) {
+            m_cloned = cloned == NULL ? "" : cloned;
+        }
+
         /// Get the parameter count.
         size_t get_parameter_count() const { return m_parameters.size(); }
 
@@ -514,6 +401,8 @@ public:
     };
 
     typedef vector<Function_info>::Type Function_vector;
+    typedef vector<size_t>::Type Material_index_vector;
+    typedef vector<size_t>::Type Function_index_vector;
 
     /// Helper class describing one annotation.
     class Annotation_info {
@@ -598,6 +487,78 @@ public:
     };
 
     typedef vector<Annotation_info>::Type Annotation_vector;
+
+    /// Helper class describing a user defined struct category.
+    class User_struct_category_info {
+        // Helper for dynamic memory consumption: Arena strings have no EXTRA memory allocated.
+        friend bool has_dynamic_memory_consumption(User_struct_category_info const &);
+        friend size_t dynamic_memory_consumption(User_struct_category_info const &);
+        friend class Generated_code_dag;
+
+    public:
+        /// Constructor.
+        ///
+        /// \param alloc          The allocator.
+        /// \param is_exported    True, if this user struct category is exported.
+        /// \param cat            The user defined struct category.
+        /// \param name           The fully qualified name of the struct category.
+        /// \param original_name  If the struct category was re-exported, the original name of the
+        ///                       struct category.
+        User_struct_category_info(
+            IAllocator  *alloc,
+            bool        is_exported,
+            IStruct_category const *cat,
+            char const  *name,
+            char const  *original_name)
+            : m_category(cat)
+            , m_name(name, alloc)
+            , m_original_name(original_name != NULL ? original_name : "", alloc)
+            , m_annotations(alloc)
+            , m_is_exported(is_exported)
+        {
+        }
+
+        /// Add an annotation.
+        void add_annotation(DAG_node const *anno) { m_annotations.push_back(anno); }
+
+        /// Get the type of the user defined type.
+        IStruct_category const *get_category() const { return m_category; }
+
+        /// Get the name.
+        char const *get_name() const { return m_name.c_str(); }
+
+        /// Get the original name if any.
+        char const *get_original_name() const {
+            return m_original_name.empty() ? NULL : m_original_name.c_str();
+        }
+
+        /// Get the annotation count.
+        size_t get_annotation_count() const { return m_annotations.size(); }
+
+        /// Get the annotation at index.
+        DAG_node const *get_annotation(size_t idx) const { return m_annotations[idx]; }
+
+        /// Returns true if this is an exported type.
+        bool is_exported() const { return m_is_exported; }
+
+    private:
+        /// The user defined type.
+        IStruct_category const * const m_category;
+
+        /// The name of the type.
+        string const m_name;
+
+        /// The original name (if re-exported).
+        string const m_original_name;
+
+        /// The annotations of this type.
+        Dag_vector m_annotations;
+
+        /// True, if this user type is exported.
+        bool m_is_exported;
+    };
+
+    typedef vector<User_struct_category_info>::Type User_struct_category_vector;
 
     /// Helper class describing a user defined type.
     class User_type_info {
@@ -692,7 +653,7 @@ public:
 
     private:
         /// The user defined type.
-        IType const * const m_type;
+        IType const *const m_type;
 
         /// The name of the type.
         string const m_name;
@@ -933,6 +894,8 @@ public:
         /// \param fold_params                Names of parameters to be folded in class-compilation
         ///                                   mode (in addition to flags).
         /// \param num_fold_params            The number of parameter names to be folded.
+        /// \param target_type                Requested target type of the material instance,
+        ///                                   or \c NULL for the default return type.
         ///
         /// \returns                The error code of the initialization.
         /// Arguments are always given by position.
@@ -951,7 +914,8 @@ public:
             float                     wavelength_min,
             float                     wavelength_max,
             char const * const        fold_params[],
-            size_t                    num_fold_params) MDL_FINAL;
+            size_t                    num_fold_params,
+            IType const               *target_type) MDL_FINAL;
 
         /// Return the material constructor.
         DAG_call const *get_constructor() const MDL_FINAL;
@@ -973,6 +937,29 @@ public:
         ///
         /// \param index  the index of the parameter
         IValue const *get_parameter_default(size_t index) const MDL_FINAL;
+
+        /// Return the node determined by the path, starting from the root expression of the
+        /// material instance.
+        /// 
+        /// If the path is invalid, both result parameters will contain NULL on return.
+        /// 
+        /// \param path         Path of the sub expression to return.
+        /// \param node_result  If the node named at the path is a non-constant, it is stored 
+        ///                     here on return. Otherwise, NULL is stored.
+        /// \param value_result If the node named at the path is a constant, its value is stored
+        ///                     here on return. Otherwise, NULL is stored.
+        void lookup_sub_expression(
+            char const *path, 
+            DAG_node const *&node_result, 
+            IValue const *&value_result) const MDL_FINAL;
+
+        /// Calculate the hash for the node determined by the path, starting from the root 
+        /// expression of the material instance.
+        /// 
+        /// \param path    Path of the sub expression to calculate the hash for.
+        /// 
+        /// \return the hash of the subexpression, or the null hash if the path is invalid.
+        DAG_hash get_sub_expression_hash(char const *path) const MDL_FINAL;
 
         /// Return the hash value of this material instance.
         DAG_hash const *get_hash() const MDL_FINAL;
@@ -1021,6 +1008,9 @@ public:
 
         /// Access messages.
         Messages const &access_messages() const MDL_FINAL;
+
+        /// Returns the amount of used memory by this code material instance.
+        size_t get_memory_size() const MDL_FINAL;
 
         /// Get the instance properties.
         Properties get_properties() const MDL_FINAL;
@@ -1090,7 +1080,7 @@ public:
         }
 
         /// Set the default parameter names and values.
-        /// \tparam S      a helper shim
+        /// \param S       a helper shim
         /// \param params  the default parameters
         template<typename S>
         void set_default_parameters(S params) {
@@ -1147,6 +1137,15 @@ public:
         /// \param name  the name of this instance
         void dump_instance_dag(char const *name) const;
 
+        void serialize(
+            ISerializer *serializer,
+            MDL_binary_serializer *bin_serializer) const;
+
+        static Generated_code_dag::Material_instance const *deserialize(
+            IDeserializer *deserializer,
+            MDL_binary_deserializer *bin_deserializer,
+            MDL *compiler);
+
     private:
         /// Constructor.
         ///
@@ -1163,6 +1162,16 @@ public:
             bool        unsafe_math_optimizations);
 
     private:
+        /// Serialize all DAGs of this material instance.
+        ///
+        /// \param dag_serializer  the DAG IR serializer
+        void serialize_dags(DAG_serializer &dag_serializer) const;
+
+        /// Deserialize all DAGs of this material instance.
+        ///
+        /// \param dag_deserializer  the DAG IR deserializer
+        void deserialize_dags(DAG_deserializer &dag_deserializer);
+
         /// Add a temporary.
         ///
         /// \param value       The temporary value to add.
@@ -1278,8 +1287,8 @@ public:
             typedef vector<IValue const *>::Type    Value_vec;
             typedef vector<string>::Type            Name_vec;
 
-            typedef IGenerated_code_dag::IMaterial_instance::Property   Property;
-            typedef IGenerated_code_dag::IMaterial_instance::Properties Properties;
+            typedef IMaterial_instance::Property   Property;
+            typedef IMaterial_instance::Properties Properties;
 
         public:
             /// Constructor.
@@ -1327,9 +1336,10 @@ public:
             ~Instantiate_helper();
 
             /// Compile the material.
+            /// \param target_type  Requested result type, or \c NULL for default.
             ///
             /// \returns            The instantiated DAG IR.
-            DAG_call const *compile();
+            DAG_call const *compile(IType const *target_type);
 
             /// Get the default values of created parameters.
             Value_vec const &get_default_parameter_values() const {
@@ -1368,6 +1378,18 @@ public:
 
             /// Check if we support instantiate_dag_arguments on this node.
             bool supported_arguments(DAG_node const *n);
+
+            /// Create a constructor call that converts the expression \c call to the 
+            /// \c target_type by inserting a constructor call of the target type and 
+            /// selecting matching fields from \c call.
+            DAG_node const *translate_decl_cast(
+                DAG_node const *call,
+                IType const *target_type);
+
+            /// Translate a decl_cast expression into a combination of a constructor call 
+            /// of the target type, field selections and default initiliazers, converting 
+            /// the expression between two compatible struct types.
+            DAG_node const *translate_decl_cast_call(DAG_call const *call);
 
             /// Instantiate a DAG IR node.
             ///
@@ -1796,6 +1818,16 @@ public:
     /// \returns    The number of materials in this generated code.
     size_t get_material_count() const MDL_FINAL;
 
+    /// Get the return type of the material at material_index.
+    /// \param      material_index  The index of the material.
+    /// \returns                    The return type of the material.
+    IType const *get_material_return_type(size_t material_index) const MDL_FINAL;
+
+    /// Get the semantics of the material at material_index.
+    /// \param      material_index  The index of the material.
+    /// \returns                    The semantics of the material.
+    IDefinition::Semantics get_material_semantics(size_t material_index) const MDL_FINAL;
+
     /// Get the name of the material at material_index.
     ///
     /// \param material_index  The index of the material.
@@ -1886,6 +1918,14 @@ public:
         size_t material_index,
         size_t parameter_index,
         size_t user_index) const MDL_FINAL;
+
+    /// Get the material hash value for the given material index if available.
+    ///
+    /// \param material_index  The index of the material.
+    /// \returns               The material hash of the material or NULL if no hash
+    ///                        value is available or the index is out of bounds.
+    DAG_hash const *get_material_hash(
+        size_t material_index) const MDL_FINAL;
 
     /// Acquires a const interface.
     ///
@@ -1992,6 +2032,20 @@ public:
     DAG_node const *get_function_body(
         size_t function_index) const MDL_FINAL;
 
+    /// Get the body of the function at function_index.
+    /// Equivalent to get_function_body.
+    ///
+    /// \param function_index      The index of the function.
+    /// \returns                   The body of the function.
+    DAG_node const *get_function_value(
+        size_t function_index) const MDL_FINAL;
+
+    /// Get the export flags of the function at function_index.
+    ///
+    /// \param      function_index  The index of the function.
+    /// \returns                    True if this is an exported function, false if it is local.
+    bool get_function_exported(size_t function_index) const MDL_FINAL;
+
     /// Get the number of annotations of the material at material_index.
     /// \param material_index      The index of the material.
     /// \returns                   The number of annotations.
@@ -2077,11 +2131,39 @@ public:
     DAG_node const *get_material_value(
         size_t material_index) const MDL_FINAL;
 
+    /// Get the body expression of the material at material_index.
+    /// This is equivalent to get_material_value().
+    /// \param material_index  The index of the material.
+    /// \returns               The value of the material.
+    DAG_node const *get_material_body(
+        size_t material_index) const MDL_FINAL;
+
     /// Get the export flags of the material at material_index.
     ///
     /// \param      material_index  The index of the material.
     /// \returns                    True if this is an exported material, false if it is local.
     bool get_material_exported(size_t material_index) const MDL_FINAL;
+
+    /// Get the property flag of the material at material_index.
+    /// \param      material_index  The index of the material.
+    /// \param      fp              The property.
+    /// \returns                    True if this material has the property, false if not.
+    bool get_material_property(
+        size_t            material_index,
+        Function_property fp) const MDL_FINAL;
+
+    /// Get the number of entities referenced by a material.
+    /// \param      material_index  The index of the material.
+    /// \returns                    Number of material that might be called by this material
+    size_t get_material_references_count(size_t material_index) const MDL_FINAL;
+
+    /// Get the signature of the i'th reference of a material
+    /// \param      material_index  The index of the material.
+    /// \param      callee_index    The index of the callee.
+    /// \returns                    Number of material that might be called by this material
+    char const *get_material_reference(
+        size_t material_index,
+        size_t callee_index) const MDL_FINAL;
 
     /// Return the original material name of a cloned material or NULL if the material
     /// is not a clone.
@@ -2100,6 +2182,48 @@ public:
     IMaterial_instance *create_material_instance(
         size_t     index,
         Error_code *error_code = 0) const MDL_FINAL;
+
+    /// Get the number of (exported and non-exported) user defined struct categories
+    /// of this compiled module.
+    size_t get_struct_category_count() const MDL_FINAL;
+
+    /// Get the name of the user-defined struct category at index.
+     ///
+    /// \param index  The index of the struct category.
+    /// \returns      The name of the struct category.
+    char const *get_struct_category_name(
+        size_t index) const MDL_FINAL;
+
+    /// Get the user defined struct category at index.
+    ///
+    /// \param index  The index of the struct category.
+    /// \returns      The struct category.
+    IStruct_category const *get_struct_category(
+        size_t index) const MDL_FINAL;
+
+    /// Get the number of annotations of the user defined struct category at index.
+    ///
+    /// \param index  The index of the struct category.
+    /// \return       The number of annotations of the struct category.
+    size_t get_struct_category_annotation_count(
+        size_t index) const MDL_FINAL;
+
+    /// Get the annotation at annotation_index of the user defined struct category
+    ///  at cat_index.
+    ///
+    /// \param cat_index           The index of the struct category.
+    /// \param annotation_index    The index of the annotation.
+    /// \returns                   The annotation.
+    DAG_node const *get_struct_category_annotation(
+        size_t cat_index,
+        size_t annotation_index) const MDL_FINAL;
+
+    /// Returns true if the user defined struct category at index is exported.
+    ///
+    /// \param index  The index of the struct category.
+    /// \returns      true for exported types.
+    bool is_struct_category_exported(
+        size_t index) const MDL_FINAL;
 
     /// Get the number of (exported and non-exported) user defined types of this compiled module.
     size_t get_type_count() const MDL_FINAL;
@@ -2482,27 +2606,6 @@ public:
     DAG_node_factory_impl const *get_node_factory() const { return &m_node_factory; }
 
 private:
-    /// Get the material info for a given material index or NULL if the index is out of range.
-    ///
-    /// \param material_index  the material index
-    Material_info *get_material_info(
-        size_t material_index);
-
-    /// Get the material info for a given material index or NULL if the index is out of range.
-    ///
-    /// \param material_index  the material index
-    Material_info const *get_material_info(
-        size_t material_index) const;
-
-    /// Get the parameter info for a given material and parameter index pair or NULL if
-    /// one index is out of range.
-    ///
-    /// \param material_index   the material index
-    /// \param parameter_index  the parameter index
-    Parameter_info const *get_mat_param_info(
-        size_t material_index,
-        size_t parameter_index) const;
-
     /// Get the function info for a given function index or NULL if the index is out of range.
     ///
     /// \param function_index  the function index
@@ -2516,6 +2619,21 @@ private:
     /// \param parameter_index  the parameter index
     Parameter_info const *get_func_param_info(
         size_t function_index,
+        size_t parameter_index) const;
+
+    /// Get the material info for a given material index or NULL if the index is out of range.
+    ///
+    /// \param material_index  the material index
+    Function_info const *get_material_info(
+        size_t material_index) const;
+
+    /// Get the parameter info for a given material and parameter index pair or NULL if
+    /// one index is out of range.
+    ///
+    /// \param material_index   the material index
+    /// \param parameter_index  the parameter index
+    Parameter_info const *get_mat_param_info(
+        size_t material_index,
         size_t parameter_index) const;
 
     /// Get the annotation info for a given annotation index or NULL if the index is out of range.
@@ -2532,6 +2650,13 @@ private:
     Parameter_info const *get_anno_param_info(
         size_t annotation_index,
         size_t parameter_index) const;
+
+    /// Get the user struct category info for a given category index or NULL if the index is 
+    /// out of range.
+    ///
+    /// \param cat_index  the type index
+    User_struct_category_info const *get_struct_category_info(
+        size_t cat_index) const;
 
     /// Get the user type info for a given type index or NULL if the index is out of range.
     ///
@@ -2598,6 +2723,16 @@ private:
     /// \param def                      The definition.
     DAG_node const *build_material_dag(
         IDefinition const *def);
+
+    /// Compile a user defined struct category.
+    ///
+    /// \param dag_builder  the DAG builder to be used
+    /// \param def          the definition of the tystruct categorype.
+    /// \param is_exported  true, if this struct category is exported
+    void compile_struct_category(
+        DAG_builder       &dag_builder,
+        IDefinition const *def,
+        bool              is_exported);
 
     /// Compile a user defined type.
     ///
@@ -2954,18 +3089,6 @@ private:
     /// \param dag_deserializer  the DAG IR serializer
     void deserialize_parameters(Function_info &mat, DAG_deserializer &dag_deserializer);
 
-    /// Serialize all parameters of a material.
-    ///
-    /// \param mat             the material
-    /// \param dag_serializer  the DAG IR serializer
-    void serialize_parameters(Material_info const &mat, DAG_serializer &dag_serializer) const;
-
-    /// Deserialize all parameters of a material.
-    ///
-    /// \param mat               the material
-    /// \param dag_deserializer  the DAG IR serializer
-    void deserialize_parameters(Material_info &mat, DAG_deserializer &dag_deserializer);
-
     /// Serialize all parameters of an annotation.
     ///
     /// \param anno            the annotation
@@ -3058,13 +3181,19 @@ private:
     Dag_vector m_module_annotations;
 
     /// The materials of this compiled module.
-    Function_vector m_functions;
+    Function_vector m_function_infos;
 
-    /// The materials of this compiled module.
-    Material_vector m_materials;
+    /// The indices of materials in the m_functions vector.
+    Function_index_vector m_functions;
+
+    /// The indices of materials in the m_functions vector.
+    Material_index_vector m_materials;
 
     /// The (declared) annotations of this compiled module.
     Annotation_vector m_annotations;
+
+    /// The (exported and non-exported) user defined struct categories of this compiled module.
+    User_struct_category_vector m_user_struct_categories;
 
     /// The (exported and non-exported) user defined types of this compiled module.
     User_type_vector m_user_types;

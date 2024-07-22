@@ -52,6 +52,7 @@ public:
         DK_INVALID,         ///< An invalid declaration.
         DK_IMPORT,          ///< An import declaration.
         DK_ANNOTATION,      ///< An annotation declaration.
+        DK_STRUCT_CATEGORY, ///< A struct category declaration.
         DK_CONSTANT,        ///< A constant declaration.
         DK_TYPE_ALIAS,      ///< A type alias declaration (typedef).
         DK_TYPE_STRUCT,     ///< A struct type declaration.
@@ -193,6 +194,37 @@ public:
     ///
     /// \param parameter  the parameter to add
     virtual void add_parameter(IParameter const *parameter) = 0;
+};
+
+/// An struct category declaration inside the MDL AST.
+class IDeclaration_struct_category : public IDeclaration
+{
+public:
+    /// The kind of this subclass.
+    static Kind const s_kind = DK_STRUCT_CATEGORY;
+
+    /// Get the name of the struct category.
+    virtual ISimple_name const *get_name() const = 0;
+
+    /// Set the name of the struct category.
+    ///
+    /// \param name  the name of this struct category
+    virtual void set_name(ISimple_name const *name) = 0;
+
+    /// Get the annotation block of this struct category declaration
+    /// if any.
+    virtual IAnnotation_block const *get_annotations() const = 0;
+
+    /// Set the annotation block of this struct category declaration.
+    virtual void set_annotations(IAnnotation_block const *annos) = 0;
+
+    /// Get the definition of this declaration if already set.
+    virtual IDefinition const *get_definition() const = 0;
+
+    /// Set the definition of this declaration.
+    ///
+    /// \param def  the definition of this annotation
+    virtual void set_definition(IDefinition const *def) = 0;
 };
 
 /// A constant declaration in the MDL AST.
@@ -337,6 +369,28 @@ public:
     virtual void set_field_init(
         int               index,
         IExpression const *init) = 0;
+
+    /// Get the name of the category of the struct type.
+    virtual IQualified_name const *get_struct_category_name() const = 0;
+
+    /// Get the declaration of the category of the struct type.
+    ///
+    /// Return NULL if the struct does not have a category.
+    virtual IDefinition const *get_struct_category_definition() const = 0;
+
+    /// Set the definition of the category of the struct type.
+    ///
+    /// \param category_definition  the definition of the struct's category.
+    virtual void set_struct_category_definition(
+        IDefinition const *category_definition) = 0;
+
+    /// Return whether the struct declaration was explicitly marked as declarative or not.
+    virtual bool is_declarative() const = 0;
+
+    /// Mark this struct declaration explicitly as declarative or not.
+    ///
+    /// \param flag  the new declarative setting
+    virtual void set_declarative(bool flag) = 0;
 };
 
 /// An enum type declaration inside the MDL AST.
@@ -358,7 +412,7 @@ public:
     virtual IAnnotation_block const *get_annotations() const = 0;
 
     /// Get the number of enum values.
-    virtual int get_value_count() const = 0;
+    virtual size_t get_value_count() const = 0;
 
     /// Get the name of the value at index.
     ///
@@ -375,7 +429,7 @@ public:
     /// \param index  the index of the requested enum value
     /// \param init   the new initializer expression
     virtual void set_value_init(
-        int         index,
+        size_t            index,
         IExpression const *init) = 0;
 
     /// Get the annotations of the value at index if any.
@@ -540,6 +594,14 @@ public:
     ///
     /// \param annotations  new annotations for the function's return type
     virtual void set_return_annotation(IAnnotation_block const *annotations) = 0;
+
+    /// Return whether the function declaration is marked as declarative or not.
+    virtual bool is_declarative() const = 0;
+
+    /// Set the function declaration declarative flag.
+    ///
+    /// \param flag  the new declarative setting
+    virtual void set_declarative(bool flag) = 0;
 };
 
 /// A module declaration inside the MDL AST.
@@ -707,6 +769,25 @@ public:
         int                     end_line = 0,
         int                     end_column = 0) = 0;
 
+    /// Create a new struct category declaration.
+    ///
+    /// \param name             The name of the struct category.
+    /// \param annotations      The annotations of this declaration.
+    /// \param exported         Flag to indicate if this declaration is exported.
+    /// \param start_line       The line on which the declaration begins.
+    /// \param start_column     The column on which the declaration begins.
+    /// \param end_line         The line on which the declaration ends.
+    /// \param end_column       The column on which the declaration ends.
+    /// \returns                The created declaration.
+    virtual IDeclaration_struct_category *create_struct_category(
+        ISimple_name const      *name = NULL,
+        IAnnotation_block const *annotations = NULL,
+        bool                    exported = false,
+        int                     start_line = 0,
+        int                     start_column = 0,
+        int                     end_line = 0,
+        int                     end_column = 0) = 0;
+
     /// Create a new constant declaration.
     ///
     /// \param type_name        The name of the constants type.
@@ -745,16 +826,20 @@ public:
 
     /// Create a new struct type declaration.
     ///
-    /// \param struct_name      The name of the struct type.
-    /// \param annotations      The annotations of the struct type.
-    /// \param exported         Flag to indicate if this declaration is exported.
-    /// \param start_line       The line on which the declaration begins.
-    /// \param start_column     The column on which the declaration begins.
-    /// \param end_line         The line on which the declaration ends.
-    /// \param end_column       The column on which the declaration ends.
-    /// \returns                The created declaration.
+    /// \param struct_name          The name of the struct type.
+    /// \param struct_category_name The name of the category of the struct type. NULL if absent.
+    /// \param annotations          The annotations of the struct type.
+    /// \param exported             Flag to indicate if this declaration is exported.
+    /// \param declarative          Flag to indicate if this declaration is declarative.
+    /// \param start_line           The line on which the declaration begins.
+    /// \param start_column         The column on which the declaration begins.
+    /// \param end_line             The line on which the declaration ends.
+    /// \param end_column           The column on which the declaration ends.
+    /// \returns                    The created declaration.
     virtual IDeclaration_type_struct *create_struct(
+        bool                    declarative = false,
         ISimple_name const      *struct_name = NULL,
+        IQualified_name const   *struct_category_name = NULL,
         IAnnotation_block const *annotations = NULL,
         bool                    exported = false,
         int                     start_line = 0,
@@ -802,6 +887,7 @@ public:
 
     /// Create a new function declaration.
     ///
+    /// \param is_declarative   Flag to indicate if this declaration is declarative.
     /// \param return_type_name The name of the functions return type.
     /// \param ret_annotations  The annotation block of the functions return type.
     /// \param function_name    The name of the function.
@@ -815,6 +901,7 @@ public:
     /// \param end_column       The column on which the declaration ends.
     /// \returns                The created declaration.
     virtual IDeclaration_function *create_function(
+        bool                    is_declarative = false,
         IType_name const        *return_type_name = NULL,
         IAnnotation_block const *ret_annotations = NULL,
         ISimple_name const      *function_name = NULL,

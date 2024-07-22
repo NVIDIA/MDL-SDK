@@ -53,7 +53,7 @@ Scope_impl::Scope_impl( DB::Scope* scope, const Class_factory* class_factory)
     m_name = m_scope->get_name();
 
     DB::Scope_id id = scope->get_id();
-    Uint32 id_as_uint = static_cast<Uint32>( id);
+    auto id_as_uint = static_cast<Uint32>( id);
     m_id = std::to_string( id_as_uint);
 
     // The string cannot be empty at this point. If it still is, then this indicates a misbehaving
@@ -71,8 +71,6 @@ Scope_impl::Scope_impl( DB::Scope* scope, const Class_factory* class_factory)
             ".",
             id_as_uint);
     }
-
-    ASSERT( M_NEURAY_API, id == 0);
 }
 
 Scope_impl::~Scope_impl()

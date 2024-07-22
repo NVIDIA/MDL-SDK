@@ -118,6 +118,11 @@ public:
     /// \return      The old value of the flag.
     bool enable_unsafe_math_opt(bool flag) MDL_FINAL;
 
+    /// Return unsafe math optimization setting.
+    ///
+    /// \return      The value of the flag.
+    bool get_unsafe_math_opt() const MDL_FINAL;
+
     /// Get the type factory associated with this node factory.
     /// \returns            The type factory.
     Type_factory *get_type_factory() MDL_FINAL;
@@ -322,6 +327,13 @@ public:
     /// Get the allocator of this factory.
     IAllocator *get_allocator() const { return m_builder.get_arena()->get_allocator(); }
 
+    /// Converts a constant into a elemental constructor.
+    ///
+    /// \param c  The constant to convert.
+    /// \returns  A DAG_call representing the constant.
+    DAG_call const *value_to_constructor(
+        DAG_constant const *c);
+
 private:
     /// Build a call to a conversion from a ::tex::gamma value to int.
     ///
@@ -377,13 +389,6 @@ private:
     /// \param ret_type  the bsdf type
     DAG_node const *create_diffuse_reflection_bsdf(
         IType const                   *ret_type);
-
-    /// Converts a constant into a elemental constructor.
-    ///
-    /// \param c  The constant to convert.
-    /// \returns  A DAG_call representing the constant.
-    DAG_call const *value_to_constructor(
-        DAG_constant const *c);
 
     /// Try to move a ternary operator down.
     ///

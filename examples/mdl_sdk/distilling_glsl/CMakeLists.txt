@@ -89,8 +89,3 @@ add_target_install(
     TARGET ${PROJECT_NAME}
     DESTINATION "examples/mdl_sdk/distilling_glsl"
     )
-
-# -------------------------------------------------------------------------------------------------
-# Add tests if available
-# -------------------------------------------------------------------------------------------------
-add_tests(POST)

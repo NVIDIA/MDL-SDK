@@ -42,6 +42,7 @@
 #include "neuray_string_impl.h"
 
 #include <io/scene/mdl_elements/i_mdl_elements_compiled_material.h>
+#include <io/scene/mdl_elements/mdl_elements_utilities.h>
 #include <io/scene/scene/i_scene_journal_types.h>
 
 namespace MI {
@@ -76,7 +77,8 @@ mi::neuraylib::Element_type Compiled_material_impl::get_element_type() const
 const mi::neuraylib::IExpression_direct_call* Compiled_material_impl::get_body() const
 {
    mi::base::Handle<Expression_factory> ef( get_transaction()->get_expression_factory());
-   mi::base::Handle<const MDL::IExpression_direct_call> result_int( get_db_element()->get_body());
+   mi::base::Handle<const MDL::IExpression_direct_call> result_int(
+       get_db_element()->get_body( get_db_transaction()));
    return ef->create<mi::neuraylib::IExpression_direct_call>(
        result_int.get(), this->cast_to_major());
 }
@@ -90,8 +92,85 @@ const mi::neuraylib::IExpression* Compiled_material_impl::get_temporary(
     mi::Size index) const
 {
    mi::base::Handle<Expression_factory> ef( get_transaction()->get_expression_factory());
-   mi::base::Handle<const MDL::IExpression> result_int( get_db_element()->get_temporary( index));
+   mi::base::Handle<const MDL::IExpression> result_int(
+       get_db_element()->get_temporary( get_db_transaction(), index));
    return ef->create( result_int.get(), this->cast_to_major());
+}
+
+const mi::neuraylib::IExpression* Compiled_material_impl::lookup_sub_expression(
+    const char* path) const
+{
+    if( !path)
+        return nullptr;
+
+    mi::base::Handle<Expression_factory> ef(
+        get_transaction()->get_expression_factory());
+    mi::base::Handle<const MDL::IExpression> result_int(
+        get_db_element()->lookup_sub_expression( get_db_transaction(), path));
+    return ef->create( result_int.get(), this->cast_to_major());
+}
+
+bool Compiled_material_impl::is_valid( mi::neuraylib::IMdl_execution_context* context) const
+{
+    MDL::Execution_context default_context;
+    MDL::Execution_context* mdl_context = unwrap_and_clear_context( context, default_context);
+
+    return get_db_element()->is_valid( get_db_transaction(), mdl_context);
+}
+
+mi::Size Compiled_material_impl::get_parameter_count() const
+{
+    return get_db_element()->get_parameter_count();
+}
+
+const char* Compiled_material_impl::get_parameter_name( mi::Size index) const
+{
+    return get_db_element()->get_parameter_name( index);
+}
+
+const mi::neuraylib::IValue* Compiled_material_impl::get_argument( mi::Size index) const
+{
+   mi::base::Handle<Value_factory> vf( get_transaction()->get_value_factory());
+   mi::base::Handle<const MDL::IValue> result_int(
+       get_db_element()->get_argument( get_db_transaction(), index));
+   return vf->create( result_int.get(), this->cast_to_major());
+}
+
+const mi::IString* Compiled_material_impl::get_connected_function_db_name(
+    const char* material_instance_name,
+    mi::Size parameter_index,
+    mi::Sint32* errors) const
+{
+    mi::Sint32 dummy_errors = 0;
+    if( !errors)
+        errors = &dummy_errors;
+
+    if( !material_instance_name) {
+        *errors = -1;
+        return nullptr;
+    }
+
+    if( parameter_index >= get_parameter_count()) {
+        *errors = -2;
+        return nullptr;
+    }
+
+    DB::Transaction* transaction = get_db_transaction();
+    DB::Tag material_instance_tag = transaction->name_to_tag( material_instance_name);
+    if( !material_instance_tag) {
+        *errors = -1;
+        return nullptr;
+    }
+
+    DB::Tag result = get_db_element()->get_connected_function_db_name(
+        transaction, material_instance_tag, parameter_index);
+    if( !result) {
+        *errors = -3;
+        return nullptr;
+    }
+
+    const char* name = transaction->tag_to_name( result);
+    return new String_impl( name);
 }
 
 mi::Float32 Compiled_material_impl::get_mdl_meters_per_scene_unit() const
@@ -107,6 +186,31 @@ mi::Float32 Compiled_material_impl::get_mdl_wavelength_min() const
 mi::Float32 Compiled_material_impl::get_mdl_wavelength_max() const
 {
     return get_db_element()->get_mdl_wavelength_max();
+}
+
+mi::neuraylib::Material_opacity Compiled_material_impl::get_opacity() const
+{
+    return MDL::core_opacity_to_ext_opacity( get_db_element()->get_opacity());
+}
+
+mi::neuraylib::Material_opacity Compiled_material_impl::get_surface_opacity() const
+{
+    return MDL::core_opacity_to_ext_opacity( get_db_element()->get_surface_opacity());
+}
+
+bool Compiled_material_impl::get_cutout_opacity( mi::Float32 *cutout_opacity) const
+{
+    return get_db_element()->get_cutout_opacity( cutout_opacity);
+}
+
+mi::Size Compiled_material_impl::get_referenced_scene_data_count() const
+{
+    return get_db_element()->get_referenced_scene_data_count();
+}
+
+const char* Compiled_material_impl::get_referenced_scene_data_name( mi::Size index) const
+{
+    return get_db_element()->get_referenced_scene_data_name( index);
 }
 
 bool Compiled_material_impl::depends_on_state_transform() const
@@ -129,33 +233,6 @@ bool Compiled_material_impl::depends_on_uniform_scene_data() const
     return get_db_element()->depends_on_uniform_scene_data();
 }
 
-mi::Size Compiled_material_impl::get_referenced_scene_data_count() const
-{
-    return get_db_element()->get_referenced_scene_data_count();
-}
-
-const char* Compiled_material_impl::get_referenced_scene_data_name( mi::Size index) const
-{
-    return get_db_element()->get_referenced_scene_data_name( index);
-}
-
-mi::Size Compiled_material_impl::get_parameter_count() const
-{
-    return get_db_element()->get_parameter_count();
-}
-
-const char* Compiled_material_impl::get_parameter_name( mi::Size index) const
-{
-    return get_db_element()->get_parameter_name( index);
-}
-
-const mi::neuraylib::IValue* Compiled_material_impl::get_argument( mi::Size index) const
-{
-   mi::base::Handle<Value_factory> vf( get_transaction()->get_value_factory());
-   mi::base::Handle<const MDL::IValue> result_int( get_db_element()->get_argument( index));
-   return vf->create( result_int.get(), this->cast_to_major());
-}
-
 mi::base::Uuid Compiled_material_impl::get_hash() const
 {
     return get_db_element()->get_hash();
@@ -166,88 +243,12 @@ mi::base::Uuid Compiled_material_impl::get_slot_hash( mi::neuraylib::Material_sl
     return get_db_element()->get_slot_hash( slot);
 }
 
-const mi::neuraylib::IExpression* Compiled_material_impl::lookup_sub_expression(
-    const char* path) const
+mi::base::Uuid Compiled_material_impl::get_sub_expression_hash( const char* path) const
 {
-    mi::base::Handle<Expression_factory> ef(
-        get_transaction()->get_expression_factory());
-    mi::base::Handle<const MDL::IExpression> result_int(
-        get_db_element()->lookup_sub_expression( path));
-    return ef->create( result_int.get(), this->cast_to_major());
-}
+    if( !path)
+        return {};
 
-const mi::IString* Compiled_material_impl::get_connected_function_db_name(
-    const char* material_instance_name,
-    mi::Size parameter_index,
-    mi::Sint32* errors) const
-{
-    mi::Sint32 dummy_error = 0;
-    if (!errors) errors = &dummy_error;
-
-    if (!material_instance_name) {
-        *errors = -1;
-        return nullptr;
-    }
-    if (parameter_index >= get_parameter_count()) {
-        *errors = -2;
-        return nullptr;
-    }
-    DB::Transaction* transaction = get_db_transaction();
-    DB::Tag material_instance_tag = transaction->name_to_tag(material_instance_name);
-    if (material_instance_tag.is_invalid()) {
-        *errors = -1;
-        return nullptr;
-    }
-    DB::Tag call_tag = get_db_element()->get_connected_function_db_name(
-        transaction, material_instance_tag, get_parameter_name(parameter_index));
-    if (call_tag.is_invalid()) {
-        *errors = -3;
-        return nullptr;
-    }
-    mi::IString* result = new String_impl();
-    result->set_c_str(transaction->tag_to_name(call_tag));
-
-    *errors = 0;
-    return result;
-}
-
-static mi::neuraylib::Material_opacity int_opacity_to_opacity(
-    mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity opacity)
-{
-    switch (opacity) {
-    case mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE:
-        return mi::neuraylib::OPACITY_OPAQUE;
-    case mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_TRANSPARENT:
-        return mi::neuraylib::OPACITY_TRANSPARENT;
-    case mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN:
-        return mi::neuraylib::OPACITY_UNKNOWN;
-    default:
-        break;
-    }
-    return mi::neuraylib::OPACITY_UNKNOWN;
-}
-
-mi::neuraylib::Material_opacity Compiled_material_impl::get_opacity() const
-{
-    return int_opacity_to_opacity(get_db_element()->get_opacity());
-}
-
-mi::neuraylib::Material_opacity Compiled_material_impl::get_surface_opacity() const
-{
-    return int_opacity_to_opacity(get_db_element()->get_surface_opacity());
-}
-
-bool Compiled_material_impl::get_cutout_opacity(mi::Float32 *cutout_opacity) const
-{
-    return get_db_element()->get_cutout_opacity(cutout_opacity);
-}
-
-bool Compiled_material_impl::is_valid(mi::neuraylib::IMdl_execution_context* context) const
-{
-    MDL::Execution_context default_context;
-    return get_db_element()->is_valid(
-        get_db_transaction(),
-        unwrap_and_clear_context(context, default_context));
+    return get_db_element()->get_sub_expression_hash( path);
 }
 
 void Compiled_material_impl::swap( MDL::Mdl_compiled_material& rhs)

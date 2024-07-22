@@ -51,7 +51,6 @@ MI_TEST_AUTO_FUNCTION( test_verify_serializer_module )
             ID_TEST_TYPE_1_CLASS_ID, test_type_1_factory);
 
         test_buffer_serializer();
-        test_file_serializer();
     }
 }
 
@@ -70,3 +69,4 @@ Deserialization_manager_holder::~Deserialization_manager_holder()
 }
 
 MI::SERIAL::Deserialization_manager* g_deserialization_manager;
+

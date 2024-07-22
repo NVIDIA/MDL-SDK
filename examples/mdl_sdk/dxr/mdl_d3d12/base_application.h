@@ -88,13 +88,46 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
     // --------------------------------------------------------------------------------------------
 
+    // Options to enable or disable certain features for instance because of GPU capabilities.
+    struct Feature_options
+    {
+        /// Bindless resources for global access to all shaders and buffers.
+        /// Available with Shader Model 6.6 and Resource Binding Tier 3
+        /// see https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_6_DynamicResources.html
+        bool HLSL_dynamic_resources = false;
+    };
+
+    // --------------------------------------------------------------------------------------------
+
     // Options that are defined at application start. They cannot be changed while the application
     // is running.
     class Base_options
     {
     public:
+        // Supported slot modes for HLSL.
+        enum Slot_mode {
+            SM_NONE,
+            SM_FIXED_1,
+            SM_FIXED_2,
+            SM_FIXED_4,
+            SM_FIXED_8
+        };
+
+        /// Flags controlling the calculation of DF results.
+        enum Df_flags {
+            DF_FLAGS_NONE = 0,               ///< allows nothing -> black
+
+            DF_FLAGS_ALLOW_REFLECT = 1,
+            DF_FLAGS_ALLOW_TRANSMIT = 2,
+            DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT = DF_FLAGS_ALLOW_REFLECT | DF_FLAGS_ALLOW_TRANSMIT,
+            DF_FLAGS_ALLOWED_SCATTER_MODE_MASK = DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT,
+
+            DF_FLAGS_FORCE_32_BIT = 0xffffffffU
+        };
+
         explicit Base_options()
-            : window_title(L"MDL D3D12 Example Application")
+            : features()
+            , window_title(L"MDL D3D12 Example Application")
             , window_width(1280)
             , window_height(720)
             , mdl_paths()
@@ -127,7 +160,14 @@ namespace mi { namespace examples { namespace mdl_d3d12
             , gpu_debug(false)
             , enable_shader_cache(false)
             , shader_opt("O3")
-            , distilling_target("none")
+            , distill_target("none")
+            , distill_debug(false)
+            , slot_mode(SM_NONE)
+            , material_type("::material")
+            , material_type_module("::%3Cbuiltins%3E")
+            , aov_to_render("")
+            , enable_bsdf_flags(false)
+            , allowed_scatter_mode(DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT)
 #if MDL_ENABLE_SLANG
             , use_slang(false)
 #endif
@@ -137,6 +177,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
         {
         }
         virtual ~Base_options() = default;
+
+        Feature_options features;
+
         std::wstring window_title;
         size_t window_width;
         size_t window_height;
@@ -171,7 +214,17 @@ namespace mi { namespace examples { namespace mdl_d3d12
         bool gpu_debug;
         bool enable_shader_cache;
         std::string shader_opt;
-        std::string distilling_target;
+        std::string distill_target;
+        bool distill_debug;
+        Slot_mode slot_mode;
+
+        // with MDL 1.9, custom material types are supported
+        std::string material_type; // the qualified name of the structure that defines the material
+        std::string material_type_module; // the qualified name of the module that contains the type
+        std::string aov_to_render; // field name of the custom material type to render
+
+        bool enable_bsdf_flags;
+        Df_flags allowed_scatter_mode;
 
 #if MDL_ENABLE_SLANG
         bool use_slang;
@@ -224,9 +277,31 @@ namespace mi { namespace examples { namespace mdl_d3d12
             }
         }
 
+        /// Get/Set the available AOVs.
+        /// Depends on the material type the renderer is set up to and the --aov option on start.
+        const std::vector<std::string>& get_available_aovs() const { return m_available_aovs; }
+        void set_available_aovs(const std::vector<std::string>& to_set)
+        {
+            m_available_aovs = to_set;
+            m_active_aov = 0;
+        }
+
+        /// Get/Set the active AOV, i.e. the index into the available aov list.
+        size_t get_active_aov() const { return m_active_aov; }
+        void set_active_aov(size_t index)
+        {
+            if (m_active_aov != index)
+            {
+                m_active_aov = index; // no out of bounds check here
+                m_restart_progressive_rendering = true;
+            }
+        }
+
     private:
         bool m_restart_progressive_rendering = true;
         std::string m_active_lpe;
+        std::vector<std::string> m_available_aovs = {};
+        size_t m_active_aov;
     };
 
     // --------------------------------------------------------------------------------------------

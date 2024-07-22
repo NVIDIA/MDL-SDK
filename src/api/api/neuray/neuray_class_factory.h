@@ -39,6 +39,7 @@
 #include <mi/neuraylib/iuser_class_factory.h>
 
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -58,12 +59,14 @@ namespace neuraylib { class ISerializable; class ITransaction; }
 namespace MI {
 
 namespace DB { class Element_base; }
+namespace IDATA { class Factory; }
 
 namespace NEURAY {
 
 class Class_factory;
 class Expression_factory;
 class IDb_element;
+class Tag_handler;
 class Transaction_impl;
 class Type_factory;
 class Value_factory;
@@ -84,6 +87,7 @@ extern Class_factory* s_class_factory;
 /// - Via class name and class ID, registering factories for the API class and the DB element
 /// - Via class name, registering a factory for the API class
 /// - Via class name and UUID, registering a factory for the user class
+/// The second case is delegated to #MI::IDATA::Factory.
 ///
 /// There are two different ways to create instances of API/user classes:
 /// - an instance that wraps a DB element stored in the DB
@@ -91,15 +95,6 @@ extern Class_factory* s_class_factory;
 /// - an instance that is not associated with the DB in any way (either because the instance has
 ///   not yet been stored in the DB, or the instance has no DB element as backing implementation)
 ///   (corresponds to STATE_POINTER in Db_element_impl_base)
-///
-/// Note that the maps in this classes are not protected through locks, even though the class
-/// factory can be used from multiple threads concurrently. However, the maps are only modified
-/// during registration, and that happens single-threaded. Locks would cause a deadlock if a user
-/// invokes the class factory from a user class factory (or the corresponding constructor).
-///
-/// The exception from this rule are the maps that store structure and enum declarations. They are
-/// protected by a lock. Recursive structures and enums work because the lock is not needed while
-/// structures and are created, but only to look up the structure or enum declaration.
 class Class_factory : public boost::noncopyable
 {
 public:
@@ -108,8 +103,6 @@ public:
     Class_factory();
 
     /// Destructor.
-    ///
-    /// Releases the registers class factories for user-defined classes.
     ~Class_factory();
 
     // class registration
@@ -124,10 +117,8 @@ public:
     /// \param argv                 An array of optional constructor arguments.
     /// \return                     An instance of the class, or \c NULL on failure (incl.
     ///                             invalid arguments).
-    typedef mi::base::IInterface* (*Api_class_factory)
-        (mi::neuraylib::ITransaction* transaction,
-         mi::Uint32 argc,
-         const mi::base::IInterface* argv[]);
+    using Api_class_factory = mi::base::IInterface*(*)(
+        mi::neuraylib::ITransaction*, mi::Uint32, const mi::base::IInterface**);
 
     /// The type of factory methods for DB elements.
     ///
@@ -140,10 +131,8 @@ public:
     /// \param argv                 An array of optional constructor arguments.
     /// \return                     An instance of the class, or \c NULL on failure (incl.
     ///                             invalid arguments).
-    typedef DB::Element_base* (*Db_element_factory)
-        (mi::neuraylib::ITransaction* transaction,
-         mi::Uint32 argc,
-         const mi::base::IInterface* argv[]);
+    using Db_element_factory = DB::Element_base*(*)(
+        mi::neuraylib::ITransaction*, mi::Uint32, const mi::base::IInterface**);
 
     /// Registers class factories for a class ID and a class name.
     ///
@@ -408,8 +397,11 @@ public:
         return ptr_T;
     }
 
+    /// Returns the corresponding factory for instances of #mi::neuraylib::IData.
+    IDATA::Factory* get_idata_factory() const { return m_idata_factory.get(); }
+
     /// Converts \p uuid into a string.
-    static std::string uuid_to_string( const mi::base::Uuid& uuid);
+    std::string uuid_to_string( const mi::base::Uuid& uuid);
 
     /// Returns the MDL type factory for a given transaction.
     Type_factory* create_type_factory( mi::neuraylib::ITransaction* transaction) const;
@@ -472,78 +464,6 @@ private:
         ptr_iinterface->release();
         return ptr_T;
     }
-
-    /// Creates an instance of an array class.
-    ///
-    /// \param transaction          The transaction.
-    /// \param type_name            The type name of the array class to create.
-    /// \param argc                 The size of the \p argv array (must be 0).
-    /// \param argv                 An array of optional arguments that gets passed to the class
-    ///                             factories.
-    /// \return                     An instance of the requested class, or \c NULL on failure.
-    mi::base::IInterface* create_array_instance(
-        Transaction_impl* transaction,
-        const char* type_name,
-        mi::Uint32 argc,
-        const mi::base::IInterface* argv[]) const;
-
-    /// Creates an instance of a map class.
-    ///
-    /// \param transaction          The transaction.
-    /// \param type_name            The type name of the map class to create.
-    /// \param argc                 The size of the \p argv array (must be 0).
-    /// \param argv                 An array of optional arguments that gets passed to the class
-    ///                             factories.
-    /// \return                     An instance of the requested class, or \c NULL on failure.
-    mi::base::IInterface* create_map_instance(
-        Transaction_impl* transaction,
-        const char* type_name,
-        mi::Uint32 argc,
-        const mi::base::IInterface* argv[]) const;
-
-    /// Creates an instance of a pointer or const pointer class.
-    ///
-    /// \param transaction          The transaction.
-    /// \param type_name            The type name of the pointer class to create.
-    /// \param argc                 The size of the \p argv array (must be 0).
-    /// \param argv                 An array of optional arguments that gets passed to the class
-    ///                             factories.
-    /// \return                     An instance of the requested class, or \c NULL on failure.
-    mi::base::IInterface* create_pointer_instance(
-        Transaction_impl* transaction,
-        const char* type_name,
-        mi::Uint32 argc,
-        const mi::base::IInterface* argv[]) const;
-
-    /// Creates an instance of a structure declaration.
-    ///
-    /// \param transaction          The transaction.
-    /// \param type_name            The type name of the structure declaration to create.
-    /// \param argc                 The size of the \p argv array (must be 0).
-    /// \param argv                 An array of optional arguments that gets passed to the class
-    ///                             factories.
-    /// \return                     An instance of the requested class, or \c NULL on failure.
-    mi::base::IInterface* create_structure_instance(
-        Transaction_impl* transaction,
-        const char* type_name,
-        mi::Uint32 argc,
-        const mi::base::IInterface* argv[],
-        const mi::IStructure_decl* decl) const;
-
-    /// Creates an instance of an enum declaration.
-    ///
-    /// \param transaction          The transaction.
-    /// \param type_name            The type name of the enum declaration to create.
-    /// \param argc                 The size of the \p argv array (must be 0).
-    /// \param argv                 An array of optional arguments that gets passed to the class
-    ///                             factories.
-    /// \return                     An instance of the requested class, or \c NULL on failure.
-    mi::base::IInterface* create_enum_instance(
-        Transaction_impl* transaction,
-        const char* type_name,
-        mi::Uint32 argc,
-        const mi::base::IInterface* argv[],
-        const mi::IEnum_decl* decl) const;
 
     /// Extracts the actual user class from the API wrapper and returns it.
     ///
@@ -624,33 +544,11 @@ private:
     /// \return                     An instance of the requested class, or \c NULL on failure.
     mi::base::IInterface* invoke_user_class_factory( const mi::base::Uuid& uuid) const;
 
-    /// Checks whether any member of a structure declaration contains a blacklisted type name.
-    ///
-    /// Used to reject recursive structure declarations (including indirect recursion).
-    ///
-    /// \note The caller must lock #m_map_name_structure_decl_lock.
-    ///
-    /// \param type_name   The type name to check.
-    /// \param blacklist   List of blacklisted type names. Modified during execution,
-    ///                    restored before the method returns.
-    /// \return            \c true if the call declaration contains any of the blacklisted type
-    ///                    names, \c false otherwise.
-    bool contains_blacklisted_type_names(
-        const std::string& type_name, std::vector<std::string>& blacklist);
+    /// A callback passed to #m_idata_factory to implement the support for #mi::IRef.
+    mi::base::Handle<Tag_handler> m_tag_handler;
 
-    /// Checks whether any member of a structure declaration contains a blacklisted type name.
-    ///
-    /// Used to reject recursive structure declarations (including indirect recursion).
-    ///
-    /// \note The caller must lock #m_map_name_structure_decl_lock.
-    ///
-    /// \param decl        The structure declaration to check.
-    /// \param blacklist   List of blacklisted type names. Modified during execution,
-    ///                    restored before the method returns.
-    /// \return            \c true if the structure declaration contains any of the blacklisted type
-    ///                    names, \c false otherwise.
-    bool contains_blacklisted_type_names(
-        const mi::IStructure_decl* decl, std::vector<std::string>& blacklist);
+    /// The corresponding factory for instances of #mi::neuraylib::IData.
+    std::unique_ptr<IDATA::Factory> m_idata_factory;
 
     /// Maps class names to class IDs.
     ///
@@ -683,22 +581,6 @@ private:
     /// Not locked since it is modified only before startup/after shutdown.
     std::map<mi::base::Uuid, mi::base::Handle<mi::neuraylib::IUser_class_factory>>
         m_map_uuid_user_class_factory;
-
-    /// Maps class names to structure declarations.
-    ///
-    /// \note Any access needs to be protected by #m_map_name_structure_decl_lock.
-    std::map<std::string, mi::base::Handle<const mi::IStructure_decl>> m_map_name_structure_decl;
-
-    /// Maps class names to enum declarations.
-    ///
-    /// \note Any access needs to be protected by #m_map_name_enum_decl_lock.
-    std::map<std::string, mi::base::Handle<const mi::IEnum_decl>> m_map_name_enum_decl;
-
-    /// The lock that protects the map #m_map_name_structure_decl.
-    mutable mi::base::Lock m_map_name_structure_decl_lock;
-
-    /// The lock that protects the map #m_map_name_enum_decl.
-    mutable mi::base::Lock m_map_name_enum_decl_lock;
 };
 
 } // namespace NEURAY

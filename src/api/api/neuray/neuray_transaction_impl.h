@@ -38,11 +38,15 @@
 #include <regex>
 #include <set>
 #include <string>
+
 #include <mi/base/lock.h>
 #include <mi/base/interface_implement.h>
+
 #include <boost/core/noncopyable.hpp>
+
 #include <base/data/db/i_db_tag.h>
 #include <base/data/serial/i_serial_classid.h>
+#include <base/lib/robin_hood/robin_hood.h>
 
 #include "i_neuray_transaction.h"
 
@@ -254,7 +258,7 @@ private:
         const std::wregex* name_regex,
         const std::set<SERIAL::Class_id>* class_ids,
         mi::IDynamic_array* result,
-        std::set<DB::Tag>& tags_seen) const;
+        robin_hood::unordered_set<DB::Tag>& tags_seen) const;
 
     /// The DB transaction used by this instance.
     DB::Transaction* m_db_transaction;
@@ -282,7 +286,7 @@ private:
     /// Lock for #m_elements.
     mi::base::Lock m_elements_lock;
 
-    typedef std::set<const Db_element_impl_base*> Elements;
+    using Elements = std::set<const Db_element_impl_base*>;
 
     /// Contains the DB elements currently in use by the API for this transaction.
     ///

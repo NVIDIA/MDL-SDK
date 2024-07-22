@@ -57,10 +57,10 @@ ATTR::Type_code to_valid_range(const ATTR::Type_code code)
 // is useful to check that the values are compatible, for example for shader
 // parameter inheritance and assignment. Names are not compared.
 MI_INLINE bool Type::operator==(
-    const Type	&other) const
+    const Type  &other) const
 {
-    if (m_typecode != other.m_typecode	||
-        m_const    != other.m_const	||
+    if (m_typecode != other.m_typecode  ||
+        m_const    != other.m_const     ||
         m_spare    != other.m_spare)
 
         return false;                           // toplevel type mismatch
@@ -93,7 +93,7 @@ MI_INLINE bool Type::operator==(
 
 
 MI_INLINE bool Type::operator!=(
-    const Type	&other) const
+    const Type  &other) const
 {
     return !(*this == other);
 }
@@ -165,7 +165,7 @@ MI_INLINE std::vector<std::pair<int, std::string> >* Type::get_enum() const
 }
 
 MI_INLINE void Type::set_name(
-    const char		*name)		// new field name
+    const char          *name)          // new field name
 {
     if (name)
         m_name = name;
@@ -179,7 +179,7 @@ MI_INLINE void Type::set_name(
 //
 
 MI_INLINE void Type::set_next(
-    const Type &next)			// new successor
+    const Type &next)                   // new successor
 {
     delete m_next;
     m_next = new Type(next);
@@ -193,7 +193,7 @@ MI_INLINE void Type::set_next(
 //
 
 MI_INLINE size_t Type::sizeof_one(
-    Type_code		type)		// return size of one of this type
+    Type_code           type)           // return size of one of this type
 {
     return m_typeinfo[type].comp * m_typeinfo[type].size;
 }
@@ -204,7 +204,7 @@ MI_INLINE size_t Type::sizeof_one(
 //
 
 MI_INLINE const char *Type::type_name(
-    Type_code		type)		// type to look up
+    Type_code           type)           // type to look up
 {
     type = to_valid_range(type);
     return m_typeinfo[type].name;
@@ -216,7 +216,7 @@ MI_INLINE const char *Type::type_name(
 //
 
 MI_INLINE Uint Type::component_count(
-    Type_code		type)		// type, ie. Color -> 4 components
+    Type_code           type)           // type, ie. Color -> 4 components
 {
     type = to_valid_range(type);
     return m_typeinfo[type].comp;
@@ -224,14 +224,14 @@ MI_INLINE Uint Type::component_count(
 
 
 MI_INLINE Type_code Type::component_type(
-    Type_code		type)		// type, ie. Color -> Scalar
+    Type_code           type)           // type, ie. Color -> Scalar
 {
     type = to_valid_range(type);
     return m_typeinfo[type].base;
 }
 
 MI_INLINE const char *Type::component_name( //-V524 PVS
-    Type_code		type)		// type, ie. Color -> Scalar
+    Type_code           type)           // type, ie. Color -> Scalar
 {
     type = to_valid_range(type);
     return m_typeinfo[type].name;
@@ -243,14 +243,14 @@ MI_INLINE const char *Type::component_name( //-V524 PVS
 //
 
 MI_INLINE bool Type::is_type_subclass(
-    SERIAL::Class_id id) const		// id of the requested subclass
+    SERIAL::Class_id id) const          // id of the requested subclass
 {
     return false;
 }
 
 // write access functions. Setting next/child deletes the entire old chain.
 MI_INLINE void Type::set_typecode(
-    Type_code		typecode)
+    Type_code           typecode)
 {
     ASSERT(M_ATTR, typecode != TYPE_ID);
     m_typecode = typecode;
@@ -258,7 +258,7 @@ MI_INLINE void Type::set_typecode(
 
 
 MI_INLINE void Type::set_const(
-    bool		isconst)
+    bool                isconst)
 {
     m_const = isconst;
 }
@@ -461,12 +461,12 @@ MI_INLINE size_t Type::sizeof_elem() const
     }
     for (const Type *t=get_child(); t; t=t->get_next()) {
         size_t subalign = t->align_all();
-        if (subalign > align)				// align by largest
+        if (subalign > align)                           // align by largest
             align = subalign;
-        total  = (total + subalign-1) & (~subalign+1);	// align new child
-        total += t->sizeof_all();			// add new child
+        total  = (total + subalign-1) & (~subalign+1);  // align new child
+        total += t->sizeof_all();                       // add new child
     }
-    total = (total + align-1) & (~align+1);		// pad end of struct
+    total = (total + align-1) & (~align+1);             // pad end of struct
     return total;
 }
 

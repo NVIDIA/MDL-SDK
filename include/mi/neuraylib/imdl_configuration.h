@@ -32,6 +32,7 @@
 #define MI_NEURAYLIB_IMDL_CONFIGURATION_H
 
 #include <mi/base/interface_declare.h>
+#include <mi/neuraylib/itype.h>
 #include <mi/neuraylib/version.h>
 
 namespace mi {
@@ -219,6 +220,8 @@ public:
     /// \c false, such an assignment fails and it is necessary to insert the cast operator
     /// explicitly. Default: \c true.
     ///
+    /// \note This setting can only be configured before \neurayProductName has been started.
+    ///
     /// \see #mi::neuraylib::IExpression_factory::create_cast().
     ///
     /// \param value    \c True to enable the feature, \c false otherwise.
@@ -239,10 +242,12 @@ public:
     /// and makes the name of let expressions available as names of such temporaries. In order to
     /// do so, certain optimizations are disabled, in particular, constant folding. These names are
     /// only available on material and functions definitions, not on compiled materials, which are
-    /// always highly optimized. Default: \c true.
+    /// always highly optimized. Default: \c false.
     ///
     /// \note Since some optimizations are essential for inner workings of the MDL compiler, there
     //        is no guarantee that the name of a particular let expression is exposed.
+    ///
+    /// \note This setting can only be configured before \neurayProductName has been started.
     ///
     /// \see #mi::neuraylib::IFunction_definition::get_temporary_name()
     virtual Sint32 set_expose_names_of_let_expressions( bool value) = 0;
@@ -252,10 +257,10 @@ public:
     /// \see #set_expose_names_of_let_expressions()
     virtual bool get_expose_names_of_let_expressions() const = 0;
 
-    /// Configures the behavior of \c df::simple_glossy_bsdf() in MDL modules
-    /// of versions smaller than 1.3.
+    /// Configures the behavior of \c df::simple_glossy_bsdf() in MDL modules of versions smaller
+    /// than 1.3.
     ///
-    /// \note \if IRAY_API This setting can only be configured before \NeurayProductName has been
+    /// \note \if IRAY_API This setting can only be configured before \neurayProductName has been
     ///       started. \else This function has no effect in the MDL SDK and always returns -1.
     ///       \endif
     ///
@@ -277,6 +282,9 @@ public:
     ///
     /// \note The returned instance contains a copy of the currently configured search paths,
     ///       subsequent changes to the search paths are not reflected in this instance.
+    ///
+    /// \note The built-in entity resolver is only available after \neurayProductName has been
+    ///       started.
     virtual IMdl_entity_resolver* get_entity_resolver() const = 0;
 
     /// Installs an external entity resolver.
@@ -294,6 +302,34 @@ public:
     virtual void MI_NEURAYLIB_DEPRECATED_METHOD_14_1(set_logger)( base::ILogger* logger) = 0;
 
     virtual base::ILogger* MI_NEURAYLIB_DEPRECATED_METHOD_14_1(get_logger)() = 0;
+
+    /// \name Miscellaneous settings
+    //@{
+
+    /// Sets the frequency of the \c material.ior field.
+    ///
+    /// Starting with MDL 1.9 the \c material.ior field is supposed to be no longer uniform, but
+    /// varying. However, in the current implementation the \c material.ior field is varying for
+    /// \em all MDL versions. In rare cases, this can lead to problems with MDL modules written for
+    /// older MDL versions. This flag allows to trade the new feature of a varying \c material.ior
+    /// field for full compatibility with older MDL versions.
+    /// Default: #mi::neuraylib::IType::MK_VARYING.
+    ///
+    /// \note This setting can only be configured before \neurayProductName has been started.
+    ///
+    /// \param frequency_qualifier   The desired frequency modifier for the \c material.ior field.
+    /// \return
+    ///                              -  0: Success.
+    ///                              - -1: The method cannot be called at this point of time.
+    ///                              - -2: Unsupported enum value.
+    virtual Sint32 set_material_ior_frequency( IType::Modifier frequency_qualifier) = 0;
+
+    /// Returns the frequency of the \c material.ior field.
+    ///
+    /// Returns either #mi::neuraylib::IType::MK_VARYING or #mi::neuraylib::IType::MK_UNIFORM.
+    virtual IType::Modifier get_material_ior_frequency() const = 0;
+
+    //@}
 };
 
 /**@}*/ // end group mi_neuray_configuration

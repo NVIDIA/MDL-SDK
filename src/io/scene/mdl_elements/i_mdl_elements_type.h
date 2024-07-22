@@ -51,6 +51,84 @@ namespace MDL {
 
 class IAnnotation_block;
 
+class IStruct_category : public
+    mi::base::Interface_declare<0xacdcee65,0xdbca,0x4a19,0xb3,0xd1,0x65,0x86,0xb0,0x9b,0x5c,0xdb>
+{
+public:
+    enum Predefined_id {
+        CID_USER              = -1,
+        CID_MATERIAL_CATEGORY =  0,
+        CID_FORCE_32_BIT      =  0x7fffffff
+    };
+
+    virtual const char* get_symbol() const = 0;
+
+    virtual Predefined_id get_predefined_id() const = 0;
+
+    virtual const IAnnotation_block* get_annotations() const = 0;
+
+    // internal methods
+
+    virtual mi::Size get_memory_consumption() const = 0;
+};
+
+mi_static_assert( sizeof( IStruct_category::Predefined_id) == sizeof( mi::Sint32));
+
+class IStruct_category_list : public
+    mi::base::Interface_declare<0xd9fbaf31,0x70d6,0x4642,0x96,0x4b,0x38,0xbd,0xf5,0xde,0x03,0x9b>
+{
+public:
+    // public API methods
+
+    virtual mi::Size get_size() const = 0;
+
+    virtual mi::Size get_index( const char* name) const = 0;
+
+    virtual const char* get_name( mi::Size index) const = 0;
+
+    virtual const IStruct_category* get_struct_category( mi::Size index) const = 0;
+
+    template <class T>
+    const T* get_struct_category( mi::Size index) const
+    {
+        mi::base::Handle<const IStruct_category> ptr_struct_category( get_struct_category( index));
+        if( !ptr_struct_category)
+            return nullptr;
+        return static_cast<const T*>( ptr_struct_category->get_interface( typename T::IID()));
+    }
+
+    virtual const IStruct_category* get_struct_category( const char* name) const = 0;
+
+    template <class T>
+    const T* get_struct_category( const char* name) const
+    {
+        mi::base::Handle<const IStruct_category> ptr_struct_category( get_struct_category( name));
+        if( !ptr_struct_category)
+            return nullptr;
+        return static_cast<const T*>( ptr_struct_category->get_interface( typename T::IID()));
+    }
+
+    virtual mi::Sint32 set_struct_category(
+        mi::Size index, const IStruct_category* struct_category) = 0;
+
+    virtual mi::Sint32 set_struct_category(
+        const char* name, const IStruct_category* struct_category) = 0;
+
+    virtual mi::Sint32 add_struct_category(
+        const char* name, const IStruct_category* struct_category) = 0;
+
+    // internal methods
+
+    /// A variant of #add_type() without sanity checks.
+    ///
+    /// This variant should only be used if correctness is guaranteed, e.g., when converting from
+    /// the core representation, or from another instance known to be correct.
+    virtual void add_struct_category_unchecked(
+        const char* name, const IStruct_category* struct_category) = 0;
+
+    virtual mi::Size get_memory_consumption() const = 0;
+};
+
 class IType : public
     mi::base::Interface_declare<0xa0949f39,0xbec9,0x458a,0x80,0x04,0xc6,0xcc,0x58,0x79,0x61,0x48>
 {
@@ -79,10 +157,10 @@ public:
     };
 
     enum Modifier {
-        MK_NONE        = 0,
-        MK_UNIFORM     = 2,
-        MK_VARYING     = 4,
-        MK_FORCE_32_BIT
+        MK_NONE          = 0,
+        MK_UNIFORM       = 2,
+        MK_VARYING       = 4,
+        MK_FORCE_32_BIT = 0xffffffffU
     };
 
     virtual Kind get_kind() const = 0;
@@ -91,7 +169,7 @@ public:
 
     virtual const IType* skip_all_type_aliases() const = 0;
 
-    virtual mi::Size get_memory_consumption() const = 0;
+    virtual bool is_declarative() const = 0;
 };
 
 mi_static_assert( sizeof( IType::Kind) == sizeof( mi::Uint32));
@@ -180,7 +258,7 @@ public:
     virtual const IAnnotation_block* get_value_annotations( mi::Size index) const = 0;
 };
 
-mi_static_assert( sizeof( IType_enum::Predefined_id) == sizeof( mi::Uint32));
+mi_static_assert( sizeof( IType_enum::Predefined_id) == sizeof( mi::Sint32));
 
 class IType_float : public
     mi::base::Interface_declare<0xc57b325d,0x05eb,0x4dd5,0x81,0xde,0x2e,0xbc,0x1f,0xd1,0x76,0xdc,
@@ -338,9 +416,11 @@ public:
     virtual const IAnnotation_block* get_annotations() const = 0;
 
     virtual const IAnnotation_block* get_field_annotations( mi::Size index) const = 0;
+
+    virtual const IStruct_category* get_struct_category() const = 0;
 };
 
-mi_static_assert( sizeof( IType_struct::Predefined_id) == sizeof( mi::Uint32));
+mi_static_assert( sizeof( IType_struct::Predefined_id) == sizeof( mi::Sint32));
 
 class IType_reference : public
     mi::base::Interface_declare<0x2d682296,0x5789,0x42fd,0xa8,0x2a,0x70,0xd9,0x38,0x0f,0x3a,0x8d,
@@ -474,7 +554,7 @@ public:
     /// A variant of #add_type() without sanity checks.
     ///
     /// This variant should only be used if correctness is guaranteed, e.g., when converting from
-    /// the MDL core API representation, or from another instance known to be correct.
+    /// the core representation, or from another instance known to be correct.
     virtual void add_type_unchecked( const char* name, const IType* type) = 0;
 
     virtual mi::Size get_memory_consumption() const = 0;
@@ -486,6 +566,28 @@ class IType_factory : public
 public:
     /// \name Interface of #mi::neuraylib::IType_factory
     //@{
+
+    virtual const IStruct_category* create_struct_category( const char* symbol) const = 0;
+
+    virtual IStruct_category_list* create_struct_category_list(
+        mi::Size initial_capacity) const = 0;
+
+    virtual const IStruct_category* get_predefined_struct_category(
+        IStruct_category::Predefined_id id) const = 0;
+
+    virtual IStruct_category_list* clone( const IStruct_category_list* list) const = 0;
+
+    virtual mi::Sint32 compare( const IStruct_category* lhs, const IStruct_category* rhs) const = 0;
+
+    virtual mi::Sint32 compare(
+        const IStruct_category_list* lhs, const IStruct_category_list* rhs) const = 0;
+
+    virtual const mi::IString* dump(
+        const IStruct_category* struct_category, mi::Size depth = 0) const = 0;
+
+    virtual const mi::IString* dump(
+        const IStruct_category_list* list, mi::Size depth = 0) const = 0;
+
 
     virtual const IType_alias* create_alias(
         const IType* type, mi::Uint32 modifiers, const char* symbol) const = 0;
@@ -544,7 +646,9 @@ public:
 
     virtual mi::Sint32 compare( const IType_list* lhs, const IType_list* rhs) const = 0;
 
-    virtual mi::Sint32 is_compatible(const IType* src, const IType* dst) const = 0;
+    virtual mi::Sint32 is_compatible( const IType* lhs, const IType* rhs) const = 0;
+
+    virtual mi::Sint32 from_same_struct_category( const IType* lhs, const IType* rhs) const = 0;
 
     virtual const mi::IString* dump( const IType* type, mi::Size depth = 0) const = 0;
 
@@ -562,24 +666,43 @@ public:
             return nullptr;
         return static_cast<const T*>( ptr_type->get_interface( typename T::IID()));
     }
-
     //@}
     /// \name Type registration
     //@{
+
+    /// Returns an instance of a given struct category.
+    ///
+    /// If the symbol is already registered, its definition is compared with \p id. In case of a
+    /// match the registered struct category is returned, otherwise \c NULL. If the symbol is not
+    /// yet registered, it will be registered with a struct category constructed from \p id and
+    /// \p annotations, and the just registered struct category is returned.
+    ///
+    /// \return
+    ///           -  0: Success.
+    ///           - -1: Invalid parameters.
+    ///           - -2: The given symbol is not a valid MDL identifier.
+    ///           - -3: The given symbol is already registered and of a different type (struct
+    ///                 category vs enum type vs struct type).
+    ///           - -4: The given symbol is already registered and of a different type (ID).
+    virtual const IStruct_category* create_struct_category(
+        const char* symbol,
+        IStruct_category::Predefined_id id,
+        mi::base::Handle<const IAnnotation_block>& annotations,
+        mi::Sint32* errors) = 0;
 
     /// Returns an instance of a given enum type.
     ///
     /// If the symbol is already registered, its definition is compared with \p id and \p values. In
     /// case of a match the registered type is returned, otherwise \c NULL. If the symbol is not yet
     /// registered, it will be registered with a type constructed from \p id, \p values,
-    /// \p annotations, and \p value_annotations and the just registered type is returned.
+    /// \p annotations, and \p value_annotations, and the just registered type is returned.
     ///
     /// \return
     ///           -  0: Success.
     ///           - -1: Invalid parameters.
     ///           - -2: The given symbol is not a valid MDL identifier.
-    ///           - -3: The given symbol is already registered and of a different type (enum vs
-    ///                 struct).
+    ///           - -3: The given symbol is already registered and of a different type (struct
+    ///                 category vs enum type vs struct type).
     ///           - -4: The given symbol is already registered and of a different type (ID and/or
     ///                 values do not match).
     virtual const IType_enum* create_enum(
@@ -590,19 +713,21 @@ public:
         const IType_enum::Value_annotations& value_annotations,
         mi::Sint32* errors) = 0;
 
-    ///  Returns an instance of a given struct type.
+    /// Returns an instance of a given struct type.
     ///
-    /// If the symbol is already registered, its definition is compared with \p id and \p fields. In
-    /// case of a match the registered type is returned, otherwise \c NULL. If the symbol is not yet
-    /// registered, it will be registered with a type constructed from \p id, \p fields,
-    /// \p annotations, and \p field_annotations and the just registered type is returned.
+    /// If the symbol is already registered, its definition is compared with \p id, \p fields,
+    /// \p is_declarative, and the symbol of \p struct_category. In case of a match the registered
+    /// type is returned, otherwise \c NULL. If  the symbol is not yet registered, it will be
+    /// registered with a type constructed from \p id, \p fields, \p annotations,
+    /// \p field_annotations, \p is_declarative, and \p struct_category, and the just registered
+    /// type is returned.
     ///
     /// \return
     ///           -  0: Success.
-    ///           - -1: Invalid parameters.
+    ///           - -1: Invalid parameters (including valid struct category but not declarative).
     ///           - -2: The given symbol is not a valid MDL identifier.
-    ///           - -3: The given symbol is already registered and of a different type (enum vs
-    ///                 struct).
+    ///           - -3: The given symbol is already registered and of a different type (struct
+    ///                 category vs enum type vs struct type).
     ///           - -4: The given symbol is already registered and of a different type (ID and/or
     ///                 fields do not match).
     virtual const IType_struct* create_struct(
@@ -611,11 +736,29 @@ public:
         const IType_struct::Fields& fields,
         mi::base::Handle<const IAnnotation_block>& annotations,
         const IType_struct::Field_annotations& field_annotations,
+        bool is_declarative,
+        const IStruct_category* struct_category,
         mi::Sint32* errors) = 0;
 
     //@}
     /// \name Serialization
     //@{
+
+    /// Serializes a struct category to \p serializer.
+    virtual void serialize_struct_category(
+        SERIAL::Serializer* serializer, const IStruct_category* struct_category) const = 0;
+
+    /// Deserializes a struct category from \p deserializer.
+    virtual const IStruct_category* deserialize_struct_category(
+        SERIAL::Deserializer* deserializer) = 0;
+
+    /// Serializes a struct category to \p serializer.
+    virtual void serialize_struct_category_list(
+        SERIAL::Serializer* serializer, const IStruct_category_list* list) const = 0;
+
+    /// Deserializes a struct category from \p deserializer.
+    virtual IStruct_category_list* deserialize_struct_category_list(
+        SERIAL::Deserializer* deserializer) = 0;
 
     /// Serializes a type to \p serializer.
     virtual void serialize( SERIAL::Serializer* serializer, const IType* type) const = 0;
@@ -635,7 +778,7 @@ public:
 
     /// Serializes a type list to \p serializer.
     virtual void serialize_list(
-        SERIAL::Serializer* serializer, const IType_list* type_list) const = 0;
+        SERIAL::Serializer* serializer, const IType_list* list) const = 0;
 
     /// Deserializes a type list from \p deserializer.
     virtual IType_list* deserialize_list( SERIAL::Deserializer* deserializer) = 0;
@@ -647,10 +790,24 @@ public:
 IType_factory* get_type_factory();
 
 // See base/lib/mem/i_mem_consumption.h
-inline bool has_dynamic_memory_consumption( const IType*) { return true; }
-inline size_t dynamic_memory_consumption( const IType* t)
-{ return t->get_memory_consumption(); }
+inline bool has_dynamic_memory_consumption( const IStruct_category*) { return true; }
+inline size_t dynamic_memory_consumption( const IStruct_category* sc)
+{ return sc->get_memory_consumption(); }
 
+// See base/lib/mem/i_mem_consumption.h
+inline bool has_dynamic_memory_consumption( const IStruct_category_list*) { return true; }
+inline size_t dynamic_memory_consumption( const IStruct_category_list* l)
+{ return l->get_memory_consumption(); }
+
+// See base/lib/mem/i_mem_consumption.h
+//
+// Treat types as if they did not use any dynamic memory. This is not correct and underestimates
+// their memory usage, but only to a small amount, whereas correct values here lead to way too high
+// numbers since the types are shared between all users (values, expressions, type lists, etc.).
+inline bool has_dynamic_memory_consumption( const IType*) { return false; }
+inline size_t dynamic_memory_consumption( const IType*) { return 0; }
+
+// See base/lib/mem/i_mem_consumption.h
 inline bool has_dynamic_memory_consumption( const IType_list*) { return true; }
 inline size_t dynamic_memory_consumption( const IType_list* l)
 { return l->get_memory_consumption(); }

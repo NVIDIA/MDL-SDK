@@ -42,7 +42,7 @@
 namespace mi {
 namespace mdl {
 
-/// Helper struct to support mapping of IGenerated_code_dag::IMaterial_instance::Slot values
+/// Helper struct to support mapping of IMaterial_instance::Slot values
 /// to selector pattern.
 struct Locator {
     char const *first_name;
@@ -50,7 +50,7 @@ struct Locator {
     char const *third_name;
 };
 
-/// The mapping table, keep in sync with IGenerated_code_dag::IMaterial_instance::Slot.
+/// The mapping table, keep in sync with IMaterial_instance::Slot.
 static Locator const locators[] = {
     { "thin_walled", NULL,                     NULL },
 
@@ -773,7 +773,7 @@ void Dag_hasher::hash(IValue const *v) {
 
             m_hasher.update(st->get_symbol()->get_name());
         }
-        // fallthrough
+        MDL_FALLTHROUGH
     case IValue::VK_VECTOR:
     case IValue::VK_MATRIX:
     case IValue::VK_ARRAY:

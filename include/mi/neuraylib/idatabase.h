@@ -308,10 +308,6 @@ scopes.
 */
 
 /// This interface is used to interact with the distributed database.
-///
-/// \if MDL_SDK_API
-/// \note The MDL SDK currently supports only \em one scope, the global scope.
-/// \endif
 class IDatabase : public
     mi::base::Interface_declare<0x814ae637,0xde35,0x4870,0x8e,0x5b,0x7e,0x28,0x9d,0x30,0xfb,0x82>
 {
@@ -322,9 +318,8 @@ public:
     ///          system.
     virtual IScope* get_global_scope() const = 0;
 
-    /// \ifnot MDL_SDK_API
-    /// Creates a new optionally temporary scope at the given privacy level with the
-    /// given parent scope ID.
+    /// Creates a new optionally temporary scope at the given privacy level with the given parent
+    /// scope ID.
     ///
     /// \note A scope continues to exist if the pointer returned by this method is released. Use
     ///       #remove_scope() to remove a scope.
@@ -343,12 +338,8 @@ public:
     ///                       then when the creating host is removed from the cluster the
     ///                       scope and all contained data will remain in the database.
     /// \return               The created scope or \c NULL if something went wrong.
-    /// \else
-    /// This operation is not supported.
-    /// \endif
     virtual IScope* create_scope( IScope* parent, Uint8 privacy_level = 0, bool temp = false) = 0;
 
-    /// \ifnot MDL_SDK_API
     /// Creates or retrieves a new named scope at the given privacy level with the given parent
     /// scope ID.
     ///
@@ -364,9 +355,6 @@ public:
     ///                       0). The default value of 0 indicates the privacy level of the parent
     ///                       scope plus 1.
     /// \return               The created scope or \c NULL if something went wrong.
-    /// \else
-    /// This operation is not supported.
-    /// \endif
     virtual IScope* create_or_get_named_scope(
         const char* name, IScope* parent = 0,  Uint8 privacy_level = 0) = 0;
 
@@ -376,17 +364,12 @@ public:
     /// \return               The found scope or \c NULL if no such scope exists.
     virtual IScope* get_scope( const char* id) const = 0;
 
-    /// \ifnot MDL_SDK_API
     /// Looks up and returns a scope with a given name.
     ///
     /// \param name           The name of the scope
     /// \return               The found scope or \c NULL if no such scope exists.
-    /// \else
-    /// This operation is not supported.
-    /// \endif
     virtual IScope* get_named_scope( const char* name) const = 0;
 
-    /// \ifnot MDL_SDK_API
     /// Removes a scope with the specified ID.
     ///
     /// Note that scopes are reference counted. The actual removal will not happen before all
@@ -399,9 +382,6 @@ public:
     ///
     /// \param id             The ID of the scope as returned by #mi::neuraylib::IScope::get_id().
     /// \return               0, in case of success, -1 in case of failure.
-    /// \else
-    /// This operation is not supported.
-    /// \endif
     virtual Sint32 remove_scope( const char* id) const = 0;
 
     /// Priorities for synchronous garbage collection runs.

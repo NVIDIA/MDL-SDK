@@ -146,7 +146,7 @@ mi::neuraylib::ITile* Image_file_reader_impl::read(
 
         const mi::Uint8* const src = surface.get_pixels() + z * surface.get_size() / 6;
         const mi::Uint8* const buffer1 = decompressor.get_buffer();
-        mi::Uint8* const buffer2 = new mi::Uint8[bytes_per_layer];
+        auto* const buffer2 = new mi::Uint8[bytes_per_layer];
 
         for( mi::Uint32 block = 0; block < decompressor.get_block_count_y(); ++block) {
             decompressor.decompress_blockline( src, block);
@@ -157,8 +157,7 @@ mi::neuraylib::ITile* Image_file_reader_impl::read(
         delete[] buffer2;
     }
 
-    tile->retain();
-    return tile.get();
+    return tile.extract();
 }
 
 bool Image_file_reader_impl::write(

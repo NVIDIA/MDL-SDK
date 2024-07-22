@@ -88,7 +88,6 @@ index.
 
   - \ref mi_neuray_example_derivatives "Automatic derivatives"
 
-\if  MDL_BIN_RELEASE
   - \ref mi_neuray_example_distilling "Material distilling"
   - \ref mi_neuray_example_distilling "Baking material sub-expressions"
 
@@ -99,7 +98,6 @@ index.
 
   - \ref mi_neuray_example_distilling_target "Custom Distiller target loading"
   - \ref mi_neuray_example_distilling_target "Custom Distiller plugin implementation"
-\endif
 
   - \ref mi_neuray_example_traversal "Traversal of a compiled material"
   - \ref mi_neuray_example_traversal "Generating MDL code"

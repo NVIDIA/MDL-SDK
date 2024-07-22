@@ -136,28 +136,20 @@ enum Module_id {
     M_SIMP,             // geometry/mesh/simplify
     M_STITCH,           // geometry/mesh/stitch
     M_WELD,             // geometry/mesh/weld
-    M_ICMAP,            // render/particlemap/irradcache
-    M_PMAP,             // render/particlemap/particlemap
     M_BACKENDS,         // render/mdl/backends
     M_ASSEMBLY,         // render/render/assembly
-    M_BRDF,             // render/render/brdf
-    M_FRAMEBUFFER,      // render/render/framebuffer
     M_LPEXPR,           // render/render/lpexpr
     M_MATCONV,          // render/render/matconv
     M_MRMDL,            // render/render/mrmetasl (mr only)
     M_RAL,              // render/render/ral
-    M_RDIFF,            // render/render/rdiff
     M_RENDER,           // render/render/render
     M_SAMP,             // render/render/samp
-    M_SHADER,           // render/render/shader
-    M_SOFTSHADER,       // render/render/softshader
     M_TRAVERSE,         // render/render/traverse
     M_TRAVERSE_API,     // render/render/traverse_api
     M_IRAY,             // render/iray/...
     M_INDEX,            // render/render/index
     M_BSP,              // some mental ray code
     M_SWRCLIB,          // render/swrc/swrclib
-    M_SWRCLIGHT,        // render/swrc/swrclight
     M_NEURAY_API,       // api/api/neuray
     M_MESH,             // prod/lib/mentalmesh
     M_DIST,             // mdl/distiller/dist

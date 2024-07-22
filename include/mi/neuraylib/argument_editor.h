@@ -149,6 +149,9 @@ public:
     /// \see \ref mi_neuray_mdl_arrays
     bool is_array_constructor() const;
 
+    /// Indicates whether the corresponding material or function definition is declarative.
+    bool is_declarative() const;
+
     /// Indicates whether the argument editor acts on a material instance.
     bool is_material() const;
 
@@ -707,15 +710,21 @@ public:
     /// \param parameter_index  The index of the argument in question.
     /// \param call_name        The name of the call to set.
     /// \return
-    ///                         -  0: Success.
-    ///                         - -1: #is_valid() returns \c false.
-    ///                         - -2: \p parameter_index is out of range.
-    ///                         - -3: The return type of \p call_name does not match the argument
-    ///                               type.
-    ///                         - -4: The material instance or function call is immutable.
-    ///                         - -5: The parameter is uniform, but the return type of the
-    ///                               call is varying.
-    ///                         - -6: \p call_name is invalid.
+    ///                         -   0: Success.
+    ///                         -  -1: #is_valid() returns \c false.
+    ///                         -  -2: \p parameter_index is out of range.
+    ///                         -  -3: The return type of \p call_name does not match the argument
+    ///                                type.
+    ///                         -  -4: The material instance or function call is immutable.
+    ///                         -  -5: The parameter is uniform, but the return type of the
+    ///                                call is varying.
+    ///                         -  -6: \p call_name is invalid.
+    ///                         -  -8: The parameter is uniform, but the argument is a call
+    ///                                expression and the return type of the called function
+    ///                                definition is effectively varying since the function
+    ///                                definition itself is varying.
+    ///                         - -10: The definition is non-declarative, but at least one of the
+    ///                                arguments is a declarative call.
     Sint32 set_call( Size parameter_index, const char* call_name);
 
     /// Sets an argument (call expressions only).
@@ -857,6 +866,14 @@ inline bool Argument_editor::is_array_constructor() const
     return m_access->is_array_constructor();
 }
 
+inline bool Argument_editor::is_declarative() const
+{
+    if( !is_valid())
+        return false;
+
+    return m_access->is_declarative();
+}
+
 inline bool Argument_editor::is_material() const
 {
     if( !is_valid())
@@ -914,7 +931,7 @@ inline bool Argument_editor::is_parameter_enabled( Size index, IMdl_evaluator_ap
         return true;
 
     base::Handle<const IValue_bool> b( evaluator->is_function_parameter_enabled(
-        m_transaction.get(), m_value_factory.get(), m_access.get(), index, /*error*/ 0));
+        m_transaction.get(), m_value_factory.get(), m_access.get(), index, /*errors*/ 0));
     if( !b)
         return true;
     return b->get_value();

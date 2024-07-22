@@ -43,7 +43,8 @@ namespace hair
     {
         float v = 1.0f;
         float n = 1.0f;
-        float d = 1.0f; //!! div by 0 if uint, as overflow, but does not matter in practice as float is suitable enough (only last iterations exceed precision but these are huuuge numbers in d then anyway)
+        float d = 1.0f; //!! div by 0 if uint, as overflow, but does not matter in practice as float is suitable enough 
+                        //!! (only last iterations exceed precision but these are huuuge numbers in d then anyway)
         float f = 1.0f;
         const float x2 = x * x;
         for (unsigned int i = 0; i < 9; ++i)

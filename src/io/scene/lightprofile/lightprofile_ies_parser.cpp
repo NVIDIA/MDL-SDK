@@ -43,12 +43,12 @@
 #include <cmath>
 #include <string>
 #include <cstring>
+#include <utility>
 #include <vector>
 
 #include <base/util/string_utils/i_string_utils.h>
 #include <base/util/string_utils/i_string_lexicographic_cast.h>
 #include <base/util/string_utils/i_string_utils.h>
-#include <base/hal/disk/disk.h>
 #include <base/hal/disk/disk_file_reader_writer_impl.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/path/i_path.h>
@@ -117,7 +117,7 @@ public:
     };
 
     // C'tor
-    Lightprofile_ies_parser(mi::neuraylib::IReader* reader, const std::string& log_identifier);
+    Lightprofile_ies_parser(mi::neuraylib::IReader* reader, std::string log_identifier);
 
     bool setup_lightprofile(
         Uint flags,
@@ -165,8 +165,8 @@ private:
     // File infos
     mi::base::Handle<mi::neuraylib::IReader> m_reader;
     std::string                              m_log_identifier;
-    bool                                     m_valid;
-    bool                                     m_skip_line_length_warning;
+    bool                                     m_valid = true;
+    bool                                     m_skip_line_length_warning = false;
 
     // Actual IES lightprofile version
     Version                     m_version;
@@ -210,11 +210,10 @@ private:
 // IES file parser
 //
 Lightprofile_ies_parser::Lightprofile_ies_parser(
-    mi::neuraylib::IReader* reader, const std::string& log_identifier)
+    mi::neuraylib::IReader* reader, std::string log_identifier)
   : m_reader(reader, mi::base::DUP_INTERFACE),
-    m_log_identifier(log_identifier),
-    m_valid(true),
-    m_skip_line_length_warning(false)
+    m_log_identifier(std::move(log_identifier))
+
 {
     char line[MAX_LINE_LENGTH];
     m_reader->readline(line, sizeof(line));
@@ -371,19 +370,19 @@ void Lightprofile_ies_parser::parse_lamp_data()
         m_valid = false;
         return;
     }
-    m_nb_of_lamps           = STRING::lexicographic_cast_s<MI::Uint, std::string>(tokens[0]);
-    m_lumens_per_lamp       = STRING::lexicographic_cast_s<MI::Scalar, std::string>(tokens[1]);
-    m_candela_multiplier    = STRING::lexicographic_cast_s<MI::Scalar, std::string>(tokens[2]);
-    m_nb_vertical_angles    = STRING::lexicographic_cast_s<MI::Uint, std::string>(tokens[3]);
+    m_nb_of_lamps           = STRING::lexicographic_cast_s<MI::Uint, std::string>(tokens[0]).value();
+    m_lumens_per_lamp       = STRING::lexicographic_cast_s<MI::Scalar, std::string>(tokens[1]).value();
+    m_candela_multiplier    = STRING::lexicographic_cast_s<MI::Scalar, std::string>(tokens[2]).value();
+    m_nb_vertical_angles    = STRING::lexicographic_cast_s<MI::Uint, std::string>(tokens[3]).value();
     m_vertical_angles.resize(m_nb_vertical_angles);
-    m_nb_horizontal_angles  = STRING::lexicographic_cast_s<MI::Uint, std::string>(tokens[4]);
+    m_nb_horizontal_angles  = STRING::lexicographic_cast_s<MI::Uint, std::string>(tokens[4]).value();
     m_horizontal_angles.resize(m_nb_horizontal_angles);
     for(Uint i=0; i<m_nb_horizontal_angles; i++)
     {
         std::vector<Scalar> vertical_candela_values(m_nb_vertical_angles);
         m_candela_values.push_back(vertical_candela_values);
     }
-    Uint photometric_type   = STRING::lexicographic_cast_s<MI::Uint, std::string>(tokens[5]);
+    Uint photometric_type   = STRING::lexicographic_cast_s<MI::Uint, std::string>(tokens[5]).value();
     switch(photometric_type)
     {
         case TYPE_C:    m_photometric_type = TYPE_C;    break;
@@ -403,7 +402,7 @@ void Lightprofile_ies_parser::parse_lamp_data()
             m_photometric_type = TYPE_C;
             break;
     }
-    Uint units_type         = STRING::lexicographic_cast_s<MI::Uint, std::string>(tokens[6]);
+    Uint units_type         = STRING::lexicographic_cast_s<MI::Uint, std::string>(tokens[6]).value();
     switch(units_type)
     {
         case FEET:      m_units_type = FEET;    break;
@@ -418,9 +417,9 @@ void Lightprofile_ies_parser::parse_lamp_data()
             m_units_type = METER;
             break;
     }
-    m_width                 = STRING::lexicographic_cast_s<MI::Scalar, std::string>(tokens[7]);
-    m_length                = STRING::lexicographic_cast_s<MI::Scalar, std::string>(tokens[8]);
-    m_height                = STRING::lexicographic_cast_s<MI::Scalar, std::string>(tokens[9]);
+    m_width                 = STRING::lexicographic_cast_s<MI::Scalar, std::string>(tokens[7]).value();
+    m_length                = STRING::lexicographic_cast_s<MI::Scalar, std::string>(tokens[8]).value();
+    m_height                = STRING::lexicographic_cast_s<MI::Scalar, std::string>(tokens[9]).value();
 }
 
 //
@@ -453,9 +452,9 @@ void Lightprofile_ies_parser::parse_additional_data()
         return;
     }
 
-    m_ballast_factor        = STRING::lexicographic_cast_s<MI::Scalar, std::string>(tokens[0]);
-    m_ballast_lamp_factor   = STRING::lexicographic_cast_s<MI::Scalar, std::string>(tokens[1]);
-    m_input_watts           = STRING::lexicographic_cast_s<MI::Scalar, std::string>(tokens[2]);
+    m_ballast_factor        = STRING::lexicographic_cast_s<MI::Scalar, std::string>(tokens[0]).value();
+    m_ballast_lamp_factor   = STRING::lexicographic_cast_s<MI::Scalar, std::string>(tokens[1]).value();
+    m_input_watts           = STRING::lexicographic_cast_s<MI::Scalar, std::string>(tokens[2]).value();
 
 }
 
@@ -492,7 +491,7 @@ void Lightprofile_ies_parser::parse_angles_data(
 
     for(Uint i=0; i<nb_angles; i++)
     {
-        angles_data[i] = STRING::lexicographic_cast_s<MI::Scalar, std::string>(tokens[i]);
+        angles_data[i] = STRING::lexicographic_cast_s<MI::Scalar, std::string>(tokens[i]).value();
     }
 }
 
@@ -643,7 +642,7 @@ void Lightprofile_ies_parser::parse_tilt_values()
         return;
     }
 
-    Uint lamp_geometry = STRING::lexicographic_cast_s<MI::Uint, std::string>(tokens[0]);
+    Uint lamp_geometry = STRING::lexicographic_cast_s<MI::Uint, std::string>(tokens[0]).value();
     switch(lamp_geometry)
     {
         case VERTICAL_BASE_UP_DOWN:
@@ -666,9 +665,9 @@ void Lightprofile_ies_parser::parse_tilt_values()
             m_lamp_to_luminaire_geometry = VERTICAL_BASE_UP_DOWN;
             break;
     }
-    m_nb_angles                 = STRING::lexicographic_cast_s<MI::Uint, std::string>(tokens[1]);
+    m_nb_angles                 = STRING::lexicographic_cast_s<MI::Uint, std::string>(tokens[1]).value();
     m_angles.resize(m_nb_angles);
-    m_nb_multiplying_factors    = STRING::lexicographic_cast_s<MI::Uint, std::string>(tokens[2]);
+    m_nb_multiplying_factors    = STRING::lexicographic_cast_s<MI::Uint, std::string>(tokens[2]).value();
     m_multiplying_factors.resize(m_nb_multiplying_factors);
 
     if(m_valid)
@@ -964,7 +963,7 @@ static void horizontal_rotate(
     while(rotation + Dscalar(horizontal_angles[0]) < -M_PI)
         rotation += 2.0 * M_PI;
 
-    const Scalar rotationf = Scalar(rotation);
+    const auto rotationf = Scalar(rotation);
     for(Uint i=0; i<nb_horizontal_angles; i++)
         horizontal_angles[i] += rotationf;
 }
@@ -977,7 +976,7 @@ static void horizontal_flip(
     std::vector<Scalar>&                horizontal_angles,
     std::vector<std::vector<Scalar> >&  candela_values)
 {
-	const Uint nb_horizontal_angles = horizontal_angles.size();
+        const Uint nb_horizontal_angles = horizontal_angles.size();
 
     const Scalar max_angle = horizontal_angles[nb_horizontal_angles - 1];
 
@@ -1115,7 +1114,7 @@ static void add_boundary(
 
     // Add boundary columns in both horizontal directions
     grid.insert(grid.begin(), std::vector<Scalar>(nb_vertical_angles+2, -1));
-    grid.push_back(std::vector<Scalar>(nb_vertical_angles+2, -1));
+    grid.emplace_back(nb_vertical_angles+2, -1);
 
     std::vector<Scalar>& col_left             = grid[0];
     std::vector<Scalar>& col_left_plus_two    = grid[2];
@@ -1630,7 +1629,7 @@ bool Lightprofile_ies_parser::setup_lightprofile(
 
             horizontal_angles.push_back(Scalar(2.0*M_PI));
             const std::vector<Scalar>& first_horizontal_candela = m_candela_values[0];
-            candela_values.push_back(std::vector<Scalar>(m_nb_vertical_angles));
+            candela_values.emplace_back(m_nb_vertical_angles);
             std::vector<Scalar>& last_horizontal_candela =
                 candela_values[m_nb_horizontal_angles];
 

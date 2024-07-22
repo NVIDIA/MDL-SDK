@@ -208,10 +208,10 @@ float2 transform_st(float rotation = 0.0, float2 translation = float2(0.0), floa
     anno::author("NVIDIA Corporation")
 ]]{
     float s = math::sin(rotation);
-	float c = math::cos(rotation);
-	float2 st_t=st;
-	st_t = float2(s*st_t.x+c*st_t.y,s*st_t.y-c*st_t.x);
-	return st_t*scale+ translation;
+        float c = math::cos(rotation);
+        float2 st_t=st;
+        st_t = float2(s*st_t.x+c*st_t.y,s*st_t.y-c*st_t.x);
+        return st_t*scale+ translation;
 }
 
 color biased_color_blend(float w1 = 0.0, color c1 = color(0.0), float w2 = 0.0, color c2 = color(0.0), float w3 = 0.0, color c3 = color(0.0), color mean = color(0.5))
@@ -221,11 +221,11 @@ color biased_color_blend(float w1 = 0.0, color c1 = color(0.0), float w2 = 0.0, 
     anno::author("NVIDIA Corporation")
 ]]
 {
-	color o=w1*c1+w2*c2+w3*c3;
-	float s=w1+w2+w3;
-	float s2=w1*w1+w2*w2+w3*w3;
+        color o=w1*c1+w2*c2+w3*c3;
+        float s=w1+w2+w3;
+        float s2=w1*w1+w2*w2+w3*w3;
 return mean + (o-s*mean)/   math::sqrt(s2);
-}	
+}       
 
 
 //group Enumerations

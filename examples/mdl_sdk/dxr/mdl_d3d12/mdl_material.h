@@ -70,8 +70,17 @@ namespace mi { namespace examples { namespace mdl_d3d12
             // - none -
 
             // individual properties of the different material instances
+
+            // id of the material in the scene
             int32_t material_id;
-            uint32_t material_flags;
+
+            // features of the material in terms of code paths to execute
+            // (optimization of the entire material class)
+            uint32_t features;
+
+            // features of the individual material that are independent of MDL code,
+            // e.g. single sided primitives (defined on the material to align with gltf)
+            uint32_t flags;
         };
 
         // --------------------------------------------------------------------
@@ -111,7 +120,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
         /// get a descriptor table that describes the resource layout in the materials heap region.
         /// Note, non-static table has to be used when a target is created for each material.
-        const Descriptor_table get_descriptor_table();
+        // const Descriptor_table get_descriptor_table();
 
         /// samplers used for mdl texture lookups
         static std::vector<D3D12_STATIC_SAMPLER_DESC> get_sampler_descriptions();
@@ -134,14 +143,18 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// get a pointer in argument block buffer or NULL if there is none.
         uint8_t* get_argument_data();
 
-        /// get the GPU handle of to the first resource of this target in the descriptor heap.
-        D3D12_GPU_DESCRIPTOR_HANDLE get_target_descriptor_heap_region() const override {
-            return m_target->get_descriptor_heap_region();
+        /// Get the start index of the resources belonging to the target code of this material.
+        /// The index can be used directly in the shader code.
+        uint32_t get_target_resource_heap_index() const override
+        {
+            return m_target->get_resource_heap_index();
         }
 
-        /// get the GPU handle of to the first resource of this material in the descriptor heap.
-        D3D12_GPU_DESCRIPTOR_HANDLE get_material_descriptor_heap_region() const override {
-            return m_first_resource_heap_handle.get_gpu_handle();
+        /// Get the start index of the resources belonging to this individual material.
+        /// The index can be used directly in the shader code.
+        uint32_t get_material_resource_heap_index() const override
+        {
+            return static_cast<uint32_t>(m_first_resource_heap_handle.get_heap_index());
         }
 
         /// after material parameters have been changed, they have to copied to the GPU.
@@ -174,9 +187,6 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
         // Description including definition and parameter set of this material.
         Mdl_material_description m_description;
-
-        // material flags e.g. for optimization (not necessarily equal to m_description.get_flags)
-        IMaterial::Flags m_flags;
 
         // display name of the material in the scene.
         std::string m_name;

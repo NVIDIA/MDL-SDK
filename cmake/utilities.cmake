@@ -150,8 +150,6 @@ function(TARGET_BUILD_SETUP)
                 "-fPIC"   # position independent code since we will build a shared object
                 "-fno-strict-aliasing"
                 "$<$<STREQUAL:${MI_PLATFORM_NAME},linux-x86-64>:-march=nocona>"
-                "$<$<CONFIG:DEBUG>:-gdwarf-3>"
-                "$<$<CONFIG:DEBUG>:-gstrict-dwarf>"
 
                 # enable additional warnings
                 "-Wall"
@@ -166,6 +164,11 @@ function(TARGET_BUILD_SETUP)
                 "-Wno-unused-local-typedefs"
                 "-Wno-deprecated-declarations"
                 "-Wno-unknown-pragmas"
+            )
+        target_link_libraries(${TARGET_BUILD_SETUP_TARGET}
+            PRIVATE
+                "-static-libstdc++"
+                "-static-libgcc"
             )
     endif()
 
@@ -216,8 +219,6 @@ function(TARGET_BUILD_SETUP)
         target_compile_definitions(${TARGET_BUILD_SETUP_TARGET}
             PRIVATE
                 "MI_DLL_BUILD"            # export/import macro
-                "MI_ARCH_LITTLE_ENDIAN"   # used in the .rc files
-                "TARGET_FILENAME=\"$<TARGET_FILE_NAME:${TARGET_BUILD_SETUP_TARGET}>\""     # used in .rc
             )
     endif()
 endfunction()
@@ -386,6 +387,14 @@ function(TARGET_COPY_TO_OUTPUT_DIR)
             set (_ELEMENT "")
         endif()
 
+        if(TARGET_COPY_TO_OUTPUT_DIR_DEST_SUBFOLDER)
+            set(_SUBFOLDER /${TARGET_COPY_TO_OUTPUT_DIR_DEST_SUBFOLDER})
+            set(_SUBFOLDERLOG " in subfolder ${TARGET_COPY_TO_OUTPUT_DIR_DEST_SUBFOLDER}")
+        else()
+            set(_SUBFOLDER "")
+            set(_SUBFOLDERLOG "")
+        endif()
+
         # handle directories and files slightly different
         if(IS_DIRECTORY ${_SOURCE_FILE})
             if(MDL_LOG_FILE_DEPENDENCIES)
@@ -393,7 +402,9 @@ function(TARGET_COPY_TO_OUTPUT_DIR)
             endif()
             add_custom_command(
                 TARGET ${TARGET_COPY_TO_OUTPUT_DIR_TARGET} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_directory ${_SOURCE_FILE} $<TARGET_FILE_DIR:${TARGET_COPY_TO_OUTPUT_DIR_TARGET}>/${TARGET_COPY_TO_OUTPUT_DIR_DEST_SUBFOLDER}${_FOLDER_PATH}
+                COMMAND ${CMAKE_COMMAND} -E echo "copy to output dir: ${_SOURCE_FILE}${_SUBFOLDERLOG}"
+                COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${TARGET_COPY_TO_OUTPUT_DIR_TARGET}>${_SUBFOLDER}
+                COMMAND ${CMAKE_COMMAND} -E copy_directory ${_SOURCE_FILE} $<TARGET_FILE_DIR:${TARGET_COPY_TO_OUTPUT_DIR_TARGET}>${_SUBFOLDER}/${_FOLDER_PATH}
             )
         elseif (TARGET ${_SOURCE_FILE})
             GET_TARGET_PROPERTY(__libname ${_SOURCE_FILE} LOCATION)
@@ -403,7 +414,9 @@ function(TARGET_COPY_TO_OUTPUT_DIR)
             endif()
             add_custom_command(
                 TARGET ${TARGET_COPY_TO_OUTPUT_DIR_TARGET} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${__libname} $<TARGET_FILE_DIR:${TARGET_COPY_TO_OUTPUT_DIR_TARGET}>/${TARGET_COPY_TO_OUTPUT_DIR_DEST_SUBFOLDER}${_ELEMENT}
+                COMMAND ${CMAKE_COMMAND} -E echo "copy to output dir: ${__libname}${_SUBFOLDERLOG}"
+                COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${TARGET_COPY_TO_OUTPUT_DIR_TARGET}>${_SUBFOLDER}
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${__libname} $<TARGET_FILE_DIR:${TARGET_COPY_TO_OUTPUT_DIR_TARGET}>${_SUBFOLDER}
             )
         else()
             if(MDL_LOG_FILE_DEPENDENCIES)
@@ -411,7 +424,9 @@ function(TARGET_COPY_TO_OUTPUT_DIR)
             endif()
             add_custom_command(
                 TARGET ${TARGET_COPY_TO_OUTPUT_DIR_TARGET} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_SOURCE_FILE} $<TARGET_FILE_DIR:${TARGET_COPY_TO_OUTPUT_DIR_TARGET}>/${TARGET_COPY_TO_OUTPUT_DIR_DEST_SUBFOLDER}${_ELEMENT}
+                COMMAND ${CMAKE_COMMAND} -E echo "copy to output dir: ${_SOURCE_FILE}${_SUBFOLDERLOG}"
+                COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${TARGET_COPY_TO_OUTPUT_DIR_TARGET}>${_SUBFOLDER}
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_SOURCE_FILE} $<TARGET_FILE_DIR:${TARGET_COPY_TO_OUTPUT_DIR_TARGET}>${_SUBFOLDER}
             )
         endif()
     endforeach()
@@ -796,7 +811,7 @@ function(CREATE_FROM_BASE_PRESET)
             )
     endif()
 
-    # includes used .rc in case of MDL SDK libraries
+    # embed .rc files
     if(CREATE_FROM_BASE_PRESET_EMBED_RC AND WINDOWS AND CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED")
         if(MDL_LOG_FILE_DEPENDENCIES)
             message(STATUS "- embedding:      ${CREATE_FROM_BASE_PRESET_EMBED_RC}")
@@ -805,10 +820,14 @@ function(CREATE_FROM_BASE_PRESET)
             PRIVATE
                 ${CREATE_FROM_BASE_PRESET_EMBED_RC}
             )
-
         target_include_directories(${CREATE_FROM_BASE_PRESET_TARGET}
             PRIVATE
                 ${MDL_SRC_FOLDER}/base/system/version # for the version.h
+            )
+        # TODO: _NAME => short name?
+        set_source_files_properties(${CREATE_FROM_BASE_PRESET_EMBED_RC}
+            PROPERTIES COMPILE_DEFINITIONS
+                "MI_ARCH_LITTLE_ENDIAN;TARGET_FILENAME=\"$<TARGET_FILE_NAME:${CREATE_FROM_BASE_PRESET_TARGET}>\""
             )
     endif()
 
@@ -1494,33 +1513,6 @@ function(CREATE_FROM_DOC_PRESET)
         TARGET ${CREATE_FROM_DOC_PRESET_TARGET}
         TYPE DOCUMENTATION)
 
-endfunction()
-
-# -------------------------------------------------------------------------------------------------
-# add tests if available
-if(MDL_ENABLE_TESTS)
-    add_subdirectory(${MDL_BASE_FOLDER}/cmake/tests)
-endif()
-
-# add tests to individual targets when defined in a corresponding sub-directory
-function(ADD_TESTS)
-    set(options POST)
-    set(oneValueArgs)
-    set(multiValueArgs)
-    cmake_parse_arguments(ADD_TESTS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
-
-    if(MDL_ENABLE_TESTS AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt)
-        # postpone the test until all regular targets are created
-        if(ADD_TESTS_POST)
-            if(MDL_TEST_LIST_POST STREQUAL "") # first element
-                set(MDL_TEST_LIST_POST "${CMAKE_CURRENT_SOURCE_DIR}/tests" CACHE INTERNAL "list of test directories to add after regular targets are defined")
-            else()
-                set(MDL_TEST_LIST_POST "${MDL_TEST_LIST_POST};${CMAKE_CURRENT_SOURCE_DIR}/tests" CACHE INTERNAL "list of test directories to add after regular targets are defined")
-            endif()
-        else()
-            add_subdirectory(tests)
-        endif()
-    endif()
 endfunction()
 
 # -------------------------------------------------------------------------------------------------

@@ -174,7 +174,7 @@ private:
     Status m_status;
 
     /// The type of the map that stores the registered API components
-    typedef std::map<mi::base::Uuid, mi::base::IInterface*> Api_components_map;
+    using Api_components_map = std::map<mi::base::Uuid, mi::base::IInterface*>;
     /// The map that stores the registered API components
     Api_components_map m_api_components;
     /// The lock for the map that stores the registered API components

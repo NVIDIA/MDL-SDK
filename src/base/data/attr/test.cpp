@@ -118,14 +118,14 @@ MI_TEST_AUTO_FUNCTION( verify_attribute_system )
     //
     struct Atype {struct {char rgbea[5][2]; mi::math::Color color; char byte;} s[100]; };
 #   define ATTRNAME "attr"
-    Type *type0 = new Type(TYPE_STRUCT, ATTRNAME, 100);	// struct {
-    Type *type1 = new Type(TYPE_RGBEA,  "rgbea", 2);	//   char[5][2];
-    Type *type2 = new Type(TYPE_COLOR,  "color");	//   Scalar[4];
-    Type *type3 = new Type(TYPE_INT8,   "byte");	//   char;
+    Type *type0 = new Type(TYPE_STRUCT, ATTRNAME, 100); // struct {
+    Type *type1 = new Type(TYPE_RGBEA,  "rgbea", 2);    //   char[5][2];
+    Type *type2 = new Type(TYPE_COLOR,  "color");       //   Scalar[4];
+    Type *type3 = new Type(TYPE_INT8,   "byte");        //   char;
     type1->set_const();
     type2->set_next(*type3);
     type1->set_next(*type2);
-    type0->set_child(*type1);				// } [100]
+    type0->set_child(*type1);                           // } [100]
 
     MI_REQUIRE_EQUAL(type0->align_one(), 1);
     MI_REQUIRE_EQUAL(type1->align_one(), 1);
@@ -137,17 +137,17 @@ MI_TEST_AUTO_FUNCTION( verify_attribute_system )
     MI_REQUIRE_EQUAL(type1->sizeof_one(), 2 * 5);
     MI_REQUIRE_EQUAL(type2->sizeof_one(), 4 * sizeof(Scalar));
     MI_REQUIRE_EQUAL(type3->sizeof_one(), 1);
-    MI_REQUIRE_EQUAL(type0->sizeof_all(), 100 * (2 * 5 +	// rgbea[2]
-                                                 2 +		// padding
+    MI_REQUIRE_EQUAL(type0->sizeof_all(), 100 * (2 * 5 +        // rgbea[2]
+                                                 2 +            // padding
                                                  4 * sizeof(Scalar)+ //float[4]
-                                                 1 +		// char
-                                                 3));		// padding
+                                                 1 +            // char
+                                                 3));           // padding
     //
     // test lookup by name
     //
     Uint offs;
     no_unused_variable_warning_please(offs);
-    MI_REQUIRE_EQUAL(*type0, *type0->lookup(ATTRNAME,		  &offs));
+    MI_REQUIRE_EQUAL(*type0, *type0->lookup(ATTRNAME,             &offs));
     MI_REQUIRE_EQUAL(offs, 0);
     MI_REQUIRE_EQUAL(*type1, *type0->lookup(ATTRNAME ".rgbea",    &offs));
     MI_REQUIRE_EQUAL(offs, 0);
@@ -172,15 +172,15 @@ MI_TEST_AUTO_FUNCTION( verify_attribute_system )
     {
 #   define ATTR_NAME "attr_new"
     Type type0(TYPE_STRUCT, ATTR_NAME, 100);// struct {
-    Type type1(TYPE_RGBEA,  "rgbea", 2);	//   char[5][2];
-    Type type2(TYPE_COLOR,  "color");	//   Scalar[4];
+    Type type1(TYPE_RGBEA,  "rgbea", 2);        //   char[5][2];
+    Type type2(TYPE_COLOR,  "color");   //   Scalar[4];
     Type type3(TYPE_STRUCT, "colors", 2); //   struct {
     Type type3_1(TYPE_COLOR, "ambient");    //     Scalar[4];} [2];
-    Type type4(TYPE_INT8,   "byte");	//   char;
+    Type type4(TYPE_INT8,   "byte");    //   char;
     // due to new deep copy behaviour Types are *not* shared anymore!
     // This means that set_XXX() functions do not work as expected anymore.
     /* old order
-    type0->set_child(*type1);				// } [100]
+    type0->set_child(*type1);                           // } [100]
     type1->set_next(*type2);
     type2->set_next(*type3);
     type3->set_child(*type3_1);
@@ -193,14 +193,14 @@ MI_TEST_AUTO_FUNCTION( verify_attribute_system )
     type3.set_child(type3_1);
     type2.set_next(type3);
     type1.set_next(type2);
-    type0.set_child(type1);				// } [100]
+    type0.set_child(type1);                             // } [100]
 
     //
     // test lookup by name
     //
     Uint offs;
     no_unused_variable_warning_please(offs);
-    MI_REQUIRE_EQUAL(type0, *type0.lookup(ATTR_NAME,		  &offs));
+    MI_REQUIRE_EQUAL(type0, *type0.lookup(ATTR_NAME,              &offs));
     MI_REQUIRE_EQUAL(offs, 0);
     MI_REQUIRE_EQUAL(type1, *type0.lookup(ATTR_NAME ".rgbea",    &offs));
     MI_REQUIRE_EQUAL(offs, 0);

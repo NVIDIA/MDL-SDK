@@ -369,12 +369,8 @@ static IType const *needs_uniform_condition(IType const *type)
                     return s_type;
                 }
                 // do a deep check
-                for (int i = 0, n = s_type->get_field_count(); i < n; ++i) {
-                    ISymbol const *f_sym;
-                    IType const   *f_type;
-
-                    s_type->get_field(i, f_type, f_sym);
-
+                for (size_t i = 0, n = s_type->get_field_count(); i < n; ++i) {
+                    IType const *f_type   = s_type->get_field(i)->get_type();
                     IType const *bad_type = needs_uniform_condition(f_type);
                     if (bad_type != NULL) {
                         return bad_type;
@@ -936,92 +932,92 @@ void AT_analysis::check_auto_types(IDeclaration_function *decl)
 
     IType_function const *f_type   = cast<IType_function>(def->get_type());
     IType const          *ret_type = f_type->get_return_type();
-    bool                 in_mat    = ret_type->skip_type_alias() == m_tc.material_type;
+    bool                 is_mat    = is_material_type(ret_type);
 
-    if (!in_mat) {
-        // only check this for real functions, not for materials
+    IType::Modifiers ret_mod = get_type_modifiers(ret_type);
 
-        IType::Modifiers ret_mod = get_type_modifiers(ret_type);
+    Dependence_graph::Node const *ret_val = m_dg->get_node(return_value_id);
 
-        Dependence_graph::Node const *ret_val = m_dg->get_node(return_value_id);
+    if (ret_mod & IType::MK_UNIFORM) {
+        switch (ret_val->get_auto_type()) {
+        case Dependence_graph::AT_TOP:
+            // depends only on constants, good
+            break;
+        case Dependence_graph::AT_UNIFORM:
+            // return value will be uniform, good
+            break;
+        case Dependence_graph::AT_PARAM:
+            // return value depends on parameters, bad
+            error(
+                UNIFORM_RESULT_DEPENDS_ON_AUTOTYPED_PARAMETER,
+                decl->get_return_type_name()->access_position(),
+                Error_params(*this).add_signature(def));
+            break;
+        case Dependence_graph::AT_VARYING:
+            // return value is varying, bad
+            error(
+                UNIFORM_RESULT_IS_VARYING,
+                decl->get_return_type_name()->access_position(),
+                Error_params(*this).add_signature(def));
+            break;
+        }
+    }
 
-        if (ret_mod & IType::MK_UNIFORM) {
-            switch (ret_val->get_auto_type()) {
-            case Dependence_graph::AT_TOP:
-                // depends only on constants, good
+    bool is_uniform = def->has_flag(Definition::DEF_IS_UNIFORM);
+    bool is_varying = def->has_flag(Definition::DEF_IS_VARYING);
+
+    // check the return value first
+    if (!(is_uniform|is_varying)) {
+        switch (ret_val->get_auto_type()) {
+        case Dependence_graph::AT_TOP:
+            // depends only on constants
+            MDL_FALLTHROUGH
+        case Dependence_graph::AT_UNIFORM:
+            // return value will be uniform
+            MDL_FALLTHROUGH
+        case Dependence_graph::AT_PARAM:
+            if (!m_has_varying_call) {
+                // the function is auto-typed AND the return value has "parameter-dependent"
+                // return type, hence it is uniform
+                const_cast<Definition *>(def)->set_flag(Definition::DEF_IS_UNIFORM);
+                if (!is_mat) {
+                    set_function_qualifier(decl, def, FQ_UNIFORM);
+                }
                 break;
-            case Dependence_graph::AT_UNIFORM:
-                // return value will be uniform, good
-                break;
-            case Dependence_graph::AT_PARAM:
-                // return value depends on parameters, bad
-                error(
-                    UNIFORM_RESULT_DEPENDS_ON_AUTOTYPED_PARAMETER,
+            }
+            MDL_FALLTHROUGH
+        case Dependence_graph::AT_VARYING:
+            // function calls either a varying function OR the return value is varying
+            const_cast<Definition *>(def)->set_flag(Definition::DEF_IS_VARYING);
+            if (!is_mat) {
+                set_function_qualifier(decl, def, FQ_VARYING);
+            }
+            break;
+        }
+    } else if (is_uniform) {
+        // varying calls are already reported ...
+        if (ret_val->get_auto_type() == Dependence_graph::AT_VARYING) {
+            if (ret_mod & IType::MK_VARYING) {
+                // error already reported
+            } else {
+                error_mdl_11(
+                    RESULT_OF_UNIFORM_FUNCTION_IS_VARYING,
                     decl->get_return_type_name()->access_position(),
                     Error_params(*this).add_signature(def));
-                break;
-            case Dependence_graph::AT_VARYING:
-                // return value is varying, bad
-                error(
-                    UNIFORM_RESULT_IS_VARYING,
-                    decl->get_return_type_name()->access_position(),
-                    Error_params(*this).add_signature(def));
-                break;
             }
         }
-
-        bool is_uniform = def->has_flag(Definition::DEF_IS_UNIFORM);
-        bool is_varying = def->has_flag(Definition::DEF_IS_VARYING);
-
-        // check the return value first
-        if (!(is_uniform|is_varying)) {
-            switch (ret_val->get_auto_type()) {
-            case Dependence_graph::AT_TOP:
-                // depends only on constants
-                /*FALLTHROUGH*/
-            case Dependence_graph::AT_UNIFORM:
-                // return value will be uniform
-                /*FALLTHROUGH*/
-            case Dependence_graph::AT_PARAM:
-                if (!m_has_varying_call) {
-                    // the function is auto-typed AND the return value has "parameter-dependent"
-                    // return type, hence it is uniform
-                    const_cast<Definition *>(def)->set_flag(Definition::DEF_IS_UNIFORM);
-                    set_function_qualifier(decl, def, FQ_UNIFORM);
-                    break;
-                }
-                /*FALLTHROUGH*/
-            case Dependence_graph::AT_VARYING:
-                // function calls either a varying function OR the return value is varying
-                const_cast<Definition *>(def)->set_flag(Definition::DEF_IS_VARYING);
-                set_function_qualifier(decl, def, FQ_VARYING);
-                break;
-            }
-        } else if (is_uniform) {
-            // varying calls are already reported ...
-            if (ret_val->get_auto_type() == Dependence_graph::AT_VARYING) {
-                if (ret_mod & IType::MK_VARYING) {
-                    // error already reported
-                } else {
-                    error_mdl_11(
-                        RESULT_OF_UNIFORM_FUNCTION_IS_VARYING,
-                        decl->get_return_type_name()->access_position(),
-                        Error_params(*this).add_signature(def));
-                }
-            }
-        } else if (is_varying) {
-            if (!m_has_varying_call && ret_val->get_auto_type() < Dependence_graph::AT_VARYING) {
-                // useless varying
-                warning(
-                    NONVARYING_RESULT_OF_VARYING_FUNCTION,
-                    decl->get_return_type_name()->access_position(),
-                    Error_params(*this).add_signature(def));
-            }
+    } else if (is_varying) {
+        if (!m_has_varying_call && ret_val->get_auto_type() < Dependence_graph::AT_VARYING) {
+            // useless varying
+            warning(
+                NONVARYING_RESULT_OF_VARYING_FUNCTION,
+                decl->get_return_type_name()->access_position(),
+                Error_params(*this).add_signature(def));
         }
     }
 
     // finally check and fix the types inside the function
-    AT_check at_checker(m_compiler, m_module, m_ctx, *m_dg, in_mat);
+    AT_check at_checker(m_compiler, m_module, m_ctx, *m_dg, is_mat);
 
     at_checker.process(decl);
 }
@@ -1117,14 +1113,38 @@ bool AT_analysis::pre_visit(IDeclaration_function *decl)
         m_dg->create_param_node(const_cast<Definition *>(p_def));
     }
 
-    // visit children
-    return true;
-}
+    IType_name const *rname = decl->get_return_type_name();
+    visit(rname);
 
-// end of a function
-void AT_analysis::post_visit(IDeclaration_function *decl)
-{
-    // all stacks must be empty
+    if (IAnnotation_block const *ret_anno = decl->get_return_annotations()) {
+        visit(ret_anno);
+    }
+
+    ISimple_name const *sname = decl->get_name();
+    visit(sname);
+
+    for (size_t i = 0, n = decl->get_parameter_count(); i < n; ++i) {
+        IParameter const *param = decl->get_parameter(i);
+        visit(param);
+    }
+
+    if (IStatement const *body = decl->get_body()) {
+        if (is<IStatement_compound>(body) || is<IStatement_invalid>(body)) {
+            // classical function
+            visit(body);
+        } else {
+            // single expression function
+            m_assignment_stack.push(return_value_id);
+            visit(body);
+            m_assignment_stack.pop();
+        }
+    }
+
+    if (IAnnotation_block const *anno = decl->get_annotations()) {
+        visit(anno);
+    }
+
+    // end: all stacks must be empty
     MDL_ASSERT(m_control_stack.empty());
     MDL_ASSERT(m_context_stack.empty());
     MDL_ASSERT(m_loop_stack.empty());
@@ -1143,7 +1163,22 @@ void AT_analysis::post_visit(IDeclaration_function *decl)
         }
 
         check_auto_types(decl);
+    } else {
+        mi::base::Handle<IModule const> owner = mi::base::make_handle_dup(&m_module);
+        IDeclaration_function const *o_decl = skip_presets(decl, owner);
+        Definition const            *odef   = impl_cast<Definition>(o_decl->get_definition());
+
+        // only set this in the def, presets do not allow frequency modifiers in syntax
+        if (odef->has_flag(Definition::DEF_IS_UNIFORM)) {
+            const_cast<Definition *>(fkt_def)->set_flag(Definition::DEF_IS_UNIFORM);
+        }
+        if (odef->has_flag(Definition::DEF_IS_VARYING)) {
+            const_cast<Definition *>(fkt_def)->set_flag(Definition::DEF_IS_VARYING);
+        }
     }
+
+    // do not visit children anymore
+    return false;
 }
 
 // start of a variable declaration

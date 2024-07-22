@@ -39,3 +39,5 @@ Changes:
  - adapt NVPTX data layout to use same alignment for vectors with 3 elements as CUDA on the ABI
    in lib/Target/NVPTX/NVPTXTargetMachine.cpp
  - don't call abort in global destructors in ~raw_fd_ostream when writing to stderr failed
+ - applied llvm_project commit c2515a8f "[Bitcode] Add some missing GetTypeByID failure checks"
+   (CVE-2023-46049)

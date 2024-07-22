@@ -74,13 +74,6 @@ namespace base {
 /// You may define the macro #mi_static_assert(expr) yourself to customize its behavior, for
 /// example, to disable it.
 #ifndef mi_static_assert
-#ifdef _MSC_VER
-// Special case for Visual Studio 7.1, since __LINE__ would not work.
-#define mi_static_assert(expr)                                               \
-    typedef mi::base::static_assert_test<static_cast<int>(                   \
-        sizeof(mi::base::static_assert_failure<static_cast<bool>((expr))>))> \
-            MI_BASE_JOIN(static_assert_instance, __COUNTER__)
-#else // _MSC_VER
 #ifdef MI_COMPILER_GCC
 #define mi_static_assert_attribute __attribute__((unused))
 #else
@@ -90,7 +83,6 @@ namespace base {
     typedef mi::base::static_assert_test<static_cast<int>(                   \
         sizeof(mi::base::static_assert_failure<static_cast<bool>((expr))>))> \
             MI_BASE_JOIN(static_assert_instance, __LINE__) mi_static_assert_attribute
-#endif // _MSC_VER
 #endif // mi_static_assert
 
 // helper definitions for the mi_static_assert above.

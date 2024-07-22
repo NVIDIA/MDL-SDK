@@ -74,6 +74,13 @@ function(FIND_D3D12_EXT)
         endif()
     endif()
 
+    # to get experimental d3d features or features that have not been released for older windows versions
+    if(EXISTS ${MDL_BASE_FOLDER}/cmake/find/find_agility_sdk_ext.cmake)
+        include(${MDL_BASE_FOLDER}/cmake/find/find_agility_sdk_ext.cmake)
+        find_agility_sdk_ext()
+        # no error handling since this is optional
+    endif()
+
     if(NOT MDL_ENABLE_D3D12_EXAMPLES)
         message(WARNING "Examples that require D3D12 are disabled. Enable the option 'MDL_ENABLE_D3D12_EXAMPLES' and resolve the required dependencies to re-enable them.")
         return()

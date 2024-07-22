@@ -32,12 +32,12 @@
 #ifndef BASE_UTIL_CONFIG_I_CONFIG_REGISTRY_H
 #define BASE_UTIL_CONFIG_I_CONFIG_REGISTRY_H
 
-#include <base/util/string_utils/i_string_lexicographic_cast.h>
-#include <base/system/stlext/i_stlext_any.h>
-
+#include <any>
 #include <iosfwd>
 #include <map>
 #include <string>
+
+#include <base/util/string_utils/i_string_lexicographic_cast.h>
 
 namespace MI {
 namespace SITE { class Rs_hostconfig; }
@@ -58,20 +58,20 @@ public:
     /// \param value the value
     /// \return success of registration
     virtual bool add_value(
-	const std::string& name,
-	const STLEXT::Any& value) = 0;
+        const std::string& name,
+        const std::any& value) = 0;
     /// Registering a value into a list of values of the same type.
     /// \param name name of the value
     /// \param value the value
     /// \return success of registration
     virtual bool add_value_multiple(
-	const std::string& name,
-	const STLEXT::Any& value) = 0;
+        const std::string& name,
+        const std::any& value) = 0;
     /// Retrieving a value.
     /// \param name name of the value
     /// \return its value or the empty type iff not registered
-    virtual STLEXT::Any get_value(
-	const std::string& name) const = 0;
+    virtual std::any get_value(
+        const std::string& name) const = 0;
     /// Retrieving a value and checking whether it was stored as string- or float-typed value.
     /// Certain values are added as string-typed values, eg when given via
     ///   --config SOFT_shader_language=2
@@ -82,55 +82,55 @@ public:
     /// and the string-typed value and the float-typed value.
     /// Currently disabled! In addition to that, check for the name prefixed by the module.
     template <typename T> bool get_value(
-	const std::string& name,
-	T& val) const
+        const std::string& name,
+        T& val) const
     {
-	if (this->get_typed_value(name, val))
-	    return true;
+        if (this->get_typed_value(name, val))
+            return true;
 
-	// now try to match with other "similiar" types
-	STLEXT::Any any = get_value(name);
-	if (!any.empty()) {
-	    if (any.type() == typeid(std::string)) {
-		std::string value = *STLEXT::any_cast<std::string>(&any);
-		STLEXT::Likely<T> v = STRING::lexicographic_cast_s<T, std::string>(value);
-		if (v.get_status()) {
-		    val = v;
-		    return true;
-		}
-	    }
-	    // try the float type as the last resort - see the comments above!
-	    else if (any.type() == typeid(float)) {
-		float* value = STLEXT::any_cast<float>(&any);
-		if (value) {
-		    val = static_cast<T>(*value);
-		    return true;
-		}
-	    }
-	}
-	return false;
+        // now try to match with other "similiar" types
+        std::any any = get_value(name);
+        if (any.has_value()) {
+            if (any.type() == typeid(std::string)) {
+                std::string value = *std::any_cast<std::string>(&any);
+                std::optional<T> v = STRING::lexicographic_cast_s<T, std::string>(value);
+                if (v.has_value()) {
+                    val = v.value();
+                    return true;
+                }
+            }
+            // try the float type as the last resort - see the comments above!
+            else if (any.type() == typeid(float)) {
+                float* value = std::any_cast<float>(&any);
+                if (value) {
+                    val = static_cast<T>(*value);
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /// Retrieving a value. This is the typesafe version of \c get_value(). Ie it does
     /// not try to match with other types.
     template <typename T> bool get_typed_value(
-	const std::string& name,
-	T& val) const
+        const std::string& name,
+        T& val) const
     {
-	STLEXT::Any any = get_value(name);
-	if (!any.empty()) {
-	    if (any.type() == typeid(T)) {
-		val = *STLEXT::any_cast<T>(&any);
-		return true;
-	    }
-	}
-	return false;
+        std::any any = get_value(name);
+        if (any.has_value()) {
+            if (any.type() == typeid(T)) {
+                val = *std::any_cast<T>(&any);
+                return true;
+            }
+        }
+        return false;
     }
 
     /// \name Iteration support
     /// Iteration support.
     //@{
-    typedef std::map<std::string, STLEXT::Any>::const_iterator Const_iter;
+    typedef std::map<std::string, std::any>::const_iterator Const_iter;
     /// Retrieve the start of the registry.
     virtual Const_iter begin() const = 0;
     /// Retrieve the end of the registry.
@@ -141,8 +141,8 @@ public:
     /// \param name name of the value
     /// \param value the value
     virtual void overwrite_value(
-	const std::string& name,
-	const STLEXT::Any& value) = 0;
+        const std::string& name,
+        const std::any& value) = 0;
 };
 
 /// Writing out the current values.
@@ -155,29 +155,29 @@ inline bool Config_registry::get_value(
     const std::string& name,
     bool& val) const
 {
-    STLEXT::Any any = get_value(name);
-    if (!any.empty()) {
-	if (any.type() == typeid(bool)) {
-	    val = *STLEXT::any_cast<bool>(&any);
-	    return true;
-	}
-	else if (any.type() == typeid(std::string)) {
-	    std::string value = *STLEXT::any_cast<std::string>(&any);
-	    STLEXT::Likely<bool> v = STRING::lexicographic_cast_s<bool, std::string>(value);
-	    if (v.get_status()) {
-		val = v;
-		return true;
-	    }
-	}
-	// try the float type as the last resort - T should be either int or bool!
-	else {
-	    float* value = STLEXT::any_cast<float>(&any);
-	    if (value) {
-		// this is to avoid the "forcing value to bool" warning on VC++
-		val = !!*value;
-		return true;
-	    }
-	}
+    std::any any = get_value(name);
+    if (any.has_value()) {
+        if (any.type() == typeid(bool)) {
+            val = *std::any_cast<bool>(&any);
+            return true;
+        }
+        else if (any.type() == typeid(std::string)) {
+            std::string value = *std::any_cast<std::string>(&any);
+            std::optional<bool> v = STRING::lexicographic_cast_s<bool, std::string>(value);
+            if (v.has_value()) {
+                val = v.value();
+                return true;
+            }
+        }
+        // try the float type as the last resort - T should be either int or bool!
+        else {
+            float* value = std::any_cast<float>(&any);
+            if (value) {
+                // this is to avoid the "forcing value to bool" warning on VC++
+                val = !!*value;
+                return true;
+            }
+        }
     }
     return false;
 }
@@ -187,12 +187,12 @@ inline bool Config_registry::get_value(
     const std::string& name,
     std::string& val) const
 {
-    STLEXT::Any any = get_value(name);
-    if (!any.empty()) {
-	if (any.type() == typeid(std::string)) {
-	    val = *STLEXT::any_cast<std::string>(&any);
-	    return true;
-	}
+    std::any any = get_value(name);
+    if (any.has_value()) {
+        if (any.type() == typeid(std::string)) {
+            val = *std::any_cast<std::string>(&any);
+            return true;
+        }
     }
     return false;
 }

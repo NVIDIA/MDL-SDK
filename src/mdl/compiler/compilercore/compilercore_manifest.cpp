@@ -674,6 +674,7 @@ void Manifest_printer::print(Printer *printer, mi::base::IInterface const *iface
     case IMDL::MDL_VERSION_1_6: s = "1.6"; break;
     case IMDL::MDL_VERSION_1_7: s = "1.7"; break;
     case IMDL::MDL_VERSION_1_8: s = "1.8"; break;
+    case IMDL::MDL_VERSION_1_9: s = "1.9"; break;
     case IMDL::MDL_VERSION_EXP: s = "99.99"; break;
     }
     printer->printf("%s = \"%s\"\n", manifest->get_key(IArchive_manifest::PK_MDL), s);
@@ -741,6 +742,9 @@ void Manifest_printer::print(Printer *printer, mi::base::IInterface const *iface
             break;
         case IArchive_manifest::EK_ANNOTATION:
             key = "exports.annotation";
+            break;
+        case IArchive_manifest::EK_STRUCT_CATEGORY:
+            key = "exports.struct_category";
             break;
         }
 

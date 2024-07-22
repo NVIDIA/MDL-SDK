@@ -52,6 +52,7 @@ private:
 
     SYSTEM::Access_module<LOG::Log_module> m_log_module;
     SYSTEM::Access_module<MDLC::Mdlc_module> m_mdlc_module;
+    SYSTEM::Access_module<SCENE::Scene_module> m_scene_module;
 };
 
 Unified_database_access::Unified_database_access()
@@ -60,7 +61,8 @@ Unified_database_access::Unified_database_access()
     // For IMDL::is_valid_mdl_identifier() in IType_factory::create_deferred_sized_array().
     m_mdlc_module.set();
     m_database = MI::DBLIGHT::factory();
-    SCENE::register_db_elements( m_database);
+    m_scene_module.set();
+    m_scene_module->register_db_elements( m_database);
 }
 
 Unified_database_access::~Unified_database_access()

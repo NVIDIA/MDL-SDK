@@ -126,11 +126,12 @@ const char* Module_impl::get_import( mi::Size index) const
     return get_db_transaction()->tag_to_name( tag);
 }
 
-const mi::neuraylib::IValue_list* Module_impl::get_constants() const
+const mi::neuraylib::IStruct_category_list* Module_impl::get_struct_categories() const
 {
-    mi::base::Handle<Value_factory> vf( get_transaction()->get_value_factory());
-    mi::base::Handle<const MDL::IValue_list> result_int( get_db_element()->get_constants());
-    return vf->create_value_list( result_int.get(), this->cast_to_major());
+    mi::base::Handle<Type_factory> tf( get_transaction()->get_type_factory());
+    mi::base::Handle<const MDL::IStruct_category_list> result_int(
+        get_db_element()->get_struct_categories());
+    return tf->create_struct_category_list( result_int.get(), this->cast_to_major());
 }
 
 const mi::neuraylib::IType_list* Module_impl::get_types() const
@@ -138,6 +139,13 @@ const mi::neuraylib::IType_list* Module_impl::get_types() const
     mi::base::Handle<Type_factory> tf( get_transaction()->get_type_factory());
     mi::base::Handle<const MDL::IType_list> result_int( get_db_element()->get_types());
     return tf->create_type_list( result_int.get(), this->cast_to_major());
+}
+
+const mi::neuraylib::IValue_list* Module_impl::get_constants() const
+{
+    mi::base::Handle<Value_factory> vf( get_transaction()->get_value_factory());
+    mi::base::Handle<const MDL::IValue_list> result_int( get_db_element()->get_constants());
+    return vf->create_value_list( result_int.get(), this->cast_to_major());
 }
 
 mi::Size Module_impl::get_function_count() const
@@ -201,8 +209,7 @@ const mi::IArray* Module_impl::get_function_overloads(
         element->set_c_str( tmp[i].c_str());
     }
 
-    result->retain();
-    return result.get();
+    return result.extract();
 }
 
 const mi::IArray* Module_impl::get_function_overloads(
@@ -232,8 +239,7 @@ const mi::IArray* Module_impl::get_function_overloads(
         element->set_c_str( tmp[i].c_str());
     }
 
-    result->retain();
-    return result.get();
+    return result.extract();
 }
 
 mi::Size Module_impl::get_resources_count() const
@@ -336,7 +342,7 @@ const char* Module_impl::deprecated_get_resource_mdl_file_path( mi::Size index) 
     const MDL::Resource_tag_tuple* rtt = get_db_element()->get_resource_tag_tuple( index);
     if( !rtt)
         return nullptr;
-        
+
     return rtt->m_mdl_file_path.c_str();
 }
 

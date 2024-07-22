@@ -171,12 +171,17 @@ namespace mi { namespace examples { namespace mdl_d3d12
         explicit Environment(Base_application* app, const std::string& file_path);
         virtual ~Environment();
 
-        // get a descriptor table that describes the resource layout
-        const Descriptor_table& get_descriptor_table() const {
-            return m_resource_descriptor_table;
+        ID3D12Resource* get_resource_texture() const;
+        ID3D12Resource* get_resource_sampling_buffer() const;
+
+        // Get the start index of the resources belonging to this environment.
+        // The index can be used directly in the shader code.
+        uint32_t get_resource_heap_index() const
+        {
+            return static_cast<uint32_t>(m_first_resource_heap_handle.get_heap_index());
         }
 
-        float get_integral() const { return m_integral;  }
+        float get_integral() const { return m_integral; }
 
         void transition_to(D3DCommandList* command_list, D3D12_RESOURCE_STATES state);
 

@@ -57,21 +57,21 @@ class Deserialization_class : public MI::MEM::Allocatable
   public:
     // constructor
     Deserialization_class(
-        Class_id class_identifier,		// class id to be registered
-        Factory_function* factory);		// factory for this class id
+        Class_id class_identifier,              // class id to be registered
+        Factory_function* factory);             // factory for this class id
 
     // constructor
     Deserialization_class(
-        Class_id class_identifier,		// class id to be registered
+        Class_id class_identifier,              // class id to be registered
         IDeserialization_factory* factory_class); // factory class for this class id
 
     // constructor mainly used for searching
     Deserialization_class(
         Class_id class_identifier);
 
-    Class_id m_class_identifier;		// class id to be registered
-    Factory_function* m_factory;		// factory for this class id
-    IDeserialization_factory* m_factory_class;	// factory class this class id
+    Class_id m_class_identifier;                // class id to be registered
+    Factory_function* m_factory;                // factory for this class id
+    IDeserialization_factory* m_factory_class;  // factory class this class id
                                                 // mutually exclusive with factory
 };
 
@@ -97,31 +97,31 @@ class Deserialization_manager_impl : public Deserialization_manager
     // function to create an appropriate object. This object then provides the
     // applicable deserialize function.
     void register_class(
-        Class_id class_identifier,		// class id to be registered
-        Factory_function* factory);		// factory for this class id
+        Class_id class_identifier,              // class id to be registered
+        Factory_function* factory);             // factory for this class id
 
     // Any module may register a factory function for a given Class_id. When the deserializer finds
     // this Class_id it will call use the given factory class to create an appropriate object. This
     // object then provides the applicable deserialize function.
     void register_class(
-        Class_id class_identifier,			// class id to be registered
-        IDeserialization_factory* factory);		// factory class for this class id
+        Class_id class_identifier,                      // class id to be registered
+        IDeserialization_factory* factory);             // factory class for this class id
 
     // Call the appropriate factory function for the given class id and return
     // it.
     Serializable* construct(
-        Class_id class_identifier);		// class id to be constructed
+        Class_id class_identifier);             // class id to be constructed
 
     // Check, if a class has been registered.
     bool is_registered(
-        Class_id class_identifier);		// class id to be checked
+        Class_id class_identifier);             // class id to be checked
 
   private:
-      mi::base::Lock m_lock;			// lock for protecting the set
+      mi::base::Lock m_lock;                    // lock for protecting the set
 
     // Container for keeping deserialization classes
     typedef std::set<Deserialization_class,  Deserialization_class_compare> Class_set;
-    Class_set	 m_classes; 			// map of registered class.
+    Class_set    m_classes;                     // map of registered class.
 };
 
 void Serializer_impl::serialize(const Serializable* serializable, bool shared)
@@ -385,8 +385,8 @@ void Deserializer_impl::clear_shared_objects()
 
 // constructor
 Deserialization_class::Deserialization_class(
-    Class_id class_identifier,			// class id to be registered
-    Factory_function* factory)			// factory for this class id
+    Class_id class_identifier,                  // class id to be registered
+    Factory_function* factory)                  // factory for this class id
 {
     m_class_identifier = class_identifier;
     m_factory = factory;
@@ -395,8 +395,8 @@ Deserialization_class::Deserialization_class(
 
 // constructor
 Deserialization_class::Deserialization_class(
-    Class_id class_identifier,			// class id to be registered
-    IDeserialization_factory* factory_class)	// factory class for this class id
+    Class_id class_identifier,                  // class id to be registered
+    IDeserialization_factory* factory_class)    // factory class for this class id
 {
     m_class_identifier = class_identifier;
     m_factory_class = factory_class;
@@ -405,7 +405,7 @@ Deserialization_class::Deserialization_class(
 
 // constructor mainly used for searching
 Deserialization_class::Deserialization_class(
-    Class_id class_identifier)			// class id of searched class
+    Class_id class_identifier)                  // class id of searched class
 : m_class_identifier(class_identifier)
 , m_factory(0)
 , m_factory_class(0)
@@ -430,8 +430,8 @@ void Deserialization_manager::release(
 // function to create an appropriate object. This object then provides the
 // applicable deserialize function.
 void Deserialization_manager_impl::register_class(
-    Class_id class_identifier,			// class id to be registered
-    Factory_function* factory)			// factory for this class id
+    Class_id class_identifier,                  // class id to be registered
+    Factory_function* factory)                  // factory for this class id
 {
     ASSERT(M_DB, class_identifier || !"Registering serialization class with null ID");
     mi::base::Lock::Block block(&m_lock);
@@ -446,8 +446,8 @@ void Deserialization_manager_impl::register_class(
 // this Class_id it will call use the given factory class to create an appropriate object. This
 // object then provides the applicable deserialize function.
 void Deserialization_manager_impl::register_class(
-    Class_id class_identifier,			// class id to be registered
-    IDeserialization_factory* factory)		// factory class for this class id
+    Class_id class_identifier,                  // class id to be registered
+    IDeserialization_factory* factory)          // factory class for this class id
 {
     ASSERT(M_DB, class_identifier || !"Registering serialization class with null ID");
     mi::base::Lock::Block block(&m_lock);
@@ -461,7 +461,7 @@ void Deserialization_manager_impl::register_class(
 // Call the appropriate factory function for the given class id and return
 // it.
 Serializable* Deserialization_manager_impl::construct(
-    Class_id class_identifier)			// class id to be constructed
+    Class_id class_identifier)                  // class id to be constructed
 {
     mi::base::Lock::Block block(&m_lock);
     Deserialization_class pattern(class_identifier);
@@ -471,7 +471,7 @@ Serializable* Deserialization_manager_impl::construct(
                 "Don't know how to deserialize class ID %#x",class_identifier);
         return nullptr;
     }
-    Deserialization_class deserialization_class = *it;	// copy outside of the lock
+    Deserialization_class deserialization_class = *it;  // copy outside of the lock
     block.release();
 
     if (deserialization_class.m_factory != NULL)
@@ -481,7 +481,7 @@ Serializable* Deserialization_manager_impl::construct(
 
 // Check if the class with given id is registered
 bool Deserialization_manager_impl::is_registered(
-    Class_id class_identifier)			// class id to be checked
+    Class_id class_identifier)                  // class id to be checked
 {
     mi::base::Lock::Block block(&m_lock);
     Deserialization_class pattern(class_identifier);

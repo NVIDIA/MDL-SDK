@@ -40,7 +40,7 @@ set(PROJECT_HEADERS
     "search_path.h"
     "traversal.h"
     "util.h"
-    "version.h"
+    "version_helper.h"
     "xliff.h"
     )
 
@@ -54,7 +54,7 @@ set(PROJECT_SOURCES
     "search_path.cpp"
     "traversal.cpp"
     "util.cpp"
-    "version.cpp"
+    "version_helper.cpp"
     "xliff.cpp"
     ${PROJECT_HEADERS}
     )

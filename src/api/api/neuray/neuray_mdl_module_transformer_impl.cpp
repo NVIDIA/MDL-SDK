@@ -34,6 +34,8 @@
 
 #include "neuray_mdl_module_transformer_impl.h"
 
+#include <memory>
+
 #include <mi/mdl/mdl_modules.h>
 #include <mi/neuraylib/ibuffer.h>
 #include <mi/neuraylib/istring.h>
@@ -58,15 +60,11 @@ Mdl_module_transformer_impl::Mdl_module_transformer_impl(
   : m_transaction( transaction, mi::base::DUP_INTERFACE),
     m_db_module_name( module_name)
 {
-    Transaction_impl* transaction_impl
+    auto* transaction_impl
         = static_cast<Transaction_impl*>( transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
-    m_impl.reset( new MDL::Mdl_module_transformer( db_transaction, mdl_module));
-}
-
-Mdl_module_transformer_impl::~Mdl_module_transformer_impl()
-{
+    m_impl = std::make_unique<MDL::Mdl_module_transformer>( db_transaction, mdl_module);
 }
 
 mi::Sint32 Mdl_module_transformer_impl::upgrade_mdl_version(

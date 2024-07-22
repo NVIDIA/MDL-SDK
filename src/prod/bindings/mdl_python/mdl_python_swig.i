@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ * Copyright 2024 NVIDIA Corporation. All rights reserved.
  *****************************************************************************/
 
 /* File : example.i */
@@ -18,6 +18,7 @@
 %}
 
 %include <typemaps.i>
+%include <std_string.i>
 %apply unsigned long long{ uint64_t };
 
 // TODO: Doxygen
@@ -39,6 +40,7 @@
 %feature("doxygen:alias:NeurayAdjectiveName") "MDL SDK"
 %feature("doxygen:alias:neurayAdjectiveName") "MDL SDK"
 // %feature("doxygen:alias:MiProductVersion") "$(MI_PRODUCT_VERSION)"
+%feature("python:annotations", "c"); // since there is no python mode yet
 
 // When enabled, the python binding will be able to load neuray or the MDL SDK.
 // Otherwise, only existing neuray instance pointers can be attached from a running process.
@@ -48,7 +50,7 @@
 
 %{
 /******************************************************************************
- * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ * Copyright 2024 NVIDIA Corporation. All rights reserved.
  *****************************************************************************/
 
 #ifdef IRAY_SDK
@@ -89,6 +91,12 @@ namespace {
 #endif
 }
 
+// Global INeuray pointer.
+//
+// Not reference-counted to avoid problems when attach_ineuray() is used instead of
+// load_and_get_ineuray().
+extern mi::neuraylib::INeuray* g_neuray;
+
 std::mutex SmartPtrBase::s_lock_open_handles;
 std::map<void*, SmartPtrBase::Open_handle>SmartPtrBase::s_open_handles;
 bool SmartPtrBase::s_print_ref_counts = false;
@@ -117,11 +125,38 @@ extern bool unload();
 %}
 #endif
 
-%pythoncode {
+%pythoncode %{
     from enum import Enum
     import warnings
     import gc
-}
+    import sys
+    from typing import Callable, TypeVar
+    if sys.version_info >= (3, 10):
+        from typing import ParamSpec  # pragma: no cover
+    else:
+        from typing_extensions import ParamSpec  # pragma: no cover
+
+    P = ParamSpec("P")
+    T = TypeVar("T")
+    def copy_docs_from(wrapped: Callable[P, T]):  # pragma: no cover
+        """Helper to copy documentation to a different function."""
+        def decorator(func: Callable) -> Callable[P, T]:
+            func.__doc__ = wrapped.__doc__
+            return func
+        return decorator
+
+    def post_swig_move_to_end_of_class():  # pragma: no cover
+        """Helper to move a function definition to the end of the class"""
+        def decorator(func):
+            return func
+        return decorator
+
+    def post_swig_add_type_hint_mapping(map_from: str, map_to: str): # pragma: no cover
+        """Helper to apply type hints which are not supported by swig yet"""
+        def decorator(func):
+            return func
+        return decorator
+%}
 
 // this adds 'with` support to the smart pointer
 %ignore SmartPtrBase;
@@ -130,24 +165,24 @@ extern bool unload();
 %import "mdl_python.h"
 %extend SmartPtr
 {
-    // enter function for `with` blocks
+    /// Enter function for `with` blocks
     SmartPtr<T>* __enter__() {
         return $self;
     }
 
-    // exit function for `with` blocks
+    /// Exit function for `with` blocks
     bool __exit__(const void* exc_type, const void* exc_value, const void* exc_traceback) {
         $self->drop(true);
         return true;
     }
 
-    // release function exposed to python.
-    // decrements the ref count internally and makes the python proxy invalid (holds nullptr).
+    /// release-function exposed to python.
+    /// decrements the ref count internally and makes the python proxy invalid (holds nullptr).
     void release() {
         $self->drop(false);
     }
 
-    // Reference counter of the native objects.
+    /// Reference counter of the native objects.
     size_t __iinterface_refs__() const {
         const T* pointee = $self->get();
         if (pointee) {
@@ -157,10 +192,18 @@ extern bool unload();
         return 0;
     }
 
-    // Get the native pointer as uint64. E.g. for comparison.
-    uint64_t __iinterface_ptr_as_uint64__() const {
+    /// Get the native pointer as uint64. E.g. for comparison.
+    ///
+    /// \param retain   If true, the native refcount is increased.
+    ///                 Do not use this unless for interop with native code.
+    /// 
+    /// \return         The native point as uint64.
+    uint64_t __iinterface_ptr_as_uint64__(bool retain = false) const {
         const T* pointee = $self->get();
         if (pointee) {
+            if (retain) {
+                pointee->retain();
+            }
             return reinterpret_cast<uint64_t>(pointee);
         }
         return 0;
@@ -194,40 +237,39 @@ namespace mi
 #define IValue_struct IValue_structure
 
 // Init step for the wrapper generation
-%define NEURAY_INIT_INTERFACE(CLASS_TYPE)
+%define NEURAY_INIT_INTERFACE(NAMESPACE, CLASS_TYPE)
 
     // We don't want to generate wrappers for our interfaces directly, only for the ones wrapped in handles
     //%ignore CLASS_TYPE;
-    %nodefault CLASS_TYPE;
+    %nodefault NAMESPACE::CLASS_TYPE;
 
     // handle retain and release a bit different:
     // - we hide the internal ref countering from the python interface
     // - we add a new release function, that just like the __exit__,
     //   invalidates the python proxy using `drop` (which decrements the ref count internally)
-    %ignore CLASS_TYPE::retain;
-    %ignore CLASS_TYPE::release;
+    %ignore NAMESPACE::CLASS_TYPE::retain;
+    %ignore NAMESPACE::CLASS_TYPE::release;
 
     // hide the get/retain/release/drop functions, this is not supposed to be used from python
-    %ignore SmartPtr<CLASS_TYPE>::retain;
-    // %ignore SmartPtr<CLASS_TYPE>::release; // we actually do expose this for manual releasing of objects (deprecated in the future?)
-    %ignore SmartPtr<CLASS_TYPE>::drop;
-    %ignore SmartPtr<CLASS_TYPE>::get;
+    %ignore SmartPtr<NAMESPACE::CLASS_TYPE>::retain;
+    // %ignore SmartPtr<NAMESPACE::CLASS_TYPE>::release; // we actually do expose this for manual releasing of objects (deprecated in the future?)
+    %ignore SmartPtr<NAMESPACE::CLASS_TYPE>::drop;
+    %ignore SmartPtr<NAMESPACE::CLASS_TYPE>::get;
 
     // hide debugging support
-    %ignore SmartPtr<CLASS_TYPE>::get_debug_str;
-    %ignore SmartPtr<CLASS_TYPE>::assign_open_handle_typename;
+    %ignore SmartPtr<NAMESPACE::CLASS_TYPE>::get_debug_str;
+    %ignore SmartPtr<NAMESPACE::CLASS_TYPE>::assign_open_handle_typename;
 
     // we don't want people to create objects using the constructor
-    %nodefault SmartPtr<CLASS_TYPE>;
-    %ignore SmartPtr<CLASS_TYPE>::SmartPtr<CLASS_TYPE>;
+    %nodefault SmartPtr<NAMESPACE::CLASS_TYPE>;
+    %ignore SmartPtr<NAMESPACE::CLASS_TYPE>::SmartPtr<NAMESPACE::CLASS_TYPE>;
 
     // we re-implement get_interface here
-    %ignore CLASS_TYPE::get_interface;
+    %ignore NAMESPACE::CLASS_TYPE::get_interface;
 
-    %ignore CLASS_TYPE::s_kind;
+    %ignore NAMESPACE::CLASS_TYPE::s_kind;
 
-    %rename(_get_iid) SmartPtr<CLASS_TYPE>::get_iid;
-    %extend SmartPtr<CLASS_TYPE> {
+    %extend SmartPtr<NAMESPACE::CLASS_TYPE> {
 
         /// Declares the interface ID (IID) of this interface.
         ///
@@ -237,15 +279,16 @@ namespace mi
         /// #mi::base::Uuid.
         static const mi::base::Uuid IID()
         {
-            return CLASS_TYPE::IID();
+            return NAMESPACE::CLASS_TYPE::IID();
         }
 
         /// this creates a static function at the target interface class to convert an interface pointer
         /// into an object of the own class, e.g.:
         /// [python] cfg = pymdlsdk.IMdl_configuration.get_interface(iinterface)
-        static SmartPtr<CLASS_TYPE>* _get_interface(mi::base::IInterface* iface) {
-            auto ptr = new SmartPtr<CLASS_TYPE>(iface->get_interface<CLASS_TYPE>(), "CLASS_TYPE");
-            return ptr;
+        static NAMESPACE::CLASS_TYPE* _get_interface(mi::base::IInterface* iface) {
+            if (!iface)
+                return nullptr;
+            return iface->get_interface<NAMESPACE::CLASS_TYPE>();
         }
 
         // Allow "foo.get_interface(Bar)" instead of "Bar.get_interface(foo)"
@@ -254,11 +297,10 @@ namespace mi
             def get_interface(self, type):
                 r"""
                 Acquires an interfaces of a given other ``type``.
-                If the type hierarchy of the calling object does not contain the specified ``type``, 
+                If the type hierarchy of the calling object does not contain the specified ``type``,
                 an invalid interface is returned.
                 """
                 typed_interface = type._get_interface(self)
-                typed_interface.thisown = True
                 return typed_interface
         }
 
@@ -266,21 +308,21 @@ namespace mi
         //     def __repr__(self) -> str:
         //         r"""Create a string representation."""
         //         refCount: int = self.__iinterface_refs__()
-        //         return f"CLASS_TYPE (RefCount: {refCount})"
+        //         return f"NAMESPACE::CLASS_TYPE (RefCount: {refCount})"
         // }
     };
 %enddef
 
 %define DICE_INTERFACE(CLASS_TYPE)
-    NEURAY_INIT_INTERFACE(mi::neuraylib::CLASS_TYPE)
+    NEURAY_INIT_INTERFACE(mi::neuraylib, CLASS_TYPE)
 %enddef
 
 %define DICE_INTERFACE_MI(CLASS_TYPE)
-    NEURAY_INIT_INTERFACE(mi::CLASS_TYPE)
+    NEURAY_INIT_INTERFACE(mi, CLASS_TYPE)
 %enddef
 
 %define DICE_INTERFACE_BASE(CLASS_TYPE)
-    NEURAY_INIT_INTERFACE(mi::base::CLASS_TYPE)
+    NEURAY_INIT_INTERFACE(mi::base, CLASS_TYPE)
 %enddef
 
 // Wrapping Neuray IInterfaces
@@ -360,7 +402,7 @@ namespace mi
     %typemap(check) SmartPtr<IINTERFACE_TYPE ARGS> *self {
         // filter cases that are supposed to work with nullptrs
         %#if __cplusplus >= 201703L
-            constexpr bool filtered = 
+            constexpr bool filtered =
         %#else
             const bool filtered =
         %#endif
@@ -402,7 +444,7 @@ namespace mi
                 if iinterface.is_valid_interface():
                     return iinterface.get_interface(type)
                 else:
-                    return iinterface
+                    return iinterface  # pragma: no cover
         }
     }
 %enddef
@@ -525,7 +567,7 @@ typedef Sint32             Difference;
 }
 
 
-// special handling for: mi::neuraylib::IDatabase::Garbage_collection_priority
+// special handling for: Clip_mode
 // ----------------------------------------------------------------------------
 
 // We manually define the enums
@@ -649,11 +691,10 @@ namespace math {
 
 // Do not run the dice script on the base interface
 %ignore mi::base::IInterface;
-NEURAY_INIT_INTERFACE(mi::base::IInterface);
+NEURAY_INIT_INTERFACE(mi::base, IInterface);
 %include "mi/base/iinterface.h"
 %include "mi/base/interface_declare.h"
 %include "mi/base/enums.h"
-
 
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::base::IInterface)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::base, IInterface)
@@ -703,8 +744,6 @@ DICE_INTERFACE_MI(IUint16);
 DICE_INTERFACE_MI(IUint32);
 DICE_INTERFACE_MI(IUint64);
 DICE_INTERFACE_MI(IVoid);
-DICE_INTERFACE_MI(IEnum_decl);
-DICE_INTERFACE_MI(IEnum);
 DICE_INTERFACE_MI(IBoolean_2_2)
 DICE_INTERFACE_MI(IBoolean_2_3)
 DICE_INTERFACE_MI(IBoolean_2_4)
@@ -920,8 +959,6 @@ NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint16)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint32)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint64)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IVoid)
-NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IEnum_decl)
-NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IEnum)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IBoolean_2_2)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IBoolean_2_3)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IBoolean_2_4)
@@ -1012,8 +1049,6 @@ NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint16)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint32)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint64)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IVoid)
-NEURAY_CREATE_HANDLE_TEMPLATE(mi, IEnum_decl)
-NEURAY_CREATE_HANDLE_TEMPLATE(mi, IEnum)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IBoolean_2_2)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IBoolean_2_3)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IBoolean_2_4)
@@ -1067,36 +1102,41 @@ NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat64_4_4)
 // one note on the order here, currently trying to keep the blocks and in each
 // block we have alphabetical sorting
 
-DICE_INTERFACE(IAttribute_set);
+DICE_INTERFACE(IAttribute_set)
 DICE_INTERFACE(IBaker)
+DICE_INTERFACE(IBsdf_buffer)
+DICE_INTERFACE(IBsdf_isotropic_data)
 DICE_INTERFACE(IBsdf_measurement)
+DICE_INTERFACE(IBuffer)
 DICE_INTERFACE(ICanvas)
 DICE_INTERFACE(ICanvas_base)
 DICE_INTERFACE(ICompiled_material)
 DICE_INTERFACE(IDatabase);
-DICE_INTERFACE(IDeserialized_function_name);
-DICE_INTERFACE(IDeserialized_module_name);
-DICE_INTERFACE(IImage_api);
-DICE_INTERFACE(IMdl_configuration);
-DICE_INTERFACE(IMdl_evaluator_api);
-DICE_INTERFACE(IMessage);
-DICE_INTERFACE(IMdl_distiller_api);
-DICE_INTERFACE(IMdl_execution_context);
-DICE_INTERFACE(IMdl_resolved_module);
-DICE_INTERFACE(IMdl_resolved_resource);
-DICE_INTERFACE(IMdl_resolved_resource_element);
-DICE_INTERFACE(IMdl_entity_resolver);
-DICE_INTERFACE(IMdl_factory);
-DICE_INTERFACE(IMdl_impexp_api);
+DICE_INTERFACE(IDeserialized_function_name)
+DICE_INTERFACE(IDeserialized_module_name)
+DICE_INTERFACE(IImage_api)
+DICE_INTERFACE(IMdl_configuration)
+DICE_INTERFACE(IMdl_evaluator_api)
+DICE_INTERFACE(IMessage)
+DICE_INTERFACE(IMdl_distiller_api)
+DICE_INTERFACE(IMdl_execution_context)
+DICE_INTERFACE(IMdl_i18n_configuration)
+DICE_INTERFACE(IMdl_resolved_module)
+DICE_INTERFACE(IMdl_resolved_resource)
+DICE_INTERFACE(IMdl_resolved_resource_element)
+DICE_INTERFACE(IMdl_entity_resolver)
+DICE_INTERFACE(IMdl_factory)
+DICE_INTERFACE(IMdl_impexp_api)
 DICE_INTERFACE(IMdl_module_builder)
+DICE_INTERFACE(IMdl_module_transformer)
 DICE_INTERFACE(IMdle_deserialization_callback)
 DICE_INTERFACE(IMdle_serialization_callback)
-DICE_INTERFACE(INeuray);
+DICE_INTERFACE(INeuray)
 DICE_INTERFACE(IPlugin_configuration)
-DICE_INTERFACE(IScene_element);
-DICE_INTERFACE(IScope);
-DICE_INTERFACE(ISerialized_function_name);
-DICE_INTERFACE(ITransaction);
+DICE_INTERFACE(IScene_element)
+DICE_INTERFACE(IScope)
+DICE_INTERFACE(ISerialized_function_name)
+DICE_INTERFACE(ITransaction)
 DICE_INTERFACE(IAnnotation)
 DICE_INTERFACE(IAnnotation_block)
 DICE_INTERFACE(IAnnotation_definition)
@@ -1121,6 +1161,8 @@ DICE_INTERFACE(IReader)
 DICE_INTERFACE(IWriter)
 DICE_INTERFACE(ITexture)
 DICE_INTERFACE(ITile)
+DICE_INTERFACE(IStruct_category)
+DICE_INTERFACE(IStruct_category_list)
 DICE_INTERFACE(IType)
 DICE_INTERFACE(IType_alias)
 DICE_INTERFACE(IType_array)
@@ -1178,6 +1220,10 @@ DICE_INTERFACE(IValue_vector)
 %include <mi_neuraylib_enums.i>
 
 
+// remove free functions that can be accessed otherwise
+%ignore mi::neuraylib::set_value;
+%ignore mi::neuraylib::get_value;
+
 // special handling for: mi::neuraylib::IAttribute_set
 // ----------------------------------------------------------------------------
 // Since this is not used by the MDL SDK, we drop this from the bindings.
@@ -1197,7 +1243,7 @@ DICE_INTERFACE(IValue_vector)
 // ----------------------------------------------------------------------------
 // Rewrite of special template functions to make life easier
 // - note, this has to happen before the types are processed
-// - of the original function is needed, just rename it with an underscore in front
+// - if the original function is needed, just rename it with an underscore in front
 // - then extent the wrapped class by a handwritten python or c++ function using the original name
 %rename(_get_api_component) mi::neuraylib::INeuray::get_api_component;
 %rename(_shutdown) mi::neuraylib::INeuray::shutdown;
@@ -1207,7 +1253,6 @@ DICE_INTERFACE(IValue_vector)
             r"""
             Returns an API component from the MDL SDK API.
             See also: 'mi_neuray_api_components' for a list of built - in API components.
-            See also: #register_api_component(), #unregister_api_component()
             """
             iinterface = self._get_api_component(type.IID())
             if iinterface.is_valid_interface():
@@ -1222,6 +1267,11 @@ DICE_INTERFACE(IValue_vector)
     }
 }
 
+// Hide registration/unregistration of API compoenents since subclasses of IInterface cannot be
+// implemented in Python, and registration/unregistration of other interfaces as API components is
+// highly unlikely.
+%ignore mi::neuraylib::INeuray::register_api_component;
+%ignore mi::neuraylib::INeuray::unregister_api_component;
 
 
 
@@ -1245,20 +1295,34 @@ EXTEND_FUNCTION_AS(mi::neuraylib::IExpression_list, get_expression)
 
 // special handling for: mi::neuraylib::IExpression_factory
 // ----------------------------------------------------------------------------
-%ignore mi::neuraylib::IExpression_factory::create_cast(IExpression*, IType const*, char const*, bool) const;
-%rename(_create_cast) mi::neuraylib::IExpression_factory::create_cast(IExpression*, IType const*, char const*, bool, Sint32*) const;
+%ignore mi::neuraylib::IExpression_factory::create_cast(IExpression*, IType const*, char const*, bool, bool) const;
+%rename(_create_cast) mi::neuraylib::IExpression_factory::create_cast(IExpression*, IType const*, char const*, bool, bool, Sint32*) const;
 %extend SmartPtr<mi::neuraylib::IExpression_factory> {
     %pythoncode {
-        def create_cast(self, src_expr, target_type, cast_db_name, force_cast, errors: ReturnCode = None):
-            iinterface, ret = self._create_cast(src_expr, target_type, cast_db_name, force_cast)
+        @post_swig_move_to_end_of_class
+        @copy_docs_from(_create_cast)
+        def create_cast(self, src_expr, target_type, cast_db_name, force_cast, direct_call, errors: ReturnCode = None):
+            iinterface, ret = self._create_cast(src_expr, target_type, cast_db_name, force_cast, direct_call)
             if errors != None:
                 errors.value = ret
             iinterface.thisown = True
             return iinterface
+    }
+}
 
-        def create_cast_with_ret(self, src_expr, target_type, cast_db_name, force_cast):
-            warnings.warn("Use `create_cast` instead using the `errors: ReturnCode` parameter.", DeprecationWarning)
-            return self._create_cast(src_expr, target_type, cast_db_name, force_cast)
+// Note, no deprecated version as it hasn't been in the bindings
+%ignore mi::neuraylib::IExpression_factory::create_decl_cast(IExpression*, IType_struct const*, char const*, bool, bool) const;
+%rename(_create_decl_cast) mi::neuraylib::IExpression_factory::create_decl_cast(IExpression*, IType_struct const*, char const*, bool, bool, Sint32*) const;
+%extend SmartPtr<mi::neuraylib::IExpression_factory> {
+    %pythoncode {
+        @post_swig_move_to_end_of_class
+        @copy_docs_from(_create_decl_cast)
+        def create_decl_cast(self, src_expr, target_type, cast_db_name, force_cast, direct_call, errors: ReturnCode = None):
+            iinterface, ret = self._create_decl_cast(src_expr, target_type, cast_db_name, force_cast, direct_call)
+            if errors != None:
+                errors.value = ret
+            iinterface.thisown = True
+            return iinterface
     }
 }
 
@@ -1266,16 +1330,14 @@ EXTEND_FUNCTION_AS(mi::neuraylib::IExpression_list, get_expression)
 %rename(_create_direct_call) mi::neuraylib::IExpression_factory::create_direct_call(const char*, IExpression_list*, Sint32*) const;
 %extend SmartPtr<mi::neuraylib::IExpression_factory> {
     %pythoncode {
+        @post_swig_move_to_end_of_class
+        @copy_docs_from(_create_direct_call)
         def create_direct_call(self, name, arguments, errors: ReturnCode = None):
             iinterface, ret = self._create_direct_call(name, arguments)
             if errors != None:
                 errors.value = ret
             iinterface.thisown = True
             return iinterface
-
-        def create_direct_call_with_ret(self, name, arguments):
-            warnings.warn("Use `create_direct_call` instead using the `errors: ReturnCode` parameter.", DeprecationWarning)
-            return self._create_direct_call(name, arguments)
     }
 }
 
@@ -1289,16 +1351,14 @@ EXTEND_FUNCTION_AS(mi::neuraylib::IExpression_list, get_expression)
 %rename(_create_function_call) mi::neuraylib::IFunction_definition::create_function_call(IExpression_list const*, Sint32*) const;
 %extend SmartPtr<mi::neuraylib::IFunction_definition> {
     %pythoncode {
+        @post_swig_move_to_end_of_class
+        @copy_docs_from(_create_function_call)
         def create_function_call(self, arguments, errors: ReturnCode = None):
             iinterface, ret = self._create_function_call(arguments)
             if errors != None:
                 errors.value = ret
             iinterface.thisown = True
             return iinterface
-
-        def create_function_call_with_ret(self, arguments):
-            warnings.warn("Use `create_function_call` instead using the `errors: ReturnCode` parameter.", DeprecationWarning)
-            return self._create_function_call(arguments)
     }
 }
 
@@ -1310,16 +1370,14 @@ EXTEND_FUNCTION_AS(mi::neuraylib::IExpression_list, get_expression)
 %rename(_distill_material) mi::neuraylib::IMdl_distiller_api::distill_material(ICompiled_material const*, char const*, IMap const*, Sint32*) const;
 %extend SmartPtr<mi::neuraylib::IMdl_distiller_api> {
     %pythoncode {
+        @post_swig_move_to_end_of_class
+        @copy_docs_from(_distill_material)
         def distill_material(self, material, target, distiller_options = None, errors: ReturnCode = None):
             iinterface, ret = self._distill_material(material, target, distiller_options)
             if errors != None:
                 errors.value = ret
             iinterface.thisown = True
             return iinterface
-
-        def distill_material_with_ret(self, material, target, distiller_options = None) :
-            warnings.warn("Use `distill_material` instead using the `errors: ReturnCode` parameter.", DeprecationWarning)
-            return self._distill_material(material, target, distiller_options)
     }
 }
 
@@ -1329,25 +1387,117 @@ EXTEND_FUNCTION_AS(mi::neuraylib::IExpression_list, get_expression)
 %rename(_get_connected_function_db_name) mi::neuraylib::ICompiled_material::get_connected_function_db_name(char const*, Size, Sint32*) const;
 %extend SmartPtr<mi::neuraylib::ICompiled_material> {
     %pythoncode {
+        @post_swig_move_to_end_of_class
+        @copy_docs_from(_get_connected_function_db_name)
         def get_connected_function_db_name(self, material_instance_name, parameter_index, errors: ReturnCode = None):
             iinterface, ret = self._get_connected_function_db_name(material_instance_name, parameter_index)
             if errors != None:
                 errors.value = ret
             iinterface.thisown = True
             return iinterface
-
-        def get_connected_function_db_name_with_ret(self, material_instance_name, parameter_index):
-            warnings.warn("Use `get_connected_function_db_name` instead using the `errors: ReturnCode` parameter.", DeprecationWarning)
-            return self._get_connected_function_db_name(material_instance_name, parameter_index)
     }
 }
+
+// special handling for: mi::neuraylib::IMdl_evaluator_api
+// ----------------------------------------------------------------------------
+%ignore mi::neuraylib::IMdl_evaluator_api::is_function_parameter_enabled(ITransaction*, IValue_factory*, IFunction_call const*, Size) const;
+%rename(_is_function_parameter_enabled) mi::neuraylib::IMdl_evaluator_api::is_function_parameter_enabled(ITransaction*, IValue_factory*, IFunction_call const*, Size, Sint32*) const;
+%extend SmartPtr<mi::neuraylib::IMdl_evaluator_api> {
+    %pythoncode {
+        @post_swig_move_to_end_of_class
+        @copy_docs_from(_is_function_parameter_enabled)
+        def is_function_parameter_enabled(self, trans, fact, call, index, errors: ReturnCode = None) -> "IValue_bool":
+            iinterface, ret = self._is_function_parameter_enabled(trans, fact, call, index)
+            if errors != None:
+                errors.value = ret
+            iinterface.thisown = True
+            return iinterface
+    }
+}
+
 // make the return of mi::neuraylib::ICompiled_material::get_cutout_opacity() a tuple
 %apply mi::Float32* OUTPUT{ float* cutout_opacity };
 
+// special handling for: mi::neuraylib::IMdl_impexp_api
+// ----------------------------------------------------------------------------
+// Hide IMdle_serialization_callback and IMdle_deserialization_callback parameters which cannot
+// be implemented in Pyton, or instantiated otherwise. Insert "None" for such paramters.
+
+%ignore mi::neuraylib::IMdl_impexp_api::serialize_function_name;
+%ignore mi::neuraylib::IMdl_impexp_api::deserialize_function_name(
+    ITransaction*, const char*,
+    IMdle_deserialization_callback*, IMdl_execution_context*) const;
+%ignore mi::neuraylib::IMdl_impexp_api::deserialize_function_name(
+    ITransaction*, const char*, const char*,
+    IMdle_deserialization_callback*, IMdl_execution_context*) const;
+%ignore mi::neuraylib::IMdl_impexp_api::deserialize_module_name;
+
+%rename(_serialize_function_name) mi::neuraylib::IMdl_impexp_api::serialize_function_name;
+%rename(_deserialize_function_name4) mi::neuraylib::IMdl_impexp_api::deserialize_function_name(
+    ITransaction*, const char*,
+    IMdle_deserialization_callback*, IMdl_execution_context*) const;
+%rename(_deserialize_function_name5) mi::neuraylib::IMdl_impexp_api::deserialize_function_name(
+    ITransaction*, const char*, const char*,
+    IMdle_deserialization_callback*, IMdl_execution_context*) const;
+%rename(_deserialize_module_name) mi::neuraylib::IMdl_impexp_api::deserialize_module_name;
+
+%extend SmartPtr<mi::neuraylib::IMdl_impexp_api> {
+    %pythoncode {
+
+        @post_swig_move_to_end_of_class
+        @copy_docs_from(_serialize_function_name)
+        def serialize_function_name(self, definition_name, argument_types, return_type, context) -> "ISerialized_function_name":
+            r"""Actually this method lacks the mdle_serialization_callback parameter."""
+            iinterface = self._serialize_function_name(
+                definition_name, argument_types, return_type, None, context)
+            iinterface.thisown = True
+            return iinterface
+
+        @post_swig_move_to_end_of_class
+        @copy_docs_from(_deserialize_function_name4)
+        @copy_docs_from(_deserialize_function_name5)
+        def deserialize_function_name(self, *args) -> "IDeserialized_function_name":
+            r"""Actually this method lacks the mdle_deserialization_callback parameter."""
+            argc: int = len(args)
+            if argc == 3:
+                iinterface = self._deserialize_function_name4(
+                    args[0], args[1], None, args[2])
+                iinterface.thisown = True
+                return iinterface
+            elif argc == 4:
+                iinterface = self._deserialize_function_name5(
+                    args[0], args[1], args[2], None, args[3])
+                iinterface.thisown = True
+                return iinterface
+            else:
+                raise TypeError("Wrong number of arguments passed to `IMdl_impexp_api.deserialize_function_name`.")
+
+        @post_swig_move_to_end_of_class
+        @copy_docs_from(_deserialize_module_name)
+        def deserialize_module_name(self, module_name, context) -> "IDeserialized_module_name":
+            r"""Actually this method lacks the mdle_deserialization_callback parameter."""
+            iinterface = self._deserialize_module_name(module_name, None, context)
+            iinterface.thisown = True
+            return iinterface
+
+    }
+}
+
 // special handling for: mi::neuraylib::IType_enum
 // ----------------------------------------------------------------------------
-%rename(get_value_code_with_ret) mi::neuraylib::IType_enumeration::get_value_code(Size, Sint32*) const;
-
+%ignore mi::neuraylib::IType_enumeration::get_value_code(Size) const;
+%rename(_get_value_code) mi::neuraylib::IType_enumeration::get_value_code(Size, Sint32*) const;
+%extend SmartPtr<mi::neuraylib::IType_enumeration> {
+    %pythoncode {
+        @post_swig_move_to_end_of_class
+        @copy_docs_from(_get_value_code)
+        def get_value_code(self, index: int, errors: ReturnCode = None):
+            code, ret = self._get_value_code(index)
+            if errors != None:
+                errors.value = ret
+            return code
+    }
+}
 
 // special handling for: mi::neuraylib::IValue
 // ----------------------------------------------------------------------------
@@ -1360,25 +1510,101 @@ EXTEND_FUNCTION_AS(mi::neuraylib::IValue_array, get_value)
 EXTEND_FUNCTION_AS(mi::neuraylib::IValue_structure, get_value)
 EXTEND_FUNCTION_AS(mi::neuraylib::IValue_structure, get_field)
 
+// special handling for: mi::neuraylib::IDatabase
+// ----------------------------------------------------------------------------
+// not implemented in the MDL SDK
+%ignore mi::neuraylib::IDatabase::lock;
+%ignore mi::neuraylib::IDatabase::unlock;
+
 // special handling for: mi::neuraylib::ITransaction
 // ----------------------------------------------------------------------------
 EXTEND_FUNCTION_AS(mi::neuraylib::ITransaction, access)
 EXTEND_FUNCTION_AS(mi::neuraylib::ITransaction, edit)
 
-%rename(_create) mi::neuraylib::ITransaction::create; // omit the last two parameters of the create function
+%ignore mi::neuraylib::ITransaction::create;
 %extend SmartPtr<mi::neuraylib::ITransaction> {
-    %pythoncode{
-        def create(self, type_name: str, argc = 0, argv = None):
-            return  self._create(type_name, argc, argv)
 
-        def create_as(self, type, type_name:str, argc = 0, argv = None):
-            iinterface = self.create(type_name, argc, argv)
+    mi::base::IInterface* _create_internal(const char* type_name)
+    {
+        return $self->get()->create(type_name, 0, nullptr);
+    }
+
+    // leading underscores because there are deprecated functions
+    %pythoncode %{
+
+        def _create(self, type_name: str) -> "IInterface":
+            r"""
+            Creates an object of the type ``type_name``.
+
+            Objects created with this method are typically mi_neuray_types and mi_neuray_scene_element.
+            Note that most types can also be created via the API
+            component #mi::neuraylib::IFactory which does not require the context of a transaction.
+
+            This method can not be used to create MDL modules, definitions, or function calls. To
+            create instances of #mi::neuraylib::IFunction_call, use the method
+            #mi::neuraylib::IFunction_definition::create_function_call().
+
+            The created object will be initialized in a manner dependent upon the passed type
+            name. Each class has its own policy on initialization. So, one should not make any
+            assumptions on the values of the various class members.
+
+            :type type_name: string
+            :param type_name:   The type name of the object to create. See 'mi_neuray_types' for
+                                possible type names. In addition, 'mi_neuray_scene_element' can be created by
+                                passing the name of the requested interfaces without namespace
+                                qualifiers and the leading ``"I"``, e.g., ``"Image"`` for
+                                #mi::neuraylib::IImage. Note that you can not create instances of
+                                #mi::neuraylib::IScene_element, only instances of the derived interfaces.
+
+            :rtype: "IInterface"
+            :return: A pointer to the created object, or ``NULL`` if ``type_name`` is invalid
+                                    (``NULL`` pointer) or not a valid type name.
+            """
+            return self._create_internal(type_name)
+
+        def _create_as(self, type, type_name: str):
+            r"""
+            Creates an object of type_name and returns as interface of `type.
+
+            See also `ITransaction.create` for more details.
+            """
+            iinterface = self._create_internal(type_name)
             if iinterface.is_valid_interface():
                 return iinterface.get_interface(type)
             else:
                 return iinterface
-    }
+    %}
 }
+
+%ignore mi::neuraylib::ITransaction::LOCAL_SCOPE;
+%extend SmartPtr<mi::neuraylib::ITransaction> {
+
+    %pythoncode %{
+
+        LOCAL_SCOPE:int = 255
+        r"""
+        Symbolic privacy level for the privacy level of the scope of this transaction.
+
+        This symbolic constant can be passed to `store()` and `copy()` to indicate the privacy level
+        of the scope of this transaction. It has the same affect as passing the result of
+        IScope.get_privacy_level(), but is more convenient.
+        """
+    %}
+}
+
+// special handling for: mi::neuraylib::Image_api
+// ----------------------------------------------------------------------------
+%ignore mi::neuraylib::IImage_api::create_canvas_cuda;
+%ignore mi::neuraylib::IImage_api::read_raw_pixels;  // Not supported at this point, TODO involve numpy here
+%ignore mi::neuraylib::IImage_api::write_raw_pixels;  // Not supported at this point, TODO involve numpy here
+
+// special handling for: mi::neuraylib::IBuffer
+// ----------------------------------------------------------------------------
+%ignore mi::neuraylib::IBuffer::get_data;  // Not supported at this point, TODO involve numpy here
+// special handling for: mi::neuraylib::IBsdf_buffer
+//
+// ----------------------------------------------------------------------------
+%ignore mi::neuraylib::IBsdf_buffer::get_data;  // Not supported at this point, TODO involve numpy here
 
 
 // special handling for: mi::neuraylib::IImage
@@ -1406,7 +1632,7 @@ EXTEND_FUNCTION_AS(mi::neuraylib::ITransaction, edit)
 %extend SmartPtr<mi::neuraylib::IImage> {
 
     /// Checks if there are valid uv-coordinates for given index ``frame_id`` and ``uvtile_id``.
-    /// 
+    ///
     /// \param frame_id     The frame ID of the frame.
     /// \param uvtile_id    The uv-tile ID of the uv-tile.
     /// \return             ``false`` if ``frame_id`` or ``uvtile_id`` out of range.
@@ -1418,7 +1644,7 @@ EXTEND_FUNCTION_AS(mi::neuraylib::ITransaction, edit)
     }
 
     /// Returns the u-coordinates corresponding to a uv-tile ID.
-    /// 
+    ///
     /// \param frame_id     The frame ID of the frame.
     /// \param uvtile_id    The uv-tile ID of the uv-tile.
     /// \return             The u-coordinate or undefined if out of range.
@@ -1432,7 +1658,7 @@ EXTEND_FUNCTION_AS(mi::neuraylib::ITransaction, edit)
     }
 
     /// Returns the v-coordinates corresponding to a uv-tile ID.
-    /// 
+    ///
     /// \param frame_id     The frame ID of the frame.
     /// \param uvtile_id    The uv-tile ID of the uv-tile.
     /// \return             The v-coordinate or undefined if out of range.
@@ -1478,6 +1704,10 @@ EXTEND_FUNCTION_AS(mi::neuraylib::ITransaction, edit)
     }
 }
 
+// special handling for: mi::neuraylib::ICanvas_base
+// ----------------------------------------------------------------------------
+%ignore mi::neuraylib::get_resolution;
+
 // special handling for: mi::neuraylib::ITile
 // ----------------------------------------------------------------------------
 %ignore mi::neuraylib::ITile::get_pixel const;
@@ -1505,9 +1735,9 @@ EXTEND_FUNCTION_AS(mi::neuraylib::ITransaction, edit)
 %extend SmartPtr<mi::neuraylib::IMdl_resolved_resource_element> {
 
     /// Checks if there are valid uv-coordinates for a given index ``i``.
-    /// 
+    ///
     /// \param i        The index of the requested resource entity (from 0 to #get_count()-1).
-    /// \return         ``true`` if the uvtile mode is not #mi::neuraylib::UVTILE_MODE_NONE 
+    /// \return         ``true`` if the uvtile mode is not #mi::neuraylib::UVTILE_MODE_NONE
     ///                 and \c i is not out of range.
     bool has_uvtile_uv(mi::Size i) const
     {
@@ -1517,7 +1747,7 @@ EXTEND_FUNCTION_AS(mi::neuraylib::ITransaction, edit)
     }
 
     /// Returns the u tile index for a resource entity.
-    /// 
+    ///
     /// \param i        The index of the requested resource entity (from 0 to #get_count()-1).
     /// \return         The u-coordinate of the resource entity or undefined if the uvtile mode
     ///                 is not #mi::neuraylib::UVTILE_MODE_NONE or \c i is out of range.
@@ -1531,7 +1761,7 @@ EXTEND_FUNCTION_AS(mi::neuraylib::ITransaction, edit)
     }
 
     /// Returns the v tile index for a resource entity.
-    /// 
+    ///
     /// \param i        The index of the requested resource entity (from 0 to #get_count()-1).
     /// \return         The v-coordinate of the resource entity or undefined if the uvtile mode
     ///                 is not #mi::neuraylib::UVTILE_MODE_NONE or \c i is out of range.
@@ -1562,7 +1792,7 @@ EXTEND_FUNCTION_AS(mi::neuraylib::ITransaction, edit)
     /// Reads at most \p size - 1 characters from the stream and stores returns them as string.
     /// Reading stops after a newline character or an end-of-file.
     /// If a newline is read, it is stored at the end of the string.
-    /// 
+    ///
     /// \param size     The maximum number of bytes to be read.
     /// \return         The string in case of success, or None in case of errors.
     std::string readline(mi::Sint32 size)
@@ -1576,6 +1806,162 @@ EXTEND_FUNCTION_AS(mi::neuraylib::ITransaction, edit)
         return result;
     }
 }
+
+// special handling for: mi::neuraylib::IPlugin_configuration
+// ----------------------------------------------------------------------------
+%ignore mi::neuraylib::IPlugin_configuration::get_plugin_descriptor;  // that interface is not part of neuray, skip unless needed
+%ignore mi::neuraylib::IPlugin_configuration::load_plugins_from_directory;  // dangerous, difficult to test
+
+// special handling for: mi::neuraylib::IMdl_factory
+// ----------------------------------------------------------------------------
+%ignore mi::neuraylib::IMdl_factory::analyze_uniform;  // return the `query_result` instead of using an outparam
+%extend SmartPtr<mi::neuraylib::IMdl_factory> {
+
+    bool _analyze_uniform(mi::neuraylib::ITransaction* transaction, const char* root_name, bool root_uniform, const mi::neuraylib::IExpression* query_expr, mi::IString* error_path, mi::neuraylib::IMdl_execution_context* context)
+    {
+        bool query_result;
+        $self->get()->analyze_uniform(transaction, root_name, root_uniform, query_expr, query_result, error_path, context);
+        return query_result;
+    }
+
+    // at this point do a rewrite of the function. in order to copy docs we need the function in the binding but this one in particalur is unusable
+    %pythoncode %{
+
+        def analyze_uniform(self, transaction: "ITransaction", root_name: str, root_uniform: bool, query_expr: "IExpression", context: "IMdl_execution_context") -> tuple[bool, str]:
+            r"""
+            Analyzes whether an expression graph violates the uniform constraints.
+
+            Notes:
+            This method can be used to check already created graphs, but it can also be used to
+            check whether a hypothetical connection would observe the uniform constraints:
+            First, invoke the method with the root of the existing graph, ``root_uniform`` set to
+            ``false`` (at least for materials), and ``query_expr`` set to the graph node to be
+            replaced. If the call returns ``false`` (and no errors are set in the context),
+            then any (valid) subgraph can be connected. Otherwise, invoke the
+            method again with the root of the to-be-connected subgraph, ``root_uniform`` set to
+            ``true``, and ``query_expr`` set to ``NULL``. If there are no errors, then the subgraph
+            can be connected.
+
+            Make sure that ``query_expr`` (if not ``NULL)`` can be reached from ``root_name``,
+            otherwise ``query_result`` is always ``false``. In particular, arguments passed during
+            call creation (or later for argument changes) are cloned, and the expression that is
+            part of the graph is different from the one that was used to construct the graph
+            (equal, but not identical).
+
+            :type transaction:      `ITransaction`
+            :param transaction:     The transaction to be used.
+            :type root_name:        string
+            :param root_name:       DB name of the root node of the graph (material instance or function call).
+            :type root_uniform:     boolean
+            :param root_uniform:    Indicates whether the root node should be uniform.
+            :type query_expr:       `IExpression`
+            :param query_expr:      A node of the call graph for which the uniform property is
+                                    to be queried. This expression is *only* used to identify
+                                    the corresponding node in the graph, i.e., it even makes
+                                    sense to pass constant expressions (which by themselves are
+                                    always uniform) to determine whether a to-be-connected call
+                                    expression has to be uniform. Can be ``NULL``.
+            :type context:          `IMdl_execution_context`
+            :param context:         The execution context can be used to pass options and to
+                                    retrieve error and/or warning messages. Can be ``NULL``.
+            :rtype:                 Tuple[boolean, str]
+            :return:                - Indicates whether ``query_expr`` needs to be uniform (or
+                                      ``false`` if ``query_expr`` is ``NULL``, or in case of errors).
+                                    - A path to a node of the graph that violates the uniform
+                                      constraints, or the empty string if there is no such node
+                                      (or in case of errors). Such violations are also reported
+                                      via ``context``.
+            """
+            error_path: IString = transaction.create_as(IString, "String")
+            query_result: bool = self._analyze_uniform(transaction, root_name, root_uniform, query_expr, error_path, context)
+            error_path_str: str = error_path.get_c_str()
+            error_path = None
+            return (query_result, error_path_str)
+    %}
+}
+
+// special handling for: mi::neuraylib::IMdl_execution_context
+// ----------------------------------------------------------------------------
+// Data access is not supported at this point. The interface is exposed to be passed between components only.
+// TODO involve numpy here
+
+%ignore mi::neuraylib::IMdl_execution_context::get_option const;
+%extend SmartPtr<mi::neuraylib::IMdl_execution_context> {
+
+    std::string _get_option_string(const char* name, int* errors) const
+    {
+        const char* result = "";
+        *errors = $self->get()->get_option(name, result);
+        return result;
+    }
+    bool _get_option_bool(const char* name, int* errors) const
+    {
+        bool result = false;
+        *errors = $self->get()->get_option(name, result);
+        return result;
+    }
+    mi::Sint32 _get_option_int(const char* name, int* errors) const
+    {
+        mi::Sint32 result = 0;
+        *errors = $self->get()->get_option(name, result);
+        return result;
+    }
+    mi::Float32 _get_option_float(const char* name, int* errors) const
+    {
+        mi::Float32 result = 0.0f;
+        *errors = $self->get()->get_option(name, result);
+        return result;
+    }
+    const mi::base::IInterface* _get_option_interface(const char* name, int* errors) const
+    {
+        const mi::base::IInterface* result = nullptr;
+        *errors = $self->get()->get_option(name, &result);
+        return result;
+    }
+
+    %pythoncode {
+    def get_option(self, name: str, errors: ReturnCode = None) -> str|int|float|bool|IInterface:
+        """
+        Returns an string, int, float, bool or interface option.
+
+        :type name:     string
+        :param name:    The name of the option.
+
+        :type errors:   "ReturnCode"
+        :param errors:  Optional error out parmaeter.
+                        - 0: Success.
+                        - 1: Invalid option name.
+                        - 2: The option type does not match the value type.
+
+        :rtype:         str|int|float|bool|IInterface
+        :return:        The value of the option.
+        """
+        type: str = self.get_option_type(name)
+        if type == "String":
+            optionValue, ret = self._get_option_string(name)
+        elif type == "Boolean":
+            optionValue, ret = self._get_option_bool(name)
+        elif type == "Sint32":
+            optionValue, ret = self._get_option_int(name)
+        elif type == "Float32":
+            optionValue, ret = self._get_option_float(name)
+        elif type == "IInterface":
+            optionValue, ret = self._get_option_interface(name)
+            if optionValue.is_valid_interface():
+                optionValue.thisown = True
+        if errors != None:
+            errors.value = ret
+        return optionValue
+    }
+}
+
+// ----------------------------------------------------------------------------
+
+// If possible we move all deprecated functions into a seperated file.
+// These functions should map to the latest version and issue a warning.
+// Deprecated functions will be dropped with one of the next major releases.
+%include <mi_neuraylib_deprecated.i>
+
 
 // ----------------------------------------------------------------------------
 
@@ -1607,9 +1993,11 @@ EXTEND_FUNCTION_AS(mi::neuraylib::ITransaction, edit)
 %include "mi/neuraylib/imdl_evaluator_api.h"
 %include "mi/neuraylib/imdl_entity_resolver.h"
 %include "mi/neuraylib/imdl_execution_context.h"
+%include "mi/neuraylib/imdl_i18n_configuration.h"
 %include "mi/neuraylib/imdl_factory.h"
 %include "mi/neuraylib/imdl_impexp_api.h"
 %include "mi/neuraylib/imdl_module_builder.h"
+%include "mi/neuraylib/imdl_module_transformer.h"
 %include "mi/neuraylib/imodule.h"
 %include "mi/neuraylib/ineuray.h"
 %include "mi/neuraylib/iplugin_configuration.h"
@@ -1617,13 +2005,13 @@ EXTEND_FUNCTION_AS(mi::neuraylib::ITransaction, edit)
 %include "mi/neuraylib/itexture.h"
 %include "mi/neuraylib/itile.h"
 %include "mi/neuraylib/ibsdf_measurement.h"
+%include "mi/neuraylib/ibsdf_isotropic_data.h"
 %include "mi/neuraylib/icanvas.h"
 %include "mi/neuraylib/icompiled_material.h"
 %include "mi/neuraylib/ilightprofile.h"
 %include "mi/neuraylib/itransaction.h"
-%include "mi/neuraylib/ienum_decl.h"
-%include "mi/neuraylib/ienum.h"
 %include "mi/neuraylib/istream_position.h"
+%include "mi/neuraylib/ibuffer.h"
 %include "mi/neuraylib/ireader_writer_base.h"
 %include "mi/neuraylib/ireader.h"
 %include "mi/neuraylib/iwriter.h"
@@ -1631,7 +2019,10 @@ EXTEND_FUNCTION_AS(mi::neuraylib::ITransaction, edit)
 
 // NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IAttribute_set)  Not added because we don't use the IAttribute_set in the MDL SDK
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IBaker)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IBsdf_buffer)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IBsdf_isotropic_data)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IBsdf_measurement)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IBuffer)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::ICanvas)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::ICanvas_base)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::ICompiled_material)
@@ -1643,6 +2034,7 @@ NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_configuration)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_distiller_api)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_evaluator_api)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_execution_context)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_i18n_configuration)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_resolved_module)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_resolved_resource)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_resolved_resource_element)
@@ -1650,8 +2042,7 @@ NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_entity_resolver)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_factory)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_impexp_api)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_module_builder)
-NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdle_deserialization_callback)
-NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdle_serialization_callback)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_module_transformer)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::INeuray)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IPlugin_configuration)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IScene_element)
@@ -1679,6 +2070,8 @@ NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMessage)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IModule)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::ITexture)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::ITile)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IStruct_category)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IStruct_category_list)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IType)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IType_alias)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IType_array)
@@ -1736,7 +2129,10 @@ NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IWriter)
 
 // NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IAttribute_set)  Not added because we don't use the IAttribute_set in the MDL SDK
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IBaker)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IBsdf_buffer)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IBsdf_isotropic_data)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IBsdf_measurement)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IBuffer)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, ICanvas)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, ICanvas_base)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, ICompiled_material)
@@ -1748,15 +2144,13 @@ NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_configuration)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_distiller_api)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_evaluator_api)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_execution_context)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_i18n_configuration)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_resolved_module)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_resolved_resource)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_resolved_resource_element)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_entity_resolver)
-NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdle_deserialization_callback)
-NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdle_serialization_callback)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_factory)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_impexp_api)
-NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_module_builder)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMessage)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IModule)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, INeuray)
@@ -1784,6 +2178,8 @@ NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, ILightprofile)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMaterial_instance)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, ITexture)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, ITile)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IStruct_category)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IStruct_category_list)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IType)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IType_alias)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IType_array)
@@ -1833,6 +2229,8 @@ NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IValue_string_localized)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IValue_struct)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IValue_texture)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IValue_vector)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_module_builder) // needs IType defined
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_module_transformer)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IStream_position)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IReader_writer_base)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IReader)
@@ -1858,7 +2256,16 @@ IInterface* attach(uint64_t ptr_as_uint64);
 // Alternative entry-point to the API that can be used when a neuray instance
 // already exists in the current process. In that case, DO NOT use `get_neuray()`
 // before calling this functions and DO NOT shutdown neuray when finished.
-%template(attach_ineuray) attach<mi::neuraylib::INeuray>;
+%{
+mi::neuraylib::INeuray* attach_ineuray(uint64_t ptr_as_uint64)
+{
+    mi::neuraylib::INeuray* result = reinterpret_cast<mi::neuraylib::INeuray*>(ptr_as_uint64);
+    g_neuray = result;
+    return result;
+}
+%}
+
+mi::neuraylib::INeuray* attach_ineuray(uint64_t ptr_as_uint64);
 
 // Similar to the main neuray instance, we can share existing transactions.
 %template(attach_itransaction) attach<mi::neuraylib::ITransaction>;

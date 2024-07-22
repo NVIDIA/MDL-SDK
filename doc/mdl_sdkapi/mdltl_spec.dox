@@ -455,30 +455,30 @@ Calls to the functions
 
 are transformed into calls to one of the functions:
 
-- `bsdf_mix_1, bsdf_mix_2, bsdf_mix_3`
-- `bsdf_clamped_mix_1, bsdf_clamped_mix2, bsdf_clamped_mix_3`
-- `bsdf_unbounded_mix_1, bsdf_unbounded_mix_2, bsdf_unbounded_mix_3`
-- `bsdf_color_mix_1, bsdf_color_mix_2, bsdf_color_mix_3`
-- `bsdf_color_clamped_mix_1, bsdf_color_clamped_mix_2, bsdf_color_clamped_mix_3`
-- `bsdf_color_unboudned_mix_1, bsdf_color_unbounded_mix_2, bsdf_color_unbounded_mix_3`
-- `edf_mix_1, edf_mix_2, edf_mix_3`
-- `edf_clamped_mix_1, edf_clamped_mix2, edf_clamped_mix_3`
-- `edf_unbounded_mix_1, edf_unbounded_mix_2, edf_unbounded_mix_3`
-- `edf_color_mix_1, edf_color_mix_2, edf_color_mix_3`
-- `edf_color_clamped_mix_1, edf_color_clamped_mix_2, edf_color_clamped_mix_3`
-- `edf_color_unboudned_mix_1, edf_color_unbounded_mix_2, edf_color_unbounded_mix_3`
-- `vdf_mix_1, vdf_mix_2, vdf_mix_3`
-- `df_clamped_mix_1, vdf_clamped_mix2, vdf_clamped_mix_3`
-- `vdf_unbounded_mix_1, vdf_unbounded_mix_2, vdf_unbounded_mix_3`
-- `vdf_color_mix_1, vdf_color_mix_2, vdf_color_mix_3`
-- `vdf_color_clamped_mix_1, vdf_color_clamped_mix_2, vdf_color_clamped_mix_3`
-- `vdf_color_unboudned_mix_1, vdf_color_unbounded_mix_2, vdf_color_unbounded_mix_3`
+- `bsdf_mix_1, bsdf_mix_2, bsdf_mix_3, bsdf_mix_4`
+- `bsdf_clamped_mix_1, bsdf_clamped_mix_2, bsdf_clamped_mix_3, bsdf_clamped_mix_4`
+- `bsdf_unbounded_mix_1, bsdf_unbounded_mix_2, bsdf_unbounded_mix_3, bsdf_unbounded_mix_4`
+- `bsdf_color_mix_1, bsdf_color_mix_2, bsdf_color_mix_3, bsdf_color_mix_4`
+- `bsdf_color_clamped_mix_1, bsdf_color_clamped_mix_2, bsdf_color_clamped_mix_3, bsdf_color_clamped_mix_4`
+- `bsdf_color_unboudned_mix_1, bsdf_color_unbounded_mix_2, bsdf_color_unbounded_mix_3, bsdf_color_unbounded_mix_4`
+- `edf_mix_1, edf_mix_2, edf_mix_3, edf_mix_4`
+- `edf_clamped_mix_1, edf_clamped_mix2, edf_clamped_mix_3, edf_clamped_mix_4`
+- `edf_unbounded_mix_1, edf_unbounded_mix_2, edf_unbounded_mix_3, edf_unbounded_mix_4`
+- `edf_color_mix_1, edf_color_mix_2, edf_color_mix_3, edf_color_mix_4`
+- `edf_color_clamped_mix_1, edf_color_clamped_mix_2, edf_color_clamped_mix_3, edf_color_clamped_mix_4`
+- `edf_color_unboudned_mix_1, edf_color_unbounded_mix_2, edf_color_unbounded_mix_3, edf_color_unbounded_mix_4`
+- `vdf_mix_1, vdf_mix_2, vdf_mix_3, vdf_mix_4`
+- `df_clamped_mix_1, vdf_clamped_mix2, vdf_clamped_mix_3, vdf_clamped_mix_4`
+- `vdf_unbounded_mix_1, vdf_unbounded_mix_2, vdf_unbounded_mix_3, vdf_unbounded_mix_4`
+- `vdf_color_mix_1, vdf_color_mix_2, vdf_color_mix_3, vdf_color_mix_4`
+- `vdf_color_clamped_mix_1, vdf_color_clamped_mix_2, vdf_color_clamped_mix_3, vdf_color_clamped_mix_4`
+- `vdf_color_unboudned_mix_1, vdf_color_unbounded_mix_2, vdf_color_unbounded_mix_3, vdf_color_unbounded_mix_4`
 
 depending of their number and types of parameters before rule
 application and back afterwards. That means that rules can only match
 on, and generate, calls to the transformed functions (...`_1`,
-...`_2`, ...`_3`). When a mixer call has more than 3 BSDFs, arguments
-after the third are ignored.
+...`_2`, ...`_3`, ...`_4`). When a mixer call has more than 4 BSDFs, arguments
+after the fourth are ignored.
 
 > **Implementation note:** The special handling of mixer calls might be
 > subject to change in future versions of the \neurayApiName and may
@@ -649,20 +649,20 @@ file. The plugin uses the generated classes in its `distill()`
 function, which is declared like this:
 
 \code{.cpp}
-const mi::mdl::IGenerated_code_dag::IMaterial_instance* Distilling_target_plugin::distill(
-    mi::mdl::IDistiller_plugin_api&                         api,
-    mi::mdl::IRule_matcher_event*                           event_handler,
-    const mi::mdl::IGenerated_code_dag::IMaterial_instance* material_instance,
-    mi::Size                                                target_index,
-    mi::mdl::Distiller_options*                             options,
-    mi::Sint32*                                             p_error) const;
+const mi::mdl::IMaterial_instance* Distilling_target_plugin::distill(
+    mi::mdl::IDistiller_plugin_api&    api,
+    mi::mdl::IRule_matcher_event*      event_handler,
+    const mi::mdl::IMaterial_instance* material_instance,
+    mi::Size                           target_index,
+    mi::mdl::Distiller_options*        options,
+    mi::Sint32*                        p_error) const;
 \endcode
 
 The function uses the distilling plugin API reference `api` in
 order to apply the generated rules as follows:
 
 \code{.cpp}
-    mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance const> res;
+    mi::base::Handle<mi::mdl::IMaterial_instance const> res;
 
     switch ( target_index) {
     case 0:

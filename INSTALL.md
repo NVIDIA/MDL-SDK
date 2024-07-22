@@ -5,8 +5,7 @@ particular development environment. It is required to use CMake 3.12 or later
 (3.21 or later on Windows), which can be downloaded from the
 [CMake Website](https://cmake.org/download/). When using a Unix-like system,
 you can install the *cmake* package using the respective package management
-systems. On the Mac OS X platform, third party dependencies can be resolved
-using the [Homebrew Package Manager](https://brew.sh/index_de).
+systems.
 
 
 ## Dependencies
@@ -29,7 +28,7 @@ might work as well.
 <a name="thirdparty-dependencies-libs"></a>
 The following third-party libraries and tools are required to build the MDL SDK:
 
--   <a name="vcpkg">**vcpkg**</a> *(git commit ID fe1e9f5)*  
+-   <a name="vcpkg">**vcpkg**</a> *(git commit ID 5d675c7e5)*  
     [Vcpkg](https://vcpkg.io/en/getting-started.html) is the recommended way to
     install other dependencies like Boost, OpenImageIO, GLEW, and GLFW. The
     vcpkg version mentioned above corresponds to the versions mentioned for
@@ -42,17 +41,17 @@ The following third-party libraries and tools are required to build the MDL SDK:
     for further details. Add the vcpkg option *--triplet=x64-windows-static* to
     the *install* command. There is no need to run the *integrate* command.
 
--   **Boost** *(1.83.0)*  
+-   **Boost** *(1.84.0)*  
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
-    packages *boost-any* and *boost-uuid*.  
+    package *boost-headers*.  
 
--   **OpenImageIO** *(2.4.14.0)*  
+-   **OpenImageIO** *(2.5.8.0)*  
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
     packages *openimageio[gif,openjpeg,tools,webp]*.  
 
--   **Python3** *(3.8.0)*  
+-   **Python3** *(3.10.0)*  
     Linux: Install the *python* package.  
-    Windows and Max OS X: Download and install Python 3.8 from
+    Windows and Max OS X: Download and install Python 3.10 from
     [python.org](https://www.python.org/downloads/).
 
 -   **Clang** *(12.0.1)*  
@@ -79,10 +78,16 @@ The following tools are used to build the API reference documentation:
 For generating and compiling the MDL Python Bindings, the following additional
 dependencies are required:
 
--   **Python3 Development Package** *(3.8.0)*  
+-   **Python3 Development Package** *(3.10.0)*  
     Linux: Install the *python-dev* package in addition to *python*.  
-    Windows and Max OS X: Download and install Python 3.8 from
+    Windows and Max OS X: Download and install Python 3.10 from
     [python.org](https://www.python.org/downloads/).
+
+-   **Python3 Additional Packages**  
+    The following pip packages are used by the bindings or examples:  
+    * [coverage](https://pypi.org/project/coverage/) for creating test reports
+    * [numpy](https://pypi.org/search/?q=numpy) for high-level bindings
+    * [typing_extensions](https://pypi.org/project/typing-extensions/) in case the bindings are generated for Python 3.9 (or earlier)
 
 -   **SWIG** *(4.0.2)*  
     Follow the instructions for downloading or building on
@@ -108,7 +113,7 @@ of examples is of no interest to you.
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
     package *glew*.  
 
--   **GLFW** *(3.3.8)*  
+-   **GLFW** *(3.4)*  
     This dependency is required for all OpenGL- and Vulkan-based examples.  
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
     package *glfw3*.  
@@ -118,11 +123,12 @@ of examples is of no interest to you.
     Please follow the instructions on the
     [CUDA Developer Website](https://developer.nvidia.com/cuda-toolkit).
 
--   **Vulkan SDK** *(1.2.198.1)*  
+-   **Vulkan SDK** *(Windows: 1.3.275.0, Linux: 1.2.198.1)*  
     This dependency is required for all Vulkan-based examples.  
     Please follow the instructions on the
     [Vulkan SDK Website](https://vulkan.lunarg.com/sdk/home).  
-    For debug builds on Windows, the debug libraries are required to be installed.
+    For debug builds on Windows, the debug libraries are required to be installed.  
+    Note that the prebuilt binaries for version 1.3.275.0 do not work on CentOS 7.x.
 
 The following third-party dependencies are only used by fewer or single
 examples, or add additional features to other examples. Installation can be
@@ -135,7 +141,7 @@ features.
     [Arnold Website](https://www.arnoldrenderer.com/arnold/download/) to
     download the Arnold SDK.
 
--   **MaterialX** *(github repository, tag: v1.38.7, Windows only)*  
+-   **MaterialX** *(github repository, tag: v1.38.9, Windows only)*  
     This dependency adds MaterialX support to the DXR example.  
     Please download a release from
     [github](https://github.com/AcademySoftwareFoundation/MaterialX/releases).  
@@ -232,7 +238,7 @@ features.
         for example: *C:/Qt/5.10.1/msvc2017_64*
 
     -   **VULKAN_SDK_DIR** in Ungrouped Entries (only if the environment variable VULKAN_SDK is not set),  
-        for example: *C:/VulkanSDK/1.2.198.1*
+        for example: *C:/VulkanSDK/1.3.275.0*
 
     -   **PANTORA_AXF_DIR** in Ungrouped Entries,  
         for example: *C:/projects/thirdparty/pantora-axf-1.9.0*
@@ -507,17 +513,65 @@ features.
 ## Additional CMake Options
 
 <a name="cmake-options"></a>
-The following options enable you to select the components to be built and to
-select particular logging information:
+The following options enable you to select the components to be built:
+
+-   **MDL_BUILD_SDK**  
+    [ON/OFF] enable/disable the MDL SDK itself. Disabling the MDL SDK can be
+    useful if you are only interested in MDL Core.
+
+-   **MDL_BUILD_OPENIMAGEIO_PLUGIN**  
+    [ON/OFF] enable/disable the OpenImageIO plugin. Disabling the OpenImageIO
+    plugin can be useful for advanced integrations to avoid the dependency on
+    OpenImageIO.
 
 -   **MDL_BUILD_SDK_EXAMPLES**  
-    [ON/OFF] enable/disable the MDL SDK examples.
+    [ON/OFF] enable/disable the MDL SDK examples (see also below for ways to
+    enable/disable examples based on their required thirdparty dependencies).
 
 -   **MDL_BUILD_CORE_EXAMPLES**  
-    [ON/OFF] enable/disable the MDL Core examples.
+    [ON/OFF] enable/disable the MDL Core examples (see also below for ways to
+    enable/disable examples based on their required thirdparty dependencies).
 
 -   **MDL_BUILD_DOCUMENTATION**  
     [ON/OFF] enable/disable building of the API documentation.
+
+-   **MDL_ENABLE_UNIT_TESTS**  
+    [ON/OFF] enable/disable the build of unit tests.
+
+-   **MDL_ENABLE_PYTHON_BINDINGS**  
+    [ON/OFF] enable/disable the generation and compilation of the MDL Python
+    Bindings.
+
+The following options enable you to select particular logging information
+useful for debugging the CMake setup:
+
+-   **MDL_LOG_PLATFORM_INFOS**  
+    [ON/OFF] enable/disable the logging of platform and CMake settings.
+
+-   **MDL_LOG_DEPENDENCIES**  
+    [ON/OFF] enable/disable the logging of dependencies of the individual targets.
+
+-   **MDL_LOG_FILE_DEPENDENCIES**  
+    [ON/OFF] enable/disable the logging of files that are copied to the output folder.
+
+For any help request, please attach the log messages generated when the log
+options are enabled.
+
+The following options affect how various components are built:
+
+-   **MDL_TREAT_RUNTIME_DEPS_AS_BUILD_DEPS**  
+    [ON/OFF] enable/disable treating runtime dependencies as build
+    dependencies. Enabling this option results in slightly slower builds, but
+    is safer for users not familiar with the runtime dependencies between
+    examples, libraries, and plugins.
+
+-   **MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES**  
+    [ON/OFF] links the MSVC dynamic runtime (/MD) instead of static (/MT) when
+    creating the example executables.
+
+The following options enable you to select the examples to be built based on
+their required thirdparty dependencies (see also **MDL_BUILD_SDK_EXAMPLES**
+and **MDL_BUILD_CORE_EXAMPLES** above):
 
 -   **MDL_ENABLE_CUDA_EXAMPLES**  
     [ON/OFF] enable/disable examples that require CUDA.
@@ -540,33 +594,11 @@ select particular logging information:
 -   **MDL_ENABLE_AXF_EXAMPLES**  
     [ON/OFF] enable/disable the AxF to MDL example.
 
--   **MDL_ENABLE_PYTHON_BINDINGS**  
-    [ON/OFF] enable/disable the generation and compilation of the MDL Python Bindings.
-
 -   **MDL_BUILD_ARNOLD_PLUGIN**  
     [ON/OFF] enable/disable the build of the MDL Arnold Plugin.
 
 -   **MDL_ENABLE_MATERIALX**  
     [ON/OFF] enable/disable MaterialX in examples that support it.
-
--   **MDL_ENABLE_UNIT_TESTS**  
-    [ON/OFF] enable/disable the build of unit tests.
-
--   **MDL_LOG_PLATFORM_INFOS**  
-    [ON/OFF] enable/disable the logging of platform and CMake settings.
-
--   **MDL_LOG_DEPENDENCIES**  
-    [ON/OFF] enable/disable the logging of dependencies of the individual targets.
-
--   **MDL_LOG_FILE_DEPENDENCIES**  
-    [ON/OFF] enable/disable the logging of files that are copied to the output folder.
-
--   **MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES**  
-    [ON/OFF] links the MSCV dynamic runtime (/MD) instead of static (/MT) when
-    creating the example executables.
-
-For any help request, please attach the log messages generated when the log
-options are enabled.
 
 
 ## Testing the Build

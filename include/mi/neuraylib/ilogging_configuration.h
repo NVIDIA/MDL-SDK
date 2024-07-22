@@ -184,7 +184,7 @@ public:
     /// in the preferred order of fallbacks. Hosts with the highest logging priority will take over
     /// from designated logging hosts that have failed. The default logging priority is 0.
     ///
-    /// This can only be configured before \NeurayProductName has been started.
+    /// This can only be configured before \neurayProductName has been started.
     ///
     /// \param priority        The logging priority
     /// \return                0, in case of success, -1 in case of failure.
@@ -206,7 +206,7 @@ public:
     /// If local logging is enabled, all log messages from this host are sent to the local logger.
     /// Otherwise, they are sent to the logger of the logging host (see #set_log_priority()).
     ///
-    /// This can only be configured before \NeurayProductName has been started.
+    /// This can only be configured before \neurayProductName has been started.
     ///
     /// \param value           \c true to enable the local logging, \c false to disable it (the
     ///                        default).

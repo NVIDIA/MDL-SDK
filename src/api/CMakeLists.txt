@@ -26,6 +26,10 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #*****************************************************************************
 
+if(NOT MDL_BUILD_SDK)
+    return()
+endif()
+
 add_subdirectory(${MDL_SRC_FOLDER}/api/api/mdl)
 
 set(LINKER_DEPENDENCIES_API

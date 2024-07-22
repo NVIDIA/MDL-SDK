@@ -47,6 +47,7 @@
 
 namespace MI {
 
+namespace CONFIG { class Config_module; }
 namespace MDLC { class Mdlc_module; }
 namespace PATH { class Path_module; }
 
@@ -109,6 +110,11 @@ public:
 
     bool get_simple_glossy_bsdf_legacy_enabled() const final;
 
+    mi::Sint32 set_material_ior_frequency(
+        mi::neuraylib::IType::Modifier frequency_qualifier) final;
+
+    mi::neuraylib::IType::Modifier get_material_ior_frequency() const final;
+
 
     mi::neuraylib::IMdl_entity_resolver* get_entity_resolver() const final;
 
@@ -151,12 +157,14 @@ public:
 private:
     mi::neuraylib::INeuray* m_neuray;                       // neuray interface
 
-    SYSTEM::Access_module<PATH::Path_module> m_path_module; // path module
-    SYSTEM::Access_module<MDLC::Mdlc_module> m_mdlc_module; // mdlc module
+    SYSTEM::Access_module<CONFIG::Config_module> m_config_module;
+    SYSTEM::Access_module<PATH::Path_module> m_path_module;
+    SYSTEM::Access_module<MDLC::Mdlc_module> m_mdlc_module;
 
     bool m_implicit_cast_enabled = true;
     bool m_expose_names_of_let_expressions = false;
     bool m_simple_glossy_bsdf_legacy_enabled = false;
+
     mi::base::Handle<mi::neuraylib::IMdl_entity_resolver> m_entity_resolver;
     std::vector<std::string> m_mdl_system_paths;
     std::vector<std::string> m_mdl_user_paths;

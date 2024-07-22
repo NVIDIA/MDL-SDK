@@ -96,7 +96,7 @@ class Thread_attr {
     static DWORD m_key;
 #endif
 
-    friend class Thread;		///< needs access to the key
+    friend class Thread;                ///< needs access to the key
 };
 
 
@@ -129,9 +129,9 @@ inline bool Thread_attr::create()
     // a problem sometimes occuring with the test program. it
     // actually shouldn't fail.
     if (pthread_key_create(&m_key, NULL) == 0)
-	pthread_setspecific(m_key, (void*)&thr_data);
+        pthread_setspecific(m_key, (void*)&thr_data);
     else
-	return false;
+        return false;
 #else
     m_key = TlsAlloc();
     TlsSetValue(m_key, (LPVOID)&thr_data);
@@ -155,7 +155,7 @@ inline Thr_data* Thread_attr::access_data()
 // set the id
 
 inline void Thread_attr::set_id(
-    int id)				// set thread id to this
+    int id)                             // set thread id to this
 {
     Thr_data* thr_data = access_data();
     ASSERT(M_THREAD, thr_data != 0);
@@ -174,7 +174,7 @@ inline int Thread_attr::get_id()
 {
     Thr_data* thr_data = access_data();
     if (thr_data == 0)
-	return 0; // main or an unknown thread (not derived from THREAD::Thread)
+        return 0; // main or an unknown thread (not derived from THREAD::Thread)
 
     return thr_data->id;
 }

@@ -44,13 +44,13 @@ inline Uint Attribute_list::get_listcapacity( ) const
 }
 
 inline const char *Attribute_list::get_list_values(
-    Uint		i) const	// if attribute list, list index
+    Uint                i) const        // if attribute list, list index
 {
     return get_values_i(i);
 }
 
 inline char *Attribute_list::set_list_values(
-    Uint		i)		// if attribute list, list index
+    Uint                i)              // if attribute list, list index
 {
     return set_values_i(i);
 }
@@ -159,7 +159,7 @@ inline void Attribute_list::set_list_value( const T &v, Uint i, Uint n )
 // swaps this and another Attribute_list
 // This function swaps two Attributes by exchanging the data in constant time.
 inline void Attribute_list::swap(
-    Attribute_list& other)			// swap with this
+    Attribute_list& other)                      // swap with this
 {
     Parent_type::swap(other);
     std::swap(m_listsize, other.m_listsize);
@@ -169,8 +169,8 @@ inline void Attribute_list::swap(
 
 // See Attribute_list::swap().
 inline void swap(
-    Attribute_list& one,		// The one
-    Attribute_list& other)		// The other
+    Attribute_list& one,                // The one
+    Attribute_list& other)              // The other
 {
     one.swap(other);
 }

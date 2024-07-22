@@ -40,12 +40,16 @@
 #ifndef BASE_DATA_ATTR_ATTR_H
 #define BASE_DATA_ATTR_ATTR_H
 
+#include <any>
+#include <map>
+#include <string>
+#include <regex>
+
 #include <base/system/main/types.h>
 #include <base/system/main/i_module.h>
 #include <base/data/db/i_db_journal_type.h>
 #include <base/data/db/i_db_tag.h>
 #include <base/data/serial/i_serial_serializable.h>
-#include <base/system/stlext/i_stlext_any.h>
 #include <mi/base/config.h>
 
 #include "i_attr_types.h"
@@ -54,10 +58,6 @@
 #include "i_attr_registry.h"
 #include "i_attr_attribute.h"
 #include "i_attr_attribute_list.h"
-
-#include <map>
-#include <string>
-#include <regex>
 
 namespace MI {
 namespace DB { class Transaction; }
@@ -69,8 +69,8 @@ class Deserializer;
 namespace SYSTEM { class Module_registration_entry; }
 namespace ATTR {
 
-const Uint reserved_ids = 1 << 20;	///< reserved for fixed Attr IDs
-const Uint reserved_flag_ids = 32;	///< reserved for fixed boolean Attr IDs
+const Uint reserved_ids = 1 << 20;      ///< reserved for fixed Attr IDs
+const Uint reserved_flag_ids = 32;      ///< reserved for fixed boolean Attr IDs
 
 
 /// Represents the module. All modules must be registered this way.
@@ -99,26 +99,12 @@ class Attr_module : public SYSTEM::IModule
     /// \param inh inheritable, may have GLOBAL flag
     /// \param def default value for this Attributes
     virtual void set_reserved_attr(
-        Attribute_id		id,
-        const char		*name,
-        const Type_code		tc,
-        const DB::Journal_type	flags,
-        bool		  	inh,
-        const STLEXT::Any&	def=STLEXT::Any()) = 0;
-
-    /// Some attributes have deprecated names that should also work, and map to
-    /// the same IDs. For example, "sample_max" is now "samples".
-    /// \param id give this ID an alternate name
-    /// \param name new attr name, literal, not copied
-    virtual void set_deprecated_attr_name(
-        Attribute_id		id,
-        const char		*name) = 0;
-
-    /// Return deprecated name, or 0 if there is none.
-    /// \param id return alternate name of this ID
-    /// \return deprecated name, or 0 if there is none.
-    virtual const char *get_deprecated_attr_name(
-        Attribute_id	   	id) = 0;
+        Attribute_id            id,
+        const char              *name,
+        const Type_code         tc,
+        const DB::Journal_type  flags,
+        bool                    inh,
+        const std::any& def=std::any()) = 0;
 
     /// Register journal-flags for all user attributes.
     /// For now, all user attributes have the same journal flags
@@ -134,10 +120,10 @@ class Attr_module : public SYSTEM::IModule
     /// \param inh false if attr is never inheritable
     /// \return previously set names of the reserved flag attributes.
     virtual const char *get_reserved_attr(
-        Attribute_id	id,
-        Type_code	*tc  = 0,
+        Attribute_id    id,
+        Type_code       *tc  = 0,
         DB::Journal_type*jf  = 0,
-        bool		*inh = 0) const = 0;
+        bool            *inh = 0) const = 0;
 
     /// Retrieve the \c Attribute_spec for the given \p id.
     /// \param id the \c Attribute_id of the reserved \c Attribute
@@ -154,11 +140,11 @@ class Attr_module : public SYSTEM::IModule
         const std::string& name,
         T& default_value) const
     {
-        STLEXT::Any any;
+        std::any any;
         bool result = false;
         retrieve_reserved_attr_default(name, any);
-        if (!any.empty() && any.type() == typeid(T)) {
-            default_value = *STLEXT::any_cast<T>(&any);
+        if (any.has_value() && any.type() == typeid(T)) {
+            default_value = *std::any_cast<T>(&any);
             result = true;
         }
         return result;
@@ -197,7 +183,7 @@ class Attr_module : public SYSTEM::IModule
       /// the templated member \c get_reserved_attr_default(). But thanks to the \c Any...
     void retrieve_reserved_attr_default(
         const std::string& name,
-        STLEXT::Any& any) const;
+        std::any& any) const;
 };
 
 
@@ -315,7 +301,7 @@ class Attribute_set : public SERIAL::Serializable
     /// Return a set of all tags in the attribute set
     /// \param[out] result all referenced tags
     void get_references(
-        DB::Tag_set	*result) const;
+        DB::Tag_set     *result) const;
 
     /// Unique class ID so that the receiving host knows which class to create
     SERIAL::Class_id get_class_id() const;
@@ -346,7 +332,7 @@ class Attribute_set : public SERIAL::Serializable
     static const SERIAL::Class_id id = ID_ATTRIBUTE_SET; ///< for serialization
 
   private:
-    Attributes m_attrs;					///< the collected attributes
+    Attributes m_attrs;                                 ///< the collected attributes
 
     /// deep copy of all Attributes
     /// \param other copy from this
@@ -359,7 +345,7 @@ class Attribute_set : public SERIAL::Serializable
     /// \param id ID of attribute to look up
     /// \return a shared pointer to the attached attribute
     std::shared_ptr<Attribute> lookup_shared_ptr(
-        Attribute_id	id) const;
+        Attribute_id    id) const;
 };
 
 
@@ -423,22 +409,22 @@ class Type_iterator
     /// \param type current type
     /// \param values pointer to data of the type instance
     explicit Type_iterator(
-        const Type	*type = 0,
-        char		*values = 0);
+        const Type      *type = 0,
+        char            *values = 0);
 
     /// constructor: iterate over the elements of a struct parameter
     /// \param par struct to recurse into
     /// \param values pointer to data of the type instance
     explicit Type_iterator(
-        Type_iterator	*par,
-        char		*values);
+        Type_iterator   *par,
+        char            *values);
 
     /// let the iterator pointer to the given type and value
     /// \param type current type
     /// \param values  pointer to data of the type instance
     void set(
-        const Type	*type,
-        char		*values);
+        const Type      *type,
+        char            *values);
 
     /// proceed to next element
     void to_next();
@@ -452,23 +438,23 @@ class Type_iterator
     /// step of the iteration. If get_arraysize==0, get_value returns a pointer
     /// to Dynamic_array.
     /// @{
-    const char	*get_name()		const;
+    const char  *get_name()             const;
     /// \param array_elem_type if true, return array's elem type
     ATTR::Type_code  get_typecode(
-        bool array_elem_type=false)	const;
-    char	*get_value()		const;
+        bool array_elem_type=false)     const;
+    char        *get_value()            const;
     /// \return 0 if it is a dynamic array
-    int		 get_arraysize()	const;
+    int          get_arraysize()        const;
     const Type *operator->() const;
     /// @}
 
     /// get the size of the type currently pointed to. This will only return the
     /// size of one element in an array
-    size_t	 sizeof_elem()		const;
+    size_t       sizeof_elem()          const;
 
   private:
-    const ATTR::Type	*m_type;	///< name, type, and array status of parm
-    char		*m_value;	///< value of parameter
+    const ATTR::Type    *m_type;        ///< name, type, and array status of parm
+    char                *m_value;       ///< value of parameter
 
     Type_iterator& operator=(const Type_iterator&);
 #ifndef MI_PLATFORM_MACOSX

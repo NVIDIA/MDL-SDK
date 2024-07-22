@@ -89,7 +89,18 @@ public:
     ///       (see #get_function_definition()).
     virtual const char* get_mdl_function_definition() const = 0;
 
+    /// Indicates whether the corresponding function definition is declarative.
+    ///
+    /// \note This includes, in addition to functions definitions that are explicitly marked as
+    ///       declarative, also function definitions that have been analyzed by the MDL compiler
+    //        to be declarative.
+    virtual bool is_declarative() const = 0;
+
     /// Indicates whether the call represents a material instance.
+    ///
+    /// This value might differ from the result of
+    /// #mi::neuraylib::IFunction_definition::is_material() in case of the
+    /// \ref mi_neuray_mdl_template_like_function_definitions .
     virtual bool is_material() const = 0;
 
     /// Indicates whether this call is an instance of the array constructor.
@@ -129,23 +140,25 @@ public:
     ///                     \em not copied. The exception are (immutable) defaults, for which a
     ///                     deep copy is performed.
     /// \return
-    ///                     -  0: Success.
-    ///                     - -1: Invalid parameters (\c NULL pointer).
-    ///                     - -2: One of the parameters in \p arguments does not exist.
-    ///                     - -3: One of the argument types does not match the corresponding
-    ///                           parameter type.
-    ///                     - -4: The function call is immutable (because it appears in a default of
-    ///                           a function or material definition).
-    ///                     - -5: One of the parameter types is uniform, but the corresponding
-    ///                           argument type is varying.
-    ///                     - -6: One of the arguments is not a constant nor a call.
-    ///                     - -7: One of the arguments contains references to DB elements in a scope
-    ///                           that is more private scope than the scope of this material
-    ///                           instance.
-    ///                     - -8: One of the parameter types is uniform, but the corresponding
-    ///                           argument is a call expression and the return type of the
-    ///                           called function definition is effectively varying since the
-    ///                           function definition itself is varying.
+    ///                     -   0: Success.
+    ///                     -  -1: Invalid parameters (\c NULL pointer).
+    ///                     -  -2: One of the parameters in \p arguments does not exist.
+    ///                     -  -3: One of the argument types does not match the corresponding
+    ///                            parameter type.
+    ///                     -  -4: The function call is immutable (because it appears in a default
+    ///                            of a function or material definition).
+    ///                     -  -5: One of the parameter types is uniform, but the corresponding
+    ///                            argument type is varying.
+    ///                     -  -6: One of the arguments is not a constant nor a call.
+    ///                     -  -7: One of the arguments contains references to DB elements in a
+    ///                            scope that is more private scope than the scope of this material
+    ///                            instance.
+    ///                     -  -8: One of the parameter types is uniform, but the corresponding
+    ///                            argument is a call expression and the return type of the
+    ///                            called function definition is effectively varying since the
+    ///                            function definition itself is varying.
+    ///                     - -10: The definition is non-declarative, but at least one of the
+    ///                            arguments is a declarative call.
     virtual Sint32 set_arguments( const IExpression_list* arguments) = 0;
 
     /// Sets the argument at \p index.
@@ -173,6 +186,8 @@ public:
     ///                           expression and the return type of the called function definition
     ///                           is effectively varying since the function definition itself is
     ///                           varying.
+    ///                    - -10: The definition is non-declarative, but the argument is a
+    ///                           declarative call.
     virtual Sint32 set_argument( Size index, const IExpression* argument) = 0;
 
     /// Sets an argument identified by name.
@@ -200,6 +215,8 @@ public:
     ///                           expression and the return type of the called function definition
     ///                           is effectively varying since the function definition itself is
     ///                           varying.
+    ///                    - -10: The definition is non-declarative, but the argument is a
+    ///                           declarative call.
     virtual Sint32 set_argument( const char* name, const IExpression* argument) = 0;
 
     /// Resets the argument at \p index.

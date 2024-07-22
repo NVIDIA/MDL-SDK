@@ -40,55 +40,55 @@ using namespace MI;
 
 MI_TEST_AUTO_FUNCTION( test_lexicographic_cast )
 {
-    STLEXT::Likely<unsigned int> ui;
-    STLEXT::Likely<signed int> si;
-    STLEXT::Likely<size_t> s;
-    STLEXT::Likely<bool> b;
+    std::optional<unsigned int> ui;
+    std::optional<signed int> si;
+    std::optional<size_t> s;
+    std::optional<bool> b;
 
     // Check valid values for unsigned int.
     ui = STRING::lexicographic_cast_s<unsigned int>("42");
-    MI_CHECK(ui.get_status());
-    MI_CHECK(*ui.get_ptr() == 42);
+    MI_CHECK(ui.has_value());
+    MI_CHECK(ui.value() == 42);
 
     // Check that underflow for unsigned int is detected.
     ui = STRING::lexicographic_cast_s<unsigned int>("-42");
-    MI_CHECK(!ui.get_status());
+    MI_CHECK(!ui.has_value());
     ui = STRING::lexicographic_cast_s<unsigned int>(" -42");
-    MI_CHECK(!ui.get_status());
+    MI_CHECK(!ui.has_value());
 
     // Check valid values for size_t.
     s = STRING::lexicographic_cast_s<size_t>("42");
-    MI_CHECK(s.get_status());
-    MI_CHECK(*s.get_ptr() == 42);
+    MI_CHECK(s.has_value());
+    MI_CHECK(s.value() == 42);
 
     // Check that underflow for size_t is detected.
     s = STRING::lexicographic_cast_s<size_t>("-42");
-    MI_CHECK(!s.get_status());
+    MI_CHECK(!s.has_value());
     s = STRING::lexicographic_cast_s<size_t>(" -42");
-    MI_CHECK(!s.get_status());
+    MI_CHECK(!s.has_value());
 
     // Check valid values for signed int.
     si = STRING::lexicographic_cast_s<signed int>("42");
-    MI_CHECK(si.get_status());
-    MI_CHECK(*si.get_ptr() == 42);
+    MI_CHECK(si.has_value());
+    MI_CHECK(si.value() == 42);
 
     // Check valid valued for signed int.
     si = STRING::lexicographic_cast_s<signed int>("-42");
-    MI_CHECK(si.get_status());
-    MI_CHECK(*si.get_ptr() == -42);
+    MI_CHECK(si.has_value());
+    MI_CHECK(si.value() == -42);
 
     // Check valid values for bool.
     b = STRING::lexicographic_cast_s<bool>("0");
-    MI_CHECK(b.get_status());
-    MI_CHECK(*b.get_ptr() == false);
+    MI_CHECK(b.has_value());
+    MI_CHECK(b.value() == false);
     b = STRING::lexicographic_cast_s<bool>("1");
-    MI_CHECK(b.get_status());
-    MI_CHECK(*b.get_ptr() == true);
+    MI_CHECK(b.has_value());
+    MI_CHECK(b.value() == true);
 
     // Check that underflow for bool is detected (already handled correctly
     // without the special check).
     b = STRING::lexicographic_cast_s<bool>("-1");
-    MI_CHECK(!b.get_status());
+    MI_CHECK(!b.has_value());
 }
 
 void check_utf8_to_wchar_and_back( const char* input)

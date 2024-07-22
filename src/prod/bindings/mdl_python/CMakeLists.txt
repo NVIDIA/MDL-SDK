@@ -41,6 +41,7 @@ set(_GENERATOR_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/instantiate_templates_inline.py
     ${CMAKE_CURRENT_SOURCE_DIR}/post_swig.py
     ${CMAKE_CURRENT_SOURCE_DIR}/mdl_python_swig.i
+    ${CMAKE_CURRENT_SOURCE_DIR}/swig_library/mi_neuraylib_deprecated.i
     ${CMAKE_CURRENT_SOURCE_DIR}/swig_library/mi_neuraylib_enums.i
     )
 
@@ -134,6 +135,13 @@ if(_GENERATOR_IS_MULTI_CONFIG)
     set(CONFIG_DIR "/$(configuration)")
 endif()
 
+file(GLOB_RECURSE
+    _POTENTIAL_HEADERS_TO_PROCESS
+    LIST_DIRECTORIES false
+    CONFIGURE_DEPENDS
+    "${MDL_INCLUDE_FOLDER}/*.h"
+    )
+
 # run template processing for the interface classes
 add_custom_command(
     OUTPUT
@@ -151,6 +159,7 @@ add_custom_command(
     DEPENDS
         ${CMAKE_CURRENT_SOURCE_DIR}/instantiate_templates_inline.py
         ${CMAKE_CURRENT_SOURCE_DIR}/mdl_python_swig.i
+        ${_POTENTIAL_HEADERS_TO_PROCESS}
     VERBATIM
     )
 
@@ -166,7 +175,6 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E echo "SWIG binding code generation ..."
     COMMAND ${swig_PATH}
         -c++ -python -py3 -doxygen
-        # -fastproxy -keyword -w511
         -w564
         -DSWIGWORDSIZE64
         ${_SWIG_MDL_SOURCE_RELEASE_OPTIONS}
@@ -187,6 +195,7 @@ add_custom_command(
     DEPENDS
         ${_GENERATED_DIR}${CONFIG_DIR}/processed_headers.d
         ${CMAKE_CURRENT_SOURCE_DIR}/mdl_python_swig.i
+        ${CMAKE_CURRENT_SOURCE_DIR}/swig_library/mi_neuraylib_deprecated.i
         ${CMAKE_CURRENT_SOURCE_DIR}/swig_library/mi_neuraylib_enums.i
         ${CMAKE_CURRENT_SOURCE_DIR}/post_swig.py
         ${PROJECT_SOURCES}
@@ -201,11 +210,9 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E touch ${_GENERATED_DIR}/swig.d
     DEPENDS
         ${CMAKE_CURRENT_SOURCE_DIR}/mdl_python_swig.i
+        ${CMAKE_CURRENT_SOURCE_DIR}/swig_library/mi_neuraylib_deprecated.i
         ${CMAKE_CURRENT_SOURCE_DIR}/swig_library/mi_neuraylib_enums.i
         ${_GENERATED_DIR}/mdl_python_swig.cpp
         ${_GENERATED_DIR}${CONFIG_DIR}/processed_headers.d
     VERBATIM
     )
-
-# add tests if available
-add_tests(POST)

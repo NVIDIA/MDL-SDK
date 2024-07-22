@@ -84,7 +84,37 @@ void Compiled_material_traverser_print::Context::reset()
 std::string Compiled_material_traverser_print::Context::decode_name(const std::string& name)
 {
     mi::base::Handle<const mi::IString> decoded_name(m_mdl_factory->decode_name(name.c_str()));
-    return decoded_name->get_c_str();
+    char const *dname = decoded_name->get_c_str();
+
+    // skip $Major.Minor suffix if any
+    size_t p, l = strlen(dname);
+    for (p = l; p > 0; --p) {
+        if (dname[p - 1] < '0' || dname[p - 1] > '9') {
+            break;
+        }
+    }
+    if (p == l) {
+        return std::string(dname);
+    }
+    if (p == 0 || dname[--p] != '.') {
+        return std::string(dname);
+    }
+
+    l = p;
+    for (; p > 0; --p) {
+        if (dname[p - 1] < '0' || dname[p - 1] > '9') {
+            break;
+        }
+    }
+
+    if (p == l) {
+        return std::string(dname);
+    }
+    if (p == 0 || dname[--p] != '$') {
+        return std::string(dname);
+    }
+
+    return std::string(dname, 0, p);
 }
 
 
@@ -102,7 +132,7 @@ std::string Compiled_material_traverser_print::print_mdl(
 
     // version string
     std::stringstream output;
-    output << "mdl 1.7;\n\n";
+    output << "mdl 1.9;\n\n";
 
     // add required includes
     size_t last_sep_pos = std::string::npos;

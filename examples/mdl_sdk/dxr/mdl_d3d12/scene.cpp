@@ -30,6 +30,7 @@
 #include "base_application.h"
 #include "buffer.h"
 #include "command_queue.h"
+#include "descriptor_heap.h"
 #include "mdl_material.h"
 #include "mdl_material_description.h"
 #include "mdl_material_library.h"
@@ -506,8 +507,6 @@ Mesh::Mesh(
 
     m_local_aabb = Bounding_box::Invalid;
 
-    std::vector<Scene_data::Info> primvar_vertex_infos;
-
     for (size_t i = 0, n = mesh_desc.primitives.size(); i < n; ++i)
     {
         m_geometries.push_back(Mesh::Geometry(app, *this, mesh_desc.primitives[i], i));
@@ -536,12 +535,29 @@ Mesh::Mesh(
             m_local_aabb.extend(*vec);
         }
     }
+
+    // create a SRV for scene data lookups
+    assert(!m_first_resource_heap_handle.is_valid());
+    Descriptor_heap& resource_heap = *m_app->get_resource_descriptor_heap();
+    m_first_resource_heap_handle = resource_heap.reserve_views(2);
+    assert(m_first_resource_heap_handle.is_valid());
+
+    bool res = resource_heap.create_shader_resource_view(
+        m_vertex_buffer, true, m_first_resource_heap_handle);
+    assert(res);
+    res = resource_heap.create_shader_resource_view(
+        m_index_buffer, true, m_first_resource_heap_handle.create_offset(1));
+    assert(res);
+
 }
 
 // ------------------------------------------------------------------------------------------------
 
 Mesh::~Mesh()
 {
+    // free heap block
+    m_app->get_resource_descriptor_heap()->free_views(m_first_resource_heap_handle);
+
     delete m_vertex_buffer;
     delete m_index_buffer;
 }
@@ -565,6 +581,9 @@ Mesh::Instance::Instance(
 
 Mesh::Instance::~Instance()
 {
+    // free heap block
+    m_app->get_resource_descriptor_heap()->free_views(m_first_resource_heap_handle);
+
     if (m_scene_data_infos)
         delete m_scene_data_infos;
 
@@ -767,7 +786,26 @@ bool Mesh::Instance::update_scene_data_infos(D3DCommandList* command_list)
 
     // push info data to the GPU
     m_scene_data_infos->set_data(scene_data_infos);
-    return m_scene_data_infos->upload(command_list);
+    if (!m_scene_data_infos->upload(command_list))
+        return false;
+
+    // assuming the scene data size is constant
+    if (!m_first_resource_heap_handle.is_valid())
+    {
+        Descriptor_heap& resource_heap = *m_app->get_resource_descriptor_heap();
+        m_first_resource_heap_handle = resource_heap.reserve_views(scene_data.empty() ? 1 : 2);
+        assert(m_first_resource_heap_handle.is_valid());
+
+        if (!resource_heap.create_shader_resource_view(
+            m_scene_data_infos, true, m_first_resource_heap_handle))
+            return false;
+
+        if (!scene_data.empty() && !resource_heap.create_shader_resource_view(
+            m_scene_data_buffer, true, m_first_resource_heap_handle.create_offset(1)))
+            return false;
+    }
+;
+    return true;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -778,6 +816,22 @@ bool Mesh::upload_buffers(D3DCommandList* command_list)
     if (!m_index_buffer->upload(command_list)) return false;
     return true;
 }
+
+// ------------------------------------------------------------------------------------------------
+
+//bool Mesh::create_resource_view()
+//{
+    // if (m_vertex_buffer_handle.is_valid())
+    //     return false;
+    // 
+    // Descriptor_heap& resource_heap = *m_app->get_resource_descriptor_heap();
+    // m_vertex_buffer_handle = resource_heap.reserve_views(1);
+    // if (!m_vertex_buffer_handle.is_valid())
+    //     return false;
+    // 
+    // return resource_heap.create_shader_resource_view(
+    //     m_vertex_buffer, true, m_vertex_buffer_handle);
+//}
 
 // ------------------------------------------------------------------------------------------------
 
@@ -840,18 +894,16 @@ void Camera::update(const DirectX::XMMATRIX& global_transform, bool transform_ch
     if (transform_changed)
     {
         Camera::Constants& data = m_constants->data();
-        data.view = DirectX::XMMatrixInverse(nullptr, global_transform);
         data.view_inv = global_transform;
     }
 
     if (m_projection_changed)
     {
-        Camera::Constants& data = m_constants->data();
-        data.perspective = DirectX::XMMatrixPerspectiveFovRH(
+        DirectX::XMMATRIX perspective = DirectX::XMMatrixPerspectiveFovRH(
             m_field_of_view, m_aspect_ratio, m_near_plane_distance, m_far_plane_distance);
 
-        data.perspective_inv =
-            DirectX::XMMatrixInverse(nullptr, data.perspective);
+        Camera::Constants& data = m_constants->data();
+        data.perspective_inv = DirectX::XMMatrixInverse(nullptr, perspective);
 
         m_projection_changed = false;
     }
@@ -1229,6 +1281,11 @@ bool Scene::build_scene(std::unique_ptr<const IScene_loader::Scene> scene)
 
     // free unused temp data - required for construction
     // m_acceleration_structure->release_static_scratch_buffers();
+
+    // create a SRV for scene data access
+    // ----------------------------------------------------------------------------------------
+    //for (auto& m : m_meshes)
+    //    if (!m->create_resource_view()) return false;
 
     return true;
 }

@@ -66,6 +66,7 @@
 
 #include <mdl/codegenerators/generator_dag/generator_dag.h>
 #include <mdl/codegenerators/generator_dag/generator_dag_tools.h>
+#include <mdl/codegenerators/generator_dag/generator_dag_distiller_plugin_api_impl.h>
 
 #include "Scanner.h"
 #include "Parser.h"
@@ -102,6 +103,14 @@ extern IGenerated_code_dag const *deserialize_code_dag(
     IDeserializer           *ds,
     MDL_binary_deserializer &bin_deserializer,
     MDL                     *compiler);
+extern void serialize_material_instance(
+    IMaterial_instance const *instance,
+    ISerializer              *is,
+    MDL_binary_serializer    &bin_serializer);
+extern IMaterial_instance const *deserialize_material_instance(
+    IDeserializer *ds,
+    MDL_binary_deserializer &bin_deserializer,
+    MDL *compiler);
 
 extern ICode_generator *create_code_generator_jit(IAllocator *alloc, MDL *mdl);
 extern Jitted_code     *create_jitted_code_singleton(IAllocator *alloc);
@@ -229,6 +238,8 @@ void Scanner::initialize_mdl_keywords()
     keywords.set("intensity_radiant_exitance", Parser::TOK_IDENT);
     keywords.set("intensity_power", Parser::TOK_IDENT);
     keywords.set("cast", Parser::TOK_IDENT);
+    keywords.set("declarative", Parser::TOK_IDENT);     // MDL 1.9+
+    keywords.set("struct_category", Parser::TOK_IDENT); // MDL 1.9+
 
     // the "reserved" identifier is not really reserved
     keywords.set("reserved", Parser::TOK_IDENT);
@@ -341,8 +352,13 @@ void Scanner::set_mdl_version(int major, int minor)
         keywords.set("hair_bsdf", Parser::TOK_HAIR_BSDF);
     }
     if (HAS_VERSION(1, 7)) {
-        // enable  MDL 1.7 keywords
+        // enable MDL 1.7 keywords
         keywords.set("auto", Parser::TOK_AUTO);
+    }
+    if (HAS_VERSION(1, 9)) {
+        // enable MDL 1.9 keywords
+        keywords.set("declarative", Parser::TOK_DECLARATIVE);
+        keywords.set("struct_category", Parser::TOK_STRUCT_CATEGORY);
     }
 }
 
@@ -376,24 +392,31 @@ dbg::DebugMallocAllocator dbgMallocAlloc;
 
 #endif  // DEBUG
 
-/// Creates a new MDL compiler-
-static mi::mdl::MDL *create_mdl(IAllocator *alloc)
+/// Creates a new MDL compiler.
+static mi::mdl::MDL *create_mdl(
+    IAllocator *alloc,
+    bool       mat_ior_is_varying)
 {
     Allocator_builder builder(alloc);
 
-    mi::mdl::MDL *p = builder.create<mi::mdl::MDL>(alloc);
+    mi::mdl::MDL *p = builder.create<mi::mdl::MDL>(alloc, mat_ior_is_varying);
     return p;
 }
 
 }  // anonymous
 
 
-MDL::MDL(IAllocator *alloc)
+MDL::MDL(
+    IAllocator *alloc,
+    bool       mat_ior_is_varying)
 : Base(alloc)
 , m_builder(alloc)
 , m_next_module_id(0)
+, m_mat_ior_is_varying(mat_ior_is_varying)
+, m_type_factory_is_valid(false)
 , m_arena(alloc)
-, m_type_factory(m_arena, NULL, NULL)
+, m_sym_tab(m_arena)
+, m_type_factory(m_arena, *this, m_sym_tab)
 , m_options(alloc)
 , m_builtin_module_indexes(0, Module_map::hasher(), Module_map::key_equal(), alloc)
 , m_builtin_modules(alloc)
@@ -403,10 +426,11 @@ MDL::MDL(IAllocator *alloc)
 , m_global_lock()
 , m_search_path_lock()
 , m_weak_module_lock()
-, m_predefined_types_build(false)
 , m_jitted_code(NULL)
 , m_translator_list(alloc)
 {
+    m_type_factory_is_valid = true;
+
     create_options();
     create_builtin_semantics();
 
@@ -761,6 +785,8 @@ void MDL::create_builtin_semantics()
         IDefinition::DS_INTRINSIC_MATH_FLOAT_BITS_TO_INT;
     m_builtin_semantics["::math::int_bits_to_float"] =
         IDefinition::DS_INTRINSIC_MATH_INT_BITS_TO_FLOAT;
+    m_builtin_semantics["::math::round_away_from_zero"] =
+        IDefinition::DS_INTRINSIC_MATH_ROUND_AWAY_FROM_ZERO;
     m_builtin_semantics["::math::DX"] =
         IDefinition::DS_INTRINSIC_MATH_DX;
     m_builtin_semantics["::math::DY"] =
@@ -1600,7 +1626,7 @@ void MDL::serialize_module_with_imports(
     bool                  is_root) const
 {
     // ensure that all imported modules are serialized before ...
-    for (int i = 0, n = mod->get_import_count(); i < n; ++i) {
+    for (size_t i = 0, n = mod->get_import_count(); i < n; ++i) {
         mi::base::Handle<Module const> imp_mod(mod->get_import(i));
 
         if (!bin_serializer.is_module_registered(imp_mod.get())) {
@@ -1747,6 +1773,24 @@ IGenerated_code_dag const *MDL::deserialize_code_dag(IDeserializer *ds)
     MDL_binary_deserializer bin_deserializer(get_allocator(), ds, this);
 
     return mi::mdl::deserialize_code_dag(ds, bin_deserializer, this);
+}
+
+// Serialize a material instance to the given serializer.
+void MDL::serialize_material_instance(
+    IMaterial_instance const *instance,
+    ISerializer              *is) const
+{
+    MDL_binary_serializer bin_serializer(get_allocator(), this, is);
+    mi::mdl::serialize_material_instance(instance, is, bin_serializer);
+}
+
+// Deserialize a code DAG from a given deserializer.
+IMaterial_instance const *MDL::deserialize_material_instance(
+    IDeserializer *ds)
+{
+    MDL_binary_deserializer bin_deserializer(get_allocator(), ds, this);
+
+    return mi::mdl::deserialize_material_instance(ds, bin_deserializer, this);
 }
 
 // Create a new MDL lambda function.
@@ -1984,7 +2028,8 @@ bool MDL::valid_mdl_identifier(char const *ident)
         break;
     case 'd':
         if (p[1] == 'e') {
-            FORBIDDEN("delete", 2);
+            FORBIDDEN("delete",      2);
+            FORBIDDEN("declarative", 2); // MDL 1.9+
         } else if (p[1] == 'o') {
             if (p[2] == '\0')
                 return false;
@@ -2068,6 +2113,8 @@ bool MDL::valid_mdl_identifier(char const *ident)
     case 'i':
         if (p[1] == 'f') {
             return p[2] != '\0';
+        } else if (p[1] == 'n') {
+            return p[2] != '\0'; // MDL 1.9+
         } else if (p[1] == 'm') {
             FORBIDDEN("import", 2);
         } else if (p[1] == 'n') {
@@ -2142,10 +2189,11 @@ bool MDL::valid_mdl_identifier(char const *ident)
             FORBIDDEN("signed", 2);
             FORBIDDEN("sizeof", 2);
         } else if (p[1] == 't') {
-            FORBIDDEN("static",      2);
-            FORBIDDEN("static_cast", 2);
-            FORBIDDEN("string",      2);
-            FORBIDDEN("struct",      2);
+            FORBIDDEN("static",          2);
+            FORBIDDEN("static_cast",     2);
+            FORBIDDEN("string",          2);
+            FORBIDDEN("struct",          2);
+            FORBIDDEN("struct_category", 2); // MDL 1.9+
         }
         else {
             FORBIDDEN("switch",  1);
@@ -2243,7 +2291,7 @@ IEncapsulate_tool *MDL::create_encapsulate_tool()
 IMDL_comparator *MDL::create_mdl_comparator()
 {
     // creates a new compiler owned by the comparator
-    mi::base::Handle<MDL> compiler(create_mdl(get_allocator()));
+    mi::base::Handle<MDL> compiler(create_mdl(get_allocator(), mat_ior_is_varying()));
 
     mi::base::Handle<IMDL_search_path> const &sp = get_search_path();
 
@@ -2295,6 +2343,13 @@ bool MDL::remove_foreign_module_translator(
     return false;
 }
 
+IDistiller_plugin_api *MDL::create_distiller_plugin_api(
+    IMaterial_instance const *instance,
+    ICall_name_resolver      *call_resolver)
+{
+    return ::mi::mdl::create_distiller_plugin_api(instance, call_resolver);
+}
+
 // Check if the compiler supports a requested MDL version.
 bool MDL::check_version(
     int         major,
@@ -2335,10 +2390,13 @@ bool MDL::check_version(
             version = MDL_VERSION_1_8;
             return true;
         case 9:
+            version = MDL_VERSION_1_9;
+            return true;
+        default:
             // unsupported yet
             return false;
         }
-    } if (major == 99 && minor == 99 && enable_experimental) {
+    } else if (major == 99 && minor == 99 && enable_experimental) {
         // experimental supported
         version = MDL_VERSION_EXP;
         return true;
@@ -2635,19 +2693,6 @@ Module const *MDL::get_builtin_module(size_t idx) const
     return m_builtin_modules[idx].get();
 }
 
-// Returns true if predefined types must be build, false otherwise.
-bool MDL::build_predefined_types()
-{
-    if (m_predefined_types_build) {
-        return false;
-    } else {
-        // Note: it is safe to run this without a lock, it runs in the
-        // context of building builtin modules which is serialized.
-        m_predefined_types_build = true;
-        return true;
-    }
-}
-
 // Get the "weak module reference lock".
 mi::base::Lock &MDL::get_weak_module_lock() const
 {
@@ -2695,13 +2740,15 @@ IAllocator *get_debug_log_allocator() { return g_debug_log_allocator; }
 //
 
 // Initializes the mdl library and obtains the primary mdl interface.
-mi::mdl::IMDL *initialize(IAllocator *allocator)
+mi::mdl::IMDL *initialize(
+    bool       mat_ior_is_varying,
+    IAllocator *allocator)
 {
     if (allocator != NULL) {
         // FIXME: This creates a non-ref-counted reference!
         g_debug_log_allocator = allocator;
 
-        return create_mdl(allocator);
+        return create_mdl(allocator, mat_ior_is_varying);
     }
 
     mi::base::Handle<mi::base::IAllocator> alloc(
@@ -2716,7 +2763,7 @@ mi::mdl::IMDL *initialize(IAllocator *allocator)
 
     // FIXME: This creates a non-ref-counted reference!
     g_debug_log_allocator = alloc.get();
-    return create_mdl(alloc.get());
+    return create_mdl(alloc.get(), mat_ior_is_varying);
 }
 
 } // mdl

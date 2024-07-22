@@ -120,7 +120,7 @@ namespace multiscatter
     }
 
     // called after sampling glossy BSDF
-    // returns -1 if the sample was excepted and rho1 if not
+    // returns -1 if the sample was accepted and rho1 if not
     // in case of the latter, the pdf for the glossy BSDF has to be updated (k2 changed)
     // after that, call sample_update_single_scatter_probability.
     BSDF_INLINE float sample(
@@ -134,15 +134,13 @@ namespace multiscatter
         BSDF_sample_data *data,
         const Geometry &g,
         const float3 &tint,
-        const float3 &multiscatter_tint)
+        const float3 &multiscatter_tint,
+        const scatter_mode mode)
     {
         // assuming the glossy BSDF was sampled before
         float w = (data->event_type != BSDF_EVENT_ABSORB) ? math::average(data->bsdf_over_pdf) : 0.0f;
 
-        // assuming 0 <= w <= 1, we can reject samples with probability w, rejection basically means 
-        // that we use multi-scattering then
-
-        // compute rho1, needed in both cases
+        // compute rho1, needed in all cases
         const float2 clamp = make<float2>(0.0f, 1.0f);
         float3 coord = make<float3>(
             compute_lookup_coordinate_x(type, nk1),
@@ -152,8 +150,21 @@ namespace multiscatter
         const float rho1 = 
             state->tex_lookup_float3_3d(texture_id, coord, 0, 0, 0, clamp, clamp, clamp, 0.0f).x;
 
+        // if mode == allowed_mode:
+        //  - we have importance-sampled the masked single scattering BSDF
+        //  - we can assume 0 <= w <= 1, so we can reject samples with probability w
+        //  - in expectation, this means we accept with exactly probability rho1
+        //  - rejected samples then do multiscatter (in expectation with probability 1 - rho1)
+        // if mode != allowed_mode (i.e. only reflection allowed for mode reflect_transmit):
+        //  - we can't use w as probability, as we don't know what the acceptance probability in
+        //    expectation would turn out to be
+        //  - simply use rho1 as acceptance probability (not perfect, but still good)
+        const float accept_prob =
+            ((mode == scatter_reflect_transmit) &&
+             (get_allowed_scatter_mode(data) == DF_FLAGS_ALLOW_REFLECT)) ? rho1 : w;
+
         // accept glossy sample        
-        if (data->xi.w <= w) {
+        if (data->xi.w < accept_prob) {
 
             // incorporate multi-scatter part to pdf
             if (BSDF::calc_pdf_in_sample()) {
@@ -164,14 +175,14 @@ namespace multiscatter
                     data->pdf += (1.0f - rho1) * (float)(1.0 / M_PI) + math::dot(data->k2, g.n.shading_normal);
             }
 
-            data->bsdf_over_pdf *= tint / w;
+            data->bsdf_over_pdf *= tint / accept_prob;
             return -1.0f;
 
         // reject glossy sample
         } else {
 
             // sample diffuse direction
-            const float xi4 = math::saturate((data->xi.w - w) / (1.0f - w));
+            const float xi4 = math::saturate((data->xi.w - accept_prob) / (1.0f - accept_prob));
             const float phi = data->xi.z * (float)(2.0 * M_PI);
             float sin_phi, cos_phi;
             math::sincos(phi, &sin_phi, &cos_phi);

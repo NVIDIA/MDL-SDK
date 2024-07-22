@@ -45,7 +45,7 @@ class ICall_name_resolver;
 /// A plugin is only accepted if it is compiled against the same API version
 /// than the SDK. This version needs to be incremented whenever something in
 /// this API changes.
-#define MI_MDL_DISTILLER_PLUGIN_API_VERSION 2
+#define MI_MDL_DISTILLER_PLUGIN_API_VERSION 4
 
 ///
 /// The rule engine handles the transformation of a compiled material by a rule set.
@@ -62,8 +62,8 @@ public:
     /// \param error          error codes reported back to the API
     ///
     /// \return a new compiled material
-    virtual IGenerated_code_dag::IMaterial_instance *apply_rules(
-        IGenerated_code_dag::IMaterial_instance const *inst,
+    virtual IMaterial_instance *apply_rules(
+        IMaterial_instance const *inst,
         IRule_matcher                                 &matcher,
         IRule_matcher_event                           *event_handler,
         const Distiller_options                       *options,
@@ -80,8 +80,8 @@ public:
         }
     };
 
-    virtual void dump_attributes(IGenerated_code_dag::IMaterial_instance const *inst) = 0;
-    virtual void dump_attributes(IGenerated_code_dag::IMaterial_instance const *inst,
+    virtual void dump_attributes(IMaterial_instance const *inst) = 0;
+    virtual void dump_attributes(IMaterial_instance const *inst,
                                  DAG_node const *node) = 0;
 
     /// Set the value of a named attribute of a node. If the node
@@ -92,10 +92,10 @@ public:
     /// \param value new value of the attribute (must not be NULL)
     virtual void set_attribute(DAG_node const * node, char const *name,
                                DAG_node const *value) = 0;
-    virtual void set_attribute(IGenerated_code_dag::IMaterial_instance const *inst,
+    virtual void set_attribute(IMaterial_instance const *inst,
                                DAG_node const * node, char const *name,
                                mi::Float32 value) = 0;
-    virtual void set_attribute(IGenerated_code_dag::IMaterial_instance const *inst,
+    virtual void set_attribute(IMaterial_instance const *inst,
                                DAG_node const * node, char const *name,
                                mi::Sint32 value) = 0;
 
@@ -173,9 +173,9 @@ public:
     /// \param field_selector    mask to select the fields from m0 or m1 respectively.
     ///
     /// \return a new compiled material instance.
-    virtual IGenerated_code_dag::IMaterial_instance *merge_materials(
-        IGenerated_code_dag::IMaterial_instance const *m0,
-        IGenerated_code_dag::IMaterial_instance const *m1,
+    virtual IMaterial_instance *merge_materials(
+        IMaterial_instance const *m0,
+        IMaterial_instance const *m1,
         Field_selector                                field_selector) = 0;
 
     /// Create a constant.
@@ -223,12 +223,12 @@ public:
         DAG_node const * const call_args[],
         size_t                 num_call_args) = 0;
 
-    /// Create a 1-, 2-, or 3-mixer call, with 2, 4, or 6 parameters respectively.
+    /// Create a 1-, 2-, 3-, or 4-mixer call, with 2, 4, 6, or 8 parameters respectively.
     virtual DAG_node const *create_mixer_call(
         DAG_call::Call_argument const call_args[],
         int                           num_call_args) = 0;
 
-    /// Create a 1-, 2-, or 3-color-mixer call, with 2, 4, or 6 parameters respectively.
+    /// Create a 1-, 2-, 3-, or 4-color-mixer call, with 2, 4, 6, or 8 parameters respectively.
     virtual DAG_node const *create_color_mixer_call(
         DAG_call::Call_argument const call_args[],
         int                           num_call_args) = 0;
@@ -494,7 +494,7 @@ public:
     /// Compute the node selector for the matcher, either the semantic for a DAG_call
     /// node, or one of the Distiller_extended_node_semantics covering DAG_constant
     /// of type bsdf, edf or vdf respectively, or for DAG_constant's and DAG_call's of
-    /// one of the material structs, and selectors for mix_1, mix_2, mix_3,
+    /// one of the material structs, and selectors for mix_1, mix_2, mix_3, mix_4,
     /// clamped_mix_1, ..., as well as a special selector for local_normal.
     /// All other nodes return 0.
     virtual int get_selector( DAG_node const* node) const = 0;
@@ -515,20 +515,11 @@ public:
     /// \param error          error codes reported back to the API
     ///
     /// \return a new compiled material
-    virtual IGenerated_code_dag::IMaterial_instance *normalize_mixers(
-        IGenerated_code_dag::IMaterial_instance const *inst,
+    virtual IMaterial_instance *normalize_mixers(
+        IMaterial_instance const *inst,
         IRule_matcher_event                           *event_handler,
         const mi::mdl::Distiller_options              *options,
         mi::Sint32                                    &error) = 0;
-
-    /// Factory to create a newly allocated distiller plugin API.
-    /// The interface is not reference counted. Call release() immediately deletes it.
-    ///
-    /// \param instance       a material instance used to retrieve an allocator
-    /// \param call_resolver  a MDL call name resolver for the IR checker
-    static IDistiller_plugin_api* get_new_distiller_plugin_api(
-        IGenerated_code_dag::IMaterial_instance const *instance,
-        ICall_name_resolver                           *call_resolver);
 
     /// Immediately deletes this distiller plugin API
     virtual void release() const  = 0;

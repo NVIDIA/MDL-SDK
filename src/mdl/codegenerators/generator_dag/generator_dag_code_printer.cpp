@@ -140,6 +140,7 @@ void DAG_code_printer::print(Printer *printer, mi::base::IInterface const *code)
         print("]];\n");
     }
 
+    print_struct_categories(code_dag.get());
     print_types(code_dag.get());
     print_constants(code_dag.get());
     print_annotations(code_dag.get());
@@ -535,6 +536,12 @@ void DAG_code_printer::print_mdl_type(
                 print(" ");
             }
             print_short(sym->get_name());
+            if (IStruct_category const *cat = s_type->get_category()) {
+                print(" ");
+                keyword("in");
+                print(" ");
+                print_short(cat->get_symbol()->get_name());
+            }
         }
         break;
 
@@ -642,6 +649,36 @@ void DAG_code_printer::print_mdl_type(
     }
 }
 
+// Print all struct categories of the code dag.
+void DAG_code_printer::print_struct_categories(IGenerated_code_dag const *code_dag) const
+{
+    size_t cat_count = code_dag->get_struct_category_count();
+    for (size_t i = 0; i < cat_count; ++i) {
+        print("\n");
+
+        if (code_dag->is_struct_category_exported(i)) {
+            keyword("export");
+            print(" ");
+        }
+        keyword("struct_category");
+        print(" ");
+        print_short(code_dag->get_struct_category_name(i));
+
+        if (size_t annotation_count = code_dag->get_struct_category_annotation_count(i)) {
+            print("\n[[\n");
+            for (size_t k = 0; k < annotation_count; ++k) {
+                indent(1);
+                print_exp(1, code_dag, 0, code_dag->get_struct_category_annotation(i, k));
+                if (k < annotation_count - 1)
+                    print(',');
+                print("\n");
+            }
+            print("]]");
+        }
+        print(";\n");
+    }
+}
+
 // Print all types of the code dag.
 void DAG_code_printer::print_types(IGenerated_code_dag const *code_dag) const
 {
@@ -682,15 +719,15 @@ void DAG_code_printer::print_types(IGenerated_code_dag const *code_dag) const
                 print(code_dag->get_type_sub_entity_name(i, j));
                 pop_color();
 
-                if (size_t annotation_count = code_dag->get_type_sub_entity_annotation_count(i, j)) {
+                if (size_t anno_count = code_dag->get_type_sub_entity_annotation_count(i, j)) {
                     print('\n');
                     indent(1);
                     print("[[\n");
-                    for (size_t k = 0; k < annotation_count; ++k) {
+                    for (size_t k = 0; k < anno_count; ++k) {
                         indent(2);
                         print_exp(
                             2, code_dag, 0, code_dag->get_type_sub_entity_annotation(i, j, k));
-                        if (k < annotation_count - 1)
+                        if (k < anno_count - 1)
                             print(',');
                         print("\n");
                     }
@@ -764,12 +801,6 @@ void DAG_code_printer::print_functions(IGenerated_code_dag const *code_dag) cons
         print("\n");
         IDefinition::Semantics sema = code_dag->get_function_semantics(i);
         print_sema(sema);
-
-        if (code_dag->get_function_property(i, IGenerated_code_dag::FP_IS_NATIVE)) {
-            push_color(ISyntax_coloring::C_COMMENT);
-            print("// declared \"native\"\n");
-            pop_color();
-        }
 
         char const *orig_name = code_dag->get_original_function_name(i);
         if (orig_name != NULL) {
@@ -912,6 +943,11 @@ void DAG_code_printer::print_functions(IGenerated_code_dag const *code_dag) cons
             keyword("native");
         }
 
+        if (code_dag->get_function_property(i, IGenerated_code_dag::FP_IS_DECLARATIVE)) {
+            print(' ');
+            keyword("declarative");
+        }
+
         bool throws_bounds =
             code_dag->get_function_property(i, IGenerated_code_dag::FP_CAN_THROW_BOUNDS);
         bool throws_zero =
@@ -1009,7 +1045,8 @@ void DAG_code_printer::print_materials(IGenerated_code_dag const *code_dag) cons
         }
         print(" ");
 
-        keyword("material");
+        IType const *return_type = code_dag->get_material_return_type(mat_idx);
+        print(return_type);
         print(" ");
 
         const char *material_name = code_dag->get_material_name(mat_idx);
@@ -1075,7 +1112,7 @@ void DAG_code_printer::print_materials(IGenerated_code_dag const *code_dag) cons
                 print_exp(depth, code_dag, 2 * mat_idx, init);
             }
         }
-        print(")\n");
+        print(") declarative\n");
         if (vertical)
             --depth;
         print("= ");
@@ -1207,8 +1244,7 @@ void DAG_code_printer::print_annotations(IGenerated_code_dag const *code_dag) co
 // Print the code to the given printer.
 void Material_instance_printer::print(Printer *printer, mi::base::IInterface const *inst) const
 {
-    mi::base::Handle<IGenerated_code_dag::IMaterial_instance const> instance(
-        inst->get_interface<IGenerated_code_dag::IMaterial_instance>());
+    mi::base::Handle<IMaterial_instance const> instance(inst->get_interface<IMaterial_instance>());
 
     if (!instance.is_valid_interface())
         return;
@@ -1250,12 +1286,27 @@ void Material_instance_printer::print(Printer *printer, mi::base::IInterface con
     }
     print_exp(1, instance.get(), instance->get_constructor());
     print(";\n");
+
+    print("// Resource map:\n");
+    for (size_t i = 0; i < instance->get_resource_tag_map_entries_count(); ++i) {
+        auto rt = instance->get_resource_tag_map_entry(i);
+        print("//  #");
+        print<long>(i);
+        print(": kind: ");
+        print<long>(rt->m_kind);
+        print(" url: ");
+        print(rt->m_url);
+        print(" tag: ");
+        print<long>(rt->m_tag);
+        print("\n");
+    }
+
 }
 
 void Material_instance_printer::print_exp(
-    int                                           depth,
-    IGenerated_code_dag::IMaterial_instance const *instance,
-    DAG_node const                                *node) const
+    int                      depth,
+    IMaterial_instance const *instance,
+    DAG_node const           *node) const
 {
     switch (node->get_kind()) {
     case DAG_node::EK_CONSTANT:

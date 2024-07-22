@@ -56,13 +56,20 @@
 class Test_logger : public mi::base::Interface_implement<mi::base::ILogger>
 {
 public:
-    void message( mi::base::Message_severity level, const char* module_category,
-                  const mi::base::Message_details&, const char* message)
+    void message(
+        mi::base::Message_severity level,
+        const char* module_category,
+        const mi::base::Message_details&,
+        const char* message) final
     {
         const char* log_level = get_log_level( level);
-        fprintf( stderr,
-            "Log Level = '%s' : Module:Category = '%s' : Message = '%s'\n", log_level, module_category, message);
-        m_messages.push_back( message);
+        fprintf(
+            stderr,
+            "Log Level = '%s' : Module:Category = '%s' : Message = '%s'\n",
+            log_level,
+            module_category,
+            message);
+        m_messages.emplace_back( message);
     }
 
     void check_and_reset( const char* message)
@@ -122,13 +129,16 @@ void run_tests (
 
     // get forwarding logger
 
-    mi::base::Handle<mi::base::ILogger> forwarding_logger(  logging_configuration->get_forwarding_logger());
+    mi::base::Handle<mi::base::ILogger> forwarding_logger(
+        logging_configuration->get_forwarding_logger());
     MI_CHECK( forwarding_logger.is_valid_interface());
 
     forwarding_logger->message( mi::base::MESSAGE_SEVERITY_INFO, "TEST:MISC", "foo");
-    forwarding_logger->printf( mi::base::MESSAGE_SEVERITY_INFO, "TEST:MISC", "bar %d %s %f %lf", 42, "baz", 1.0f, 1.0);
+    forwarding_logger->printf(
+        mi::base::MESSAGE_SEVERITY_INFO, "TEST:MISC", "bar %d %s %f %lf", 42, "baz", 1.0f, 1.0);
     receiving_logger->message( mi::base::MESSAGE_SEVERITY_INFO, "TEST:MISC", {}, "foo");
-    receiving_logger->printf( mi::base::MESSAGE_SEVERITY_INFO, "TEST:MISC", "bar %d %s %f %lf", 42, "baz", 1.0f, 1.0);
+    receiving_logger->printf(
+        mi::base::MESSAGE_SEVERITY_INFO, "TEST:MISC", "bar %d %s %f %lf", 42, "baz", 1.0f, 1.0);
 
     // set / get receiving logger
 
@@ -136,9 +146,9 @@ void run_tests (
     mi::base::Handle<mi::base::ILogger> logger( logging_configuration->get_receiving_logger());
     MI_CHECK( logger.get() == receiving_logger);
 
-    logging_configuration->set_receiving_logger( 0);
+    logging_configuration->set_receiving_logger( nullptr);
     logger = logging_configuration->get_receiving_logger();
-    MI_CHECK( logger.get() == 0);
+    MI_CHECK( logger.get() == nullptr);
 
     logging_configuration->set_receiving_logger( receiving_logger);
     logger = logging_configuration->get_receiving_logger();
@@ -148,75 +158,82 @@ void run_tests (
 
     std::string s1022 = std::string( 1018, '.') + "1022";
     MI_CHECK_EQUAL( s1022.size(), 1022);
-    forwarding_logger->printf( mi::base::MESSAGE_SEVERITY_INFO, "TEST:MISC", "%s", s1022.c_str());
+    forwarding_logger->printf(
+        mi::base::MESSAGE_SEVERITY_INFO, "TEST:MISC", "%s", s1022.c_str());
     receiving_logger->check_and_reset( (std::string( ": ") + s1022).c_str());
 
     std::string s1023 = std::string( 1019, '.') + "1023";
     MI_CHECK_EQUAL( s1023.size(), 1023);
-    forwarding_logger->printf( mi::base::MESSAGE_SEVERITY_INFO, "TEST:MISC", "%s", s1023.c_str());
+    forwarding_logger->printf(
+        mi::base::MESSAGE_SEVERITY_INFO, "TEST:MISC", "%s", s1023.c_str());
     receiving_logger->check_and_reset( (std::string( ": ") + s1023).c_str());
 
     std::string s1024 = std::string( 1020, '.') + "1024";
     MI_CHECK_EQUAL( s1024.size(), 1024);
-    forwarding_logger->printf( mi::base::MESSAGE_SEVERITY_INFO, "TEST:MISC", "%s", s1024.c_str());
+    forwarding_logger->printf(
+        mi::base::MESSAGE_SEVERITY_INFO, "TEST:MISC", "%s", s1024.c_str());
     receiving_logger->check_and_reset( (std::string( ": ") + s1024.substr( 0, 1023)).c_str());
 
     std::string s1025 = std::string( 1021, '.') + "1025";
     MI_CHECK_EQUAL( s1025.size(), 1025);
-    forwarding_logger->printf( mi::base::MESSAGE_SEVERITY_INFO, "TEST:MISC", "%s", s1025.c_str());
+    forwarding_logger->printf(
+        mi::base::MESSAGE_SEVERITY_INFO, "TEST:MISC", "%s", s1025.c_str());
     receiving_logger->check_and_reset( (std::string( ": ") + s1025.substr( 0, 1023)).c_str());
 
     // set / get overall limit
 
     mi::Sint32 result;
 
-    for( int l = 0; l < levels_size; ++l) {
+    for( auto level : levels) {
 
-        result = logging_configuration->set_log_level( levels[l]);
-        MI_CHECK( (result == 0) ^ (levels[l] == INVALID));
+        result = logging_configuration->set_log_level( level);
+        MI_CHECK( (result == 0) ^ (level == INVALID));
 
-        mi::base::Message_severity level = logging_configuration->get_log_level();
-        MI_CHECK( (level == levels[l]) ^ (levels[l] == INVALID));
+        mi::base::Message_severity l = logging_configuration->get_log_level();
+        MI_CHECK( (l == level) ^ (level == INVALID));
     }
 
     // set / get limits per category
 
-    for( int c = 0; c < categories_size; ++c) {
-        for( int l = 0; l < levels_size; ++l) {
+    for( auto& category : categories) {
+        for( auto l : levels) {
 
             logging_configuration->set_log_level( mi::base::MESSAGE_SEVERITY_FATAL);
 
-            result = logging_configuration->set_log_level_by_category( categories[c].c_str(), levels[l]);
-            MI_CHECK( (result == 0) ^ ((levels[l] == INVALID) || (categories[c] == "INVALID")));
+            result = logging_configuration->set_log_level_by_category( category.c_str(), l);
+            MI_CHECK( (result == 0) ^ ((l == INVALID) || (category == "INVALID")));
 
-            MI_CHECK_EQUAL( logging_configuration->get_log_level(), mi::base::MESSAGE_SEVERITY_FATAL);
+            MI_CHECK_EQUAL( logging_configuration->get_log_level(),
+                mi::base::MESSAGE_SEVERITY_FATAL);
 
             mi::base::Message_severity level
-                = logging_configuration->get_log_level_by_category( categories[c].c_str());
-            MI_CHECK( (level == levels[l]) ^ ((levels[l] == INVALID) || (categories[c] == "INVALID")));
+                = logging_configuration->get_log_level_by_category( category.c_str());
+            MI_CHECK( (level == l) ^ ((l == INVALID) || (category == "INVALID")));
         }
     }
 
     // set / get limits for all categories
 
-    for( int l = 0; l < levels_size; ++l) {
+    for( auto level : levels) {
 
         logging_configuration->set_log_level( mi::base::MESSAGE_SEVERITY_FATAL);
 
-        result = logging_configuration->set_log_level_by_category( "ALL", levels[l]);
-        MI_CHECK( (result == 0) ^ (levels[l] == INVALID));
+        result = logging_configuration->set_log_level_by_category( "ALL", level);
+        MI_CHECK( (result == 0) ^ (level == INVALID));
 
-        MI_CHECK_EQUAL( logging_configuration->get_log_level(), mi::base::MESSAGE_SEVERITY_FATAL);
+        MI_CHECK_EQUAL( logging_configuration->get_log_level(),
+            mi::base::MESSAGE_SEVERITY_FATAL);
 
-        for( int c = 0; c < categories_size; ++c) {
+        for( auto& category : categories) {
 
-            mi::base::Message_severity level
-                = logging_configuration->get_log_level_by_category( categories[c].c_str());
-            MI_CHECK( (level == levels[l]) ^ ((levels[l] == INVALID) || (categories[c] == "INVALID")));
+            mi::base::Message_severity l
+                = logging_configuration->get_log_level_by_category( category.c_str());
+            MI_CHECK( (l == level) ^ ((level == INVALID) || (category == "INVALID")));
         }
     }
 
-    result = logging_configuration->set_log_level_by_category( "ALL", mi::base::MESSAGE_SEVERITY_INFO);
+    result = logging_configuration->set_log_level_by_category(
+        "ALL", mi::base::MESSAGE_SEVERITY_INFO);
     MI_CHECK_EQUAL( 0, result);
     result = logging_configuration->set_log_level( mi::base::MESSAGE_SEVERITY_INFO);
     MI_CHECK_EQUAL( 0, result);
@@ -230,7 +247,8 @@ void run_tests (
 
     // test Log_stream
 
-    mi::base::Log_stream s( forwarding_logger.get(), "TEST:MISC", mi::base::MESSAGE_SEVERITY_INFO);
+    mi::base::Log_stream s(
+        forwarding_logger.get(), "TEST:MISC", mi::base::MESSAGE_SEVERITY_INFO);
     s << "An info message" << std::flush;
     s << mi::base::warning << "A warning message" << std::flush;
     s << "Another info message" << mi::base::error << "And an error message" << std::flush;
@@ -260,7 +278,7 @@ MI_TEST_AUTO_FUNCTION( test_ilogging_configuration )
         MI_CHECK_EQUAL( 0, neuray->shutdown());
     }
 
-    neuray = 0;
+    neuray = nullptr;
     MI_CHECK( unload());
 }
 

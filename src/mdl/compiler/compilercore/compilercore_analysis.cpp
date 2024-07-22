@@ -65,8 +65,10 @@ namespace mdl {
 typedef Store<IType const *>             IType_store;
 typedef Store<Definition *>              Definition_store;
 typedef Store<bool>                      Flag_store;
+typedef Store<char>                      Tristate_store;
 typedef Store<IExpression_call const *>  Expr_call_store;
 typedef Store<Messages_impl *>           Msgs_store;
+typedef Store<IDeclaration_function *>   Decl_func_store;
 
 #define POS(pos) \
     (pos).get_start_line(), (pos).get_start_column(), \
@@ -233,6 +235,10 @@ void dump_def(IDefinition const *def)
     case IDefinition::DK_ANNOTATION:
         printer->print("annotation ");
         printer->print(def->get_type());
+        break;
+    case IDefinition::DK_STRUCT_CATEGORY:
+        printer->print("struct_category ");
+        printer->print(def->get_symbol());
         break;
     case IDefinition::DK_TYPE:
         printer->print(def->get_type());
@@ -746,6 +752,9 @@ static void replace_since_version(
         case 8:
             flags |= unsigned(IMDL::MDL_VERSION_1_8);
             break;
+        case 9:
+            flags |= unsigned(IMDL::MDL_VERSION_1_9);
+            break;
         default:
             MDL_ASSERT(!"Unsupported version");
             break;
@@ -795,6 +804,9 @@ static void replace_removed_version(
             break;
         case 8:
             flags |= (unsigned(IMDL::MDL_VERSION_1_8) << 8);
+            break;
+        case 9:
+            flags |= (unsigned(IMDL::MDL_VERSION_1_9) << 8);
             break;
         default:
             MDL_ASSERT(!"Unsupported version");
@@ -1869,12 +1881,11 @@ Scope *Analysis::resolve_scope(
                     // only one error ...
                     if (!silent) {
                         ISymbol const *bsym = find_best_named_subscope_match(scope_sym, scope);
-                        string tname = full_name(scope_node, /*only_scopy=*/true);
                         error(
                             UNKNOWN_PACKAGE_NAME,
-                            scope_node->access_position(),
+                            identifier->access_position(),
                             Error_params(*this)
-                                .add(tname.c_str())
+                                .add(scope_sym)
                                 .add_possible_match(bsym));
                     }
                     error_reported = true;
@@ -2413,6 +2424,8 @@ bool Analysis::is_const_expression(IExpression const *expr, bool &is_invalid)
             return false;
         case IExpression_binary::OK_SEQUENCE:
             return false;
+        default:
+            return false;
         }
     }
     case IExpression::EK_CONDITIONAL:
@@ -2659,6 +2672,7 @@ NT_analysis::NT_analysis(
     IModule_cache    *cache)
 : Analysis(compiler, module, ctx)
 , m_preset_overload(NULL)
+, m_material_ior_is_varying(compiler->mat_ior_is_varying())
 , m_is_stdlib(module.is_stdlib())
 , m_in_expected_const_expr(false)
 , m_ignore_deferred_size(false)
@@ -2681,6 +2695,8 @@ NT_analysis::NT_analysis(
 , m_has_array_assignment(module.get_mdl_version() >= IMDL::MDL_VERSION_1_3)
 , m_has_auto_return(false)
 , m_parameters_are_rvalues(false)
+, m_declarative_fkt_state(DS_MUST_BE_NON_DECLARATIVE)
+, m_inside_func_decl_only(NULL)
 , m_module_cache(cache)
 , m_annotated_def(NULL)
 , m_deduced_type(NULL)
@@ -2899,6 +2915,19 @@ void NT_analysis::enter_native_annotations()
     }
 }
 
+// Enter builtin categories for stdlib modules.
+void NT_analysis::enter_builtin_categories()
+{
+    // the material_category category of all standard materials
+     {
+        ISymbol const *sym = m_st->get_predefined_symbol(ISymbol::SYM_CAT_MATERIAL_CATEGORY);
+        Definition *def = m_def_tab->enter_definition(
+            Definition::DK_STRUCT_CATEGORY, sym, /*type=*/nullptr, /*pos=*/nullptr);
+        IStruct_category const *cat = m_tc.material_category;
+        def->set_category(cat);
+     }
+}
+
 // Create an exported constant declaration for a given value and add it to the current module.
 void NT_analysis::create_exported_decl(ISymbol const *sym, IValue const *val, int line)
 {
@@ -2906,7 +2935,7 @@ void NT_analysis::create_exported_decl(ISymbol const *sym, IValue const *val, in
 
     // add it one line AFTER the last declaration
     if (line == 0) {
-        int n_decls = m_module.get_declaration_count();
+        size_t n_decls = m_module.get_declaration_count();
         if (n_decls > 0) {
             IDeclaration const *last_decl = m_module.get_declaration(n_decls - 1);
             line = last_decl->access_position().get_end_line();
@@ -3129,7 +3158,7 @@ void NT_analysis::create_default_members(
 
     // create the explicit element wise constructor
     {
-        int n = s_type->get_field_count();
+        size_t n = s_type->get_field_count();
 
         Small_VLA<IType_factory::Function_parameter, 8> params(get_allocator(), n);
         Small_VLA<IExpression const *, 8>               inits(get_allocator(), n);
@@ -3153,11 +3182,10 @@ void NT_analysis::create_default_members(
             Parameter_modifier param_modifier(m_module);
 
             // add a function parameter for every field
-            for (int i = 0; i < n; ++i) {
-                IType const   *f_type;
-                ISymbol const *f_sym;
-
-                s_type->get_field(i, f_type, f_sym);
+            for (size_t i = 0; i < n; ++i) {
+                IType_struct::Field const *field = s_type->get_field(i);
+                IType const               *f_type = field->get_type();
+                ISymbol const             *f_sym  = field->get_symbol();
 
                 params[i].p_type = f_type;
                 params[i].p_sym  = f_sym;
@@ -3829,6 +3857,10 @@ Definition const *NT_analysis::import_definition(
             break;
         }
     }
+    MDL_ASSERT(imported && "unexpected: imported is NULL");
+    if (!imported) {
+        return NULL;
+    }
 
     // check for double import
     ISymbol const *imp_sym = m_module.import_symbol(imported->get_sym());
@@ -4340,6 +4372,8 @@ bool NT_analysis::import_qualified_entity(
         return false;
     }
 
+    MDL_ASSERT(def && "unexpected: def is NULL");
+
     // ... importing enum values alone is forbidden
     if (def->get_kind() == IDefinition::DK_ENUM_VALUE) {
         string tname = full_name(entity_name, /*only_scopy=*/false);
@@ -4568,6 +4602,7 @@ restart:
 
 // Checks if the given type is allowed for function return types.
 IType const *Analysis::has_forbidden_function_return_type(
+    bool        allow_declarative,
     IType const *type,
     unsigned    mdl_version,
     bool        is_std_mod)
@@ -4613,6 +4648,10 @@ restart:
     case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
+        if (allow_declarative) {
+            // allowed for declarative functions
+            return NULL;
+        }
         // reference types are allowed in std module functions, otherwise forbidden
         return is_std_mod ? NULL : type;
 
@@ -4620,8 +4659,9 @@ restart:
         {
             IType_array const *a_type = cast<IType_array>(type);
             IType const       *e_type = a_type->get_element_type();
-            // do a deep check
-            return has_forbidden_function_return_type(e_type, mdl_version, is_std_mod);
+            // do a deep check, but forbid arrays of *DFs
+            return has_forbidden_function_return_type(
+                allow_declarative, e_type, mdl_version, is_std_mod);
         }
     case IType::TK_FUNCTION:
         // functions are forbidden (and impossible by syntax)
@@ -4635,13 +4675,10 @@ restart:
                 return s_type;
             }
             // do a deep check
-            for (int i = 0, n = s_type->get_field_count(); i < n; ++i) {
-                ISymbol const *f_name;
-                IType const   *f_type;
-
-                s_type->get_field(i, f_type, f_name);
-                IType const *bad_type =
-                    has_forbidden_function_return_type(f_type, mdl_version, is_std_mod);
+            for (size_t i = 0, n = s_type->get_field_count(); i < n; ++i) {
+                IType const *f_type   = s_type->get_field(i)->get_type();
+                IType const *bad_type = has_forbidden_function_return_type(
+                    allow_declarative, f_type, mdl_version, is_std_mod);
                 if (bad_type != NULL) {
                     return bad_type;
                 }
@@ -4653,22 +4690,97 @@ restart:
     return type;
 }
 
+// Checks if the given type is "void", i.e. its only value is void.
+bool Analysis::is_void_type(
+    IType const *type)
+{
+restart:
+    switch (type->get_kind()) {
+    case IType::TK_ALIAS:
+        {
+            IType_alias const *a_type = cast<IType_alias>(type);
+            type = a_type->get_aliased_type();
+        }
+        goto restart;
+    case IType::TK_BOOL:
+    case IType::TK_INT:
+    case IType::TK_ENUM:
+    case IType::TK_FLOAT:
+    case IType::TK_DOUBLE:
+    case IType::TK_STRING:
+    case IType::TK_VECTOR:
+    case IType::TK_MATRIX:
+    case IType::TK_COLOR:
+    case IType::TK_LIGHT_PROFILE:
+    case IType::TK_TEXTURE:
+    case IType::TK_BSDF_MEASUREMENT:
+    case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
+    case IType::TK_EDF:
+    case IType::TK_VDF:
+    case IType::TK_FUNCTION:     // functions are forbidden (and impossible by syntax)
+    case IType::TK_ERROR:        // error already reported, fine here
+        return false;
+
+    case IType::TK_AUTO:
+        // we might see an auto type when used on the return type, ignore it so far
+        // and assume the check will be called again when the type is determined
+        return false;
+
+    case IType::TK_ARRAY:
+        {
+            IType_array const *a_type = cast<IType_array>(type);
+
+            if (a_type->is_immediate_sized()) {
+                if (a_type->get_size() == 0) {
+                    // zero length arrays are always void
+                    return true;
+                }
+            }
+
+            IType const *e_type = a_type->get_element_type();
+            // do a deep check
+            return is_void_type(e_type);
+        }
+
+    case IType::TK_STRUCT:
+        {
+            IType_struct const *s_type = cast<IType_struct>(type);
+
+            // do a deep check
+            for (int i = 0, n = s_type->get_field_count(); i < n; ++i) {
+                IType const *f_type = s_type->get_field(i)->get_type();
+                if (!is_void_type(f_type)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    MDL_ASSERT(!"Unsupported type kind");
+    return false;
+}
+
 // Checks if the given type is allowed for variable types.
 IType const *Analysis::has_forbidden_variable_type(
+    bool        allow_declarative,
     IType const *type,
     unsigned    mdl_version)
 {
     // same restriction as return types for non-standard modules
-    return has_forbidden_function_return_type(type, mdl_version, /*is_std_mod=*/false);
+    return has_forbidden_function_return_type(
+        allow_declarative, type, mdl_version, /*is_std_mod=*/false);
 }
 
 // Checks if the given type is allowed for structure field types.
 bool Analysis::is_allowed_field_type(
+    bool        allow_declarative,
     IType const *type,
     unsigned    mdl_version)
 {
     // same restriction as return types for non-standard modules
-    return has_forbidden_function_return_type(type, mdl_version, /*is_std_mod=*/false) == NULL;
+    return has_forbidden_function_return_type(
+        allow_declarative, type, mdl_version, /*is_std_mod=*/false) == NULL;
 }
 
 // Checks if the given type is allowed for array element types.
@@ -4806,11 +4918,8 @@ static IType const *has_forbidden_parameter_type(
                     return s_type;
                 }
                 // do a deep check
-                for (int i = 0, n = s_type->get_field_count(); i < n; ++i) {
-                    ISymbol const *f_name;
-                    IType const   *f_type;
-
-                    s_type->get_field(i, f_type, f_name);
+                for (size_t i = 0, n = s_type->get_field_count(); i < n; ++i) {
+                    IType const *f_type   = s_type->get_field(i)->get_type();
                     IType const *bad_type =
                         has_forbidden_parameter_type(f_type, allow_df, allow_resource);
                     if (bad_type != NULL) {
@@ -4840,15 +4949,15 @@ static IType const *has_forbidden_parameter_type(
 
 /// Checks if the given type is allowed for function parameter types.
 ///
-/// \param type         the type to check
-/// \param is_std_mod   true if the current module is a standard module
+/// \param type       the type to check
+/// \param allow_df   true if DFs are allowed
 ///
 /// \returns  the forbidden type or NULL if the type is ok
 static IType const *has_forbidden_function_parameter_type(
     IType const *type,
-    bool        is_std_mod)
+    bool        allow_df)
 {
-    return has_forbidden_parameter_type(type, /*allow_df=*/is_std_mod, /*allow_resource=*/true);
+    return has_forbidden_parameter_type(type, allow_df, /*allow_resource=*/true);
 }
 
 /// Checks if the given type is allowed for annotation parameter types.
@@ -4924,11 +5033,8 @@ IType const *NT_analysis::has_forbidden_material_parameter_type(
                     }
                 }
                 // do a deep check
-                for (int i = 0, n = s_type->get_field_count(); i < n; ++i) {
-                    ISymbol const *f_name;
-                    IType const   *f_type;
-
-                    s_type->get_field(i, f_type, f_name);
+                for (size_t i = 0, n = s_type->get_field_count(); i < n; ++i) {
+                    IType const *f_type   = s_type->get_field(i)->get_type();
                     IType const *bad_type = has_forbidden_material_parameter_type(f_type);
                     if (bad_type != NULL) {
                         return bad_type;
@@ -4956,12 +5062,14 @@ IType const *NT_analysis::has_forbidden_material_parameter_type(
 
 // Checks if the given type is allowed for function return types.
 bool NT_analysis::check_function_return_type(
+    bool           allow_declarative,
     IType const    *type,
     Position const &pos,
     ISymbol const  *func_name,
     bool           is_std_mod)
 {
-    IType const *bad_type = has_forbidden_function_return_type(type, m_mdl_version, is_std_mod);
+    IType const *bad_type = has_forbidden_function_return_type(
+        allow_declarative, type, m_mdl_version, is_std_mod);
     if (bad_type != NULL) {
         error(
             FORBIDDEN_RETURN_TYPE,
@@ -5017,7 +5125,8 @@ void NT_analysis::check_prototype_default_parameter(
 }
 
 // Check if a function is redeclared or redefined.
-Definition const *NT_analysis::check_function_redeclaration(Definition *curr_def)
+Definition const *NT_analysis::check_function_redeclaration(
+    Definition *curr_def)
 {
     IType const *decl_type = curr_def->get_decl_type();
 
@@ -5029,7 +5138,7 @@ Definition const *NT_analysis::check_function_redeclaration(Definition *curr_def
     IType_function const *curr_func = cast<IType_function>(decl_type);
     int n_params = curr_func->get_parameter_count();
 
-    bool remove_it = false;
+    bool remove_it       = false;
     bool is_set_exported = false;
 
     Definition *first_default_param_def = NULL;
@@ -5060,6 +5169,19 @@ Definition const *NT_analysis::check_function_redeclaration(Definition *curr_def
                     .add(curr_def->get_sym()));
             add_prev_definition_note(same_def);
             // remove it
+            remove_it = true;
+            break;
+        }
+
+        if (is_material_category_type(func->get_return_type()->skip_type_alias())) {
+            // currently we do not allow overloads on "material-alikes"
+            error(
+                MATERIAL_FUNCTION_OVERLOADED,
+                curr_def->get_declaration()->access_position(),
+                Error_params(*this)
+                .add_signature(curr_def));
+            add_prev_definition_note(same_def);
+
             remove_it = true;
             break;
         }
@@ -5099,7 +5221,7 @@ Definition const *NT_analysis::check_function_redeclaration(Definition *curr_def
 
         if (overload_on_modifier) {
             if (m_is_stdlib) {
-                // Note: we "allow" overload on modifier inside the stdlib if the "existance range"
+                // Note: we "allow" overload on modifier inside the stdlib if the "existence range"
                 // does not overlap
                 unsigned same_v       = same_def->get_version_flags();
                 unsigned since_same   = mdl_since_version(same_v);
@@ -5606,6 +5728,28 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
     IType_name const *ret_name = fkt_decl->get_return_type_name();
     IStatement const *body     = fkt_decl->get_body();
 
+    char declarative_fkt_state = DS_MUST_BE_NON_DECLARATIVE;
+
+    if (body == NULL) {
+        // for prototypes, the declarative MUSt be set explicitly
+        declarative_fkt_state = fkt_decl->is_declarative() ?
+            DS_IS_DECLARATIVE : DS_MUST_BE_NON_DECLARATIVE;
+    } else {
+        // for definitions, we can "auto detect" it
+        declarative_fkt_state = fkt_decl->is_declarative() ?
+            DS_IS_DECLARATIVE : DS_MAYBE_DECLARATIVE;
+
+        if (is<IStatement_compound>(body)) {
+            // we have a real body
+            declarative_fkt_state = DS_MUST_BE_NON_DECLARATIVE;
+        }
+    }
+
+    Tristate_store declarative_store(m_declarative_fkt_state, declarative_fkt_state);
+
+    Decl_func_store inside_func_decl_only(
+        m_inside_func_decl_only, body == NULL && !has_error ? fkt_decl : NULL);
+
     // create new scope for the parameters and the body
     m_next_param_idx = 0;
     unsigned deriv_mask = 0;
@@ -5631,7 +5775,8 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
             IType_name const *pt_name = param->get_type_name();
             IType const      *p_type  = p_def->get_type();
 
-            IType const *bad_type = has_forbidden_function_parameter_type(p_type, m_is_stdlib);
+            IType const *bad_type = has_forbidden_function_parameter_type(
+                p_type, (m_declarative_fkt_state != DS_MUST_BE_NON_DECLARATIVE) || m_is_stdlib);
             if (bad_type != NULL) {
                 error(
                     FORBIDDEN_FUNCTION_PARAMETER_TYPE,
@@ -5680,7 +5825,7 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
 
         // Handle enable_if annotations here after all parameters have been processed because
         // use-before-def is allowed here
-        for (int i = 0; i < n_params; ++i) {
+        for (size_t i = 0; i < n_params; ++i) {
             IParameter const *param = fkt_decl->get_parameter(i);
             handle_enable_ifs(param);
         }
@@ -5716,9 +5861,12 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
             }
         }
 
+        // allow declarative return types for MDL 1.9+
+        bool allow_declarative = m_mdl_version >= IMDL::MDL_VERSION_1_9;
+
         bool is_auto_ret_type = ret_name->is_auto_type();
-        if (!is_auto_ret_type &&
-            !check_function_return_type(ret_type, ret_name->access_position(), f_sym, m_is_stdlib))
+        if (!is_auto_ret_type && !check_function_return_type(
+            allow_declarative, ret_type, ret_name->access_position(), f_sym, m_is_stdlib))
         {
             ret_type = m_tc.error_type;
 
@@ -5726,7 +5874,6 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
             // rest of the definition might be ok and can be further analyzed
         }
 
-        // create the function type
         f_type = m_tc.create_function(ret_type, params);
     }
 
@@ -5734,6 +5881,13 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
         // create a new definition for this function
         f_def = m_def_tab->enter_definition(
             Definition::DK_FUNCTION, f_sym, f_type, &fkt_decl->access_position());
+
+        // set the definition flag if it was declared declarative her, so we can distinguish
+        // between "declared" and "analyzed" declarative
+        if (fkt_decl->is_declarative()) {
+            f_def->set_flag(Definition::DEF_IS_DECLARATIVE);
+        }
+
         f_def->set_own_scope(f_scope);
         if (m_is_stdlib) {
             f_def->set_flag(Definition::DEF_IS_STDLIB);
@@ -5804,6 +5958,17 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
 
             // this is a function definition
             if (IStatement_compound const *block = as<IStatement_compound>(body)) {
+                if (fkt_decl->is_declarative()) {
+                    // Show this error only if explicitly defined as declarative. Declarative
+                    // types appearing in the function's parameters or body will trigger their
+                    // own errors.
+                    error(
+                        DECLARATIVE_FUNCTION_REQUIRES_EXPR_BODY,
+                        fkt_decl->access_position(),
+                        Error_params(*this)
+                        .add_signature(f_def));
+
+                }
                 for (size_t i = 0, n = block->get_statement_count(); i < n; ++i) {
                     IStatement const *stmt = block->get_statement(i);
 
@@ -5816,9 +5981,9 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
                 // expect single expression body
                 bool single_expr_func = false;
                 if (m_module.get_mdl_version() >= IMDL::MDL_VERSION_1_6) {
-                   if (is<IStatement_expression>(body)) {
-                       single_expr_func = true;
-                   }
+                    if (is<IStatement_expression>(body)) {
+                        single_expr_func = true;
+                    }
                 }
 
                 Flag_store allow_let(m_allow_let_expression, single_expr_func);
@@ -5919,11 +6084,8 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
     }
 
 
-    // add it to the call graph
+    // update flags and add it to the call graph
     if (!has_error) {
-        if (!m_is_stdlib) {
-            calc_mdl_versions(f_def);
-        }
         if (fkt_decl->is_exported()) {
             export_definition(f_def);
         }
@@ -5957,6 +6119,62 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
 
             const_cast<IType_name *>(proto_ret_name)->set_type(ret_name->get_type());
             const_cast<Definition *>(proto_def)->set_type(f_def->get_type());
+        }
+
+        if (proto_def->has_flag(Definition::DEF_IS_DECLARATIVE)) {
+            if (m_declarative_fkt_state == DS_MAYBE_DECLARATIVE) {
+                // was declared declarative, although not necessary
+                f_def->set_flag(Definition::DEF_IS_DECLARATIVE);
+                fkt_decl->set_declarative(true);
+            }
+        } else {
+            if ((m_declarative_fkt_state == DS_IS_DECLARATIVE ||
+                 f_def->has_flag(Definition::DEF_IS_DECLARATIVE)) !=
+                proto_def->has_flag(Definition::DEF_IS_DECLARATIVE)) {
+                // was declared differently
+                error(
+                    CONFLICTING_REDECLARATION,
+                    f_def,
+                    Error_params(*this)
+                    .add_signature(f_def, m_declarative_fkt_state == DS_IS_DECLARATIVE));
+                add_prev_definition_note(proto_def);
+                if (m_declarative_fkt_state == DS_IS_DECLARATIVE &&
+                    !f_def->has_flag(Definition::DEF_IS_DECLARATIVE)) {
+                    // will be promoted, inform the user
+                    add_note(
+                        PROMOTED_TO_DECLARATIVE,
+                        f_def,
+                        Error_params(*this)
+                        .add_signature(f_def));
+                }
+            }
+        }
+    }
+
+    if (m_declarative_fkt_state == DS_IS_DECLARATIVE) {
+        if (!f_def->has_flag(Definition::DEF_IS_DECL_ONLY)) {
+            // analysis enforces declarative, adopt
+            f_def->set_flag(Definition::DEF_IS_DECLARATIVE);
+            fkt_decl->set_declarative(true);
+        } else {
+            // Hmm
+        }
+    }
+
+    // warn if a function returns void
+    if (is_void_type(ret_name->get_type())) {
+        warning(
+            VOID_RETURN,
+            ret_name->access_position(),
+            Error_params(*this)
+            .add_signature(f_def)
+            .add(ret_name->get_type())
+        );
+    }
+
+    if (!has_error) {
+        if (!m_is_stdlib) {
+            calc_mdl_versions(f_def);
         }
     }
 }
@@ -6188,7 +6406,6 @@ error_found:
             if (m_is_stdlib) {
                 con_def->set_flag(Definition::DEF_IS_STDLIB);
             }
-
             con_def->set_declaration(fkt_decl);
 
             // add it to the call graph
@@ -6389,6 +6606,9 @@ void NT_analysis::handle_enable_ifs(IParameter const *param)
 void NT_analysis::declare_material(IDeclaration_function *mat_decl)
 {
     IType_name const *ret_name = mat_decl->get_return_type_name();
+
+    // materials are declarative "by design"
+    Tristate_store declarative_fkt_state(m_declarative_fkt_state, DS_IS_DECLARATIVE);
 
     // we known it is the material type here, but visit it to set type and definition
     visit(ret_name);
@@ -6672,9 +6892,7 @@ void NT_analysis::declare_material(IDeclaration_function *mat_decl)
                 // error already reported
                 has_error = true;
             } else if (!has_error) {
-                IType_struct const *s_type = as<IType_struct>(body_type);
-
-                if (s_type == NULL || s_type->get_predefined_id() != IType_struct::SID_MATERIAL) {
+                if (!is_material_category_type(body_type)) {
                     error(
                         MATERIAL_BODY_IS_NOT_A_MATERIAL,
                         expr->access_position(),
@@ -6690,6 +6908,7 @@ void NT_analysis::declare_material(IDeclaration_function *mat_decl)
                 if (m_can_throw_divzero) {
                     con_def->set_flag(Definition::DEF_CAN_THROW_DIVZERO);
                 }
+                con_def->set_flag(Definition::DEF_IS_DECLARATIVE);
             }
         } else if (is<IStatement_invalid>(body)) {
             // an invalid statement, we are ready
@@ -6808,6 +7027,9 @@ bool NT_analysis::collect_preset_defaults(
 void NT_analysis::declare_material_preset(IDeclaration_function *mat_decl)
 {
     IType_name const *ret_name = mat_decl->get_return_type_name();
+
+    // materials are declarative "by design"
+    Tristate_store declarative_fkt_state(m_declarative_fkt_state, DS_IS_DECLARATIVE);
 
     visit(ret_name);
 
@@ -7087,8 +7309,12 @@ error_found:
         visit(anno);
     }
 
-    if (!m_is_stdlib && !is_error(con_def)) {
-        calc_mdl_versions(con_def);
+    if (!is_error(con_def)) {
+        // mark it as declarative
+        con_def->set_flag(Definition::DEF_IS_DECLARATIVE);
+        if (!m_is_stdlib) {
+            calc_mdl_versions(con_def);
+        }
     }
 }
 
@@ -7805,6 +8031,12 @@ IExpression *NT_analysis::convert_to_type_implicit(
         return NULL;
     }
 
+    if (is<IType_struct>(src_type) && is<IType_struct>(dst_type->skip_type_alias())) {
+        // We simply return the original expression here, since the translation of the
+        // declarative struct conversion happens in the DAG backend.
+        return const_cast<IExpression *>(expr);
+    }
+
     if (is<IType_enum>(src_type) && !is<IType_int>(dst_type->skip_type_alias())) {
         // there are no conversions from enum type, first convert to int
         Definition *def = find_implicit_conversion(src_type, m_tc.int_type);
@@ -7922,9 +8154,9 @@ static void update_flags(
     unsigned         &removed_ver)
 {
     type = type->skip_type_alias();
-    if (is_material_type_or_sub_type(type)) {
-        // material and subtypes can only be used in materials itself where they alwys are
-        // promoted to the lastest version, hence there is no restriction
+    if (is_material_type_or_sub_type(type) || is<IType_df>(type)) {
+        // material and subtypes can only be used in materials itself where they always are
+        // promoted to the latest version, hence there is no restriction
         return;
     }
     if (Scope *scope = def_tab->get_type_scope(type)) {
@@ -7933,6 +8165,10 @@ static void update_flags(
             since_ver   = max(since_ver,   mdl_since_version(flags));
             removed_ver = min(removed_ver, mdl_removed_version(flags));
         }
+    }
+    if (type->is_declarative()) {
+        // "real" declarative types require at least MDL 1.9
+        since_ver = max(since_ver, IMDL::MDL_VERSION_1_9);
     }
 }
 
@@ -7959,6 +8195,10 @@ static void update_flags(
         case ISymbol::SYM_TYPE_HAIR_BSDF:
             // keyword in MDL 1.5, so it cannot be used as identifier
             since_ver = max(since_ver, REMOVED_1_5);
+            break;
+        case ISymbol::SYM_CAT_MATERIAL_CATEGORY:
+            // keyword in MDL 1.9, so it cannot be used as identifier
+            since_ver = max(since_ver, REMOVED_1_9);
             break;
         default:
             break;
@@ -8027,6 +8267,17 @@ static void update_flags(
 
                 m_since_ver   = max(m_since_ver,   mdl_since_version(flags));
                 m_removed_ver = min(m_removed_ver, mdl_removed_version(flags));
+
+                if (def->has_flag(Definition::DEF_IS_DECLARATIVE)) {
+                    // check, if this is a material constructor
+                    IType_function const *f_type   = cast<IType_function>(def->get_type());
+                    IType const          *ret_type = f_type->get_return_type();
+
+                    if (!is_material_type_or_sub_type(ret_type) && !is<IType_df>(ret_type)) {
+                        // real declarative functions available in 1.9+ only
+                        m_since_ver = max(m_since_ver, IMDL::MDL_VERSION_1_9);
+                    }
+                }
             }
             return expr;
         }
@@ -8059,8 +8310,13 @@ void NT_analysis::calc_mdl_versions(Definition *def)
         // check the name of the function itself
         update_flags(def->get_sym(), since_ver, removed_ver);
 
+        bool is_old_material_type = false;
         if (IType const *ret_type = func_type->get_return_type()) {
             update_flags(m_def_tab, ret_type, since_ver, removed_ver);
+
+            if (is_material_type_or_sub_type(ret_type) || is<IType_df>(ret_type)) {
+                is_old_material_type = true;
+            }
         }
 
         for (int i = 0, n = func_type->get_parameter_count(); i < n; ++i) {
@@ -8075,6 +8331,11 @@ void NT_analysis::calc_mdl_versions(Definition *def)
             if (IExpression const *def_value = def->get_default_param_initializer(i)) {
                 update_flags(m_def_tab, def_value, since_ver, removed_ver);
             }
+        }
+
+        if (!is_old_material_type && def->has_flag(Definition::DEF_IS_DECLARATIVE)) {
+            // declarative functions supported only in 1.9+, except "old" material definitions
+            since_ver = IMDL::MDL_VERSION_1_9;
         }
     } else {
         // check only the type
@@ -8191,6 +8452,40 @@ bool NT_analysis::kill_less_specific(Signature_list &list, Signature_entry const
         // in which case (curr_is_more && new_is_more) == true
         // Return true in THAT case, so both are added and an overload error is reported.
         if (curr_is_more && new_is_more) {
+            if (m_mdl_version <= IMDL::MDL_VERSION_1_8) {
+                // no new overload resolution rules for 1.8 and below
+                return true;
+            }
+
+            Definition const *curr_def = curr_sig.def;
+            Definition const *new_def  = new_sig.def;
+            IType_function const *curr_type = cast<IType_function>(curr_def->get_type());
+            IType_function const *new_type  = cast<IType_function>(new_def->get_type());
+
+            size_t curr_n_params = curr_type->get_parameter_count();
+            size_t new_n_params  = new_type->get_parameter_count();
+            for (size_t i = 0; i < std::min(curr_n_params, new_n_params); ++i) {
+                IType const   *curr_param_type;
+                ISymbol const *curr_param_name;
+                IType const   *new_param_type;
+                ISymbol const *new_param_name;
+
+                curr_type->get_parameter(i, curr_param_type, curr_param_name);
+                new_type->get_parameter(i, new_param_type, new_param_name);
+
+                if (!equal_types(
+                    curr_param_type->skip_type_alias(),
+                    new_param_type->skip_type_alias())) {
+                    // we have no overload on type modifiers, hence skip them
+                    return true;
+                }
+            }
+            if (curr_n_params < new_n_params) {
+                return false;
+            } else if (curr_n_params > new_n_params) {
+                list.erase(it);
+                return true;
+            }
             return true;
         }
     }
@@ -8328,6 +8623,18 @@ bool NT_analysis::can_assign_param(
             return true;
         }
         return false;
+    }
+
+    // Handle structs with categories.
+    IType_struct const* param_struct_ty = as<IType_struct>(param_type);
+    IType_struct const* arg_struct_ty   = as<IType_struct>(arg_type);
+    if (param_struct_ty && arg_struct_ty) {
+        // If the struct types are different, they must have the same category. The case of
+        // identical types was tested at the start of this functions, so we only check that 
+        // there is a category and that both categories are the same.
+        IStruct_category const *param_cat = param_struct_ty->get_category();
+        IStruct_category const *arg_cat   = arg_struct_ty->get_category();
+        return  param_cat != NULL && param_cat == arg_cat;
     }
 
     if (IType_array const *a_param_type = as<IType_array>(param_type)) {
@@ -9802,7 +10109,7 @@ bool NT_analysis::handle_array_constructor(
         // we do not allow array of pointers, so produce a better error message here
         if (IType_function const *f_type = as<IType_function>(arg_type)) {
             IType const *ret_type = f_type->get_return_type();
-            if (ret_type != NULL && is_material_type(ret_type)) {
+            if (ret_type != NULL && is_material_category_type(ret_type)) {
                 error(
                     MATERIAL_PTR_USED,
                     expr->access_position(),
@@ -9959,7 +10266,7 @@ IExpression const *NT_analysis::find_init_constructor(
         if (IType_function const *f_type = as<IType_function>(from_type)) {
             IType const *ret_type = f_type->get_return_type();
 
-            if (ret_type != NULL && is_material_type(ret_type)) {
+            if (ret_type != NULL && is_material_category_type(ret_type)) {
                 error(
                     MATERIAL_PTR_USED,
                     init_expr->access_position(),
@@ -10295,7 +10602,7 @@ Definition const *NT_analysis::reformat_default_struct_constructor(
 
         if ((expr = orig_c_def->get_default_param_initializer(i))) {
             // this struct field has an initializer, clone it
-            m_module.clone_expr(expr, &def_modifier);
+            expr = m_module.clone_expr(expr, &def_modifier);
         } else {
             // this struct field is default initialized
             IType const   *ptype;
@@ -10887,7 +11194,9 @@ bool NT_analysis::pre_visit(IDeclaration_constant *con_decl)
 
         type = as_type(t_name);
 
-        IType const *bad_type = has_forbidden_variable_type(type, m_mdl_version);
+        // currently we do not allow declarative constants
+        IType const *bad_type = has_forbidden_variable_type(
+            /*allow_declarative=*/false, type, m_mdl_version);
         if (bad_type != NULL) {
             error(
                 FORBIDDEN_CONSTANT_TYPE,
@@ -10980,7 +11289,9 @@ bool NT_analysis::pre_visit(IDeclaration_constant *con_decl)
                     IType const *init_type = init->get_type();
 
                     if (is_auto_type) {
-                        init_type = handle_allowed_var_type(init_type, init->access_position());
+                        // no declarative constants
+                        init_type = handle_allowed_var_type(
+                            /*allow_declarative=*/false, init_type, init->access_position());
 
                         // skip any modifiers here
                         init_type = init_type->skip_type_alias();
@@ -11278,9 +11589,67 @@ bool NT_analysis::pre_visit(IDeclaration_annotation *anno_decl)
     return false;
 }
 
+// start a struct category declaration
+bool NT_analysis::pre_visit(IDeclaration_struct_category *cat_decl)
+{
+    ISimple_name const *a_name = cat_decl->get_name();
+    ISymbol const *sym = a_name->get_symbol();
+
+    // create a fully qualified name to name the type
+    string cat_name(get_current_scope_name());
+    if (!cat_name.empty()) {
+        cat_name += "::";
+    }
+    cat_name += sym->get_name();
+
+    ISymbol const *fq_sym = m_module.get_symbol_table().get_user_type_symbol(cat_name.c_str());
+
+    bool               has_error = is_syntax_error(sym);
+
+    Definition *a_def = has_error ? NULL : get_definition_at_scope(sym);
+    if (a_def != NULL) {
+        err_redeclaration(
+            Definition::DK_STRUCT_CATEGORY, a_def, cat_decl->access_position(), ENT_REDECLARATION);
+        has_error = true;
+    }
+
+    // for now, set the error definition, update it later
+    a_def = get_error_definition();
+
+    if (!has_error) {
+        a_def = m_def_tab->enter_definition(
+            Definition::DK_STRUCT_CATEGORY, sym, nullptr, &cat_decl->access_position());
+        if (m_is_stdlib) {
+            a_def->set_flag(Definition::DEF_IS_STDLIB);
+        }
+        a_def->set_declaration(cat_decl);
+        IStruct_category const *cat = m_tc.create_category(fq_sym);
+        a_def->set_category(cat);
+
+        if (cat_decl->is_exported()) {
+            export_definition(a_def);
+        }
+    }
+
+    const_cast<ISimple_name *>(a_name)->set_definition(a_def);
+    cat_decl->set_definition(a_def);
+
+    if (IAnnotation_block const *anno = cat_decl->get_annotations()) {
+        Definition_store store(m_annotated_def, a_def);
+
+        visit(anno);
+    }
+
+    // don't visit children anymore
+    return false;
+}
+
 // Start of an alias declaration
 bool NT_analysis::pre_visit(IDeclaration_type_alias *alias_decl)
 {
+    // declaring an alias is a "declarative context"
+    Tristate_store declarative_fkt_state(m_declarative_fkt_state, DS_IS_DECLARATIVE);
+
     IType_name const *tname = alias_decl->get_type_name();
     visit(tname);
 
@@ -11347,13 +11716,12 @@ bool NT_analysis::pre_visit(IDeclaration_type_enum *enum_decl)
 
     // UGLY: because ::tex::gamma_mode type must be a builtin-type, detect its "declaration"
     // and handle it gracefully
-    bool is_builtin_enum_type =
+    bool is_tex_gamma_mode =
         fq_sym->get_id() == ISymbol::SYM_TYPE_TEX_GAMMA_MODE &&
         m_module.is_stdlib() &&
         strcmp("::tex", m_module.get_name()) == 0;
 
-    IType_enum *e_type = is_builtin_enum_type ?
-        const_cast<IType_enum *>(m_tc.tex_gamma_mode_type) : m_tc.create_enum(fq_sym);
+    IType const *e_type = m_tc.error_type;
 
     Definition *type_def = sym_error ? NULL : get_definition_at_scope(sym);
     if (type_def != NULL) {
@@ -11380,12 +11748,6 @@ bool NT_analysis::pre_visit(IDeclaration_type_enum *enum_decl)
 
     // create a type scope
     Scope *type_scope = m_def_tab->enter_scope(e_type, type_def);
-    if (!is_error(type_def)) {
-        type_def->set_own_scope(type_scope);
-
-        // create the default operators here, we might need them for the enum value initializers
-        create_default_operators(e_type, sym, type_def, enum_decl);
-    }
 
     if (!is_enum_class) {
         // non-class Enumerations are defined in the scope of the declaration itself, not inside
@@ -11393,20 +11755,13 @@ bool NT_analysis::pre_visit(IDeclaration_type_enum *enum_decl)
         m_def_tab->leave_scope();
     }
 
-    // another work-around for the builtin enum types: Add values to the builtin enum types only
-    // the first time we encounter the declaration. This happens when the standard library is
-    // parsed, so the time frame where builtin enum types have no values is luckily short.
-    bool add_values = !is_builtin_enum_type;
-    if (is_builtin_enum_type && e_type->get_value_count() == 0) {
-        // first time we encounter this enum
-        add_values = true;
-    }
-
     int code = 0;
-#ifdef ENABLE_ASSERT
-    bool had_errors = false;
-#endif
-    for (int idx = 0, n = enum_decl->get_value_count(); idx < n; ++idx) {
+    bool has_errors = false;
+    size_t n_values = enum_decl->get_value_count();
+
+    Small_VLA<IType_enum::Value, 8> e_values(get_allocator(), n_values);
+    Small_VLA<Definition *, 8>      e_val_def(get_allocator(), n_values);
+    for (size_t idx = 0; idx < n_values; ++idx) {
         ISimple_name const *v_name = enum_decl->get_value_name(idx);
         ISymbol const      *v_sym  = v_name->get_symbol();
 
@@ -11484,19 +11839,16 @@ bool NT_analysis::pre_visit(IDeclaration_type_enum *enum_decl)
 
         // set the definition for the value
         const_cast<ISimple_name *>(v_name)->set_definition(v_def);
+        e_val_def[idx] = v_def;
 
-        int t_idx = idx;
-        if (is_error(v_def)) {
-#ifdef ENABLE_ASSERT
-            had_errors = true;
-#endif
+        if (v_def->get_kind() != Definition::DK_ENUM_VALUE) {
+            has_errors = true;
         } else {
-            if (add_values) {
-                // builtin enum types are already created, do not modify them
-                t_idx = e_type->add_value(v_sym, code);
-                MDL_ASSERT(t_idx == idx || had_errors);
-            }
-            IValue const *enum_value = m_module.get_value_factory()->create_enum(e_type, t_idx);
+            // builtin enum types are already created, do not modify them
+            e_values[idx] = IType_enum::Value(v_sym, code);
+
+            // here, set an integer value, as the enum type is not yet created
+            IValue const *enum_value = m_module.get_value_factory()->create_int(code);
             v_def->set_constant_value(enum_value);
         }
         ++code;
@@ -11511,7 +11863,36 @@ bool NT_analysis::pre_visit(IDeclaration_type_enum *enum_decl)
         m_def_tab->leave_scope();
     }
 
-    create_default_constructors(e_type, sym, type_def, enum_decl);
+    if (!has_errors) {
+        // create the enum type and update the definition table, except is is the predefined
+        // tex_gamma_mode
+        e_type = is_tex_gamma_mode ?
+            m_tc.tex_gamma_mode_type :
+            m_tc.create_enum(fq_sym, e_values.data(), e_values.size());
+
+        // fix the enum's definition and the scope
+        type_def->set_type(e_type);
+        type_scope->set_scope_type(e_type, type_def->get_sym());
+        type_def->set_own_scope(type_scope);
+        m_def_tab->set_type_scope(e_type, type_scope);
+
+        // adapt the type of the initializer to enum
+        for (size_t idx = 0; idx < n_values; ++idx) {
+            Definition       *v_def      = e_val_def[idx];
+            IType_enum const *tp         = cast<IType_enum>(e_type);
+            IValue const     *enum_value = m_module.get_value_factory()->create_enum(tp, idx);
+
+            v_def->set_type(e_type);
+            v_def->set_constant_value(enum_value);
+        }
+    }
+
+    if (!is_error(type_def)) {
+        // create the default operators here, we might need them for the enum value initializers
+        create_default_operators(cast<IType_enum>(e_type), sym, type_def, enum_decl);
+
+        create_default_constructors(cast<IType_enum>(e_type), sym, type_def, enum_decl);
+    }
 
     const_cast<ISimple_name *>(enum_decl->get_name())->set_definition(type_def);
 
@@ -11519,8 +11900,26 @@ bool NT_analysis::pre_visit(IDeclaration_type_enum *enum_decl)
     return false;
 }
 
+bool NT_analysis::has_member_in_category(IType const *ty, IStruct_category const *cat) {
+    if (IType_struct const *s_ty = as<IType_struct>(ty)) {
+        if (s_ty->get_category() == cat) {
+            return true;
+        }
+        size_t field_count = s_ty->get_field_count();
+        for (size_t i = 0; i < field_count; ++i) {
+            IType_struct::Field const *fld = s_ty->get_field(i);
+            IType const *fld_ty = fld->get_type();
+            if (has_member_in_category(fld_ty, cat)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 // Start a struct type declaration.
-bool NT_analysis::pre_visit(IDeclaration_type_struct *struct_decl)
+bool NT_analysis::pre_visit(
+    IDeclaration_type_struct *struct_decl)
 {
     ISymbol const *sym = struct_decl->get_name()->get_symbol();
 
@@ -11532,8 +11931,45 @@ bool NT_analysis::pre_visit(IDeclaration_type_struct *struct_decl)
     struct_name += sym->get_name();
 
     ISymbol const *fq_sym = m_module.get_symbol_table().get_user_type_symbol(struct_name.c_str());
+    IStruct_category const *cat = NULL;
+    bool is_declarative = struct_decl->is_declarative();
 
-    IType_struct *s_type = m_tc.create_struct(fq_sym);
+    IQualified_name const *cat_name = struct_decl->get_struct_category_name();
+    if (cat_name != NULL) {
+        visit(cat_name);
+
+        // Declarative struct checks:
+        // 1. If a category name is given in a struct declaration:
+        //    a. Check that the category name is a defined symbol.
+        //    b. Check that the definition is a category.
+        //    c. Check that the struct is declarative. If not mark as declarative
+        Definition const *cat_def = impl_cast<Definition>(cat_name->get_definition());
+
+        if (cat_def->get_kind() != IDefinition::DK_STRUCT_CATEGORY) {
+            if (!is_error(cat_def)) {
+                error(
+                    NOT_A_STRUCT_CATEGORY,
+                    cat_name->access_position(),
+                    Error_params(*this)
+                    .add(cat_name));
+                cat_def = get_error_definition();
+            }
+        } else {
+            // this struct declaration has a category, so it is declarative even if not
+            // explicitly marked
+            is_declarative = true;
+            cat = cat_def->get_category();
+        }
+        struct_decl->set_struct_category_definition(cat_def);
+
+        // if there was a category, mark it as declarative
+        is_declarative = true;
+    }
+
+    Tristate_store declarative_fkt_state(
+        m_declarative_fkt_state, is_declarative ? DS_IS_DECLARATIVE : DS_MAYBE_DECLARATIVE);
+
+    IType const *s_type = m_tc.error_type;
 
     Definition *type_def = get_definition_at_scope(sym);
     if (type_def != NULL) {
@@ -11560,10 +11996,13 @@ bool NT_analysis::pre_visit(IDeclaration_type_struct *struct_decl)
     }
 
     // create a new type scope
+    bool has_error = false;
+    int n_fields = struct_decl->get_field_count();
+    Small_VLA<IType_struct::Field, 8> struct_fields(get_allocator(), n_fields);
     {
-        Definition_table::Scope_enter scope(*m_def_tab, s_type, type_def);
+         Definition_table::Scope_enter scope(*m_def_tab, type_def);
 
-        for (int i = 0, n = struct_decl->get_field_count(); i < n; ++i) {
+        for (int i = 0; i < n_fields; ++i) {
             IType_name const *t_name = struct_decl->get_field_type_name(i);
             visit(t_name);
 
@@ -11573,6 +12012,7 @@ bool NT_analysis::pre_visit(IDeclaration_type_struct *struct_decl)
                     t_name->access_position(),
                     Error_params(*this));
                 const_cast<IType_name*>(t_name)->set_type(m_tc.error_type);
+                has_error = true;
             }
 
             IType const        *f_type = as_type(t_name);
@@ -11586,6 +12026,7 @@ bool NT_analysis::pre_visit(IDeclaration_type_struct *struct_decl)
                         t_name->access_position(),
                         Error_params(*this).add(f_type).add(f_sym));
                     f_type = m_tc.error_type;
+                    has_error = true;
                 }
             }
             if (is<IType_auto>(f_type)) {
@@ -11594,15 +12035,36 @@ bool NT_analysis::pre_visit(IDeclaration_type_struct *struct_decl)
                     t_name->access_position(),
                     Error_params(*this).add(f_type).add(f_sym));
                 f_type = m_tc.error_type;
-            }
-            if (!m_is_stdlib && !is_allowed_field_type(f_type, m_mdl_version)) {
-                error(
-                    FORBIDDEN_FIELD_TYPE,
-                    t_name->access_position(),
-                    Error_params(*this).add(f_type));
-                f_type = m_tc.error_type;
+                has_error = true;
             }
 
+            // do not promote types in the standard library, this will give unexpected results
+            if (!m_is_stdlib) {
+                if (f_type->is_declarative() || is<IType_df>(f_type->skip_type_alias())) {
+                    // "A structure type with a field of a declarative structure or declarative
+                    // array type is automatically a declarative structure type."
+                    is_declarative = true;
+                }
+
+                if (!is_allowed_field_type(is_declarative, f_type, m_mdl_version)) {
+                    error(
+                        FORBIDDEN_FIELD_TYPE,
+                        t_name->access_position(),
+                        Error_params(*this).add(f_type));
+                    f_type = m_tc.error_type;
+                    has_error = true;
+                }
+            }
+
+            if (!is<IType_error>(f_type) && cat != NULL) {
+                if (has_member_in_category(f_type, cat)) {
+                    error(
+                        MEMBER_OF_SAME_CATEGORY,
+                        t_name->access_position(),
+                        Error_params(*this).add(sym));
+                    has_error = true;
+                }
+            }
             Definition *f_def  = NULL;
 
             Definition const *t_def =
@@ -11639,7 +12101,7 @@ bool NT_analysis::pre_visit(IDeclaration_type_struct *struct_decl)
                         Definition::DK_MEMBER, f_sym, f_type, &f_name->access_position());
 
                     f_def->set_field_index(i);
-                    s_type->add_field(f_type, f_sym);
+                    struct_fields[i] = IType_struct::Field(f_type, f_sym);
                 }
             }
 
@@ -11656,7 +12118,9 @@ bool NT_analysis::pre_visit(IDeclaration_type_struct *struct_decl)
                 }
             }
 
-            if (!is_error(f_def)) {
+            if (is_error(f_def)) {
+                has_error = true;
+            } else {
                 if (IType_array const *a_type = as<IType_array>(f_type)) {
                     if (init != NULL) {
                         IType const *init_type = init->get_type();
@@ -11705,11 +12169,35 @@ bool NT_analysis::pre_visit(IDeclaration_type_struct *struct_decl)
             }
         }
 
-        create_default_members(s_type, sym, type_def, struct_decl);
+        if (!has_error) {
+            // all went fine, create the struct type
+            s_type = m_tc.create_struct(
+                is_declarative, fq_sym, cat, struct_fields.data(), struct_fields.size());
+        }
+
+        if (type_def->get_kind() == IDefinition::DK_TYPE) {
+            // fix the struct's definition and the scope
+            type_def->set_type(s_type);
+
+            Scope *type_scope = m_def_tab->get_curr_scope();
+            type_scope->set_scope_type(s_type, type_def->get_sym());
+
+            type_def->set_own_scope(type_scope);
+            m_def_tab->set_type_scope(s_type, type_scope);
+
+            if (is<IType_struct>(s_type)) {
+                create_default_members(cast<IType_struct>(s_type), sym, type_def, struct_decl);
+            }
+        }
+    }
+
+    if (is_declarative) {
+        type_def->set_flag(Definition::DEF_IS_DECLARATIVE);
+        struct_decl->set_declarative(true);
     }
 
     // clear the incomplete flag
-    if (!is_error(type_def)) {
+    if (type_def->get_kind() == IDefinition::DK_TYPE) {
         type_def->clear_flag(Definition::DEF_IS_INCOMPLETE);
     }
 
@@ -11924,11 +12412,13 @@ bool NT_analysis::pre_visit(IDeclaration_namespace_alias *alias_decl)
 
 // Handle allowed variable types.
 IType const *NT_analysis::handle_allowed_var_type(
+    bool           allow_declarative,
     IType const    *var_type,
     Position const &pos)
 {
     if (!m_inside_material_constr) {
-        IType const *bad_type = has_forbidden_variable_type(var_type, m_mdl_version);
+        IType const *bad_type = has_forbidden_variable_type(
+            allow_declarative, var_type, m_mdl_version);
         if (bad_type != NULL) {
             error(
                 FORBIDDEN_VARIABLE_TYPE,
@@ -11986,7 +12476,10 @@ bool NT_analysis::pre_visit(IDeclaration_variable *var_decl)
         is_incomplete_arr = t_name->is_incomplete_array();
 
         var_type = as_type(t_name);
-        var_type = handle_allowed_var_type(var_type, t_name->access_position());
+        var_type = handle_allowed_var_type(
+            /*allow_declarative=*/m_declarative_fkt_state != DS_MUST_BE_NON_DECLARATIVE,
+            var_type,
+            t_name->access_position());
     }
 
     for (size_t i = 0, n = var_decl->get_variable_count(); i < n; ++i) {
@@ -12071,7 +12564,10 @@ bool NT_analysis::pre_visit(IDeclaration_variable *var_decl)
             check_auto_constructor(init);
             if (init != NULL) {
                 var_type = init->get_type();
-                var_type = handle_allowed_var_type(var_type, init->access_position());
+                var_type = handle_allowed_var_type(
+                    /*allow_declarative=*/m_declarative_fkt_state != DS_MUST_BE_NON_DECLARATIVE,
+                    var_type,
+                    init->access_position());
 
                 // skip any modifiers here
                 var_type = var_type->skip_type_alias();
@@ -12425,11 +12921,9 @@ bool NT_analysis::pre_visit(IStatement_switch *switch_stmt)
         if (IType_enum const *e_type = as<IType_enum>(control_type)) {
             Value_factory *value_fact = m_module.get_value_factory();
 
-            for (int idx = 0, n = e_type->get_value_count(); idx < n; ++idx) {
-                ISymbol const *sym;
-                int           code;
-
-                e_type->get_value(idx, sym, code);
+            for (size_t idx = 0, n = e_type->get_value_count(); idx < n; ++idx) {
+                IType_enum::Value const *e_value = e_type->get_value(idx);
+                int                     code     = e_value->get_code();
 
                 // must be handled as int here, otherwise two enum values with equal
                 // codes will be threated as two different values
@@ -12440,7 +12934,7 @@ bool NT_analysis::pre_visit(IStatement_switch *switch_stmt)
                     warning(
                         ENUM_VALUE_NOT_HANDLED_IN_SWITCH,
                         switch_stmt->access_position(),
-                        Error_params(*this).add(sym));
+                        Error_params(*this).add(e_value->get_symbol()));
                 }
             }
         }
@@ -12695,6 +13189,21 @@ IExpression *NT_analysis::post_visit(IExpression_literal *lit)
         // already use resource values instead of calls to resource constructors
         handle_resource_url(r_val, lit, r_val->get_type());
     }
+
+    // check for declarative types
+    if (lit->get_type()->is_declarative()) {
+        if (m_declarative_fkt_state == DS_MAYBE_DECLARATIVE) {
+            // declarative type used
+            m_declarative_fkt_state = DS_IS_DECLARATIVE;
+        } else if (m_declarative_fkt_state == DS_MUST_BE_NON_DECLARATIVE) {
+            error(
+                DECLARATIVE_TYPE_USED_IN_NON_DECL_CONTEXT,
+                lit->access_position(),
+                Error_params(*this)
+                .add(lit->get_type()));
+        }
+    }
+
     return lit;
 }
 
@@ -12763,6 +13272,10 @@ IExpression *NT_analysis::post_visit(IExpression_unary *un_expr)
     }
 
     IType const *res_type = get_result_type(def);
+
+    // Note: we do NOT check for a declarative type here: there is no unary operation that 
+    // changes the type, so we can safely ignore this
+
     un_expr->set_type(check_performance_restriction(res_type, un_expr->access_position()));
     return un_expr;
 }
@@ -12902,6 +13415,14 @@ IExpression *NT_analysis::post_visit(IExpression_binary *bin_expr)
                         }
                     }
                 }
+                if (lhs_type->is_declarative()) {
+                    if (!(index_type->get_type_modifiers() & IType::MK_UNIFORM)) {
+                        error(
+                            DECLARATIVE_INDEX_NOT_UNIFORM,
+                            rhs->access_position(),
+                            Error_params(*this));
+                    }
+                }
             } else if (!is<IType_error>(index_type)) {
                 // neither int nor enum
                 error(
@@ -13022,6 +13543,20 @@ IExpression *NT_analysis::post_visit(IExpression_binary *bin_expr)
         break;
     }
 
+    // check for declarative types
+    if (res_type->is_declarative()) {
+        if (m_declarative_fkt_state == DS_MAYBE_DECLARATIVE) {
+            // declarative type used
+            m_declarative_fkt_state = DS_IS_DECLARATIVE;
+        } else if (m_declarative_fkt_state == DS_MUST_BE_NON_DECLARATIVE) {
+            error(
+                DECLARATIVE_TYPE_USED_IN_NON_DECL_CONTEXT,
+                bin_expr->access_position(),
+                Error_params(*this)
+                    .add(res_type));
+        }
+    }
+
     bin_expr->set_type(check_performance_restriction(res_type, bin_expr->access_position()));
 
     if (!is<IType_error>(res_type) && op == IExpression_binary::OK_ASSIGN) {
@@ -13098,6 +13633,9 @@ IExpression *NT_analysis::post_visit(IExpression_conditional *cond_expr)
             }
         }
     }
+
+    // Note: we do not check for declarative types here. Either the conditinal is valid, then
+    // the result type is equal to true and false type, or we have an error anyway
 
     cond_expr->set_type(
         has_error ?
@@ -13319,6 +13857,40 @@ IExpression *NT_analysis::post_visit(IExpression_call *call_expr)
     } else {
         // not an array constructor: handle overloads
         Definition const *def = find_overload(initial_def, call_expr, bound_to_scope);
+
+        if (!is_error(def)) {
+            if (def->has_flag(Definition::DEF_IS_DECLARATIVE)) {
+                // we are calling a declarative function
+                if (m_declarative_fkt_state == DS_MAYBE_DECLARATIVE) {
+                    // make it declarative
+                    m_declarative_fkt_state = DS_IS_DECLARATIVE;
+                } else if (m_declarative_fkt_state == DS_MUST_BE_NON_DECLARATIVE) {
+                    // call of declarative function is not allowed
+                    if (Function_entry *entry = tos_function()) {
+                        // we are inside a function
+                        error(
+                            DECLARATIVE_FUNCTION_CALLED_IN_NON_DECL_FUNCTION,
+                            callee_ref->access_position(),
+                            Error_params(*this)
+                                .add_signature(def)
+                                .add_signature(entry->get_def()));
+                    } else {
+                        error(
+                            DECLARATIVE_FUNCTION_CALLED_IN_NON_DECL_CONTEXT,
+                            callee_ref->access_position(),
+                            Error_params(*this)
+                                .add_signature(def));
+                    }
+                    if (m_inside_param_initializer) {
+                        // ... from an parameter initializer
+                        add_note(
+                            DEF_ARG_OF_NOT_DECLARATIVE_FUNC,
+                            callee_ref->access_position(),
+                            Error_params(*this));
+                    }
+                }
+            }
+        }
 
         const_cast<IExpression_reference *>(callee_ref)->set_definition(def);
 
@@ -13581,6 +14153,34 @@ bool NT_analysis::pre_visit(IType_name *type_name)
                 type = m_tc.error_type;
             }
         }
+
+        if (type->is_declarative()) {
+            if (m_declarative_fkt_state == DS_MAYBE_DECLARATIVE) {
+                // make it declarative
+                m_declarative_fkt_state = DS_IS_DECLARATIVE;
+            } else if (m_declarative_fkt_state == DS_MUST_BE_NON_DECLARATIVE) {
+                // declarative type are not allowed, except for stdlib, where we allow
+                // declarative function definition without bodies for intrinsics.
+                if (!m_is_stdlib) {
+                    error(
+                        DECLARATIVE_TYPE_USED_IN_NON_DECL_CONTEXT,
+                        type_name->access_position(),
+                        Error_params(*this)
+                        .add(type));
+                    if (m_inside_func_decl_only != NULL) {
+                        ISimple_name const *f_name = m_inside_func_decl_only->get_name();
+                        ISymbol const *f_sym = f_name->get_symbol();
+
+                        add_note(
+                            FUNC_DECL_NOT_DECLARATIVE,
+                            m_inside_func_decl_only->access_position(),
+                            Error_params(*this)
+                            .add(f_sym));
+                    }
+                }
+            }
+        }
+
         // set the type, so it will be recognized as a type
         type_name->set_type(type);
     }
@@ -14007,7 +14607,7 @@ Definition const *NT_analysis::handle_known_annotation(
     Definition const *def,
     IAnnotation      *anno)
 {
-    if (m_annotated_def != NULL && is_error(m_annotated_def)) {
+    if (m_annotated_def != NULL && m_annotated_def->get_kind() == IDefinition::DK_ERROR) {
         // the annotated entity is already wrong, ignore
         return get_error_definition();
     }
@@ -14989,20 +15589,15 @@ IType const *NT_analysis::check_cast_conversion(
 
         EV_map enum_values(EV_map::key_compare(), get_allocator());
 
-        for (int i = 0, n_values = s_type->get_value_count(); i < n_values; ++i) {
-            ISymbol const *sym;
-            int           code;
+        for (size_t i = 0, n_values = s_type->get_value_count(); i < n_values; ++i) {
+            IType_enum::Value const *e_value = s_type->get_value(i);
 
-            s_type->get_value(i, sym, code);
-
-            enum_values.insert(EV_map::value_type(code, sym));
+            enum_values.insert(EV_map::value_type(e_value->get_code(), e_value->get_symbol()));
         }
 
-        for (int i = 0, n_values = d_type->get_value_count(); i < n_values; ++i) {
-            ISymbol const *sym;
-            int           code;
-
-            d_type->get_value(i, sym, code);
+        for (size_t i = 0, n_values = d_type->get_value_count(); i < n_values; ++i) {
+            IType_enum::Value const *e_value = d_type->get_value(i);
+            int                     code     = e_value->get_code();
 
             EV_map::iterator it(enum_values.find(code));
             if (it == enum_values.end()) {
@@ -15016,7 +15611,7 @@ IType const *NT_analysis::check_cast_conversion(
                         Error_params(*this)
                             .add(src_tp)
                             .add(dst_type)
-                            .add(sym)
+                            .add(e_value->get_symbol())
                             .add(code)
                     );
                 }
@@ -15032,10 +15627,10 @@ IType const *NT_analysis::check_cast_conversion(
 
                 if (report_error) {
                     int code = 0;
-                    for (int i = 0, n = s_type->get_value_count(); i < n; ++i) {
-                        ISymbol const *e_sym;
+                    for (size_t i = 0, n = s_type->get_value_count(); i < n; ++i) {
+                        IType_enum::Value const *e_value = s_type->get_value(i);
+                        ISymbol const           *e_sym   = e_value->get_symbol();
 
-                        s_type->get_value(i, e_sym, code);
                         if (e_sym == sym) {
                             break;
                         }
@@ -15059,7 +15654,24 @@ IType const *NT_analysis::check_cast_conversion(
         IType_struct const *s_type = cast<IType_struct>(src_type);
         IType_struct const *d_type = cast<IType_struct>(dst_type);
 
-        int n_fields = s_type->get_field_count();
+        if (d_type->is_declarative()) {
+            error(
+                CAST_ON_DECLARATIVE_STRUCT,
+                pos,
+                Error_params(*this)
+                .add(dst_tp)
+            );
+            return m_tc.error_type;
+        } else if (s_type->is_declarative()) {
+            error(
+                CAST_ON_DECLARATIVE_STRUCT,
+                pos,
+                Error_params(*this)
+                .add(src_tp)
+            );
+            return m_tc.error_type;
+        }
+        size_t n_fields = s_type->get_field_count();
 
         if (n_fields != d_type->get_field_count()) {
             if (report_error) {
@@ -15074,16 +15686,12 @@ IType const *NT_analysis::check_cast_conversion(
             return m_tc.error_type;
         }
 
-        for (int i = 0; i < n_fields; ++i) {
-            IType const   *fs_type;
-            ISymbol const *fs_sym;
+        for (size_t i = 0; i < n_fields; ++i) {
+            IType_struct::Field const *s_field = s_type->get_field(i);
+            IType_struct::Field const *d_field = d_type->get_field(i);
 
-            s_type->get_field(i, fs_type, fs_sym);
-
-            IType const   *fd_type;
-            ISymbol const *fd_sym;
-
-            d_type->get_field(i, fd_type, fd_sym);
+            IType const *fs_type = s_field->get_type();
+            IType const *fd_type = d_field->get_type();
 
             if (is<IType_error>(
                 check_cast_conversion(
@@ -15101,8 +15709,8 @@ IType const *NT_analysis::check_cast_conversion(
                         Error_params(*this)
                         .add(src_tp)
                         .add(dst_tp)
-                        .add(fs_sym)
-                        .add(fd_sym)
+                        .add(s_field->get_symbol())
+                        .add(d_field->get_symbol())
                     );
                 }
                 has_error = true;
@@ -15181,36 +15789,41 @@ IType const *NT_analysis::check_cast_conversion(
                 has_error = true;
             }
         } else if (!dst_is_incomplete) {
-            if (s_imm) {
-                // both array are immediate sized
-                if (s_arr_type->get_size() != d_arr_type->get_size()) {
-                    if (report_error) {
-                        // different array size
-                        error(
-                            CAST_ARRAY_DIFFERENT_LENGTH,
-                            pos,
-                            Error_params(*this)
-                            .add(src_tp)
-                            .add(dst_tp)
-                        );
+            MDL_ASSERT(d_arr_type && "unexpected: d_arr_type is NULL");
+            if (d_arr_type) {
+                if (s_imm) {
+                    // both array are immediate sized
+                    if (s_arr_type->get_size() != d_arr_type->get_size()) {
+                        if (report_error) {
+                            // different array size
+                            error(
+                                CAST_ARRAY_DIFFERENT_LENGTH,
+                                pos,
+                                Error_params(*this)
+                                .add(src_tp)
+                                .add(dst_tp)
+                            );
+                        }
+                        has_error = true;
                     }
-                    has_error = true;
+                } else {
+                    // both array are deferred sized
+                    if (s_arr_type->get_deferred_size() != d_arr_type->get_deferred_size()) {
+                        if (report_error) {
+                            // different array size
+                            error(
+                                CAST_ARRAY_DIFFERENT_LENGTH,
+                                pos,
+                                Error_params(*this)
+                                .add(src_tp)
+                                .add(dst_tp)
+                            );
+                        }
+                        has_error = true;
+                    }
                 }
             } else {
-                // both array are deferred sized
-                if (s_arr_type->get_deferred_size() != d_arr_type->get_deferred_size()) {
-                    if (report_error) {
-                        // different array size
-                        error(
-                            CAST_ARRAY_DIFFERENT_LENGTH,
-                            pos,
-                            Error_params(*this)
-                            .add(src_tp)
-                            .add(dst_tp)
-                        );
-                    }
-                    has_error = true;
-                }
+                has_error = true;
             }
         }
         // return the newly computed type here
@@ -15272,6 +15885,10 @@ void NT_analysis::handle_cast_expression(IExpression_unary *cast_expr)
             d_incomplete,
             /*report_error=*/true);
     }
+
+    // Note: we do not check for declarative types here. Either the cast is valid, THEN
+    // both types have the same declarative property, OR an error was reported anyway and
+    // dst_type is the error type
 
     cast_expr->set_type(dst_type);
 }
@@ -15489,6 +16106,9 @@ void NT_analysis::visit_material_default(Module_visitor &visitor)
         m_tc.material_volume_type,
         m_tc.material_type
     };
+
+    // we know that material defaults are in a declarative context
+    Tristate_store declarative_fkt_state(m_declarative_fkt_state, DS_IS_DECLARATIVE);
 
     for (size_t tp_idx = 0, n_tp = dimension_of(material_types); tp_idx < n_tp; ++tp_idx) {
         IType const *type = material_types[tp_idx];
@@ -16452,6 +17072,7 @@ void NT_analysis::collect_builtin_entities()
                     mat_definitions[id] = def;
                 }
             }
+            break;
         default:
             // ignore others
             break;
@@ -16651,7 +17272,7 @@ void NT_analysis::run()
     m_def_tab->reopen_scope(m_def_tab->get_predef_scope());
 
     // enter all predefined entities
-    enter_predefined_entities(m_module, m_tc, m_compiler->build_predefined_types());
+    enter_predefined_entities(m_module, m_tc, !m_material_ior_is_varying);
 
     // and create the error definition here, so the set of
     // predefined entities is constant
@@ -16666,6 +17287,8 @@ void NT_analysis::run()
     if (m_module.is_native() || m_module.get_mdl_version() >= IMDL::MDL_VERSION_1_8) {
         enter_native_annotations();
     }
+
+    enter_builtin_categories();
 
     // enter the global scope
     m_def_tab->reopen_scope(m_def_tab->get_global_scope());
@@ -16989,13 +17612,16 @@ Definition const *NT_analysis::get_definition_for_reference(
             def = type_scope != NULL ?
                 type_scope->find_definition_in_scope(type_scope->get_scope_name()) : NULL;
             if (def == NULL) {
-                error(
-                    INTERNAL_COMPILER_ERROR,
-                    ref->access_position(),
-                    Error_params(*this)
-                    .add("Could not find constructor for type '")
-                    .add(tdef->get_sym())
-                    .add("'"));
+                MDL_ASSERT(tdef && "unexpected: tdef is NULL");
+                if (tdef != NULL) {
+                    error(
+                        INTERNAL_COMPILER_ERROR,
+                        ref->access_position(),
+                        Error_params(*this)
+                        .add("Could not find constructor for type '")
+                        .add(tdef->get_sym())
+                        .add("'"));
+                }
                 def = get_error_definition();
             }
         }

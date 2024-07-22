@@ -704,7 +704,7 @@ public:
 #include "libbsdf.h"
 
 // Object providing BSDF functionality and some meta information accessors.
-// note: keep in sync with get_df_func_kind() in generator_jit_llvm_df.cpp.
+// note: keep in sync with get_libbsdf_df_func_kind() in generator_jit_llvm_df.cpp.
 struct BSDF
 {
     void(*sample)(
@@ -736,6 +736,10 @@ struct BSDF
     // returns true, if the attached BSDF is "diffuse_reflection_bsdf()".
     // note: this is currently unsupported for BSDFs in BSDF_component
     bool(*is_default_diffuse_reflection)();
+
+    // returns true, if the attached BSDF contains any components which don't absorb if only
+    // the given scatter mode is allowed.
+    bool(*has_allowed_components)(Df_flags allowed_scatter_mode);
 
     // select a BSDF to sample based on a condition, allowing to avoid code duplication when
     // aggressive inlining is used in some cases
@@ -820,5 +824,175 @@ struct color_EDF_component
     EDF component;
 };
 
+
+// This function gets replaced by a constant in translate_libbsdf_runtime_call.
+BSDF_PARAM bool is_bsdf_flags_enabled();
+
+// Returns which scatter mode is allowed.
+template <typename Data>
+BSDF_INLINE Df_flags get_allowed_scatter_mode(Data const *data)
+{
+    if (is_bsdf_flags_enabled()) {
+        return Df_flags(data->flags & DF_FLAGS_ALLOWED_SCATTER_MODE_MASK);
+    } else {
+        // without flags, all scatter modes are allowed
+        return DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT;
+    }
+}
+
+// Returns true, if reflect is an allowed scatter mode.
+BSDF_INLINE bool is_allowed_reflect(Df_flags allowed_mode)
+{
+    return (allowed_mode & DF_FLAGS_ALLOW_REFLECT) != 0;
+}
+
+// Returns true, if reflect is an allowed scatter mode.
+template <typename Data>
+BSDF_INLINE bool is_allowed_reflect(Data const *data)
+{
+    return is_allowed_reflect(get_allowed_scatter_mode(data));
+}
+
+// Returns true, if transmit is an allowed scatter mode.
+BSDF_INLINE bool is_allowed_transmit(Df_flags allowed_mode)
+{
+    return (allowed_mode & DF_FLAGS_ALLOW_TRANSMIT) != 0;
+}
+
+// Returns true, if transmit is an allowed scatter mode.
+template <typename Data>
+BSDF_INLINE bool is_allowed_transmit(Data const *data)
+{
+    return is_allowed_transmit(get_allowed_scatter_mode(data));
+}
+
+// Returns true, if the given scatter mode is allowed.
+BSDF_INLINE bool is_allowed_scatter_mode(Df_flags allowed_mode, scatter_mode mode)
+{
+    // turn mode also into bits by adding one, then simply mask it with the allowed mode
+    return ((int(mode) + 1) & int(allowed_mode)) != 0;
+}
+
+// Returns true, if the given scatter mode is allowed.
+template <typename Data>
+BSDF_INLINE bool is_allowed_scatter_mode(Data const *data, scatter_mode mode)
+{
+    return is_allowed_scatter_mode(get_allowed_scatter_mode(data), mode);
+}
+
+// Returns true, if the given bsdf contains allowed components.
+template <typename Data>
+BSDF_INLINE bool has_allowed_components(Data const *data, BSDF const &bsdf)
+{
+    return bsdf.has_allowed_components(get_allowed_scatter_mode(data));
+}
+
+// Always returns true, as EDFs currently don't support flags
+template <typename Data>
+BSDF_INLINE bool has_allowed_components(Data const *data, EDF const &edf)
+{
+    return true;
+}
+
+// Adapts the given reflection probability according to the given scatter mode compared
+// to the allowed scatter mode. Returns false in the absorb case.
+template <typename Data>
+BSDF_INLINE bool adapt_reflect_prob_for_allowed_mode(
+    Data const *data, scatter_mode mode, float *f_refl)
+{
+    Df_flags allowed_mode = get_allowed_scatter_mode(data);
+    if (!is_allowed_scatter_mode(allowed_mode, mode))
+        return false;
+
+    if (mode == scatter_reflect) {
+        *f_refl = 1.0f;
+        return true;
+    }
+
+    if (mode == scatter_transmit) {
+        *f_refl = 0.0f;
+        return true;
+    }
+
+    // unchanged for allowed_mode == DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT
+
+    if (allowed_mode == DF_FLAGS_ALLOW_REFLECT)
+        *f_refl = 1.0f;
+    if (allowed_mode == DF_FLAGS_ALLOW_TRANSMIT)
+        *f_refl = 0.0f;
+
+    return true;
+}
+
+// Decides how to sample layer and base based on a sample condition and the allowed modes.
+// Returns false, if absorption was selected.
+template <typename Data>
+BSDF_INLINE bool decide_sampling_and_update_random_number(
+    Data *data,
+    bool sample_condition,
+    const BSDF &layer,
+    const BSDF &base,
+    float *prob_layer,         // in/out, original probability for selecting layer
+    float *prob_selected_inv,  // inverse probability of the selected BSDF
+    bool *sample_layer)
+{
+    *prob_selected_inv = 0.0f;
+    *sample_layer = false;
+
+    Df_flags allowed_mode = get_allowed_scatter_mode(data);
+    bool layer_allowed = layer.has_allowed_components(allowed_mode);
+    bool base_allowed = base.has_allowed_components(allowed_mode);
+    if (!layer_allowed && !base_allowed) {
+        return false;
+    }
+
+    *sample_layer = layer_allowed && (!base_allowed || sample_condition);
+
+    if (*sample_layer) {
+        if (base_allowed) {
+            *prob_selected_inv = 1.0f / *prob_layer;
+
+            // Only update random number, if layer and base are allowed
+            data->xi.z *= *prob_selected_inv;
+        } else {
+            *prob_layer = *prob_selected_inv = 1.0f;
+        }
+    } else {
+        if (!base_allowed) {
+            return false;
+        }
+
+        if (layer_allowed) {
+            *prob_selected_inv = 1.0f / (1.0f - *prob_layer);
+
+            // Only update random number, if layer and base are allowed
+            data->xi.z = (data->xi.z - *prob_layer) * *prob_selected_inv;
+        } else {
+            *prob_layer = 0.0f;
+            *prob_selected_inv = 1.0f;
+        }
+    }
+    return true;
+}
+
+// Returns the adapted layer probability according to the allowed components of layer and base
+// compared to the allowed scatter mode. For the absorb case, a negative probability is returned.
+template <typename Data>
+BSDF_INLINE float adapt_layer_prob_for_allowed_mode(
+    Data const *data,
+    const BSDF &layer,
+    const BSDF &base,
+    float prob_layer)
+{
+    Df_flags allowed_mode = get_allowed_scatter_mode(data);
+    bool layer_allowed = layer.has_allowed_components(allowed_mode);
+    bool base_allowed = base.has_allowed_components(allowed_mode);
+
+    if (!layer_allowed) {
+        return base_allowed ? 0.0f : -1.0f;
+    } else {
+        return base_allowed ? prob_layer: 1.0f;
+    }
+}
 
 #endif // MDL_LIBBSDF_INTERNAL_H

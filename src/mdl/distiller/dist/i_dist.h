@@ -83,10 +83,10 @@ public:
     ///                          - -2: Reserved for API layer.
     ///                          - -3: Unspecified failure.
     /// \return                  The distilled material instance, or \c NULL in case of failure.
-    virtual const mi::mdl::IGenerated_code_dag::IMaterial_instance* distill(
+    virtual const mi::mdl::IMaterial_instance* distill(
         mi::mdl::ICall_name_resolver& call_resolver,
         mi::mdl::IRule_matcher_event* event_handler,
-        const mi::mdl::IGenerated_code_dag::IMaterial_instance* material_instance,
+        const mi::mdl::IMaterial_instance* material_instance,
         const char* target,
         mi::mdl::Distiller_options* options,
         mi::Sint32* error) const = 0;

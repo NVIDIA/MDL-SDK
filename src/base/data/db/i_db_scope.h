@@ -82,7 +82,7 @@ public:
     virtual void unpin() = 0;
 
     /// Returns the ID of this scope.
-    virtual Scope_id get_id() = 0;
+    virtual Scope_id get_id() const = 0;
 
     /// Returns the name of this scope (or the empty string for unnamed scopes).
     virtual const std::string& get_name() const = 0;
@@ -90,12 +90,12 @@ public:
     /// Returns the direct parent of this scope (or \c NULL for the global scope).
     ///
     /// \return   The parent scope. RCS:NEU
-    virtual Scope* get_parent() = 0;
+    virtual Scope* get_parent() const = 0;
 
     /// Returns the privacy level of this scope.
-    virtual Privacy_level get_level() = 0;
+    virtual Privacy_level get_level() const = 0;
 
-    /// Creates a new scope as a child of this scope.
+    /// Creates a new scope (or retrieves an already existing named scope).
     ///
     /// This may involve network operations and thus may take a while. The call will not return
     /// before the scope is created.
@@ -105,17 +105,17 @@ public:
     /// will not be automatically removed in such a situation. Note that all child scopes of a
     /// temporary scope also need to be temporary.
     ///
-    /// \param level                    Privacy level for the new scope. Must be higher than the
-    ///                                 privacy level of the current scope.
-    /// \param is_temporary             Flag for temporary scopes.
-    /// \param name                     The name of the scope. The empty string creates an unnamed
-    ///                                 scope.
-    /// \return                         The created child scope, or \c NULL in case of failure.
-    ///                                 RCS:NEU
+    /// \param level          Privacy level for the new scope. Must be higher than the privacy level
+    ///                       of the parent scope.
+    /// \param is_temporary   Flag for temporary scopes.
+    /// \param name           The name of the scope. The empty string creates an unnamed scope.
+    /// \return               The created child scope, or \c NULL in case of failure:
+    ///                       - Privacy level not higher than that of the parent scope.
+    ///                       - A scope with that name exists already, but with different parent
+    ///                         scope and/or privacy level.
+    ///                       RCS:NEU
     virtual Scope* create_child(
-        Privacy_level level,
-        bool is_temporary = false,
-        const std::string& name = "") = 0;
+        Privacy_level level, bool is_temporary = false, const std::string& name = "") = 0;
 
     /// Creates a new transaction associated with this scope.
     ///

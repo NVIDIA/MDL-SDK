@@ -76,7 +76,7 @@ class Processor:
     ]
 
     # Matches the UUID template argument to "Interface_declare" with optional base class as last parameter
-    RE_UUID = '([0-9a-fxA-FX,\s]+)([^0-9\s][\w_:<>,\s]*)?'
+    RE_UUID = r'([0-9a-fxA-FX,\s]+)([^0-9\s][\w_:<>,\s]*)?'
 
 
     def __init__(self, start_file, base_path_index, base_path_dice, output_path, output_dependency_file):
@@ -99,14 +99,14 @@ class Processor:
 
         self.dependencies.append(filename)
 
-        regex_swig_include = re.compile('^\s*%include\s*"([^"]+\.i)"')
-        regex_header_include = re.compile('^\s*%include\s*"([^"]+\.h)"')
-        regex_header_include_nvindex = re.compile('^\s*NVINDEX_INCLUDE\(([^\)]+\.h)\)')
+        regex_swig_include = re.compile(r'^\s*%include\s*"([^"]+\.i)"')
+        regex_header_include = re.compile(r'^\s*%include\s*"([^"]+\.h)"')
+        regex_header_include_nvindex = re.compile(r'^\s*NVINDEX_INCLUDE\(([^\)]+\.h)\)')
 
-        regex_nvindex_interface = re.compile('^\s*NVINDEX_INTERFACE[1]?\s*\(([\w_]+)\s*\)')
-        regex_dice_interface = re.compile('^\s*DICE_INTERFACE(_BASE|_MI)?\s*\(([\w_]+)\s*\)')
-        regex_dice_implement  = re.compile('^\s*DICE_IMPLEMENT\s*\(([\w_]+)\s*,\s*([\w_:]+)\)')
-        regex_index_implement = re.compile('^\s*NVINDEX_IMPLEMENT\s*\(([\w_]+)\s*,\s*([\w_:]+)\)')
+        regex_nvindex_interface = re.compile(r'^\s*NVINDEX_INTERFACE[1]?\s*\(([\w_]+)\s*\)')
+        regex_dice_interface = re.compile(r'^\s*DICE_INTERFACE(_BASE|_MI)?\s*\(([\w_]+)\s*\)')
+        regex_dice_implement  = re.compile(r'^\s*DICE_IMPLEMENT\s*\(([\w_]+)\s*,\s*([\w_:]+)\)')
+        regex_index_implement = re.compile(r'^\s*NVINDEX_IMPLEMENT\s*\(([\w_]+)\s*,\s*([\w_:]+)\)')
 
         lines = open(filename).readlines()
         for line in lines:
@@ -146,20 +146,20 @@ class Processor:
     def process_header_file(self, filename, base_dir, interfaces):
         self.dependencies.append(base_dir + "/" + filename)
 
-        RE_CLASS = 'class\s*([\w_]+)'
+        RE_CLASS = r'class\s*([\w_]+)'
 
         # Matches the beginning of a template declaration
-        regex_template = re.compile('^\s*template\s*<')
+        regex_template = re.compile(r'^\s*template\s*<')
         # Matches the beginning of a class declaration (but not a forward declaration)
-        regex_class_only = re.compile('^\s*' + RE_CLASS + '\s*[^;]*\s*$')
+        regex_class_only = re.compile(r'^\s*' + RE_CLASS + r'\s*[^;]*\s*$')
         # Matches a class declaration using "Interface_declare"
-        regex_class_interface_declare = re.compile('^\s*' + RE_CLASS + '\s*:\s*public\s+' +
-                                      '([\w::]*)Interface_declare<\s*' + self.RE_UUID + '\s*>' )
+        regex_class_interface_declare = re.compile(r'^\s*' + RE_CLASS + r'\s*:\s*public\s+' +
+                                      r'([\w::]*)Interface_declare<\s*' + self.RE_UUID + r'\s*>' )
         # Matches a class declaration using "Interface_implement"
-        regex_class_interface_implement = re.compile('^\s*' + RE_CLASS + '\s*:\s*public\s+' +
-                                                     '([\w::]*)Interface_implement<\s*([\w_:]+)\s*>' )
+        regex_class_interface_implement = re.compile(r'^\s*' + RE_CLASS + r'\s*:\s*public\s+' +
+                                                     r'([\w::]*)Interface_implement<\s*([\w_:]+)\s*>' )
         # Matche the start of a "{"-block
-        regex_block_begin = re.compile('^([^{]*){')
+        regex_block_begin = re.compile(r'^([^{]*){')
 
         class_declaration = ""
         class_name        = ""
@@ -237,7 +237,7 @@ class Processor:
                         return base
 
                     def remove_extra_whitespace(s):
-                        return re.sub('\s+', ' ', s).strip()
+                        return re.sub(r'\s+', ' ', s).strip()
 
                     #
                     # Handle Interface_declare
@@ -347,8 +347,8 @@ class Processor:
             self.process_header_file(h, base, interfaces)
 
         # Debug info about what interfaces haven been found
-        sys.stderr.write("\nprocessed interfaces\n")
-        self.log = sorted(self.log)
+        # sys.stderr.write("\nprocessed interfaces\n")
+        # self.log = sorted(self.log)
         # for interface in self.log:
         #     sys.stderr.write("\n%s" % interface)
 

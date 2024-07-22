@@ -564,7 +564,14 @@ void test_struct()
     IType_struct::Field_annotations field_annotations;
     mi::Sint32 errors = 0;
     mi::base::Handle<const IType_struct> st( tf.create_struct(
-        "::my_struct",  IType_struct::SID_USER, fields, annotations, field_annotations, &errors));
+        "::my_struct",
+        IType_struct::SID_USER,
+        fields,
+        annotations,
+        field_annotations,
+        /*is_declarative*/ false,
+        /*struct_cateogry*/ nullptr,
+        &errors));
     MI_CHECK_EQUAL( 0, errors);
     MI_CHECK( st);
 
@@ -625,11 +632,11 @@ void test_struct()
 
 void test_texture( DB::Transaction* transaction)
 {
-    TEXTURE::Texture* texture = new TEXTURE::Texture;
+    auto* texture = new TEXTURE::Texture;
     DB::Tag texture_tag = transaction->store( texture, "texture");
     MI_CHECK( texture_tag);
 
-    TEXTURE::Texture* texture2 = new TEXTURE::Texture;
+    auto* texture2 = new TEXTURE::Texture;
     DB::Tag texture2_tag = transaction->store( texture2, "texture2");
     MI_CHECK( texture2_tag);
 
@@ -676,7 +683,7 @@ void test_texture( DB::Transaction* transaction)
     check_dump( transaction, vf, tv.get(), "texture_2d foo = \"texture\"");
     tv->set_value( DB::Tag());
     check_dump( transaction, vf, tv.get(),
-        "texture_2d foo = (unset, owner module \"\", unresolved MDL file path \"\")");
+        R"(texture_2d foo = (unset, owner module "", unresolved MDL file path ""))");
     tv = vf.create_texture( t.get(), texture_tag);
     check_dump( transaction, vf, tv.get(), "texture_2d foo = \"texture\"");
     check_list( vf, tv.get());
@@ -684,11 +691,11 @@ void test_texture( DB::Transaction* transaction)
 
 void test_light_profile( DB::Transaction* transaction)
 {
-    LIGHTPROFILE::Lightprofile* light_profile = new LIGHTPROFILE::Lightprofile;
+    auto* light_profile = new LIGHTPROFILE::Lightprofile;
     DB::Tag light_profile_tag = transaction->store( light_profile, "light_profile");
     MI_CHECK( light_profile_tag);
 
-    LIGHTPROFILE::Lightprofile* light_profile2 = new LIGHTPROFILE::Lightprofile;
+    auto* light_profile2 = new LIGHTPROFILE::Lightprofile;
     DB::Tag light_profile2_tag = transaction->store( light_profile2, "light_profile2");
     MI_CHECK( light_profile2_tag);
 
@@ -732,7 +739,7 @@ void test_light_profile( DB::Transaction* transaction)
     check_dump( transaction, vf, lv.get(), "light_profile foo = \"light_profile\"");
     lv->set_value( DB::Tag());
     check_dump( transaction, vf, lv.get(),
-        "light_profile foo = (unset, owner module \"\", unresolved MDL file path \"\")");
+        R"(light_profile foo = (unset, owner module "", unresolved MDL file path ""))");
     lv = vf.create_light_profile( light_profile_tag);
     check_dump( transaction, vf, lv.get(), "light_profile foo = \"light_profile\"");
     check_list( vf, lv.get());
@@ -740,11 +747,11 @@ void test_light_profile( DB::Transaction* transaction)
 
 void test_bsdf_measurement( DB::Transaction* transaction)
 {
-    BSDFM::Bsdf_measurement* bsdf_measurement = new BSDFM::Bsdf_measurement;
+    auto* bsdf_measurement = new BSDFM::Bsdf_measurement;
     DB::Tag bsdf_measurement_tag = transaction->store( bsdf_measurement, "bsdf_measurement");
     MI_CHECK( bsdf_measurement_tag);
 
-    BSDFM::Bsdf_measurement* bsdf_measurement2 = new BSDFM::Bsdf_measurement;
+    auto* bsdf_measurement2 = new BSDFM::Bsdf_measurement;
     DB::Tag bsdf_measurement2_tag = transaction->store( bsdf_measurement2, "bsdf_measurement2");
     MI_CHECK( bsdf_measurement2_tag);
 
@@ -788,7 +795,7 @@ void test_bsdf_measurement( DB::Transaction* transaction)
     check_dump( transaction, vf, bv.get(), "bsdf_measurement foo = \"bsdf_measurement\"");
     bv->set_value( DB::Tag());
     check_dump( transaction, vf, bv.get(),
-        "bsdf_measurement foo = (unset, owner module \"\", unresolved MDL file path \"\")");
+        R"(bsdf_measurement foo = (unset, owner module "", unresolved MDL file path ""))");
     bv = vf.create_bsdf_measurement( bsdf_measurement_tag);
     check_dump(
         transaction, vf, bv.get(), "bsdf_measurement foo = \"bsdf_measurement\"");
@@ -952,10 +959,10 @@ void test_compare( DB::Transaction* transaction)
     MI_CHECK_EQUAL( ivf->compare( dsav1.get(), isav1.get()), +1);
 
     // compare textures (resources in general)
-    TEXTURE::Texture* texture1 = new TEXTURE::Texture;
+    auto* texture1 = new TEXTURE::Texture;
     DB::Tag texture_tag1 = transaction->store( texture1, "texture1");
     MI_CHECK( texture_tag1);
-    TEXTURE::Texture* texture2 = new TEXTURE::Texture;
+    auto* texture2 = new TEXTURE::Texture;
     DB::Tag texture_tag2 = transaction->store( texture2, "texture2");
     MI_CHECK( texture_tag2);
 

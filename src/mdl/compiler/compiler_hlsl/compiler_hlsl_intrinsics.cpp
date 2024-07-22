@@ -75,15 +75,24 @@ enum LEGAL_INTRINSIC_COMPTYPES {
     LICOMPTYPE_ANY_INT32 = 5,       // i32, u32, int-literal
     LICOMPTYPE_UINT_ONLY = 6,       // u32, u64, int-literal; no casts allowed
     LICOMPTYPE_FLOAT = 7,           // f32, partial-precision-f32, float-literal
-    LICOMPTYPE_ANY_FLOAT = 8,       // f32, partial-precision-f32, f64, float-literal, min10-float, min16-float, half
-    LICOMPTYPE_FLOAT_LIKE = 9,      // f32, partial-precision-f32, float-literal, min10-float, min16-float, half
+    LICOMPTYPE_ANY_FLOAT = 8,       // f32, partial-precision-f32, f64, float-literal,
+                                    // min10-float, min16-float, half
+    LICOMPTYPE_FLOAT_LIKE = 9,      // f32, partial-precision-f32, float-literal, min10-float,
+                                    // min16-float, half
     LICOMPTYPE_FLOAT_DOUBLE = 10,   // f32, partial-precision-f32, f64, float-literal
     LICOMPTYPE_DOUBLE = 11,         // f64, float-literal
     LICOMPTYPE_DOUBLE_ONLY = 12,    // f64; no casts allowed
-    LICOMPTYPE_NUMERIC = 13,        // float-literal, f32, partial-precision-f32, f64, min10-float, min16-float, int-literal, i32, u32, min12-int, min16-int, min16-uint, i64, u64
-    LICOMPTYPE_NUMERIC32 = 14,      // float-literal, f32, partial-precision-f32, int-literal, i32, u32
-    LICOMPTYPE_NUMERIC32_ONLY = 15, // float-literal, f32, partial-precision-f32, int-literal, i32, u32; no casts allowed
-    LICOMPTYPE_ANY = 16,            // float-literal, f32, partial-precision-f32, f64, min10-float, min16-float, int-literal, i32, u32, min12-int, min16-int, min16-uint, bool, i64, u64
+    LICOMPTYPE_NUMERIC = 13,        // float-literal, f32, partial-precision-f32, f64,
+                                    // min10-float, min16-float, int-literal, i32, u32,
+                                    // min12-int, min16-int,
+                                    // min16-uint, i64, u64
+    LICOMPTYPE_NUMERIC32 = 14,      // float-literal, f32, partial-precision-f32, int-literal,
+                                    // i32, u32
+    LICOMPTYPE_NUMERIC32_ONLY = 15, // float-literal, f32, partial-precision-f32, int-literal,
+                                    // i32, u32; no casts allowed
+    LICOMPTYPE_ANY = 16,            // float-literal, f32, partial-precision-f32, f64
+                                    // min10-float, min16-float, int-literal, i32, u32,
+                                    // min12-int, min16-int, min16-uint, bool, i64, u64
     LICOMPTYPE_SAMPLER1D = 17,
     LICOMPTYPE_SAMPLER2D = 18,
     LICOMPTYPE_SAMPLER3D = 19,
@@ -116,15 +125,23 @@ static unsigned char const IA_SPECIAL_SLOTS = 4;
 struct HLSL_intrinsic_argument {
     char const    *pName;                ///< Name of the argument; the first argument has
                                          ///  the function name.
-    unsigned      qwUsage;               ///< A combination of AR_QUAL_IN|AR_QUAL_OUT|AR_QUAL_COLMAJOR|AR_QUAL_ROWMAJOR in parameter tables; other values possible elsewhere.
-
-    unsigned char uTemplateId;           ///< One of INTRIN_TEMPLATE_FROM_TYPE, INTRIN_TEMPLATE_VARARGS or the argument # the template (layout) must match (trivially itself).
-    unsigned char uLegalTemplates;       ///< A LEGAL_INTRINSIC_TEMPLATES value for allowed templates.
-    unsigned char uComponentTypeId;      ///< INTRIN_COMPTYPE_FROM_TYPE_ELT0, or the argument # the component (element type) must match (trivially itself).
-    unsigned char uLegalComponentTypes;  ///< A LEGAL_intRINSIC_COMPTYPES value for allowed components.
-
-    unsigned char uRows;                 ///< Required number of rows, or one of IA_R/IA_C/IA_R2/IA_C2 for matching input constraints.
-    unsigned char uCols;                 ///< Required number of cols, or one of IA_R/IA_C/IA_R2/IA_C2 for matching input constraints.
+    unsigned      qwUsage;               ///< A combination of AR_QUAL_IN|AR_QUAL_OUT|
+                                         ///  AR_QUAL_COLMAJOR|AR_QUAL_ROWMAJOR in parameter
+                                         ///  tables; other values possible elsewhere.
+    unsigned char uTemplateId;           ///< One of INTRIN_TEMPLATE_FROM_TYPE,
+                                         ///  INTRIN_TEMPLATE_VARARGS or the argument # of
+                                         ///  the template (layout) must match (trivially itself).
+    unsigned char uLegalTemplates;       ///< A LEGAL_INTRINSIC_TEMPLATES value for allowed
+                                         ///  templates.
+    unsigned char uComponentTypeId;      ///< INTRIN_COMPTYPE_FROM_TYPE_ELT0, or the argument
+                                         ///  # of the component (element type) must match
+                                         ///  (trivially itself).
+    unsigned char uLegalComponentTypes;  ///< A LEGAL_intRINSIC_COMPTYPES value for allowed
+                                         ///  components.
+    unsigned char uRows;                 ///< Required number of rows, or one of
+                                         ///  IA_R/IA_C/IA_R2/IA_C2 for matching input constraints.
+    unsigned char uCols;                 ///< Required number of cols, or one of
+                                         ///  IA_R/IA_C/IA_R2/IA_C2 for matching input constraints.
 };
 
 enum HLSL_memory_access {
@@ -136,7 +153,8 @@ enum HLSL_memory_access {
 struct HLSL_intrinsic {
     Def_function::Semantics Sema;                ///< intrinsic Op ID
     HLSL_memory_access      MemoryAccess;        ///< How memory is accessed
-    int                     iOverloadParamIndex; ///< Parameter decide the overload type, -1 means ret type
+    int                     iOverloadParamIndex; ///< Parameter decide the overload type,
+                                                 ///  -1 means ret type
     unsigned                uNumArgs;            ///< Count of arguments in pArgs.
     HLSL_intrinsic_argument const *pArgs;        ///< Pointer to first argument.
 };

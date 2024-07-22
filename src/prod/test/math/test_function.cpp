@@ -131,7 +131,7 @@ MI_TEST_AUTO_FUNCTION( test_function_math_functions )
     MI_CHECK(   is_approx_equal( 1.0f, 2.0f, 1.1f));
     MI_CHECK(   is_approx_equal( 1.0,  2.0,  1.1));
 
-    typedef Vector<Float32,3> Vector3;
+    using Vector3 = Vector<Float32, 3>;
     Vector3 v2a(11, 22, 33);
     Vector3 v2b(10, 23, 32);
     Vector3 v2c(12, 21, 34);

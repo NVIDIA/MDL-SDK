@@ -127,12 +127,14 @@ void create_module(
         mi::Sint32 result = module_builder->add_function(
             "diffuse_material",
             body.get(),
+            /*temporaries*/ nullptr,
             parameters.get(),
             /*defaults*/ nullptr,
             /*parameter_annotations*/ nullptr,
             /*annotations*/ nullptr,
             /*return_annotations*/ nullptr,
             /*is_exported*/ true,
+            /*is_declarative*/ true,
             /*frequency_qualifier*/ mi::neuraylib::IType::MK_NONE,
             context.get());
 
@@ -167,6 +169,7 @@ void create_module(
             annotations.get(),
             /*return_annotations*/ nullptr,
             /*is_exported*/ true,
+            /*is_declarative*/ true,
             context.get());
 
         print_messages( context.get());
@@ -248,12 +251,14 @@ void create_module(
         mi::Sint32 result = module_builder->add_function(
             "uniform_parameter",
             body.get(),
+            /*temporaries*/ nullptr,
             parameters.get(),
             /*defaults*/ nullptr,
             /*parameter_annotations*/ nullptr,
             /*annotations*/ nullptr,
             /*return_annotations*/ nullptr,
             /*is_exported*/ true,
+            /*is_declarative*/ true,
             /*frequency_qualifier*/ mi::neuraylib::IType::MK_NONE,
             context.get());
 
@@ -303,6 +308,8 @@ void create_module(
             /*field_annotations*/ nullptr,
             /*annotations*/ nullptr,
             /*is_exported*/ true,
+            /*is_declarative*/ false,
+            /*struct_category*/ nullptr,
             context.get());
 
         print_messages( context.get());
@@ -383,12 +390,14 @@ void create_module(
         result = module_builder->add_function(
             "types",
             body.get(),
+            /*temporaries*/ nullptr,
             parameters.get(),
             /*defaults*/ nullptr,
             /*parameter_annotations*/ nullptr,
             /*annotations*/ nullptr,
             /*return_annotations*/ nullptr,
             /*is_exported*/ true,
+            /*is_declarative*/ false,
             /*frequency_qualifier*/ mi::neuraylib::IType::MK_NONE,
             context.get());
 

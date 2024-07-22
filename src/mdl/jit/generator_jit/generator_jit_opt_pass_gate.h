@@ -71,6 +71,11 @@ public:
             return false;
         }
 
+        // Avoid introducing more memset and memcpy calls, which may introduce complex pointers
+        if (P->getPassName() == "MemCpy Optimization") {
+            return false;
+        }
+
         return true;
     }
 

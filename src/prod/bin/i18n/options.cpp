@@ -342,7 +342,7 @@ void Option_parser::output_usage(ostream & ostr) const
     // <------------------------------ maxline ------------------------------------------>
     // <---col 1--><------------------ col 2 -------------------------------------------->
     // Usage: i18n [-h | --help][-v | --verbosity <level>][-q | --quiet][-n | --nostdpath]
-    //             [[-p | --search - path <path>]][…]
+    //             [[-p | --search - path <path>]][Â…]
     //             <command>[<args>]
     //
     // col 1 + col 2 < maxline

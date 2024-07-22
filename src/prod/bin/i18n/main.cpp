@@ -30,7 +30,7 @@
 #include "util.h"
 #include "command.h"
 #if defined(DEBUG)
-#include "version.h"
+#include "version_helper.h"
 #include "util.h"
 #include "options.h"
 #endif
@@ -65,14 +65,14 @@ using namespace i18n;
 //
 //    help                      Display help information
 //    help <command>            Display help information for the given command
-//        
+//
 // The command create_xliff
 // --------------------------
 // This command creates XLIFF file from a single module or from a single package.
 // The command has options to set the locale, set a module or a package for
 // which we want XLIFF file. When setting a package we can chose to recursively traverse
 // sub-packages. XLIFF files can have context embedded as XLIFF groups or we can chose not
-// to have any context. A dry-run mode allows to see the result of the command without 
+// to have any context. A dry-run mode allows to see the result of the command without
 // creating the XLIFF file. A force option allows to overwrite existing XLIFF files.
 // The created XLIFF file is stored in the same directory as the given module or
 // in the package directory.
@@ -110,7 +110,6 @@ int run(int argc, char *argv[])
     Util::log_info("Application started");
 
 #if defined(DEBUG)
-    Util::File::Test();
     I18N_option_parser::Test();
 #endif
 

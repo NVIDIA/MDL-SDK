@@ -64,14 +64,14 @@ void run_tests( mi::neuraylib::INeuray* neuray)
 
         // check abort() / get_id()
         transaction = scope->create_transaction();
-        MI_CHECK_NOT_EQUAL( 0, transaction->get_id());
+        MI_CHECK_NOT_EQUAL( nullptr, transaction->get_id());
         MI_CHECK( transaction->is_open());
         transaction->abort();
         MI_CHECK( !transaction->is_open());
 
         // check commit / get_id()
         transaction = scope->create_transaction();
-        MI_CHECK_NOT_EQUAL( 0, transaction->get_id());
+        MI_CHECK_NOT_EQUAL( nullptr, transaction->get_id());
         MI_CHECK( transaction->is_open());
         MI_CHECK_EQUAL( 0, transaction->commit());
         MI_CHECK( !transaction->is_open());
@@ -91,7 +91,7 @@ void run_tests( mi::neuraylib::INeuray* neuray)
             texture = transaction->create<mi::neuraylib::ITexture>( "Texture");
             texture->set_gamma( 1.0);
             MI_CHECK_EQUAL( 0, transaction->store( texture.get(), "dummy"));
-            texture = 0;
+            texture = nullptr;
 
             c_texture1 = transaction->access<mi::neuraylib::ITexture>( "dummy");
             MI_CHECK_EQUAL( 1.0, c_texture1->get_gamma());
@@ -104,9 +104,9 @@ void run_tests( mi::neuraylib::INeuray* neuray)
             MI_CHECK_EQUAL( 1.0, c_texture1->get_gamma());
             MI_CHECK_EQUAL( 2.0, m_texture1->get_gamma());
 
-            c_texture1 = 0;
-            m_texture1 = 0;
-            c_texture2 = 0;
+            c_texture1 = nullptr;
+            m_texture1 = nullptr;
+            c_texture2 = nullptr;
             transaction->commit();
         }
 
@@ -117,7 +117,7 @@ void run_tests( mi::neuraylib::INeuray* neuray)
             texture = transaction->create<mi::neuraylib::ITexture>( "Texture");
             texture->set_gamma( 1.0);
             MI_CHECK_EQUAL( 0, transaction->store( texture.get(), "dummy"));
-            texture = 0;
+            texture = nullptr;
 
             m_texture1 = transaction->edit<mi::neuraylib::ITexture>( "dummy");
             MI_CHECK_EQUAL( 1.0, m_texture1->get_gamma());
@@ -133,9 +133,9 @@ void run_tests( mi::neuraylib::INeuray* neuray)
             MI_CHECK_EQUAL( 2.0, c_texture1->get_gamma());
             MI_CHECK_EQUAL( 2.0, c_texture2->get_gamma());
 
-            m_texture1 = 0;
-            c_texture1 = 0;
-            c_texture2 = 0;
+            m_texture1 = nullptr;
+            c_texture1 = nullptr;
+            c_texture2 = nullptr;
             transaction->commit();
         }
 
@@ -146,7 +146,7 @@ void run_tests( mi::neuraylib::INeuray* neuray)
             texture = transaction->create<mi::neuraylib::ITexture>( "Texture");
             texture->set_gamma( 1.0);
             MI_CHECK_EQUAL( 0, transaction->store( texture.get(), "dummy"));
-            texture = 0;
+            texture = nullptr;
 
             m_texture1 = transaction->edit<mi::neuraylib::ITexture>( "dummy");
             MI_CHECK_EQUAL( 1.0, m_texture1->get_gamma());
@@ -162,9 +162,9 @@ void run_tests( mi::neuraylib::INeuray* neuray)
             MI_CHECK_EQUAL( 1.0, m_texture2->get_gamma());
             MI_CHECK_EQUAL( 1.0, m_texture3->get_gamma());
 
-            m_texture1 = 0;
-            m_texture2 = 0;
-            m_texture3 = 0;
+            m_texture1 = nullptr;
+            m_texture2 = nullptr;
+            m_texture3 = nullptr;
             transaction->commit();
         }
 
@@ -175,7 +175,7 @@ void run_tests( mi::neuraylib::INeuray* neuray)
             texture = transaction->create<mi::neuraylib::ITexture>( "Texture");
             texture->set_gamma( 1.0);
             MI_CHECK_EQUAL( 0, transaction->store( texture.get(), "dummy"));
-            texture = 0;
+            texture = nullptr;
 
             m_texture1 = transaction->edit<mi::neuraylib::ITexture>( "dummy");
             MI_CHECK_EQUAL( 1.0, m_texture1->get_gamma());
@@ -185,13 +185,13 @@ void run_tests( mi::neuraylib::INeuray* neuray)
 
             m_texture1->set_gamma( 2.0);
             m_texture2->set_gamma( 3.0);
-            m_texture1 = 0;
-            m_texture2 = 0;
+            m_texture1 = nullptr;
+            m_texture2 = nullptr;
 
             c_texture1 = transaction->access<mi::neuraylib::ITexture>( "dummy");
             MI_CHECK_EQUAL( 3.0, c_texture1->get_gamma());
 
-            c_texture1 = 0;
+            c_texture1 = nullptr;
             transaction->commit();
         }
 
@@ -202,7 +202,7 @@ void run_tests( mi::neuraylib::INeuray* neuray)
             texture = transaction->create<mi::neuraylib::ITexture>( "Texture");
             texture->set_gamma( 1.0);
             MI_CHECK_EQUAL( 0, transaction->store( texture.get(), "dummy"));
-            texture = 0;
+            texture = nullptr;
 
             m_texture1 = transaction->edit<mi::neuraylib::ITexture>( "dummy");
             MI_CHECK_EQUAL( 1.0, m_texture1->get_gamma());
@@ -212,13 +212,13 @@ void run_tests( mi::neuraylib::INeuray* neuray)
 
             m_texture1->set_gamma( 2.0);
             m_texture2->set_gamma( 3.0);
-            m_texture2 = 0;
-            m_texture1 = 0;
+            m_texture2 = nullptr;
+            m_texture1 = nullptr;
 
             c_texture1 = transaction->access<mi::neuraylib::ITexture>( "dummy");
             MI_CHECK_EQUAL( 3.0, c_texture1->get_gamma());
 
-            c_texture1 = 0;
+            c_texture1 = nullptr;
             transaction->commit();
         }
 
@@ -239,7 +239,7 @@ MI_TEST_AUTO_FUNCTION( test_itransaction )
         run_tests( neuray.get());
     }
 
-    neuray = 0;
+    neuray = nullptr;
     MI_CHECK( unload());
 }
 

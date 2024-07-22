@@ -283,7 +283,7 @@ public:
 
     Server() : served(0), count(0) {}
 
-    virtual ~Server() {}
+    virtual ~Server() = default;
 
     virtual void serve(int i) = 0;
 
@@ -303,7 +303,7 @@ private:
 
 public:
 
-    virtual ~Passive_server() {}
+    virtual ~Passive_server() = default;
 
     void serve(int i)
     {
@@ -331,7 +331,7 @@ private:
 
 public:
 
-    virtual ~Active_server() {}
+    virtual ~Active_server() = default;
 
     void serve(int i)
     {

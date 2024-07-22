@@ -170,22 +170,6 @@ public:
     /// \name General types
     //@{
 
-    /// Returns the element type name of an array type name, or the empty string in case of failure.
-    ///
-    /// The length of the array is stored in \p length (only in case of success, zero for dynamic
-    /// arrays).
-    static std::string strip_array( const std::string& type_name, mi::Size& length);
-
-    /// Returns the value type name of a map type name, or the empty string in case of failure.
-    static std::string strip_map( const std::string& type_name);
-
-    /// Returns the nested type name of a pointer type name, or the empty string in case of failure.
-    static std::string strip_pointer( const std::string& type_name);
-
-    /// Returns the nested type name of a const pointer type name, or the empty string in case of
-    /// failure.
-    static std::string strip_const_pointer( const std::string& type_name);
-
     /// Checks whether two types are compatible.
     ///
     /// Two types are called compatible if they have the same memory layout, that is, the type names
@@ -296,11 +280,11 @@ private:
     };
 
     /// The type of s_map_name_code.
-    typedef robin_hood::unordered_map<std::string, ATTR::Type_code> Map_name_code;
+    using Map_name_code = robin_hood::unordered_map<std::string, ATTR::Type_code>;
 
     /// The type of s_map_name_code.
-    typedef robin_hood::unordered_map<
-        ATTR::Type_code, std::string, hash<ATTR::Type_code> > Map_code_name;
+    using Map_code_name
+        = robin_hood::unordered_map<ATTR::Type_code, std::string, hash<ATTR::Type_code>>;
 
     /// The map for the mapping from type name to type code.
     static Map_name_code s_map_name_code;

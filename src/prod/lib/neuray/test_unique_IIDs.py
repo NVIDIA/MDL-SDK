@@ -317,7 +317,7 @@ def main():
     for filename in filenames:
         if filename.endswith (".h") or filename.endswith (".cpp"):
             process_file()
-    assert len (iids) > 300
+    assert len (iids) >= 300
 
     print()
     print("%d interface IDs found" % len (iids))

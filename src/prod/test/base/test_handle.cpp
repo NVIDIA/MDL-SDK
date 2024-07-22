@@ -53,9 +53,10 @@ public:
 class Test_interface : public mi::base::Interface_implement<ITest_interface>
 {
 public:
-    typedef mi::base::Interface_implement<ITest_interface> Base;
+    using Base = mi::base::Interface_implement<ITest_interface>;
 
-    virtual mi::Uint32 get_reference_count() const {
+    mi::Uint32 get_reference_count() const final
+    {
         Base::retain();
         return Base::release();
     }
@@ -72,9 +73,10 @@ class ITest_interface_2 : public
 class Test_interface_2 : public mi::base::Interface_implement<ITest_interface_2>
 {
 public:
-    typedef mi::base::Interface_implement<ITest_interface_2> Base;
+    using Base = mi::base::Interface_implement<ITest_interface_2>;
 
-    virtual mi::Uint32 get_reference_count() const {
+    mi::Uint32 get_reference_count() const final
+    {
         Base::retain();
         return Base::release();
     }
@@ -82,13 +84,15 @@ public:
 
 // Test interface pointer passing without additional use of Handle
 // Ref-count need to be 2 in h before calling this.
-void foo_no_handle( ITest_interface* h) {
+void foo_no_handle( ITest_interface* h)
+{
     MI_CHECK( 2 == h->get_reference_count());
 }
 
 // Test interface pointer passing with additional use of Handle
 // Ref-count need to be 2 in h before calling this.
-void foo_with_handle( ITest_interface* h) {
+void foo_with_handle( ITest_interface* h)
+{
     MI_CHECK( 2 == h->get_reference_count());
     mi::base::Handle<ITest_interface> handle( h, mi::base::DUP_INTERFACE);
     MI_CHECK( 3 == h->get_reference_count());
@@ -96,32 +100,38 @@ void foo_with_handle( ITest_interface* h) {
 
 // Test interface pointer passing without additional use of const Handle
 // Ref-count need to be 2 in h before calling this.
-void foo_no_const_handle( const ITest_interface* h) {
+void foo_no_const_handle( const ITest_interface* h)
+{
     MI_CHECK( 2 == h->get_reference_count());
 }
 
 // Test interface pointer passing with additional use of const Handle
 // Ref-count need to be 2 in h before calling this.
-void foo_with_const_handle( const ITest_interface* h) {
+void foo_with_const_handle( const ITest_interface* h)
+{
     MI_CHECK( 2 == h->get_reference_count());
     mi::base::Handle<const ITest_interface> handle(h, mi::base::DUP_INTERFACE);
     MI_CHECK( 3 == h->get_reference_count());
 }
 
 // Example of interface-returning functions
-ITest_interface* interface_factory() {
+ITest_interface* interface_factory()
+{
     return new Test_interface;
 }
 
-const ITest_interface* const_interface_factory() {
+const ITest_interface* const_interface_factory()
+{
     return new Test_interface;
 }
 
-ITest_interface_2* interface_2_factory() {
+ITest_interface_2* interface_2_factory()
+{
     return new Test_interface_2;
 }
 
-const ITest_interface_2* const_interface_2_factory() {
+const ITest_interface_2* const_interface_2_factory()
+{
     return new Test_interface_2;
 }
 
@@ -132,18 +142,18 @@ MI_TEST_AUTO_FUNCTION( test_handle )
     MI_CHECK( ! h0.is_valid_interface());
     MI_CHECK( ! h0);
 
-    MI_CHECK( h0 == h0);
-    MI_CHECK( h0 == 0);
-    MI_CHECK( 0  == h0);
+    MI_CHECK( h0      == h0);
+    MI_CHECK( h0      == nullptr);
+    MI_CHECK( nullptr == h0);
 
     mi::base::Handle<ITest_interface> handle( interface_factory());
     MI_CHECK( handle.is_valid_interface());
     MI_CHECK( handle);
-    MI_CHECK( handle == handle);
-    MI_CHECK( handle != h0);
-    MI_CHECK( h0     != handle);
-    MI_CHECK( handle != 0);
-    MI_CHECK( 0      != handle);
+    MI_CHECK( handle  == handle);
+    MI_CHECK( handle  != h0);
+    MI_CHECK( h0      != handle);
+    MI_CHECK( handle  != nullptr);
+    MI_CHECK( nullptr != handle);
 
     MI_CHECK( 1 == handle->get_reference_count());
     MI_CHECK( 1 == (*handle).get_reference_count());
@@ -178,15 +188,15 @@ MI_TEST_AUTO_FUNCTION( test_handle )
     MI_CHECK( 4 == h3->get_reference_count());
     MI_CHECK( 1 == h5->get_reference_count());
 
-    h3.swap(h5);
+    h3.swap( h5);
     MI_CHECK( 1 == h3->get_reference_count());
     MI_CHECK( 4 == h5->get_reference_count());
 
-    h4 = 0;
+    h4 = nullptr;
     MI_CHECK( ! h4.is_valid_interface());
     MI_CHECK( 3 == handle->get_reference_count());
 
-    h5 = 0;
+    h5 = nullptr;
     MI_CHECK( ! h5.is_valid_interface());
     MI_CHECK( 2 == handle->get_reference_count());
 
@@ -216,18 +226,18 @@ MI_TEST_AUTO_FUNCTION( test_const_handle )
     MI_CHECK( ! h0.is_valid_interface());
     MI_CHECK( ! h0);
 
-    MI_CHECK( h0 == h0);
-    MI_CHECK( h0 == 0);
-    MI_CHECK( 0  == h0);
+    MI_CHECK( h0      == h0);
+    MI_CHECK( h0      == nullptr);
+    MI_CHECK( nullptr == h0);
 
     mi::base::Handle<const ITest_interface> handle( const_interface_factory());
     MI_CHECK( handle.is_valid_interface());
     MI_CHECK( handle);
-    MI_CHECK( handle == handle);
-    MI_CHECK( handle != h0);
-    MI_CHECK( h0     != handle);
-    MI_CHECK( handle != 0);
-    MI_CHECK( 0      != handle);
+    MI_CHECK( handle  == handle);
+    MI_CHECK( handle  != h0);
+    MI_CHECK( h0      != handle);
+    MI_CHECK( handle  != nullptr);
+    MI_CHECK( nullptr != handle);
 
     MI_CHECK( handle == handle.get());
     MI_CHECK( handle.get() == handle);
@@ -268,15 +278,15 @@ MI_TEST_AUTO_FUNCTION( test_const_handle )
     MI_CHECK( 4 == h3->get_reference_count());
     MI_CHECK( 1 == h5->get_reference_count());
 
-    h3.swap(h5);
+    h3.swap( h5);
     MI_CHECK( 1 == h3->get_reference_count());
     MI_CHECK( 4 == h5->get_reference_count());
 
-    h4 = 0;
+    h4 = nullptr;
     MI_CHECK( ! h4.is_valid_interface());
     MI_CHECK( 3 == handle->get_reference_count());
 
-    h5 = 0;
+    h5 = nullptr;
     MI_CHECK( ! h5.is_valid_interface());
     MI_CHECK( 2 == handle->get_reference_count());
 
@@ -345,13 +355,13 @@ MI_TEST_AUTO_FUNCTION( test_handle_const_handle )
 
 MI_TEST_AUTO_FUNCTION( test_iinterface_implement )
 {
-    Test_interface* i = new Test_interface;
+    auto* i = new Test_interface;
     MI_CHECK_EQUAL( 1, i->get_reference_count());
     i->retain();
     i->retain();
     MI_CHECK_EQUAL( 3, i->get_reference_count());
 
-    Test_interface* j = new Test_interface;
+    auto* j = new Test_interface;
     j->retain();
     MI_CHECK_EQUAL( 2, j->get_reference_count());
 
@@ -361,7 +371,7 @@ MI_TEST_AUTO_FUNCTION( test_iinterface_implement )
     MI_CHECK_EQUAL( 3, i->get_reference_count());
 
     // Test ref-count on implementation copy construction
-    Test_interface* k = new Test_interface( *i);
+    auto* k = new Test_interface( *i);
     MI_CHECK_EQUAL( 1, k->get_reference_count());
     MI_CHECK_EQUAL( 3, i->get_reference_count());
 

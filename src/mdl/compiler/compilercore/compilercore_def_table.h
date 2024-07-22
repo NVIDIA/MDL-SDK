@@ -76,6 +76,8 @@ enum Version_flags {
     REMOVED_1_7 = (IMDL::MDL_VERSION_1_7 << 8),  ///< Removed since MDL 1.7.
     SINCE_1_8 = IMDL::MDL_VERSION_1_8,           ///< Exists since MDL 1.8.
     REMOVED_1_8 = (IMDL::MDL_VERSION_1_8 << 8),  ///< Removed since MDL 1.8.
+    SINCE_1_9 = IMDL::MDL_VERSION_1_9,           ///< Exists since MDL 1.9.
+    REMOVED_1_9 = (IMDL::MDL_VERSION_1_9 << 8),  ///< Removed since MDL 1.9.
     SINCE_EXP = IMDL::MDL_VERSION_EXP,           ///< Exists in experimental.
 };
 
@@ -134,6 +136,7 @@ public:
         DEF_IS_CONST_EXPR,          ///< This function is declared const_expr.
         DEF_USES_DERIVATIVES,       ///< This function uses derivatives.
         DEF_IS_DERIVABLE,           ///< This parameter or return type is derivable.
+        DEF_IS_DECLARATIVE,         ///< This type or function is declarative.
         DEF_LAST
     };
 
@@ -184,6 +187,9 @@ public:
 
     /// Return the value of an enum constant or a global constant.
     IValue const *get_constant_value() const MDL_FINAL;
+
+    /// Return the category of this category definition or NULL if it is another kind.
+    IStruct_category const *get_category() const MDL_FINAL;
 
     /// Return the field index of a field member.
     int get_field_index() const MDL_FINAL;
@@ -404,6 +410,10 @@ public:
     /// Remove this definition from its parent scope.
     void remove_from_parent();
 
+
+    /// Set the category of this definition.
+    void set_category(IStruct_category const *cateogry);
+
 private:
     /// Constructor.
     explicit Definition(
@@ -490,6 +500,9 @@ private:
     /// A value coupled with the definition.
     IValue const *m_value;
 
+    /// A category associated with the definition.
+    IStruct_category const *m_category;
+
     union {
         unsigned  code;                 ///< Biggest type for bitwise copy.
         int       field_index;          ///< For DK_MEMBER, the field index.
@@ -558,6 +571,18 @@ public:
     /// Return the associated type of this scope.
     inline IType const *get_scope_type() const {
         return m_scope_type;
+    }
+
+    /// Set the type scope.
+    ///
+    /// \param type  the type
+    /// \param name  the name of the type (and the scope)
+    inline void set_scope_type(
+        IType const   *type,
+        ISymbol const *name)
+    {
+        m_scope_type = type;
+        m_scope_name = name;
     }
 
     /// Return the associated name of this scope.
@@ -827,6 +852,17 @@ public:
     ///
     /// \param type  the type to lookup
     Scope *get_type_scope(IType const *type) const;
+
+    /// Set a scope for its type.
+    ///
+    /// \param type   the type
+    /// \param scope  the scope of this type
+    void set_type_scope(
+        IType const *type,
+        Scope       *scope)
+    {
+        m_type_scopes[type] = scope;
+    }
 
     /// Return the current definition for a symbol in this definition table.
     ///

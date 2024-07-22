@@ -59,7 +59,7 @@
 #ifndef BASE_LIB_CONT_ALLOCATORS_H
 #define BASE_LIB_CONT_ALLOCATORS_H
 
-#include <cstddef>			// for size_t
+#include <cstddef>                      // for size_t
 #include <base/system/stlext/i_stlext_type_traits_base_types.h>
 
 namespace MI {
@@ -72,16 +72,16 @@ class Default_allocator
 {
   public:
     // Convenient typedefs - reused by the clients.
-    typedef T			Value_type;
-    typedef Value_type*		Pointer;
-    typedef const Value_type*	Const_pointer;
-    typedef Value_type&		Reference;
-    typedef const Value_type&	Const_reference;
+    typedef T                   Value_type;
+    typedef Value_type*         Pointer;
+    typedef const Value_type*   Const_pointer;
+    typedef Value_type&         Reference;
+    typedef const Value_type&   Const_reference;
 
     // Alternate allocator type.
     template <typename U>
     struct rebind {
-	typedef Default_allocator<U> other;
+        typedef Default_allocator<U> other;
     };
 
     // Since this is a stateless allocator there is no real construction
@@ -92,74 +92,74 @@ class Default_allocator
     // Conversion copy constructor
     template <typename U>
     Default_allocator(
-	const Default_allocator<U>&)	// the other allocator
+        const Default_allocator<U>&)    // the other allocator
     {}
 
 
     // Initialize element at p with given value.
     void construct(
-	Pointer p,			// place of element in memory
-	Const_reference val);		// initial value of element
+        Pointer p,                      // place of element in memory
+        Const_reference val);           // initial value of element
     // Destroy element at p.
     void destroy(
-	Pointer p);			// place of element in memory
+        Pointer p);                     // place of element in memory
 
     // Construct a range of objects.
     void construct_n(
-	Pointer p,			// place of first element in memory
-	Const_reference val,		// initial value for all elements
-	size_t size);			// number of elements
+        Pointer p,                      // place of first element in memory
+        Const_reference val,            // initial value for all elements
+        size_t size);                   // number of elements
     // Destroy a range of objects.
     void destroy_n(
-	Pointer p,			// place of first element in memory
-	size_t size);			// number of elements
+        Pointer p,                      // place of first element in memory
+        size_t size);                   // number of elements
     // Construct a range of objects.
     void construct(
-	Pointer start,			// place of first element in memory
-	Pointer end,			// place of last element in memory
-	Const_reference val);		// initial value for all elements
+        Pointer start,                  // place of first element in memory
+        Pointer end,                    // place of last element in memory
+        Const_reference val);           // initial value for all elements
     // Destroy a range of objects.
     void destroy(
-	Pointer start,			// place of first element in memory
-	Pointer end);			// place of last element in memory
+        Pointer start,                  // place of first element in memory
+        Pointer end);                   // place of last element in memory
 
     // Allocate but don't initialize size elements of type T.
     Pointer allocate(
-	size_t size);			// number of elements
+        size_t size);                   // number of elements
 
     // Deallocate storage p of deleted elements.
     void deallocate(
-	Pointer p,			// begin of storage to be freed
-	size_t);			// dummy size of memory to free
+        Pointer p,                      // begin of storage to be freed
+        size_t);                        // dummy size of memory to free
 
 
     // Convenient functions
     //
     // Copy the given source memory of count objects into given raw memory.
     Pointer uninitialized_copy(
-	Pointer src,			// source memory location
-	Pointer target,			// target memory location
-	size_t count);			// number of objects
+        Pointer src,                    // source memory location
+        Pointer target,                 // target memory location
+        size_t count);                  // number of objects
 
     // Copies the value count times into the range starting at src.
     // This function does not require an initialized output range.
     Pointer uninitialized_fill_n(
-	Pointer dest,			// destination begin
-	size_t count,			// number of items to fill
-	const T& value);		// init value
+        Pointer dest,                   // destination begin
+        size_t count,                   // number of items to fill
+        const T& value);                // init value
 
     // Copy the given source memory range into given raw memory.
     Pointer uninitialized_copy(
-	Pointer start,			// source begin
-	Pointer end,			// source end
-	Pointer target);		// destination objects memory location
+        Pointer start,                  // source begin
+        Pointer end,                    // source end
+        Pointer target);                // destination objects memory location
 
     // Copies the value count times into the range starting at src.
     // This function does not require an initialized output range.
     Pointer uninitialized_fill(
-	Pointer start,			// range begin
-	Pointer end,			// range end
-	const T& value);		// init value
+        Pointer start,                  // range begin
+        Pointer end,                    // range end
+        const T& value);                // init value
 
 
   private:
@@ -167,72 +167,72 @@ class Default_allocator
     //
     // Destroy a range of objects with trivial destructors.
     void destroy_n_aux(
-	Pointer p,			// first element to destroy
-	size_t count,			// number of elements to destroy
-	const STLEXT::True_type&);		// type to differ
+        Pointer p,                      // first element to destroy
+        size_t count,                   // number of elements to destroy
+        const STLEXT::True_type&);              // type to differ
     // Destroy a range of objects with nontrivial destructors.
     void destroy_n_aux(
-	Pointer p,			// first element to destroy
-	size_t count,			// number of elements to destroy
-	const STLEXT::False_type&);		// type to differ
+        Pointer p,                      // first element to destroy
+        size_t count,                   // number of elements to destroy
+        const STLEXT::False_type&);             // type to differ
     // Destroy a range of objects with trivial destructors.
     void destroy_aux(
-	Pointer start,			// first element to destroy
-	Pointer end,			// end of range of objects
-	const STLEXT::True_type&);		// type to differ
+        Pointer start,                  // first element to destroy
+        Pointer end,                    // end of range of objects
+        const STLEXT::True_type&);              // type to differ
     // Destroy a range of objects with nontrivial destructors.
     void destroy_aux(
-	Pointer start,			// first element to destroy
-	Pointer end,			// end of range of objects
-	const STLEXT::False_type&);		// type to differ
+        Pointer start,                  // first element to destroy
+        Pointer end,                    // end of range of objects
+        const STLEXT::False_type&);             // type to differ
     // Copy POD, which do not require construction on the target size.
     Pointer uninitialized_copy_aux(
-	Pointer start,			// source begin
-	Pointer end,			// source end
-	Pointer target,			// destination objects memory location
-	const STLEXT::True_type&);		// type to differ
+        Pointer start,                  // source begin
+        Pointer end,                    // source end
+        Pointer target,                 // destination objects memory location
+        const STLEXT::True_type&);              // type to differ
     // Copy objects, which requires construction on the target size.
     Pointer uninitialized_copy_aux(
-	Pointer start,			// source begin
-	Pointer end,			// source end
-	Pointer target,			// destination objects memory location
-	const STLEXT::False_type&);		// type to differ
+        Pointer start,                  // source begin
+        Pointer end,                    // source end
+        Pointer target,                 // destination objects memory location
+        const STLEXT::False_type&);             // type to differ
     // Copy POD, which do not require construction on the target size.
     Pointer uninitialized_copy_aux(
-	Pointer src,			// source begin
-	Pointer target,			// destination objects memory location
-	size_t count,			// number of elements to copy
-	const STLEXT::True_type&);		// type to differ
+        Pointer src,                    // source begin
+        Pointer target,                 // destination objects memory location
+        size_t count,                   // number of elements to copy
+        const STLEXT::True_type&);              // type to differ
     // Copy objects, which requires construction on the target size.
     Pointer uninitialized_copy_aux(
-	Pointer src,			// source begin
-	Pointer target,			// destination objects memory location
-	size_t count,			// number of elements to copy
-	const STLEXT::False_type&);		// type to differ
+        Pointer src,                    // source begin
+        Pointer target,                 // destination objects memory location
+        size_t count,                   // number of elements to copy
+        const STLEXT::False_type&);             // type to differ
     // Fill the given range with the given value.
     Pointer uninitialized_fill_aux(
-	Pointer start,			// range begin
-	Pointer end,			// range end
-	const T& value,			// init value
-	const STLEXT::False_type&);		// type to differ
+        Pointer start,                  // range begin
+        Pointer end,                    // range end
+        const T& value,                 // init value
+        const STLEXT::False_type&);             // type to differ
     // Fill the given range with the given value.
     Pointer uninitialized_fill_aux(
-	Pointer start,			// range begin
-	Pointer end,			// range end
-	const T& value,			// init value
-	const STLEXT::True_type&);		// type to differ
+        Pointer start,                  // range begin
+        Pointer end,                    // range end
+        const T& value,                 // init value
+        const STLEXT::True_type&);              // type to differ
     // Copies the value count times into the range starting at dest.
     Pointer uninitialized_fill_n_aux(
-	Pointer target,			// destination begin
-	size_t count,			// number of copies to be made
-	const T& value,			// init value
-	const STLEXT::False_type&);		// type to differ
+        Pointer target,                 // destination begin
+        size_t count,                   // number of copies to be made
+        const T& value,                 // init value
+        const STLEXT::False_type&);             // type to differ
     // Copies the value count times into the range starting at dest.
     Pointer uninitialized_fill_n_aux(
-	Pointer target,			// destination begin
-	size_t count,			// number of copies to be made
-	const T& value,			// init value
-	const STLEXT::True_type&);		// type to differ
+        Pointer target,                 // destination begin
+        size_t count,                   // number of copies to be made
+        const T& value,                 // init value
+        const STLEXT::True_type&);              // type to differ
 
 };
 

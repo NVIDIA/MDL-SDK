@@ -55,7 +55,7 @@
 #define MDL_SAMPLES_ROOT "."
 #endif
 
-typedef mi::mdl::IMDL *(IMDL_factory)(mi::base::IAllocator *);
+typedef mi::mdl::IMDL *(IMDL_factory)(bool, mi::base::IAllocator *);
 
 
 /// Pointer to the DSO handle. Cached here for unload().
@@ -211,7 +211,7 @@ mi::mdl::IMDL* load_mdl_compiler(const char* filename = 0)
 #endif // MI_PLATFORM_WINDOWS
     g_dso_handle = handle;
 
-    return ((IMDL_factory *)(symbol))(nullptr);
+    return ((IMDL_factory *)(symbol))(/*material_ior_is_varying=*/true, nullptr);
 }
 
 /// Unloads the mdl_core lib.
@@ -345,12 +345,16 @@ public:
     /// Constructor.
     ///
     /// \param mdl_compiler  the MDL compiler interface
-    Msg_context(mi::mdl::IMDL *mdl_compiler)
-    : m_out(mdl_compiler->create_std_stream(mi::mdl::IMDL::OS_STDOUT))
-    , m_printer(mi::base::make_handle(mdl_compiler->create_printer(m_out.get())))
-    , m_ctx(mdl_compiler->create_thread_context())
+    /// \param filename      when provided, messages are directed to file.
+    Msg_context(mi::mdl::IMDL *mdl_compiler, char const* filename = nullptr)
     {
+        m_out = filename == nullptr ?
+            mdl_compiler->create_std_stream(mi::mdl::IMDL::OS_STDOUT) :
+            mdl_compiler->create_file_output_stream(filename);
+            
+        m_printer = mi::base::make_handle(mdl_compiler->create_printer(m_out.get()));
         m_printer->enable_color(true);
+        m_ctx = mdl_compiler->create_thread_context();
     }
 
     /// Get the associated thread context.
@@ -369,8 +373,17 @@ public:
     void print_messages()
     {
         mi::mdl::Messages const &msgs = m_ctx->access_messages();
+        print_messages(msgs);
+    }
+
+    /// Print messages to stdout.
+    ///
+    /// \param msgs     the messages
+    void print_messages(mi::mdl::Messages const &msgs)
+    {
         for (size_t i = 0, n = msgs.get_message_count(); i < n; ++i) {
-            m_printer->print(msgs.get_message(i));
+            mi::mdl::IMessage const *msg = msgs.get_message(i);
+            m_printer->print(msg, /*include_notes=*/true);
         }
     }
 
@@ -400,6 +413,12 @@ public:
       : m_dag_be(mi::base::make_handle(mdl_compiler->load_code_generator("dag"))
         .get_interface<mi::mdl::ICode_generator_dag>())
     {
+        mi::mdl::Options &options = m_dag_be->access_options();
+
+        // We need to set these options to ensure that local function calls in
+        // materials work.
+        options.set_option(MDL_CG_DAG_OPTION_NO_LOCAL_FUNC_CALLS, "false");
+        options.set_option(MDL_CG_DAG_OPTION_INCLUDE_LOCAL_ENTITIES, "true");
     }
 
     /// Adds a module and all its imports to the module manager.
@@ -477,7 +496,7 @@ public:
     ///
     /// \param entity_name    the entity name
     ///
-    /// \returns the owning module of this entity if found, NULL otherwise
+    /// \returns the owning module of this entity if found, nullptr otherwise
     mi::mdl::IGenerated_code_dag const *get_owner_dag(char const *entity_name) const final
     {
         return nullptr;
@@ -645,7 +664,7 @@ public:
     Material_instance(
         mi::mdl::IGenerated_code_dag const *dag,
         size_t material_index,
-        mi::mdl::IGenerated_code_dag::IMaterial_instance *instance)
+        mi::mdl::IMaterial_instance *instance)
     : m_dag(dag, mi::base::DUP_INTERFACE)
     , m_material_index(material_index)
     , m_inst(instance, mi::base::DUP_INTERFACE)
@@ -653,7 +672,7 @@ public:
 
     /// Provides transparent access to the material instance mdl_core object.
     /// The reference count is not changed by this function.
-    mi::mdl::IGenerated_code_dag::IMaterial_instance *operator->() const
+    mi::mdl::IMaterial_instance *operator->() const
     {
         return m_inst.get();
     }
@@ -761,7 +780,7 @@ public:
     }
 
     /// Get the DAG containing the material of the material instance.
-    mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance> get_material_instance()
+    mi::base::Handle<mi::mdl::IMaterial_instance> get_material_instance()
         const
     {
         return m_inst;
@@ -877,7 +896,7 @@ public:
 private:
     mi::base::Handle<mi::mdl::IGenerated_code_dag const> m_dag;
     size_t m_material_index;
-    mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance> m_inst;
+    mi::base::Handle<mi::mdl::IMaterial_instance> m_inst;
 };
 
 /// Base class for compiling materials into specific targets.
@@ -889,12 +908,13 @@ public:
     /// Constructor.
     ///
     /// \param mdl_compiler  the MDL compiler interface
-    Material_compiler(mi::mdl::IMDL *mdl_compiler)
+    /// \param filename      when provided, messages are directed to file.
+    Material_compiler(mi::mdl::IMDL *mdl_compiler, char const* filename = nullptr)
     : m_mdl_compiler(mi::base::make_handle_dup(mdl_compiler))
     , m_dag_be(mi::base::make_handle(mdl_compiler->load_code_generator("dag"))
         .get_interface<mi::mdl::ICode_generator_dag>())
     , m_search_path(new MDL_search_path())
-    , m_msg_context(mdl_compiler)
+    , m_msg_context(mdl_compiler, filename)
     , m_module_manager(mdl_compiler)
     {
         // increment reference counter, as the MDL compiler will take ownership (and not increment it),
@@ -902,6 +922,13 @@ public:
         m_search_path->retain();
 
         m_mdl_compiler->install_search_path(m_search_path.get());
+
+        mi::mdl::Options &options = m_dag_be->access_options();
+
+        // We support local entity usage inside MDL materials in neuray, but ...
+        options.set_option(MDL_CG_DAG_OPTION_NO_LOCAL_FUNC_CALLS, "false");
+        // ... we need entries for those in the DB, hence generate them
+        options.set_option(MDL_CG_DAG_OPTION_INCLUDE_LOCAL_ENTITIES, "true");
     }
 
     /// Get the index of a material in a given module DAG.
@@ -970,6 +997,14 @@ public:
         m_msg_context.print_messages();
     }
 
+    /// Print messages to the console.
+    ///
+    /// \param msgs     the messages
+    void print_messages(mi::mdl::Messages const &msgs)
+    {
+        m_msg_context.print_messages(msgs);
+    }
+
     /// Get the stdout printer.
     mi::base::Handle<mi::mdl::IPrinter> get_printer()
     {
@@ -1033,8 +1068,8 @@ public:
         // Load the MDL module
         mi::base::Handle<mi::mdl::IModule const> module(
             m_mdl_compiler->load_module(m_msg_context, module_name, &m_module_manager));
+        m_msg_context.print_messages();
         if (!module || !module->is_valid()) {
-            m_msg_context.print_messages();
             check_success(!"Loading module failed");
         }
         m_module_manager.add_module(module.get());
@@ -1068,7 +1103,7 @@ public:
         if (mat_index == ~0)
             return Material_instance();
 
-        mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance> mat_instance(
+        mi::base::Handle<mi::mdl::IMaterial_instance> mat_instance(
             code_dag->create_material_instance(mat_index));
         if (!mat_instance)
             return Material_instance();
@@ -1084,7 +1119,8 @@ public:
     {
         // Load the MDL module
         std::string module_name = get_module_name(material_name);
-        mi::base::Handle<mi::mdl::IGenerated_code_dag const> code_dag(compile_module(module_name.c_str()));
+        mi::base::Handle<mi::mdl::IGenerated_code_dag const> code_dag(
+            compile_module(module_name.c_str()));
 
         return create_material_instance(code_dag.get(), material_name);
     }
@@ -1097,13 +1133,19 @@ public:
     /// \param mat_inst           the material instance
     /// \param args               material instance arguments
     /// \param class_compilation  if true, create a material instance in class compilation mode
+    /// \param flags              material instantiation flags
     /// \param use_zero_defaults  if true, set open parameters to zero
     mi::mdl::IGenerated_code_dag::Error_code initialize_material_instance(
         Material_instance              &mat_inst,
         Array_ref<Call_argument> const &args,
         bool                           class_compilation,
+        mi::Uint32                     flags,
         bool                           use_zero_defaults = false)
     {
+        flags |= class_compilation
+            ? mi::mdl::IMaterial_instance::DEFAULT_CLASS_COMPILATION
+            : mi::mdl::IMaterial_instance::INSTANCE_COMPILATION;
+
         std::vector<mi::mdl::DAG_node const *> real_args;
         size_t used_args = 0;
         size_t num_args = args.size();
@@ -1134,7 +1176,7 @@ public:
             mi::mdl::DAG_node const *def_param = mat_inst.get_dag_parameter_default(i);
             if (def_param == nullptr) {
                 if (!use_zero_defaults)
-                    return mi::mdl::IGenerated_code_dag::EC_TOO_FEW_ARGUMENTS;
+                    return mi::mdl::EC_TOO_FEW_ARGUMENTS;
                 def_param = mat_inst->create_constant(
                     mat_inst->get_value_factory()->create_zero(
                         mat_inst.get_dag_parameter_type(i)));
@@ -1143,9 +1185,13 @@ public:
             real_args.push_back(def_param);
         }
 
+        mi::mdl::IType const *mat_ty = mat_inst->
+            get_type_factory()->
+            get_predefined_struct(mi::mdl::IType_struct::Predefined_id::SID_MATERIAL);
+
         // Not all arguments were used?
         if (used_args != args.size())
-            return mi::mdl::IGenerated_code_dag::EC_TOO_MANY_ARGUMENTS;
+            return mi::mdl::EC_TOO_MANY_ARGUMENTS;
 
         return mat_inst->initialize(
             &m_module_manager,
@@ -1154,16 +1200,15 @@ public:
             int(real_args.size()),
             real_args.data(),
             /*use_temporaries=*/ false,
-            class_compilation
-                ? mi::mdl::IGenerated_code_dag::IMaterial_instance::DEFAULT_CLASS_COMPILATION
-                : mi::mdl::IGenerated_code_dag::IMaterial_instance::INSTANCE_COMPILATION,
+            flags,
             /*evaluator=*/ nullptr,
             /*fold_meters_per_scene_unit=*/ true,
             /*mdl_meters_per_scene_unit=*/ 1.0f,
             /*wavelength_min=*/ 380.0f,
             /*wavelength_max=*/ 780.0f,
             /*fold_params=*/ nullptr,
-            /*num_fold_params=*/ 0);
+            /*num_fold_params=*/ 0,
+            /*target_type=*/ mat_ty);
     }
 
 protected:
@@ -1183,10 +1228,10 @@ int wmain(int argc, wchar_t* argv[]) { \
     char** argv_utf8 = new char*[argc]; \
     for (int i = 0; i < argc; i++) { \
         LPWSTR warg = argv[i]; \
-        DWORD size = WideCharToMultiByte(CP_UTF8, 0, warg, -1, NULL, 0, NULL, NULL); \
+        DWORD size = WideCharToMultiByte(CP_UTF8, 0, warg, -1, nullptr, 0, nullptr, nullptr); \
         check_success(size > 0); \
         argv_utf8[i] = new char[size]; \
-        DWORD result = WideCharToMultiByte(CP_UTF8, 0, warg, -1, argv_utf8[i], size, NULL, NULL); \
+        DWORD result = WideCharToMultiByte(CP_UTF8, 0, warg, -1, argv_utf8[i], size, nullptr, nullptr); \
         check_success(result > 0); \
     } \
     SetConsoleOutputCP(CP_UTF8); \

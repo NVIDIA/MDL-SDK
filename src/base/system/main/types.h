@@ -53,18 +53,18 @@ using mi::Float64;                       //< 64-bit IEEE-754 double precision fl
 using mi::Size;                          //< architecture-dependent unsigned word size
 using mi::Difference;                    //< architecture-dependent signed word size
 
-typedef Float32			Scalar;  //< 32-bit IEEE-754 single precision float
-typedef Float64			Dscalar; //< 64-bit IEEE-754 double precision float
-typedef mi::Uint32		Uint;    //< unsigned integer
-typedef unsigned char		Uchar;	 //< unsigned character
-typedef unsigned short		Ushort;	 //< unsigned short
-typedef signed int		Sint;	 //< signed integer
+typedef Float32                 Scalar;  //< 32-bit IEEE-754 single precision float
+typedef Float64                 Dscalar; //< 64-bit IEEE-754 double precision float
+typedef mi::Uint32              Uint;    //< unsigned integer
+typedef unsigned char           Uchar;   //< unsigned character
+typedef unsigned short          Ushort;  //< unsigned short
+typedef signed int              Sint;    //< signed integer
 
 #ifdef MI_PLATFORM_WINDOWS
 #ifdef MI_ARCH_64BIT
-typedef __int64			ssize_t;
+typedef __int64                 ssize_t;
 #else
-typedef long			ssize_t;
+typedef long                    ssize_t;
 #endif
 #endif
 

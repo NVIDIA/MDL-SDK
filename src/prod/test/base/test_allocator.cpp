@@ -48,7 +48,7 @@ MI_TEST_AUTO_FUNCTION( test_allocator )
     MI_CHECK_EQUAL( 1, alloc->retain());
     MI_CHECK_EQUAL( 1, alloc->release());
     void* p = alloc->malloc( 1024);
-    MI_CHECK( 0 != p);
+    MI_CHECK( p);
     alloc->free( p);
 }
 
@@ -56,7 +56,7 @@ MI_TEST_AUTO_FUNCTION( test_std_allocator )
 {
     mi::base::IAllocator* alloc = mi::base::Default_allocator::get_instance();
 
-    typedef mi::base::Std_allocator<int> Std_int_alloc;
+    using Std_int_alloc = mi::base::Std_allocator<int>;
     Std_int_alloc std_int_alloc( alloc);
 
     std::list< int, Std_int_alloc> ls( std_int_alloc);
@@ -67,10 +67,10 @@ MI_TEST_AUTO_FUNCTION( test_std_allocator )
     vs.push_back( 5);
     MI_CHECK_EQUAL( 5, vs.front());
 
-    typedef mi::base::Std_allocator<std::pair<const int,int>> Std_pair_int_int_alloc;
+    using Std_pair_int_int_alloc = mi::base::Std_allocator<std::pair<const int, int>>;
     Std_pair_int_int_alloc std_pair_int_int_alloc( alloc);
-    
-    std::map< int, int, std::less<int>, Std_pair_int_int_alloc> ms( std_pair_int_int_alloc);
+
+    std::map< int, int, std::less<>, Std_pair_int_int_alloc> ms( std_pair_int_int_alloc);
     ms[42] = 5;
     MI_CHECK_EQUAL( 5, ms[42]);
 }

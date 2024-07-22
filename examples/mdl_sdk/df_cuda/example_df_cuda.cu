@@ -1170,8 +1170,9 @@ __device__ inline bool trace_scene(
                 aux_data.roughness = result_buffer_3;
                 aux_data.handle_count = df_eval_slots;
             #endif
+            aux_data.flags = params.bsdf_data_flags;
 
-            // outer loop in case the are more material tags than slots in the evaluate struct
+            // outer loop in case there are more material tags than slots in the evaluate struct
             unsigned offset = 0;
             #if DF_HANDLE_SLOTS != DF_HSM_NONE
             for (; offset < bsdf_mtag_to_gtag_map_size; offset += df_eval_slots)
@@ -1230,6 +1231,7 @@ __device__ inline bool trace_scene(
                     eval_data.bsdf_glossy = result_buffer_1;
                     eval_data.handle_count = df_eval_slots;
                 #endif
+                eval_data.flags = params.bsdf_data_flags;
 
                 // outer loop in case the are more material tags than slots in the evaluate struct
                 unsigned offset = 0;
@@ -1319,6 +1321,7 @@ __device__ inline bool trace_scene(
                     eval_data.bsdf_glossy = result_buffer_1;
                     eval_data.handle_count = df_eval_slots;
                 #endif
+                eval_data.flags = params.bsdf_data_flags;
 
                 // outer loop in case the are more material tags than slots in the evaluate struct
                 unsigned offset = 0;
@@ -1389,7 +1392,7 @@ __device__ inline bool trace_scene(
             sample_data.xi.y = rnd(seed);
             sample_data.xi.z = rnd(seed);
             sample_data.xi.w = rnd(seed);
-
+            sample_data.flags = params.bsdf_data_flags;
 
             // sample the materials BSDF
             as_bsdf_sample(func_idx)(&sample_data, &state, &mdl_resources.data, arg_block);
@@ -1450,6 +1453,7 @@ __device__ inline bool trace_scene(
                 {
                     const float3 k2 = sample_data.k2;
                     pdf_data.k2 = k2;
+                    pdf_data.flags = params.bsdf_data_flags;
 
                     // get pdf corresponding to the materials BSDF
                     as_bsdf_pdf(func_idx)(&pdf_data, &state, &mdl_resources.data, arg_block);

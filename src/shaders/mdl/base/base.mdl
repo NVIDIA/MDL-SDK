@@ -463,8 +463,8 @@ float4x4 compute_cylindric_transform(
 
     // make normal pointing to the 'outside' of the projector geometry body
     // (to avoid potentially different uvs on front and backface)
-    //use geometry_normal to avoid random flipping if normals are already pertubed
-    if ((t_pos.x * g_normal.x + t_pos.y * g_normal.y + t_pos.z * g_normal.z) < 0.0f)
+    // use geometry_normal to avoid random flipping if normals are already pertubed
+    if ((t_pos.x * g_normal.x + t_pos.y * g_normal.y + t_pos.z * g_normal.z) < math::min(math::length(float3(t_pos.x, t_pos.y, t_pos.z)) * 1e-9f, 1e-5f))
         t_normal = -t_normal;
 
     float3 uv_coord(0.);
@@ -567,10 +567,12 @@ uniform float4x4 compute_cubic_transform(
     float4 g_normal =  projection_transform*float4(g_normal_3.x,g_normal_3.y,g_normal_3.z,0);
     float4 t_position = projection_transform*float4(pos.x,pos.y,pos.z,1);
 
-    //flip for backside to avoid different uv on front and back.
-    //use geometry_normal to avoid random flipping if normals are already pertubed
-    if ((t_position.x * g_normal.x + t_position.y * g_normal.y + t_position.z * g_normal.z) < 0.0f)
+    // make normal pointing to the 'outside' of the projector geometry body
+    // (to avoid potentially different uvs on front and backface)
+    // use geometry_normal to avoid random flipping if normals are already pertubed
+    if ((t_position.x * g_normal.x + t_position.y * g_normal.y + t_position.z * g_normal.z) < math::min(math::length(float3(t_position.x, t_position.y, t_position.z)) * 1e-9f, 1e-5f))
         t_normal = -t_normal;
+
     // Find out on which cube face is the intersection point
     //transform is then planar, but based on a rotated/flipped coordsys
     if (math::abs(t_normal.x) >= math::abs(t_normal.y) && math::abs(t_normal.x) >= math::abs(t_normal.z)) {
@@ -2516,7 +2518,9 @@ export float3 file_bump_texture(
     int2 texi3 = texremapu( crop_texres, crop_ofs, float2(tex2.x + 2.f, tex2.y + 2.f), wrap_u, wrap_v );
 
     float u = tex2.x - math::floor(tex2.x);
+    u = (tex2.x < 0.0f && u == 0.0f) ? 1.0f : u;
     float v = tex2.y - math::floor(tex2.y);
+    v = (tex2.y < 0.0f && v == 0.0f) ? 1.0f : v;
 
     if (!b_spline)
     {

@@ -53,9 +53,9 @@ struct Args_wrapper {
 
         for ( size_t i = 0; i < DIM; ++i) {
             const Node_param& param( node_type->parameters[i]);
-            args[i].param_name = param.param_name.c_str();
+            args[i].param_name = param.param_name;
             if ( i >= dim) { // note: glossy BSDFs have at least three positional args
-                args[i].arg = e.mk_default( param.param_type.c_str(), param.param_default.c_str());
+                args[i].arg = e.mk_default( param.param_type, param.param_default);
             }
         }
     }

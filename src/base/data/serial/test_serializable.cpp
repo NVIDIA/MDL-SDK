@@ -76,8 +76,8 @@ MI::SERIAL::Serializable* test_type_4_factory()
 //----------------------------------------------------------------------
 // Comparison of Test_type_0 for equality.
 bool operator==(
-    const Test_type_0 & lhs,				// lhs
-    const Test_type_0 & rhs)				// rhs
+    const Test_type_0 & lhs,                            // lhs
+    const Test_type_0 & rhs)                            // rhs
 {
     return lhs.m_int == rhs.m_int;
 }
@@ -85,25 +85,25 @@ bool operator==(
 //----------------------------------------------------------------------
 // Comparison of Test_type_1 for equality.
 bool operator==(
-    const Test_type_1 & lhs,				// lhs
-    const Test_type_1 & rhs)				// rhs
+    const Test_type_1 & lhs,                            // lhs
+    const Test_type_1 & rhs)                            // rhs
 {
     if (lhs.m_int != rhs.m_int)
-	return false;
+        return false;
     if (lhs.m_array.size() != rhs.m_array.size())
-	return false;
+        return false;
     std::vector<int>::const_iterator it_lhs, it_rhs;
     std::vector<int>::const_iterator end_lhs=lhs.m_array.end(), end_rhs=rhs.m_array.end();
     for (
-	it_lhs=lhs.m_array.begin(),it_rhs=rhs.m_array.begin();
-	(it_lhs != end_lhs) && (it_rhs != end_rhs);
-	++it_lhs, ++it_rhs)
+        it_lhs=lhs.m_array.begin(),it_rhs=rhs.m_array.begin();
+        (it_lhs != end_lhs) && (it_rhs != end_rhs);
+        ++it_lhs, ++it_rhs)
     {
-	if (*it_lhs != *it_rhs)
-	    return false;
+        if (*it_lhs != *it_rhs)
+            return false;
     }
     if (lhs.m_string != rhs.m_string)
-	return false;
+        return false;
 
     return true;
 }
@@ -111,8 +111,8 @@ bool operator==(
 //----------------------------------------------------------------------
 // Comparison of Test_type_2 for equality.
 bool operator==(
-    const Test_type_2 & lhs,				// lhs
-    const Test_type_2 & rhs)				// rhs
+    const Test_type_2 & lhs,                            // lhs
+    const Test_type_2 & rhs)                            // rhs
 {
     // Compare m_int and m_ext (if both objects have the extension set)
     return (lhs.m_int == rhs.m_int) &&
@@ -140,7 +140,7 @@ const Serializable* Test_type_0::serialize(
 //----------------------------------------------------------------------
 // Deserialization.
 Serializable* Test_type_0::deserialize(
-    Deserializer* deserializer)				// deserialize from here
+    Deserializer* deserializer)                         // deserialize from here
 {
     deserializer->read(&m_int);
     return this + 1;
@@ -160,7 +160,7 @@ const Serializable* Test_type_1::serialize(
 //----------------------------------------------------------------------
 // Deserialization.
 Serializable* Test_type_1::deserialize(
-    Deserializer* deserializer)				// deserialize from here
+    Deserializer* deserializer)                         // deserialize from here
 {
     deserializer->read(&m_int);
     MI::SERIAL::read(deserializer, &m_array);
@@ -185,7 +185,7 @@ const Serializable* Test_type_2::serialize(
 //----------------------------------------------------------------------
 // Deserialization.
 Serializable* Test_type_2::deserialize(
-    Deserializer* deserializer)				// deserialize from here
+    Deserializer* deserializer)                         // deserialize from here
 {
     deserializer->read(&m_int);
     if (m_use_ext && deserializer->check_extension())
@@ -210,7 +210,7 @@ const Serializable* Test_type_3::serialize(
 //----------------------------------------------------------------------
 // Deserialization.
 Serializable* Test_type_3::deserialize(
-    Deserializer* deserializer)				// deserialize from here
+    Deserializer* deserializer)                         // deserialize from here
 {
     deserializer->read(&m_data);
     m_ptr = dynamic_cast<Test_type_2*>(deserializer->deserialize());

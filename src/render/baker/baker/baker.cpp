@@ -40,6 +40,7 @@
 #include <mi/mdl/mdl_mdl.h>
 #include <mi/neuraylib/icanvas.h>
 #include <mi/neuraylib/itile.h>
+#include <mi/neuraylib/vector_typedefs.h>
 
 #include <base/system/main/access_module.h>
 #include <base/system/main/module_registration.h>
@@ -68,18 +69,14 @@ namespace MI {
 
 namespace BAKER {
 
-typedef mi::math::Vector<Scalar, 2> Vector2;
-typedef mi::math::Vector<Scalar, 3> Vector3;
-
-inline Vector3 from_polar(
-    const Vector2& v)// polar coordinates
+inline mi::Float32_3 from_polar(float theta, float phi) // polar coordinates
 {
-    const float cos_theta = -cosf(v[0]);
+    const float cos_theta = -cosf(theta);
     const float sin_theta = sqrtf(1.0f - cos_theta * cos_theta);
-    return Vector3(
-        -sin_theta * cosf(v[1]),
+    return mi::Float32_3(
+        -sin_theta * cosf(phi),
         cos_theta,
-        -sin_theta * sinf(v[1]));
+        -sin_theta * sinf(phi));
 }
 
 MI_FORCE_INLINE float radinv2(const unsigned int i/*, const unsigned int scramble = 0*/);
@@ -93,6 +90,10 @@ public:
     Baker_fragmented_job(
         const mi::neuraylib::ITarget_code* target_code,
         mi::neuraylib::ICanvas* texture,
+        mi::Float32 min_u,
+        mi::Float32 max_u,
+        mi::Float32 min_v,
+        mi::Float32 max_v,
         mi::Uint32 samples,
         mi::Uint32 state_flags,
         bool is_environment);
@@ -113,6 +114,10 @@ protected:
 
     mi::Uint32  m_tex_width;
     mi::Uint32  m_tex_height;
+    mi::Float32 m_min_u;
+    mi::Float32 m_max_u;
+    mi::Float32 m_min_v;
+    mi::Float32 m_max_v;
     mi::Uint32  m_num_samples;
     mi::Uint32  m_state_flags;
     bool        m_is_environment;
@@ -128,11 +133,19 @@ protected:
 Baker_fragmented_job::Baker_fragmented_job(
     const mi::neuraylib::ITarget_code* target_code,
     mi::neuraylib::ICanvas* texture,
+    const mi::Float32 min_u,
+    const mi::Float32 max_u,
+    const mi::Float32 min_v,
+    const mi::Float32 max_v,
     const mi::Uint32 samples,
     const mi::Uint32 state_flags,
     const bool is_environment)
     : m_target_code(target_code, mi::base::DUP_INTERFACE)
     , m_texture(texture, mi::base::DUP_INTERFACE)
+    , m_min_u(min_u)
+    , m_max_u(max_u)
+    , m_min_v(min_v)
+    , m_max_v(max_v)
     , m_num_samples(samples)
     , m_state_flags(state_flags)
     , m_is_environment(is_environment)
@@ -195,7 +208,7 @@ static void prepare_cpu_state(
         state.world_to_object       = &s_unity[0];
         state.object_to_world       = &s_unity[0];
         state.object_id             = 0;
-        state.meters_per_scene_unit = 1.0f; //!!??
+        state.meters_per_scene_unit = 1.0f;
     }
 }
 
@@ -235,6 +248,8 @@ void Baker_fragmented_job::execute_fragment(
     mi::base::Handle<mi::neuraylib::ITile> tile(m_texture->get_tile());
 
     const float inv_spp = (float)(1.0 / (double)m_num_samples);
+    const mi::Float32 range_v(m_max_v - m_min_v);
+    const mi::Float32 range_u(m_max_u - m_min_u);
     for (mi::Uint32 i = start_row; i <= end_row; i++)
     {
         for (mi::Uint32 j = start_col; j <= end_col; j++)
@@ -244,13 +259,13 @@ void Baker_fragmented_job::execute_fragment(
 
             for (mi::Uint32 k = 0; k < m_num_samples; k++) {
 
-                const mi::Float32 y = ((float)i + fractf(radinv2(k) + 0.5f)) * m_dv;
-                const mi::Float32 x = ((float)j + fractf((float)k * inv_spp + 0.5f)) * m_du;
+                const mi::Float32 y = ((((float)i + fractf(radinv2(k) + 0.5f)) * m_dv) * range_v) + m_min_v;
+                const mi::Float32 x = ((((float)j + fractf((float)k * inv_spp + 0.5f)) * m_du) * range_u) + m_min_u;
 
                 if (m_is_environment) {
                     const float phi = x * (float)(2.0 * M_PI);
                     const float theta = y * (float)(M_PI);
-                    state_env.direction = from_polar(Vector2(theta, phi));
+                    state_env.direction = from_polar(theta, phi);
 
                     if (m_target_code->execute_environment(
                             0, state_env, nullptr, (mi::Spectrum_struct*)&pixel.x) != 0) {
@@ -261,7 +276,7 @@ void Baker_fragmented_job::execute_fragment(
                     if (m_state_flags & BAKER_STATE_POSITION_DIRECTION) {
                         const float phi = x * (float)(2.0 * M_PI);
                         const float theta = y * (float)(M_PI);
-                        state.position = from_polar(Vector2(theta, phi));
+                        state.position = from_polar(theta, phi);
                     } else {
                         state.position = mi::Float32_3(x, y, 0.0f);
                         tex_coords = mi::Float32_3(x, y, 0.0f);
@@ -449,10 +464,6 @@ Baker_module_impl::Baker_module_impl()
 {
 }
 
-Baker_module_impl::~Baker_module_impl()
-{
-}
-
 bool Baker_module_impl::init()
 {
 
@@ -477,6 +488,7 @@ void Baker_module_impl::exit()
 }
 
 
+
 const IBaker_code* Baker_module_impl::create_baker_code(
     DB::Transaction* transaction,
     const MDL::Mdl_compiled_material* compiled_material,
@@ -488,7 +500,7 @@ const IBaker_code* Baker_module_impl::create_baker_code(
 {
     return create_baker_code_internal(
         transaction, compiled_material, nullptr, path,
-        resource, gpu_device_id, pixel_type, is_uniform);
+        resource, gpu_device_id, pixel_type, is_uniform, false);
 }
 
 const IBaker_code* Baker_module_impl::create_environment_baker_code(
@@ -501,7 +513,7 @@ const IBaker_code* Baker_module_impl::create_environment_baker_code(
     std::string pixel_type;
     return create_baker_code_internal(
         transaction, nullptr, environment_function, nullptr,
-        resource, gpu_device_id, pixel_type, is_uniform);
+        resource, gpu_device_id, pixel_type, is_uniform, false);
 }
 
 
@@ -513,7 +525,8 @@ const IBaker_code* Baker_module_impl::create_baker_code_internal(
     mi::neuraylib::Baker_resource resource,
     mi::Uint32 gpu_device_id,
     std::string& pixel_type,
-    bool& is_uniform) const
+    bool& is_uniform,
+    const bool use_custom_cpu_tex_runtime) const
 {
     TIME::Stopwatch mdl_time;
     mdl_time.start();
@@ -521,7 +534,7 @@ const IBaker_code* Baker_module_impl::create_baker_code_internal(
     if (compiled_material)
     {
         mi::base::Handle<const MDL::IExpression> field(
-            compiled_material->lookup_sub_expression( path));
+            compiled_material->lookup_sub_expression( transaction, path));
 
         if( !field)
             return 0;
@@ -594,7 +607,6 @@ const IBaker_code* Baker_module_impl::create_baker_code_internal(
         break;
     }
 
-    use_gpu = false;
 
     if (!use_gpu && !use_cpu) {
         // no resource available
@@ -654,8 +666,17 @@ const IBaker_code* Baker_module_impl::create_baker_code_internal(
 
         mi::Sint32 result = be_native.set_option( "num_texture_spaces", "1");
         ASSERT( M_BAKER, result == 0);
-        boost::ignore_unused( result);
+        if (use_custom_cpu_tex_runtime) {
+            result = be_native.set_option("use_builtin_resource_handler", "off");
+        } else {
+            result = be_native.set_option("use_builtin_resource_handler", "on");
+        }
+        ASSERT( M_BAKER, result == 0);
 
+        result = context.set_option("fold_meters_per_scene_unit", true);
+        ASSERT(M_BAKER, result == 0);
+        boost::ignore_unused(result);
+        
         if (compiled_material)
             cpu_code = mi::base::make_handle(
                 be_native.translate_material_expression(
@@ -696,10 +717,25 @@ const IBaker_code* Baker_module_impl::create_baker_code_internal(
         function_call != nullptr);
 }
 
+
 mi::Sint32 Baker_module_impl::bake_texture(
     DB::Transaction* transaction,
     const IBaker_code* baker_code,
     mi::neuraylib::ICanvas* texture,
+    const mi::Uint32 samples,
+    const mi::Uint32 state_flags) const
+{
+    return bake_texture(transaction, baker_code, texture, 0, 1, 0, 1, samples, state_flags);
+}
+    
+mi::Sint32 Baker_module_impl::bake_texture(
+    DB::Transaction* transaction,
+    const IBaker_code* baker_code,
+    mi::neuraylib::ICanvas* texture,
+    mi::Float32 min_u,
+    mi::Float32 max_u,
+    mi::Float32 min_v,
+    mi::Float32 max_v,
     const mi::Uint32 samples,
     const mi::Uint32 state_flags) const
 {
@@ -709,7 +745,7 @@ mi::Sint32 Baker_module_impl::bake_texture(
 
     if (cpu_code) {
         const bool is_env = static_cast<Baker_code_impl const *>(baker_code)->is_environment();
-        Baker_fragmented_job job(cpu_code.get(), texture, samples, state_flags, is_env);
+        Baker_fragmented_job job(cpu_code.get(), texture, min_u, max_u, min_v, max_v, samples, state_flags, is_env);
         transaction->execute_fragmented(&job, texture->get_resolution_y());
         if (job.successful()) {
             // success
@@ -772,6 +808,7 @@ mi::Sint32 Baker_module_impl::bake_constant(
     log_error("Material expression execution failed.");
     return -1;
 }
+
 
 static SYSTEM::Module_registration<Baker_module_impl> s_module( SYSTEM::M_BAKER, "BAKER");
 

@@ -111,6 +111,12 @@ public:
         }
     }
 
+    /// Write a value.
+    void write_encoded(IValue const *v) {
+       Tag_t t = get_value_tag(v);
+       write_encoded_tag(t);
+    }
+
     /// Write a string.
     void write_encoded(string const &s) {
         write_cstring(s.c_str());
@@ -192,6 +198,25 @@ public:
         IModule const *module,
         char const    *internal_space,
         char const    *context_name);
+
+    /// Creates a new (empty) material instance for deserialization.
+    ///
+    /// \param alloc                     The allocator.
+    /// \param mdl                       The mdl compiler.
+    /// \param material_index            The material index of the instance.
+    /// \param internal_space            The internal space for which this instance was compiled.
+    /// \param unsafe_math_optimizations Optimization settings for match for which
+    ///                                  the instance was compiled.
+    /// \param context_name              The name of the context (used for error messages).
+    ///
+    /// \return a new empty material instance
+    Generated_code_dag::Material_instance *create_material_instance(
+        IAllocator *alloc,
+        MDL *mdl,
+        size_t      material_index,
+        char const *internal_space,
+        bool        unsafe_math_optimizations,
+        char const *context_name);
 
     /// Constructor.
     ///

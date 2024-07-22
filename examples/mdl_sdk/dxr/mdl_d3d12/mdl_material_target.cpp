@@ -48,10 +48,10 @@ std::string compute_shader_cache_filename(
     bool create_parent_folders = false)
 {
     std::string compiler = "dxc";
-#ifdef MDL_ENABLE_SLANG
-    if(options.use_slang)
-        compiler = "slang";
-#endif
+    #ifdef MDL_ENABLE_SLANG
+        if(options.use_slang)
+            compiler = "slang";
+    #endif
 
     std::string folder = mi::examples::io::get_executable_folder() +"/shader_cache/" + compiler;
     if (create_parent_folders)
@@ -251,7 +251,8 @@ Mdl_material_target::~Mdl_material_target()
     if (m_read_only_data_segment) delete m_read_only_data_segment;
 
     // free heap block
-    m_app->get_resource_descriptor_heap()->free_views(m_first_resource_heap_handle);
+    if(m_first_resource_heap_handle.is_valid())
+        m_app->get_resource_descriptor_heap()->free_views(m_first_resource_heap_handle);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -293,6 +294,14 @@ bool Mdl_material_target::add_material_to_link_unit(
     // material before selecting functions for code generation.
 
     // third, either the bsdf or the edf need to be non-default (black)
+
+    // helper to check if a expression exists in the material type
+    auto exists = [&compiled_material](const char* expression_path)
+    {
+        mi::base::Handle<const mi::neuraylib::IExpression> expr(
+            compiled_material->lookup_sub_expression(expression_path));
+        return expr.is_valid_interface();
+    };
 
     // helper function to check if a distribution function is invalid
     // if true, the distribution function needs no eval because it has no contribution
@@ -366,78 +375,168 @@ bool Mdl_material_target::add_material_to_link_unit(
     // select expressions to generate HLSL code for
     std::vector<mi::neuraylib::Target_function_description> selected_functions;
 
-    selected_functions.push_back(mi::neuraylib::Target_function_description(
-        "init", "mdl_init"));
-
-    // add surface scattering if available
-    if (!is_invalid_df("surface.scattering"))
+    // always add init
     {
         selected_functions.push_back(mi::neuraylib::Target_function_description(
-            "surface.scattering", "mdl_surface_scattering"));
-        interface_data.has_surface_scattering = true;
+            "init", "mdl_init"));
+        interface_data.add_code_feature(Material_code_feature::HAS_INIT);
     }
 
     // add surface emission if available
-    if (!is_invalid_df("surface.emission.emission") && !is_constant_black_color("surface.emission.intensity"))
+    if (exists("surface.emission.emission") && 
+        exists("surface.emission.intensity") && 
+        !is_invalid_df("surface.emission.emission") &&
+        !is_constant_black_color("surface.emission.intensity"))
     {
         selected_functions.push_back(mi::neuraylib::Target_function_description(
             "surface.emission.emission", "mdl_surface_emission"));
         selected_functions.push_back(mi::neuraylib::Target_function_description(
             "surface.emission.intensity", "mdl_surface_emission_intensity"));
-        interface_data.has_surface_emission = true;
+        interface_data.add_code_feature(Material_code_feature::SURFACE_EMISSION);
     }
 
     // add absorption
-    if (!is_constant_black_color("volume.absorption_coefficient"))
+    if (exists("volume.absorption_coefficient") && 
+        !is_constant_black_color("volume.absorption_coefficient"))
     {
         selected_functions.push_back(mi::neuraylib::Target_function_description(
             "volume.absorption_coefficient", "mdl_volume_absorption_coefficient"));
-        interface_data.has_volume_absorption = true;
+        interface_data.add_code_feature(Material_code_feature::VOLUME_ABSORPTION);
+    }
+
+    // add surface scattering if available
+    if (exists("surface.scattering") && !is_invalid_df("surface.scattering"))
+    {
+        selected_functions.push_back(mi::neuraylib::Target_function_description(
+            "surface.scattering", "mdl_surface_scattering"));
+        interface_data.add_code_feature(Material_code_feature::SURFACE_SCATTERING);
     }
 
     // thin walled and potentially with a different backface
-    if (!is_constant_false("thin_walled"))
+    if (exists("thin_walled") && !is_constant_false("thin_walled"))
     {
         selected_functions.push_back(mi::neuraylib::Target_function_description(
             "thin_walled", "mdl_thin_walled"));
-        interface_data.can_be_thin_walled = true;
+        interface_data.add_code_feature(Material_code_feature::CAN_BE_THIN_WALLED);
 
-        // back faces could be different for thin walled materials
-        // we only need to generate new code
-        // 1. if surface and backface are different
-        bool need_backface_bsdf =
-            compiled_material->get_slot_hash(mi::neuraylib::SLOT_SURFACE_SCATTERING) !=
-            compiled_material->get_slot_hash(mi::neuraylib::SLOT_BACKFACE_SCATTERING);
-        bool need_backface_edf =
-            compiled_material->get_slot_hash(mi::neuraylib::SLOT_SURFACE_EMISSION_EDF_EMISSION) !=
-            compiled_material->get_slot_hash(mi::neuraylib::SLOT_BACKFACE_EMISSION_EDF_EMISSION);
-
-        // 2. either the bsdf or the edf need to be non-default (black)
-        bool none_default_backface = 
-            !is_invalid_df("backface.scattering") || !is_invalid_df("backface.emission.emission");
-        need_backface_bsdf &= none_default_backface;
-        need_backface_edf &= none_default_backface;
-
-        if (need_backface_bsdf || need_backface_edf)
+        if (exists("backface.scattering"))
         {
-            // generate code for both backface functions here, even if they are black
-            // because it could be requested to have black backsides
-            selected_functions.push_back(mi::neuraylib::Target_function_description(
-                "backface.scattering", "mdl_backface_scattering"));
-            interface_data.has_backface_scattering = true;
+            // back faces could be different for thin walled materials
+            // we only need to generate new code
+            // 1. if surface and backface are different
+            bool need_backface_bsdf =
+                compiled_material->get_slot_hash(mi::neuraylib::SLOT_SURFACE_SCATTERING) !=
+                compiled_material->get_slot_hash(mi::neuraylib::SLOT_BACKFACE_SCATTERING);
+            bool need_backface_edf =
+                compiled_material->get_slot_hash(mi::neuraylib::SLOT_SURFACE_EMISSION_EDF_EMISSION) !=
+                compiled_material->get_slot_hash(mi::neuraylib::SLOT_BACKFACE_EMISSION_EDF_EMISSION) || 
+                compiled_material->get_slot_hash(mi::neuraylib::SLOT_SURFACE_EMISSION_INTENSITY) !=
+                compiled_material->get_slot_hash(mi::neuraylib::SLOT_BACKFACE_EMISSION_INTENSITY) ||
+                compiled_material->get_slot_hash(mi::neuraylib::SLOT_SURFACE_EMISSION_MODE) !=
+                compiled_material->get_slot_hash(mi::neuraylib::SLOT_BACKFACE_EMISSION_MODE);
 
-            selected_functions.push_back(mi::neuraylib::Target_function_description(
-                "backface.emission.emission", "mdl_backface_emission"));
-            selected_functions.push_back(mi::neuraylib::Target_function_description(
-                "backface.emission.intensity", "mdl_backface_emission_intensity"));
-            interface_data.has_backface_emission = true;
+            // 2. either the bsdf or the edf need to be non-default (black)
+            bool none_default_backface =
+                !is_invalid_df("backface.scattering") || !is_invalid_df("backface.emission.emission");
+            need_backface_bsdf &= none_default_backface;
+            need_backface_edf &= none_default_backface;
+
+            if (need_backface_bsdf || need_backface_edf)
+            {
+                // generate code for both backface functions here, even if they are black
+                // because it could be requested to have black backsides
+                selected_functions.push_back(mi::neuraylib::Target_function_description(
+                    "backface.scattering", "mdl_backface_scattering"));
+                interface_data.add_code_feature(Material_code_feature::BACKFACE_SCATTERING);
+
+                selected_functions.push_back(mi::neuraylib::Target_function_description(
+                    "backface.emission.emission", "mdl_backface_emission"));
+                selected_functions.push_back(mi::neuraylib::Target_function_description(
+                    "backface.emission.intensity", "mdl_backface_emission_intensity"));
+                interface_data.add_code_feature(Material_code_feature::BACKFACE_EMISSION);
+            }
         }
     }
 
-    // it's possible that the material does not contain any feature this renderer supports
-    if (selected_functions.size() > 1) // note, the 1 function added is 'init'
+    // with MDL 1.9, custom material types are supported
+    // generate code for a used defined arbitrary output variable (AOV)
+    // this is just an illustration of how to generate and use code for AOV. Real-world
+    // applications would feed the computed values into a simulation for example.
+    const std::vector<std::string>& aov_expression_paths =
+        m_app->get_dynamic_options()->get_available_aovs();
+    if (!aov_expression_paths.empty())
     {
-        interface_data.has_init = true;
+        mi::base::Handle<mi::neuraylib::IType_factory> tf(
+            m_sdk->get_factory().create_type_factory(m_sdk->get_transaction().get()));
+
+        // the renderer requests AOVs
+        // if they are present in the material, we generate code
+        // otherwise, we return black in the switch later
+        interface_data.add_code_feature(Material_code_feature::HAS_AOVS);
+        interface_data.aovs.reserve(aov_expression_paths.size());
+
+        for (size_t i = 0; i < aov_expression_paths.size(); ++i)
+        {
+            const std::string& expression_path = aov_expression_paths[i];
+            mi::base::Handle<const mi::neuraylib::IExpression> aov_expr(
+                compiled_material->lookup_sub_expression(expression_path.c_str()));
+            if (!aov_expr)
+            {
+                log_error("AOV '" + expression_path + "' not available in material: " +
+                    material->get_name(), SRC);
+            }
+            else
+            {
+                mi::base::Handle<const mi::neuraylib::IType> ret_type(aov_expr->get_type());
+                ret_type = ret_type->skip_all_type_aliases();
+                if (ret_type->get_kind() == mi::neuraylib::IType::TK_ARRAY ||
+                    ret_type->get_kind() == mi::neuraylib::IType::TK_BSDF ||
+                    ret_type->get_kind() == mi::neuraylib::IType::TK_BSDF_MEASUREMENT ||
+                    ret_type->get_kind() == mi::neuraylib::IType::TK_EDF ||
+                    ret_type->get_kind() == mi::neuraylib::IType::TK_ENUM ||
+                    ret_type->get_kind() == mi::neuraylib::IType::TK_HAIR_BSDF ||
+                    ret_type->get_kind() == mi::neuraylib::IType::TK_LIGHT_PROFILE ||
+                    ret_type->get_kind() == mi::neuraylib::IType::TK_MATRIX ||
+                    ret_type->get_kind() == mi::neuraylib::IType::TK_STRUCT ||
+                    ret_type->get_kind() == mi::neuraylib::IType::TK_TEXTURE ||
+                    ret_type->get_kind() == mi::neuraylib::IType::TK_VDF)
+                {
+                    m_sdk->log_messages(
+                        "AOV visualization for the type of '" + expression_path + "' not support.",
+                        context, SRC);
+                }
+                else
+                {
+                    // collect information about the selected outputs
+                    // this is mainly for generating the code that visualizes the AOVs
+                    size_t aov_index = interface_data.aovs.size();
+                    interface_data.aovs.push_back({});
+                    Mdl_aov_info& info = interface_data.aovs.back();
+
+                    info.runtime_index = uint32_t(i);
+                    info.expression_path = expression_path;
+                    info.hlsl_name = "mdl_aov_" + expression_path;
+                    std::replace(info.hlsl_name.begin(), info.hlsl_name.end(), '.', '_');
+                    mi::base::Handle<const mi::IString> ret_type_name(
+                        tf->get_mdl_type_name(ret_type.get()));
+                    info.mdl_type_name = ret_type_name->get_c_str();
+
+                    // add function to link unit
+                    selected_functions.push_back(mi::neuraylib::Target_function_description(
+                        info.expression_path.c_str(), info.hlsl_name.c_str()));
+                }
+            }
+        }
+    }
+
+    // add the main material to the link unit for code generation
+    if (selected_functions.size() == 1)
+    {
+        log_warning("Material has supported renderer feature and will be black.");
+        interface_data.material_code_paths = 0; // disable
+    }
+    else
+    {
         link_unit->add_material(
             compiled_material.get(),
             selected_functions.data(), selected_functions.size(),
@@ -447,18 +546,26 @@ bool Mdl_material_target::add_material_to_link_unit(
             return false;
     }
 
-    // compile cutout_opacity also as standalone version to be used in the anyhit programs,
-    // to avoid costly precalculation of expressions only used by other expressions
-    mi::neuraylib::Target_function_description standalone_opacity(
-        "geometry.cutout_opacity", "mdl_standalone_geometry_cutout_opacity");
+    // check if the material is trivial opaque, if not we need to generate code for cutout opacity
+    float opacity = -1.0f;
+    if (exists("geometry.cutout_opacity") &&
+        (!compiled_material->get_cutout_opacity(&opacity) || opacity < 1.0f))
+    {
+        // compile cutout_opacity also as standalone version to be used in the anyhit programs,
+        // to avoid costly precalculation of expressions only used by other expressions
+        interface_data.add_code_feature(Material_code_feature::CUTOUT_OPACITY);
 
-    link_unit->add_material(
-        compiled_material.get(),
-        &standalone_opacity, 1,
-        context);
+        mi::neuraylib::Target_function_description standalone_opacity(
+            "geometry.cutout_opacity", "mdl_standalone_geometry_cutout_opacity");
 
-    if (!m_sdk->log_messages("Failed to add cutout_opacity for code generation.", context, SRC))
-        return false;
+        link_unit->add_material(
+            compiled_material.get(),
+            &standalone_opacity, 1,
+            context);
+
+        if (!m_sdk->log_messages("Failed to add cutout_opacity for code generation.", context, SRC))
+            return false;
+    }
 
     // get the resulting target code information
     // constant for the entire material, for one material per link unit 0
@@ -713,7 +820,7 @@ bool Mdl_material_target::generate()
     }
 
     // generate HLSL code
-    if (!loaded_from_shader_cache)
+    if (!loaded_from_shader_cache && interface_data.material_code_paths != 0)
     {
         auto p = m_app->get_profiling().measure("generating HLSL (translate link unit)");
         m_target_code = m_sdk->get_backend().translate_link_unit(link_unit.get(), context.get());
@@ -726,7 +833,7 @@ bool Mdl_material_target::generate()
     D3DCommandList* command_list = command_queue->get_command_list();
 
     // add all body textures, the ones that are required independent of the parameter set
-    for (size_t i = 1, n = m_target_code->get_texture_count(); i < n; ++i)
+    for (size_t i = 1, n = m_target_code ? m_target_code->get_texture_count() : 0; i < n; ++i)
     {
         if (!m_target_code->get_texture_is_body_resource(i))
             continue;
@@ -755,7 +862,7 @@ bool Mdl_material_target::generate()
     }
 
     // add all body light profiles
-    for (size_t i = 1, n = m_target_code->get_light_profile_count(); i < n; ++i)
+    for (size_t i = 1, n = m_target_code ? m_target_code->get_light_profile_count() : 0; i < n; ++i)
     {
         if (!m_target_code->get_light_profile_is_body_resource(i))
             continue;
@@ -767,7 +874,7 @@ bool Mdl_material_target::generate()
     }
 
     // add all body bsdf measurements
-    for (size_t i = 1, n = m_target_code->get_bsdf_measurement_count(); i < n; ++i)
+    for (size_t i = 1, n = m_target_code ? m_target_code->get_bsdf_measurement_count() : 0; i < n; ++i)
     {
         if (!m_target_code->get_bsdf_measurement_is_body_resource(i))
             continue;
@@ -780,7 +887,7 @@ bool Mdl_material_target::generate()
 
     // add all string constants known to the link unit
     m_target_string_constants.clear();
-    for (size_t i = 1, n = m_target_code->get_string_constant_count(); i < n; ++i)
+    for (size_t i = 1, n = m_target_code ? m_target_code->get_string_constant_count() : 0; i < n; ++i)
     {
         Mdl_string_constant constant;
         constant.runtime_string_id = i;
@@ -793,6 +900,12 @@ bool Mdl_material_target::generate()
     // that with the 'scene_data_id'. Instead, only the render can call this outside of the
     // generated code.
     map_string_constant("TEXCOORD_0");
+
+    #if defined(MDL_ENABLE_MATERIALX)
+        // add camera position for MaterialX NPR nodes
+        // NOTE, using this in a path tracer is questionable
+        map_string_constant("CAMERA_POSITION");
+    #endif
 
     // create per material resources, parameter bindings, ...
     // ------------------------------------------------------------
@@ -877,24 +990,28 @@ bool Mdl_material_target::generate()
     // --------------------------------------
 
     // read-only data, all jit back-ends, including HLSL produce zero or one segments
-    if (m_target_code->get_ro_data_segment_count() > 0)
+    if (m_read_only_data_segment)
     {
+        // free old buffer
+        delete m_read_only_data_segment;
+        m_read_only_data_segment = nullptr;
+    }
+    if (m_target_code && m_target_code->get_ro_data_segment_count() > 0)
+    {
+        // create a new buffer
         size_t ro_data_seg_index = 0; // assuming one material per target code only
         const char* name = m_target_code->get_ro_data_segment_name(ro_data_seg_index);
-        auto read_only_data_segment = new Buffer(
+        m_read_only_data_segment = new Buffer(
             m_app, m_target_code->get_ro_data_segment_size(ro_data_seg_index),
             "MDL_ReadOnly_" + std::string(name));
 
-        read_only_data_segment->set_data(
+        m_read_only_data_segment->set_data(
             m_target_code->get_ro_data_segment_data(ro_data_seg_index),
             m_target_code->get_ro_data_segment_size(ro_data_seg_index));
-
-        if (!m_read_only_data_segment) delete m_read_only_data_segment;
-        m_read_only_data_segment = read_only_data_segment;
     }
-
-    if(m_read_only_data_segment == nullptr)
+    if (m_read_only_data_segment == nullptr)
     {
+        // create a dummy buffer to always have the same alignment in the heap
         m_read_only_data_segment = new Buffer(m_app, 4, "MDL_ReadOnly_nullptr");
         uint32_t zero(0);
         m_read_only_data_segment->set_data(&zero, 1);
@@ -935,66 +1052,102 @@ bool Mdl_material_target::generate()
 
     // generate the actual shader code with the help of some snippets
     m_hlsl_source_code.clear();
+    m_hlsl_compilation_defines["TARGET_CODE_ID"] = get_shader_name_suffix();
+    m_hlsl_compilation_defines["DISABLE_READABILITY"] = "1"; // disable hlsl defines for editing
 
-    // all the following defines could be passed to the compiler as argument as well 
-    // but for reading the HLSL code we choose to add them in source
+    // to allow the render code to be optimized for material features defines can be used
+    // if not, the availality of a feature and the necessity of runnign the corresponding code path
+    // is evaluated dynamically.
 
-    // per target data
-    m_hlsl_source_code += "#define MDL_TARGET_REGISTER_SPACE space2\n";
-    m_hlsl_source_code += "#define MDL_TARGET_RO_DATA_SEGMENT_SLOT t0\n";
+    bool optimize_renderer_for_available_material_code_path = true;
+    if (optimize_renderer_for_available_material_code_path)
+    {
+        // depending on the functions selected for code generation
+        // 
+        m_hlsl_source_code +=
+            interface_data.has_code_feature(Material_code_feature::HAS_INIT)
+            ? "#define MDL_HAS_INIT 1\n"
+            : "#define MDL_HAS_INIT 0\n";
+        m_hlsl_source_code +=
+            interface_data.has_code_feature(Material_code_feature::SURFACE_SCATTERING)
+            ? "#define MDL_HAS_SURFACE_SCATTERING 1\n"
+            : "#define MDL_HAS_SURFACE_SCATTERING 0\n";
+        m_hlsl_source_code +=
+            interface_data.has_code_feature(Material_code_feature::SURFACE_EMISSION)
+            ? "#define MDL_HAS_SURFACE_EMISSION 1\n"
+            : "#define MDL_HAS_SURFACE_EMISSION 0\n";
+        m_hlsl_source_code +=
+            interface_data.has_code_feature(Material_code_feature::BACKFACE_SCATTERING)
+            ? "#define MDL_HAS_BACKFACE_SCATTERING 1\n"
+            : "#define MDL_HAS_BACKFACE_SCATTERING 0\n";
+        m_hlsl_source_code +=
+            interface_data.has_code_feature(Material_code_feature::BACKFACE_EMISSION)
+            ? "#define MDL_HAS_BACKFACE_EMISSION 1\n"
+            : "#define MDL_HAS_BACKFACE_EMISSION 0\n";
+        m_hlsl_source_code +=
+            interface_data.has_code_feature(Material_code_feature::VOLUME_ABSORPTION)
+            ? "#define MDL_HAS_VOLUME_ABSORPTION 1\n"
+            : "#define MDL_HAS_VOLUME_ABSORPTION 0\n";
+        m_hlsl_source_code +=
+            interface_data.has_code_feature(Material_code_feature::CAN_BE_THIN_WALLED)
+            ? "#define MDL_CAN_BE_THIN_WALLED 1\n"
+            : "#define MDL_CAN_BE_THIN_WALLED 0\n";
+        m_hlsl_source_code +=
+            interface_data.has_code_feature(Material_code_feature::CUTOUT_OPACITY)
+            ? "#define MDL_HAS_CUTOUT_OPACITY 1\n"
+            : "#define MDL_HAS_CUTOUT_OPACITY 0\n";
+        m_hlsl_source_code +=
+            interface_data.has_code_feature(Material_code_feature::HAS_AOVS)
+            ? "#define MDL_HAS_AOVS 1\n"
+            : "#define MDL_HAS_AOVS 0\n";
+    }
+
     m_hlsl_source_code += "\n";
 
-    // per material data
-    m_hlsl_source_code += "#define MDL_MATERIAL_REGISTER_SPACE space3\n"; // there are more
-    m_hlsl_source_code += "#define MDL_MATERIAL_ARGUMENT_BLOCK_SLOT t1\n";
-    m_hlsl_source_code += "#define MDL_MATERIAL_TEXTURE_INFO_SLOT t2\n";
-    m_hlsl_source_code += "#define MDL_MATERIAL_LIGHT_PROFILE_INFO_SLOT t3\n";
-    m_hlsl_source_code += "#define MDL_MATERIAL_MBSDF_INFO_SLOT t4\n";
-    m_hlsl_source_code += "\n";
-    m_hlsl_source_code += "#define MDL_MATERIAL_TEXTURE_2D_REGISTER_SPACE space4\n";
-    m_hlsl_source_code += "#define MDL_MATERIAL_TEXTURE_3D_REGISTER_SPACE space5\n";
-    m_hlsl_source_code += "#define MDL_MATERIAL_TEXTURE_SLOT_BEGIN t0\n";
-    m_hlsl_source_code += "\n";
-    m_hlsl_source_code += "#define MDL_MATERIAL_BUFFER_REGISTER_SPACE space6\n";
-    m_hlsl_source_code += "#define MDL_MATERIAL_BUFFER_SLOT_BEGIN t0\n";
-    m_hlsl_source_code += "\n";
-
-    // depending on the functions selected for code generation
-    m_hlsl_source_code += interface_data.has_init
-        ? "#define MDL_HAS_INIT 1\n"
-        : "#define MDL_HAS_INIT 0\n";
-    m_hlsl_source_code += interface_data.has_surface_scattering
-        ? "#define MDL_HAS_SURFACE_SCATTERING 1\n"
-        : "#define MDL_HAS_SURFACE_SCATTERING 0\n";
-    m_hlsl_source_code += interface_data.has_surface_emission
-        ? "#define MDL_HAS_SURFACE_EMISSION 1\n"
-        : "#define MDL_HAS_SURFACE_EMISSION 0\n";
-    m_hlsl_source_code += interface_data.has_backface_scattering
-        ? "#define MDL_HAS_BACKFACE_SCATTERING 1\n"
-        : "#define MDL_HAS_BACKFACE_SCATTERING 0\n";
-    m_hlsl_source_code += interface_data.has_backface_emission
-        ? "#define MDL_HAS_BACKFACE_EMISSION 1\n"
-        : "#define MDL_HAS_BACKFACE_EMISSION 0\n";
-    m_hlsl_source_code += interface_data.has_volume_absorption
-        ? "#define MDL_HAS_VOLUME_ABSORPTION 1\n"
-        : "#define MDL_HAS_VOLUME_ABSORPTION 0\n";
-    m_hlsl_source_code += interface_data.can_be_thin_walled
-        ? "#define MDL_CAN_BE_THIN_WALLED 1\n"
-        : "#define MDL_CAN_BE_THIN_WALLED 0\n";
-    m_hlsl_source_code += "\n";
-
-    // global data
-    m_hlsl_source_code += "#define MDL_TEXTURE_SAMPLER_SLOT s0\n";
-    m_hlsl_source_code += "#define MDL_LIGHT_PROFILE_SAMPLER_SLOT s1\n";
-    m_hlsl_source_code += "#define MDL_MBSDF_SAMPLER_SLOT s2\n";
-    m_hlsl_source_code += "#define MDL_LATLONGMAP_SAMPLER_SLOT s3\n";
     m_hlsl_source_code += "#define MDL_NUM_TEXTURE_RESULTS " +
         std::to_string(m_app->get_options()->texture_results_cache_size) + "\n";
 
     m_hlsl_source_code += "\n";
     if (m_app->get_options()->automatic_derivatives) m_hlsl_source_code += "#define USE_DERIVS\n";
     if (m_app->get_options()->enable_auxiliary) m_hlsl_source_code += "#define ENABLE_AUXILIARY\n";
-    m_hlsl_source_code += "#define MDL_DF_HANDLE_SLOT_MODE -1\n";
+
+    // To illustrate the usage of the slot handles we just take maximum handle count.
+    // With LPE support (see example df_cuda) it would make sense to limit the loop size per df.
+    // The shader code will need to loop over the handles to collect the contribution of the
+    // individual distribution function groupes defined by the handle parameters.
+    {
+        size_t max_slot_count = 0;
+        for (size_t i = 0; i < (m_target_code ? m_target_code->get_callable_function_count() : 0); ++i)
+        {
+            max_slot_count =
+                std::max(max_slot_count, m_target_code->get_callable_function_df_handle_count(i));
+        }
+
+        m_hlsl_source_code +=
+            "// Note, real-world renderers would not support all slot modes.\n"
+            "// A slot mode other than `none`, is only required for light path expressions (LPEs).\n"
+            "#define MDL_DF_HANDLE_SLOT_COUNT ";
+        m_hlsl_source_code += std::to_string(max_slot_count) + "\n";
+
+        switch (m_app->get_options()->slot_mode)
+        {
+            case Base_options::SM_NONE:
+                m_hlsl_source_code += "#define MDL_DF_HANDLE_SLOT_MODE -1\n";
+                break;
+            case Base_options::SM_FIXED_1:
+                m_hlsl_source_code += "#define MDL_DF_HANDLE_SLOT_MODE 1\n";
+                break;
+            case Base_options::SM_FIXED_2:
+                m_hlsl_source_code += "#define MDL_DF_HANDLE_SLOT_MODE 2\n";
+                break;
+            case Base_options::SM_FIXED_4:
+                m_hlsl_source_code += "#define MDL_DF_HANDLE_SLOT_MODE 4\n";
+                break;
+            case Base_options::SM_FIXED_8:
+                m_hlsl_source_code += "#define MDL_DF_HANDLE_SLOT_MODE 8\n";
+                break;
+        }
+    }
 
     // since scene data access is more expensive than direct vertex data access and since
     // texture coordinates are extremely common, MDL typically fetches those from the state.
@@ -1004,27 +1157,101 @@ bool Mdl_material_target::generate()
     m_hlsl_source_code += "#define SCENE_DATA_ID_TEXCOORD_0 " +
         std::to_string(map_string_constant("TEXCOORD_0")) + "\n"; // registered before
 
+    #if defined(MDL_ENABLE_MATERIALX)
+        // add viewdirection for MaterialX NPR nodes
+        // NOTE, using this in a path tracer is questionable
+        m_hlsl_source_code += "#define SCENE_DATA_ID_CAMERA_POSITION " +
+            std::to_string(map_string_constant("CAMERA_POSITION")) + "\n"; // registered before
+    #endif
+
     m_hlsl_source_code += "\n";
     m_hlsl_source_code += "#include \"content/common.hlsl\"\n";
-    m_hlsl_source_code += "#include \"content/mdl_target_code_types.hlsl\"\n";
     m_hlsl_source_code += "#include \"content/mdl_renderer_runtime.hlsl\"\n\n";
-    m_hlsl_source_code += m_target_code->get_code();
+    m_hlsl_source_code += m_target_code ? m_target_code->get_code() : "/* NO CODE GENERATED */\n";
+
+    // add default implementations for all optional functions if not generated
+    if (!interface_data.has_code_feature(Material_code_feature::HAS_INIT))
+        m_hlsl_source_code += "void mdl_init(const Shading_state_material) {}\n";
+    if (!interface_data.has_code_feature(Material_code_feature::SURFACE_SCATTERING))
+        m_hlsl_source_code +=
+        "void mdl_surface_scattering_evaluate(inout Bsdf_evaluate_data, const Shading_state_material) {}\n"
+        "void mdl_surface_scattering_sample(inout Bsdf_sample_data, const Shading_state_material) {}\n"
+        "void mdl_surface_scattering_auxiliary(inout Bsdf_auxiliary_data, const Shading_state_material) {}\n";
+    if (!interface_data.has_code_feature(Material_code_feature::SURFACE_EMISSION))
+        m_hlsl_source_code +=
+        "void mdl_surface_emission_evaluate(inout Edf_evaluate_data, const Shading_state_material) {}\n"
+        "void mdl_surface_emission_sample(inout Edf_sample_data, const Shading_state_material) {}\n"
+        "void mdl_surface_emission_auxiliary(inout Edf_auxiliary_data, const Shading_state_material) {}\n"
+        "float3 mdl_surface_emission_intensity(const Shading_state_material) { return float3(0, 0, 0); }\n";
+    if (!interface_data.has_code_feature(Material_code_feature::BACKFACE_SCATTERING))
+        m_hlsl_source_code +=
+        "void mdl_backface_scattering_evaluate(inout Bsdf_evaluate_data, const Shading_state_material) {}\n"
+        "void mdl_backface_scattering_sample(inout Bsdf_sample_data, const Shading_state_material) {}\n"
+        "void mdl_backface_scattering_auxiliary(inout Bsdf_auxiliary_data, const Shading_state_material) {}\n";
+    if (!interface_data.has_code_feature(Material_code_feature::BACKFACE_EMISSION))
+        m_hlsl_source_code +=
+        "void mdl_backface_emission_evaluate(inout Edf_evaluate_data, const Shading_state_material) {}\n"
+        "void mdl_backface_emission_sample(inout Edf_sample_data, const Shading_state_material) {}\n"
+        "void mdl_backface_emission_auxiliary(inout Edf_auxiliary_data, const Shading_state_material) {}\n"
+        "float3 mdl_backface_emission_intensity(const Shading_state_material) { return float3(0, 0, 0); }\n";
+    if (!interface_data.has_code_feature(Material_code_feature::VOLUME_ABSORPTION))
+        m_hlsl_source_code +=
+        "float3 mdl_volume_absorption_coefficient(const Shading_state_material) { return float3(0, 0, 0); }\n";
+    if (!interface_data.has_code_feature(Material_code_feature::CUTOUT_OPACITY))
+        m_hlsl_source_code +=
+        "float mdl_standalone_geometry_cutout_opacity(const Shading_state_material) { return 1.0; }\n";
+    if (!interface_data.has_code_feature(Material_code_feature::CAN_BE_THIN_WALLED))
+        m_hlsl_source_code += "bool mdl_thin_walled(const Shading_state_material) { return false; }\n";
+
+    // add functions to illustrate the usage of AOVs
+    // A custom material type is probably very well known to the renderer or other components that use the code
+    // Here, we add more generic functions to display AOVs depending on the type rather than feeding the results
+    // into a simulation or post processing pipeline for example.
+    {
+        std::string aov_switch =
+            "float3 mdl_aov(int index, const Shading_state_material state)\n"
+            "{\n"
+            "   switch(index)\n"
+            "   {\n";
+
+        // loop over the available AOVs to display
+        if (interface_data.has_code_feature(Material_code_feature::HAS_AOVS))
+        {
+            for (size_t i = 0; i < interface_data.aovs.size(); ++i)
+            {
+                aov_switch += mi::examples::strings::format(
+                    "       case %d:\n", int(interface_data.aovs[i].runtime_index));
+
+                // handle the type conversion to output a visible color (just for illustration)
+                const std::string& type = interface_data.aovs[i].mdl_type_name == "color"
+                    ? "float3" 
+                    : interface_data.aovs[i].mdl_type_name;
+
+                // select components to create a color
+                std::string postfix = ".xxx";
+                if (type.back() == '4' or type.back() == '3')
+                    postfix = ".xyz";
+                else if (type.back() == '2')
+                    postfix = ".xy, 0.0f";
+
+                aov_switch += mi::examples::strings::format(
+                    "           return float3(%s(state)%s);\n",
+                    interface_data.aovs[i].hlsl_name.c_str(), postfix.c_str());
+            }
+        }
+
+        aov_switch +=
+            "       default:\n"
+            "           return float3(0.0f, 0.0f, 0.0f);\n"
+            "   }\n"
+            "}\n\n";
+        m_hlsl_source_code += aov_switch;
+    }
 
     // this last snipped contains the actual hit shader and the renderer logic
     // ideally, this is the only part that is handwritten
     m_hlsl_source_code += "\n\n#include \"content/mdl_hit_programs.hlsl\"\n\n";
 
-    // write to file for debugging purpose
-#if 0
-    std::ofstream file_stream;
-    file_stream.open(
-        mi::examples::io::get_executable_folder() + "/link_unit_code_" + get_shader_name_suffix() + ".hlsl");
-    if (file_stream)
-    {
-        file_stream << m_hlsl_source_code.c_str();
-        file_stream.close();
-    }
-#endif
     command_queue->execute_command_list(command_list);
 
     m_generation_required = false;
@@ -1063,9 +1290,6 @@ bool Mdl_material_target::compile()
     // compile to DXIL
     {
         auto p = m_app->get_profiling().measure("compiling HLSL to DXIL");
-        std::map<std::string, std::string> defines;
-        defines["TARGET_CODE_ID"] = get_shader_name_suffix();
-
         // use the material name of the first material
         std::string pseudo_file_name = "link_unit_code";
         if (m_materials.size() > 0)
@@ -1089,7 +1313,7 @@ bool Mdl_material_target::compile()
         m_dxil_compiled_libraries = compiler.compile_shader_library_from_string(
             m_app->get_options(),
             get_hlsl_source_code(), pseudo_file_name + "_" + get_shader_name_suffix(),
-            &defines,
+            &m_hlsl_compilation_defines,
             { m_radiance_closest_hit_name, m_radiance_any_hit_name, m_shadow_any_hit_name });
     }
 

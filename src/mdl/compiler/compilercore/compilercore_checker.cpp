@@ -286,6 +286,8 @@ void Code_checker::check_definition(
     case IDefinition::DK_CONSTRUCTOR:
         // TODO: check parameter initializer
         break;
+    case IDefinition::DK_STRUCT_CATEGORY:
+        break;
     case IDefinition::DK_TYPE:
         break;
     case IDefinition::DK_VARIABLE:

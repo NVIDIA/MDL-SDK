@@ -119,17 +119,20 @@ public:
         const IAnnotation_block* annotations,
         const IAnnotation_block* return_annotations,
         bool is_exported,
+        bool is_declarative,
         Execution_context* context);
 
     mi::Sint32 add_function(
         const char* name,
         const IExpression* body,
+        const IExpression_list* temporaries,
         const IType_list* parameters,
         const IExpression_list* defaults,
         const IAnnotation_list* parameter_annotations,
         const IAnnotation_block* annotations,
         const IAnnotation_block* return_annotations,
         bool is_exported,
+        bool is_declarative,
         IType::Modifier frequency_qualifier,
         Execution_context* context);
 
@@ -138,6 +141,12 @@ public:
         const IType_list* parameters,
         const IExpression_list* defaults,
         const IAnnotation_list* parameter_annotations,
+        const IAnnotation_block* annotations,
+        bool is_exported,
+        Execution_context* context);
+
+    mi::Sint32 add_struct_category(
+        const char* name,
         const IAnnotation_block* annotations,
         bool is_exported,
         Execution_context* context);
@@ -157,6 +166,8 @@ public:
         const IAnnotation_list* field_annotations,
         const IAnnotation_block* annotations,
         bool is_exported,
+        bool is_declarative,
+        const IStruct_category* struct_category,
         Execution_context* context);
 
     mi::Sint32 add_constant(
@@ -196,6 +207,7 @@ public:
         const IAnnotation_block* annotations,
         const IAnnotation_block* return_annotations,
         bool is_exported,
+        bool is_declarative,
         IType::Modifier frequency_qualifier,
         Execution_context* context);
 
@@ -259,6 +271,7 @@ private:
         const IAnnotation_block* return_annotations,
         bool is_variant,
         bool is_exported,
+        bool is_declarative,
         bool for_mdle,
         Execution_context* context);
 
@@ -269,13 +282,13 @@ private:
     /// Converts an IAnnotation to an mi::mdl::IAnnotation.
     ///
     /// Returns \c NULL in case of errors.
-    mi::mdl::IAnnotation* int_anno_to_mdl_anno(
+    mi::mdl::IAnnotation* int_anno_to_core_anno(
         const IAnnotation* annotation, Execution_context* context);
 
     /// Converts an IAnnotation_block to an mi::mdl::IAnnotation_block.
     ///
     /// Returns \c NULL in case of errors, or if \p annotation_block is \c NULL.
-    mi::mdl::IAnnotation_block* int_anno_block_to_mdl_anno_block(
+    mi::mdl::IAnnotation_block* int_anno_block_to_core_anno_block(
         const IAnnotation_block* annotation_block,
         bool skip_anno_unused,
         Execution_context* context);
@@ -332,6 +345,10 @@ private:
         mi::Size allowed_parameter_count,
         mi::Size allowed_temporary_count,
         Execution_context* context);
+
+    /// Returns the argument if \p expr is a direct or (indirect) call to the decl_cast operator.
+    /// Otherwise, returns \p expr itself.
+    const IExpression* skip_decl_cast_operator( const IExpression* expr);
 
     /// The MDL interface.
     mi::base::Handle<mi::mdl::IMDL> m_mdl;

@@ -67,6 +67,106 @@ namespace neuraylib {
 
 class IAnnotation_block;
 
+/// Represents the optional struct category for struct types.
+class IStruct_category : public
+    mi::base::Interface_declare<0xdc79e614,0xad7e,0x4e4d,0xa9,0xc1,0x25,0x91,0xba,0x84,0x44,0x2d>
+{
+public:
+    /// Identifiers of struct categories.
+    enum Predefined_id {
+        CID_USER              = -1,         ///< A user-defined struct category.
+        CID_MATERIAL_CATEGORY =  0,         ///< The \c "::material_category" struct category.
+        CID_FORCE_32_BIT      =  0x7fffffff //   Undocumented, for alignment only.
+    };
+
+    /// Returns the qualified name of this struct category.
+    virtual const char* get_symbol() const = 0;
+
+    /// If this struct category is a predefined one, return its ID, else #CID_USER.
+    virtual Predefined_id get_predefined_id() const = 0;
+
+    /// Returns the annotations of the struct category type.
+    ///
+    /// \return              The annotations of the struct category type, or \c NULL if there are no
+    ///                      annotations for the struct category type.
+    virtual const IAnnotation_block* get_annotations() const = 0;
+};
+
+mi_static_assert( sizeof( IStruct_category::Predefined_id) == sizeof( Sint32));
+
+/// An ordered collection of struct categories identified by name or index.
+///
+/// Struct category lists can be created with
+/// #mi::neuraylib::IType_factory::create_struct_category_list().
+class IStruct_category_list : public
+    mi::base::Interface_declare<0x509417fe,0xaf4d,0x439e,0xa5,0xa2,0x09,0x56,0x2a,0x6c,0x04,0x2a>
+{
+public:
+    /// Returns the number of elements.
+    virtual Size get_size() const = 0;
+
+    /// Returns the index for the given name, or -1 if there is no such struct category.
+    virtual Size get_index( const char* name) const = 0;
+
+    /// Returns the name for the given index, or \c NULL if there is no such struct category.
+    virtual const char* get_name( Size index) const = 0;
+
+    /// Returns the struct category for \p index, or \c NULL if there is no such struct category.
+    virtual const IStruct_category* get_struct_category( Size index) const = 0;
+
+    /// Returns the struct category for \p index, or \c NULL if there is no such struct category.
+    template <class T>
+    const T* get_struct_category( Size index) const
+    {
+        const IStruct_category* ptr_struct_category = get_struct_category( index);
+        if( !ptr_struct_category)
+            return 0;
+        const T* ptr_T = static_cast<const T*>(
+            ptr_struct_category->get_interface( typename T::IID()));
+        ptr_struct_category->release();
+        return ptr_T;
+    }
+
+    /// Returns the struct category for \p name, or \c NULL if there is no such struct category.
+    virtual const IStruct_category* get_struct_category( const char* name) const = 0;
+
+    /// Returns the struct category for \p name, or \c NULL if there is no such struct category.
+    template <class T>
+    const T* get_struct_category( const char* name) const
+    {
+        const IStruct_category* ptr_struct_category = get_struct_category( name);
+        if( !ptr_struct_category)
+            return 0;
+        const T* ptr_T = static_cast<const T*>(
+            ptr_struct_category->get_interface( typename T::IID()));
+        ptr_struct_category->release();
+        return ptr_T;
+    }
+
+    /// Sets a struct category at a given index.
+    ///
+    /// \return   -  0: Success.
+    ///           - -1: Invalid parameters (\c NULL pointer).
+    ///           - -2: \p index is out of bounds.
+    virtual Sint32 set_struct_category( Size index, const IStruct_category* struct_category) = 0;
+
+    /// Sets a struct category identified by name.
+    ///
+    /// \return   -  0: Success.
+    ///           - -1: Invalid parameters (\c NULL pointer).
+    ///           - -2: There is no struct category mapped to \p name in the list.
+    virtual Sint32 set_struct_category(
+        const char* name, const IStruct_category* struct_category) = 0;
+
+    /// Adds a struct category at the end of the list.
+    ///
+    /// \return   -  0: Success.
+    ///           - -1: Invalid parameters (\c NULL pointer).
+    ///           - -2: There is already a struct category mapped to \p name in the list.
+    virtual Sint32 add_struct_category(
+        const char* name, const IStruct_category* struct_category) = 0;
+};
+
 /// The interface to MDL types.
 ///
 /// Types can be created using the type factory #mi::neuraylib::IType_factory.
@@ -144,6 +244,9 @@ public:
     /// aliases by calling #mi::neuraylib::IType_alias::get_aliased_type() as long as #get_kind()
     /// returns #TK_ALIAS. The method returns the first non-alias type.
     virtual const IType* skip_all_type_aliases() const = 0;
+
+    /// Indicates whether this type is declarative or not.
+    virtual bool is_declarative() const = 0;
 };
 
 mi_static_assert( sizeof( IType::Kind) == sizeof( Uint32));
@@ -248,7 +351,7 @@ public:
     /// \return              The index of the value, or -1 if there is no such value.
     virtual Size find_value( Sint32 code) const = 0;
 
-    /// If this enum is a predefined one, return its ID, else EID_USER.
+    /// If this enum is a predefined one, return its ID, else #EID_USER.
     virtual Predefined_id get_predefined_id() const = 0;
 
     /// Returns the annotations of the enum type.
@@ -265,7 +368,7 @@ public:
     virtual const IAnnotation_block* get_value_annotations( Size index) const = 0;
 };
 
-mi_static_assert( sizeof( IType_enum::Predefined_id) == sizeof( Uint32));
+mi_static_assert( sizeof( IType_enum::Predefined_id) == sizeof( Sint32));
 
 /// The type of kind float.
 class IType_float : public
@@ -430,7 +533,7 @@ public:
     /// \return         The index of the field, or -1 if there is no such field.
     virtual Size find_field( const char* name) const = 0;
 
-    /// If this struct is a predefined one, return its ID, else SID_USER.
+    /// If this struct is a predefined one, return its ID, else #SID_USER.
     virtual Predefined_id get_predefined_id() const = 0;
 
     /// Returns the annotations of the struct type.
@@ -445,9 +548,12 @@ public:
     /// \return              The annotation of that field, or \c NULL if \p index is out of bounds,
     ///                      or there are no annotations for that field.
     virtual const IAnnotation_block* get_field_annotations( Size index) const = 0;
+
+    /// Returns the corresponding struct category (or \c NULL if there is none).
+    virtual const IStruct_category* get_struct_category() const = 0;
 };
 
-mi_static_assert( sizeof( IType_struct::Predefined_id) == sizeof( Uint32));
+mi_static_assert( sizeof( IType_struct::Predefined_id) == sizeof( Sint32));
 
 /// The reference types.
 class IType_reference : public
@@ -633,7 +739,74 @@ class IType_factory : public
     mi::base::Interface_declare<0x353803c0,0x74a6,0x48ac,0xab,0xa1,0xe4,0x25,0x42,0x1d,0xa1,0xbc>
 {
 public:
-    /// \name Creation of types and type lists
+    /// \name Struct categories
+    //@{
+
+    /// Returns a registered struct category, or \c NULL if \p symbol is invalid or unknown.
+    virtual const IStruct_category* create_struct_category( const char* symbol) const = 0;
+
+    /// Creates a new struct category list.
+    virtual IStruct_category_list* create_struct_category_list() const = 0;
+
+    /// Returns a registered struct category, or \c NULL if \p id is unknown.
+    virtual const IStruct_category* get_predefined_struct_category(
+        IStruct_category::Predefined_id id) const = 0;
+
+    /// Clones the given struct category list.
+    ///
+    /// \note There is no method clone a struct category itself. Struct categories themselves are
+    ///       always \c const and there is no scenario where cloning of a struct category makes
+    ///       sense.
+    virtual IStruct_category_list* clone(
+        const IStruct_category_list* struct_category_list) const = 0;
+
+    /// Compares two instances of #mi::neuraylib::IStruct_category.
+    ///
+    /// The result is determined by \c strcmp() on the corresponding symbol names.
+    ///
+    /// \param lhs   The left-hand side operand for the comparison.
+    /// \param rhs   The right-hand side operand for the comparison.
+    /// \return      -1 if \c lhs < \c rhs, 0 if \c lhs == \c rhs, and +1 if \c lhs > \c rhs.
+    virtual Sint32 compare( const IStruct_category* lhs, const IStruct_category* rhs) const = 0;
+
+    /// Compares two instances of #mi::neuraylib::IStruct_category_list.
+    ///
+    /// The comparison operator for instances of #mi::neuraylib::IStruct_category_list is defined as
+    /// follows:
+    /// - If \p lhs or \p rhs is \c NULL, the result is the lexicographic comparison of
+    ///   the pointer addresses themselves.
+    /// - Next, the list sizes are compared using \c operator<().
+    /// - Next, the lists are traversed by increasing index and the names are compared using
+    ///   \c strcmp().
+    /// - Finally, the list elements are enumerated by increasing index and the struct categories
+    ///   are compared.
+    ///
+    /// \param lhs   The left-hand side operand for the comparison.
+    /// \param rhs   The right-hand side operand for the comparison.
+    /// \return      -1 if \c lhs < \c rhs, 0 if \c lhs == \c rhs, and +1 if \c lhs > \c rhs.
+    virtual Sint32 compare(
+        const IStruct_category_list* lhs, const IStruct_category_list* rhs) const = 0;
+
+    /// Returns a textual representation of a struct category.
+    ///
+    /// \note The exact format of the textual representation is unspecified and might change in
+    ///       future releases. The textual representation is primarily meant as a debugging aid. Do
+    ///       \em not base application logic on it.
+    virtual const IString* dump( const IStruct_category* struct_category, Size depth = 0) const = 0;
+
+    /// Returns a textual representation of a struct category list.
+    ///
+    /// The representation of the struct category list will contain line breaks. Subsequent lines
+    /// have a suitable indentation. The assumed indentation level of the first line is specified
+    /// by \p depth.
+    ///
+    /// \note The exact format of the textual representation is unspecified and might change in
+    ///       future releases. The textual representation is primarily meant as a debugging aid. Do
+    ///       \em not base application logic on it.
+    virtual const IString* dump( const IStruct_category_list* list, Size depth = 0) const = 0;
+
+    //@}
+    /// \name Creation of struct categories, types, and type lists
     //@{
 
     /// Creates a new instance of the type alias.
@@ -719,7 +892,7 @@ public:
     /// Creates a new instance of the type vdf.
     virtual const IType_vdf* create_vdf() const = 0;
 
-    /// Creates a new type map.
+    /// Creates a new type list.
     virtual IType_list* create_type_list() const = 0;
 
     /// Returns a registered enum type, or \c NULL if \p id is unknown.
@@ -810,31 +983,47 @@ public:
     /// \return      -1 if \c lhs < \c rhs, 0 if \c lhs == \c rhs, and +1 if \c lhs > \c rhs.
     virtual Sint32 compare( const IType_list* lhs, const IType_list* rhs) const = 0;
 
-    /// Checks, if two instances of #mi::neuraylib::IType are compatible, meaning that \p src
-    /// can be casted to \p dst.
+    /// Checks whether two types are (cast-)compatible, i.e. that \p lhs can be cast to \p rhs.
     ///
-    /// \p src is compatible with and therefore can be casted to \p dst, if
-    /// - \p src and \p dst are of identical type (see #mi::neuraylib::IType_factory::compare()).
-    /// - \p src and \p dst are of type #mi::neuraylib::IType_struct, have the same number of
-    ///   fields and all fields are pairwise compatible. The names of the fields do not matter,
-    ///   only their order.
-    /// - \p src and \p dst are of type #mi::neuraylib::IType_enum and both enumeration types have
+    /// \p lhs is compatible with and therefore can be cast to \p rhs, if
+    /// - \p lhs and \p rhs are of identical type (see #mi::neuraylib::IType_factory::compare()).
+    /// - \p lhs and \p rhs are of type #mi::neuraylib::IType_struct, are conventional structs,
+    ///   have the same number of fields and all fields are pairwise compatible. The names of the
+    ///   fields do not matter, only their order.
+    /// - \p lhs and \p rhs are of type #mi::neuraylib::IType_enum and both enumeration types have
     ///   the same set of numerical enumeration values. The names of the enumeration values, their
     ///   order, or whether multiple enumeration value names share the same numerical value
     ///   do not matter.
-    /// - \p src and \p dst are of type #mi::neuraylib::IType_array, both arrays are either
+    /// - \p lhs and \p rhs are of type #mi::neuraylib::IType_array, both arrays are either
     ///   immediate-sized or deferred-sized arrays, have the same size, and their element types
     ///   are compatible.
     ///
-    /// \param src The source type.
-    /// \param dst the target type to which src is intended to be compatible.
+    /// \see mi::neuraylib::IExpression_factory::create_cast().
+    ///
+    /// \param lhs   The first type.
+    /// \param rhs   The second type.
     /// \return
-    ///           -  0 if \p src can be casted to \p dst, but \p src and \p dst are not of identical
-    ///                type.
-    ///           -  1 if \p src and \p dst are of identical type.
-    ///           - -1 if \p src cannot be casted to \p dst.
-    virtual Sint32 is_compatible( const IType* src, const IType* dst) const = 0;
+    ///              -  0: \p lhs and \p rhs are compatible, but different types.
+    ///              -  1: \p lhs and \p rhs are identical types (and therefore compatible).
+    ///              - -1: \p lhs and \p rhs are not compatible.
+    virtual Sint32 is_compatible( const IType* lhs, const IType* rhs) const = 0;
 
+    /// Checks whether two types are from the same struct category, i.e., \p lhs can be decl-cast
+    /// to \p rhs.
+    ///
+    /// \see mi::neuraylib::IExpression_factory::create_decl_cast().
+    ///
+    /// \param lhs   The first type.
+    /// \param rhs   The second type.
+    /// \return
+    ///              -  0: \p lhs and \p rhs are from the same struct category, but different
+    ///                    types.
+    ///              -  1: \p lhs and \p rhs are identical types.
+    ///              - -1: \p lhs and \p rhs are from different struct categories (including
+    ///                    struct types without struct category, or no struct types).
+    virtual Sint32 from_same_struct_category( const IType* lhs, const IType* rhs) const = 0;
+
+    ///
     //@}
     /// \name Dumping of types and type lists
     //@{
@@ -891,7 +1080,6 @@ public:
     virtual const IString* get_mdl_type_name( const IType* type) const = 0;
 
     //@}
-
 };
 
 /**@}*/ // end group mi_neuray_mdl_types

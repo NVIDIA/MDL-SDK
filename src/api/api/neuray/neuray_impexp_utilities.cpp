@@ -86,7 +86,7 @@ mi::neuraylib::IImport_result* Impexp_utilities::create_import_result(
     ASSERT( M_NEURAY_API, transaction);
     ASSERT( M_NEURAY_API, message || message_number == 0);
 
-    mi::neuraylib::IImport_result_ext* import_result_ext
+    auto* import_result_ext
         = transaction->create<mi::neuraylib::IImport_result_ext>( "Import_result_ext");
 
     // set message number, severity, and message
@@ -94,7 +94,7 @@ mi::neuraylib::IImport_result* Impexp_utilities::create_import_result(
         import_result_ext->message_push_back( message_number, message_severity, message);
 
     // set names of rootgroup, camera instance, and options
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( transaction);
+    auto* transaction_impl = static_cast<Transaction_impl*>( transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
     if( rootgroup.is_valid())
@@ -105,7 +105,7 @@ mi::neuraylib::IImport_result* Impexp_utilities::create_import_result(
         import_result_ext->set_options( db_transaction->tag_to_name( options));
 
     // set names of imported elements
-    std::vector<std::string>::const_iterator it = elements.begin();
+    auto it = elements.begin();
     for( ; it != elements.end(); ++it)
         import_result_ext->element_push_back( it->c_str());
 
@@ -121,7 +121,7 @@ mi::neuraylib::IExport_result* Impexp_utilities::create_export_result(
     ASSERT( M_NEURAY_API, transaction);
     ASSERT( M_NEURAY_API, message || message_number == 0);
 
-    mi::neuraylib::IExport_result_ext* export_result_ext
+    auto* export_result_ext
         = transaction->create<mi::neuraylib::IExport_result_ext>( "Export_result_ext");
 
     // set message number, severity, and message
@@ -154,8 +154,8 @@ class Buffer_wrapper
 public:
     Buffer_wrapper( const mi::Uint8* data, mi::Size data_size)
       : m_data( data), m_data_size( data_size) { }
-    const mi::Uint8* get_data() const { return m_data; }
-    mi::Size get_data_size() const { return m_data_size; }
+    const mi::Uint8* get_data() const final { return m_data; }
+    mi::Size get_data_size() const final { return m_data_size; }
 private:
     const mi::Uint8* m_data;
     const mi::Size m_data_size;
@@ -187,9 +187,8 @@ mi::neuraylib::IReader* Impexp_utilities::create_reader(
             = path_module->get_search_path( PATH::MDL);
 
         std::unique_ptr<DISK::File_reader_impl> file_reader_impl( new DISK::File_reader_impl());
-        for( std::vector<std::string>::const_iterator it = shader_paths.begin();
-            it != shader_paths.end(); ++it) {
-            std::string test_path = resolve_shader_path( path, *it);
+        for( const auto& shader_path : shader_paths) {
+            std::string test_path = resolve_shader_path( path, shader_path);
             if( file_reader_impl->open( test_path.c_str()))
                 return file_reader_impl.release();
         }
@@ -202,7 +201,7 @@ mi::neuraylib::IReader* Impexp_utilities::create_reader(
 
 mi::neuraylib::IReader* Impexp_utilities::create_reader( const char* data, mi::Size length)
 {
-    const mi::Uint8* d = reinterpret_cast<const mi::Uint8*>( data);
+    const auto* d = reinterpret_cast<const mi::Uint8*>( data);
     mi::base::Handle<mi::neuraylib::IBuffer> buffer( new Buffer_wrapper( d, length));
     return new DISK::Memory_reader_impl( buffer.get());
 }
@@ -230,7 +229,7 @@ mi::neuraylib::IImport_result_ext* Impexp_utilities::create_import_result_ext(
     mi::neuraylib::ITransaction* transaction,
     mi::neuraylib::IImport_result* import_result)
 {
-    mi::neuraylib::IImport_result_ext* import_result_ext
+    auto* import_result_ext
         = import_result->get_interface<mi::neuraylib::IImport_result_ext>();
     if( import_result_ext)
         return import_result_ext;
@@ -259,13 +258,13 @@ std::vector<std::string> Impexp_utilities::get_recorded_elements(
     const std::vector<DB::Tag>& tags = recording_transaction->get_stored_tags();
 
     std::vector<std::string> names;
-    for( std::vector<DB::Tag>::const_iterator it = tags.begin(); it != tags.end(); ++it) {
-        const char* name = recording_transaction->tag_to_name( *it);
+    for( auto tag : tags) {
+        const char* name = recording_transaction->tag_to_name( tag);
         if( name)
-            names.push_back( name);
+            names.emplace_back( name);
 
         // Skip DB elements that have not been registered with the API's class factory.
-        SERIAL::Class_id class_id = class_factory->get_class_id( transaction, *it);
+        SERIAL::Class_id class_id = class_factory->get_class_id( transaction, tag);
         if( !class_factory->is_class_registered( class_id))
             continue;
 
@@ -285,14 +284,14 @@ std::string Impexp_utilities::get_extension( const std::string& uri)
 
     std::string::size_type last_dot = uri_string.rfind( '.');
     if( last_dot == std::string::npos)
-        return std::string();
+        return {};
 
     std::string::size_type last_slash = uri_string.rfind( '/');
     if( last_slash == std::string::npos)
         last_slash = 0;
 
     if( last_slash > last_dot)
-        return std::string();
+        return {};
 
     return uri_string.substr( last_dot);
 }
@@ -373,15 +372,15 @@ std::string Impexp_utilities::convert_uri_to_filename( const std::string& uri)
 
     const std::string& scheme = uri_class.get_scheme();
     if( !scheme.empty() && scheme != "file")
-        return std::string();
+        return {};
 
     const std::string& authority = uri_class.get_authority();
     if( !authority.empty())
-        return std::string();
+        return {};
 
     std::string path = uri_class.get_path();
     if( path.empty())
-        return std::string();
+        return {};
 
 #ifndef MI_PLATFORM_WINDOWS
     // nothing to do
@@ -419,18 +418,18 @@ std::vector<DB::Tag> Impexp_utilities::convert_names_to_tags(
     ASSERT( M_NEURAY_API, names);
 
     std::vector<DB::Tag> tags;
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( transaction);
+    auto* transaction_impl = static_cast<Transaction_impl*>( transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
     for( mi::Uint32 i = 0; i < names->get_length(); ++i) {
 
         mi::base::Handle<const mi::IString> name( names->get_element<mi::IString>( i));
         if( !name.is_valid_interface())
-            return std::vector<DB::Tag>();
+            return {};
         const char* name_c_str = name->get_c_str();
         DB::Tag tag = db_transaction->name_to_tag( name_c_str);
         if( !tag)
-            return std::vector<DB::Tag>();
+            return {};
         tags.push_back( tag);
     }
 
@@ -442,12 +441,12 @@ mi::IArray* Impexp_utilities::convert_tags_to_names(
 {
     ASSERT( M_NEURAY_API, transaction);
 
-    mi::IDynamic_array* names = transaction->create<mi::IDynamic_array>( "String[]");
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( transaction);
+    auto* names = transaction->create<mi::IDynamic_array>( "String[]");
+    auto* transaction_impl = static_cast<Transaction_impl*>( transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
-    for( mi::Size i = 0; i < tags.size(); ++i) {
-        const char* name = db_transaction->tag_to_name( tags[i]);
+    for( auto tag : tags) {
+        const char* name = db_transaction->tag_to_name( tag);
         if( !name)
             continue;
         mi::base::Handle<mi::IString> string( transaction->create<mi::IString>( "String"));
@@ -490,12 +489,12 @@ std::vector<DB::Tag> Impexp_utilities::get_export_elements(
 {
     std::vector<DB::Tag> result;
 
-    std::set<DB::Tag> tags_seen;
-    for( std::vector<DB::Tag>::const_iterator it = tags.begin(); it != tags.end(); ++it)
-        if( tags_seen.find( *it) == tags_seen.end()) {
-            tags_seen.insert( *it);
+    robin_hood::unordered_set<DB::Tag> tags_seen;
+    for( auto tag : tags)
+        if( tags_seen.find( tag) == tags_seen.end()) {
+            tags_seen.insert( tag);
             get_export_elements_internal(
-                db_transaction, *it, recurse, time_stamp, shortcuts_mdl, result, tags_seen);
+                db_transaction, tag, recurse, time_stamp, shortcuts_mdl, result, tags_seen);
         }
 
     return result;
@@ -508,7 +507,7 @@ void Impexp_utilities::get_export_elements_internal(
     DB::Tag_version* time_stamp,
     bool shortcuts_mdl,
     std::vector<DB::Tag>& result,
-    std::set<DB::Tag>& tags_seen)
+    robin_hood::unordered_set<DB::Tag>& tags_seen)
 {
     SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
 
@@ -526,11 +525,17 @@ void Impexp_utilities::get_export_elements_internal(
         }
 
         // call recursively for all references not yet in tags_seen
-        for( DB::Tag_set::const_iterator it = references.begin(); it != references.end(); ++it)
-            if( tags_seen.find( *it) == tags_seen.end()) {
-                tags_seen.insert( *it);
+        for( auto reference : references)
+            if( tags_seen.find( reference) == tags_seen.end()) {
+                tags_seen.insert( reference);
                 get_export_elements_internal(
-                    db_transaction, *it, recurse, time_stamp, shortcuts_mdl, result, tags_seen);
+                    db_transaction,
+                    reference,
+                    recurse,
+                    time_stamp,
+                    shortcuts_mdl,
+                    result,
+                    tags_seen);
             }
     }
 

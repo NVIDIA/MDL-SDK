@@ -762,7 +762,7 @@ public:
         Type *get_type() const { return m_type; }
 
         /// Get the parameter modifier of this parameter.
-        Modifier get_modifier() { return m_modifier; }
+        Modifier get_modifier() const { return m_modifier; }
 
     public:
         /// Constructor.
@@ -1227,15 +1227,15 @@ class Type_factory : public Interface_owned
                         size_t n_params = size_t(ft->get_parameter_count());
 
                         size_t t = ret_type - (Type *)0;
-                        t = ((t) >> 3) ^ (t >> 16) ^           //-V2007
+                        t = ((t) >> 3) ^ (t >> 16) ^                      //-V2007
                             size_t(KEY_FUNC_TYPE) ^ n_params;
 
                         for (size_t i = 0; i < n_params; ++i) {
                             Type_function::Parameter *param  = ft->get_parameter(i);
-                            Type                     *p_type = param->get_type();
 
                             t *= 3;
-                            t ^= (char *)p_type - (char *)0;
+                            t ^= (char *)param->get_type() - (char *)0;
+                            t ^= size_t(param->get_modifier()) * 21143;
                         }
                         return t;
                     }
@@ -1249,6 +1249,7 @@ class Type_factory : public Interface_owned
                         for (size_t i = 0; i < key.u.func.n_params; ++i) {
                             t *= 3;
                             t ^= (char *)p[i].get_type() - (char *)0;
+                            t ^= size_t(p[i].get_modifier()) * 21143;
                         }
                         return t;
                     }
@@ -1307,11 +1308,10 @@ class Type_factory : public Interface_owned
                         for (size_t i = 0; i < sk->n_params; ++i) {
                             Type_function::Parameter *param = ft->get_parameter(i);
 
-                            Type   *p_type = param->get_type();
-
-                            if (p_type != sk->params[i].get_type()) {
+                            if (param->get_type() != sk->params[i].get_type())
                                 return false;
-                            }
+                            if (param->get_modifier() != sk->params[i].get_modifier())
+                                return false;
                         }
                         return true;
                     }

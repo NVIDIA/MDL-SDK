@@ -99,7 +99,7 @@ public:
         mi::Uint32 miplevels,
         bool is_cubemap,
         mi::Float32 gamma,
-        mi::Uint32 quality) const override;
+        const mi::IMap* export_options) const override;
 
 private:
 

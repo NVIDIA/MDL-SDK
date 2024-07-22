@@ -42,11 +42,16 @@
 
 constexpr int SHOW_MESSAGE_COUNT = 10;
 
+// We just pull in this one source file for the Node_types instead of
+// linking the distiller library and many other dependencies.
+#include <mdl/codegenerators/generator_dag/generator_dag_distiller_node_types.cpp>
+
 // Constructor.
 Compiler::Compiler(mi::mdl::IMDL *imdl)
     : Base(imdl->get_mdl_allocator())
     , m_imdl(imdl)
     , m_mdl(*mi::mdl::impl_cast<mi::mdl::MDL>(m_imdl))
+    , m_node_types()
     , m_mdl_type_factory(*mi::mdl::impl_cast<mi::mdl::Type_factory>(imdl->get_type_factory()))
     , m_mdl_symbol_table(*m_mdl_type_factory.get_symbol_table())
     , m_allocator(imdl->get_mdl_allocator())
@@ -60,21 +65,24 @@ Compiler::Compiler(mi::mdl::IMDL *imdl)
 {
 }
 
-mi::base::Handle<Compilation_unit> Compiler::create_unit( const char *fname)
+mi::base::Handle<Compilation_unit> Compiler::create_unit(const char *fname)
 {
     mi::mdl::Allocator_builder builder(m_allocator);
     Compilation_unit *unit =
-        builder.create<Compilation_unit>(m_allocator, &m_arena, m_imdl,
-                                         &m_symbol_table, fname,
-                                         &m_comp_options, &m_messages,
-                                         &m_builtin_type_map);
+        builder.create<Compilation_unit>(
+            m_allocator,
+            &m_arena,
+            m_imdl,
+            &m_node_types,
+            &m_symbol_table,
+            fname,
+            &m_comp_options,
+            &m_messages,
+            &m_builtin_type_map);
     return mi::base::make_handle(unit);
 }
 
 void Compiler::run(unsigned& err_count) {
-
-    // Initialize the Distiller-specific BSDF node table.
-    mi::mdl::Node_types::init();
 
     // Load ::nvidia::distilling_support as a builtin module to make
     // its definitions available to mdltl files.
@@ -132,10 +140,6 @@ void Compiler::run(unsigned& err_count) {
     // For unit tests, we allow error messages to be suppressed.
     if (!m_comp_options.get_silent())
         print_messages();
-
-    // Shut down the Distiller-specific node table, so that multiple
-    // Compiler instances can be created in series.
-    mi::mdl::Node_types::exit();
 }
 
 Message_list const &Compiler::get_messages() const {

@@ -119,13 +119,21 @@ struct Value_type_trait {};
 template <>
 struct Value_type_trait<float> {
     typedef IValue_float Value_type;
-    typedef double       IM_type;
+    typedef float        IM_type;
+
+    static float trunc(float f) { return ::truncf(f); }
+    static float floor(float f) { return ::floorf(f); }
+    static float sign(float f)  { return mi::math::sign(f); }
 };
 
 template <>
 struct Value_type_trait<double> {
     typedef IValue_double Value_type;
-    typedef double       IM_type;
+    typedef double        IM_type;
+
+    static double trunc(double f) { return ::trunc(f); }
+    static double floor(double f) { return ::floor(f); }
+    static double sign(double f)  { return mi::math::sign(f); }
 };
 
 static inline IValue const *create_value(IValue_factory *factory, float value)
@@ -426,6 +434,64 @@ static IValue const *do_transpose(
     IType_matrix const *nm_type = type_fact->create_matrix(nv_type, m);
     return value_factory->create_matrix(nm_type, matrix, m);
 }
+
+/// Helper for round(floatX) (the iray way, round(x) = floor(x + 0.5))
+template <
+    typename T
+>
+static IValue const *do_round(
+    IValue_factory *value_factory,
+    IValue const *const arguments[])
+{
+    typedef Value_type_trait<T>                      TT;
+    typedef typename Value_type_trait<T>::Value_type VT;
+    typedef typename Value_type_trait<T>::IM_type    IM;
+
+    if (IValue_vector const *v_a = as<IValue_vector>(arguments[0])) {
+        int n = v_a->get_component_count();
+        IValue const *res[4];
+        for (int j = 0; j < n; ++j) {
+            VT const *a = cast<VT>(v_a->get_value(j));
+            res[j] = create_value(value_factory, TT::floor(a->get_value() + IM(0.5)));
+        }
+        return value_factory->create_vector(v_a->get_type(), res, n);
+    }
+
+    VT const *a = cast<VT>(arguments[0]);
+
+    return create_value(value_factory, TT::floor(a->get_value() + IM(0.5)));
+}
+
+/// Helper for round_away_from_zero(floatX) (to nearest, 0.5 is rounded away from zero),
+/// round_away_from_zero(x) = trunc(x + 0.5 * sign(x))
+template <
+    typename T
+>
+static IValue const *do_round_away_from_zero(
+    IValue_factory *value_factory,
+    IValue const *const arguments[])
+{
+    typedef Value_type_trait<T>                      TT;
+    typedef typename Value_type_trait<T>::Value_type VT;
+    typedef typename Value_type_trait<T>::IM_type    IM;
+
+    if (IValue_vector const *v_a = as<IValue_vector>(arguments[0])) {
+        int n = v_a->get_component_count();
+        IValue const *res[4];
+        for (int j = 0; j < n; ++j) {
+            VT const *a = cast<VT>(v_a->get_value(j));
+            IM x = a->get_value();
+            res[j] = create_value(value_factory, TT::trunc(x + IM(0.5) * TT::sign(x)));
+        }
+        return value_factory->create_vector(v_a->get_type(), res, n);
+    }
+
+    VT const *a = cast<VT>(arguments[0]);
+    IM x = a->get_value();
+
+    return create_value(value_factory, TT::trunc(x + IM(0.5) * TT::sign(x)));
+}
+
 
 #include "compilercore_intrinsic_eval.i"
 

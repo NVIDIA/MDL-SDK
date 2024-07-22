@@ -74,11 +74,36 @@ public:
 
     const mi::neuraylib::IExpression* get_temporary( mi::Size index) const final;
 
+    const mi::neuraylib::IExpression* lookup_sub_expression( const char* path) const final;
+
+    bool is_valid( mi::neuraylib::IMdl_execution_context* context) const final;
+
+    mi::Size get_parameter_count() const final;
+
+    const char* get_parameter_name( mi::Size index) const final;
+
+    const mi::neuraylib::IValue* get_argument( mi::Size index) const final;
+
+    const mi::IString* get_connected_function_db_name(
+        const char* material_instance_name,
+        mi::Size parameter_index,
+        mi::Sint32* errors) const final;
+
     mi::Float32 get_mdl_meters_per_scene_unit() const final;
 
     mi::Float32 get_mdl_wavelength_min() const final;
 
     mi::Float32 get_mdl_wavelength_max() const final;
+
+    mi::neuraylib::Material_opacity get_opacity() const final;
+
+    mi::neuraylib::Material_opacity get_surface_opacity() const final;
+
+    bool get_cutout_opacity( mi::Float32* cutout_opacity) const final;
+
+    mi::Size get_referenced_scene_data_count() const final;
+
+    const char* get_referenced_scene_data_name( mi::Size index) const final;
 
     bool depends_on_state_transform() const final;
 
@@ -88,34 +113,11 @@ public:
 
     bool depends_on_uniform_scene_data() const final;
 
-    mi::Size get_referenced_scene_data_count() const final;
-
-    const char* get_referenced_scene_data_name( mi::Size index) const final;
-
-    mi::Size get_parameter_count() const final;
-
-    const char* get_parameter_name( mi::Size index) const final;
-
-    const mi::neuraylib::IValue* get_argument( mi::Size index) const final;
-
     mi::base::Uuid get_hash() const final;
 
     mi::base::Uuid get_slot_hash( mi::neuraylib::Material_slot slot) const final;
 
-    const mi::neuraylib::IExpression* lookup_sub_expression( const char* path) const final;
-
-    const mi::IString* get_connected_function_db_name(
-        const char* material_instance_name,
-        mi::Size parameter_index,
-        mi::Sint32* errors) const final;
-
-    mi::neuraylib::Material_opacity get_opacity() const final;
-
-    mi::neuraylib::Material_opacity get_surface_opacity() const final;
-
-    bool get_cutout_opacity(mi::Float32 *cutout_opacity) const final;
-
-    bool is_valid(mi::neuraylib::IMdl_execution_context* context) const final;
+    mi::base::Uuid get_sub_expression_hash( const char* path) const final;
 
     // own methods
 

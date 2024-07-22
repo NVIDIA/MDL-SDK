@@ -221,7 +221,7 @@ MI_TEST_AUTO_FUNCTION( test_bbox_constructors )
 
 MI_TEST_AUTO_FUNCTION( test_bbox_basics_operators_methods )
 {
-    typedef Bbox<double,3> Bbox;
+    using Bbox = Bbox<double, 3>;
 
     Bbox bba(-1, -2, -3, 1, 1, 1);
     Bbox bbb( 0,  0,  0, 1, 2, 3);
@@ -255,15 +255,15 @@ MI_TEST_AUTO_FUNCTION( test_bbox_basics_operators_methods )
 
 MI_TEST_AUTO_FUNCTION( test_bbox_transform )
 {
-    typedef Bbox<double,3> Bbox;
+    using Bbox = Bbox<double, 3>;
     Bbox bbc(-1, -2, -3, 1, 1, 1);
 
     // test transform
     Matrix<double,4,4> mat(
- 	0.0,1.0,0.0,0.0,
- 	0.0,0.0,1.0,0.0,
- 	1.0,0.0,0.0,0.0,
- 	1.0,1.0,1.0,1.0);
+        0.0,1.0,0.0,0.0,
+        0.0,0.0,1.0,0.0,
+        1.0,0.0,0.0,0.0,
+        1.0,1.0,1.0,1.0);
     Bbox bbd = transform_vector( mat, bbc);
     MI_CHECK_EQUAL(bbd, Bbox(-3, -1, -2, 1, 1, 1));
     bbd = transform_point( mat, bbc);
@@ -272,7 +272,7 @@ MI_TEST_AUTO_FUNCTION( test_bbox_transform )
 
 MI_TEST_AUTO_FUNCTION( test_bbox_interpolate )
 {
-    typedef Bbox<double,3> Bbox;
+    using Bbox = Bbox<double, 3>;
     Bbox bba(-1, -2, -3, 1, 1, 1);
     Bbox bbb( 0,  0,  0, 1, 2, 3);
     Bbox bbc(-1, -2, -3, 1, 1, 1);
@@ -294,7 +294,7 @@ MI_TEST_AUTO_FUNCTION( test_bbox_interpolate )
 
 MI_TEST_AUTO_FUNCTION( test_bbox_intersection )
 {
-    typedef Bbox<double,3> Bbox;
+    using Bbox = Bbox<double, 3>;
 
     Bbox outer(Bbox::Vector(10, 0, 0), Bbox::Vector(20, 10, 10));
     Bbox inner(Bbox::Vector(13, 3, 3), Bbox::Vector(18, 8, 8));
@@ -322,7 +322,7 @@ MI_TEST_AUTO_FUNCTION( test_bbox_intersection )
 
 MI_TEST_AUTO_FUNCTION( test_bbox_union )
 {
-    typedef Bbox<double,3> Bbox;
+    using Bbox = Bbox<double, 3>;
 
     Bbox left(Bbox::Vector(0, 0, 0), Bbox::Vector(10, 10, 10));
     Bbox right(Bbox::Vector(5, 5, 5), Bbox::Vector(15, 15, 15));
@@ -337,7 +337,7 @@ MI_TEST_AUTO_FUNCTION( test_bbox_union )
 
 MI_TEST_AUTO_FUNCTION( test_bbox_function_contains )
 {
-    typedef Bbox<double,3> Bbox;
+    using Bbox = Bbox<double, 3>;
     Bbox bba(-1, -2, -3, 1, 1, 1);
     MI_CHECK(bba.contains(Bbox::Vector(-1, -2, -3)));
     MI_CHECK(bba.contains(Bbox::Vector(1, 1, 1)));
@@ -349,7 +349,7 @@ MI_TEST_AUTO_FUNCTION( test_bbox_function_contains )
 
 MI_TEST_AUTO_FUNCTION( test_bbox_function_intersects )
 {
-    typedef Bbox<double,3> Bbox;
+    using Bbox = Bbox<double, 3>;
     Bbox a0(Bbox::Vector(0, 0, 0), Bbox::Vector(10, 10, 10));
     Bbox b0 = a0;
     MI_CHECK(a0.intersects(b0));

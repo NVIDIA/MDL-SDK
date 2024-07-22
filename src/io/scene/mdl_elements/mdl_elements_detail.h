@@ -37,7 +37,6 @@
 
 #include <mi/mdl/mdl_types.h>
 #include <mi/mdl/mdl_values.h>
-#include <mi/mdl/mdl_generated_dag.h>
 #include <mi/mdl/mdl_entity_resolver.h>
 #include <mi/mdl/mdl_streams.h>
 #include <mi/neuraylib/ireader.h>
@@ -53,10 +52,7 @@
 #include <io/image/image/i_image.h>
 #include <io/scene/dbimage/i_dbimage.h>
 
-namespace mi { namespace mdl {
-    class IArchive_tool;
-    class IMDL_resource_reader;
-} }
+namespace mi { namespace mdl { class IArchive_tool; class IMDL_resource_reader; } }
 
 namespace MI {
 
@@ -73,7 +69,7 @@ namespace DETAIL {
 ///
 /// \param module_filename      resolved module file name
 /// \param module_name          MDL name of the module
-/// \param def_simple_name      MDL simple name of the definitionA
+/// \param def_simple_name      MDL simple name of the definition
 /// \param annotations          annotations of the mdl definition
 /// \param archive_tool         to resolve thumbnails in archives
 /// \return the resolved file name of the thumbnail or an empty string if none could be found
@@ -103,7 +99,7 @@ std::string lookup_thumbnail(
 ///                                file paths only) without module context.
 /// \param errors_are_warnings     Report errors only as warnings.
 /// \return                        The tag for the MDL resource (invalid in case of failures).
-DB::Tag mdl_resource_to_tag(
+DB::Tag core_resource_to_tag(
     DB::Transaction* transaction,
     const mi::mdl::IValue_resource* value,
     const char* module_filename,
@@ -113,8 +109,8 @@ DB::Tag mdl_resource_to_tag(
 
 /// Returns the DB tag corresponding to an MDL texture.
 ///
-/// \see #mdl_resource_to_tag(). The found resources are always shared.
-DB::Tag mdl_texture_to_tag(
+/// \see #core_resource_to_tag(). The found resources are always shared.
+DB::Tag core_texture_to_tag(
     DB::Transaction* transaction,
     const mi::mdl::IValue_texture* value,
     const char* module_filename,
@@ -124,8 +120,8 @@ DB::Tag mdl_texture_to_tag(
 
 /// Returns the DB tag corresponding to an MDL texture.
 ///
-/// \see #mdl_resource_to_tag()
-DB::Tag mdl_texture_to_tag(
+/// \see #core_resource_to_tag()
+DB::Tag core_texture_to_tag(
     DB::Transaction* transaction,
     const char* file_path,
     const char* module_filename,
@@ -139,8 +135,8 @@ DB::Tag mdl_texture_to_tag(
 
 /// Returns the DB tag corresponding to an MDL volume texture.
 ///
-/// \see #mdl_resource_to_tag()
-DB::Tag mdl_volume_texture_to_tag(
+/// \see #core_resource_to_tag()
+DB::Tag core_volume_texture_to_tag(
     DB::Transaction* transaction,
     const char* file_path,
     const char* module_filename,
@@ -152,8 +148,8 @@ DB::Tag mdl_volume_texture_to_tag(
 
 /// Returns the DB tag corresponding to an MDL light profile.
 ///
-/// \see #mdl_resource_to_tag(). The found resources are always shared.
-DB::Tag mdl_light_profile_to_tag(
+/// \see #core_resource_to_tag(). The found resources are always shared.
+DB::Tag core_light_profile_to_tag(
     DB::Transaction* transaction,
     const mi::mdl::IValue_light_profile* value,
     const char* module_filename,
@@ -163,8 +159,8 @@ DB::Tag mdl_light_profile_to_tag(
 
 /// Returns the DB tag corresponding to an MDL light profile.
 ///
-/// \see #mdl_resource_to_tag()
-DB::Tag mdl_light_profile_to_tag(
+/// \see #core_resource_to_tag()
+DB::Tag core_light_profile_to_tag(
     DB::Transaction* transaction,
     const char* file_path,
     const char* module_filename,
@@ -175,8 +171,8 @@ DB::Tag mdl_light_profile_to_tag(
 
 /// Returns the DB tag corresponding to an MDL BSDF measurement.
 ///
-/// \see #mdl_resource_to_tag(). The found resources are always shared.
-DB::Tag mdl_bsdf_measurement_to_tag(
+/// \see #core_resource_to_tag(). The found resources are always shared.
+DB::Tag core_bsdf_measurement_to_tag(
     DB::Transaction* transaction,
     const mi::mdl::IValue_bsdf_measurement* value,
     const char* module_filename,
@@ -186,8 +182,8 @@ DB::Tag mdl_bsdf_measurement_to_tag(
 
 /// Returns the DB tag corresponding to an MDL BSDF measurement.
 ///
-/// \see #mdl_resource_to_tag()
-DB::Tag mdl_bsdf_measurement_to_tag(
+/// \see #core_resource_to_tag()
+DB::Tag core_bsdf_measurement_to_tag(
     DB::Transaction* transaction,
     const char* file_path,
     const char* module_filename,
@@ -199,8 +195,40 @@ DB::Tag mdl_bsdf_measurement_to_tag(
 /// Generates a name that is unique in the DB (at least from the given transaction's point of view).
 std::string generate_unique_db_name( DB::Transaction* transaction, const char* prefix);
 
+/// Converts mi::mdl::IStruct_category IDs into MI::MDL::IStruct_category IDs.
+inline IStruct_category::Predefined_id core_struct_category_id_to_int_struct_category_id(
+    mi::mdl::IStruct_category::Predefined_id struct_category_id)
+{
+    switch( struct_category_id) {
+        case mi::mdl::IStruct_category::CID_USER:
+            return IStruct_category::CID_USER;
+        case mi::mdl::IStruct_category::CID_MATERIAL_CATEGORY:
+            return IStruct_category::CID_MATERIAL_CATEGORY;
+    }
+
+    ASSERT( M_SCENE, false);
+    return IStruct_category::CID_USER;
+}
+
+/// Converts MI::MDL::IStruct_category IDs into mi::mdl::IStruct_category IDs.
+inline mi::mdl::IStruct_category::Predefined_id int_struct_category_id_to_core_struct_category_id(
+    IStruct_category::Predefined_id struct_category_id)
+{
+    switch( struct_category_id) {
+        case IStruct_category::CID_USER:
+            return mi::mdl::IStruct_category::CID_USER;
+        case IStruct_category::CID_MATERIAL_CATEGORY:
+            return mi::mdl::IStruct_category::CID_MATERIAL_CATEGORY;
+        case IStruct_category::CID_FORCE_32_BIT:
+            ASSERT( M_SCENE, false); return mi::mdl::IStruct_category::CID_USER;
+    }
+
+    ASSERT( M_SCENE, false);
+    return mi::mdl::IStruct_category::CID_USER;
+}
+
 /// Converts mi::mdl::IType_alias modifiers into MI::MDL::IType_alias modifiers.
-inline mi::Uint32 mdl_modifiers_to_int_modifiers( mi::Uint32 modifiers)
+inline mi::Uint32 core_modifiers_to_int_modifiers( mi::Uint32 modifiers)
 {
     ASSERT( M_SCENE, (modifiers
         & ~mi::mdl::IType_alias::MK_UNIFORM
@@ -213,7 +241,7 @@ inline mi::Uint32 mdl_modifiers_to_int_modifiers( mi::Uint32 modifiers)
 }
 
 /// Converts MI::MDL::IType_alias modifiers into mi::mdl::IType_alias modifiers.
-inline mi::Uint32 int_modifiers_to_mdl_modifiers( mi::Uint32 modifiers)
+inline mi::Uint32 int_modifiers_to_core_modifiers( mi::Uint32 modifiers)
 {
     ASSERT( M_SCENE, (modifiers
         & ~IType_alias::MK_UNIFORM
@@ -225,8 +253,8 @@ inline mi::Uint32 int_modifiers_to_mdl_modifiers( mi::Uint32 modifiers)
     return result;
 }
 
-/// Converts predefined mi::mdl::IType_enum IDs into predefined MI::MDL::IType_enum IDs.
-inline IType_enum::Predefined_id mdl_enum_id_to_int_enum_id(
+/// Converts mi::mdl::IType_enum IDs into MI::MDL::IType_enum IDs.
+inline IType_enum::Predefined_id core_enum_id_to_int_enum_id(
     mi::mdl::IType_enum::Predefined_id enum_id)
 {
     switch( enum_id) {
@@ -239,8 +267,8 @@ inline IType_enum::Predefined_id mdl_enum_id_to_int_enum_id(
     return IType_enum::EID_USER;
 }
 
-/// Converts predefined MI::MDL::IType_enum IDs into predefined mi::mdl::IType_enum IDs.
-inline mi::mdl::IType_enum::Predefined_id int_enum_id_to_mdl_enum_id(
+/// Converts MI::MDL::IType_enum IDs into mi::mdl::IType_enum IDs.
+inline mi::mdl::IType_enum::Predefined_id int_enum_id_to_core_enum_id(
     IType_enum::Predefined_id enum_id)
 {
     switch( enum_id) {
@@ -255,8 +283,8 @@ inline mi::mdl::IType_enum::Predefined_id int_enum_id_to_mdl_enum_id(
     return mi::mdl::IType_enum::EID_USER;
 }
 
-/// Converts predefined mi::mdl::IType_struct IDs into predefined MI::MDL::IType_struct IDs.
-inline IType_struct::Predefined_id mdl_struct_id_to_int_struct_id(
+/// Converts mi::mdl::IType_struct IDs into MI::MDL::IType_struct IDs.
+inline IType_struct::Predefined_id core_struct_id_to_int_struct_id(
     mi::mdl::IType_struct::Predefined_id struct_id)
 {
     switch( struct_id) {
@@ -278,8 +306,8 @@ inline IType_struct::Predefined_id mdl_struct_id_to_int_struct_id(
     return IType_struct::SID_USER;
 }
 
-/// Converts predefined MI::MDL::IType_struct IDs into predefined mi::mdl::IType_struct IDs.
-inline mi::mdl::IType_struct::Predefined_id int_struct_id_to_mdl_struct_id(
+/// Converts MI::MDL::IType_struct IDs into mi::mdl::IType_struct IDs.
+inline mi::mdl::IType_struct::Predefined_id int_struct_id_to_core_struct_id(
     IType_struct::Predefined_id struct_id)
 {
     switch( struct_id) {
@@ -304,7 +332,7 @@ inline mi::mdl::IType_struct::Predefined_id int_struct_id_to_mdl_struct_id(
 }
 
 /// Converts mi::mdl::IType_texture shapes into MI::MDL::IType_texture shapes.
-inline IType_texture::Shape mdl_shape_to_int_shape( mi::mdl::IType_texture::Shape shape)
+inline IType_texture::Shape core_shape_to_int_shape( mi::mdl::IType_texture::Shape shape)
 {
     switch( shape) {
         case mi::mdl::IType_texture::TS_2D:        return IType_texture::TS_2D;
@@ -319,7 +347,7 @@ inline IType_texture::Shape mdl_shape_to_int_shape( mi::mdl::IType_texture::Shap
 }
 
 /// Converts MI::MDL::IType_texture shapes into mi::mdl::IType_texture shapes.
-inline mi::mdl::IType_texture::Shape int_shape_to_mdl_shape( IType_texture::Shape shape)
+inline mi::mdl::IType_texture::Shape int_shape_to_core_shape( IType_texture::Shape shape)
 {
     switch( shape) {
         case IType_texture::TS_2D:           return mi::mdl::IType_texture::TS_2D;
@@ -529,9 +557,9 @@ private:
 class Input_stream_impl : public mi::base::Interface_implement<mi::mdl::IInput_stream>
 {
 public:
-    Input_stream_impl( mi::neuraylib::IReader* reader, const std::string& filename);
+    Input_stream_impl( mi::neuraylib::IReader* reader, std::string filename);
 
-    // MDL core API methods
+    // core methods
 
     int read_char();
 
@@ -548,7 +576,7 @@ class Output_stream_impl : public mi::base::Interface_implement<MDL::IOutput_str
 public:
     Output_stream_impl( mi::neuraylib::IWriter* writer);
 
-    // MDL core API methods
+    // core methods
 
     virtual void write_char( char c);
 
@@ -574,7 +602,7 @@ class Mdle_input_stream_impl
 public:
     Mdle_input_stream_impl( mi::neuraylib::IReader* reader, const std::string& filename);
 
-    // MDL core API methods
+    // core methods
 
     int read_char();
 
@@ -587,11 +615,11 @@ class Mdl_resource_reader_impl : public mi::base::Interface_implement<mi::mdl::I
 public:
     Mdl_resource_reader_impl(
         mi::neuraylib::IReader* reader,
-        const std::string& file_path,
-        const std::string& filename,
+        std::string file_path,
+        std::string filename,
         const mi::base::Uuid& hash);
 
-    // MDL core API methods
+    // core methods
 
     Uint64 read( void* ptr, Uint64 size);
 

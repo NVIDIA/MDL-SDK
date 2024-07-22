@@ -132,7 +132,7 @@ mi::neuraylib::IValue_texture* Mdl_factory_impl::create_texture(
         return nullptr;
     }
 
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( transaction);
+    auto* transaction_impl = static_cast<Transaction_impl*>( transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
     MDL::IType_texture::Shape int_shape = ext_shape_to_int_shape( shape);
@@ -159,7 +159,7 @@ mi::neuraylib::IValue_light_profile* Mdl_factory_impl::create_light_profile(
         return nullptr;
     }
 
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( transaction);
+    auto* transaction_impl = static_cast<Transaction_impl*>( transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
     mi::base::Handle<MDL::IValue_light_profile> result(
@@ -185,7 +185,7 @@ mi::neuraylib::IValue_bsdf_measurement* Mdl_factory_impl::create_bsdf_measuremen
         return nullptr;
     }
 
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( transaction);
+    auto* transaction_impl = static_cast<Transaction_impl*>( transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
     mi::base::Handle<MDL::IValue_bsdf_measurement> result(
@@ -229,25 +229,26 @@ mi::neuraylib::IMdl_module_transformer* Mdl_factory_impl::create_module_transfor
         return nullptr;
     }
 
-    Transaction_impl* transaction_impl
+    auto* transaction_impl
         = static_cast<Transaction_impl*>( transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
     DB::Tag tag = db_transaction->name_to_tag( module_name);
-    if( !tag || db_transaction->get_class_id( tag) != MDL::Mdl_module::id) {
+    if( !tag || db_transaction->get_class_id( tag) != MDL::ID_MDL_MODULE) {
         add_error_message( mdl_context, "Invalid module name.", -2);
         return nullptr;
     }
 
     DB::Access<MDL::Mdl_module> db_module( tag, db_transaction);
-    mi::base::Handle<const mi::mdl::IModule> mdl_module( db_module->get_mdl_module());
-    const mi::mdl::Module* mdl_module_impl = mi::mdl::impl_cast<mi::mdl::Module>( mdl_module.get());
-    if( mdl_module_impl->is_compiler_owned() || mdl_module_impl->is_native()) {
+    mi::base::Handle<const mi::mdl::IModule> core_module( db_module->get_core_module());
+    const mi::mdl::Module* core_module_impl
+        = mi::mdl::impl_cast<mi::mdl::Module>( core_module.get());
+    if( core_module_impl->is_compiler_owned() || core_module_impl->is_native()) {
         add_error_message( mdl_context, "Builtin modules cannot be transformed.", -3);
         return nullptr;
     }
 
-    return new Mdl_module_transformer_impl( transaction, module_name, mdl_module.get());
+    return new Mdl_module_transformer_impl( transaction, module_name, core_module.get());
 }
 
 const mi::IString* Mdl_factory_impl::get_db_module_name( const char* mdl_name)
@@ -307,7 +308,7 @@ void Mdl_factory_impl::analyze_uniform(
         return;
     }
 
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( transaction);
+    auto* transaction_impl = static_cast<Transaction_impl*>( transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     DB::Tag tag = db_transaction->name_to_tag( root_name);
     if( !tag) {
@@ -317,7 +318,7 @@ void Mdl_factory_impl::analyze_uniform(
 
     mi::base::Handle<MDL::IExpression_direct_call> int_root_expr;
     SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
-    if( class_id != MDL::Mdl_function_call::id) {
+    if( class_id != MDL::ID_MDL_FUNCTION_CALL) {
         add_error_message( context_impl, "Invalid root type.", -3);
         return;
     }
@@ -403,7 +404,7 @@ const mi::IString* Mdl_factory_impl::encode_function_definition_name(
             parameter_types->get_value<mi::IString>( i));
         if( !parameter_type)
             return nullptr;
-        parameter_types_int.push_back( parameter_type->get_c_str());
+        parameter_types_int.emplace_back( parameter_type->get_c_str());
     }
 
     std::string result = MDL::encode_name_plus_signature( name, parameter_types_int);

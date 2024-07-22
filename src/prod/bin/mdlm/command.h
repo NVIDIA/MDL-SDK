@@ -79,7 +79,7 @@ namespace mdlm
         Compatibility(const std::string & old_archive, const std::string & new_archive);
 
         /// \return
-        ///		- See COMPATIBILITY
+        ///             - See COMPATIBILITY
         /// COMPATIBLE_SAME_VERSION is returned same as COMPATIBLE 
         int execute() override;
 
@@ -110,13 +110,13 @@ namespace mdlm
         Create_archive(const std::string & mdl_directory, const std::string & archive);
 
         /// \return
-        ///		- SUCCESS: Success
-        ///		- UNSPECIFIED_FAILURE: Unspecified failure.
+        ///             - SUCCESS: Success
+        ///             - UNSPECIFIED_FAILURE: Unspecified failure.
         int execute() override;
 
         /// \return
-        ///		- SUCCESS: Success
-        ///		- UNSPECIFIED_FAILURE: Unspecified failure.
+        ///             - SUCCESS: Success
+        ///             - UNSPECIFIED_FAILURE: Unspecified failure.
         /// key_value format should be key=value, otherwise the key/value pair is not added.
         int add_key_value(const std::string & key_value);
     };
@@ -155,10 +155,10 @@ namespace mdlm
         void set_dryrun(bool dryrun) { m_dryrun = dryrun; }
 
         /// \return
-        ///		- SUCCESS: Success
-        ///		- UNSPECIFIED_FAILURE: Unspecified failure.
-        ///		- INVALID_ARCHIVE: Invalid input archive
-        ///		- INVALID_MDL_PATH: Invalid MDL path
+        ///             - SUCCESS: Success
+        ///             - UNSPECIFIED_FAILURE: Unspecified failure.
+        ///             - INVALID_ARCHIVE: Invalid input archive
+        ///             - INVALID_MDL_PATH: Invalid MDL path
         int execute() override;
     };
 
@@ -198,10 +198,10 @@ namespace mdlm
         const std::multimap<std::string, std::string> & get_manifest()const { return m_manifest; }
 
         /// \return
-        ///		- SUCCESS: Success
-        ///		- UNSPECIFIED_FAILURE: Unspecified failure.
-        ///		- INVALID_ARCHIVE: Invalid input archive
-        ///		- INVALID_MDL_PATH: Invalid MDL path
+        ///             - SUCCESS: Success
+        ///             - UNSPECIFIED_FAILURE: Unspecified failure.
+        ///             - INVALID_ARCHIVE: Invalid input archive
+        ///             - INVALID_MDL_PATH: Invalid MDL path
         int execute() override;
 
         /// Control whether to report or not the result
@@ -251,11 +251,11 @@ namespace mdlm
         }
 
         /// \return
-        ///		- SUCCESS: Success
-        ///		- UNSPECIFIED_FAILURE: Unspecified failure.
+        ///             - SUCCESS: Success
+        ///             - UNSPECIFIED_FAILURE: Unspecified failure.
         ///             - PATH_EXISTS: A file or directory with same name exists
-        ///		- INVALID_ARCHIVE: Invalid input archive
-        ///		- INVALID_PATH: Invalid MDL path
+        ///             - INVALID_ARCHIVE: Invalid input archive
+        ///             - INVALID_PATH: Invalid MDL path
         int execute() override;
     };
 
@@ -277,13 +277,13 @@ namespace mdlm
         Create_mdle(const std::string& prototype, const std::string& mdle);
 
         /// \return
-        ///		- SUCCESS: Success
-        ///		- UNSPECIFIED_FAILURE: Unspecified failure.
+        ///             - SUCCESS: Success
+        ///             - UNSPECIFIED_FAILURE: Unspecified failure.
         int execute() override;
 
         /// \return
-        ///		- SUCCESS: Success
-        ///		- UNSPECIFIED_FAILURE: Unspecified failure.
+        ///             - SUCCESS: Success
+        ///             - UNSPECIFIED_FAILURE: Unspecified failure.
         /// add a user file to the MDLE 
         int add_user_file(const std::string& source_path, const std::string& target_path);
     };
@@ -306,8 +306,8 @@ namespace mdlm
         Check_mdle(const std::string& mdle);
 
         /// \return
-        ///		- SUCCESS: Success
-        ///		- UNSPECIFIED_FAILURE: Unspecified failure.
+        ///             - SUCCESS: Success
+        ///             - UNSPECIFIED_FAILURE: Unspecified failure.
         int execute() override;
     };
     /// Help command
@@ -321,10 +321,10 @@ namespace mdlm
         {}
 
         /// \return
-        ///		- SUCCESS: Success
-        ///		- UNSPECIFIED_FAILURE: Unspecified failure.
-        ///		- INVALID_ARCHIVE: Invalid input archive
-        ///		- INVALID_MDL_PATH: Invalid MDL path
+        ///             - SUCCESS: Success
+        ///             - UNSPECIFIED_FAILURE: Unspecified failure.
+        ///             - INVALID_ARCHIVE: Invalid input archive
+        ///             - INVALID_MDL_PATH: Invalid MDL path
         int execute() override;
     };
 
@@ -355,8 +355,8 @@ namespace mdlm
 
         /// List all the locations for the given Archive
         /// \return
-        ///		- SUCCESS: Success
-        ///		- UNSPECIFIED_FAILURE: Unspecified failure.
+        ///             - SUCCESS: Success
+        ///             - UNSPECIFIED_FAILURE: Unspecified failure.
         int execute() override;
 
         List_result get_result() const
@@ -389,10 +389,10 @@ namespace mdlm
 
         /// List all the locations for the given Archive
         /// \return
-        ///		- SUCCESS: Success
+        ///             - SUCCESS: Success
         ///     - ARCHIVE_NOT_FOUND: Archive does not exist
         ///     - INVALID_ARCHIVE: Archive is not valid
-        ///		- UNSPECIFIED_FAILURE: Unspecified failure.
+        ///             - UNSPECIFIED_FAILURE: Unspecified failure.
         int execute() override;
     };
 

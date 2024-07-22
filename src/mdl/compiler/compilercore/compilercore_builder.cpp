@@ -45,6 +45,8 @@
 namespace mi {
 namespace mdl {
 
+#define BUILD_TYPE_ONLY 0x80000000
+
 #define ARG0()                              num_args = 0;
 #define ARG1(a1)                            num_args = 1; a1
 #define ARG2(a1, a2)                        num_args = 2; a1 a2
@@ -98,6 +100,19 @@ namespace mdl {
     m_params[arg_num].p_sym    = psym;      \
     m_inits[arg_num]           = NULL;      \
 
+// declare an eXtra parameter for every argument in the specification
+#define XARG(type, name, arr)               \
+    ++arg_num;                              \
+    ptype = m_extra_is_uniform ? \
+        m_tc.decorate_type(m_tc.type##_type, IType::MK_UNIFORM) : \
+        m_tc.type##_type;                   \
+    arr                                     \
+    psym = get_predef_symbol(#name);        \
+    m_params[arg_num].p_type   = ptype;     \
+    m_params[arg_num].p_sym    = psym;      \
+    m_inits[arg_num]           = NULL;      \
+
+
 // declare a parameter for every argument in the specification with an default argument
 #define DEFARG(type, name, arr, expr)       \
     ARG(type, name, arr)                    \
@@ -113,6 +128,11 @@ namespace mdl {
 #define CDEFARG(type, name, arr, expr)      \
     UDEFARG(type, name, arr, expr)          \
     m_literal_param_msk |= 1u << arg_num;
+
+// declare an eXtra  parameter for every argument in the specification with an default argument
+#define XDEFARG(type, name, arr, expr)      \
+    XARG(type, name, arr)                   \
+    expr
 
 // a literal expression
 #define EXPR_LITERAL(value)                             \
@@ -172,11 +192,15 @@ class Entity_builder {
 public:
     /// Constructor.
     ///
-    /// \param module                  the module that gets the builtin entities
-    /// \param tc                      the type cache
-    /// \param build_predefined_types  if true, fields of predefined types will be entered
-    Entity_builder(Module &module, Type_cache &tc, bool build_predefined_types)
-    : m_module(module)
+    /// \param module                   the module that gets the builtin entities
+    /// \param tc                       the type cache
+    /// \param extra_types_are_uniform  if true, extra types are uniform, else automatic
+    Entity_builder(
+        Module     &module,
+        Type_cache &tc,
+        bool       extra_types_are_uniform)
+    : mod_extra(extra_types_are_uniform ? mod_uniform : IType::MK_NONE)
+    , m_module(module)
     , m_def_tab(module.get_definition_table())
     , m_sym_tab(module.get_symbol_table())
     , m_name_fact(*m_module.get_name_factory())
@@ -187,7 +211,7 @@ public:
     , m_tex_sym(m_sym_tab.get_predefined_symbol(ISymbol::SYM_CNST_TEX))
     , m_mod_version(module.get_version())
     , m_literal_param_msk(0)
-    , m_build_predefined_types(build_predefined_types)
+    , m_extra_is_uniform(extra_types_are_uniform)
     {
     }
 
@@ -195,6 +219,9 @@ private:
     static IType::Modifier const  mod_            = IType::MK_NONE;
     static IType::Modifier const  mod_uniform     = IType::MK_UNIFORM;
     static IType::Modifier const  mod_const       = IType::MK_CONST;
+
+    /// The meaning of the eXtra modifier.
+    IType::Modifier const mod_extra;
 
     Module             &m_module;
     Definition_table   &m_def_tab;
@@ -214,19 +241,22 @@ private:
     /// The mask of literal parameters.
     unsigned m_literal_param_msk;
 
-    /// if true, fields of predefined type are entered
-    bool m_build_predefined_types;
-
     /// temporary space for building function parameters
     IType_factory::Function_parameter m_params[16];  // -V730_NOINIT
 
     // temporary space for initializers
     IExpression const *m_inits[16];  // -V730_NOINIT
 
+    /// If true, eXtra types are uniform, else varying.
+    bool const m_extra_is_uniform;
+
 private:
     /// Check if the current entity represented by its version flags is available
     /// in the current module.
     bool available(unsigned flags) {
+        if (flags & BUILD_TYPE_ONLY) {
+            return false;
+        }
         return is_available_in_mdl(m_mod_version, flags);
     }
 
@@ -327,7 +357,7 @@ private:
         MDL_ASSERT(scope);
 
         Definition *def = scope->find_definition_in_scope(sym);
-        MDL_ASSERT(def && def->get_kind() == Definition::DK_CONSTRUCTOR);
+        MDL_ASSERT(def != NULL && def->get_kind() == Definition::DK_CONSTRUCTOR);
 
         for (; def != NULL; def = def->get_prev_def()) {
             IType_function const *ftype = as<IType_function>(def->get_type());
@@ -479,6 +509,9 @@ private:
 #undef IMPLICIT
 #define IMPLICIT /* do nothing */
 
+#undef DECLARATIVE
+#define DECLARATIVE def->set_flag(Definition::DEF_IS_DECLARATIVE);
+
 // declare a constructor
 #define CONSTRUCTOR(kind, classname, args, sema, flags)                         \
     if (available(flags)) {                           \
@@ -501,10 +534,6 @@ private:
         def  = m_def_tab.enter_definition(Definition::DK_MEMBER, sym, type, NULL);          \
         def->set_field_index(num_fields++);                                                 \
         def->set_version_flags(VERSION(flags));                                             \
-    }                                                                                       \
-    if (m_build_predefined_types && this_type->get_kind() == IType::TK_STRUCT) {            \
-        IType_struct *s_type = const_cast<IType_struct *>(cast<IType_struct>(this_type));   \
-        s_type->add_field(type, sym);                                                       \
     }
 
 // handle enum values
@@ -514,8 +543,6 @@ private:
     def  = m_def_tab.enter_definition(Definition::DK_ENUM_VALUE, sym, this_type, NULL); \
     {                                                                               \
         IType_enum *e_type = const_cast<IType_enum *>(cast<IType_enum>(this_type)); \
-        if (m_build_predefined_types)                                               \
-            idx = e_type->add_value(sym, value);                                    \
         IValue const *enum_value = m_value_fact.create_enum(e_type, idx++);         \
         def->set_constant_value(enum_value);                                        \
         def->set_flag(Definition::DEF_IS_PREDEFINED);                               \
@@ -644,12 +671,12 @@ public:
         sym = m_sym_tab.get_operator_symbol(IExpression::OK_MULTIPLY);
 
 // declare operators
-#define MUL_OPERATOR(ret, args, flags)                          \
-        arg_num = -1;                                           \
-        args                                                    \
-        func_type = m_tc.create_function(m_tc.ret##_type,       \
+#define MUL_OPERATOR(ret, args, flags)                            \
+        arg_num = -1;                                             \
+        args                                                      \
+        func_type = m_tc.create_function(m_tc.ret##_type,         \
             Type_cache::Function_parameters(m_params, num_args)); \
-        m_def_tab.enter_operator_definition(              \
+        m_def_tab.enter_operator_definition(                      \
             IExpression::OK_MULTIPLY, sym, func_type);
 
 #include "compilercore_known_defs.h"
@@ -763,12 +790,14 @@ public:
     }
 };
 
+// Enter all compiler known definitions from compilercore_known_defs.h
+// into the given module.
 void enter_predefined_entities(
     Module     &module,
     Type_cache &tc,
-    bool build_predefined_types)
+    bool       extra_types_are_uniform)
 {
-    Entity_builder builder(module, tc, build_predefined_types);
+    Entity_builder builder(module, tc, extra_types_are_uniform);
 
     builder.enter_builtins(module.is_stdlib());
 }

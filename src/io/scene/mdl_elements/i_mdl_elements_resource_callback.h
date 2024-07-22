@@ -37,11 +37,13 @@
 #include <map>
 #include <functional>
 
+#include <boost/core/noncopyable.hpp>
+
 #include <mi/base/handle.h>
 #include <mi/mdl/mdl_printers.h>
 #include <mi/mdl/mdl_values.h>
+
 #include <base/system/main/access_module.h>
-#include <boost/core/noncopyable.hpp>
 #include <base/data/db/i_db_tag.h>
 
 namespace mi { namespace neuraylib { class IExport_result_ext; class IBuffer; } }

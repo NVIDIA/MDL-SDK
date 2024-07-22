@@ -42,6 +42,7 @@
 
 #include <base/util/string_utils/i_string_lexicographic_cast.h>
 #include <base/lib/log/i_log_logger.h>
+#include <base/data/idata/i_idata_factory.h>
 
 #include <cstring>
 
@@ -84,11 +85,11 @@ bool Type_utilities::is_valid_array_attribute_type( const std::string& type_name
     // extract length
     std::string length_str = type_name.substr( left_bracket+1, right_bracket-left_bracket-1);
     if( !length_str.empty()) {
-        STLEXT::Likely<mi::Size> length_likely
+        std::optional<mi::Size> length_optional
             = STRING::lexicographic_cast_s<mi::Size>( length_str);
-        if( !length_likely.get_status())
+        if( !length_optional.has_value())
             return false;
-        if( *length_likely.get_ptr() == 0) //-V522 PVS
+        if( length_optional.value() == 0)
             return false;
     }
 
@@ -172,66 +173,12 @@ mi::Size Type_utilities::get_attribute_array_length( const std::string& type_nam
     mi::Size right_bracket = type_name.rfind( ']');
     ASSERT( M_NEURAY_API, right_bracket != std::string::npos);
     std::string length = type_name.substr( left_bracket+1, right_bracket-left_bracket-1);
-    STLEXT::Likely<mi::Size> length_likely = STRING::lexicographic_cast_s<mi::Size>( length);
-    ASSERT( M_NEURAY_API, length_likely.get_status());
-    ASSERT( M_NEURAY_API, *length_likely.get_ptr() > 0); //-V522 PVS
-    return *length_likely.get_ptr();
+    std::optional<mi::Size> length_optional = STRING::lexicographic_cast_s<mi::Size>( length);
+    ASSERT( M_NEURAY_API, length_optional.has_value());
+    ASSERT( M_NEURAY_API, length_optional.value() > 0);
+    return length_optional.value();
 }
 
-
-std::string Type_utilities::strip_array( const std::string& type_name, mi::Size& length)
-{
-    // extract delimiters
-    mi::Size left_bracket = type_name.rfind( '[');
-    if( left_bracket == std::string::npos)
-        return "";
-    mi::Size right_bracket = type_name.rfind( ']');
-    if( right_bracket != type_name.length() - 1)
-        return "";
-
-    // extract length
-    std::string length_str = type_name.substr( left_bracket+1, right_bracket-left_bracket-1);
-    if( !length_str.empty()) {
-        STLEXT::Likely<mi::Size> length_likely
-            = STRING::lexicographic_cast_s<mi::Size>( length_str);
-        if( !length_likely.get_status())
-            return "";
-        if( *length_likely.get_ptr() == 0) //-V522 PVS
-            return "";
-        length = *length_likely.get_ptr();
-    } else
-        length = 0;
-
-    // extract element type name
-    return type_name.substr( 0, left_bracket);
-}
-
-std::string Type_utilities::strip_map( const std::string& type_name)
-{
-    if( type_name.substr( 0, 4) != "Map<")
-        return std::string();
-    if( type_name[type_name.size() - 1] != '>')
-        return std::string();
-    return type_name.substr( 4, type_name.size() - 5);
-}
-
-std::string Type_utilities::strip_pointer( const std::string& type_name)
-{
-    if( type_name.substr( 0, 8) != "Pointer<")
-        return "";
-    if( type_name[type_name.size()-1] != '>')
-        return "";
-    return type_name.substr( 8, type_name.size() - 9);
-}
-
-std::string Type_utilities::strip_const_pointer( const std::string& type_name)
-{
-    if( type_name.substr( 0, 14) != "Const_pointer<")
-        return "";
-    if( type_name[type_name.size()-1] != '>')
-        return "";
-    return type_name.substr( 14, type_name.size() - 15);
-}
 
 bool Type_utilities::compatible_types(
     const std::string& lhs, const std::string& rhs, bool relaxed_array_check)
@@ -265,33 +212,34 @@ bool Type_utilities::compatible_types(
 
     // compare arrays
     mi::Size lhs_length;
-    const std::string& lhs_array_element = strip_array( lhs, lhs_length);
+    const std::string& lhs_array_element = IDATA::Factory::strip_array( lhs, lhs_length);
     if( !lhs_array_element.empty()) {
         mi::Size rhs_length;
-        const std::string& rhs_array_element = strip_array( rhs, rhs_length);
+        const std::string& rhs_array_element = IDATA::Factory::strip_array( rhs, rhs_length);
         if( lhs_length != rhs_length && (!relaxed_array_check || rhs_length > 0))
             return false;
         return compatible_types( lhs_array_element, rhs_array_element, relaxed_array_check);
     }
 
     // compare maps
-    const std::string& lhs_map_value = strip_map( lhs);
+    const std::string& lhs_map_value = IDATA::Factory::strip_map( lhs);
     if( !lhs_map_value.empty()) {
-        const std::string& rhs_map_value = strip_map( rhs);
+        const std::string& rhs_map_value = IDATA::Factory::strip_map( rhs);
         return compatible_types( lhs_map_value, rhs_map_value, relaxed_array_check);
     }
 
     // compare pointers
-    const std::string& lhs_pointer_nested = strip_pointer( lhs);
+    const std::string& lhs_pointer_nested = IDATA::Factory::strip_pointer( lhs);
     if( !lhs_pointer_nested.empty()) {
-        const std::string& rhs_pointer_nested = strip_pointer( rhs);
+        const std::string& rhs_pointer_nested = IDATA::Factory::strip_pointer( rhs);
         return compatible_types( lhs_pointer_nested, rhs_pointer_nested, relaxed_array_check);
     }
 
     // compare const pointers
-    const std::string& lhs_const_pointer_nested = strip_const_pointer( lhs);
+    const std::string& lhs_const_pointer_nested = IDATA::Factory::strip_const_pointer( lhs);
     if( !lhs_const_pointer_nested.empty()) {
-        const std::string& rhs_const_pointer_nested = strip_const_pointer( rhs);
+        const std::string& rhs_const_pointer_nested
+            = IDATA::Factory::strip_const_pointer( rhs);
         return compatible_types(
             lhs_const_pointer_nested, rhs_const_pointer_nested, relaxed_array_check);
     }
@@ -324,7 +272,7 @@ ATTR::Type_code Type_utilities::convert_type_name_to_type_code( const std::strin
         || type_name == "Ref<Lightprofile>"
         || type_name == "Ref<Bsdf_measurement>") {
         LOG::mod_log->error( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
-            "Using attributes of type \"%s\" is no longer supported. Use type \"Ref\" instead.",
+            R"(Using attributes of type "%s" is no longer supported. Use type "Ref" instead.)",
             type_name.c_str());
         return ATTR::TYPE_UNDEF;
     }
@@ -355,7 +303,7 @@ const char* Type_utilities::convert_type_code_to_type_name( ATTR::Type_code type
         || type_code == ATTR::TYPE_LIGHTPROFILE
         || type_code == ATTR::TYPE_BSDF_MEASUREMENT) {
         LOG::mod_log->error( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
-            "Using attributes of type \"%s\" is deprecated. Use type \"Ref\" instead.",
+            R"(Using attributes of type "%s" is deprecated. Use type "Ref" instead.)",
             it->second.c_str());
         return nullptr;
     }

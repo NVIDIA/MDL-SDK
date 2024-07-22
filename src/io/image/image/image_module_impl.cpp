@@ -32,6 +32,9 @@
 
 #include <mi/base/handle.h>
 #include <mi/neuraylib/iimage_plugin.h>
+#include <mi/neuraylib/imap.h>
+#include <mi/neuraylib/inumber.h>
+#include <mi/neuraylib/istring.h>
 #include <mi/neuraylib/iplugin_api.h>
 #include <mi/math/color.h>
 
@@ -51,6 +54,7 @@
 #include <base/hal/disk/disk_memory_reader_writer_impl.h>
 #include <base/hal/hal/i_hal_ospath.h>
 #include <base/data/serial/i_serializer.h>
+#include <base/data/idata/i_idata_factory.h>
 
 #include "i_image_pixel_conversion.h"
 #include "i_image_utilities.h"
@@ -83,14 +87,18 @@ Module_registration_entry* Image_module::get_instance()
     return s_module.init_module( s_module.get_name());
 }
 
+Image_module_impl::~Image_module_impl() = default;
+
 bool Image_module_impl::init()
 {
+    m_factory = std::make_unique<IDATA::Factory>( nullptr);
+
     m_plug_module.set();
 
     mi::base::Handle<mi::neuraylib::IPlugin_api> plugin_api( m_plug_module->get_plugin_api());
 
     // If no plugin API has been registered, e.g., in some unit tests, then we provide our own
-    // which at least provides access to most of IImage_api.
+    // which at least provides access to most of IImage_api and ILogging_configuration.
     if( !plugin_api)
         plugin_api = new Plugin_api_impl( this);
 
@@ -107,8 +115,7 @@ bool Image_module_impl::init()
         if( is_valid_image_plugin( type, name, filename)) {
 
             // Call IImage_plugin::init()
-            mi::neuraylib::IImage_plugin* image_plugin
-                = static_cast<mi::neuraylib::IImage_plugin*>( plugin);
+            auto* image_plugin = static_cast<mi::neuraylib::IImage_plugin*>( plugin);
             image_plugin->init( plugin_api.get());
 
             // Store plugin for exit()
@@ -127,23 +134,24 @@ void Image_module_impl::exit()
     mi::base::Handle<mi::neuraylib::IPlugin_api> plugin_api( m_plug_module->get_plugin_api());
 
     // If no plugin API has been registered, e.g., in some unit tests, then we provide our own
-    // which at least provides access to most of IImage_api.
+    // which at least provides access to most of IImage_api and ILogging_configuration.
     if( !plugin_api)
         plugin_api = new Plugin_api_impl( this);
 
     // Call IImage_plugin::exit() on our type of plugins
     mi::base::Lock::Block block( &m_plugins_lock);
-          Plugin_vector::reverse_iterator it     = m_plugins.rbegin();
-    const Plugin_vector::reverse_iterator it_end = m_plugins.rend();
+          auto it     = m_plugins.rbegin();
+    const auto it_end = m_plugins.rend();
     for( ; it != it_end; ++it) {
         mi::base::Plugin* plugin = (*it)->get_plugin();
-        mi::neuraylib::IImage_plugin* image_plugin
+        auto* image_plugin
             = static_cast<mi::neuraylib::IImage_plugin*>( plugin);
         image_plugin->exit( plugin_api.get());
     }
     m_plugins.clear();
 
     m_plug_module.reset();
+    m_factory.reset();
 }
 
 IMipmap* Image_module_impl::create_mipmap(
@@ -596,7 +604,7 @@ void Image_module_impl::adjust_gamma(
         case PT_FLOAT32_3:
         case PT_FLOAT32_4: {
             const mi::Uint32 components = get_components_per_pixel( pixel_type);
-            mi::Float32* data = static_cast<mi::Float32*>( tile->get_data());
+            auto* data = static_cast<mi::Float32*>( tile->get_data());
             IMAGE::adjust_gamma( data, nr_of_pixels, components, exponent);
             break;
         }
@@ -642,7 +650,7 @@ void Image_module_impl::adjust_gamma(
     const mi::Uint32 nr_of_layers  = canvas->get_layers_size();
     const mi::Size   nr_of_pixels  = (mi::Size)canvas_width * canvas_height;
 
-    switch (pixel_type) {
+    switch( pixel_type) {
         case PT_COLOR:
         case PT_RGB_FP:
         case PT_FLOAT32:
@@ -652,9 +660,9 @@ void Image_module_impl::adjust_gamma(
             const mi::Uint32 components = get_components_per_pixel(pixel_type);
             for( mi::Uint32 z = 0; z < nr_of_layers; ++z) {
                 mi::base::Handle<mi::neuraylib::ITile> tile( canvas->get_tile( z));
-                ASSERT(M_IMAGE, tile->get_resolution_x() == canvas_width);
-                ASSERT(M_IMAGE, tile->get_resolution_y() == canvas_height);
-                mi::Float32* data = static_cast<mi::Float32*>( tile->get_data());
+                ASSERT( M_IMAGE, tile->get_resolution_x() == canvas_width);
+                ASSERT( M_IMAGE, tile->get_resolution_y() == canvas_height);
+                auto* data = static_cast<mi::Float32*>( tile->get_data());
                 IMAGE::adjust_gamma( data, nr_of_pixels, components, exponent);
             }
             break;
@@ -859,7 +867,7 @@ mi::neuraylib::ICanvas* Image_module_impl::deserialize_canvas(
 
     mi::Uint32 pixel_type_as_uint32;
     deserializer->read( &pixel_type_as_uint32);
-    const Pixel_type pixel_type = static_cast<Pixel_type>( pixel_type_as_uint32);
+    const auto pixel_type = static_cast<Pixel_type>( pixel_type_as_uint32);
     deserializer->read( &canvas_width);
     deserializer->read( &canvas_height);
     deserializer->read( &nr_of_layers);
@@ -906,7 +914,7 @@ mi::neuraylib::ITile* Image_module_impl::deserialize_tile(
 
     mi::Uint32 pixel_type_as_uint32;
     deserializer->read( &pixel_type_as_uint32);
-    const Pixel_type pixel_type = static_cast<Pixel_type>( pixel_type_as_uint32);
+    const auto pixel_type = static_cast<Pixel_type>( pixel_type_as_uint32);
     deserializer->read( &width);
     deserializer->read( &height);
 
@@ -923,8 +931,7 @@ mi::neuraylib::ITile* Image_module_impl::deserialize_tile(
 bool Image_module_impl::export_canvas(
     const mi::neuraylib::ICanvas* canvas_ptr,
     const char* output_filename,
-    mi::Uint32 quality,
-    bool force_default_gamma) const
+    const mi::IMap* export_options) const
 {
     // Wrap incoming canvas pointer into handle for easier management later.
     mi::base::Handle<const mi::neuraylib::ICanvas> canvas( canvas_ptr, mi::base::DUP_INTERFACE);
@@ -955,7 +962,6 @@ bool Image_module_impl::export_canvas(
     const Pixel_type export_pixel_type_enum = convert_pixel_type_string_to_enum( export_pixel_type);
     const int canvas_bpc = get_bytes_per_component( canvas_pixel_type_enum);
     const int export_bpc = get_bytes_per_component( export_pixel_type_enum);
-    const mi::Float32 canvas_gamma = canvas->get_gamma();
     const mi::Float32 export_default_gamma = get_default_gamma( export_pixel_type_enum);
 
     // Convert pixel type before potential gamma conversion if bytes per component increases.
@@ -964,12 +970,10 @@ bool Image_module_impl::export_canvas(
         ASSERT( M_IMAGE, canvas);
     }
 
-    // If enabled and necessary, adjust gamma to export_default_gamma.
-    if( force_default_gamma && fabs( canvas_gamma - export_default_gamma) > 0.001f) {
-        mi::base::Handle<mi::neuraylib::ICanvas> tmp( copy_canvas( canvas.get()));
-        adjust_gamma( tmp.get(), export_default_gamma);
-        canvas = tmp;
-    }
+    // If enabled and necessary, adjust gamma.
+    canvas = enforce_default_gamma( canvas.get(), export_options, export_default_gamma);
+    if( !canvas)
+        return false;
 
     // Convert pixel type before after gamma conversion if bytes per component does not increase.
     if( (canvas_pixel_type_enum != export_pixel_type_enum) && (export_bpc <= canvas_bpc)) {
@@ -992,7 +996,7 @@ bool Image_module_impl::export_canvas(
     const bool is_cubemap          = get_canvas_is_cubemap( canvas.get());
 
     mi::base::Handle<mi::neuraylib::IImage_file> image_file( plugin->open_for_writing( &writer,
-        pixel_type, image_width, image_height, nr_of_layers, 1, is_cubemap, gamma, quality));
+        pixel_type, image_width, image_height, nr_of_layers, 1, is_cubemap, gamma, export_options));
     if( !image_file) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin \"%s\" failed to export \"%s\" due to unsupported properties "
@@ -1002,7 +1006,7 @@ bool Image_module_impl::export_canvas(
     }
 
     LOG::mod_log->info( M_IMAGE, LOG::Mod_log::C_IO,
-        "Saving image \"%s\", pixel type \"%s\", %ux%ux%u pixels, 1 miplevel.",
+        R"(Saving image "%s", pixel type "%s", %ux%ux%u pixels, 1 miplevel.)",
         output_filename, export_pixel_type, image_width, image_height, nr_of_layers);
 
     for( mi::Uint32 z = 0; z < nr_of_layers; ++z) {
@@ -1022,8 +1026,7 @@ bool Image_module_impl::export_canvas(
 bool Image_module_impl::export_mipmap(
     const IMipmap* mipmap,
     const char* output_filename,
-    mi::Uint32 quality,
-    bool force_default_gamma) const
+    const mi::IMap* export_options) const
 {
     std::string extension = HAL::Ospath::get_ext( output_filename);
     if( !extension.empty() && extension[0] == '.' )
@@ -1054,7 +1057,6 @@ bool Image_module_impl::export_mipmap(
     const Pixel_type export_pixel_type_enum = convert_pixel_type_string_to_enum( export_pixel_type);
     const int canvas_bpc = get_bytes_per_component( canvas_pixel_type_enum);
     const int export_bpc = get_bytes_per_component( export_pixel_type_enum);
-    const mi::Float32 canvas_gamma = canvas->get_gamma();
     const mi::Float32 export_default_gamma = get_default_gamma( export_pixel_type_enum);
 
     DISK::File_writer_impl writer;
@@ -1071,26 +1073,41 @@ bool Image_module_impl::export_mipmap(
     const mi::Float32 gamma        = canvas->get_gamma();
     const bool is_cubemap          = get_canvas_is_cubemap( canvas.get());
 
-    mi::base::Handle<mi::neuraylib::IImage_file> image_file( plugin->open_for_writing( &writer,
-        export_pixel_type, image_width, image_height, nr_of_layers, nr_of_levels, is_cubemap, gamma,
-        quality));
+    mi::base::Handle<mi::neuraylib::IImage_file> image_file( plugin->open_for_writing(
+        &writer,
+        export_pixel_type,
+        image_width,
+        image_height,
+        nr_of_layers,
+        nr_of_levels,
+        is_cubemap,
+        gamma,
+        export_options));
+
+    // If multiple levels are not supported try again exporting only the first level.
     if( !image_file) {
-        // if multiple levels are not supported try again exporting only the first level
-        image_file = plugin->open_for_writing( &writer, export_pixel_type,
-            image_width, image_height, nr_of_layers, 1, is_cubemap, gamma, quality);
+        nr_of_levels = 1;
+        image_file = plugin->open_for_writing(
+            &writer,
+            export_pixel_type,
+            image_width,
+            image_height,
+            nr_of_layers,
+            nr_of_levels,
+            is_cubemap,
+            gamma,
+            export_options);
         if( !image_file) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                 "The image plugin \"%s\" failed to export \"%s\" due to unsupported properties "
                 "or an out-of-memory exception.",
                 plugin->get_name(), output_filename);
             return false;
-        } else {
-            nr_of_levels = 1;
         }
     }
 
     LOG::mod_log->info( M_IMAGE, LOG::Mod_log::C_IO,
-        "Saving image \"%s\", pixel type \"%s\", %ux%ux%u pixels, %u miplevel%s.",
+        R"(Saving image "%s", pixel type "%s", %ux%ux%u pixels, %u miplevel%s.)",
         output_filename, export_pixel_type, image_width, image_height, nr_of_layers,
         nr_of_levels, nr_of_levels == 1 ? "" : "s");
 
@@ -1100,7 +1117,7 @@ bool Image_module_impl::export_mipmap(
         if( !canvas_l)
             return false;
 
-        nr_of_layers             = canvas_l->get_layers_size();
+        nr_of_layers = canvas_l->get_layers_size();
 
         // Convert pixel type before potential gamma conversion if bytes per component increases.
         if( (canvas_pixel_type_enum != export_pixel_type_enum) && (export_bpc > canvas_bpc)) {
@@ -1108,12 +1125,10 @@ bool Image_module_impl::export_mipmap(
             ASSERT( M_IMAGE, canvas_l);
         }
 
-        // If enabled and necessary, adjust gamma to export_default_gamma.
-        if( force_default_gamma && fabs( canvas_gamma - export_default_gamma) > 0.001f) {
-            mi::base::Handle<mi::neuraylib::ICanvas> tmp( copy_canvas( canvas_l.get()));
-            adjust_gamma( tmp.get(), export_default_gamma);
-            canvas_l = tmp;
-        }
+        // If enabled and necessary, adjust gamma.
+        canvas_l = enforce_default_gamma( canvas_l.get(), export_options, export_default_gamma);
+        if( !canvas_l)
+            return false;
 
         // Convert pixel type before after gamma conversion if bytes per component does not
         // increase.
@@ -1141,8 +1156,7 @@ mi::neuraylib::IBuffer* Image_module_impl::create_buffer_from_canvas(
     const mi::neuraylib::ICanvas* canvas_ptr,
     const char* image_format,
     const char* pixel_type,
-    mi::Uint32 quality,
-    bool force_default_gamma) const
+    const mi::IMap* export_options) const
 {
     // Wrap incoming canvas pointer into handle for easier management later.
     mi::base::Handle<const mi::neuraylib::ICanvas> canvas( canvas_ptr, mi::base::DUP_INTERFACE);
@@ -1170,7 +1184,6 @@ mi::neuraylib::IBuffer* Image_module_impl::create_buffer_from_canvas(
     const Pixel_type export_pixel_type_enum = convert_pixel_type_string_to_enum( export_pixel_type);
     const int canvas_bpc = get_bytes_per_component( canvas_pixel_type_enum);
     const int export_bpc = get_bytes_per_component( export_pixel_type_enum);
-    const mi::Float32 canvas_gamma = canvas->get_gamma();
     const mi::Float32 export_default_gamma = get_default_gamma( export_pixel_type_enum);
 
     // Convert pixel type before potential gamma conversion if bytes per component increases.
@@ -1179,12 +1192,10 @@ mi::neuraylib::IBuffer* Image_module_impl::create_buffer_from_canvas(
         ASSERT( M_IMAGE, canvas);
     }
 
-    // If enabled and necessary, adjust gamma to export_default_gamma.
-    if( force_default_gamma && fabs( canvas_gamma - export_default_gamma) > 0.001f) {
-        mi::base::Handle<mi::neuraylib::ICanvas> tmp( copy_canvas( canvas.get()));
-        adjust_gamma( tmp.get(), export_default_gamma);
-        canvas = tmp;
-    }
+    // If enabled and necessary, adjust gamma.
+    canvas = enforce_default_gamma( canvas.get(), export_options, export_default_gamma);
+    if( !canvas)
+        return nullptr;
 
     // Convert pixel type before after gamma conversion if bytes per component does not increase.
     if( (canvas_pixel_type_enum != export_pixel_type_enum) && (export_bpc <= canvas_bpc)) {
@@ -1198,8 +1209,16 @@ mi::neuraylib::IBuffer* Image_module_impl::create_buffer_from_canvas(
     const mi::Float32 gamma        = canvas->get_gamma();
     const bool is_cubemap          = get_canvas_is_cubemap( canvas.get());
 
-    mi::base::Handle<mi::neuraylib::IImage_file> image_file( plugin->open_for_writing( &writer,
-        export_pixel_type, image_width, image_height, nr_of_layers, 1, is_cubemap, gamma, quality));
+    mi::base::Handle<mi::neuraylib::IImage_file> image_file( plugin->open_for_writing(
+        &writer,
+        export_pixel_type,
+        image_width,
+        image_height,
+        nr_of_layers,
+        /*nr_of_levels*/ 1,
+        is_cubemap,
+        gamma,
+        export_options));
     if( !image_file) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin \"%s\" failed to encode the canvas due to unsupported properties.",
@@ -1232,23 +1251,28 @@ mi::neuraylib::IImage_plugin* Image_module_impl::find_plugin_for_import(
                         std::vector<mi::neuraylib::IImage_plugin*>, Plugin_less> queue;
 
     mi::base::Lock::Block block( &m_plugins_lock);
-    for( mi::Size plugin_index = 0; plugin_index < m_plugins.size(); ++plugin_index) {
+    for( const auto& plugin : m_plugins) {
 
-        mi::neuraylib::IImage_plugin* plugin
-            = static_cast<mi::neuraylib::IImage_plugin*>( m_plugins[plugin_index]->get_plugin());
+        auto* image_plugin = static_cast<mi::neuraylib::IImage_plugin*>( plugin->get_plugin());
         mi::Uint32 extension_index = 0;
-        const char* plugin_extension = plugin->get_file_extension( extension_index);
+        const char* plugin_extension = nullptr;
+        if( extension)
+            plugin_extension = image_plugin->get_file_extension( extension_index);
 
         while( plugin_extension) {
-            if( !extension || STRING::compare_case_insensitive( extension, plugin_extension) == 0) {
+
+            if(    !extension
+                || STRING::compare_case_insensitive( extension, plugin_extension) == 0) {
+
                 if( !reader) {
-                    queue.push( plugin);
-                } else if( plugin->test( reader)) {
-                    queue.push( plugin);
+                    queue.push( image_plugin);
+                } else if( image_plugin->test( reader)) {
+                    queue.push( image_plugin);
                     reader->seek_absolute( 0);
                 }
             }
-            plugin_extension = extension ? plugin->get_file_extension( ++extension_index) : nullptr;
+            if( extension)
+                plugin_extension = image_plugin->get_file_extension( ++extension_index);
         }
     }
 
@@ -1268,19 +1292,18 @@ mi::neuraylib::IImage_plugin* Image_module_impl::find_plugin_for_export(
                         std::vector<mi::neuraylib::IImage_plugin*>, Plugin_less> queue;
 
     mi::base::Lock::Block block( &m_plugins_lock);
-    for( mi::Size plugin_index = 0; plugin_index < m_plugins.size(); ++plugin_index) {
+    for( const auto& plugin : m_plugins) {
 
-        mi::neuraylib::IImage_plugin* plugin
-            = static_cast<mi::neuraylib::IImage_plugin*>( m_plugins[plugin_index]->get_plugin());
+        auto* image_plugin = static_cast<mi::neuraylib::IImage_plugin*>( plugin->get_plugin());
         mi::Uint32 extension_index = 0;
-        const char* plugin_extension = plugin->get_file_extension( extension_index);
+        const char* plugin_extension = image_plugin->get_file_extension( extension_index);
 
         while( plugin_extension) {
             if( STRING::compare_case_insensitive( extension, plugin_extension) == 0) {
-                if( plugin->get_supported_type( 0) != nullptr)
-                    queue.push( plugin);
+                if( image_plugin->get_supported_type( 0) != nullptr)
+                    queue.push( image_plugin);
             }
-            plugin_extension = plugin->get_file_extension( ++extension_index);
+            plugin_extension = image_plugin->get_file_extension( ++extension_index);
         }
     }
 
@@ -1304,31 +1327,45 @@ IMdl_container_callback* Image_module_impl::get_mdl_container_callback() const
     return m_mdl_container_callback.get();
 }
 
+mi::IMap* Image_module_impl::convert_legacy_options(
+    mi::Uint32 quality, bool force_default_gamma) const
+{
+    mi::base::Handle option_jpg_quality( m_factory->create<mi::IUint32>());
+    option_jpg_quality->set_value( quality);
+    mi::base::Handle option_exr_data_type( m_factory->create<mi::IString>());
+    option_exr_data_type->set_c_str( quality <= 50 ? "Float16" : "Float32");
+    mi::base::Handle option_force_default_gamma( m_factory->create<mi::IBoolean>());
+    option_force_default_gamma->set_value( force_default_gamma);
+
+    mi::base::Handle export_options( m_factory->create<mi::IMap>( nullptr, "Map<Interface>"));
+    export_options->insert( "jpg:quality", option_jpg_quality.get());
+    export_options->insert( "exr:data_type", option_exr_data_type.get());
+    export_options->insert( "force_default_gamma", option_force_default_gamma.get());
+
+    return export_options.extract();
+}
+
 void Image_module_impl::dump() const
 {
     mi::Size i = 0;
 
-    mi::base::Lock::Block block( &m_plugins_lock);
-          Plugin_vector::const_iterator it     = m_plugins.begin();
-    const Plugin_vector::const_iterator it_end = m_plugins.end();
-
     // Dump list of image plugins with extensions and pixel types for export
-    for( ; it != it_end; ++it) {
+    mi::base::Lock::Block block( &m_plugins_lock);
+    for( const auto& plugin : m_plugins) {
 
-        const mi::neuraylib::IImage_plugin* const plugin
-            = static_cast<mi::neuraylib::IImage_plugin*>( (*it)->get_plugin());
+        auto* image_plugin = static_cast<mi::neuraylib::IImage_plugin*>( plugin->get_plugin());
 
         std::ostringstream line;
-        line << "plugin " << i << ": name \"" << plugin->get_name() << "\", ";
+        line << "plugin " << i << ": name \"" << image_plugin->get_name() << "\", ";
 
-        line << "priority " << plugin->get_priority() << ", ";
+        line << "priority " << image_plugin->get_priority() << ", ";
 
         line << "file extensions: ";
         mi::Uint32 j = 0;
-        const char* file_extension = plugin->get_file_extension( j);
+        const char* file_extension = image_plugin->get_file_extension( j);
         while( file_extension) {
             line << (j>0 ? ", ": "") << "\"." << file_extension << '\"';
-            file_extension = plugin->get_file_extension( ++j);
+            file_extension = image_plugin->get_file_extension( ++j);
         }
         // If j is still zero, then this plugin does not support imports, only (possibly) exports.
         // We do not have such plugins. But it occurs if e.g. the OIIO library is incorrectly
@@ -1338,10 +1375,10 @@ void Image_module_impl::dump() const
 
         line << ", supported pixel types (export): ";
         mi::Uint32 k = 0;
-        const char* supported_type = plugin->get_supported_type( k);
+        const char* supported_type = image_plugin->get_supported_type( k);
         while( supported_type) {
             line << (k>0 ? ", ": "") << '\"' << supported_type << '\"';
-            supported_type = plugin->get_supported_type( ++k);
+            supported_type = image_plugin->get_supported_type( ++k);
         }
 
         LOG::mod_log->info( M_IMAGE, LOG::Mod_log::C_IO, "%s", line.str().c_str());
@@ -1353,14 +1390,14 @@ void Image_module_impl::dump() const
     constexpr mi::Uint32 last_pixel_type  = 14;
 
     for( mi::Uint32 from = first_pixel_type; from <= last_pixel_type; ++from) {
-        const Pixel_type from_enum = static_cast<Pixel_type>( from);
+        const auto from_enum = static_cast<Pixel_type>( from);
         std::ostringstream s;
         s << "conversion priorities for ";
         s << std::left << std::setw( 11) << convert_pixel_type_enum_to_string( from_enum);
 
         std::vector<mi::Float32> cost( last_pixel_type+1);
         for( mi::Uint32 to = first_pixel_type; to <= last_pixel_type; ++to) {
-            const Pixel_type to_enum = static_cast<Pixel_type>( to);
+            const auto to_enum = static_cast<Pixel_type>( to);
             cost[to] = get_conversion_cost( from_enum, to_enum);
         }
 
@@ -1368,7 +1405,7 @@ void Image_module_impl::dump() const
         for( mi::Uint32 i2 = first_pixel_type; i2 <= last_pixel_type; ++i2) {
 
             mi::Float32 min_cost = std::numeric_limits<mi::Float32>::max();
-            mi::Uint32 min_index = static_cast<mi::Uint32>( -1);
+            auto min_index = static_cast<mi::Uint32>( -1);
             for( mi::Uint32 j = first_pixel_type; j <= last_pixel_type; ++j) {
                 if( cost[j] < min_cost) {
                     min_cost = cost[j];
@@ -1378,7 +1415,7 @@ void Image_module_impl::dump() const
             ASSERT( M_IMAGE, min_index != static_cast<mi::Uint32>( -1));
             ASSERT( M_IMAGE, min_cost >= last_cost);
 
-            const Pixel_type to_enum = static_cast<Pixel_type>( min_index);
+            const auto to_enum = static_cast<Pixel_type>( min_index);
             if( i2 > 1)
                 s << ((min_cost > last_cost) ? ", " : "/");
             s << convert_pixel_type_enum_to_string( to_enum);
@@ -1387,6 +1424,42 @@ void Image_module_impl::dump() const
         }
         LOG::mod_log->info( M_IMAGE, LOG::Mod_log::C_IO, "%s", s.str().c_str());
     }
+}
+
+const mi::neuraylib::ICanvas* Image_module_impl::enforce_default_gamma(
+    const mi::neuraylib::ICanvas* canvas,
+    const mi::IMap* export_options,
+    mi::Float32 export_default_gamma) const
+{
+    const char* key = "force_default_gamma";
+    if( !export_options || !export_options->has_key( key)) {
+        canvas->retain();
+        return canvas;
+    }
+
+    mi::base::Handle<const mi::IBoolean> force_default_gamma(
+        export_options->get_value<mi::IBoolean>( key));
+    if( !force_default_gamma) {
+        LOG::mod_log->error(
+            M_IMAGE, LOG::Mod_log::C_IO, "Invalid type for option \"%s\".", key);
+        return nullptr;
+    }
+
+    bool force = force_default_gamma->get_value<bool>();
+    if( !force) {
+        canvas->retain();
+        return canvas;
+    }
+
+    mi::Float32 gamma = canvas->get_gamma();
+    if( fabs( gamma - export_default_gamma) <= 0.001f) {
+        canvas->retain();
+        return canvas;
+    }
+
+    mi::base::Handle<mi::neuraylib::ICanvas> result( copy_canvas( canvas));
+    adjust_gamma( result.get(), export_default_gamma);
+    return result.extract();
 }
 
 bool Image_module_impl::is_valid_image_plugin(

@@ -67,13 +67,13 @@ public:
     {
     }
 
-    mi::Float32 get_cpu_load() const { return m_cpu_load; }
-    mi::Float32 get_gpu_load() const { return m_gpu_load; }
-    mi::Sint8 get_priority() const { return 0; }
-    bool is_remaining_work_splittable() { return false; }
-    void pre_execute( const mi::neuraylib::IJob_execution_context* context) { }
+    mi::Float32 get_cpu_load() const final { return m_cpu_load; }
+    mi::Float32 get_gpu_load() const final { return m_gpu_load; }
+    mi::Sint8 get_priority() const final { return 0; }
+    bool is_remaining_work_splittable() final { return false; }
+    void pre_execute( const mi::neuraylib::IJob_execution_context* context) final { }
 
-    void execute( const mi::neuraylib::IJob_execution_context* context)
+    void execute( const mi::neuraylib::IJob_execution_context* context) final
     {
         LOG::mod_log->info( M_THREAD_POOL, LOG::Mod_log::C_MISC,
             "    Started test job %llu (CPU load %.1f, GPU load %.1f)",
@@ -112,13 +112,13 @@ public:
     {
     }
 
-    mi::Float32 get_cpu_load() const { return m_cpu_load; }
-    mi::Float32 get_gpu_load() const { return m_gpu_load; }
-    mi::Sint8 get_priority() const { return 0; }
-    bool is_remaining_work_splittable() { return false; }
-    void pre_execute( const mi::neuraylib::IJob_execution_context* context) { }
+    mi::Float32 get_cpu_load() const final { return m_cpu_load; }
+    mi::Float32 get_gpu_load() const final { return m_gpu_load; }
+    mi::Sint8 get_priority() const final { return 0; }
+    bool is_remaining_work_splittable() final { return false; }
+    void pre_execute( const mi::neuraylib::IJob_execution_context* context) final { }
 
-    void execute( const mi::neuraylib::IJob_execution_context* context)
+    void execute( const mi::neuraylib::IJob_execution_context* context) final
     {
         LOG::mod_log->info( M_THREAD_POOL, LOG::Mod_log::C_MISC,
             "    Started block job %d (CPU load %.1f, GPU load %.1f)",
@@ -165,13 +165,13 @@ public:
             m_prefix += "    ";
     }
 
-    mi::Float32 get_cpu_load() const { return m_cpu_load; }
-    mi::Float32 get_gpu_load() const { return m_gpu_load; }
-    mi::Sint8 get_priority() const { return 0; }
-    bool is_remaining_work_splittable() { return false; }
-    void pre_execute( const mi::neuraylib::IJob_execution_context* context) { }
+    mi::Float32 get_cpu_load() const final { return m_cpu_load; }
+    mi::Float32 get_gpu_load() const final { return m_gpu_load; }
+    mi::Sint8 get_priority() const final { return 0; }
+    bool is_remaining_work_splittable() final { return false; }
+    void pre_execute( const mi::neuraylib::IJob_execution_context* context) final { }
 
-    void execute( const mi::neuraylib::IJob_execution_context* context)
+    void execute( const mi::neuraylib::IJob_execution_context* context) final
     {
         LOG::mod_log->info( M_THREAD_POOL, LOG::Mod_log::C_MISC,
             "%sStarted recursive job level %d (CPU load %.1f, GPU load %.1f)",
@@ -232,7 +232,7 @@ public:
         mi::Float32 cpu_load,
         mi::Float32 gpu_load,
         mi::Float32 delay,
-        mi::base::Condition* condition = 0)
+        mi::base::Condition* condition = nullptr)
       : m_thread_pool( thread_pool),
         m_level( level),
         m_max_levels( max_levels),
@@ -245,13 +245,13 @@ public:
             m_prefix += "    ";
     }
 
-    mi::Float32 get_cpu_load() const { return m_cpu_load; }
-    mi::Float32 get_gpu_load() const { return m_gpu_load; }
-    mi::Sint8 get_priority() const { return 0; }
-    bool is_remaining_work_splittable() { return false; }
-    void pre_execute( const mi::neuraylib::IJob_execution_context* context) { }
+    mi::Float32 get_cpu_load() const final { return m_cpu_load; }
+    mi::Float32 get_gpu_load() const final { return m_gpu_load; }
+    mi::Sint8 get_priority() const final { return 0; }
+    bool is_remaining_work_splittable() final { return false; }
+    void pre_execute( const mi::neuraylib::IJob_execution_context* context) final { }
 
-    void execute( const mi::neuraylib::IJob_execution_context* context)
+    void execute( const mi::neuraylib::IJob_execution_context* context) final
     {
         LOG::mod_log->info( M_THREAD_POOL, LOG::Mod_log::C_MISC,
             "%sStarted tree job level %d (CPU load %.1f, GPU load %.1f)",
@@ -331,19 +331,19 @@ public:
     {
     }
 
-    mi::Float32 get_cpu_load() const { return m_cpu_load; }
-    mi::Float32 get_gpu_load() const { return m_gpu_load; }
-    mi::Sint8 get_priority() const { return 0; }
+    mi::Float32 get_cpu_load() const final { return m_cpu_load; }
+    mi::Float32 get_gpu_load() const final { return m_gpu_load; }
+    mi::Sint8 get_priority() const final { return 0; }
     size_t get_thread_limit() const { return m_thread_limit; }
-    bool is_remaining_work_splittable()
+    bool is_remaining_work_splittable() final
     {
         size_t thread_limit = get_thread_limit();
         return (m_next_fragment+1 < m_count) && (thread_limit == 0 || m_threads < thread_limit);
     }
-    void pre_execute( const mi::neuraylib::IJob_execution_context* context)
+    void pre_execute( const mi::neuraylib::IJob_execution_context* context) final
     { ++m_threads; }
 
-    void execute( const mi::neuraylib::IJob_execution_context* context)
+    void execute( const mi::neuraylib::IJob_execution_context* context) final
     {
         mi::Uint32 index = m_next_fragment++;
         while( index < m_count) {
@@ -382,7 +382,7 @@ public:
         mi::Float32 delay,
         mi::Uint32 count,
         mi::Uint32 thread_limit)
-      : Fragmented_job( 0, count),
+      : Fragmented_job( nullptr, count),
         m_thread_pool( thread_pool),
         m_cpu_load( cpu_load),
         m_gpu_load( gpu_load),
@@ -392,16 +392,16 @@ public:
     {
     }
 
-    mi::Float32 get_cpu_load() const { return m_cpu_load; }
-    mi::Float32 get_gpu_load() const { return m_gpu_load; }
-    mi::Sint8 get_priority() const { return 0; }
-    size_t get_thread_limit() const { return m_thread_limit; }
+    mi::Float32 get_cpu_load() const final { return m_cpu_load; }
+    mi::Float32 get_gpu_load() const final { return m_gpu_load; }
+    mi::Sint8 get_priority() const final { return 0; }
+    size_t get_thread_limit() const final { return m_thread_limit; }
 
     void execute_fragment(
         DB::Transaction* transaction,
         size_t index,
         size_t count,
-        const mi::neuraylib::IJob_execution_context* context)
+        const mi::neuraylib::IJob_execution_context* context) final
     {
         LOG::mod_log->info( M_THREAD_POOL, LOG::Mod_log::C_MISC,
             "    Started fragment %" FMT_SIZE_T " (CPU load %.1f, GPU load %.1f)",
@@ -443,13 +443,13 @@ class Priority_job
     {
     }
 
-    mi::Float32 get_cpu_load() const { return m_cpu_load; }
-    mi::Float32 get_gpu_load() const { return m_gpu_load; }
-    mi::Sint8 get_priority() const { return m_priority; }
-    bool is_remaining_work_splittable() { return false; }
-    void pre_execute( const mi::neuraylib::IJob_execution_context* context) { }
+    mi::Float32 get_cpu_load() const final { return m_cpu_load; }
+    mi::Float32 get_gpu_load() const final { return m_gpu_load; }
+    mi::Sint8 get_priority() const final { return m_priority; }
+    bool is_remaining_work_splittable() final { return false; }
+    void pre_execute( const mi::neuraylib::IJob_execution_context* context) final { }
 
-    void execute( const mi::neuraylib::IJob_execution_context* context)
+    void execute( const mi::neuraylib::IJob_execution_context* context) final
     {
         LOG::mod_log->info( M_THREAD_POOL, LOG::Mod_log::C_MISC,
             "    Started priority job %llu (CPU load %.1f, GPU load %.1f, priority %d)",
@@ -510,13 +510,13 @@ public:
     {
     }
 
-    mi::Float32 get_cpu_load() const { return m_cpu_load; }
-    mi::Float32 get_gpu_load() const { return m_gpu_load; }
-    mi::Sint8 get_priority() const { return m_priority; }
-    bool is_remaining_work_splittable() { return false; }
-    void pre_execute( const mi::neuraylib::IJob_execution_context* context) { }
+    mi::Float32 get_cpu_load() const final { return m_cpu_load; }
+    mi::Float32 get_gpu_load() const final { return m_gpu_load; }
+    mi::Sint8 get_priority() const final { return m_priority; }
+    bool is_remaining_work_splittable() final { return false; }
+    void pre_execute( const mi::neuraylib::IJob_execution_context* context) final { }
 
-    void execute( const mi::neuraylib::IJob_execution_context* context)
+    void execute( const mi::neuraylib::IJob_execution_context* context) final
     {
         LOG::mod_log->info( M_THREAD_POOL, LOG::Mod_log::C_MISC,
             "    Started yield %s job %d (CPU load %.1f, GPU load %.1f, priority %d)",
@@ -758,7 +758,7 @@ void test_priorities()
     // Submit priority jobs with priorities from 10 (lowest) to 1 (highest), executed in reverse
     // order.
     for( mi::Size i = 1; i < 11; ++i) {
-        mi::Sint8 priority = static_cast<mi::Sint8>( 11-i);
+        auto priority = static_cast<mi::Sint8>( 11-i);
         mi::base::Handle<Priority_job> job( new Priority_job(
             &thread_pool, i, cpu_load, gpu_load, delay, priority));
         LOG::mod_log->info( M_THREAD_POOL, LOG::Mod_log::C_MISC,

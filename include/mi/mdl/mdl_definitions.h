@@ -41,6 +41,7 @@ namespace mdl {
 class IDeclaration;
 class ISymbol;
 class IType;
+class IStruct_category;
 class IValue;
 class Position;
 
@@ -53,19 +54,20 @@ class IDefinition : public Interface_owned
 public:
     /// Definition kinds.
     enum Kind {
-        DK_ERROR,         ///< This is an error definition.
-        DK_CONSTANT,      ///< This is a constant entity.
-        DK_ENUM_VALUE,    ///< This is an enum value.
-        DK_ANNOTATION,    ///< This is an annotation.
-        DK_TYPE,          ///< This is a type.
-        DK_FUNCTION,      ///< This is a function.
-        DK_VARIABLE,      ///< This is a variable.
-        DK_MEMBER,        ///< This is a field member.
-        DK_CONSTRUCTOR,   ///< This is a constructor.
-        DK_PARAMETER,     ///< This is a parameter.
-        DK_ARRAY_SIZE,    ///< This is a constant array size.
-        DK_OPERATOR,      ///< This is an operator.
-        DK_NAMESPACE,     ///< This is a namespace.
+        DK_ERROR,           ///< This is an error definition.
+        DK_CONSTANT,        ///< This is a constant entity.
+        DK_ENUM_VALUE,      ///< This is an enum value.
+        DK_ANNOTATION,      ///< This is an annotation.
+        DK_STRUCT_CATEGORY, ///< This is a struct category.
+        DK_TYPE,            ///< This is a type.
+        DK_FUNCTION,        ///< This is a function.
+        DK_VARIABLE,        ///< This is a variable.
+        DK_MEMBER,          ///< This is a field member.
+        DK_CONSTRUCTOR,     ///< This is a constructor.
+        DK_PARAMETER,       ///< This is a parameter.
+        DK_ARRAY_SIZE,      ///< This is a constant array size.
+        DK_OPERATOR,        ///< This is an operator.
+        DK_NAMESPACE,       ///< This is a namespace.
     };
 
     /// Boolean properties of definitions.
@@ -97,9 +99,10 @@ public:
         DP_USES_NORMAL,         ///< True, if this function may call state::normal().
         DP_IS_NATIVE,           ///< True, if this function was declared native.
         DP_IS_CONST_EXPR,       ///< True, if this function is declared as const_expr.
-        DP_USES_DERIVATIVES,    ///< True, if this functions uses derivatives directly
+        DP_USES_DERIVATIVES,    ///< True, if this functions uses derivatives directly.
         DP_USES_SCENE_DATA,     ///< True, if this function uses the scene data functions (either
                                 ///  directly or by calling another function that uses scene data).
+        DP_IS_DECLARATIVE,      ///< True, if this type or function is declarative.
     };
 
     /// Built-in semantics.
@@ -230,6 +233,8 @@ public:
         DS_INTRINSIC_MATH_TANH,                  ///< The math::tanh() intrinsic function.
         DS_INTRINSIC_MATH_FLOAT_BITS_TO_INT,     ///< The math::float_bits_to_int() function.
         DS_INTRINSIC_MATH_INT_BITS_TO_FLOAT,     ///< The math::int_bits_to_float() function.
+        DS_INTRINSIC_MATH_ROUND_AWAY_FROM_ZERO,  ///< The math::round_away_from_zero()
+                                                 ///  intrinsic function.
         DS_INTRINSIC_MATH_DX,                    ///< The math::DX() intrinsic function.
         DS_INTRINSIC_MATH_DY,                    ///< The math::DY() intrinsic function.
         DS_INTRINSIC_MATH_LAST = DS_INTRINSIC_MATH_DY,
@@ -385,6 +390,7 @@ public:
             = DS_INTRINSIC_DAG_FIRST,
         DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR, ///< This is an array constructor.
         DS_INTRINSIC_DAG_ARRAY_LENGTH,      ///< This is the array length operator.
+        DS_INTRINSIC_DAG_DECL_CAST,         ///< Cast between compatible declarative structs.
         DS_INTRINSIC_DAG_SET_OBJECT_ID,     ///< Specifies the used object id.
         DS_INTRINSIC_DAG_SET_TRANSFORMS,    ///< Specifies the transform (w2o and o2w) matrices.
         DS_INTRINSIC_DAG_CALL_LAMBDA,       ///< Calls the lambda function specified by the name.
@@ -478,6 +484,9 @@ public:
     ///
     /// For example, if bit 0 is set, the first parameter of the function must be a literal value.
     virtual unsigned get_literal_parameter_mask() const = 0;
+
+    /// Return the category of this category definition or NULL if it is another kind.
+    virtual IStruct_category const *get_category() const = 0;
 };
 
 /// Check if the given semantic describes a constructor.

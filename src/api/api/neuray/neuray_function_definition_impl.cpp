@@ -125,6 +125,11 @@ bool Function_definition_impl::is_exported() const
     return get_db_element()->is_exported();
 }
 
+bool Function_definition_impl::is_declarative() const
+{
+    return get_db_element()->is_declarative();
+}
+
 bool Function_definition_impl::is_uniform() const
 {
     return get_db_element()->is_uniform();
@@ -219,7 +224,7 @@ const char* Function_definition_impl::get_thumbnail() const
     return !m_cached_thumbnail.empty() ? m_cached_thumbnail.c_str() : nullptr;
 }
 
-bool Function_definition_impl::is_valid(mi::neuraylib::IMdl_execution_context* context) const
+bool Function_definition_impl::is_valid( mi::neuraylib::IMdl_execution_context* context) const
 {
     MDL::Execution_context default_context;
     MDL::Execution_context *mdl_context = unwrap_and_clear_context(context, default_context);
@@ -264,15 +269,15 @@ mi::neuraylib::IFunction_call* Function_definition_impl::create_function_call(
     if( !db_call)
         return nullptr;
 
-    mi::neuraylib::IFunction_call* api_call
-        = get_transaction()->create<mi::neuraylib::IFunction_call>(  "__Function_call");
+    auto* api_call = get_transaction()->create<mi::neuraylib::IFunction_call>(  "__Function_call");
     static_cast<Function_call_impl* >( api_call)->get_db_element()->swap( *db_call);
     return api_call;
 }
 
-const char *Function_definition_impl::get_mdl_mangled_name() const
+const char* Function_definition_impl::get_mangled_name() const
 {
-    return get_db_element()->get_mdl_mangled_name( get_db_transaction());
+    m_cached_mangled_name = get_db_element()->get_mangled_name( get_db_transaction());
+    return m_cached_mangled_name.c_str();
 }
 
 } // namespace NEURAY

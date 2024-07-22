@@ -50,10 +50,6 @@
 #include "Scanner.h"
 #include "Parser.h"
 
-// We just pull in this one source file for the Node_types instead of
-// linking the distiller library and many other dependencies.
-#include <mdl/codegenerators/generator_dag/generator_dag_distiller_node_types.cpp>
-
 /// Return a pointer to the filename portion of the given path, or the
 /// path itself if it does not have a directory component.
 static char const *file_basename(char const *filename) {
@@ -143,6 +139,7 @@ Compilation_unit::Compilation_unit(
     mi::mdl::IAllocator *alloc,
     mi::mdl::Memory_arena *global_arena,
     mi::mdl::IMDL *imdl,
+    mi::mdl::Node_types *node_types,
     Symbol_table *symbol_table,
     char const *file_name,
     Compiler_options const *comp_options,
@@ -153,6 +150,7 @@ Compilation_unit::Compilation_unit(
     , m_arena(alloc)
     , m_arena_builder(m_arena)
     , m_imdl(imdl)
+    , m_node_types(node_types)
     , m_filename(Arena_strdup(m_arena, file_name))
     , m_filename_only(Arena_strdup(m_arena, file_basename(m_filename)))
     , m_comp_options(comp_options)
@@ -674,14 +672,15 @@ void Compilation_unit::declare_builtins(Environment &env) {
     (void) num_args;
 
 
-#define BUILTIN_TYPE_BEGIN(typename, flags)                             \
-    {                                                                   \
-        Symbol *symbol = m_symbol_table->get_symbol(#typename);         \
-        Type *builtin_type = builtin_type_for(#typename);               \
-        MDL_ASSERT(builtin_type && "unknown builtin type " #typename);  \
-        if (!builtin_type) {                                            \
-            printf("[error]: unknown builtin type %s\n", #typename);    \
-            builtin_type = m_error_type;                                \
+#define BUILTIN_TYPE_BEGIN(typenam, flags)                             \
+    {                                                                  \
+        Symbol *symbol = m_symbol_table->get_symbol(#typenam);         \
+        (void) symbol;                                                 \
+        Type *builtin_type = builtin_type_for(#typenam);               \
+        MDL_ASSERT(builtin_type && "unknown builtin type " #typenam);  \
+        if (!builtin_type) {                                           \
+            printf("[error]: unknown builtin type %s\n", #typenam);    \
+            builtin_type = m_error_type;                               \
         }
 
 #define ARG0()                              num_args = 0;
@@ -719,6 +718,9 @@ void Compilation_unit::declare_builtins(Environment &env) {
 #define UDEFARG(type, name, arr, expr) \
     ARG(type, name, arr)
 
+#define XDEFARG(type, name, arr, expr) \
+    ARG(type, name, arr)
+
 #define CONSTRUCTOR(kind, classname, args, sema, flags)                 \
         {                                                               \
                                 \
@@ -728,7 +730,7 @@ void Compilation_unit::declare_builtins(Environment &env) {
             add_binding(symbol, constr_type, env);                      \
         }
 
-#define BUILTIN_TYPE_END(typename)              \
+#define BUILTIN_TYPE_END(typenam)              \
     }
 
 #include "mdl/compiler/compilercore/compilercore_known_defs.h"
@@ -763,7 +765,7 @@ void Compilation_unit::declare_stdlib(Environment &builtin_env) {
             tle = m_type_factory.create_type_list_elem(
                 m_type_factory.get_vector(3, m_type_factory.get_float()));
             tf->add_parameter(tle);
-            tf->set_node_type(mi::mdl::Node_types::static_type_from_idx(mi::mdl::local_normal));
+            tf->set_node_type(m_node_types->type_from_idx(mi::mdl::local_normal));
             add_binding(symbol, tf, builtin_env);
 
             // Skip normal handling for local_normal.
@@ -808,11 +810,9 @@ void Compilation_unit::declare_stdlib(Environment &builtin_env) {
                 // For enums, add the values as global identifiers.
                 mi::mdl::IType_enum const *te = as<mi::mdl::IType_enum>(mdl_type);
 
-                for (int i = 0; i < te->get_value_count(); i++) {
-                    mi::mdl::ISymbol const *sym;
-                    int code;
-
-                    if (te->get_value(i, sym, code)) {
+                for (size_t i = 0; i < te->get_value_count(); i++) {
+                    if (mi::mdl::IType_enum::Value const *e_val = te->get_value(i)) {
+                        mi::mdl::ISymbol const *sym = e_val->get_symbol();
                         add_binding(m_symbol_table->get_symbol(sym->get_name()),
                                     type, builtin_env);
                     } else {
@@ -828,12 +828,10 @@ void Compilation_unit::declare_stdlib(Environment &builtin_env) {
 
                 Type_function *tf = m_type_factory.create_function(type);
 
-                for (int i = 0; i < ts->get_field_count(); i++) {
-                    mi::mdl::IType const *param_type;
-                    mi::mdl::ISymbol const *param_name;
+                for (size_t i = 0; i < ts->get_field_count(); i++) {
+                    mi::mdl::IType_struct::Field const *s_field = ts->get_field(i);
 
-                    ts->get_field(i, param_type, param_name);
-                    Type *t = m_type_factory.import_type(param_type);
+                    Type *t = m_type_factory.import_type(s_field->get_type());
 
                     Type_list_elem *tle = m_type_factory.create_type_list_elem(t);
                     tf->add_parameter(tle);
@@ -850,56 +848,25 @@ void Compilation_unit::declare_dist_nodes(Environment &builtin_env) {
 
     for (int idx = 0; ; idx++) {
         bool error = false;
-        mi::mdl::Node_type const *nt = mi::mdl::Node_types::static_type_from_idx(idx);
+        mi::mdl::Node_type const *nt = m_node_types->type_from_idx(idx);
         // static_type_from_idx returns nullptr if the idx is larger
         // than the last supported node type index.
         if (!nt) {
             break;
         }
 
-        mi::mdl::string nt_ret_type(m_arena.get_allocator());
+        //mi::mdl::string nt_ret_type(m_arena.get_allocator());
+        char const *nt_ret_type = m_node_types->get_return_type(idx);
 
-        // FIXME: For the following node type, we get an invalid
-        // string from Node_type::get_return_type().
-        // Therefore, we hardcode them for now.
-
-        if (nt->type_name == "color_measured_curve_layer") {
-            nt_ret_type = "bsdf";
-        } else if (nt->type_name == "edf_color_unbounded_mix_3") {
-            nt_ret_type = "bsdf";
-        } else if (nt->type_name == "vdf_color_unbounded_mix_3") {
-            nt_ret_type = "bsdf";
-        } else if (nt->type_name == "hair_bsdf_tint") {
-            nt_ret_type = "bsdf";
-        } else if (nt->type_name == "material_surface") {
-            nt_ret_type = "material_surface";
-        } else if (nt->type_name == "material_emission") {
-            nt_ret_type = "material_emission";
-        } else if (nt->type_name == "material_geometry") {
-            nt_ret_type = "material_geometry";
-        } else if (nt->type_name == "nvidia::df::simple_glossy_bsdf_legacy") {
-            nt_ret_type = "bsdf";
-        } else if (nt->type_name == "material_conditional_operator") {
-            nt_ret_type = "material";
-        } else if (nt->type_name == "bsdf_conditional_operator") {
-            nt_ret_type = "bsdf";
-        } else if (nt->type_name == "edf_conditional_operator") {
-            nt_ret_type = "edf";
-        } else if (nt->type_name == "vdf_conditional_operator") {
-            nt_ret_type = "vdf";
-        } else {
-            nt_ret_type = nt->get_return_type().c_str();
-        }
-
-        Type *ret_type = builtin_type_for(nt_ret_type.c_str());
+        Type *ret_type = builtin_type_for(nt_ret_type);
 
         if (!ret_type) {
             printf("[warning] ignoring distiller function '%s' (unknown return type: '%s' for '%s' [%s])\n",
-                   nt->type_name.c_str(), nt_ret_type.c_str(), nt->get_return_type().c_str(), nt->get_signature().c_str());
+                   nt->type_name, nt_ret_type, m_node_types->get_return_type(idx), nt->get_signature().c_str());
             continue;
         }
 
-        Symbol* name = m_symbol_table->get_symbol(nt->type_name.c_str());
+        Symbol* name = m_symbol_table->get_symbol(nt->type_name);
 
         // For builtins important from the distiller node definitions,
         // we expand the function types for all supported parameter
@@ -909,7 +876,7 @@ void Compilation_unit::declare_dist_nodes(Environment &builtin_env) {
         for (int max_param = nt->min_parameters; max_param <= nt->parameters.size(); max_param++) {
             Type_function *t = m_type_factory.create_function(ret_type);
             t->set_semantics(nt->semantics);
-            t->set_selector(nt->selector_enum.c_str());
+            t->set_selector(nt->selector_enum);
             t->set_node_type(nt);
 
             Type_list_elem *type_list_elem;
@@ -917,10 +884,10 @@ void Compilation_unit::declare_dist_nodes(Environment &builtin_env) {
             int i = 1;
             for (std::vector<mi::mdl::Node_param>::const_iterator it(nt->parameters.begin()), end(nt->parameters.end());
                  it != end && i <= max_param; ++it, ++i) {
-                Type *pt = builtin_type_for(it->param_type.c_str());
+                Type *pt = builtin_type_for(it->param_type);
                 if (!pt) {
                     printf("[warning] ignoring distiller function %s (unknown type for parameter %d: %s)\n",
-                           nt->type_name.c_str(), i, nt->get_signature().c_str());
+                           nt->type_name, i, nt->get_signature().c_str());
                     error = true;
                     break;
                 }
@@ -1346,7 +1313,7 @@ Expr *Compilation_unit::normalize_mixer_pattern(Expr *expr) {
 
                 if (!some_vars && unnormalized) {
 
-                    constexpr int MAX_MIXER_ARG_COUNT = 6;
+                    constexpr int MAX_MIXER_ARG_COUNT = 8;
 
                     int argc = new_call->get_argument_count();
                     MDL_ASSERT(argc <= MAX_MIXER_ARG_COUNT);

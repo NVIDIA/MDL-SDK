@@ -37,7 +37,8 @@
 
 #include <base/data/db/i_db_transaction.h>
 #include <base/data/db/i_db_tag.h>
-#include <base/hal/thread/i_thread_lock.h>
+
+#include "dblight_util.h"
 
 namespace MI {
 
@@ -75,22 +76,21 @@ public:
     /// \param database              Instance of the database this transaction belongs to.
     /// \param transaction_manager   Manager that created this transaction.
     /// \param scope                 Scope this transaction belongs to. RCS:NEU
-    /// \param transaction_id        ID of this transaction.
+    /// \param id                    ID of this transaction.
     Transaction_impl(
         Database_impl* database,
         Transaction_manager* transaction_manager,
         Scope_impl* scope,
         DB::Transaction_id id);
 
-    virtual ~Transaction_impl() { }
+    /// Destructor.
+    virtual ~Transaction_impl();
 
     // methods of DB::Transaction
 
     void pin() override { ++m_pin_count; }
 
-    /// Removes instance from Transaction_manager::m_all_transactions and invokes the destructor
-    /// if the pin count drops to zero.
-    void unpin() override;
+    void unpin() override { if( --m_pin_count == 0) delete this; }
 
     DB::Transaction_id get_id() const override { return m_id; }
 
@@ -176,7 +176,7 @@ public:
         DB::Journal_type journal_type,
         DB::Privacy_level store_level) override;
 
-    /*NI*/ void localize(
+    void localize(
         DB::Tag tag, DB::Privacy_level privacy_level, DB::Journal_type journal_type) override;
 
     bool remove( DB::Tag tag, bool remove_local_copy) override;
@@ -189,9 +189,9 @@ public:
 
     SERIAL::Class_id get_class_id( DB::Tag tag) override;
 
-    DB::Privacy_level get_tag_privacy_level( DB::Tag tag) override { return 0; }
+    DB::Privacy_level get_tag_privacy_level( DB::Tag tag) override;
 
-    DB::Privacy_level get_tag_storage_level( DB::Tag tag) override { return 0; }
+    DB::Privacy_level get_tag_store_level( DB::Tag tag) override;
 
     mi::Uint32 get_tag_reference_count( DB::Tag tag) override;
 
@@ -209,8 +209,10 @@ public:
          DB::Journal_type journal_type,
          bool lookup_parents) override;
 
+    /// Only the scheduling mode LOCAL is supported.
     mi::Sint32 execute_fragmented( DB::Fragmented_job* job, size_t count) override;
 
+    /// Only the scheduling mode LOCAL is supported.
     mi::Sint32 execute_fragmented_async(
         DB::Fragmented_job* job, size_t count, DB::IExecution_listener* listener) override;
 
@@ -251,8 +253,46 @@ public:
 
     /// Indicates whether changes from this transaction are visible for transaction \p id.
     ///
-    /// \pre Both transactions belong to the same scope.
+    /// \note This method considers only the creation/commit sequence and states. It completely
+    ///       ignores the corresponding scopes.
     bool is_visible_for( DB::Transaction_id id) const;
+
+    /// Implements the four store() overloads for DB elements.
+    void store_element_internal(
+        DB::Tag tag,
+        DB::Element_base* element,
+        const char* name,
+        DB::Privacy_level privacy_level,
+        DB::Journal_type journal_type,
+        DB::Privacy_level store_level,
+        bool store_for_rc);
+
+    /// Same as can_reference_tag(), but with m_database->get_lock() locked.
+    bool can_reference_tag_locked(
+        DB::Privacy_level referencing_level, DB::Tag referenced_tag);
+
+    /// Checks that references do not point to tags that can not be found in the given privacy level
+    /// and emits an error message otherwise.
+    ///
+    /// Note that such a reference could be considered legal if the reference is never used when
+    /// that element is retrieved from a transaction in its store level, only from transactions in
+    /// the store level of the referenced element (or its child scopes). This is very error-prone
+    /// and we do not want to support such corner cases.
+    ///
+    /// \param referencing_level    The element which references \p references is to be stored in a
+    ////                            scope with this privacy level.
+    /// \param references           The tags referenced by that element.
+    /// \param tag                  Tag of the referencing element (only used for error messages).
+    /// \param name                 Name of the referencing element (only used for error messages).
+    ///                             Can be \c NULL.
+    /// \param store                Flag that distinguishes between store and edit operations (only
+    ///                             used for error messages)
+    void check_privacy_levels(
+        DB::Privacy_level referencing_level,
+        const DB::Tag_set& references,
+        DB::Tag tag,
+        const char* name,
+        bool store);
 
 private:
     /// Instance of the database this transaction belongs to.
@@ -268,7 +308,7 @@ private:
     std::atomic_uint32_t m_pin_count = 1;
     /// State of the transaction.
     State m_state = OPEN;
-    /// Visibility of changes from this transaction when in committed or aborted state.
+    /// Visibility of changes from this transaction (only valid in COMMITTED state).
     DB::Transaction_id m_visibility_id;
     /// Sequence number for the next update within this transaction.
     std::atomic_uint32_t m_next_sequence_number = 0;
@@ -340,7 +380,7 @@ private:
     Database_impl* const m_database;
 
     /// Lock for m_all_transactions.
-    THREAD::Lock m_all_transaction_lock;
+    THREAD::Lock m_all_transactions_lock;
 
     using All_transactions_hook = bi::member_hook<
         Transaction_impl, bi::set_member_hook<>, &Transaction_impl::m_all_transactions_hook>;
@@ -350,7 +390,7 @@ private:
 
     /// Set of all still existing transactions.
     ///
-    /// Needs m_all_transaction_lock. Used only by the dump() method.
+    /// Needs m_all_transactions_lock. Used only by the dump() method.
     bi::set<Transaction_impl, All_transactions_hook> m_all_transactions;
 
     /// Set of all open transactions.

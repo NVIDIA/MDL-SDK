@@ -110,6 +110,10 @@ static void fill_default_cg_options(
         "none",
         "Defines the libbsdf version to link into the output");
     options.add_option(
+        MDL_JIT_OPTION_LIBBSDF_FLAGS_IN_BSDF_DATA,
+        "false",
+        "The BSDF data structures have an additional uint32 flags field as last field");
+    options.add_option(
         MDL_JIT_OPTION_USE_BITANGENT,
         "false",
         "Use bitangent instead of tangent_u, tangent_v in the generated MDL core state");
@@ -2356,7 +2360,9 @@ Link_unit_jit::Link_unit_jit(
     /*res_manag=*/NULL,
     enable_debug)
 , m_resource_attr_map(alloc)
-, m_res_manag(create_resource_manager(m_code.get(), options->get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU)))
+, m_res_manag(
+    create_resource_manager(
+        m_code.get(), options->get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU)))
 , m_arg_block_layouts(alloc)
 , m_lambdas(alloc)
 , m_dist_funcs(alloc)
@@ -2452,7 +2458,8 @@ IResource_manager *Link_unit_jit::create_resource_manager(
             Generated_code_lambda_function *code =
                 static_cast<Generated_code_lambda_function *>(icode);
             new (res_manag) Generated_code_lambda_function::Lambda_res_manag(
-                *code, /*resource_map=*/use_builtin_resource_handler_cpu ? NULL : &m_resource_attr_map);
+                *code,
+                /*resource_map=*/use_builtin_resource_handler_cpu ? NULL : &m_resource_attr_map);
             return res_manag;
         }
     case ICode_generator::TL_PTX:

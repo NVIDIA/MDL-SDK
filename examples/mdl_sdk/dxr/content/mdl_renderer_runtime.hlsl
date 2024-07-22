@@ -29,26 +29,7 @@
 #if !defined(MDL_RENDERER_RUNTIME_HLSLI)
 #define MDL_RENDERER_RUNTIME_HLSLI
 
-// compiler constants defined from outside:
-// - MDL_TARGET_REGISTER_SPACE
-// - MDL_TARGET_RO_DATA_SEGMENT_SLOT
-//
-// - MDL_MATERIAL_REGISTER_SPACE
-// - MDL_MATERIAL_ARGUMENT_BLOCK_SLOT
-// - MDL_MATERIAL_TEXTURE_INFO_SLOT
-// - MDL_MATERIAL_MBSDF_INFO_SLOT
-
-// - MDL_MATERIAL_TEXTURE_2D_REGISTER_SPACE
-// - MDL_MATERIAL_TEXTURE_3D_REGISTER_SPACE
-// - MDL_MATERIAL_TEXTURE_SLOT_BEGIN
-// 
-// - MDL_MATERIAL_BUFFER_REGISTER_SPACE
-// - MDL_MATERIAL_BUFFER_SLOT_BEGIN
-//
-// - MDL_TEXTURE_SAMPLER_SLOT
-// - MDL_LIGHT_PROFILE_SAMPLER_SLOT
-// - MDL_MBSDF_SAMPLER_SLOT
-
+#include "content/common.hlsl"
 
 // MDL defines UV origin bottom left, D3D top left.
 // Because GLTF defines the UV origin also top left we end up flipping twice.
@@ -59,241 +40,279 @@
     #define TEXTURE_VERTICAL_FLIP 0
 #endif
 
-/// Information passed to GPU for mapping id requested in the runtime functions to texture
-/// views of the corresponding type.
-struct Mdl_texture_info
-{
-    // index into the tex2d, tex3d, ... buffers, depending on the type requested
-    uint gpu_resource_array_start;
-
-    // number resources (e.g. uv-tiles) that belong to this resource
-    uint gpu_resource_array_size;
-
-    // frame number of the first texture/uv-tile
-    int gpu_resource_frame_first;
-
-    // coordinate of the left bottom most uv-tile (also bottom left corner)
-    int2 gpu_resource_uvtile_min;
-
-    // in case of uv-tiled textures, required to calculate a linear index (u + v * width
-    uint gpu_resource_uvtile_width;
-    uint gpu_resource_uvtile_height;
-
-    // get the last frame of an animated texture
-    int get_last_frame()
-    {
-        return gpu_resource_array_size / (gpu_resource_uvtile_width * gpu_resource_uvtile_height)
-            + gpu_resource_frame_first - 1;
-    }
-
-    // return the resource view index for a given uv-tile id. (see compute_uvtile_and_update_uv(...))
-    // returning of -1 indicates out of bounds, 0 refers to the invalid resource.
-    int compute_uvtile_id(float frame, int2 uv_tile)
-    {
-        if (gpu_resource_array_size == 1) // means no uv-tiles
-            return int(gpu_resource_array_start);
-
-        // simplest handling possible
-        int frame_number = floor(frame) - gpu_resource_frame_first;
-
-        uv_tile -= gpu_resource_uvtile_min;
-        const int offset = uv_tile.x +
-                           uv_tile.y * int(gpu_resource_uvtile_width) +
-                           frame_number * int(gpu_resource_uvtile_width) * int(gpu_resource_uvtile_height);
-        if (frame_number < 0 || uv_tile.x < 0 || uv_tile.y < 0 ||
-            uv_tile.x >= int(gpu_resource_uvtile_width) ||
-            uv_tile.y >= int(gpu_resource_uvtile_height) ||
-            offset >= gpu_resource_array_size)
-            return -1; // out of bounds
-
-        return int(gpu_resource_array_start) + offset;
-    }
-
-    // for uv-tiles, uv coordinate implicitly specifies which resource to use
-    // the index of the resource is returned while the uv mapped into the uv-tile
-    // if uv-tiles are not used, the data is just passed through
-    // returning of -1 indicates out of bounds, 0 refers to the invalid resource.
-    int compute_uvtile_id_and_update_uv(float frame, inout float2 uv)
-    {
-        if(gpu_resource_array_size == 1) // means no uv-tiles
-            return int(gpu_resource_array_start);
-
-        // uv-coordinate in the tile
-        const int2 uv_tile = abs(int2(floor(uv))); // abs because there are negative tile addresses
-        uv = frac(uv);
-
-        // compute a linear index
-        return compute_uvtile_id(frame, uv_tile);
-    }
-};
-
-/// Information passed to the GPU for each light profile resource
-struct Mdl_light_profile_info
-{
-    // angular resolution of the grid and its inverse
-    uint2 angular_resolution;
-    float2 inv_angular_resolution;
-
-    // starting angles of the grid
-    float2 theta_phi_start;
-
-    // angular step size and its inverse
-    float2 theta_phi_delta;
-    float2 theta_phi_inv_delta;
-
-    // factor to rescale the normalized data
-    // also represents the maximum candela value of the data
-    float candela_multiplier;
-
-    // power (radiant flux)
-    float total_power;
-
-    // index into the textures_2d array
-    // -  texture contains normalized data sampled on grid
-    uint eval_data_index;
-
-    // index into the buffers
-    // - CDFs for sampling a light profile
-    uint sample_data_index;
-};
-
-/// Information passed to the GPU for each BSDF measurement resource
-struct Mdl_mbsdf_info
-{
-    // if the MBSDF has data for reflection (0) and transmission (1)
-    uint2 has_data;
-
-    // index into the texture_3d array for both parts
-    // - texture contains the measurement values for evaluation
-    uint2 eval_data_index;
-
-    // indices into the buffers array for both parts
-    // - sample_data buffer contains CDFs for sampling
-    // - albedo_data buffer contains max albedos for each theta (isotropic)
-    uint2 sample_data_index;
-    uint2 albedo_data_index;
-
-    // maximum albedo values for both parts, used for limiting the multiplier
-    float2 max_albedo;
-
-    // discrete angular resolution for both parts
-    uint2 angular_resolution_theta;
-    uint2 angular_resolution_phi;
-
-    // number of color channels (1 for scalar, 3 for rgb) for both parts
-    uint2 num_channels;
-};
-
-// per target data
-ByteAddressBuffer mdl_ro_data_segment : register(MDL_TARGET_RO_DATA_SEGMENT_SLOT, MDL_TARGET_REGISTER_SPACE);
-
-// per material data
-// - argument block contains dynamic parameter data exposed in class compilation mode
-ByteAddressBuffer mdl_argument_block : register(MDL_MATERIAL_ARGUMENT_BLOCK_SLOT, MDL_MATERIAL_REGISTER_SPACE);
-// - resource infos map resource IDs, generated by the SDK, to actual buffer views
-StructuredBuffer<Mdl_texture_info> mdl_texture_infos : register(MDL_MATERIAL_TEXTURE_INFO_SLOT, MDL_MATERIAL_REGISTER_SPACE);
-// - light profile infos
-StructuredBuffer<Mdl_light_profile_info> mdl_light_profile_infos : register(MDL_MATERIAL_LIGHT_PROFILE_INFO_SLOT, MDL_MATERIAL_REGISTER_SPACE);
-// - bsdf measurement infos
-StructuredBuffer<Mdl_mbsdf_info> mdl_mbsdf_infos : register(MDL_MATERIAL_MBSDF_INFO_SLOT, MDL_MATERIAL_REGISTER_SPACE);
-// - texture views, unbound and overlapping for 2D and 3D resources
-Texture2D mdl_textures_2d[] : register(MDL_MATERIAL_TEXTURE_SLOT_BEGIN, MDL_MATERIAL_TEXTURE_2D_REGISTER_SPACE);
-Texture3D mdl_textures_3d[] : register(MDL_MATERIAL_TEXTURE_SLOT_BEGIN, MDL_MATERIAL_TEXTURE_3D_REGISTER_SPACE);
-// - buffer views, unbound. contains sampling and albedo buffers for MBSDFs and sampling buffers for light profiles
-StructuredBuffer<float> mdl_buffers[] : register(MDL_MATERIAL_BUFFER_SLOT_BEGIN, MDL_MATERIAL_BUFFER_REGISTER_SPACE);
-
-// mesh data, includes the per mesh scene data
-ByteAddressBuffer vertices : register(t1, space0);
-
-// instance data
-// - scene data buffer for object/instance data
-ByteAddressBuffer scene_data : register(t3, space0);
-// - mapping between scene_data_id and scene data buffer layout
-StructuredBuffer<SceneDataInfo> scene_data_infos: register(t4, space0);
-
-// global samplers
-SamplerState mdl_sampler_tex : register(MDL_TEXTURE_SAMPLER_SLOT);
-SamplerState mdl_sampler_light_profile : register(MDL_LIGHT_PROFILE_SAMPLER_SLOT);
-SamplerState mdl_sampler_mbsdf : register(MDL_MBSDF_SAMPLER_SLOT);
 
 // If USE_RES_DATA is defined, add a Res_data parameter to all resource handler functions.
 // This example doesn't use it, so we only put a dummy field in Res_data.
 #if USE_RES_DATA
+    struct Res_data
+    {
+        uint dummy;
+    };
 
-struct Res_data
-{
-    uint dummy;
-};
-
-#define RES_DATA_PARAM_DECL     Res_data res_data,
-#define RES_DATA_PARAM          res_data,
-
+    #define RES_DATA_PARAM_DECL     Res_data res_data,
+    #define RES_DATA_PARAM          res_data,
 #else
-
-#define RES_DATA_PARAM_DECL
-#define RES_DATA_PARAM
-
+    #define RES_DATA_PARAM_DECL
+    #define RES_DATA_PARAM
 #endif
+
+
+// ------------------------------------------------------------------------------------------------
+// Forward declartions defined with the entrypoints
+// ------------------------------------------------------------------------------------------------
+
+// per target code
+uint get_ro_data_segment_heap_index();
+
+// per material instance
+uint get_argument_block_heap_index();
+uint get_texture_infos_heap_index();
+uint get_light_profile_heap_index();
+uint get_mbsdf_infos_heap_index();
+
+// per mesh
+uint get_vertex_buffer_heap_index();
+uint get_index_buffer_heap_index();
+uint get_scene_data_info_heap_index();
+uint get_scene_data_buffer_heap_index();
+
+// ------------------------------------------------------------------------------------------------
+// cooresponding access functions depending on the Shader Model and it's features
+// ------------------------------------------------------------------------------------------------
+
+ByteAddressBuffer get_mdl_argument_block()
+{
+    #if (FEATURE_DYNAMIC_RESOURCES == 1)
+        return ResourceDescriptorHeap[NonUniformResourceIndex(get_argument_block_heap_index())];
+    #else
+        return Global_SRVs_ByteAddressBuffer[NonUniformResourceIndex(
+            get_argument_block_heap_index())];
+    #endif
+}
+
+ByteAddressBuffer get_mdl_ro_data_segment()
+{
+    #if (FEATURE_DYNAMIC_RESOURCES == 1)
+        return ResourceDescriptorHeap[NonUniformResourceIndex(get_ro_data_segment_heap_index())];
+    #else
+        return Global_SRVs_ByteAddressBuffer[
+            NonUniformResourceIndex(get_ro_data_segment_heap_index())];
+    #endif
+}
+
+const Mdl_texture_info get_mdl_texture_infos(uint tex)
+{
+    #if (FEATURE_DYNAMIC_RESOURCES == 1)
+        StructuredBuffer<Mdl_texture_info> infos =
+            ResourceDescriptorHeap[NonUniformResourceIndex(get_texture_infos_heap_index())];
+        return infos[NonUniformResourceIndex(tex)];
+    #else
+        return Global_SRVs_MDL_tex_info[NonUniformResourceIndex(
+            get_texture_infos_heap_index())][NonUniformResourceIndex(tex)];
+    #endif
+}
+
+const Mdl_light_profile_info get_mdl_light_profile_infos(uint lp)
+{
+    #if (FEATURE_DYNAMIC_RESOURCES == 1)
+        StructuredBuffer<Mdl_light_profile_info> infos =
+            ResourceDescriptorHeap[NonUniformResourceIndex(get_light_profile_heap_index())];
+        return infos[NonUniformResourceIndex(lp)];
+    #else
+        return Global_SRVs_MDL_lp_info[
+            NonUniformResourceIndex(get_light_profile_heap_index())][NonUniformResourceIndex(lp)];
+    #endif
+}
+
+const Mdl_mbsdf_info get_mdl_mbsdf_infos(uint mbsdf)
+{
+    #if (FEATURE_DYNAMIC_RESOURCES == 1)
+        StructuredBuffer<Mdl_mbsdf_info> infos =
+            ResourceDescriptorHeap[NonUniformResourceIndex(get_mbsdf_infos_heap_index())];
+        return infos[NonUniformResourceIndex(mbsdf)];
+    #else
+        return Global_SRVs_MDL_mbsdf_info[
+            NonUniformResourceIndex(get_mbsdf_infos_heap_index())][NonUniformResourceIndex(mbsdf)];
+    #endif
+}
+
+Texture2D<float4> get_mdl_texture_2d(uint global_index)
+{
+    #if (FEATURE_DYNAMIC_RESOURCES == 1)
+        return ResourceDescriptorHeap[NonUniformResourceIndex(global_index)];
+    #else
+        return Global_SRVs_Texture2D_float4[NonUniformResourceIndex(global_index)];
+    #endif
+}
+
+Texture3D<float4> get_mdl_texture_3d(uint global_index)
+{
+    #if (FEATURE_DYNAMIC_RESOURCES == 1)
+        return ResourceDescriptorHeap[NonUniformResourceIndex(global_index)];
+    #else
+        return Global_SRVs_Texture3D_float4[NonUniformResourceIndex(global_index)];
+    #endif
+}
+
+StructuredBuffer<float> get_mdl_float_buffer(uint global_index)
+{
+    #if (FEATURE_DYNAMIC_RESOURCES == 1)
+        return ResourceDescriptorHeap[NonUniformResourceIndex(global_index)];
+    #else
+        return Global_SRVs_StructuredBuffer_float[NonUniformResourceIndex(global_index)];
+    #endif
+}
+
+// access the vertex data through the heap as we don't want the SBT
+ByteAddressBuffer get_vertex_buffer_from_heap()
+{
+    #if (FEATURE_DYNAMIC_RESOURCES == 1)
+        return ResourceDescriptorHeap[NonUniformResourceIndex(get_vertex_buffer_heap_index())];
+    #else
+        return Global_SRVs_ByteAddressBuffer[NonUniformResourceIndex(
+            get_vertex_buffer_heap_index())];
+    #endif
+}
+
+SceneDataInfo get_scene_data_infos(uint index)
+{
+    ByteAddressBuffer buffer =
+    #if (FEATURE_DYNAMIC_RESOURCES == 1)
+        ResourceDescriptorHeap[NonUniformResourceIndex(get_scene_data_info_heap_index())];
+    #else
+        Global_SRVs_ByteAddressBuffer[NonUniformResourceIndex(get_scene_data_info_heap_index())];
+    #endif
+
+    SceneDataInfo info;
+    info.packed_data = uint2(
+        buffer.Load(index * 8),
+        buffer.Load(index * 8 + 4));
+
+    return info;
+}
+
+ByteAddressBuffer get_scene_data()
+{
+    #if (FEATURE_DYNAMIC_RESOURCES == 1)
+        return ResourceDescriptorHeap[NonUniformResourceIndex(get_scene_data_buffer_heap_index())];
+    #else
+        return Global_SRVs_ByteAddressBuffer[NonUniformResourceIndex(
+            get_scene_data_buffer_heap_index())];
+    #endif
+}
 
 // ------------------------------------------------------------------------------------------------
 // Argument block access for dynamic parameters in class compilation mode
 // ------------------------------------------------------------------------------------------------
 
-float mdl_read_argblock_as_float(int offs)
+float mdl_read_argblock_as_float(RES_DATA_PARAM_DECL int offs)
 {
-    return asfloat(mdl_argument_block.Load(offs));
+    return asfloat(get_mdl_argument_block().Load(offs));
 }
 
-double mdl_read_argblock_as_double(int offs)
+double mdl_read_argblock_as_double(RES_DATA_PARAM_DECL int offs)
 {
-    return asdouble(mdl_argument_block.Load(offs), mdl_argument_block.Load(offs + 4));
+    ByteAddressBuffer arg_block = get_mdl_argument_block();
+    return asdouble(arg_block.Load(offs), arg_block.Load(offs + 4));
 }
 
-int mdl_read_argblock_as_int(int offs)
+int mdl_read_argblock_as_int(RES_DATA_PARAM_DECL int offs)
 {
-    return asint(mdl_argument_block.Load(offs));
+    return asint(get_mdl_argument_block().Load(offs));
 }
 
-uint mdl_read_argblock_as_uint(int offs)
+uint mdl_read_argblock_as_uint(RES_DATA_PARAM_DECL int offs)
 {
-    return mdl_argument_block.Load(offs);
+    return get_mdl_argument_block().Load(offs);
 }
 
-bool mdl_read_argblock_as_bool(int offs)
+bool mdl_read_argblock_as_bool(RES_DATA_PARAM_DECL int offs)
 {
-    uint val = mdl_argument_block.Load(offs & ~3);
+    uint val = get_mdl_argument_block().Load(offs & ~3);
     return (val & (0xffU << (8 * (offs & 3)))) != 0;
 }
 
 float mdl_read_rodata_as_float(int offs)
 {
-    return asfloat(mdl_ro_data_segment.Load(offs));
+    return asfloat(get_mdl_ro_data_segment().Load(offs));
 }
 
 double mdl_read_rodata_as_double(int offs)
 {
-    return asdouble(mdl_ro_data_segment.Load(offs), mdl_ro_data_segment.Load(offs + 4));
+    ByteAddressBuffer ro_data = get_mdl_ro_data_segment();
+    return asdouble(ro_data.Load(offs), ro_data.Load(offs + 4));
 }
 
 int mdl_read_rodata_as_int(int offs)
 {
-    return asint(mdl_ro_data_segment.Load(offs));
+    return asint(get_mdl_ro_data_segment().Load(offs));
 }
 
 int mdl_read_rodata_as_uint(int offs)
 {
-    return mdl_ro_data_segment.Load(offs);
+    return get_mdl_ro_data_segment().Load(offs);
 }
 
 bool mdl_read_rodata_as_bool(int offs)
 {
-    uint val = mdl_ro_data_segment.Load(offs & ~3);
+    uint val = get_mdl_ro_data_segment().Load(offs & ~3);
     return (val & (0xffU << (8 * (offs & 3)))) != 0;
 }
+
 
 // ------------------------------------------------------------------------------------------------
 // Texturing functions, check if valid
 // ------------------------------------------------------------------------------------------------
+
+
+// get the last frame of an animated texture
+int get_last_frame(Mdl_texture_info info)
+{
+    return info.gpu_resource_array_size /
+        (info.gpu_resource_uvtile_width * info.gpu_resource_uvtile_height) +
+        info.gpu_resource_frame_first - 1;
+}
+
+// return the resource view index for a given uv-tile id. (see compute_uvtile_and_update_uv(...))
+// returning of -1 indicates out of bounds, 0 refers to the invalid resource.
+int compute_uvtile_id(Mdl_texture_info info, float frame, int2 uv_tile)
+{
+    if (info.gpu_resource_array_size == 1) // means no uv-tiles
+        return int(info.gpu_resource_array_start);
+
+    // simplest handling possible
+    int frame_number = floor(frame) - info.gpu_resource_frame_first;
+
+    uv_tile -= info.gpu_resource_uvtile_min;
+    const int offset = uv_tile.x +
+        uv_tile.y * int(info.gpu_resource_uvtile_width) +
+        frame_number * int(info.gpu_resource_uvtile_width) * int(info.gpu_resource_uvtile_height);
+    if (frame_number < 0 || uv_tile.x < 0 || uv_tile.y < 0 ||
+        uv_tile.x >= int(info.gpu_resource_uvtile_width) ||
+        uv_tile.y >= int(info.gpu_resource_uvtile_height) ||
+        offset >= info.gpu_resource_array_size)
+        return -1; // out of bounds
+
+    return int(info.gpu_resource_array_start) + offset;
+}
+
+// for uv-tiles, uv coordinate implicitly specifies which resource to use
+// the index of the resource is returned while the uv mapped into the uv-tile
+// if uv-tiles are not used, the data is just passed through
+// returning of -1 indicates out of bounds, 0 refers to the invalid resource.
+int compute_uvtile_id_and_update_uv(Mdl_texture_info info, float frame, inout float2 uv)
+{
+    if (info.gpu_resource_array_size == 1) // means no uv-tiles
+        return int(info.gpu_resource_array_start);
+
+    // uv-coordinate in the tile
+    const int2 uv_tile = abs(int2(floor(uv))); // abs because there are negative tile addresses
+    uv = frac(uv);
+
+    // compute a linear index
+    return compute_uvtile_id(info, frame, uv_tile);
+}
+
 
 // corresponds to ::tex::texture_isvalid(uniform texture_2d tex)
 // corresponds to ::tex::texture_isvalid(uniform texture_3d tex)
@@ -370,13 +389,13 @@ int2 tex_res_2d(RES_DATA_PARAM_DECL int tex, int2 uv_tile, float frame)
     if (tex == 0) return uint2(0, 0); // invalid texture
 
     // fetch the infos about this resource
-    Mdl_texture_info info = mdl_texture_infos[tex - 1]; // assuming this is in bounds
+    const Mdl_texture_info info = get_mdl_texture_infos(tex - 1); // assuming this is in bounds
 
-    int array_index = info.compute_uvtile_id(frame, uv_tile);
+    int array_index = compute_uvtile_id(info, frame, uv_tile);
     if (array_index < 0) return uint2(0, 0); // out of bounds or no uv-tile
 
     uint2 res;
-    mdl_textures_2d[NonUniformResourceIndex(array_index)].GetDimensions(res.x, res.y);
+    get_mdl_texture_2d(array_index).GetDimensions(res.x, res.y);
     return int2(res);
 }
 
@@ -398,7 +417,7 @@ int tex_first_frame_2d(RES_DATA_PARAM_DECL int tex)
     if (tex == 0) return 0; // invalid texture
 
     // fetch the infos about this resource
-    Mdl_texture_info info = mdl_texture_infos[tex - 1]; // assuming this is in bounds
+    const Mdl_texture_info info = get_mdl_texture_infos(tex - 1); // assuming this is in bounds
     return info.gpu_resource_frame_first;
 }
 
@@ -408,8 +427,8 @@ int tex_last_frame_2d(RES_DATA_PARAM_DECL int tex)
     if (tex == 0) return 0; // invalid texture
 
     // fetch the infos about this resource
-    Mdl_texture_info info = mdl_texture_infos[tex - 1]; // assuming this is in bounds
-    return info.get_last_frame();
+    Mdl_texture_info info = get_mdl_texture_infos(tex - 1); // assuming this is in bounds
+    return get_last_frame(info);
 }
 
 // corresponds to ::tex::lookup_float4(uniform texture_2d tex, float2 coord, ...)
@@ -426,10 +445,10 @@ float4 tex_lookup_float4_2d(
     if (tex == 0) return float4(0, 0, 0, 0); // invalid texture
 
     // fetch the infos about this resource
-    Mdl_texture_info info = mdl_texture_infos[tex - 1]; // assuming this is in bounds
+    const Mdl_texture_info info = get_mdl_texture_infos(tex - 1); // assuming this is in bounds
 
     // handle uv-tiles and/or get texture array index
-    int array_index = info.compute_uvtile_id_and_update_uv(frame, coord);
+    int array_index = compute_uvtile_id_and_update_uv(info, frame, coord);
     if (array_index < 0) return float4(0, 0, 0, 0); // out of bounds or no uv-tile
 
     if (wrap_u == TEX_WRAP_CLIP && (coord.x < 0.0 || coord.x >= 1.0))
@@ -438,7 +457,7 @@ float4 tex_lookup_float4_2d(
         return float4(0, 0, 0, 0);
 
     uint2 res;
-    mdl_textures_2d[NonUniformResourceIndex(array_index)].GetDimensions(res.x, res.y);
+    get_mdl_texture_2d(array_index).GetDimensions(res.x, res.y);
     coord.x = apply_wrap_and_crop(coord.x, wrap_u, crop_u, res.x);
     coord.y = apply_wrap_and_crop(coord.y, wrap_v, crop_v, res.y);
 
@@ -451,8 +470,8 @@ float4 tex_lookup_float4_2d(
     // Note, since we don't have ddx and ddy in the compute pipeline, TextureObject::Sample() is not
     // available, we use SampleLevel instead and go for the most detailed level. Therefore, we don't
     // need mipmaps. Manual mip level computation is possible though.
-    return mdl_textures_2d[NonUniformResourceIndex(array_index)].SampleLevel(
-        mdl_sampler_tex, coord, /*lod=*/ 0.0f, /*offset=*/ int2(0, 0));
+    return get_mdl_texture_2d(array_index).SampleLevel(
+        Global_SamplerState_MDL_tex, coord, /*lod=*/ 0.0f, /*offset=*/ int2(0, 0));
 }
 
 float3 tex_lookup_float3_2d(RES_DATA_PARAM_DECL int tex, float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
@@ -489,10 +508,10 @@ float4 tex_lookup_deriv_float4_2d(
     if (tex == 0) return float4(0, 0, 0, 0); // invalid texture
 
     // fetch the infos about this resource
-    Mdl_texture_info info = mdl_texture_infos[tex - 1]; // assuming this is in bounds
+    const Mdl_texture_info info = get_mdl_texture_infos(tex - 1); // assuming this is in bounds
 
     // handle uv-tiles and/or get texture array index
-    int array_index = info.compute_uvtile_id_and_update_uv(frame, coord.val);
+    int array_index = compute_uvtile_id_and_update_uv(info, frame, coord.val);
     if (array_index < 0) return float4(0, 0, 0, 0); // out of bounds or no uv-tile
 
     if (wrap_u == TEX_WRAP_CLIP && (coord.val.x < 0.0 || coord.val.x >= 1.0))
@@ -501,7 +520,7 @@ float4 tex_lookup_deriv_float4_2d(
         return float4(0, 0, 0, 0);
 
     uint2 res;
-    mdl_textures_2d[NonUniformResourceIndex(array_index)].GetDimensions(res.x, res.y);
+    get_mdl_texture_2d(array_index).GetDimensions(res.x, res.y);
     coord.val.x = apply_wrap_and_crop(coord.val.x, wrap_u, crop_u, res.x);
     coord.val.y = apply_wrap_and_crop(coord.val.y, wrap_v, crop_v, res.y);
 
@@ -516,8 +535,8 @@ float4 tex_lookup_deriv_float4_2d(
     // Note, since we don't have ddx and ddy in the compute pipeline, TextureObject::Sample() is not
     // available, we use SampleLevel instead and go for the most detailed level. Therefore, we don't
     // need mipmaps. Manual mip level computation is possible though.
-    return mdl_textures_2d[NonUniformResourceIndex(array_index)].SampleGrad(
-        mdl_sampler_tex, coord.val, coord.dx, coord.dy, /*offset=*/ int2(0, 0));
+    return get_mdl_texture_2d(array_index).SampleGrad(
+        Global_SamplerState_MDL_tex, coord.val, coord.dx, coord.dy, /*offset=*/ int2(0, 0));
 }
 
 float3 tex_lookup_deriv_float3_2d(RES_DATA_PARAM_DECL int tex, Derived_float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
@@ -552,14 +571,14 @@ float4 tex_texel_float4_2d(
     if (tex == 0) return float4(0, 0, 0, 0); // invalid texture
 
     // fetch the infos about this resource
-    Mdl_texture_info info = mdl_texture_infos[tex - 1]; // assuming this is in bounds
+    const Mdl_texture_info info = get_mdl_texture_infos(tex - 1); // assuming this is in bounds
 
     // handle uv-tiles and/or get texture array index
-    int array_index = info.compute_uvtile_id(frame, uv_tile);
+    int array_index = compute_uvtile_id(info, frame, uv_tile);
     if (array_index < 0) return float4(0, 0, 0, 0); // out of bounds or no uv-tile
 
     uint2 res;
-    mdl_textures_2d[NonUniformResourceIndex(array_index)].GetDimensions(res.x, res.y);
+    get_mdl_texture_2d(array_index).GetDimensions(res.x, res.y);
     if (0 > coord.x || res.x <= coord.x || 0 > coord.y || res.y <= coord.y)
         return float4(0, 0, 0, 0); // out of bounds
 
@@ -567,7 +586,7 @@ float4 tex_texel_float4_2d(
     coord.y = res.y - coord.y - 1;
 #endif
 
-    return mdl_textures_2d[NonUniformResourceIndex(array_index)].Load(int3(coord, /*mipmaplevel=*/ 0));
+    return get_mdl_texture_2d(array_index).Load(int3(coord, /*mipmaplevel=*/ 0));
 }
 
 float3 tex_texel_float3_2d(RES_DATA_PARAM_DECL int tex, int2 coord, int2 uv_tile, float frame)
@@ -600,13 +619,13 @@ int3 tex_res_3d(RES_DATA_PARAM_DECL int tex, float frame)
     if (tex == 0) return uint3(0, 0, 0); // invalid texture
 
     // fetch the infos about this resource
-    Mdl_texture_info info = mdl_texture_infos[tex - 1]; // assuming this is in bounds
+    const Mdl_texture_info info = get_mdl_texture_infos(tex - 1); // assuming this is in bounds
 
     // no uv-tiles for 3D textures (shortcut the index calculation)
     int array_index = info.gpu_resource_array_start;
 
     uint3 res;
-    mdl_textures_3d[NonUniformResourceIndex(array_index)].GetDimensions(res.x, res.y, res.z);
+    get_mdl_texture_3d(array_index).GetDimensions(res.x, res.y, res.z);
     return int3(res);
 }
 
@@ -616,7 +635,7 @@ int tex_first_frame_3d(RES_DATA_PARAM_DECL int tex)
     if (tex == 0) return 0; // invalid texture
 
     // fetch the infos about this resource
-    Mdl_texture_info info = mdl_texture_infos[tex - 1]; // assuming this is in bounds
+    const Mdl_texture_info info = get_mdl_texture_infos(tex - 1); // assuming this is in bounds
     return info.gpu_resource_frame_first;
 }
 
@@ -626,8 +645,8 @@ int tex_last_frame_3d(RES_DATA_PARAM_DECL int tex)
     if (tex == 0) return 0; // invalid texture
 
     // fetch the infos about this resource
-    Mdl_texture_info info = mdl_texture_infos[tex - 1]; // assuming this is in bounds
-    return info.get_last_frame();
+    const Mdl_texture_info info = get_mdl_texture_infos(tex - 1); // assuming this is in bounds
+    return get_last_frame(info);
 }
 
 // corresponds to ::tex::width(uniform texture_3d tex, int2 uv_tile)
@@ -662,13 +681,13 @@ float4 tex_lookup_float4_3d(
         return float4(0, 0, 0, 0);
 
     // fetch the infos about this resource
-    Mdl_texture_info info = mdl_texture_infos[tex - 1]; // assuming this is in bounds
+    const Mdl_texture_info info = get_mdl_texture_infos(tex - 1); // assuming this is in bounds
 
     // no uv-tiles for 3D textures (shortcut the index calculation)
     int array_index = info.gpu_resource_array_start;
 
     uint width, height, depth;
-    mdl_textures_3d[NonUniformResourceIndex(array_index)].GetDimensions(width, height, depth);
+    get_mdl_texture_3d(array_index).GetDimensions(width, height, depth);
     coord.x = apply_wrap_and_crop(coord.x, wrap_u, crop_u, width);
     coord.y = apply_wrap_and_crop(coord.y, wrap_v, crop_v, height);
     coord.z = apply_wrap_and_crop(coord.z, wrap_w, crop_w, depth);
@@ -680,8 +699,8 @@ float4 tex_lookup_float4_3d(
     // Note, since we don't have ddx and ddy in the compute pipeline, TextureObject::Sample() is not
     // available, we use SampleLevel instead and go for the most detailed level. Therefore, we don't
     // need mipmaps. Manual mip level computation is possible though.
-    return mdl_textures_3d[NonUniformResourceIndex(array_index)].SampleLevel(
-        mdl_sampler_tex, coord, /*lod=*/ 0.0f, /*offset=*/ int3(0, 0, 0));
+    return get_mdl_texture_3d(array_index).SampleLevel(
+        Global_SamplerState_MDL_tex, coord, /*lod=*/ 0.0f, /*offset=*/ int3(0, 0, 0));
 }
 
 float3 tex_lookup_float3_3d(RES_DATA_PARAM_DECL int tex, float3 coord, int wrap_u, int wrap_v, int wrap_w,float2 crop_u, float2 crop_v, float2 crop_w, float frame)
@@ -714,13 +733,13 @@ float4 tex_texel_float4_3d(
     if (tex == 0) return float4(0, 0, 0, 0); // invalid texture
 
     // fetch the infos about this resource
-    Mdl_texture_info info = mdl_texture_infos[tex - 1]; // assuming this is in bounds
+    const Mdl_texture_info info = get_mdl_texture_infos(tex - 1); // assuming this is in bounds
 
     // no uv-tiles for 3D textures (shortcut the index calculation)
     int array_index = info.gpu_resource_array_start;
 
     uint3 res;
-    mdl_textures_3d[NonUniformResourceIndex(array_index)].GetDimensions(res.x, res.y, res.z);
+    get_mdl_texture_3d(array_index).GetDimensions(res.x, res.y, res.z);
     if (0 > coord.x || res.x <= coord.x || 0 > coord.y || res.y <= coord.y || 0 > coord.z || res.z <= coord.z)
         return float4(0, 0, 0, 0); // out of bounds
 
@@ -728,7 +747,7 @@ float4 tex_texel_float4_3d(
     coord.y = res.y - coord.y - 1;
 #endif
 
-    return mdl_textures_3d[NonUniformResourceIndex(array_index)].Load(int4(coord, /*mipmaplevel=*/ 0));
+    return get_mdl_texture_3d(array_index).Load(int4(coord, /*mipmaplevel=*/ 0));
 }
 
 float3 tex_texel_float3_3d(RES_DATA_PARAM_DECL int tex, int3 coord, float frame)
@@ -870,7 +889,7 @@ float df_light_profile_power(RES_DATA_PARAM_DECL int lp_idx)
 {
     if (lp_idx == 0) return 0; // invalid light profile
 
-    const Mdl_light_profile_info lp = mdl_light_profile_infos[lp_idx - 1]; // assuming this is in bounds
+    const Mdl_light_profile_info lp = get_mdl_light_profile_infos(lp_idx - 1); // assuming this is in bounds
     return lp.total_power;
 }
 
@@ -878,7 +897,7 @@ float df_light_profile_maximum(RES_DATA_PARAM_DECL int lp_idx)
 {
     if (lp_idx == 0) return 0; // invalid light profile
 
-    const Mdl_light_profile_info lp = mdl_light_profile_infos[lp_idx - 1]; // assuming this is in bounds
+    const Mdl_light_profile_info lp = get_mdl_light_profile_infos(lp_idx - 1); // assuming this is in bounds
     return lp.candela_multiplier;
 }
 
@@ -889,7 +908,7 @@ float df_light_profile_evaluate(
 {
     if (lp_idx == 0) return 0; // invalid light profile
 
-    const Mdl_light_profile_info lp = mdl_light_profile_infos[lp_idx - 1]; // assuming this is in bounds
+    const Mdl_light_profile_info lp = get_mdl_light_profile_infos(lp_idx - 1); // assuming this is in bounds
 
     // map theta to 0..1 range
     float u = (theta_phi[0] - lp.theta_phi_start[0]) *
@@ -913,8 +932,8 @@ float df_light_profile_evaluate(
     // wrap_mode: border black would be an alternative (but it produces artifacts at low res)
     if (u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f) return 0.0f;
 
-    float value = mdl_textures_2d[NonUniformResourceIndex(lp.eval_data_index)].SampleLevel(
-        mdl_sampler_light_profile, float2(u, v), /*lod=*/ 0.0f, /*offset=*/ int2(0, 0)).x;
+    float value = get_mdl_texture_2d(lp.eval_data_index).SampleLevel(
+        Global_SamplerState_MDL_lp, float2(u, v), /*lod=*/ 0.0f, /*offset=*/ int2(0, 0)).x;
     return value * lp.candela_multiplier;
 }
 
@@ -929,8 +948,9 @@ float3 df_light_profile_sample(
          0.0);
     if (lp_idx == 0) return result; // invalid light profile
 
-    const Mdl_light_profile_info lp = mdl_light_profile_infos[lp_idx - 1]; // assuming this is in bounds
-    StructuredBuffer<float> sample_data = mdl_buffers[NonUniformResourceIndex(lp.sample_data_index)];
+    const Mdl_light_profile_info lp = get_mdl_light_profile_infos(lp_idx - 1); // assuming this is in bounds
+
+    StructuredBuffer<float> sample_data = get_mdl_float_buffer(lp.sample_data_index);
     const uint2 res = lp.angular_resolution;
 
     // sample theta_out
@@ -998,8 +1018,8 @@ float df_light_profile_pdf(
 {
     if (lp_idx == 0) return 0; // invalid light profile
 
-    const Mdl_light_profile_info lp = mdl_light_profile_infos[lp_idx - 1]; // assuming this is in bounds
-    StructuredBuffer<float> sample_data = mdl_buffers[NonUniformResourceIndex(lp.sample_data_index)];
+    const Mdl_light_profile_info lp = get_mdl_light_profile_infos(lp_idx - 1); // assuming this is in bounds
+    StructuredBuffer<float> sample_data = get_mdl_float_buffer(lp.sample_data_index);
     const uint2 res = lp.angular_resolution;
 
     // map theta to 0..1 range
@@ -1073,8 +1093,8 @@ bool df_bsdf_measurement_isvalid(RES_DATA_PARAM_DECL int bm_idx)
 int3 df_bsdf_measurement_resolution(RES_DATA_PARAM_DECL int bm_idx, int part)
 {
     if (bm_idx == 0) return int3(0, 0, 0); // invalid bsdf measurement
-    
-    const Mdl_mbsdf_info bm = mdl_mbsdf_infos[bm_idx - 1]; // assuming this is in bounds
+
+    const Mdl_mbsdf_info bm = get_mdl_mbsdf_infos(bm_idx - 1); // assuming this is in bounds
     if (bm.has_data[part] == 0)
         return int3(0, 0, 0);
 
@@ -1093,14 +1113,14 @@ float3 df_bsdf_measurement_evaluate(
 {
     if (bm_idx == 0) return float3(0, 0, 0); // invalid bsdf measurement
 
-    const Mdl_mbsdf_info bm = mdl_mbsdf_infos[bm_idx - 1]; // assuming this is in bounds
+    const Mdl_mbsdf_info bm = get_mdl_mbsdf_infos(bm_idx - 1); // assuming this is in bounds
     if (bm.has_data[part] == 0)
         return float3(0, 0, 0);
 
-    Texture3D eval_data = mdl_textures_3d[NonUniformResourceIndex(bm.eval_data_index[part])];
+    Texture3D eval_data = get_mdl_texture_3d(bm.eval_data_index[part]);
     const float3 uvw = bsdf_compute_uvw(theta_phi_in, theta_phi_out);
     const float4 sample = eval_data.SampleLevel(
-        mdl_sampler_mbsdf, uvw, /*lod=*/ 0.0f, /*offset=*/ int3(0, 0, 0));
+        Global_SamplerState_MDL_mbsdf, uvw, /*lod=*/ 0.0f, /*offset=*/ int3(0, 0, 0));
 
     return (bm.num_channels[part] == 3) ? sample.xyz : sample.x;
 }
@@ -1119,12 +1139,12 @@ float3 df_bsdf_measurement_sample(
          0.0);
     if (bm_idx == 0) return result; // invalid bsdf measurement
 
-    const Mdl_mbsdf_info bm = mdl_mbsdf_infos[bm_idx - 1]; // assuming this is in bounds
+    const Mdl_mbsdf_info bm = get_mdl_mbsdf_infos(bm_idx - 1); // assuming this is in bounds
     if (bm.has_data[part] == 0)
         return result;
 
     // CDF data
-    StructuredBuffer<float> sample_data = mdl_buffers[NonUniformResourceIndex(bm.sample_data_index[part])];
+    StructuredBuffer<float> sample_data = get_mdl_float_buffer(bm.sample_data_index[part]);
     const uint res_x = bm.angular_resolution_theta[part];
     const uint res_y = bm.angular_resolution_phi[part];
 
@@ -1203,12 +1223,12 @@ float df_bsdf_measurement_pdf(
 {
     if (bm_idx == 0) return 0.0; // invalid measured bsdf
 
-    const Mdl_mbsdf_info bm = mdl_mbsdf_infos[bm_idx - 1]; // assuming this is in bounds
+    const Mdl_mbsdf_info bm = get_mdl_mbsdf_infos(bm_idx - 1); // assuming this is in bounds
     if (bm.has_data[part] == 0)
         return 0.0;
 
     // CDF data and resolution
-    StructuredBuffer<float> sample_data = mdl_buffers[NonUniformResourceIndex(bm.sample_data_index[part])];
+    StructuredBuffer<float> sample_data = get_mdl_float_buffer(bm.sample_data_index[part]);
     const uint res_x = bm.angular_resolution_theta[part];
     const uint res_y = bm.angular_resolution_phi[part];
 
@@ -1247,13 +1267,13 @@ float df_bsdf_measurement_pdf(
 // output: max (in case of color) albedo for the selected direction (x) and global (y)
 float2 df_bsdf_measurement_albedo(RES_DATA_PARAM_DECL int bm_idx, float2 theta_phi, int part)
 {
-    const Mdl_mbsdf_info bm = mdl_mbsdf_infos[bm_idx - 1]; // assuming this is in bounds
+    const Mdl_mbsdf_info bm = get_mdl_mbsdf_infos(bm_idx - 1); // assuming this is in bounds
 
     // check for the part
     if (bm.has_data[part] == 0)
         return float2(0, 0);
 
-    StructuredBuffer<float> albedo_data = mdl_buffers[NonUniformResourceIndex(bm.albedo_data_index[part])];
+    StructuredBuffer<float> albedo_data = get_mdl_float_buffer(bm.albedo_data_index[part]);
 
     const uint res_x = bm.angular_resolution_theta[part];
     uint idx_theta = uint(theta_phi[0] * 2.0 * M_ONE_OVER_PI * float(res_x));
@@ -1289,8 +1309,8 @@ bool scene_data_isvalid_internal(
         return false;
 
     // get scene data buffer layout and access infos
-    SceneDataInfo info = scene_data_infos[
-        state.renderer_state.scene_data_info_offset + scene_data_id];
+    const SceneDataInfo info = get_scene_data_infos(
+        state.renderer_state.scene_data_info_offset + scene_data_id);
 
     SceneDataKind kind = info.GetKind();
     switch (kind)
@@ -1319,19 +1339,28 @@ float4 scene_data_lookup_floatX(
     bool uniform_lookup,            // true if a uniform lookup is requested
     int number_of_components)       // 1, 2, 3, or 4
 {
+    ByteAddressBuffer vertices = get_vertex_buffer_from_heap();
+
     // invalid id
     if (scene_data_id == 0)
         return default_value;
 
     // get scene data buffer layout and access infos
-    SceneDataInfo info = scene_data_infos[
-        state.renderer_state.scene_data_info_offset + scene_data_id];
+    const SceneDataInfo info = get_scene_data_infos(
+        state.renderer_state.scene_data_info_offset + scene_data_id);
 
     if (uniform_lookup && !info.GetUniform())
         return default_value;
 
+    // SceneDataKind kind = SCENE_DATA_KIND_VERTEX; // info.GetKind();
+    // SceneDataInterpolationMode mode = SCENE_DATA_INTERPOLATION_MODE_LINEAR; // info.GetInterpolationMode();
+    // int byteStride = 48; // info.GetByteStride();
+    // int byteOffset = 40; // info.GetByteOffset();
+
     SceneDataKind kind = info.GetKind();
     SceneDataInterpolationMode mode = info.GetInterpolationMode();
+    int byteStride = info.GetByteStride();
+    int byteOffset = info.GetByteOffset();
 
     // access data depending of the scope (per scene, object, or vertex)
     switch (kind)
@@ -1341,8 +1370,8 @@ float4 scene_data_lookup_floatX(
         // address of the per vertex data (for each index)
         uint3 addresses =
             state.renderer_state.scene_data_geometry_byte_offset + // address of the geometry
-            state.renderer_state.hit_vertex_indices * info.GetByteStride() + // element offset
-            info.GetByteOffset(); // offset within the vertex or to first element
+            state.renderer_state.hit_vertex_indices * byteStride + // element offset
+            byteOffset; // offset within the vertex or to first element
 
         // raw data read from the buffer
         uint4 value_a_raw = uint4(0, 0, 0, 0);
@@ -1413,10 +1442,10 @@ float4 scene_data_lookup_floatX(
         // raw data read from the buffer
         uint address = info.GetByteOffset();
         uint4 value_raw = uint4(0, 0, 0, 0);
-        if (number_of_components == 1)      value_raw.x = scene_data.Load(address);
-        else if (number_of_components == 2) value_raw.xy = scene_data.Load2(address);
-        else if (number_of_components == 3) value_raw.xyz = scene_data.Load3(address);
-        else if (number_of_components == 4) value_raw = scene_data.Load4(address);
+        if (number_of_components == 1)      value_raw.x = get_scene_data().Load(address);
+        else if (number_of_components == 2) value_raw.xy = get_scene_data().Load2(address);
+        else if (number_of_components == 3) value_raw.xyz = get_scene_data().Load3(address);
+        else if (number_of_components == 4) value_raw = get_scene_data().Load4(address);
 
         // convert to float, int or color data
         // do not interpolate as all currently available modes would result in the same value
@@ -1453,6 +1482,13 @@ float3 scene_data_lookup_float3(
     float3 default_value,
     bool uniform_lookup)
 {
+    #if defined(SCENE_DATA_ID_CAMERA_POSITION)
+        if (scene_data_id == SCENE_DATA_ID_CAMERA_POSITION)
+        {
+            return mul(camera.viewI, float4(0, 0, 0, 1)).xyz;
+        }
+    #endif
+    
     return scene_data_lookup_floatX(state, scene_data_id, default_value.xyzx, uniform_lookup, 3).xyz;
 }
 
@@ -1500,13 +1536,15 @@ int4 scene_data_lookup_intX(
     bool uniform_lookup,
     int number_of_components)
 {
+    ByteAddressBuffer vertices = get_vertex_buffer_from_heap();
+
     // invalid id
     if (scene_data_id == 0)
         return default_value;
 
     // get scene data buffer layout and access infos
-    SceneDataInfo info = scene_data_infos[
-        state.renderer_state.scene_data_info_offset + scene_data_id];
+    const SceneDataInfo info = get_scene_data_infos(
+        state.renderer_state.scene_data_info_offset + scene_data_id);
 
     if (uniform_lookup && !info.GetUniform())
         return default_value;
@@ -1593,10 +1631,10 @@ int4 scene_data_lookup_intX(
         // raw data read from the buffer
         uint address = info.GetByteOffset();
         uint4 value_raw = uint4(0, 0, 0, 0);
-        if (number_of_components == 1)      value_raw.x = scene_data.Load(address);
-        else if (number_of_components == 2) value_raw.xy = scene_data.Load2(address);
-        else if (number_of_components == 3) value_raw.xyz = scene_data.Load3(address);
-        else if (number_of_components == 4) value_raw = scene_data.Load4(address);
+        if (number_of_components == 1)      value_raw.x = get_scene_data().Load(address);
+        else if (number_of_components == 2) value_raw.xy = get_scene_data().Load2(address);
+        else if (number_of_components == 3) value_raw.xyz = get_scene_data().Load3(address);
+        else if (number_of_components == 4) value_raw = get_scene_data().Load4(address);
 
         // convert to float, int or color data
         // do not interpolate as all currently available modes would result in the same value

@@ -1007,15 +1007,10 @@ public:
     int get_value() const MDL_FINAL {
         IType_enum const *e_type = get_type();
 
-        ISymbol const *sym;
-        int           code = 0;
-#ifdef ENABLE_ASSERT
-        bool          res =
-#endif
-        e_type->get_value(m_value, sym, code);
-        MDL_ASSERT(res && "Could not lookup enum value index");
+        IType_enum::Value const *value = e_type->get_value(m_value);
+        MDL_ASSERT(value != NULL && "Could not lookup enum value index");
 
-        return code;
+        return value->get_code();
     }
 
     /// Convert an enum value.
@@ -1042,14 +1037,12 @@ public:
                 // enum to enum conversion (cast<> operator)
                 IType_enum const *e_type = cast<IType_enum>(dst_tp);
 
-                for (int i = 0, n = e_type->get_value_count(); i < n; ++i) {
-                    ISymbol const *v_sym;
-                    int           v_code = 0;
+                for (size_t i = 0, n = e_type->get_value_count(); i < n; ++i) {
+                    IType_enum::Value const *val = e_type->get_value(i);
 
-                    e_type->get_value(i, v_sym, v_code);
-
-                    if (v_code == v)
+                    if (val->get_code() == v) {
                         return factory->create_enum(e_type, i);
+                    }
                 }
                 // not found
                 return factory->create_bad();
@@ -2581,16 +2574,14 @@ class Value_struct : public Value_compound<IValue_struct, IType_struct>
 public:
 
     /// Get a field.
+    ///
     /// \param name     The name of the field.
     /// \returns        The value of the field.
-    const IValue *get_field(ISymbol const *name) const MDL_FINAL {
+    IValue const *get_field(ISymbol const *name) const MDL_FINAL {
         for (size_t i = 0, n = m_type->get_field_count(); i < n; ++i) {
-            const IType   *f_type;
-            const ISymbol *f_sym;
+            IType_struct::Field const *field = m_type->get_field(i);
 
-            m_type->get_field(i, f_type, f_sym);
-
-            if (f_sym == name) {
+            if (field->get_symbol() == name) {
                 // found
                 return Base::get_value(i);
             }
@@ -2600,16 +2591,14 @@ public:
     }
 
     /// Get a field.
+    ///
     /// \param name     The name of the field.
     /// \returns        The value of the field.
     IValue const *get_field(char const *name) const MDL_FINAL {
         for (size_t i = 0, n = m_type->get_field_count(); i < n; ++i) {
-            IType const   *f_type;
-            ISymbol const *f_sym;
+            IType_struct::Field const *field = m_type->get_field(i);
 
-            m_type->get_field(i, f_type, f_sym);
-
-            if (strcmp(f_sym->get_name(), name) == 0) {
+            if (strcmp(field->get_symbol()->get_name(), name) == 0) {
                 // found
                 return Base::get_value(i);
             }
@@ -2625,12 +2614,9 @@ public:
     /// \return NULL if name does not exists, else return the corresponding value
     IValue const *get_value(char const *name) const MDL_FINAL {
         for (size_t i = 0, n = m_type->get_field_count(); i < n; ++i) {
-            IType const   *f_type;
-            ISymbol const *f_sym;
+            IType_struct::Field const *field = m_type->get_field(i);
 
-            m_type->get_field(i, f_type, f_sym);
-
-            if (strcmp(f_sym->get_name(), name) == 0) {
+            if (strcmp(field->get_symbol()->get_name(), name) == 0) {
                 // found
                 return Base::get_value(i);
             }
@@ -2648,18 +2634,15 @@ public:
             if (s_type == m_type)
                 return this;
 
-            int n_fields = m_type->get_field_count();
+            size_t n_fields = m_type->get_field_count();
             if (s_type->get_field_count() != n_fields)
                 return factory->create_bad();
 
             Value_factory *vf = impl_cast<Value_factory>(factory);
             Small_VLA<IValue const *, 8> values(vf->get_allocator(), n_fields);
-            for (int i = 0; i < n_fields; ++i) {
-                IType const   *f_type = NULL;
-                ISymbol const *f_sym  = NULL;
-
-                s_type->get_field(i, f_type, f_sym);
-                IValue const *v = m_values[i]->convert(factory, f_type);
+            for (size_t i = 0; i < n_fields; ++i) {
+                IType_struct::Field const *field = s_type->get_field(i);
+                IValue const              *v = m_values[i]->convert(factory, field->get_type());
 
                 if (is<IValue_bad>(v))
                     return v;

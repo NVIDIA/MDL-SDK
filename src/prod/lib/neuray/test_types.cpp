@@ -89,7 +89,7 @@ void test_value(
     MI_CHECK_EQUAL( new_value, tmp);
 
     // destroy instance
-    value = 0;
+    value = nullptr;
 }
 
 template <typename I, typename T>
@@ -126,10 +126,10 @@ void test_value_attribute(
     MI_CHECK_EQUAL_CSTR( value->get_type_name(), type_name);
 
     // destroy instance
-    value = 0;
+    value = nullptr;
 
     MI_CHECK_EQUAL( 1, GET_REFCOUNT( owner));
-    owner = 0;
+    owner = nullptr;
 }
 
 void test_string(
@@ -157,7 +157,7 @@ void test_string(
     MI_CHECK_EQUAL_CSTR( old_value, tmp);
 
     // test 0
-    str->set_c_str( 0);
+    str->set_c_str( nullptr);
     tmp = str->get_c_str();
     MI_CHECK_EQUAL_CSTR( "", tmp);
 
@@ -172,7 +172,7 @@ void test_string(
     MI_CHECK_EQUAL_CSTR( new_value, tmp);
 
     // destroy instance
-    str = 0;
+    str = nullptr;
 
     // test for the proxy variant
 
@@ -198,7 +198,7 @@ void test_string(
     MI_CHECK_EQUAL_CSTR( new_value, tmp);
 
     // test 0
-    str->set_c_str( 0);
+    str->set_c_str( nullptr);
     tmp = str->get_c_str();
     MI_CHECK_EQUAL_CSTR( "", tmp);
 
@@ -213,9 +213,9 @@ void test_string(
     MI_CHECK_EQUAL_CSTR( str->get_type_name(), "String");
 
     // destroy instance
-    str = 0;
+    str = nullptr;
     MI_CHECK_EQUAL( 1, GET_REFCOUNT( owner));
-    owner = 0;
+    owner = nullptr;
 }
 
 
@@ -266,13 +266,13 @@ void test_ref( mi::neuraylib::ITransaction* transaction, const char* type_name)
     c_dummy = transaction->access( "the_Attribute_container");
     MI_CHECK( c_dummy.is_valid_interface());
     ref->set_reference( c_dummy.get());
-    c_dummy = 0;
+    c_dummy = nullptr;
 
     // check value (works only for untyped references), reset
     iinterface = ref->get_reference();
     if( type_name_str == "Ref") {
         MI_CHECK(iinterface.is_valid_interface());
-        ref->set_reference( static_cast<mi::base::IInterface*>( 0));
+        ref->set_reference( static_cast<mi::base::IInterface*>( nullptr));
         iinterface = ref->get_reference();
         MI_CHECK( !iinterface.is_valid_interface());
     } else {
@@ -283,12 +283,12 @@ void test_ref( mi::neuraylib::ITransaction* transaction, const char* type_name)
     c_dummy = transaction->access( dummy_name.c_str());
     MI_CHECK( c_dummy.is_valid_interface());
     ref->set_reference( c_dummy.get());
-    c_dummy = 0;
+    c_dummy = nullptr;
 
     // check value (always works), reset
     iinterface = ref->get_reference();
     MI_CHECK(iinterface.is_valid_interface());
-    ref->set_reference( static_cast<mi::base::IInterface*>( 0));
+    ref->set_reference( static_cast<mi::base::IInterface*>( nullptr));
     iinterface = ref->get_reference();
     MI_CHECK( !iinterface.is_valid_interface());
 
@@ -299,9 +299,9 @@ void test_ref( mi::neuraylib::ITransaction* transaction, const char* type_name)
     if( type_name_str == "Ref") {
         MI_CHECK_EQUAL_CSTR( ref->get_reference_name(), "the_Attribute_container");
         ref->set_reference( zero_string);
-        MI_CHECK_EQUAL( ref->get_reference_name(), 0);
+        MI_CHECK_EQUAL( ref->get_reference_name(), nullptr);
     } else {
-        MI_CHECK_EQUAL( ref->get_reference_name(), 0);
+        MI_CHECK_EQUAL( ref->get_reference_name(), nullptr);
     }
 
     // modify value via string (correct type)
@@ -310,10 +310,10 @@ void test_ref( mi::neuraylib::ITransaction* transaction, const char* type_name)
     // check value (always works), reset
     MI_CHECK_EQUAL_CSTR( ref->get_reference_name(), dummy_name.c_str());
     ref->set_reference( zero_string);
-    MI_CHECK_EQUAL( ref->get_reference_name(), 0);
+    MI_CHECK_EQUAL( ref->get_reference_name(), nullptr);
 
     // destroy instance
-    ref = 0;
+    ref = nullptr;
 
     // test for the proxy variant
 
@@ -337,13 +337,13 @@ void test_ref( mi::neuraylib::ITransaction* transaction, const char* type_name)
     c_dummy = transaction->access( "the_Attribute_container");
     MI_CHECK( c_dummy.is_valid_interface());
     ref->set_reference( c_dummy.get());
-    c_dummy = 0;
+    c_dummy = nullptr;
 
     // check value (works only for untyped references), reset
     iinterface = ref->get_reference();
     if( type_name_str == "Ref") {
         MI_CHECK(iinterface.is_valid_interface());
-        ref->set_reference( static_cast<mi::base::IInterface*>( 0));
+        ref->set_reference( static_cast<mi::base::IInterface*>( nullptr));
         iinterface = ref->get_reference();
         MI_CHECK( !iinterface.is_valid_interface());
     } else {
@@ -354,12 +354,12 @@ void test_ref( mi::neuraylib::ITransaction* transaction, const char* type_name)
     c_dummy = transaction->access( dummy_name.c_str());
     MI_CHECK( c_dummy.is_valid_interface());
     ref->set_reference( c_dummy.get());
-    c_dummy = 0;
+    c_dummy = nullptr;
 
     // check value (always works), reset
     iinterface = ref->get_reference();
     MI_CHECK(iinterface.is_valid_interface());
-    ref->set_reference( static_cast<mi::base::IInterface*>( 0));
+    ref->set_reference( static_cast<mi::base::IInterface*>( nullptr));
     iinterface = ref->get_reference();
     MI_CHECK( !iinterface.is_valid_interface());
 
@@ -370,9 +370,9 @@ void test_ref( mi::neuraylib::ITransaction* transaction, const char* type_name)
     if( type_name_str == "Ref") {
         MI_CHECK_EQUAL_CSTR( ref->get_reference_name(), "the_Attribute_container");
         ref->set_reference( zero_string);
-        MI_CHECK_EQUAL( ref->get_reference_name(), 0);
+        MI_CHECK_EQUAL( ref->get_reference_name(), nullptr);
     } else {
-        MI_CHECK_EQUAL( ref->get_reference_name(), 0);
+        MI_CHECK_EQUAL( ref->get_reference_name(), nullptr);
     }
 
     // modify value via string (correct type)
@@ -381,7 +381,7 @@ void test_ref( mi::neuraylib::ITransaction* transaction, const char* type_name)
     // check value (always works), reset
     MI_CHECK_EQUAL_CSTR( ref->get_reference_name(), dummy_name.c_str());
     ref->set_reference( zero_string);
-    MI_CHECK_EQUAL( ref->get_reference_name(), 0);
+    MI_CHECK_EQUAL( ref->get_reference_name(), nullptr);
 
     // test creation without explicit type name temporary
     ref = owner->create_attribute<mi::IRef>( "attribute2");
@@ -392,7 +392,7 @@ void test_ref( mi::neuraylib::ITransaction* transaction, const char* type_name)
         MI_CHECK_EQUAL_CSTR( ref->get_type_name(), "Ref");
 
     // destroy instance
-    ref = 0;
+    ref = nullptr;
 }
 
 void test_ref_array( mi::neuraylib::ITransaction* transaction)
@@ -406,7 +406,7 @@ void test_ref_array( mi::neuraylib::ITransaction* transaction)
     m_attribute_container = transaction->create<mi::neuraylib::IAttribute_container>( "Attribute_container");
     MI_CHECK( m_attribute_container.is_valid_interface());
     MI_CHECK_EQUAL( 0, transaction->store( m_attribute_container.get(), "ref_array_attribute_container_2"));
-    m_attribute_container = 0;
+    m_attribute_container = nullptr;
 
     // create a dummy owner
     mi::base::Handle<mi::neuraylib::IAttribute_container> owner(
@@ -434,7 +434,7 @@ void test_ref_array( mi::neuraylib::ITransaction* transaction)
     mi::base::Handle<mi::IRef> ref( array->get_element<mi::IRef>( 1));
     MI_CHECK( ref.is_valid_interface());
     ref->set_reference( c_attribute_container.get());
-    c_attribute_container = 0;
+    c_attribute_container = nullptr;
 
     MI_CHECK_EQUAL_CSTR( "ref_array_attribute_container_1", ref->get_reference_name());
 
@@ -465,8 +465,8 @@ void test_ref_array( mi::neuraylib::ITransaction* transaction)
     c_ref = c_array->get_element<mi::IRef>( 2);
     MI_CHECK( c_ref.is_valid_interface());
     MI_CHECK_EQUAL_CSTR( "ref_array_attribute_container_2", c_ref->get_reference_name());
-    c_ref = 0;
-    c_array = 0;
+    c_ref = nullptr;
+    c_array = nullptr;
 
     // edit array attribute and check values
     mi::base::Handle<mi::base::IInterface> iinterface;
@@ -486,8 +486,8 @@ void test_ref_array( mi::neuraylib::ITransaction* transaction)
     ref = array->get_element<mi::IRef>( 2);
     MI_CHECK( ref.is_valid_interface());
     MI_CHECK_EQUAL_CSTR( "ref_array_attribute_container_2", ref->get_reference_name());
-    ref = 0;
-    array = 0;
+    ref = nullptr;
+    array = nullptr;
 }
 
 
@@ -501,7 +501,7 @@ void test_void( mi::neuraylib::ITransaction* transaction)
     MI_CHECK_EQUAL_CSTR( voidd->get_type_name(), "Void");
 
     // destroy instance
-    voidd = 0;
+    voidd = nullptr;
 }
 
 void test_uuid( mi::neuraylib::ITransaction* transaction)
@@ -532,7 +532,7 @@ void test_uuid( mi::neuraylib::ITransaction* transaction)
     MI_CHECK( uuid_tmp == uuid2);
 
     // destroy instance
-    uuid = 0;
+    uuid = nullptr;
 }
 
 void test_pointer( mi::neuraylib::ITransaction* transaction)
@@ -555,10 +555,10 @@ void test_pointer( mi::neuraylib::ITransaction* transaction)
     MI_CHECK_EQUAL_CSTR( p_sint32->get_type_name(), "Pointer<Sint32>");
 
     // check initial value
-    MI_CHECK_EQUAL( 0, p_sint32->get_pointer());
+    MI_CHECK_EQUAL( nullptr, p_sint32->get_pointer());
 
     // set value
-    MI_CHECK_EQUAL( 0, p_sint32->set_pointer( 0));
+    MI_CHECK_EQUAL( 0, p_sint32->set_pointer( nullptr));
     MI_CHECK_EQUAL( 0, p_sint32->set_pointer( m_sint32.get()));
     MI_CHECK_EQUAL( -1, p_sint32->set_pointer( m_attribute_container.get()));
 
@@ -576,10 +576,10 @@ void test_pointer( mi::neuraylib::ITransaction* transaction)
     MI_CHECK_EQUAL_CSTR( p_untyped->get_type_name(), "Pointer<Interface>");
 
     // check initial value
-    MI_CHECK_EQUAL( 0, p_untyped->get_pointer());
+    MI_CHECK_EQUAL( nullptr, p_untyped->get_pointer());
 
     // set value
-    MI_CHECK_EQUAL( 0, p_untyped->set_pointer( 0));
+    MI_CHECK_EQUAL( 0, p_untyped->set_pointer( nullptr));
     MI_CHECK_EQUAL( 0, p_untyped->set_pointer( m_sint32.get()));
     MI_CHECK_EQUAL( 0, p_untyped->set_pointer( m_attribute_container.get()));
 
@@ -598,10 +598,10 @@ void test_pointer( mi::neuraylib::ITransaction* transaction)
     MI_CHECK_EQUAL_CSTR( cp_sint32->get_type_name(), "Const_pointer<Sint32>");
 
     // check initial value
-    MI_CHECK_EQUAL( 0, cp_sint32->get_pointer());
+    MI_CHECK_EQUAL( nullptr, cp_sint32->get_pointer());
 
     // set value
-    MI_CHECK_EQUAL( 0, cp_sint32->set_pointer( 0));
+    MI_CHECK_EQUAL( 0, cp_sint32->set_pointer( nullptr));
     MI_CHECK_EQUAL( 0, cp_sint32->set_pointer( c_sint32.get()));
     MI_CHECK_EQUAL( -1, cp_sint32->set_pointer( c_attribute_container.get()));
 
@@ -619,10 +619,10 @@ void test_pointer( mi::neuraylib::ITransaction* transaction)
     MI_CHECK_EQUAL_CSTR( cp_untyped->get_type_name(), "Const_pointer<Interface>");
 
     // check initial value
-    MI_CHECK_EQUAL( 0, cp_untyped->get_pointer());
+    MI_CHECK_EQUAL( nullptr, cp_untyped->get_pointer());
 
     // set value
-    MI_CHECK_EQUAL( 0, cp_untyped->set_pointer( 0));
+    MI_CHECK_EQUAL( 0, cp_untyped->set_pointer( nullptr));
     MI_CHECK_EQUAL( 0, cp_untyped->set_pointer( c_sint32.get()));
     MI_CHECK_EQUAL( 0, cp_untyped->set_pointer( c_attribute_container.get()));
 
@@ -758,7 +758,7 @@ MI_TEST_AUTO_FUNCTION( test_types )
         run_tests( neuray.get());
     }
 
-    neuray = 0;
+    neuray = nullptr;
     MI_CHECK( unload());
 }
 

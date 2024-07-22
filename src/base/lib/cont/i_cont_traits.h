@@ -66,11 +66,11 @@ namespace CONT {
 /// The Type_traits default values.
 template <typename T>
 struct Type_traits {
-    typedef STLEXT::False_type	has_trivial_default_constructor;
-    typedef STLEXT::False_type	has_trivial_copy_constructor;
-    typedef STLEXT::False_type	has_trivial_assignment_operator;
-    typedef STLEXT::False_type	has_trivial_destructor;
-    typedef STLEXT::False_type	is_POD_type;
+    typedef STLEXT::False_type  has_trivial_default_constructor;
+    typedef STLEXT::False_type  has_trivial_copy_constructor;
+    typedef STLEXT::False_type  has_trivial_assignment_operator;
+    typedef STLEXT::False_type  has_trivial_destructor;
+    typedef STLEXT::False_type  is_POD_type;
 };
 
 /// abbreviation: for PODs all values are true
@@ -102,11 +102,11 @@ DECLARE_POD_TYPE_TRAITS(double);
 
 /// pointer specialization
 template <typename T> struct Type_traits<T*> {
-    typedef STLEXT::True_type	has_trivial_default_constructor;
-    typedef STLEXT::True_type	has_trivial_copy_constructor;
-    typedef STLEXT::True_type	has_trivial_assignment_operator;
-    typedef STLEXT::True_type	has_trivial_destructor;
-    typedef STLEXT::True_type	is_POD_type;
+    typedef STLEXT::True_type   has_trivial_default_constructor;
+    typedef STLEXT::True_type   has_trivial_copy_constructor;
+    typedef STLEXT::True_type   has_trivial_assignment_operator;
+    typedef STLEXT::True_type   has_trivial_destructor;
+    typedef STLEXT::True_type   is_POD_type;
 };
 //@}
 

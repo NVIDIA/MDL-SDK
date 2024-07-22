@@ -136,11 +136,13 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
 target_add_content(TARGET ${PROJECT_NAME}
     FILES
         "content/common.hlsl"
+        "content/environment.hlsl"
         "content/mdl_renderer_runtime.hlsl"
         "content/mdl_target_code_types.hlsl"
         "content/mdl_hit_programs.hlsl"
         "content/miss_programs.hlsl"
         "content/ray_gen_program.hlsl"
+        "content/resource_bindings.hlsl"
         "content/gltf/sphere/sphere.bin"
         "content/gltf/sphere/sphere.gltf"
         "content/hdri/hdrihaven_teufelsberg_inner_2k.exr"
@@ -172,7 +174,7 @@ if(MDL_ENABLE_MATERIALX)
         )
 
     target_add_content(TARGET ${PROJECT_NAME}
-        FILE_BASE "${MATERIALX_DIR}/"
+        FILE_BASE "${MDL_DEPENDENCY_MATERIALX_BASE_DIR}/"
         TARGET_BASE "autodesk_materialx/"
         DEP_NAME "content_mtlx"
         FILES
@@ -193,29 +195,37 @@ if(MDL_ENABLE_MATERIALX)
             "libraries/bxdf/gltf_pbr.mtlx"
             "libraries/bxdf/standard_surface.mtlx"
             "libraries/bxdf/usd_preview_surface.mtlx"
+            "libraries/nprlib/genmdl/nprlib_genmdl_impl.mtlx"
+            "libraries/nprlib/nprlib_defs.mtlx"
+            "libraries/nprlib/nprlib_ng.mtlx"
+            "libraries/cmlib/cmlib_defs.mtlx"
+            "libraries/cmlib/cmlib_ng.mtlx"
             "libraries/pbrlib/genmdl/pbrlib_genmdl_impl.mtlx"
             "libraries/pbrlib/pbrlib_defs.mtlx"
             "libraries/pbrlib/pbrlib_ng.mtlx"
-            "libraries/stdlib/genmdl/stdlib_genmdl_cm_impl.mtlx"
             "libraries/stdlib/genmdl/stdlib_genmdl_impl.mtlx"
-            "libraries/stdlib/genmdl/stdlib_genmdl_unit_impl.mtlx"
             "libraries/stdlib/stdlib_defs.mtlx"
             "libraries/stdlib/stdlib_ng.mtlx"
             "libraries/targets/genmdl.mtlx"
         )
 
     target_add_content(TARGET ${PROJECT_NAME}
-        FILE_BASE "${MATERIALX_DIR}/libraries/"
+        FILE_BASE "${MDL_DEPENDENCY_MATERIALX_BASE_DIR}/libraries/"
         TARGET_BASE "autodesk_materialx/"
         DEP_NAME "content_mdl"
         FILES
-            "mdl/materialx/cm.mdl"
             "mdl/materialx/core.mdl"
             "mdl/materialx/hsv.mdl"
             "mdl/materialx/noise.mdl"
             "mdl/materialx/pbrlib.mdl"
+            "mdl/materialx/pbrlib_1_6.mdl"
+            "mdl/materialx/pbrlib_1_7.mdl"
+            "mdl/materialx/pbrlib_1_8.mdl"
             "mdl/materialx/sampling.mdl"
             "mdl/materialx/stdlib.mdl"
+            "mdl/materialx/stdlib_1_6.mdl"
+            "mdl/materialx/stdlib_1_7.mdl"
+            "mdl/materialx/stdlib_1_8.mdl"
             "mdl/materialx/swizzle.mdl"
         )
 
@@ -233,6 +243,14 @@ if(MDL_ENABLE_SLANG)
             "MDL_ENABLE_SLANG"
         )
 endif()
+
+if(AGILITY_SDK_ENABLED)
+    target_compile_definitions(${PROJECT_NAME}
+        PRIVATE
+            "AGILITY_SDK_ENABLED"
+        )
+endif()
+
 
 # creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)
 target_create_vs_user_settings(TARGET ${PROJECT_NAME})

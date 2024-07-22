@@ -607,10 +607,10 @@ public:
 
     // Updates the application logic. This is called right before
     // the frame's command buffer is populated.
-    virtual void update(float elapsed_seconds, uint32_t image_index) override;
+    virtual void update(float elapsed_seconds, uint32_t frame_index) override;
 
     // Populates the current frame's command buffer.
-    virtual void render(VkCommandBuffer command_buffer, uint32_t image_index) override;
+    virtual void render(VkCommandBuffer command_buffer, uint32_t frame_index, uint32_t image_index) override;
 
     // Handles keyboard input from the window.
     virtual void key_callback(int key, int action) override;
@@ -724,15 +724,17 @@ void Example_app::recreate_size_dependent_resources()
 
 // Updates the application logic. This is called right before
 // the frame's command buffer is populated.
-void Example_app::update(float elapsed_seconds, uint32_t image_index)
+void Example_app::update(float elapsed_seconds, uint32_t frame_index)
 {
     m_user_data.animation_time += elapsed_seconds;
-    m_last_image_index = image_index;
 }
 
 // Populates the current frame's command buffer.
-void Example_app::render(VkCommandBuffer command_buffer, uint32_t image_index)
+void Example_app::render(VkCommandBuffer command_buffer, uint32_t frame_index, uint32_t image_index)
 {
+    // Save image index for outputing screenshot on exit
+    m_last_image_index = image_index;
+
     VkRenderPassBeginInfo render_pass_begin_info = {};
     render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     render_pass_begin_info.renderPass = m_main_render_pass;

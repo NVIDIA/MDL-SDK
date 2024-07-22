@@ -85,7 +85,7 @@ inline size_t Scene_element<T, C, P>::get_size() const
 // derived from another class which has the given class id.
 template <class T, SERIAL::Class_id C, class P>
 inline bool Scene_element<T, C, P>::is_type_of(
-    SERIAL::Class_id id) const		// the class id to check
+    SERIAL::Class_id id) const          // the class id to check
 {
     return id == C ? true : P::is_type_of(id);
 }

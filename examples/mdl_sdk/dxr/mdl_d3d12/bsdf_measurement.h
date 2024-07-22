@@ -44,38 +44,38 @@ class Structured_buffer;
 class Bsdf_measurement
 {
 public:
-	struct Part
-	{
-		Structured_buffer<float>* sample_data = nullptr;
-		Structured_buffer<float>* albedo_data = nullptr;
-		Texture* evaluation_data = nullptr;
-		float max_albedo;
-		uint32_t angular_resolution_theta;
-		uint32_t angular_resolution_phi;
-		uint32_t num_channels;
-	};
+        struct Part
+        {
+                Structured_buffer<float>* sample_data = nullptr;
+                Structured_buffer<float>* albedo_data = nullptr;
+                Texture* evaluation_data = nullptr;
+                float max_albedo;
+                uint32_t angular_resolution_theta;
+                uint32_t angular_resolution_phi;
+                uint32_t num_channels;
+        };
 
-	Bsdf_measurement(
-		Base_application* app,
-		const mi::neuraylib::IBsdf_measurement* bsdf_measurement,
-		const std::string& debug_name);
-	virtual ~Bsdf_measurement();
+        Bsdf_measurement(
+                Base_application* app,
+                const mi::neuraylib::IBsdf_measurement* bsdf_measurement,
+                const std::string& debug_name);
+        virtual ~Bsdf_measurement();
 
-	bool has_part(mi::neuraylib::Mbsdf_part part) const { return !!m_parts[part].sample_data; }
+        bool has_part(mi::neuraylib::Mbsdf_part part) const { return !!m_parts[part].sample_data; }
 
-	const Part& get_part(mi::neuraylib::Mbsdf_part part) const { return m_parts[part]; }
+        const Part& get_part(mi::neuraylib::Mbsdf_part part) const { return m_parts[part]; }
 
 private:
-	bool prepare_mbsdf_part(
-		Base_application* app,
-		mi::neuraylib::Mbsdf_part part,
-		const mi::neuraylib::IBsdf_measurement* bsdf_measurement,
-		const std::string& debug_name);
+        bool prepare_mbsdf_part(
+                Base_application* app,
+                mi::neuraylib::Mbsdf_part part,
+                const mi::neuraylib::IBsdf_measurement* bsdf_measurement,
+                const std::string& debug_name);
 
-	Base_application* m_app;
-	std::string m_debug_name;
+        Base_application* m_app;
+        std::string m_debug_name;
 
-	Part m_parts[2];
+        Part m_parts[2];
 };
 
 }}} // mi::examples::mdl_d3d12

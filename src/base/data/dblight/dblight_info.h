@@ -36,12 +36,14 @@
 #include <vector>
 
 #include <boost/core/noncopyable.hpp>
+#include <boost/intrusive/list.hpp>
 #include <boost/intrusive/set.hpp>
 
 #include <base/data/db/i_db_scope.h>
 #include <base/lib/robin_hood/robin_hood.h>
 
 #include "dblight_transaction.h"
+#include "dblight_util.h"
 
 namespace MI {
 
@@ -55,44 +57,72 @@ class Transaction_impl;
 
 namespace bi = boost::intrusive;
 
-/// Infos are created with pin count 1. The pin count is decremented again in
-/// #Info_manager::store(), finish_edit() and remove().
-class Info_impl : public DB::Info
+/// Base class of the Info_impl class below.
+///
+/// The base class avoids the construction overhead for patterns for lookup operations. In
+/// particular it avoids the construction of the tag set for \c Info_impl::m_references which is
+/// not optimized away.
+class Info_base
 {
 public:
-    /// Regular constructor (used for store operations).
-    ///
-    /// m_references is initialized via element->get_references().
-    Info_impl(
-        DB::Element_base* element,
+    /// Constructor.
+    Info_base(
         DB::Scope_id scope_id,
-        Transaction_impl* transaction,
-        mi::Uint32 version,
-        DB::Tag tag,
-        const char* name);
+        DB::Transaction_id transaction_id,
+        mi::Uint32 version)
+      : m_scope_id( scope_id), m_transaction_id( transaction_id), m_version( version) { }
 
-    /// Regular constructor (used for edit operations).
+    friend bool operator==( const Info_base& lhs, const Info_base& rhs);
+    friend bool operator!=( const Info_base& lhs, const Info_base& rhs);
+    friend bool operator<( const Info_base& lhs, const Info_base& rhs);
+    friend bool operator<=( const Info_base& lhs, const Info_base& rhs);
+    friend bool operator>( const Info_base& lhs, const Info_base& rhs);
+    friend bool operator>=( const Info_base& lhs, const Info_base& rhs);
+
+protected:
+    /// ID of the scope this info belongs to.
+    const DB::Scope_id m_scope_id;
+    /// ID of the creator transaction.
+    const DB::Transaction_id m_transaction_id;
+     /// Sequence number of the info in the creator transaction.
+    const mi::Uint32 m_version;
+};
+
+/// Comparison operators for Info_base.
+///
+/// Sort by lexicographic comparison of the scope ID, transaction ID, and version.
+
+bool operator==( const Info_base& lhs, const Info_base& rhs);
+bool operator!=( const Info_base& lhs, const Info_base& rhs);
+bool operator<( const Info_base& lhs, const Info_base& rhs);
+bool operator<=( const Info_base& lhs, const Info_base& rhs);
+bool operator>( const Info_base& lhs, const Info_base& rhs);
+bool operator>=( const Info_base& lhs, const Info_base& rhs);
+
+/// Infos are created with pin count 1. The pin count is decremented again in
+/// #Info_manager::store(), finish_edit() and remove().
+class Info_impl : public DB::Info, public Info_base
+{
+public:
+    /// Regular constructor (used for store and edit operations).
+    ///
+    /// \note The constructor moves the content of \p references into \c m_references.
     Info_impl(
         DB::Element_base* element,
-        DB::Scope_id scope_id,
+        Scope_impl* scope,
         Transaction_impl* transaction,
         mi::Uint32 version,
         DB::Tag tag,
+        DB::Privacy_level privacy_level,
         const char* name,
-        const DB::Tag_set& references);
+        DB::Tag_set& references);
 
     /// Regular constructor (used for removal operations).
     Info_impl(
-        DB::Scope_id scope_id,
+        Scope_impl* scope,
         Transaction_impl* transaction,
         mi::Uint32 version,
         DB::Tag tag);
-
-    /// Constructor for patterns for lookup operations.
-    Info_impl(
-        DB::Scope_id scope_id,
-        DB::Transaction_id transaction_id,
-        mi::Uint32 version);
 
     /// Destructor.
     ///
@@ -109,6 +139,7 @@ public:
 
     bool get_is_job() const override { return false; }
 
+    /// Returns \c NULL for removal infos.
     DB::Element_base* get_element() const override { return m_element; }
 
     SCHED::Job* get_job() const override { return nullptr; }
@@ -121,7 +152,7 @@ public:
 
     mi::Uint32 get_version() const override { return m_version; }
 
-    DB::Privacy_level get_privacy_level() const override { return 0; }
+    DB::Privacy_level get_privacy_level() const override { return m_privacy_level; }
 
     const char* get_name() const override { return m_name; }
 
@@ -153,16 +184,26 @@ public:
     /// Sets the pointer to the containing name set.
     void set_infos_per_name( Infos_per_name* infos_per_name);
 
+    /// Returns the scope this info belongs to (or \c NULL if the scope has been removed). RCS:NEU
+    Scope_impl* get_scope() const { return m_scope; }
+
+    /// Clears the scope (used when the scope is removed).
+    void clear_scope() { m_scope = nullptr; }
+
     /// Replaces the referenced element.
     ///
     /// Only to be used for serialization checks.
     void set_element( DB::Element_base* element);
 
 private:
-    // The only members that can change after construction are the element pointer (if serialization
-    /// checks for edits are enabled), the pin count, the transaction pointer (reset only), the set
-    /// of references (for edits), the name set pointer (if the info has a name) and the hooks for
-    /// the intrusive sets.
+    /// The only members that can change after construction are
+    /// - the element pointer (if serialization checks for edits are enabled),
+    /// - the pin count,
+    /// - the name set pointer (if the info has a name),
+    /// - the scope pointer (when the scope is removed),
+    /// - the set of references (for edits),
+    /// - the transaction pointer (reset only), and
+    /// - the hooks for the intrusive sets.
 
     /// The DB element managed (and owned) by this instance, \c NULL for removals.
     DB::Element_base* /*almost const*/ m_element = nullptr;
@@ -170,17 +211,6 @@ private:
     /// Pin count of this info.
     std::atomic_uint32_t m_pin_count = 1;
 
-    /// \name Used by the comparison operator.
-    //@{
-
-    /// ID of the scope this info belongs to.
-    const DB::Scope_id m_scope_id;
-    /// ID of the creator transaction.
-    const DB::Transaction_id m_transaction_id;
-     /// Sequence number of the info in the creator transaction.
-    const mi::Uint32 m_version;
-
-    //@}
     /// \name Cached from/pointer to the corresponding containers.
     //@{
 
@@ -190,6 +220,8 @@ private:
     const char* const m_name = nullptr;
     /// The corresponding name set that contains this info (or \c NULL iff \c m_name is \c NULL).
     Infos_per_name* m_infos_per_name = nullptr;
+    /// The scope this info belongs to (or \c NULL if the scope has been removed).
+    Scope_impl* m_scope;
 
     //@}
 
@@ -206,23 +238,17 @@ private:
     /// Can be invalid if the info is visible for all open (and future) transactions.
     Transaction_impl_ptr m_transaction;
 
+    /// Privacy level of this info.
+    const DB::Privacy_level m_privacy_level;
+
 public:
     /// Hook for Infos_per_name::m_infos.
     bi::set_member_hook<> m_infos_per_name_hook;
     /// Hook for Infos_per_tag::m_infos.
     bi::set_member_hook<> m_infos_per_tag_hook;
+    /// Hook for Scope_impl::m_infos.
+    bi::list_member_hook<> m_scope_hook;
 };
-
-/// Comparison operators for Info_impl.
-///
-/// Sort by lexicographic comparison of the scope ID, transaction ID, and version.
-
-bool operator==( const Info_impl& lhs, const Info_impl& rhs);
-bool operator!=( const Info_impl& lhs, const Info_impl& rhs);
-bool operator<( const Info_impl& lhs, const Info_impl& rhs);
-bool operator<=( const Info_impl& lhs, const Info_impl& rhs);
-bool operator>( const Info_impl& lhs, const Info_impl& rhs);
-bool operator>=( const Info_impl& lhs, const Info_impl& rhs);
 
 /// Set of all infos with a given name.
 ///
@@ -263,10 +289,15 @@ public:
 
     /// Looks up an info.
     ///
-    /// \param scope            The scope where to start the look up. RCS:NEU
-    /// \param transaction_id   The transaction ID looking up the info.
-    /// \return                 The looked up info, or \c nullptr in case of failure. RCS:ICE
-    Info_impl* lookup_info( DB::Scope* scope, DB::Transaction_id transaction_id);
+    /// \param scope              The scope where to start the look up. RCS:NEU
+    /// \param transaction_id     The transaction ID looking up the info.
+    /// \param[out] level_found   The privacy level of the scope that contains the returned info,
+    ///                           or unspecified in case of failure.
+    /// \return                   The looked up info, or \c nullptr in case of failure. RCS:ICE
+    Info_impl* lookup_info(
+        DB::Scope* scope,
+        DB::Transaction_id transaction_id,
+        DB::Privacy_level* level_found = nullptr);
 
 private:
     /// Name shared by all infos in m_infos.
@@ -344,10 +375,15 @@ public:
 
     /// Looks up an info.
     ///
-    /// \param scope            The scope where to start the look up. RCS:NEU
-    /// \param transaction_id   The transaction ID looking up the info.
-    /// \return                 The looked up info, or \c nullptr in case of failure. RCS:ICE
-    Info_impl* lookup_info( DB::Scope* scope, DB::Transaction_id transaction_id);
+    /// \param scope              The scope where to start the look up. RCS:NEU
+    /// \param transaction_id     The transaction ID looking up the info.
+    /// \param[out] level_found   The privacy level of the scope that contains the returned info,
+    ///                           or unspecified in case of failure.
+    /// \return                   The looked up info, or \c nullptr in case of failure. RCS:ICE
+    Info_impl* lookup_info(
+        DB::Scope* scope,
+        DB::Transaction_id transaction_id,
+        DB::Privacy_level* level_found = nullptr);
 
     /// Marks the tag for removal in the global scope.
     void set_removed();
@@ -555,54 +591,73 @@ public:
 
     /// Creates an info for the given element and stores it under the given tag/name.
     ///
-    /// \param element       The element to store. RCS:TRO
-    /// \param scope_id      The ID of the scope the element belongs to.
-    /// \param transaction   The transaction creating this info. RCS:NEU
-    /// \param version       Sequence number of the operation within the creator transaction.
-    /// \param tag           The tag to be used for lookup.
-    /// \param name          The name to be used for lookup.
+    /// \param element         The element to store. RCS:TRO
+    /// \param scope           The scope the element belongs to. RCS:NEU
+    /// \param transaction     The transaction creating this info. RCS:NEU
+    /// \param version         Sequence number of the operation within the creator transaction.
+    /// \param tag             The tag to be used for lookup.
+    /// \param privacy_level   Privacy level of the DB element.
+    /// \param name            The name to be used for lookup.
+    /// \param references      The set of tags references by the DB element. The set is modified
+    ///                        by the call and must not be used anymore afterwards.
     void store(
         DB::Element_base* element,
-        DB::Scope_id scope_id,
+        Scope_impl* scope,
         Transaction_impl* transaction,
         mi::Uint32 version,
         DB::Tag tag,
-        const char* name);
+        DB::Privacy_level privacy_level,
+        const char* name,
+        DB::Tag_set& references);
 
     /// Looks up an info for the given tag.
     ///
-    /// \param tag              The tag to look up.
-    /// \param scope            The scope where to start the look up. RCS:NEU
-    /// \param transaction_id   The transaction ID looking up the info.
-    /// \return                 The looked up info, or \c nullptr in case of failure. RCS:ICE
-    Info_impl* lookup_info( DB::Tag tag, DB::Scope* scope, DB::Transaction_id transaction_id);
+    /// \param tag                The tag to look up.
+    /// \param scope              The scope where to start the look up. RCS:NEU
+    /// \param transaction_id     The transaction ID looking up the info.
+    /// \param[out] level_found   The privacy level of the scope that contains the returned info,
+    ///                           or unspecified in case of failure.
+    /// \return                   The looked up info, or \c nullptr in case of failure. RCS:ICE
+    Info_impl* lookup_info(
+        DB::Tag tag,
+        DB::Scope* scope,
+        DB::Transaction_id transaction_id,
+        DB::Privacy_level* level_found = nullptr);
 
     /// Looks up an info for the given name.
     ///
-    /// \param name             The name to look up.
-    /// \param scope            The scope where to start the look up. RCS:NEU
-    /// \param transaction_id   The transaction ID looking up the info.
-    /// \return                 The looked up info, or \c nullptr in case of failure. RCS:ICE
-    Info_impl* lookup_info( const char* name, DB::Scope* scope, DB::Transaction_id transaction_id);
+    /// \param name               The name to look up.
+    /// \param scope              The scope where to start the look up. RCS:NEU
+    /// \param transaction_id     The transaction ID looking up the info.
+    /// \param[out] level_found   The privacy level of the scope that contains the returned info,
+    ///                           or unspecified in case of failure.
+    /// \return                   The looked up info, or \c nullptr in case of failure. RCS:ICE
+    Info_impl* lookup_info(
+        const char* name,
+        DB::Scope* scope,
+        DB::Transaction_id transaction_id,
+        DB::Privacy_level* level_found = nullptr);
 
     /// Creates an info for the given element and stores it under the given tag/name.
     ///
     /// Quite similar to store(), except that the implementation is slightly more efficient w.r.t.
     /// the references to other DB elements.
     ///
-    /// \param element       The element to edit (this is already the copy). RCS:TRO
-    /// \param scope_id      The ID of the scope the element belongs to.
-    /// \param transaction   The transaction creating this info. RCS:NEU
-    /// \param version       Sequence number of the operation within the creator transaction.
-    /// \param tag           The tag to be used for lookup.
-    /// \param name          The name to be used for lookup.
-    /// \param references    The set of tags referenced by the DB element.
+    /// \param element         The element to edit (this is already the copy). RCS:TRO
+    /// \param scope           The scope the element belongs to. RCS:NEU
+    /// \param transaction     The transaction creating this info. RCS:NEU
+    /// \param version         Sequence number of the operation within the creator transaction.
+    /// \param tag             The tag to be used for lookup.
+    /// \param privacy_level   Privacy level of the DB element.
+    /// \param name            The name to be used for lookup.
+    /// \param references      The set of tags referenced by the DB element.
     Info_impl* start_edit(
         DB::Element_base* element,
-        DB::Scope_id scope_id,
+        Scope_impl* scope,
         Transaction_impl* transaction,
         mi::Uint32 version,
         DB::Tag tag,
+        DB::Privacy_level privacy_level,
         const char* name,
         const DB::Tag_set& references);
 
@@ -611,21 +666,28 @@ public:
     /// Decrements the pin counts of tags referenced when the edit operation started, and increments
     /// the pin counts of the tags referenced now.
     ///
-    /// \param info   The info of the edit to finish. RCS:ICR
-    void finish_edit( Info_impl* info);
+    /// \param info           The info of the edit to finish. RCS:ICR
+    /// \param transaction    The transaction editing this info. RCS:NEU
+    void finish_edit( Info_impl* info, Transaction_impl* transaction);
 
     /// Marks a tag for removal.
     ///
-    /// \param scope_id      The ID of the scope where the removal should happen.
-    /// \param transaction   The transaction creating this info. RCS:NEU
-    /// \param version       Sequence number of the operation within the creator transaction.
-    /// \param tag           The tag to mark for removal.
-    /// \return              \c true in case of success, \c false otherwise (invalid tag).
+    /// \param scope               The scope where the removal should happen. RCS:NEU
+    /// \param transaction         The transaction creating this info. RCS:NEU
+    /// \param version             Sequence number of the operation within the creator transaction.
+    /// \param tag                 The tag to mark for removal.
+    /// \param remove_local_copy   Remove only the local copy in \p scope. See
+    ////                           DB::Transaction::remove() for full details.
+    /// \return                    \c true in case of success, \c false otherwise (invalid tag).
     bool remove(
-        DB::Scope_id scope_id,
+        Scope_impl* scope,
         Transaction_impl* transaction,
         mi::Uint32 version,
-        DB::Tag tag);
+        DB::Tag tag,
+        bool remove_local_copy);
+
+    /// Marks a tag for consideration by the garbage collection.
+    void consider_tag_for_gc( DB::Tag tag);
 
     /// Runs the garbage collection.
     ///
@@ -663,8 +725,10 @@ private:
     /// Performs all required steps to destroy a particular info.
     ///
     /// - If the info has a name, then the info is removed from the corresponding Infos_per_name
-    ///   set. If that name set becomes empty, it is removed from #m_infos_by_name.
+    ///   set. If that name set becomes empty, it is removed from \c m_infos_by_name.
     /// - Removes the info from \p infos_per_tag.
+    /// - If the info is still tracked by its scope, then the info is removed from the corresponding
+    ///   \c Scope_impl::m_infos.
     /// - Decrements the pin counts of the DB elements referenced by \p it.
     /// - Destroys the info (which in turn destroys the DB element managed by the info).
     /// - Returns an iterator to the next info in \p infos_per_tag.

@@ -468,7 +468,7 @@ void MDL_name_mangler::ignore_uniform_varying()
 
 // <special-name> ::= TV <type>  # virtual table
 // <special-name> ::= TI <type>  # typeinfo structure
-// <special-name> ::= GV <object name>	# Guard variable for one-time
+// <special-name> ::= GV <object name>  # Guard variable for one-time
 //                                      # initialization
 
 void MDL_name_mangler::mangle_function_encoding(
@@ -550,7 +550,7 @@ void MDL_name_mangler::mangle_unqualified_name(
     }
 }
 
-// <operator-name> ::= cv <type>	# (cast)
+// <operator-name> ::= cv <type>        # (cast)
 
 void MDL_name_mangler::mangle_source_name(char const *name)
 {
@@ -682,7 +682,7 @@ void MDL_name_mangler::mangle_prefix(char const *prefix)
 //              ::= qu        # ?
 
 void MDL_name_mangler::mangle_type_qualifiers(IType::Modifiers mod) {
-    // <CV-qualifiers> ::= [r] [V] [K] 	# restrict (C99), volatile, const
+    // <CV-qualifiers> ::= [r] [V] [K]  # restrict (C99), volatile, const
 
     // In cases where multiple order-insensitive qualifiers are present, they should be ordered
     // 'K' (closest to the base type), 'V', 'r', and 'U' (farthest from the base type), with the
@@ -901,7 +901,7 @@ void MDL_name_mangler::mangle_array_type(
 
 void MDL_name_mangler::mangle_type(IType_vector const *type)
 {
-    // ::= u <source-name>	# vendor extended type
+    // ::= u <source-name>      # vendor extended type
     m_out.append(1, 'u');
 
     IType_atomic const *e_tp = type->get_element_type();
@@ -931,7 +931,7 @@ void MDL_name_mangler::mangle_type(IType_vector const *type)
 
 void MDL_name_mangler::mangle_type(IType_matrix const *type)
 {
-    // ::= u <source-name>	# vendor extended type
+    // ::= u <source-name>      # vendor extended type
     m_out.append(1, 'u');
 
     char buf[32];
@@ -960,14 +960,14 @@ void MDL_name_mangler::mangle_type(IType_matrix const *type)
 
 void MDL_name_mangler::mangle_type(IType_color const *type)
 {
-    // ::= u <source-name>	# vendor extended type
+    // ::= u <source-name>      # vendor extended type
     m_out.append(1, 'u');
     mangle_source_name("color");
 }
 
 void MDL_name_mangler::mangle_type(IType_reference const *type)
 {
-    // ::= u <source-name>	# vendor extended type
+    // ::= u <source-name>      # vendor extended type
     m_out.append(1, 'u');
 
     switch (type->get_kind()) {
@@ -1340,7 +1340,7 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
                         char *num_end = NULL;
 
                         // make sure the dimension is a number
-                        strtoul(ptr, &num_end, 10);
+                        (void)strtoul(ptr, &num_end, 10);
                         if (num_end == NULL || num_end == ptr || num_end >= endptr) {
                             return false;
                         }
@@ -1423,9 +1423,9 @@ bool DAG_mangler::need_signature_suffix(IDefinition const *def) const
             // a user defined function
             IType const *ret_type = fun_type->get_return_type();
 
-            // do not add a suffix for material creator function, these are not
+            // do not add a suffix for material category creator functions, these are not
             // overloaded
-            return !is_material_type(ret_type);
+            return !is_material_category_type(ret_type);
         }
         return true;
     }
@@ -1490,6 +1490,9 @@ string DAG_mangler::mangle(
             break;
         case IMDL::MDL_VERSION_1_8:
             m_printer.print("$1.7");
+            break;
+        case IMDL::MDL_VERSION_1_9:
+            m_printer.print("$1.8");
             break;
         case IMDL::MDL_VERSION_EXP:
             m_printer.print("$99.99");

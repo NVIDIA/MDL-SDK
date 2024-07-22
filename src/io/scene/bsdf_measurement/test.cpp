@@ -111,7 +111,7 @@ void import_check_export_reimport_check(
 
     {
         // Import the BSDF measurement as DB element from file
-        BSDFM::Bsdf_measurement* bsdf_measurement = new BSDFM::Bsdf_measurement();
+        auto* bsdf_measurement = new BSDFM::Bsdf_measurement();
         std::string path = TEST::mi_src_path( "io/scene/bsdf_measurement/") + filename;
         mi::Sint32 result = bsdf_measurement->reset_file( transaction, path);
         MI_CHECK_EQUAL( 0, result);
@@ -138,7 +138,7 @@ void import_check_export_reimport_check(
 
     {
         // Re-import the exported BSDF measurement as DB element
-        BSDFM::Bsdf_measurement* bsdf_measurement = new BSDFM::Bsdf_measurement();
+        auto* bsdf_measurement = new BSDFM::Bsdf_measurement();
         mi::Sint32 result = bsdf_measurement->reset_file( transaction, filename);
         MI_CHECK_EQUAL( 0, result);
         tag = transaction->store_for_reference_counting( bsdf_measurement);
@@ -155,7 +155,7 @@ void import_check_export_reimport_check(
 
     {
         // Import the BSDF measurement as DB element via a reader
-        BSDFM::Bsdf_measurement* bsdf_measurement = new BSDFM::Bsdf_measurement();
+        auto* bsdf_measurement = new BSDFM::Bsdf_measurement();
         std::string path = TEST::mi_src_path( "io/scene/bsdf_measurement/") + filename;
         DISK::File_reader_impl reader;
         MI_CHECK( reader.open( path.c_str()));
@@ -396,7 +396,7 @@ MI_TEST_AUTO_FUNCTION( test_bsdf_measurement )
 
     {
         // Create a default-constructed bsdf_measurement DB element
-        BSDFM::Bsdf_measurement* bsdf_measurement = new BSDFM::Bsdf_measurement();
+        auto* bsdf_measurement = new BSDFM::Bsdf_measurement();
         DB::Tag tag = transaction->store_for_reference_counting( bsdf_measurement);
 
         // Access the DB element

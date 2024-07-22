@@ -185,7 +185,7 @@ void Log_module_impl::remove_log_target( ILog_target* target)
 {
     ASSERT( M_LOG, target);
     mi::base::Lock::Block block( &m_lock);
-    const Log_targets::iterator it = std::find( m_targets.begin(), m_targets.end(), target);
+    const auto it = std::find( m_targets.begin(), m_targets.end(), target);
     if( it != m_targets.end())
         m_targets.erase( it);
 }
@@ -385,7 +385,11 @@ void Log_module_impl::handle_message(
 }
 
 void Log_module_impl::text_message(
-    const char* mod, Category cat, Severity sev, const mi::base::Message_details& det, const char* text)
+    const char* mod,
+    Category cat,
+    Severity sev,
+    const mi::base::Message_details& det,
+    const char* text)
 {
     const size_t len = strlen( text);
     const char* text_end = &text[len];
@@ -537,7 +541,7 @@ void Log_module_impl::insert_message_internal(
         std_message( mod, cat, sev, det, pfx, msg);
 
     // Invoke registered log targets in reverse order until one handles the message.
-    Log_targets::reverse_iterator rit = m_targets.rbegin();
+    auto rit = m_targets.rbegin();
     for( ; !handled && rit != m_targets.rend(); ++rit)
         if( (*rit)->message( mod, cat, sev, det, pfx, msg))
             handled = true;

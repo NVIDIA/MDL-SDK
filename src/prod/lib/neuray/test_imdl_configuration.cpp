@@ -45,13 +45,19 @@
 #include <mi/neuraylib/ineuray.h>
 #include <mi/neuraylib/imdl_configuration.h>
 #include <mi/neuraylib/istring.h>
+#include <mi/neuraylib/idatabase.h>
+#include <mi/neuraylib/iscope.h>
+#include <mi/neuraylib/itransaction.h>
+#include <mi/neuraylib/imdl_factory.h>
+#include <mi/neuraylib/imdl_impexp_api.h>
+#include <mi/neuraylib/imdl_execution_context.h>
 
 #include "test_shared.h"
 
 MI_TEST_AUTO_FUNCTION( test_imdl_configuration )
 {
     mi::base::Handle<mi::neuraylib::INeuray> neuray( load_and_get_ineuray());
-    MI_CHECK( neuray.is_valid_interface());
+    MI_CHECK( neuray);
 
     {
         mi::base::Handle<mi::neuraylib::IDebug_configuration> debug_configuration(
@@ -67,18 +73,18 @@ MI_TEST_AUTO_FUNCTION( test_imdl_configuration )
         MI_CHECK_EQUAL( 0, mdl_configuration->get_mdl_paths_length());
 
         string = mdl_configuration->get_mdl_path( 0);
-        MI_CHECK( !string.is_valid_interface());
+        MI_CHECK( !string);
 
         MI_CHECK_EQUAL( 0, mdl_configuration->get_resource_paths_length());
 
         string = mdl_configuration->get_resource_path( 0);
-        MI_CHECK( !string.is_valid_interface());
+        MI_CHECK( !string);
 
         // clear default paths (such that the first added path has index 0)
         mdl_configuration->clear_resource_paths();
 
-        MI_CHECK_EQUAL(0, mdl_configuration->get_mdl_paths_length());
-        MI_CHECK_EQUAL(0, mdl_configuration->get_resource_paths_length());
+        MI_CHECK_EQUAL( 0, mdl_configuration->get_mdl_paths_length());
+        MI_CHECK_EQUAL( 0, mdl_configuration->get_resource_paths_length());
 
         // add and check shader paths
         MI_CHECK_EQUAL( -2, mdl_configuration->add_mdl_path( "/non-existing"));
@@ -92,11 +98,11 @@ MI_TEST_AUTO_FUNCTION( test_imdl_configuration )
         MI_CHECK_EQUAL( 0, mdl_configuration->add_mdl_path( path.c_str()));
         MI_CHECK_EQUAL( 1, mdl_configuration->get_mdl_paths_length());
         string = mdl_configuration->get_mdl_path( 0);
-        MI_CHECK( string.is_valid_interface());
+        MI_CHECK( string);
         MI_CHECK( string->get_c_str());
         MI_CHECK_EQUAL_CSTR( string->get_c_str(), path.c_str());
         string = mdl_configuration->get_mdl_path( 1);
-        MI_CHECK( !string.is_valid_interface());
+        MI_CHECK( !string);
 
         path = MI::TEST::mi_src_path( "base/system/version");
         MI_CHECK_EQUAL( 0, mdl_configuration->add_mdl_path( path.c_str()));
@@ -115,11 +121,11 @@ MI_TEST_AUTO_FUNCTION( test_imdl_configuration )
         MI_CHECK_EQUAL( 1, mdl_configuration->get_resource_paths_length());
 
         string = mdl_configuration->get_resource_path( 0);
-        MI_CHECK( string.is_valid_interface());
+        MI_CHECK( string);
         MI_CHECK( string->get_c_str());
         MI_CHECK_EQUAL_CSTR( string->get_c_str(), path.c_str());
         string = mdl_configuration->get_resource_path( 1);
-        MI_CHECK( !string.is_valid_interface());
+        MI_CHECK( !string);
 
         path = MI::TEST::mi_src_path( "base/data/db");
         MI_CHECK_EQUAL( 0, mdl_configuration->add_resource_path( path.c_str()));
@@ -131,28 +137,69 @@ MI_TEST_AUTO_FUNCTION( test_imdl_configuration )
         mdl_configuration->clear_resource_paths();
         MI_CHECK_EQUAL( 0, mdl_configuration->get_resource_paths_length());
 
-        // check explicit cast and expose let expressions settings
+        // check various settings
 
-        MI_CHECK_EQUAL(true, mdl_configuration->get_implicit_cast_enabled());
-        MI_CHECK_EQUAL(0, mdl_configuration->set_implicit_cast_enabled(false));
-        MI_CHECK_EQUAL(false, mdl_configuration->get_implicit_cast_enabled());
+        MI_CHECK_EQUAL( true, mdl_configuration->get_implicit_cast_enabled());
+        MI_CHECK_EQUAL( 0, mdl_configuration->set_implicit_cast_enabled( false));
+        MI_CHECK_EQUAL( false, mdl_configuration->get_implicit_cast_enabled());
 
+        MI_CHECK_EQUAL( false, mdl_configuration->get_expose_names_of_let_expressions());
+        MI_CHECK_EQUAL( 0, mdl_configuration->set_expose_names_of_let_expressions( true));
+        MI_CHECK_EQUAL( true, mdl_configuration->get_expose_names_of_let_expressions());
 
-        MI_CHECK_EQUAL(false, mdl_configuration->get_expose_names_of_let_expressions());
-        MI_CHECK_EQUAL(0, mdl_configuration->set_expose_names_of_let_expressions(true));
-        MI_CHECK_EQUAL(true, mdl_configuration->get_expose_names_of_let_expressions());
+        MI_CHECK_EQUAL( mi::neuraylib::IType::MK_VARYING,
+            mdl_configuration->get_material_ior_frequency());
+        MI_CHECK_EQUAL( 0,
+            mdl_configuration->set_material_ior_frequency( mi::neuraylib::IType::MK_UNIFORM));
+        MI_CHECK_EQUAL( mi::neuraylib::IType::MK_UNIFORM,
+            mdl_configuration->get_material_ior_frequency());
+        MI_CHECK_EQUAL( -2,
+            mdl_configuration->set_material_ior_frequency( mi::neuraylib::IType::MK_NONE));
+        MI_CHECK_EQUAL( -2,
+            mdl_configuration->set_material_ior_frequency( mi::neuraylib::IType::MK_FORCE_32_BIT));
 
         // start neuray
 
         MI_CHECK_EQUAL( 0, neuray->start());
 
-        // explicit cast and expose let expressions settings cannot be changed after startup.
+        mi::base::Handle<mi::neuraylib::IDatabase> database(
+            neuray->get_api_component<mi::neuraylib::IDatabase>());
+        mi::base::Handle<mi::neuraylib::IScope> scope( database->get_global_scope());
+        mi::base::Handle<mi::neuraylib::ITransaction> transaction( scope->create_transaction());
 
-        MI_CHECK_EQUAL(-1, mdl_configuration->set_implicit_cast_enabled(true));
-        MI_CHECK_EQUAL(false, mdl_configuration->get_implicit_cast_enabled());
+        // these settings cannot be changed after startup
 
-        MI_CHECK_EQUAL(-1, mdl_configuration->set_expose_names_of_let_expressions(false));
-        MI_CHECK_EQUAL(true, mdl_configuration->get_expose_names_of_let_expressions());
+        MI_CHECK_EQUAL( -1, mdl_configuration->set_implicit_cast_enabled( true));
+        MI_CHECK_EQUAL( false, mdl_configuration->get_implicit_cast_enabled());
+
+        MI_CHECK_EQUAL( -1, mdl_configuration->set_expose_names_of_let_expressions( false));
+        MI_CHECK_EQUAL( true, mdl_configuration->get_expose_names_of_let_expressions());
+
+        MI_CHECK_EQUAL( -1,
+            mdl_configuration->set_material_ior_frequency( mi::neuraylib::IType::MK_VARYING));
+        MI_CHECK_EQUAL( mi::neuraylib::IType::MK_UNIFORM,
+            mdl_configuration->get_material_ior_frequency());
+
+        // verify that the material.ior field is uniform
+
+        mi::base::Handle<mi::neuraylib::IMdl_impexp_api> mdl_impexp_api(
+            neuray->get_api_component<mi::neuraylib::IMdl_impexp_api>());
+        mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
+            neuray->get_api_component<mi::neuraylib::IMdl_factory>());
+        mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
+            mdl_factory->create_execution_context());
+        mi::Sint32 result = mdl_impexp_api->load_module(
+            transaction.get(), "::%3Cbuiltins%3E", context.get());
+        MI_CHECK_CTX( context);
+        MI_CHECK_EQUAL( result, 0);
+        mi::base::Handle<mi::neuraylib::IType_factory> tf(
+            mdl_factory->create_type_factory( transaction.get()));
+        mi::base::Handle<const mi::neuraylib::IType_struct> std_mat(
+            tf->get_predefined_struct( mi::neuraylib::IType_struct::SID_MATERIAL));
+        mi::Size index_ior = std_mat->find_field( "ior");
+        mi::base::Handle<const mi::neuraylib::IType> std_mat_ior(
+            std_mat->get_field_type( index_ior));
+        MI_CHECK_EQUAL( std_mat_ior->get_all_type_modifiers(), mi::neuraylib::IType::MK_UNIFORM);
 
         // check path settings again
 
@@ -170,10 +217,13 @@ MI_TEST_AUTO_FUNCTION( test_imdl_configuration )
         path = MI::TEST::mi_src_path( "base/data/thread_pool");
         MI_CHECK_EQUAL( 0, mdl_configuration->add_resource_path( path.c_str()));
         MI_CHECK_LESS_OR_EQUAL( 1, mdl_configuration->get_resource_paths_length());
+
+        transaction->commit();
     }
+
     MI_CHECK_EQUAL( 0, neuray->shutdown());
 
-    neuray = 0;
+    neuray = nullptr;
     MI_CHECK( unload());
 }
 

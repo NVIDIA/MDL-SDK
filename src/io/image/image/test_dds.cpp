@@ -279,6 +279,8 @@ MI_TEST_AUTO_FUNCTION( test_dds )
     g_image_module.set();
 
     test_dds_cubemap( "test_dds_cubemap1.dds");
+
+    g_image_module.reset();
 }
 
 MI_TEST_MAIN_CALLING_TEST_MAIN();

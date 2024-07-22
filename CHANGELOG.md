@@ -1,10 +1,311 @@
 Change Log
 ==========
+MDL SDK 2024.0.1 (377400.2109): 18 Jul 2024
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2024.0.1 (377400.2109) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- MDL 1.9 Language Specification
+  - Updated version to 1.9.
+  - `declarative` and `struct_category` as new reserved words.
+  - Added the concept of *declarative* structure definitions with
+    and without a structure category to the *conventional*
+    structure definitions.
+  - Added the definition for the assignment operator (`=`) for
+    declarative structs with and without a structure category.
+  - Restricted the type cast operator on structure types to
+    conventional structure types.
+  - Added declarative functions.
+  - Restricted overload resolution on material definitions.
+  - Extended overload resolution to define functions whose signature
+    is a prefix of others as more specific.
+  - Specified that function overload sets can contain both
+    declarative and non-declarative functions.
+  - Clarified that the `auto` return type for functions is allowed
+    on function definitions and not on function declarations.
+  - Defined material definitions as functions returning a declarative
+    structure definition of the `material_category` structure category.
+  - Defined the builtin `material` type as a declarative structure type
+    with the `material_category` structure category.
+  - Changed the `ior` field of the builtin `material` type to
+    be of varying type and not `uniform color` anymore.
+  - Defined the builtin distribution function types `bsdf`,
+    `edf`, `vdf`, and `hair_bsdf` as a declarative structure type
+    without structure category and without fields.
+  - Redefined the compound types in the `material` type to
+    declarative structure types without structure category.
+  - Added rounding function `round_away_from_zero()` and clarified rounding
+    behavior of `round()`.
+  - Removed the statement for microfacet BSDF models that they become
+    black in transmission mode if the ior values indicate total
+    interior reflection.
+
+- General
+  - The `material.ior` field is now `varying` for all versions of MDL (not only for MDL 1.9).
+    This avoids to break the ABI to the renderer, since there is still only one material type.
+    The new method `IMdl_configuration::set_material_ior_frequency()` allows to revert
+    that change as a workaround for rare compatibility problems with MDL modules authored
+    for MDL versions before 1.9. Please note that this will switch the field to `uniform`
+    for all version (including MDL 1.9). Note further that this option cannot be set dynamically,
+    it is only possible to set it at SDK start time.
+  - Added CMake option `MDL_BUILD_SDK` which is `ON` by default. If set `OFF`
+    only the MDL Core and mdlc will be built.
+  -  The alpha channel is now always treated as linear, independent of the gamma value
+     specified for the remaining channels.
+  - Added new AOV(Arbitrary Output Variables) support. It allows rendering applications
+    to produce customized data in addition to the usual image output buffers:
+      - The interface `IStruct_category` has been added to represent the new
+        concept of struct categories. The new interface `IStruct_category_list`
+        represents an ordered collection of struct categories identified by name or index.
+      - The new methods `IType_struct::get_struct_category()` and
+        `IModule::get_struct_categories()` allow to query the struct categories
+        of a struct type and those defined in a module, respectively.
+      - The new methods `IType::is_declarative()`,
+        `IFunction_definition::is_declarative()`, and
+        `Definition_wrapper::is_declarative()` indicate whether a type or function is
+        declarative.
+      - The interface `IType_factory` has been extended with methods to create,
+        clone, compare, and dump struct categories and/or struct category lists.
+      - A sixth template-like function, the so-called `decl_cast` operator, has
+        been added. The new method `IExpression_factory::create_decl_cast()`
+        provides a convenient way to create calls of this function definition.
+      - The method `IMaterial_instance::create_compiled_material()` accepts the
+        new option "target_type" on the execution context. This option behaves as if
+        the entire material is wrapped into a `decl_cast` operator with the given
+        target type.
+      - The new method `ICompiled_material::get_sub_expression_hash()` allows to
+        compute hash values of arbitrary sub-expressions and is not limited to
+        predefined material slots as `ICompiled_material::get_slot_hash()`.
+      - The module builder has been extended to support struct categories: The new
+        method `IModule_builder::add_struct_category()` allows to create them.
+        The signature of the method `IModule_builder::add_struct_type()` has been
+        extended with a `struct_category` parameter. The signature of several
+        methods on `IModule_builder` has been extended with a
+        `is_declarative` parameter. The old signatures are still available if
+        `MI_NEURAYLIB_DEPRECATED_15_0` is defined.
+          
+  - The methods for texture export (`IMdl_impexp_api::export_canvas()` and
+    `IImage_api::create_buffer_from_canvas()`) and the image plugin API have
+    been changed to use a generic options map instead of two hard-coded options.
+    Supported options are documented at `IImage_api`. The old signatures are
+    still available if `MI_NEURAYLIB_DEPRECATED_15_0` is defined.
+  - The new export option "exr:data_type" allows to control the data type of EXR channels.
+  - The database supports now multiple scopes. For details, see the
+    documentation for the class `IScope` and the methods `create_scope()`,
+    `get_scope()`, and `remove_scope()` on `IDatabase`.
+  - The new method `IExpression_factory::create_temporary()` allows to create
+    temporary references.
+  - The signature of `IMdl_module_builder::add_function()` has been extended
+    to support temporaries. The old signature is still available if
+    `MI_NEURAYLIB_DEPRECATED_15_0` is defined.
+  - The free functions `set_value()` and `get_value()` on `IData`
+    support now arrays (similar to what existed already for `IValue`).
+    Arrays can be specified as pointer/length pair, or as `std::vector`.
+  - Exit codes in case of array size mismatches for the the free functions
+    `set_value()` and `get_value()` on `IValue` have been changed
+    from -3  (implementation) and -4 (documentation) to -5 for consistency with
+    `IData`.
+  - The methods `IModule::get_function_overloads()` have been updated to
+    implement the modified overload resolution rules for MDL >= 1.9.
+  - Additional performance improvements for the creation of compiled materials.
+  - The recommended vcpkg version is now `5d675c7e5`. This
+    changes the recommended versions for Boost to 1.84, OpenImageIO to 2.5.8.0,
+    and GLFW to 3.4.
+  - The license texts have been split into three separate files
+    LICENSE.md, LICENSE_IMAGES.md, and LICENSE_THIRD_PARTY.md.
+  - The API reference documentation for the MDL SDK and MDL
+    Core is now installed as part of the "install" target.
+  - Added the compiler flag `-flax-vector-conversions` when
+    using OpenImageIO on Linux and ARM.
+    
+  - Python Bindings:
+    - Changed the recommended Python version to 3.10.
+    - Improved type hints.
+    - Added stub functions to keep the bindings backwards compatible.
+    - Prepared for an update to Swig 4.2.1.
+    - Added more tests to improve coverage.
+        
+- MDL Compiler and Backends
+  - Increased default MDL version to 1.9.
+  - Added support for MDL 1.9:
+    - Implemented `math::round_away_from_zero()`.
+    - Implemented structure categories, declarative structures and declarative functions.
+    - Adapted overload resolution to new rules.
+  - Added backend option `"libbsdf_flags_in_bsdf_data"` to enable use of the new
+       `"flags"` field in the BSDF data structures for libbsdf. The flags can be used
+       to restrict generated sample, evaluate, pdf and auxiliary functions to only
+       calculate reflections, transmissions or both.
+  - MDL Core API: Support for declarative structs and functions (AOV support).
+    - Extend the abstract syntax of MDL
+      - New declaration kind `mi::mdl::IDeclaration::Kind::DK_STRUCT_CATEGORY` and corresponding 
+        class `mi::mdl::IDeclaration_struct_category` for struct category declarations.
+      - New methods on `mi::mdl::IDeclaration_type_struct` for modifying a struct's category:
+        - `IQualified_name const *get_struct_category_name()`.
+        - `IDefinition const *get_struct_category_definition()`.
+        - `void set_struct_category_definition(IDefinition const *category_definition)`.
+      - New methods on `mi::mdl::IDeclaration_type_struct` and `mi::mdl::IDeclaration_function`
+        for the declarative flags:
+        - `bool is_declarative()`.
+        - `void set_declarative(bool flag)`.
+      - New and modified methods on `mi::mdl::IDeclaration_factory` for handling struct categories
+        and changes to structs and functions:
+        - `IDeclaration_struct_category *create_struct_category(...)`.
+        - `IDeclaration_type_struct *create_struct(bool declarative = false, ...,`
+          `IQualified_name const *category_name)`.
+        - `IDeclaration_function *create_function(bool is_declarative, ...)`.
+      - Changes to `mi::mdl::IDefinition` to support declarative features:
+        - New definition kind `DK_STRUCT_CATEGORY`.
+        - New definition flag `DP_IS_DECLARATIVE`.
+        - New intrinsic `DS_INTRINSIC_DAG_DECL_CAST`.
+        - New function `IStruct_category const *get_category()` to get the category of
+          a category definition.
+      - Changes to `mi::mdl::IGenerated_code_dag` to support declarative features:
+        - New function property `FP_IS_DECLARATIVE`.
+        - The accessor functions for functions and materials have been aligned, so each
+          function exists. In one variant for functions and one for materials, for example:
+          `get_material_return_type()` vs. `get_function_return_type()`.
+        - New accessor functions for struct categories: `get_struct_category_count()`,
+          `get_struct_category()`, etc.
+      - `mi::mdl::IMaterial_instance::initialize()` now has a parameter to set the target
+         type of the material.
+        When non-null, it specifies how the application how to view a material's fields.
+      - New functions on `mi::mdl::IMaterial_instance`:
+        - `lookup_sub_expression(...)` Look up a materials sub-expression by path.
+        - `get_sub_expression_hash(...)` get the hash of the sub-expression rooted at
+           a given path.
+      - `mi::mdl::IType` has changed: New function `mi::mdl::IType::is_declarative()` to return
+         whether a type is declarative or not.
+      - New type `mi::mdl::IStruct_category` to reference struct categories in struct types.
+      - New method `IStruct_category const *mi::mdl::IType_struct::get_struct_category()`.
+      - New method `mi::mdl::IType_factory::create_struct_category()` to create struct
+        category objects.        
+  - MDL Core API: Others
+    - Change representation of enums and structs to immutable types:
+      - `mi::mdl::IType_enum::get_value()` and `lookup()` methods have changed to return
+         a `Value` object instead of using out parameters.
+      - `mi::mdl::IType_struct::get_field()` has changed to return a Field object instead of
+        using out parameters.
+      - `mi::mdl::IType_factory` methods `create_enum()` and `create_struct()` are
+        changed to take all relevant information and returning immutable types.
+        `get_predefined_struct()` and `get_predefined_enum()` also return const pointers now.
+    - Moved the `mi::mdl::IMaterial_instance interface` out of `mi::mdl::IGenerated_code_dag`.
+    - Use size_t for MDL AST statement, expression and definition counts/indexes.
+    - Make distilling available to users of `ibmdl_core`.
+    
+- MDL Distiller and Baker    
+  - Extend distiller node types to include 4-way mixers.
+  - The class `mi::neuraylib::IBaker` has been extended to support setting UV ranges.
+
+- MDL Core API examples
+  - Added new code generation example.
+
+- MDL SDK examples
+  - The documentation for the distilling examples is now
+    reachable from the list of examples and topics.
+  - Added a `"--allowed_scatter_mode"` parameter to the df_cuda, df_native, df_vulkan
+       and dxr examples to demonstrate the BSDF flags feature.
+  - MDL Example Distilling
+    - Added option `--uv_range`.
+    - Updated the example to detect whether the material being distilled and baked
+      is using UV tile materials and if this is the case, run distilling and baking
+      for each of the tiles.
+  - MDL Example df_vulkan:
+    - Added support for class compilation and implemented GLSL runtime functions
+      for argument block reads.
+    - Added command line option for outputting the generated GLSL target code to a file.
+    - Changed command line option names to match other examples.
+  - MDL Example DXR:
+    - Renamed `--gpu-debug` to `--gpu_debug` to make it conform with other options.
+    - Added colored console output for errors and warnings.
+    - Changed D3D resource handling to make use of dynamic resources and add Microsoft Agility
+      SDK as optional dependency.
+    - Added the '`-distill_debug`' option to improve debugging of distiller plugins.
+    - Added support for MDL 1.9 custom materials using the '`--material_type`' option.
+    - Allowed to select and display AOV by specifying expressions using the '`--aov`' option.
+    - Improved the selection of MDL expressions to generate shader code for.
+    - Switched MaterialX SDK to 1.38.9.
+    - Added CAMERA_POSITION scene data for a prototype implementation of MaterialX NPR nodes.
+    
+**Fixed Bugs**
+
+- General
+  - Python Bindings: Fixed various function binding issues.
+  - Fixed `get_option_count()` and `get_option_name()` functions on `IMdl_execution_context`.
+  - Fixed `IImage::set_from_canvas()` and `IImage::reset_reader()` to
+    properly recognize `uvtile` sequences with a single tile.
+  - Fixed support for search paths from "`MDL_SYSTEM_PATH`" and "`MDL_USER_PATH`"
+    environment variables containing Unicode characters on Windows.
+    
+- MDL Compiler and Backends
+  - The MDL core compiler did not compute correctly the uniform/varying property of
+    single expression body functions, causing these to be always treated as uniform.
+    This is fixed now. Additionally, Now the result of presets is always the same as
+    for the underlying function.
+  - Improved performance in HLSL/GLSL code generator by reducing the amount of
+    generated code.
+  - Fixed `ICompiled_material` opacity methods always returning `OPACITY_UNKNOWN`
+    for MDL 1.5 - 1.8 materials.
+  - Fixed invalid code generation for scene data function calls in environment functions.
+    Default values are returned now.
+  - Fixed failing argument block creation with MDL Core, when `INVALID_REF` values
+    are provided (like `texture_2d()`).
+  - Fixed performance regression for materials using `base::transform_coordinate()` or
+    `base::lookup_volume_coefficients()` in some cases.
+  - Fixed assignments to wrong struct members for GLSL/HLSL in rare cases.
+  - Fixed 3-argument `df::tint()` function using shading normal instead of geometry normal
+    to differentiate between reflection and transmission.
+  - Fixed derivatives not being calculated when they were "hidden" in a call
+    in the arguments of a user-defined function which does not use derivatives.
+  - Fixed a null pointer reference when parsing crafted LLVM bitcode metadata.
+  - Disabled `MI_MDL_HLSL_LOAD_MODULE` environment variable
+    to avoid loading unwanted LLVM modules.
+  - Fixed use of unsupported comdats for the native backend on MacOSX.
+  - Fixed crash when translating color mixers with `bsdf()/edf()` components.
+  - Fixed lost derivatives when assigning structs to each other.
+  - Do not erroneously generate GLSL variable names that are GLSL keywords or
+    restricted identifiers.
+  - Fixed handling of resource sets that contain a frame number first followed by an UDIM.
+  - Fixed a potential crash due to wrong reference count management in handling of module imports.
+  - Fixed GLSL/HLSL code generators that sometimes generate variables in the wrong scope.
+  - Do not try to resolve empty resource urls (which are invalid in MDL), and do not rewrite
+    them into pseudo-absolute.
+  - "`<package>/`" form, they stay unchanged (and are still not valid).
+    This is more a cosmetic improvement.
+  - Do not create the same error message more then once in some conditions.
+  - Fixed some crashes in the core compiler when heavily invalid code is compiled.
+  - Fixed a case where error messages were generated without file/line number.
+  - Fixed compilation of constant functions that use the uniform state.
+  - Improved error message 'xxx' is not a package or module name; Now it shows the
+    wrong part only instead of the whole package.
+  - Fixed GLSL/HLSL backends to generate valid code for function returning `void`
+    (in MDL: empty structs or arrays of size zero).
+  - Warn, if a function returns a "void-like" value (and hence might be optimized away).
+
+- MDL Distiller and Baker
+  - `Transmissive_pbr` target: Prevent division by zero in case of both diffuse and
+    glossy contributions are colored black.
+  - Improved support for `vMaterials2` composites in the `transmissive_pbr` target.
+  - Improved support for `color_custom_curve_layer` as it is used in some `vMaterials` (all distilling targets).
+  - Reduced overestimation of diffuse contribution in `treansmissive_pbr/ue4` targets for some cases.
+
+- MDL SDK examples
+  - Fixed the OptiX 7 example such that it now also works on Linux.
+  - Fixed linker errors in Vulkan examples when using Vulkan SDK version 1.3.275 or newer.
+  - MDL Example Traversal:
+    - Fixed usage information. The example expects a module as input, not a material.
+  - MDL Example DXR:
+    Fixed glTF interaction between volume attenuation and single sided materials.
+    
+
 MDL SDK 2023.1.4 (373000.3036): 18 Mar 2024
 -----------------------------------------------
 
 ABI compatible with the MDL SDK 2023.1.4 (373000.3036) binary release
 (see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
 
 **Added and Changed Features**
 

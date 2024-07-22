@@ -46,8 +46,12 @@
 #include <io/scene/scene/i_scene_journal_types.h>
 #include <io/scene/mdl_elements/mdl_elements_detail.h>
 
+#include <filesystem>
 #include <sstream>
+#include <utility>
 
+
+namespace fs = std::filesystem;
 
 namespace MI {
 
@@ -272,7 +276,7 @@ mi::Sint32 Lightprofile::reset_shared(
     if( !success)
         return -7;
 
-    Lightprofile_impl* impl = new Lightprofile_impl(
+    auto* impl = new Lightprofile_impl(
         resolution_phi, resolution_theta, degree, flags,
         start_phi, start_theta, delta_phi, delta_theta, data);
 
@@ -396,6 +400,7 @@ SERIAL::Serializable* Lightprofile::deserialize( SERIAL::Deserializer* deseriali
     SERIAL::read( deserializer, &m_cached_is_valid);
 
     // Adjust m_original_filename and m_resolved_filename for this host.
+    std::error_code ec;
     if( !m_original_filename.empty()) {
 
        if( serializer_sep != HAL::Ospath::sep()) {
@@ -407,7 +412,7 @@ SERIAL::Serializable* Lightprofile::deserialize( SERIAL::Deserializer* deseriali
 
         // Re-resolve filename if it is not meaningful for this host. If unsuccessful, clear value
         // (no error since we no longer require all resources to be present on all nodes).
-        if( !DISK::is_file( m_resolved_filename.c_str())) {
+        if( !fs::is_regular_file( fs::u8path( m_resolved_filename), ec)) {
             SYSTEM::Access_module<PATH::Path_module> m_path_module( false);
             m_resolved_filename = m_path_module->search( PATH::MDL, m_original_filename);
             if( m_resolved_filename.empty())
@@ -423,7 +428,7 @@ SERIAL::Serializable* Lightprofile::deserialize( SERIAL::Deserializer* deseriali
             = HAL::Ospath::convert_to_platform_specific_path( m_resolved_container_filename);
         m_resolved_container_membername
             = HAL::Ospath::convert_to_platform_specific_path( m_resolved_container_membername);
-        if( !DISK::is_file( m_resolved_container_filename.c_str())) {
+        if( !fs::is_regular_file( fs::u8path( m_resolved_container_filename), ec)) {
             m_resolved_container_filename.clear();
             m_resolved_container_membername.clear();
         }
@@ -524,7 +529,7 @@ Lightprofile_impl::Lightprofile_impl(
     mi::Float32 start_theta,
     mi::Float32 delta_phi,
     mi::Float32 delta_theta,
-    const std::vector<mi::Float32>& data)
+    std::vector<mi::Float32> data)
   : m_resolution_phi( resolution_phi),
     m_resolution_theta( resolution_theta),
     m_degree( degree),
@@ -533,19 +538,19 @@ Lightprofile_impl::Lightprofile_impl(
     m_start_theta( start_theta),
     m_delta_phi( delta_phi),
     m_delta_theta( delta_theta),
-    m_data( data)
+    m_data( std::move( data))
 {
     ASSERT( M_LIGHTPROFILE, m_data.size() == m_resolution_phi * m_resolution_theta);
 
     // normalize m_data, save multiplier in m_candela_multiplier
     m_candela_multiplier = 0.0f;
-    for( mi::Size i = 0; i < m_data.size(); ++i)
-        if( m_data[i] > m_candela_multiplier)
-            m_candela_multiplier = m_data[i];
+    for( float f : m_data)
+        if( f > m_candela_multiplier)
+            m_candela_multiplier = f;
     if( m_candela_multiplier > 0.0f) {
         const mi::Float32 recipr = 1.0f / m_candela_multiplier;
-        for( mi::Size i = 0; i < m_data.size(); ++i)
-            m_data[i] *= recipr;
+        for( float& f : m_data)
+            f *= recipr;
     }
 
     // compute power (integrate using one average value per grid cell)
@@ -606,8 +611,8 @@ mi::Float32 Lightprofile_impl::sample( mi::Float32 phi, mi::Float32 theta, bool 
     if( phi_offset < 0.0f || phi_offset > (float)(2*M_PI-0.0001))
         phi_offset = 0.0f;
 
-    mi::Difference phi_index   = static_cast<mi::Difference>( floor( phi_offset   / m_delta_phi));
-    mi::Difference theta_index = static_cast<mi::Difference>( floor( theta_offset / m_delta_theta));
+    auto phi_index   = static_cast<mi::Difference>( floor( phi_offset   / m_delta_phi));
+    auto theta_index = static_cast<mi::Difference>( floor( theta_offset / m_delta_theta));
     if( phi_index < 0 || theta_index < 0)
         return 0.0f;
     if( phi_index   == m_resolution_phi-1   && phi_offset   <= phi_index  *m_delta_phi   + 0.0001f)
@@ -767,7 +772,7 @@ bool export_to_writer(
 
     // theta values
     for( mi::Uint32 j = 0; j < resolution_theta; ++j) {
-        const mi::Float32 theta = static_cast<mi::Float32>( type_c
+        const auto theta = static_cast<mi::Float32>( type_c
             ? mi::math::degrees( (float)M_PI - impl->get_theta( resolution_theta-1-j))
             : mi::math::degrees( impl->get_theta( j) - (float)(M_PI/2.0)));
 
@@ -783,7 +788,7 @@ bool export_to_writer(
         return false;
 
     // phi values
-    const float scale = (float)(360.0 / (resolution_phi - 1));
+    const auto scale = static_cast<float>( 360.0 / (resolution_phi - 1));
     for( mi::Uint32 i = 0; i < resolution_phi; ++i) {
         const mi::Float32 phi = sampling
             ? (float)i * scale
@@ -801,7 +806,7 @@ bool export_to_writer(
         return false;
 
     // candela values
-    const float scalec = (float)((2.0 * M_PI) / (resolution_phi - 1));
+    const auto scalec = static_cast<float>( (2.0 * M_PI) / (resolution_phi - 1));
     for( mi::Uint32 i = 0; i < resolution_phi; ++i) {
         const mi::Float32 phi = (float)(resolution_phi-1 - i) * scalec;
         for( mi::Uint32 j = 0; j < resolution_theta; ++j) {
@@ -869,7 +874,7 @@ DB::Tag load_mdl_lightprofile(
 {
     if( !reader) {
         result = -1;
-        return DB::Tag();
+        return {};
     }
 
     std::string identifier;
@@ -901,7 +906,7 @@ DB::Tag load_mdl_lightprofile(
         reader, filename, container_filename, container_membername, mdl_file_path, impl_hash);
     ASSERT( M_LIGHTPROFILE, result == 0 || result == -7);
     if( result != 0)
-        return DB::Tag();
+        return {};
 
     tag = transaction->store_for_reference_counting(
         lp.release(), db_name.c_str(), transaction->get_scope()->get_level());

@@ -213,7 +213,8 @@ class Mdl_printer {
 
     void print_vector_type(IType const* type);
     void print_matrix_type(IType const* type);
-    void print_direct_call(IExpression_direct_call const *expr, std::string const &path_prefix, int indent);
+    void print_direct_call(IExpression_direct_call const *expr, 
+            std::string const &path_prefix, int indent);
 
     void analyze_value(IValue const *value, std::string const &path_prefix);
     void analyze_expression(IExpression const *expr, std::string const &path_prefix);

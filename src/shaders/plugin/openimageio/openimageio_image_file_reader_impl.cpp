@@ -37,6 +37,7 @@
 
 #include <cassert>
 #include <cstring>
+#include <utility>
 
 #include <io/image/image/i_image_utilities.h>
 
@@ -53,12 +54,12 @@ namespace MI {
 namespace MI_OIIO {
 
 Image_file_reader_impl::Image_file_reader_impl(
-    const std::string& oiio_format,
+    std::string oiio_format,
     const std::string& plugin_name,
     mi::neuraylib::IImage_api* image_api,
     mi::neuraylib::IReader* reader,
     const char* selector)
-  : m_oiio_format( oiio_format),
+  : m_oiio_format( std::move( oiio_format)),
     m_plugin_name( plugin_name),
     m_image_api( image_api, mi::base::DUP_INTERFACE),
     m_reader( reader, mi::base::DUP_INTERFACE)
@@ -151,7 +152,7 @@ mi::neuraylib::ITile* Image_file_reader_impl::read( mi::Uint32 z, mi::Uint32 lev
     int bytes_per_row = m_resolution_x * cpp * bpc;
 
     OIIO::TypeDesc format( get_base_type( m_pixel_type));
-    mi::Uint8* data = static_cast<mi::Uint8*>( tile->get_data());
+    auto* data = static_cast<mi::Uint8*>( tile->get_data());
 
     try {
         // Note that read_image() does not support specifying a range in z direction. This should
@@ -198,7 +199,6 @@ mi::neuraylib::ITile* Image_file_reader_impl::read( mi::Uint32 z, mi::Uint32 lev
         // Use 1.0f instead of get_gamma().  Unclear what is correct here. OIIO itself uses the
         // actual gamma value, whereas FreeImage and GIMP seem to ignore gamma for this and always
         // assume gamma == 1.0f.
-        // OIIO documentation mentions that alpha and depth should be assumed linear.
         tile = unassociate_alpha( m_image_api.get(), tile.get(), 1.0f);
     } else {
         // Avoid redundant conversions and resulting quantization errors
@@ -210,8 +210,7 @@ mi::neuraylib::ITile* Image_file_reader_impl::read( mi::Uint32 z, mi::Uint32 lev
               << c.r << " " << c.g << " " << c.b << " " << c.a << std::endl;
 #endif
 
-    tile->retain();
-    return tile.get();
+    return tile.extract();
 }
 
 bool Image_file_reader_impl::write(

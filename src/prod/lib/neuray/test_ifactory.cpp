@@ -77,9 +77,11 @@
 #define CHECK_ASSIGN( result, source, target) \
     MI_CHECK_EQUAL( result, factory->assign_from_to( source, target))
 #define CHECK_ASSIGN_DEEP( result, source, target) \
-    MI_CHECK_EQUAL( result, factory->assign_from_to( source, target, IFactory::DEEP_ASSIGNMENT_OR_CLONE))
+    MI_CHECK_EQUAL( result, \
+        factory->assign_from_to( source, target, IFactory::DEEP_ASSIGNMENT_OR_CLONE))
 #define CHECK_ASSIGN_FIXED( result, source, target) \
-    MI_CHECK_EQUAL( result, factory->assign_from_to( source, target, IFactory::FIX_SET_OF_TARGET_KEYS))
+    MI_CHECK_EQUAL( result, \
+        factory->assign_from_to( source, target, IFactory::FIX_SET_OF_TARGET_KEYS))
 #define CHECK_COMPARE( result, lhs, rhs) \
     MI_CHECK_EQUAL( result, factory->compare( lhs, rhs)); \
     MI_CHECK_EQUAL( -(result), factory->compare( rhs, lhs));
@@ -90,37 +92,38 @@ using mi::neuraylib::IFactory;
 class Data_simple : public mi::base::Interface_implement<mi::IData_simple>
 {
 public:
-    const char* get_type_name() const { return "Data_simple"; }
+    const char* get_type_name() const final { return "Data_simple"; }
 };
 
 // for test_structural_mismatch()
 class Data_collection : public mi::base::Interface_implement<mi::IData_collection>
 {
 public:
-    const char* get_type_name() const { return "Data_collection"; }
-    mi::Size get_length() const { return 0; }
-    const char* get_key( mi::Size index) const { return 0; }
-    bool has_key( const char* key) const { return false; }
-    const mi::base::IInterface* get_value( const char* key) const { return 0; }
-    mi::base::IInterface* get_value( const char* key) { return 0; }
-    const mi::base::IInterface* get_value( mi::Size index) const { return 0; }
-    mi::base::IInterface* get_value( mi::Size index) { return 0; }
-    mi::Sint32 set_value( const char* key, mi::base::IInterface* value) { return 0; }
-    mi::Sint32 set_value( mi::Size index, mi::base::IInterface* value) { return 0; }
+    const char* get_type_name() const final { return "Data_collection"; }
+    mi::Size get_length() const final { return 0; }
+    const char* get_key( mi::Size index) const final { return nullptr; }
+    bool has_key( const char* key) const final { return false; }
+    const mi::base::IInterface* get_value( const char* key) const final { return nullptr; }
+    mi::base::IInterface* get_value( const char* key) final { return nullptr; }
+    const mi::base::IInterface* get_value( mi::Size index) const final { return nullptr; }
+    mi::base::IInterface* get_value( mi::Size index) final { return nullptr; }
+    mi::Sint32 set_value( const char* key, mi::base::IInterface* value) final { return 0; }
+    mi::Sint32 set_value( mi::Size index, mi::base::IInterface* value) final { return 0; }
 };
 
 void test_null_pointer( mi::neuraylib::IFactory* factory)
 {
     Data_simple simple;
-    CHECK_ASSIGN( IFactory::NULL_POINTER, NULL, &simple);
-    CHECK_ASSIGN( IFactory::NULL_POINTER, &simple, NULL);
-    CHECK_ASSIGN( IFactory::NULL_POINTER, NULL, NULL);
+    CHECK_ASSIGN( IFactory::NULL_POINTER, nullptr, &simple);
+    CHECK_ASSIGN( IFactory::NULL_POINTER, &simple, nullptr);
+    CHECK_ASSIGN( IFactory::NULL_POINTER, nullptr, nullptr);
 
     mi::base::Handle<mi::ISint32> sint32       ( factory->create<mi::ISint32>(  "Sint32"));
     mi::base::Handle<const mi::ISint32> csint32( factory->create<mi::ISint32>(  "Sint32"));
     mi::base::Handle<mi::IPointer> p_1(          factory->create<mi::IPointer>( "Pointer<Sint32>"));
     mi::base::Handle<mi::IPointer> p_2(          factory->create<mi::IPointer>( "Pointer<Sint32>"));
-    mi::base::Handle<mi::IConst_pointer> cp_2(   factory->create<mi::IConst_pointer>( "Const_pointer<Sint32>"));
+    mi::base::Handle<mi::IConst_pointer> cp_2(
+        factory->create<mi::IConst_pointer>( "Const_pointer<Sint32>"));
     p_2->set_pointer( sint32.get());
     cp_2->set_pointer( csint32.get());
 
@@ -138,56 +141,57 @@ void test_structural_mismatch( mi::neuraylib::IFactory* factory)
 
 void test_no_conversion( mi::neuraylib::IFactory* factory, mi::neuraylib::ITransaction* transaction)
 {
-    mi::base::Handle<mi::ISint32>        sint32(     factory->create<mi::ISint32>(         "Sint32"));
-    mi::base::Handle<mi::IString>        string(     factory->create<mi::IString>(         "String"));
-    mi::base::Handle<mi::IRef>           ref(        transaction->create<mi::IRef>(        "Ref"));
-    mi::base::Handle<mi::IUuid>          uuid(       factory->create<mi::IUuid>(           "Uuid"));
-    mi::base::Handle<mi::IVoid>          void_(      factory->create<mi::IVoid>(           "Void"));
-    mi::base::Handle<mi::IPointer>       pointer(    factory->create<mi::IPointer>(        "Pointer<Interface>"));
-    mi::base::Handle<mi::IConst_pointer> cpointer(   factory->create<mi::IConst_pointer>(  "Const_pointer<Interface>"));
-    mi::base::Handle<mi::IEnum>          enum_(      factory->create<mi::IEnum>(           "Test_enum"));
+    mi::base::Handle<mi::ISint32> sint32( factory->create<mi::ISint32>( "Sint32"));
+    mi::base::Handle<mi::IString> string( factory->create<mi::IString>( "String"));
+    mi::base::Handle<mi::IRef> ref( transaction->create<mi::IRef>( "Ref"));
+    mi::base::Handle<mi::IUuid> uuid( factory->create<mi::IUuid>( "Uuid"));
+    mi::base::Handle<mi::IVoid> void_( factory->create<mi::IVoid>( "Void"));
+    mi::base::Handle<mi::IPointer> pointer( factory->create<mi::IPointer>( "Pointer<Interface>"));
+    mi::base::Handle<mi::IConst_pointer> cpointer(
+       factory->create<mi::IConst_pointer>( "Const_pointer<Interface>"));
+    mi::base::Handle<mi::IEnum> enum_( factory->create<mi::IEnum>( "Test_enum"));
 
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, sint32.get(),     string.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, sint32.get(),     ref.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, sint32.get(),     uuid.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, sint32.get(),     void_.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, sint32.get(),     pointer.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, sint32.get(),     cpointer.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, string.get(),     sint32.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, string.get(),     ref.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, string.get(),     uuid.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, string.get(),     void_.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, string.get(),     pointer.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, string.get(),     cpointer.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, ref.get(),        sint32.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, ref.get(),        string.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, ref.get(),        uuid.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, ref.get(),        void_.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, ref.get(),        pointer.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, ref.get(),        cpointer.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, uuid.get(),       sint32.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, uuid.get(),       string.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, uuid.get(),       ref.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, uuid.get(),       void_.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, uuid.get(),       pointer.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, uuid.get(),       cpointer.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, void_.get(),      sint32.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, void_.get(),      string.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, void_.get(),      ref.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, void_.get(),      uuid.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, void_.get(),      pointer.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, void_.get(),      cpointer.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, pointer.get(),    sint32.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, pointer.get(),    string.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, pointer.get(),    ref.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, pointer.get(),    uuid.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, pointer.get(),    void_.get());
-    CHECK_ASSIGN( 0                      , pointer.get(),    cpointer.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, cpointer.get(),   sint32.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, cpointer.get(),   string.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, cpointer.get(),   ref.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, cpointer.get(),   uuid.get());
-    CHECK_ASSIGN( IFactory::NO_CONVERSION, cpointer.get(),   void_.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, sint32.get(),   string.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, sint32.get(),   ref.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, sint32.get(),   uuid.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, sint32.get(),   void_.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, sint32.get(),   pointer.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, sint32.get(),   cpointer.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, string.get(),   sint32.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, string.get(),   ref.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, string.get(),   uuid.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, string.get(),   void_.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, string.get(),   pointer.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, string.get(),   cpointer.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, ref.get(),      sint32.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, ref.get(),      string.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, ref.get(),      uuid.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, ref.get(),      void_.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, ref.get(),      pointer.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, ref.get(),      cpointer.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, uuid.get(),     sint32.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, uuid.get(),     string.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, uuid.get(),     ref.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, uuid.get(),     void_.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, uuid.get(),     pointer.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, uuid.get(),     cpointer.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, void_.get(),    sint32.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, void_.get(),    string.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, void_.get(),    ref.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, void_.get(),    uuid.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, void_.get(),    pointer.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, void_.get(),    cpointer.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, pointer.get(),  sint32.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, pointer.get(),  string.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, pointer.get(),  ref.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, pointer.get(),  uuid.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, pointer.get(),  void_.get());
+    CHECK_ASSIGN( 0                      , pointer.get(),  cpointer.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, cpointer.get(), sint32.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, cpointer.get(), string.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, cpointer.get(), ref.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, cpointer.get(), uuid.get());
+    CHECK_ASSIGN( IFactory::NO_CONVERSION, cpointer.get(), void_.get());
     CHECK_ASSIGN( IFactory::INCOMPATIBLE_POINTER_TYPES, cpointer.get(), pointer.get());
 
 
@@ -213,12 +217,14 @@ void test_key_missing( mi::neuraylib::IFactory* factory)
     CHECK_ASSIGN_FIXED( IFactory::SOURCE_KEY_MISSING, map.get(), map_a.get());
     CHECK_ASSIGN_FIXED( IFactory::SOURCE_KEY_MISSING, map_a.get(), map_a_b.get());
     CHECK_ASSIGN_FIXED( IFactory::SOURCE_KEY_MISSING, map_a.get(), map_a_c.get());
-    CHECK_ASSIGN_FIXED( IFactory::SOURCE_KEY_MISSING|IFactory::TARGET_KEY_MISSING, map_a_b.get(), map_a_c.get());
+    CHECK_ASSIGN_FIXED(
+        IFactory::SOURCE_KEY_MISSING|IFactory::TARGET_KEY_MISSING, map_a_b.get(), map_a_c.get());
 
     CHECK_ASSIGN_FIXED( IFactory::TARGET_KEY_MISSING, map_a.get(), map.get());
     CHECK_ASSIGN_FIXED( IFactory::TARGET_KEY_MISSING, map_a_b.get(), map_a.get());
     CHECK_ASSIGN_FIXED( IFactory::TARGET_KEY_MISSING, map_a_c.get(), map_a.get());
-    CHECK_ASSIGN_FIXED( IFactory::TARGET_KEY_MISSING|IFactory::SOURCE_KEY_MISSING, map_a_c.get(), map_a_b.get());
+    CHECK_ASSIGN_FIXED(
+        IFactory::TARGET_KEY_MISSING|IFactory::SOURCE_KEY_MISSING, map_a_c.get(), map_a_b.get());
 
     CHECK_ASSIGN( 0, map_a.get(), map.get());
     MI_CHECK_EQUAL( 1, map->get_length());
@@ -229,8 +235,10 @@ void test_key_missing( mi::neuraylib::IFactory* factory)
     CHECK_ASSIGN( 0, map_a_c.get(), map_a_b.get());
     MI_CHECK_EQUAL( 2, map_a_b->get_length());
 
-    mi::base::Handle<mi::IDynamic_array> dynamic_array1( factory->create<mi::IDynamic_array>( "Sint32[]"));
-    mi::base::Handle<mi::IDynamic_array> dynamic_array2( factory->create<mi::IDynamic_array>( "Sint32[]"));
+    mi::base::Handle<mi::IDynamic_array> dynamic_array1(
+        factory->create<mi::IDynamic_array>( "Sint32[]"));
+    mi::base::Handle<mi::IDynamic_array> dynamic_array2(
+        factory->create<mi::IDynamic_array>( "Sint32[]"));
     dynamic_array1->set_length( 1);
     dynamic_array2->set_length( 2);
 
@@ -248,7 +256,8 @@ void test_different_collections( mi::neuraylib::IFactory* factory)
 
     mi::base::Handle<mi::IMap> map( factory->create<mi::IMap>( "Map<Sint32>"));
     mi::base::Handle<mi::IArray> array( factory->create<mi::IArray>( "Sint32[1]"));
-    mi::base::Handle<mi::IDynamic_array> dynamic_array( factory->create<mi::IDynamic_array>( "Sint32[]"));
+    mi::base::Handle<mi::IDynamic_array> dynamic_array(
+        factory->create<mi::IDynamic_array>( "Sint32[]"));
     mi::base::Handle<mi::ISint32_2> sint32_2( factory->create<mi::ISint32_2>( "Sint32<2>"));
     mi::base::Handle<mi::IStructure> structure( factory->create<mi::IStructure>( "s_empty"));
 
@@ -273,18 +282,23 @@ void test_different_collections( mi::neuraylib::IFactory* factory)
     CHECK_ASSIGN( IFactory::DIFFERENT_COLLECTIONS, sint32_2.get(), map.get());
 }
 
-void test_non_idata_values( mi::neuraylib::IFactory* factory, mi::neuraylib::ITransaction* transaction)
+void test_non_idata_values(
+    mi::neuraylib::IFactory* factory, mi::neuraylib::ITransaction* transaction)
 {
 }
 
-void test_incompatible_pointer_types( mi::neuraylib::IFactory* factory, mi::neuraylib::ITransaction* transaction)
+void test_incompatible_pointer_types(
+    mi::neuraylib::IFactory* factory, mi::neuraylib::ITransaction* transaction)
 {
 }
 
-void test_deep_assignment_to_const_pointer( mi::neuraylib::IFactory* factory, mi::neuraylib::ITransaction* transaction)
+void test_deep_assignment_to_const_pointer(
+    mi::neuraylib::IFactory* factory, mi::neuraylib::ITransaction* transaction)
 {
-    mi::base::Handle<mi::IConst_pointer> cp_1( factory->create<mi::IConst_pointer>( "Const_pointer<Sint32>"));
-    mi::base::Handle<mi::IConst_pointer> cp_2( factory->create<mi::IConst_pointer>( "Const_pointer<Sint32>"));
+    mi::base::Handle<mi::IConst_pointer> cp_1(
+        factory->create<mi::IConst_pointer>( "Const_pointer<Sint32>"));
+    mi::base::Handle<mi::IConst_pointer> cp_2(
+        factory->create<mi::IConst_pointer>( "Const_pointer<Sint32>"));
     CHECK_ASSIGN_DEEP( IFactory::DEEP_ASSIGNMENT_TO_CONST_POINTER, cp_1.get(), cp_2.get());
     CHECK_ASSIGN     ( 0,                                          cp_1.get(), cp_2.get());
 }
@@ -351,12 +365,14 @@ void test_idata_simple( mi::neuraylib::IFactory* factory, mi::neuraylib::ITransa
     m_sint32 = pointer_2->get_pointer<mi::ISint32>();
     MI_CHECK( m_sint32.is_valid_interface());
     CHECK_COMPARE( 0, pointer_1.get(), pointer_2.get());
-    pointer_1->set_pointer( 0);
+    pointer_1->set_pointer( nullptr);
     CHECK_COMPARE( -1, pointer_1.get(), pointer_2.get());
 
     // IConst_pointer
-    mi::base::Handle<mi::IConst_pointer> cpointer_1( factory->create<mi::IConst_pointer>( "Const_pointer<Sint32>"));
-    mi::base::Handle<mi::IConst_pointer> cpointer_2( factory->create<mi::IConst_pointer>( "Const_pointer<Sint32>"));
+    mi::base::Handle<mi::IConst_pointer> cpointer_1(
+        factory->create<mi::IConst_pointer>( "Const_pointer<Sint32>"));
+    mi::base::Handle<mi::IConst_pointer> cpointer_2(
+        factory->create<mi::IConst_pointer>( "Const_pointer<Sint32>"));
     mi::base::Handle<const mi::ISint32> c_sint32( cpointer_2->get_pointer<mi::ISint32>());
     MI_CHECK( !c_sint32.is_valid_interface());
     MI_CHECK_EQUAL( 0, cpointer_1->set_pointer( sint32_1.get()));
@@ -365,7 +381,7 @@ void test_idata_simple( mi::neuraylib::IFactory* factory, mi::neuraylib::ITransa
     c_sint32 = cpointer_2->get_pointer<mi::ISint32>();
     MI_CHECK( c_sint32.is_valid_interface());
     CHECK_COMPARE( 0, cpointer_1.get(), cpointer_2.get());
-    cpointer_1->set_pointer( 0);
+    cpointer_1->set_pointer( nullptr);
     CHECK_COMPARE( -1, cpointer_1.get(), cpointer_2.get());
 
 
@@ -387,7 +403,8 @@ void test_idata_simple( mi::neuraylib::IFactory* factory, mi::neuraylib::ITransa
     MI_CHECK( void_1_clone.is_valid_interface());
     mi::base::Handle<mi::IPointer> pointer_1_clone( factory->clone<mi::IPointer>( pointer_1.get()));
     MI_CHECK( pointer_1_clone.is_valid_interface());
-    mi::base::Handle<mi::IConst_pointer> cpointer_1_clone( factory->clone<mi::IConst_pointer>( cpointer_1.get()));
+    mi::base::Handle<mi::IConst_pointer> cpointer_1_clone(
+        factory->clone<mi::IConst_pointer>( cpointer_1.get()));
     MI_CHECK( cpointer_1_clone.is_valid_interface());
 }
 
@@ -415,8 +432,10 @@ void test_idata_collection( mi::neuraylib::IFactory* factory)
     // IDynamic_array
     sint32_1->set_value( 1);
     sint32_2->set_value( 2);
-    mi::base::Handle<mi::IDynamic_array> dynamic_array_1( factory->create<mi::IDynamic_array>( "Sint32[]"));
-    mi::base::Handle<mi::IDynamic_array> dynamic_array_2( factory->create<mi::IDynamic_array>( "Sint32[]"));
+    mi::base::Handle<mi::IDynamic_array> dynamic_array_1(
+        factory->create<mi::IDynamic_array>( "Sint32[]"));
+    mi::base::Handle<mi::IDynamic_array> dynamic_array_2(
+        factory->create<mi::IDynamic_array>( "Sint32[]"));
     dynamic_array_1->set_length( 1);
     dynamic_array_2->set_length( 1);
     dynamic_array_1->set_element( 0, sint32_1.get());
@@ -451,7 +470,8 @@ void test_idata_collection( mi::neuraylib::IFactory* factory)
     MI_CHECK( vector_2.is_valid_interface());
     vector_1->set_value( 0, 0, 1);
     vector_2->set_value( 0, 0, 2);
-    MI_CHECK_NOT_EQUAL( vector_2->get_value<mi::Sint32>( 0, 0), vector_1->get_value<mi::Sint32>( 0, 0));
+    MI_CHECK_NOT_EQUAL(
+        vector_2->get_value<mi::Sint32>( 0, 0), vector_1->get_value<mi::Sint32>( 0, 0));
     CHECK_COMPARE( -1, vector_1.get(), vector_2.get());
     CHECK_ASSIGN( 0, vector_1.get(), vector_2.get());
     MI_CHECK_EQUAL( vector_2->get_value<mi::Sint32>( 0, 0), vector_1->get_value<mi::Sint32>( 0, 0));
@@ -474,7 +494,8 @@ void test_idata_collection( mi::neuraylib::IFactory* factory)
     // clone()
     mi::base::Handle<mi::IArray> array_1_clone( factory->clone<mi::IArray>( array_1.get()));
     MI_CHECK( array_1_clone.is_valid_interface());
-    mi::base::Handle<mi::IDynamic_array> dynamic_array_1_clone( factory->clone<mi::IDynamic_array>( dynamic_array_1.get()));
+    mi::base::Handle<mi::IDynamic_array> dynamic_array_1_clone(
+        factory->clone<mi::IDynamic_array>( dynamic_array_1.get()));
     MI_CHECK( dynamic_array_1_clone.is_valid_interface());
     mi::base::Handle<mi::IMap> map_1_clone( factory->clone<mi::IMap>( map_1.get()));
     MI_CHECK( map_1_clone.is_valid_interface());
@@ -484,16 +505,18 @@ void test_idata_collection( mi::neuraylib::IFactory* factory)
 
 template<class I>
 void test_type_traits_helper(
-    mi::neuraylib::IFactory* factory, mi::neuraylib::ITransaction* transaction, const char* type_name)
+    mi::neuraylib::IFactory* factory,
+    mi::neuraylib::ITransaction* transaction,
+    const char* type_name)
 {
     mi::base::Handle<mi::IData> data;
     std::string type_name_str( type_name);
 
     // check Type_traits
     std::string type_name_I = mi::Type_traits<I>::get_type_name();
-    typedef typename mi::Type_traits<I>::Primitive_type P;
+    using P = typename mi::Type_traits<I>::Primitive_type;
     std::string type_name_P = mi::Type_traits<P>::get_type_name();
-    typedef typename mi::Type_traits<P>::Interface_type II;
+    using II = typename mi::Type_traits<P>::Interface_type;
 
     if( type_name_str.substr( 0, 3) == "Ref") {
         // the type traits map IRef to "Ref", and IRef/IString ambiguity for const char*
@@ -702,7 +725,7 @@ MI_TEST_AUTO_FUNCTION( test_ifactory )
         run_tests( neuray.get());
     }
 
-    neuray = 0;
+    neuray = nullptr;
     MI_CHECK( unload());
 }
 

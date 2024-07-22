@@ -62,7 +62,7 @@ template<class T, SERIAL::Class_id ID = 0, class P = Scene_element_base>
 class Scene_element: public P
 {
   public:
-    static const SERIAL::Class_id id = ID;		///< class id for this
+    static const SERIAL::Class_id id = ID;              ///< class id for this
 
     /// Construct an instance of this class.
     /// \return an instance of this class

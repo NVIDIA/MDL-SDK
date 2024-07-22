@@ -38,7 +38,7 @@
 #include <base/system/main/types.h>
 #include <base/system/main/i_module_id.h>
 #include <cstring>
-#include <base/lib/log/i_log_assert.h>	// for ASSERT
+#include <base/lib/log/i_log_assert.h>  // for ASSERT
 
 namespace MI {
 namespace CONT {
@@ -47,35 +47,35 @@ class Bitvector {
   public:
     // constructor, clear bits
     explicit Bitvector(
-	size_t	n_bits);			// bits to be allocated
+        size_t  n_bits);                        // bits to be allocated
 
     // copy constructor
     Bitvector(
-	const Bitvector &other);		// copy this
+        const Bitvector &other);                // copy this
 
     // assignment operator
     Bitvector &operator=(
-	const Bitvector &other);		// set to this
+        const Bitvector &other);                // set to this
 
     // destructor
     ~Bitvector();
 
     // set new size, new bits cleared
     void resize(
-	size_t	n_bits);			// new number of bits
+        size_t  n_bits);                        // new number of bits
 
     // return true if index has set the flag
     bool is_set(
-	size_t	index) const;			// bit index
+        size_t  index) const;                   // bit index
 
     // set flag for a given index
     void set(
-	size_t	index,				// bit index
-	bool	value);				// flag for bit
+        size_t  index,                          // bit index
+        bool    value);                         // flag for bit
 
     // set flag for a given index
     void set(
-	size_t	index);				// bit index
+        size_t  index);                         // bit index
 
     // clear all flags to zero
     void clear();
@@ -92,17 +92,17 @@ class Bitvector {
 
     // set from binary data
     void set_binary_data(
-	const size_t	nbits,			// bits
-	const Uint8*	data);			// data
+        const size_t    nbits,                  // bits
+        const Uint8*    data);                  // data
 
     // get the number of bits of the underlying base data type
     static size_t get_num_base_type_bits();
 
   private:
 
-    Uint8 *	m_data;				// bits
-    size_t	m_nbits;			// number of bits in use
-    size_t	m_nb8;				// number of Uint8 allocated
+    Uint8 *     m_data;                         // bits
+    size_t      m_nbits;                        // number of bits in use
+    size_t      m_nb8;                          // number of Uint8 allocated
 };
  
 }}

@@ -1458,10 +1458,6 @@ bool Mdl_material_description::load_material_definition_gltf_support(
 {
     m_qualified_module_name = "::nvidia::sdk_examples::gltf_support";
 
-    // .. but it will be disabled for opaque material instances
-    if (m_scene_material.alpha_mode == IScene_loader::Material::Alpha_mode::Opaque)
-        m_flags = mi::examples::enums::set_flag(m_flags, IMaterial::Flags::Opaque);
-
     if (m_scene_material.single_sided == true)
         m_flags = mi::examples::enums::set_flag(m_flags, IMaterial::Flags::SingleSided);
 
@@ -1829,7 +1825,7 @@ void Mdl_material_description::parameterize_gltf_support_material(
                 static_cast<mi::Sint32>(texture_info.wrap_s));
             add_enum(call_parameter_list.get(), "wrap_t",
                 "::nvidia::sdk_examples::gltf_support::gltf_wrapping_mode",
-                static_cast<mi::Sint32>(texture_info.wrap_s));
+                static_cast<mi::Sint32>(texture_info.wrap_t));
 
             if (normal_texture)
             {
@@ -1898,7 +1894,7 @@ void Mdl_material_description::parameterize_gltf_support_material(
             add_float(m_parameter_list.get(), "sheen_roughness_factor",
                 sheen.sheen_roughness_factor);
             add_texture(m_parameter_list.get(), "sheen_roughness_texture",
-                sheen.sheen_roughness_texture, 1.0f); // alpha channel is affected by gamma
+                sheen.sheen_roughness_texture, 1.0f);
         };
 
         // helper to add specular
@@ -1908,7 +1904,7 @@ void Mdl_material_description::parameterize_gltf_support_material(
             add_float(m_parameter_list.get(), "specular_factor",
                 specular.specular_factor);
             add_texture(m_parameter_list.get(), "specular_texture",
-                specular.specular_texture, 1.0f);   // alpha channel is affected by gamma
+                specular.specular_texture, 1.0f);
             add_color(m_parameter_list.get(), "specular_color_factor",
                 specular.specular_color_factor.x,
                 specular.specular_color_factor.y,

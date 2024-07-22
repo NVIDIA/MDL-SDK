@@ -50,7 +50,6 @@
 
 #include <base/data/db/i_db_transaction.h>
 #include <base/hal/hal/i_hal_ospath.h>
-#include <base/hal/disk/disk.h>
 #include <base/hal/disk/disk_memory_reader_writer_impl.h>
 #include <base/system/version/i_version.h>
 
@@ -84,95 +83,6 @@ namespace NEURAY {
 
 
 namespace {
-
-/// Implementation of a resource reader from a neuray buffer.
-class Buffer_resource_reader
-    : public mi::base::Interface_implement<mi::mdl::IMDL_resource_reader>
-{
-    typedef mi::base::Interface_implement<IMDL_resource_reader> Base;
-public:
-    /// Read a memory block from the resource.
-    ///
-    /// \param ptr   Pointer to a block of memory with a size of size bytes
-    /// \param size  Number of bytes to read
-    ///
-    /// \returns    The total number of bytes successfully read.
-    Uint64 read(void* ptr, Uint64 size) final
-    {
-        return m_buffer_reader->read(reinterpret_cast<char*>(ptr), static_cast<mi::Sint64>(size));
-    }
-
-    /// Get the current position.
-    Uint64 tell() final
-    {
-        return static_cast<Uint64>(m_buffer_reader->tell_absolute());
-    }
-
-    /// Reposition stream position indicator.
-    ///
-    /// \param offset  Number of bytes to offset from origin
-    /// \param origin  Position used as reference for the offset
-    ///
-    /// \return true on success
-    bool seek(mi::Sint64 offset, Position origin) final
-    {
-        switch (origin) {
-        case MDL_SEEK_SET:
-            return m_buffer_reader->seek_absolute(offset);
-
-        case MDL_SEEK_CUR:
-            {
-                mi::Sint64 cur = m_buffer_reader->tell_absolute();
-                return m_buffer_reader->seek_absolute(cur + offset);
-            }
-
-        case MDL_SEEK_END:
-            {
-                m_buffer_reader->seek_end();
-                mi::Uint64 size = m_buffer_reader->tell_absolute();
-                return m_buffer_reader->seek_absolute(size - offset);
-            }
-        }
-        return false;
-    }
-
-    /// Get the UTF8 encoded name of the resource on which this reader operates.
-    /// \returns    The name of the resource or NULL.
-    const char* get_filename() const final { return nullptr; }
-
-    /// Get the UTF8 encoded absolute MDL resource name on which this reader operates.
-    /// \returns    The absolute MDL url of the resource or NULL.
-    const char* get_mdl_url() const final { return nullptr; }
-
-    /// Returns the associated hash of this resource.
-    ///
-    /// \param[out]  get the hash value (16 bytes)
-    ///
-    /// \return true if this resource has an associated hash value, false otherwise
-    bool get_resource_hash(unsigned char hash[16]) final { return false; }
-
-    /// Constructor.
-    ///
-    /// \param buffer       the buffer this reader operates on
-    explicit Buffer_resource_reader(
-        mi::neuraylib::IBuffer* buffer)
-    : m_buffer_reader(new DISK::Memory_reader_impl(buffer))
-    {
-    }
-
-private:
-    // non copyable
-    Buffer_resource_reader(
-        Buffer_resource_reader const &) = delete;
-    Buffer_resource_reader &operator=(
-        Buffer_resource_reader const &) = delete;
-
-    ~Buffer_resource_reader() { }
-
-    /// The File handle.
-    mi::base::Handle<mi::neuraylib::IReader> m_buffer_reader;
-};
-
 
 mi::mdl::UDIM_mode get_uvtile_marker(const std::string& str)
 {
@@ -377,16 +287,12 @@ mi::mdl::IMDL_resource_reader* Mdle_resource_mapper::get_resource_reader(size_t 
     if (index >= m_resources.size())
         return nullptr;
 
-    // file stream to return
-    mi::base::Handle<mi::mdl::IMDL_resource_reader> file_random_access;
-
     // in-memory
-    if (m_resources[index].in_memory_buffer)
-    {
-        file_random_access = new Buffer_resource_reader(m_resources[index].in_memory_buffer.get());
-
-        file_random_access->retain();
-        return file_random_access.get();
+    if (m_resources[index].in_memory_buffer) {
+        mi::base::Handle<mi::neuraylib::IReader> reader(
+            new DISK::Memory_reader_impl( m_resources[index].in_memory_buffer.get()));
+        return MDL::get_resource_reader(
+            reader.get(), /*filepath*/ {}, /*filename*/ {}, /*hash*/ {});
     }
 
     // handle archives
@@ -404,10 +310,11 @@ mi::mdl::IMDL_resource_reader* Mdle_resource_mapper::get_resource_reader(size_t 
         if (!input_stream || messages.get_error_message_count() > 0)
             return nullptr;
 
-        file_random_access = input_stream->get_interface<mi::mdl::IMDL_resource_reader>();
+        return input_stream->get_interface<mi::mdl::IMDL_resource_reader>();
     }
+
     // handle mdle
-    else if (p_mdle != std::string::npos)
+    if (p_mdle != std::string::npos)
     {
         mi::base::Handle<mi::mdl::IEncapsulate_tool> mdle_tool(m_mdl->create_encapsulate_tool());
         mi::base::Handle<mi::mdl::IInput_stream> input_stream(mdle_tool->get_file_content(
@@ -418,29 +325,20 @@ mi::mdl::IMDL_resource_reader* Mdle_resource_mapper::get_resource_reader(size_t 
         if (!input_stream || messages.get_error_message_count() > 0)
             return nullptr;
 
-        file_random_access = input_stream->get_interface<mi::mdl::IMDL_resource_reader>();
+        return input_stream->get_interface<mi::mdl::IMDL_resource_reader>();
     }
 
     // handle files on disk (and also already exported in-memory files)
-    else
-    {
-        mi::mdl::MDL_zip_container_error_code  err;
-        mi::mdl::File_handle* file = mi::mdl::File_handle::open(
-            m_mdl->get_mdl_allocator(), fn.c_str(), err);
+    mi::mdl::MDL_zip_container_error_code  err;
+    mi::mdl::File_handle* file = mi::mdl::File_handle::open(
+        m_mdl->get_mdl_allocator(), fn.c_str(), err);
 
-        if (file == nullptr || file->get_kind() != mi::mdl::File_handle::FH_FILE)
-            return nullptr;
-
-        mi::mdl::Allocator_builder builder(m_mdl->get_mdl_allocator());
-        file_random_access = builder.create<mi::mdl::File_resource_reader>(
-            m_mdl->get_mdl_allocator(), file, fn.c_str(), "");
-    }
-
-    if (!file_random_access)
+    if (file == nullptr || file->get_kind() != mi::mdl::File_handle::FH_FILE)
         return nullptr;
 
-    file_random_access->retain();
-    return file_random_access.get();
+    mi::mdl::Allocator_builder builder(m_mdl->get_mdl_allocator());
+    return builder.create<mi::mdl::File_resource_reader>(
+        m_mdl->get_mdl_allocator(), file, fn.c_str(), "");
 }
 
 // Get a stream reader interface that gives access to the requested addition data file.
@@ -485,15 +383,8 @@ mi::mdl::IMDL_resource_reader* Mdle_resource_mapper::get_additional_data_reader(
         return nullptr;
 
     mi::mdl::Allocator_builder builder(m_mdl->get_mdl_allocator());
-    mi::base::Handle<mi::mdl::IMDL_resource_reader> file_random_access(
-        builder.create<mi::mdl::File_resource_reader>(
-            m_mdl->get_mdl_allocator(), file, path, ""));
-
-    if (!file_random_access)
-        return nullptr;
-
-    file_random_access->retain();
-    return file_random_access.get();
+    return builder.create<mi::mdl::File_resource_reader>(
+        m_mdl->get_mdl_allocator(), file, path, "");
 }
 
 // Avoid file name collisions inside the MDLE.
@@ -565,7 +456,7 @@ mi::Sint32 Mdle_api_impl::export_mdle(
         return -1;
     }
 
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>(transaction);
+    auto* transaction_impl = static_cast<Transaction_impl*>(transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     mi::base::Handle<MDL::IValue_factory> vf( MDL::get_value_factory());
     mi::base::Handle<MDL::IExpression_factory> ef( MDL::get_expression_factory());
@@ -753,6 +644,7 @@ mi::Sint32 Mdle_api_impl::export_mdle(
         new_annotations_int.get(), // origin and thumbnail
         empty_block.get(),         // delete all return annotations
         /*is_exported*/ true,      // let the module export this function
+        /*is_declarative*/false,   // no need to enforce the declarative flag
         MDL::IType::MK_NONE,
         mdl_context);
     if (mdl_context->get_error_messages_count() != 0)

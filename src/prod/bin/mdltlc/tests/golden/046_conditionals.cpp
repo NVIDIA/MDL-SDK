@@ -80,7 +80,7 @@ DAG_node const* Conditionals::matcher(
             if (event_handler != nullptr)
                 fire_match_event(*event_handler, 0);
             result_code = RULE_REPEAT_RULES;
-            return e.create_call("operator?(bool,<0>,<0>)(bool,bsdf,bsdf)", static_cast<mi::mdl::IDefinition::Semantics>(mi::mdl::DS_DIST_BSDF_CONDITIONAL_OPERATOR),
+            return e.create_call("operator?(bool,<0>,<0>)(bool,bsdf,bsdf)", static_cast<mi::mdl::IDefinition::Semantics>(555),
                 Args_wrapper<3>::mk_args(e,m_node_types, bsdf_conditional_operator,
                     v_cond, e.create_call("::df::tint(color,bsdf)", IDefinition::DS_INTRINSIC_DF_TINT,
                         Args_wrapper<2>::mk_args(e,m_node_types, bsdf_tint, v_c,

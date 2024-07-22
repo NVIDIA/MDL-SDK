@@ -1,6 +1,7 @@
 import unittest
 import os
 import uuid
+import tempfile
 
 try:  # pragma: no cover
     # testing from within a package or CI
@@ -195,6 +196,19 @@ class MainResolve(UnittestBase):
         image: pymdlsdk.IImage = self.sdk.transaction.access_as(pymdlsdk.IImage, imageDbName)
         self.check_tiled_resource(image)
 
+    def test_resolve_resource_to_animated_tiled_image_2(self):
+        resourcePath: str = "/nvidia/sdk_examples/resources/tiled_resource.<UDIM>.<##>.png"  # marker in different order
+        imageDbName: str = self.resolve_resource_to_image(resourcePath)
+        self.assertNotNullOrEmpty(imageDbName)
+        image: pymdlsdk.IImage = self.sdk.transaction.access_as(pymdlsdk.IImage, imageDbName)
+        self.assertEqual(image.get_length(), 2)
+        self.assertEqual(image.get_frame_length(0), 1)
+        self.assertEqual(image.get_frame_length(1), 1)
+        self.assertTrue(image.has_uvtile_uv(frame_id=0, uvtile_id=0))
+        self.assertTrue(image.has_uvtile_uv(frame_id=1, uvtile_id=0))
+        self.assertEqual(image.get_frame_number(0), 42)
+        self.assertEqual(image.get_frame_number(1), 43)
+
     def test_create_texture_animated_tiled_image(self):
         resourcePath: str = "/nvidia/sdk_examples/resources/tiled_resource.<##>.<UDIM>.png"
         texture: pymdlsdk.IValue_texture = self.sdk.mdlFactory.create_texture(
@@ -214,9 +228,13 @@ class MainResolve(UnittestBase):
         er: pymdlsdk.IMdl_entity_resolver = config.get_entity_resolver()
         self.assertIsValidInterface(er)
         resolved_module: pymdlsdk.IMdl_resolved_module = er.resolve_module(mdlName, None, None, 0, 0, None)
+        self.assertIsValidInterface(resolved_module)
+        self.assertEqual(resolved_module.get_module_name(), mdlName)
         self.assertTrue(resolved_module.is_valid_interface())
         moduleFileName = resolved_module.get_filename()
         self.assertTrue(moduleFileName.replace("\\", "/").endswith(mdlName.replace("::", "/") + ".mdl"))
+        reader: pymdlsdk.IReader = resolved_module.create_reader()
+        self.assertIsValidInterface(reader)
         return moduleFileName
 
     def test_resolve_module(self):
@@ -234,14 +252,70 @@ class MainResolve(UnittestBase):
             file_path=resourcePath, owner_file_path=ownerFilePath, owner_name=ownerName, pos_line=0, pos_column=0, context=None)
         self.assertTrue(resolved_resource.is_valid_interface())
         self.assertEqual(resolved_resource.get_count(), 1)  # not animated
+        self.assertEqual(resolved_resource.get_uvtile_mode(), pymdlsdk.Uvtile_mode.UVTILE_MODE_NONE)  # not animated
+        self.assertFalse(resolved_resource.has_sequence_marker())
         filename_mask: str = resolved_resource.get_filename_mask().replace("\\", "/")
+        mdl_file_path_mask: str = resolved_resource.get_mdl_file_path_mask()
+        self.assertEqual(mdl_file_path_mask, "/nvidia/sdk_examples/resources/metal_cast_iron_roughness.png")
         self.assertTrue(filename_mask.endswith(resourcePath))
         self.assertTrue(len(filename_mask) > len(resourcePath))
         frame0: pymdlsdk.IMdl_resolved_resource_element = resolved_resource.get_element(0)
+        self.assertIsValidInterface(frame0)
         self.assertEqual(frame0.get_count(), 1)  # not tiled
         self.assertEqual(frame0.get_mdl_file_path(0), "/nvidia/sdk_examples/" + resourcePath)  # same for not animated and not tiled
+        resource_hash: pymdlsdk.Uuid = frame0.get_resource_hash(0)
+        self.assertEqual(resource_hash, pymdlsdk.Uuid())  # at this point only non-zero for mdle and mdr
         filename_frame0_tile0: str = frame0.get_filename(0).replace("\\", "/")
         self.assertEqual(filename_frame0_tile0, filename_mask)  # same for not animated and not tiled
+
+    def test_reader_writer_from_IMdl_impexp_api(self):
+        imp_exp_api: pymdlsdk.IMdl_impexp_api = self.sdk.neuray.get_api_component(pymdlsdk.IMdl_impexp_api)
+        reader: pymdlsdk.IReader = imp_exp_api.create_reader(__file__)
+        base: pymdlsdk.IReader_writer_base = reader.get_interface(pymdlsdk.IReader_writer_base)
+        def run_common(a: pymdlsdk.IReader|pymdlsdk.IWriter):
+            self.assertIsValidInterface(a)
+            self.assertNotEqual(a.get_file_descriptor(), 0)
+            self.assertTrue(a.supports_absolute_access())
+            self.assertTrue(a.supports_recorded_access())
+            if isinstance(a, pymdlsdk.IReader):
+                self.assertFalse(a.supports_lookahead())  # not implemented
+            self.assertZero(a.get_error_number())
+            self.assertTrue(a.get_error_message() == 'No error' or a.get_error_message() == 'Success')  # depends on the OS, please check `get_error_number` first.
+            self.assertNotEqual(a.get_file_size(), 0)
+            self.assertFalse(a.eof())
+            self.assertTrue(a.seek_end())
+            self.assertTrue(a.seek_absolute(0))
+            posBegin: pymdlsdk.IStream_position = a.tell_position()
+            self.assertTrue(posBegin.is_valid())
+            self.assertIsValidInterface(posBegin)
+            if isinstance(a, pymdlsdk.IReader):
+                test1: str = a.readline(1024)
+            self.assertTrue(a.seek_position(posBegin))
+            self.assertZero(a.tell_absolute())
+            if isinstance(a, pymdlsdk.IReader):
+                test2: str = a.readline(1024)
+            self.assertTrue(a.rewind())
+            self.assertZero(a.tell_absolute())
+            if isinstance(a, pymdlsdk.IReader):
+                test3: str = a.readline(1024)
+                self.assertEqual(test1, test2)
+                self.assertEqual(test1, test3)
+        run_common(reader)
+        run_common(base)
+
+        fd, path = tempfile.mkstemp()
+        try:
+            writer: pymdlsdk.IWriter = imp_exp_api.create_writer(path)
+            base: pymdlsdk.IReader_writer_base = writer.get_interface(pymdlsdk.IReader_writer_base)
+            writer.writeline("Hello World")
+            self.assertTrue(writer.flush())
+            run_common(writer)
+            run_common(base)
+            writer = None
+            base = None
+            os.close(fd)
+        finally:
+            os.remove(path)
 
 
 # run all tests of this file

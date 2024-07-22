@@ -26,14 +26,18 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #*****************************************************************************
 
-add_subdirectory(${MDL_SRC_FOLDER}/prod/lib/mdl_core)
-add_subdirectory(${MDL_SRC_FOLDER}/prod/lib/mdl_sdk)
 
+add_subdirectory(${MDL_SRC_FOLDER}/prod/lib/mdl_core)
+add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdlc)
+
+if(NOT MDL_BUILD_SDK)
+    return()
+endif()
+
+add_subdirectory(${MDL_SRC_FOLDER}/prod/lib/mdl_sdk)
 add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/i18n)
 add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdl_distiller_cli)
-add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdlc)
 add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdlm)
 add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdltlc)
-
 add_subdirectory(${MDL_SRC_FOLDER}/prod/test/base)
 add_subdirectory(${MDL_SRC_FOLDER}/prod/test/math)

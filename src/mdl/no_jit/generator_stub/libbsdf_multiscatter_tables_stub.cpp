@@ -26,9 +26,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-#include <mdl/jit/generator_jit/generator_jit_libbsdf_data.h>
-
 #include "pch.h"
+
+#include <mdl/jit/generator_jit/generator_jit_libbsdf_data.h>
 
 namespace mi {
 namespace mdl {

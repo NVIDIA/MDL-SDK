@@ -513,16 +513,47 @@ int Generated_code_value_layout::set_value(
     IGenerated_code_value_callback      *value_callback,
     IGenerated_code_value_layout::State state) const
 {
-    if (block == NULL || value == NULL) return -1;
+    if (block == NULL || value == NULL)
+        return -1;
 
     unsigned layout_offs = state.m_state_offs;
-    if (layout_offs + sizeof(Layout_struct) > m_layout_data.size()) return -2;
+
+    if (layout_offs + sizeof(Layout_struct) > m_layout_data.size())
+        return -2;
 
     Layout_struct const *layout =
         reinterpret_cast<Layout_struct const *>(&m_layout_data[layout_offs]);
-    if (value->get_kind() != mi::mdl::IValue::Kind(layout->kind)) return -3;
 
     unsigned data_offs = state.m_data_offs + layout->element_offset;
+
+    // for INVALID_REF values, we need to check the kind of the type
+    if (value->get_kind() == mi::mdl::IValue::VK_INVALID_REF) {
+        mi::mdl::IValue::Kind layout_kind = mi::mdl::IValue::Kind(layout->kind);
+        switch (value->get_type()->get_kind()) {
+        case mi::mdl::IType::TK_TEXTURE:
+            if (layout_kind != mi::mdl::IValue::VK_TEXTURE)
+                return -3;
+            break;
+        case mi::mdl::IType::TK_LIGHT_PROFILE:
+            if (layout_kind != mi::mdl::IValue::VK_LIGHT_PROFILE)
+                return -3;
+            break;
+        case mi::mdl::IType::TK_BSDF_MEASUREMENT:
+            if (layout_kind != mi::mdl::IValue::VK_BSDF_MEASUREMENT)
+                return -3;
+            break;
+        default:
+            MDL_ASSERT(!"unexpected value type");
+            return -5;
+        }
+
+        // the invalid reference always has index 0
+        *reinterpret_cast<mi::Uint32 *>(block + data_offs) = 0;
+        return 0;
+    }
+
+    if (value->get_kind() != mi::mdl::IValue::Kind(layout->kind))
+        return -3;
 
     switch (mi::mdl::IValue::Kind(layout->kind)) {
     case mi::mdl::IValue::VK_BOOL:

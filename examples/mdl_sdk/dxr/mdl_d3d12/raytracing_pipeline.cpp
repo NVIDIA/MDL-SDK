@@ -30,6 +30,7 @@
 #include "base_application.h"
 #include "buffer.h"
 #include "shader.h"
+#include "descriptor_heap.h"
 
 namespace mi { namespace examples { namespace mdl_d3d12
 {
@@ -507,6 +508,8 @@ Raytracing_acceleration_structure::Raytracing_acceleration_structure(
 
 Raytracing_acceleration_structure::~Raytracing_acceleration_structure()
 {
+    // free heap block
+    m_app->get_resource_descriptor_heap()->free_views(m_top_level_structure_heap_index);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -791,7 +794,17 @@ bool Raytracing_acceleration_structure::build_top_level_structure(
     build_desc.ScratchAccelerationStructureData = m_scratch_resource->GetGPUVirtualAddress();
     build_desc.DestAccelerationStructureData = m_top_level_structure->GetGPUVirtualAddress();
 
-    if (update)
+    if (!update)
+    {
+        assert(!m_top_level_structure_heap_index.is_valid());
+        Descriptor_heap& resource_heap = *m_app->get_resource_descriptor_heap();
+        m_top_level_structure_heap_index = resource_heap.reserve_views(1);
+        assert(m_top_level_structure_heap_index.is_valid());
+
+        if (!resource_heap.create_shader_resource_view(this, m_top_level_structure_heap_index))
+            return false;
+    }
+    else
     {
         // in place update
         build_desc.SourceAccelerationStructureData = m_top_level_structure->GetGPUVirtualAddress();

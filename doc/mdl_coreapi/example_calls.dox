@@ -34,7 +34,7 @@ namespace mdl {
 <div align="right">
     [\link mi_mdl_core_example_cuda_shared Previous\endlink]
     [\link mi_mdl_core_examples Up\endlink]
-    [\link mi_mdl_core_example_execution_ptx Next\endlink]
+    [\link mi_mdl_core_example_code_gen Next\endlink]
 </div>
 
 This example uses function calls to create a textured material.
@@ -129,7 +129,7 @@ The dump of the material instance clearly shows the created call DAG nodes.
 <div align="right">
     [\link mi_mdl_core_example_cuda_shared Previous\endlink]
     [\link mi_mdl_core_examples Up\endlink]
-    [\link mi_mdl_core_example_execution_ptx Next\endlink]
+    [\link mi_mdl_core_example_code_gen Next\endlink]
 </div>
 
 */

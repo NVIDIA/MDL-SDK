@@ -1054,13 +1054,11 @@ void Printer::print(IValue const *value)
             IValue_enum const *v      = cast<IValue_enum>(value);
             IType_enum const  *e_type = v->get_type();
             int               idx     = v->get_index();
-            ISymbol const     *sym    = NULL;
-            int               code    = 0;
 
             print_type_prefix(e_type);
 
-            if (e_type->get_value(idx, sym, code)) {
-                print(sym);
+            if (IType_enum::Value const *e_val = e_type->get_value(idx)) {
+                print(e_val->get_symbol());
             } else {
                 // should not happen
                 MDL_ASSERT(!"could not find enum value name");
@@ -1258,9 +1256,8 @@ void Printer::print(IValue const *value)
                     print(", ");
                 }
 
-                IType const *field_type;
-                ISymbol const *field_sym;
-                type->get_field(i, field_type, field_sym);
+                IType_struct::Field const *field     = type->get_field(i);
+                ISymbol const             *field_sym = field->get_symbol();
 
                 IValue const *field_value = v->get_field(field_sym);
                 print(field_sym);
@@ -1599,7 +1596,7 @@ void Printer::print(IExpression const *expr, int priority)
         {
             IExpression_let const *l = cast<IExpression_let>(expr);
             int op_priority = get_priority(IExpression::OK_SEQUENCE);
-            int count = l->get_declaration_count();
+            size_t count = l->get_declaration_count();
 
             if (op_priority < priority) {
                 print("( ");
@@ -1610,7 +1607,7 @@ void Printer::print(IExpression const *expr, int priority)
                 print(" {");
             }
             ++m_indent;
-            for (int i = 0; i < count; ++i) {
+            for (size_t i = 0; i < count; ++i) {
                 IDeclaration const *decl = l->get_declaration(i);
                 nl();
                 print(decl);
@@ -2029,6 +2026,21 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
             print(';');
             break;
         }
+    case IDeclaration::DK_STRUCT_CATEGORY:
+        {
+            IDeclaration_struct_category const *d = cast<IDeclaration_struct_category>(decl);
+            print_mdl_versions(d->get_definition());
+            keyword("struct_category");
+            print(' ');
+            push_color(C_ENTITY);
+            print(d->get_name());
+            pop_color();
+
+            print_anno_block(d->get_annotations(), " ");
+
+            print(';');
+            break;
+        }
     case IDeclaration::DK_CONSTANT:
         {
             IDeclaration_constant const *d = cast<IDeclaration_constant>(decl);
@@ -2107,9 +2119,20 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
     case IDeclaration::DK_TYPE_STRUCT:
         {
             IDeclaration_type_struct const *d = cast<IDeclaration_type_struct>(decl);
+            if (d->is_declarative()) {
+                keyword("declarative");
+                print(' ');
+            }
             typepart("struct");
             print(' ');
             print(d->get_name());
+            IQualified_name const *cat_name = d->get_struct_category_name();
+            if (cat_name) {
+                print(' ');
+                keyword("in");
+                print(' ');
+                print(cat_name);
+            }
             print_anno_block(d->get_annotations(), " ");
             print(" {");
 
@@ -2242,6 +2265,10 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
         {
             IDeclaration_function const *d = cast<IDeclaration_function>(decl);
             print_mdl_versions(d->get_definition());
+            if (d->is_declarative()) {
+                keyword("declarative");
+                print(' ');
+            }
             print(d->get_return_type_name());
             print_anno_block(d->get_return_annotations(), " ");
             print(' ');
@@ -2781,7 +2808,7 @@ void Printer::print_mdl_versions(IDefinition const *idef, bool insert)
         unsigned since = mdl_since_version(flags);
         unsigned rem   = mdl_removed_version(flags);
 
-        if (since != 0 || rem != 0) {
+        if (since != 0 || rem != 0xFFFFFFFF) {
             print(insert ? "/*" : "//");
             switch (since) {
             case IMDL::MDL_VERSION_1_0:
@@ -2809,6 +2836,9 @@ void Printer::print_mdl_versions(IDefinition const *idef, bool insert)
                 break;
             case IMDL::MDL_VERSION_1_8:
                 print(" Since MDL 1.8");
+                break;
+            case IMDL::MDL_VERSION_1_9:
+                print(" Since MDL 1.9");
                 break;
             case IMDL::MDL_VERSION_EXP:
                 print(" Since MDL experimental");
@@ -2840,6 +2870,9 @@ void Printer::print_mdl_versions(IDefinition const *idef, bool insert)
                 break;
             case IMDL::MDL_VERSION_1_8:
                 print(" Removed in MDL 1.8");
+                break;
+            case IMDL::MDL_VERSION_1_9:
+                print(" Removed in MDL 1.9");
                 break;
             case IMDL::MDL_VERSION_EXP:
                 print(" Removed in MDL experimental");
@@ -3341,6 +3374,7 @@ void Sema_printer::print_def_name(
         case Definition::DK_MEMBER:        ///< This is a field member.
         case Definition::DK_PARAMETER:     ///< This is a parameter.
         case Definition::DK_OPERATOR:      ///< This is an operator.
+        case Definition::DK_STRUCT_CATEGORY:      ///< This is a struct category.
         case Definition::DK_NAMESPACE:     ///< This is a namespace.
             push_color(ISyntax_coloring::C_ENTITY);
             break;

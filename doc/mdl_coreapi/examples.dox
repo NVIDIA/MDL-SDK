@@ -45,12 +45,15 @@ instructions on how to build \MDLCoreProductName and the examples.
   A helper class for compiling MDL materials into DAG IR.
 
 - \subpage mi_mdl_core_example_cuda_shared <br>
-  A helper class for compiling MDL materials into CUDA PTX code.
+  A helper class for compiling MDL materials into different target backend codes.
 
 \section mi_mdl_core_examples_getting_started Getting Started
 
 - \subpage mi_mdl_core_example_calls <br>
   Creates a textured material via a series of function calls.
+
+- \subpage mi_mdl_core_example_code_gen <br>
+  Loads a MDL material and processes it up to code generation and beyond.
 
 - \subpage mi_mdl_core_example_execution_ptx <br>
   Executes material sub-expressions of a compiled MDL material for the PTX backend with CUDA.

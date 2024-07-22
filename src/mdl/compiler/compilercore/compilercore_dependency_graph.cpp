@@ -88,10 +88,11 @@ Dependence_graph::Node::Node(
     } else {
         IType::Modifiers mod = get_type_modifiers(type);
 
-        if (mod & IType::MK_VARYING)
+        if (mod & IType::MK_VARYING) {
             m_auto_type = AT_VARYING;
-        else if (mod & IType::MK_UNIFORM)
+        } else if (mod & IType::MK_UNIFORM) {
             m_auto_type = AT_UNIFORM;
+        }
     }
 }
 
@@ -202,8 +203,9 @@ void Dependence_graph::walk(IDependence_visitor *visitor)
 
         if (!root->check_visited(m_visited)) {
             // ignore the varying call node if it's the root node
-            if (root->get_kind() != Node::NK_VARYING_CALL)
+            if (root->get_kind() != Node::NK_VARYING_CALL) {
                 do_walk(root, visitor);
+            }
         }
     }
 }
@@ -245,8 +247,9 @@ Dependence_graph::Node *Dependence_graph::create_param_node(
 
     // set the auto type of parameters to "parameter-dependent"
     // if not set explicitly
-    if (n->get_auto_type() == Dependence_graph::AT_TOP)
+    if (n->get_auto_type() == Dependence_graph::AT_TOP) {
         n->set_auto_type(Dependence_graph::AT_PARAM);
+    }
 
     m_nodes.push_back(n);
 
@@ -293,8 +296,9 @@ Dependence_graph::Node *Dependence_graph::create_control_node(
 // Get the node for the given Id.
 Dependence_graph::Node *Dependence_graph::get_node(Id_type id)
 {
-    if (id < m_nodes.size())
+    if (id < m_nodes.size()) {
         return m_nodes[id];
+    }
     return NULL;
 }
 
@@ -372,7 +376,7 @@ void Dependence_graph::process_scc(Scc_vector const &scc)
     // propagate the type
     for (Scc_vector::const_iterator it(scc.begin()), end(scc.end()); it != end; ++it) {
         Node *n = *it;
-    
+
         n->set_auto_type(at);
     }
 }
@@ -386,8 +390,9 @@ void Dependence_graph::calc_auto_types()
     for (size_t i = 0, n = m_nodes.size(); i < n; ++i) {
         Node *root = m_nodes[i];
 
-        if (root->m_visited < m_visited)
+        if (root->m_visited < m_visited) {
             do_dfs(root);
+        }
     }
 }
 
@@ -481,8 +486,9 @@ void Dumper::dump()
 {
     m_printer->print("digraph \"");
     char const *name = m_dg.get_name();
-    if (name == NULL || name[0] == '\0')
+    if (name == NULL || name[0] == '\0') {
         name = "dependency_graph";
+    }
     m_printer->print(name);
     m_printer->print("\" {\n");
     m_dg.walk(this);
@@ -506,7 +512,7 @@ void Dumper::node(Dependence_graph::Node const *n, char const *color)
     m_printer->print("  ");
     node_name(n);
     m_printer->print(" [label=\"");
-    
+
     switch (n->get_kind()) {
     case Dependence_graph::Node::NK_PARAM:
     case Dependence_graph::Node::NK_VARIABLE:
@@ -561,8 +567,9 @@ void Dumper::node(Dependence_graph::Node const *n, char const *color)
         m_printer->print(color);
     }
 
-    if (use_box_shape)
+    if (use_box_shape) {
         m_printer->print(" shape=box");
+    }
 
     m_printer->print("];\n");
 }

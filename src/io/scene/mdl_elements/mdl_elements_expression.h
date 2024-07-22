@@ -399,8 +399,6 @@ class Expression_factory : public mi::base::Interface_implement<IExpression_fact
 public:
     Expression_factory( IValue_factory* value_factory);
 
-    ~Expression_factory();
-
     // public API methods
 
     IValue_factory* get_value_factory() const;
@@ -511,6 +509,15 @@ public:
         const IType* target_type,
         const char* cast_db_name,
         bool force_cast,
+        bool direct_call,
+        mi::Sint32* errors) const;
+
+    IExpression* create_decl_cast(
+        DB::Transaction* transaction,
+        IExpression* src_expr,
+        const IType_struct* target_type,
+        const char* cast_db_name,
+        bool force_decl_cast,
         bool direct_call,
         mi::Sint32* errors) const;
 

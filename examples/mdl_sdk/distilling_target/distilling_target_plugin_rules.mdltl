@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ * Copyright 2024 NVIDIA Corporation. All rights reserved.
  *****************************************************************************/
 /// \file distilling_target_plugin_rules.mdltl
 /// \brief Rule sets for the distilling custom target rules example.

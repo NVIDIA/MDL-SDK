@@ -342,6 +342,16 @@ public:
         ISymbol const          *symB,
         Definition_table const &deftabB);
 
+    /// Compare two struct categories.
+    ///
+    /// \param defA     the definition of the category from the original module
+    /// \param symB     the symbol of the category (in the new module) if any
+    /// \param deftabB  the definition table of the new module
+    void compare_struct_category(
+        Definition const       *defA,
+        ISymbol const          *symB,
+        Definition_table const &deftabB);
+
     /// Find a global definition of given kind for given symbol.
     ///
     /// \param def_kind  the definition kind
@@ -945,7 +955,7 @@ void Comparator_base::add_note(
 void Comparator_base::cache_module(Module_cache &cache, IModule const *module)
 {
     // cache imports transitively
-    for (int i = 0, n = module->get_import_count(); i < n; ++i) {
+    for (size_t i = 0, n = module->get_import_count(); i < n; ++i) {
         mi::base::Handle<IModule const> imp(module->get_import(i));
 
         cache_module(cache, imp.get());
@@ -1032,6 +1042,9 @@ void Comparator::compare_modules()
         case IDefinition::DK_FUNCTION:
         case IDefinition::DK_ANNOTATION:
             compare_function_or_annotation(defA, symB, deftabB);
+            break;
+        case IDefinition::DK_STRUCT_CATEGORY:
+            compare_struct_category(defA, symB, deftabB);
             break;
         case IDefinition::DK_VARIABLE:
         case IDefinition::DK_MEMBER:
@@ -1149,26 +1162,21 @@ bool Comparator::compare_types(
             IType_enum const *enumA = cast<IType_enum>(typeA);
             IType_enum const *enumB = cast<IType_enum>(typeB);
 
-            int n_values = enumA->get_value_count();
+            size_t n_values = enumA->get_value_count();
             if (n_values != enumB->get_value_count())
                 return false;
 
-            for (int i = 0; i < n_values; ++i) {
-                ISymbol const *symA;
-                int           codeA;
-
-                enumA->get_value(i, symA, codeA);
-
-                ISymbol const *symB;
-                int           codeB;
-
-                enumB->get_value(i, symB, codeB);
+            for (size_t i = 0; i < n_values; ++i) {
+                IType_enum::Value const *valA = enumA->get_value(i);
+                IType_enum::Value const *valB = enumB->get_value(i);
 
                 // all enum values must match name and value
-                if (strcmp(symA->get_name(), symB->get_name()) != 0)
+                if (valA->get_code() != valB->get_code()) {
                     return false;
-                if (codeA != codeB)
+                }
+                if (strcmp(valA->get_symbol()->get_name(), valB->get_symbol()->get_name()) != 0) {
                     return false;
+                }
             }
             return true;
         }
@@ -1242,22 +1250,17 @@ bool Comparator::compare_types(
             IType_struct const *structA = cast<IType_struct>(typeA);
             IType_struct const *structB = cast<IType_struct>(typeB);
 
-            if (structA->get_field_count() != structB->get_field_count())
+            if (structA->get_field_count() != structB->get_field_count()) {
                 return false;
+            }
 
-            for (int i = 0, n = structA->get_field_count(); i < n; ++i) {
-                ISymbol const *symA;
-                IType const   *memA;
+            for (size_t i = 0, n = structA->get_field_count(); i < n; ++i) {
+                IType_struct::Field const *fieldA = structA->get_field(i);
+                IType_struct::Field const *fieldB = structB->get_field(i);
 
-                structA->get_field(i, memA, symA);
-
-                ISymbol const *symB;
-                IType const   *memB;
-
-                structB->get_field(i, memB, symB);
-
-                if (!compare_types(memA, memB))
+                if (!compare_types(fieldA->get_type(), fieldB->get_type())) {
                     return false;
+                }
             }
             return true;
         }
@@ -1272,6 +1275,26 @@ bool Comparator::compare_types(
     }
     MDL_ASSERT(!"unsupported type kind");
     return false;
+}
+
+// Compare two struct categories.
+void Comparator::compare_struct_category(
+    Definition const       *defA,
+    ISymbol const          *symB,
+    Definition_table const &deftabB)
+{
+    Definition const *defB = find_definition_of_kind(IDefinition::DK_STRUCT_CATEGORY, symB, deftabB);
+    if (defB == NULL) {
+        error(
+            m_fnameA,
+            STRUCT_CATEGORY_DOES_NOT_EXIST,
+            defA,
+            Error_params(get_allocator())
+            .add_signature(defA)
+            .add(m_fnameB)
+        );
+        return;
+    }
 }
 
 // Compare two constants.
@@ -1837,6 +1860,7 @@ bool Comparator::compare_definitions(
         return compare_values(defA->get_constant_value(), defB->get_constant_value());
     case IDefinition::DK_ENUM_VALUE:
     case IDefinition::DK_ANNOTATION:
+    case IDefinition::DK_STRUCT_CATEGORY:
     case IDefinition::DK_TYPE:
     case IDefinition::DK_FUNCTION:
     case IDefinition::DK_VARIABLE:
@@ -2576,12 +2600,12 @@ bool equal( const IExpression_let* expr_a, const IExpression_let* expr_b)
     if( !equal( body_a, body_b))
         return false;
 
-    int count_a = expr_a->get_declaration_count();
-    int count_b = expr_b->get_declaration_count();
+    size_t count_a = expr_a->get_declaration_count();
+    size_t count_b = expr_b->get_declaration_count();
     if( count_a != count_b)
         return false;
 
-    for( int i = 0; i < count_a; ++i) {
+    for( size_t i = 0; i < count_a; ++i) {
         const IDeclaration* decl_a = expr_a->get_declaration( i);
         const IDeclaration* decl_b = expr_b->get_declaration( i);
         if( !equal( decl_a, decl_b))
@@ -2743,12 +2767,12 @@ bool equal( const IAnnotation_block* block_a, const IAnnotation_block* block_b)
 // Compares compound statements.
 bool equal( const IStatement_compound* stmt_a, const IStatement_compound* stmt_b)
 {
-    int count_a = stmt_a->get_statement_count();
-    int count_b = stmt_b->get_statement_count();
+    size_t count_a = stmt_a->get_statement_count();
+    size_t count_b = stmt_b->get_statement_count();
     if( count_a != count_b)
         return false;
 
-    for( int i = 0; i < count_a; ++i) {
+    for( size_t i = 0; i < count_a; ++i) {
         const IStatement* s_a = stmt_a->get_statement( i);
         const IStatement* s_b = stmt_b->get_statement( i);
         if( !equal( s_a, s_b))
@@ -2822,12 +2846,12 @@ bool equal( const IStatement_switch* stmt_a, const IStatement_switch* stmt_b)
     if( !equal( cond_a, cond_b))
        return false;
 
-    int count_a = stmt_a->get_case_count();
-    int count_b = stmt_b->get_case_count();
+    size_t count_a = stmt_a->get_case_count();
+    size_t count_b = stmt_b->get_case_count();
     if( count_a != count_b)
         return false;
 
-    for( int i = 0; i < count_a; ++i) {
+    for( size_t i = 0; i < count_a; ++i) {
         const IStatement* s_a = stmt_a->get_case( i);
         const IStatement* s_b = stmt_b->get_case( i);
         if( !equal( s_a, s_b))
@@ -3256,6 +3280,7 @@ bool equal( const IDeclaration* decl_a, const IDeclaration* decl_b)
             return true;
         CASE( DK_IMPORT, import);
         CASE( DK_ANNOTATION, annotation);
+        CASE( DK_STRUCT_CATEGORY, struct_category);
         CASE( DK_CONSTANT, constant);
         CASE( DK_TYPE_ALIAS, type_alias);
         CASE( DK_TYPE_STRUCT, type_struct);
@@ -3312,13 +3337,13 @@ bool equal( const IModule* module_a, const IModule* module_b)
         return false;
 
     // compare declaration count
-    int n_decl_a = module_a->get_declaration_count();
-    int n_decl_b = module_b->get_declaration_count();
+    size_t n_decl_a = module_a->get_declaration_count();
+    size_t n_decl_b = module_b->get_declaration_count();
     if( n_decl_a != n_decl_b)
         return false;
 
     // compare declarations
-    for( int i = 0; i < n_decl_a; ++i) {
+    for( size_t i = 0; i < n_decl_a; ++i) {
         const IDeclaration* decl_a = module_a->get_declaration( i);
         const IDeclaration* decl_b = module_b->get_declaration( i);
         if( !equal( decl_a, decl_b))

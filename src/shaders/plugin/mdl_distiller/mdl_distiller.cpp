@@ -73,10 +73,10 @@ void log( mi::base::Message_severity severity, const char* message)
 }
 
 static bool uses_ternary_df(
-    const mi::mdl::IGenerated_code_dag::IMaterial_instance* material_instance)
+    const mi::mdl::IMaterial_instance* material_instance)
 {
     return 0 != (material_instance->get_properties()
-        & mi::mdl::IGenerated_code_dag::IMaterial_instance::IP_USES_TERNARY_OPERATOR_ON_DF);
+        & mi::mdl::IMaterial_instance::IP_USES_TERNARY_OPERATOR_ON_DF);
 }
 
 bool Mdl_distiller::init( mi::base::ILogger* logger) {
@@ -120,13 +120,13 @@ const char *Mdl_distiller::get_required_module_name(mi::Size target_index, mi::S
 }
 
 /// Main function to distill an MDL material.
-const mi::mdl::IGenerated_code_dag::IMaterial_instance* Mdl_distiller::distill(
-    mi::mdl::IDistiller_plugin_api&                         api,
-    mi::mdl::IRule_matcher_event*                           event_handler,
-    const mi::mdl::IGenerated_code_dag::IMaterial_instance* material_instance,
-    mi::Size                                                target_index,
-    mi::mdl::Distiller_options*                             options,
-    mi::Sint32*                                             p_error) const
+const mi::mdl::IMaterial_instance* Mdl_distiller::distill(
+    mi::mdl::IDistiller_plugin_api&    api,
+    mi::mdl::IRule_matcher_event*      event_handler,
+    const mi::mdl::IMaterial_instance* material_instance,
+    mi::Size                           target_index,
+    mi::mdl::Distiller_options*        options,
+    mi::Sint32*                        p_error) const
 {
     // Switch from error pointer to reference to simplify later code for the case of p_error == 0.
     mi::Sint32 dummy;
@@ -139,7 +139,7 @@ const mi::mdl::IGenerated_code_dag::IMaterial_instance* Mdl_distiller::distill(
         return nullptr;
     }
 
-    mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance const> res;
+    mi::base::Handle<mi::mdl::IMaterial_instance const> res;
 
 #define CHECK_RESULT  if(error != 0) { return NULL; }
 
@@ -172,7 +172,7 @@ const mi::mdl::IGenerated_code_dag::IMaterial_instance* Mdl_distiller::distill(
         if ( options->layer_normal) {
             Make_normal_rules make_normal;
 #if 0
-            mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance const> lnorm(
+            mi::base::Handle<mi::mdl::IMaterial_instance const> lnorm(
                 api.apply_rules( res.get(), make_normal, event_handler, options, error));
             res = api.merge_materials( res.get(), lnorm.get(),
                                      mi::mdl::IDistiller_plugin_api::FS_MATERIAL_GEOMETRY_NORMAL);
@@ -209,7 +209,7 @@ const mi::mdl::IGenerated_code_dag::IMaterial_instance* Mdl_distiller::distill(
         res = api.apply_rules( res.get(), make_simple, event_handler, options, error);
         CHECK_RESULT;
 
-//        mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance const> clone;
+//        mi::base::Handle<mi::mdl::IMaterial_instance const> clone;
         if ( options->layer_normal) {
             Make_normal_for_sg make_normal_sg;
             res = api.apply_rules( res.get(), make_normal_sg, event_handler, options, error);
@@ -221,7 +221,7 @@ const mi::mdl::IGenerated_code_dag::IMaterial_instance* Mdl_distiller::distill(
         CHECK_RESULT;
 
         Make_transmission_into_cutout_ue4 make_cutout;
-        mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance const> clone2;
+        mi::base::Handle<mi::mdl::IMaterial_instance const> clone2;
         clone2 =  api.apply_rules( res.get(), make_cutout, event_handler, options, error);
         CHECK_RESULT;
 
@@ -294,7 +294,7 @@ const mi::mdl::IGenerated_code_dag::IMaterial_instance* Mdl_distiller::distill(
         res = api.apply_rules( res.get(), adapt_layering, event_handler, options, error);
         CHECK_RESULT;
 
-        mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance const> clone;
+        mi::base::Handle<mi::mdl::IMaterial_instance const> clone;
         if ( options->layer_normal) {
             Make_normal_for_ue4 make_normal;
             clone = api.apply_rules( res.get(), make_normal, event_handler, options, error);
@@ -306,7 +306,7 @@ const mi::mdl::IGenerated_code_dag::IMaterial_instance* Mdl_distiller::distill(
         CHECK_RESULT;
 
         Make_transmission_into_cutout_ue4 make_cutout;
-        mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance const> clone2;
+        mi::base::Handle<mi::mdl::IMaterial_instance const> clone2;
         clone2 =  api.apply_rules( res.get(), make_cutout, event_handler, options, error);
         CHECK_RESULT;
         res = api.merge_materials( res.get(), clone2.get(),
@@ -384,7 +384,7 @@ const mi::mdl::IGenerated_code_dag::IMaterial_instance* Mdl_distiller::distill(
         res = api.apply_rules( res.get(), adapt_layering, event_handler, options, error);
         CHECK_RESULT;
 
-        mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance const> clone;
+        mi::base::Handle<mi::mdl::IMaterial_instance const> clone;
         if ( options->layer_normal) {
             Make_normal_for_tpbr make_normal;
             clone = api.apply_rules( res.get(), make_normal, event_handler, options, error);
@@ -398,7 +398,7 @@ const mi::mdl::IGenerated_code_dag::IMaterial_instance* Mdl_distiller::distill(
 
 
         Collect_transmission_for_tpbr collect_transmission;
-        mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance const> clone2;
+        mi::base::Handle<mi::mdl::IMaterial_instance const> clone2;
         clone2 =  api.apply_rules( res.get(), collect_transmission, event_handler, options, error);
         CHECK_RESULT;
 

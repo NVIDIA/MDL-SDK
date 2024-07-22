@@ -37,6 +37,7 @@
 #include <iomanip>
 #include <cmath>
 #include <chrono>
+#include <type_traits>
 
 #include <base/lib/mem/i_mem_size.h>
 
@@ -224,7 +225,8 @@ struct Item_count
     Item_count(T c, const char* const n, const char* const p=nullptr)
     : count(c), name(n), plural(p) {}
 
-    template <typename T_=T, typename U=typename T_::base_type>
+    template <typename T_=T, typename U=typename T_::base_type,
+              typename = std::enable_if_t<std::is_constructible_v<T,typename T_::base_type>>>
     Item_count(U c, const char* const n, const char* const p=nullptr)
     : Item_count{T{c},n,p} {}
 };

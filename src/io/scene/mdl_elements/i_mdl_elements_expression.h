@@ -215,7 +215,7 @@ public:
     /// A variant of #add_expression() without sanity checks.
     ///
     /// This variant should only be used if correctness is guaranteed, e.g., when converting from
-    /// the MDL core API representation, or from another instance known to be correct.
+    /// the core representation, or from another instance known to be correct.
     virtual void add_expression_unchecked(
         const char* name, const IExpression* expression) = 0;
 
@@ -477,6 +477,15 @@ public:
         const IType* target_type,
         const char* cast_db_name,
         bool force_cast,
+        bool direct_call,
+        mi::Sint32* errors) const = 0;
+
+    virtual IExpression* create_decl_cast(
+        DB::Transaction* transaction,
+        IExpression* src_expr,
+        const IType_struct* target_type,
+        const char* cast_db_name,
+        bool force_decl_cast,
         bool direct_call,
         mi::Sint32* errors) const = 0;
 

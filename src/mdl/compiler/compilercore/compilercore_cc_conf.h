@@ -109,6 +109,16 @@
 #define MDL_WARN_UNUSED_RESULT
 #endif
 
+/// MDL_CHECK_RESULT - Mark function whose return value should not be ignored.
+/// expands to sal _Check_return_ on MSVC or MDL_WARN_UNUSED_RESULT otherwise.
+/// Note MDL_CHECK_RESULT must be placed BEFORE the function declaration and
+/// that a code analysis build is necessary (/analyze) on MSVC.
+#if defined(_MSC_VER) && (_MSC_VER >= 1700)
+#define MDL_CHECK_RESULT _Check_return_
+#else
+#define MDL_CHECK_RESULT MDL_WARN_UNUSED_RESULT
+#endif
+
 /// MDL_NOINLINE - On compilers where we have a directive to do so,
 /// mark a method "not for inlining".
 #if __has_attribute(noinline) || __GNUC_PREREQ(3, 4)
@@ -131,13 +141,13 @@
 #define MDL_ALWAYS_INLINE
 #endif
 
-/// MDL_CHECK_RESULT - Mark function whose return value should not be ignored.
-#if defined(__GNUC__) && (__GNUC__ >= 4)
-#define MDL_CHECK_RESULT __attribute__ ((warn_unused_result))
-#elif defined(_MSC_VER) && (_MSC_VER >= 1700)
-#define MDL_CHECK_RESULT _Check_return_
+/// MDL_FALLTROUGH - mark that a case fall into the next one
+#if __cplusplus >= 201703L
+#define MDL_FALLTHROUGH  [[fallthrough]];
+#elif __has_attribute(fallthrough)
+#define MDL_FALLTHROUGH __attribute__((fallthrough));
 #else
-#define MDL_CHECK_RESULT
+#define MDL_FALLTHROUGH
 #endif
 
 #if __cplusplus >= 201103L

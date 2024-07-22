@@ -104,8 +104,8 @@ public:
     /// being written from the outside. But if it's a nested scope, the outer scope
     /// will checksum the inner's class ids.
     ///
-    /// \param serializer		Serializer to be used.
-    /// \param serializable	Object to be serialized.
+    /// \param serializer               Serializer to be used.
+    /// \param serializable     Object to be serialized.
     void serialize_with_end_marker(Serializer* serializer, const Serializable* serializable);
 
     /// Serialize given object with the given serializer and set the end marker
@@ -115,8 +115,8 @@ public:
     /// being written from the outside. But if it's a nested scope, the outer scope
     /// will checksum the inner's class ids.
     ///
-    /// \param serializer		Serializer to be used.
-    /// \param serializable	Object to be serialized.
+    /// \param serializer               Serializer to be used.
+    /// \param serializable     Object to be serialized.
     void serialize_with_end_marker(mi::neuraylib::ISerializer*,
                                    const mi::neuraylib::ISerializable* serializable);
 
@@ -138,9 +138,9 @@ public:
 
     /// Read extension marker from given deserializer.
     ///
-    /// \return     			-  0 On success.
-    ///             			- -1 Marker not found.
-    ///             			- -2 Checksum failed.
+    /// \return                         -  0 On success.
+    ///                                 - -1 Marker not found.
+    ///                                 - -2 Checksum failed.
     Marker_status read_extension_marker(Deserializer* deserializer);
 
     /// Deserialize given object with the given deserializer and looks for the
@@ -150,9 +150,9 @@ public:
     ///
     /// \param deserializer   Deserializer to be used.
     /// \param serializable   Object to be deserialized.
-    /// \return     			-  0 On success.
-    ///             			- -1 Marker not found.
-    ///             			- -2 Checksum failed.
+    /// \return                         -  0 On success.
+    ///                                 - -1 Marker not found.
+    ///                                 - -2 Checksum failed.
     Marker_status deserialize_with_end_marker(Deserializer* deserializer,
                                               Serializable* serializable);
 
@@ -163,9 +163,9 @@ public:
     ///
     /// \param deserializer   Deserializer to be used.
     /// \param serializable   Object to be deserialized.
-    /// \return     			-  0 On success.
-    ///             			- -1 Marker not found.
-    ///             			- -2 Checksum failed.
+    /// \return                         -  0 On success.
+    ///                                 - -1 Marker not found.
+    ///                                 - -2 Checksum failed.
     Marker_status deserialize_with_end_marker(mi::neuraylib::IDeserializer* deserializer,
                                               mi::neuraylib::ISerializable* serializable);
 

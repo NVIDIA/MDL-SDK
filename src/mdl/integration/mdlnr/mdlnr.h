@@ -69,6 +69,11 @@ public:
     const mi::mdl::IGenerated_code_dag *deserialize_code_dag(
         SERIAL::Deserializer *deserializer);
 
+    void serialize_material_instance(
+        SERIAL::Serializer *serializer, const mi::mdl::IMaterial_instance *instance);
+
+    const mi::mdl::IMaterial_instance *deserialize_material_instance(SERIAL::Deserializer *deserializer);
+
     void serialize_lambda_function(
         SERIAL::Serializer *serializer, const mi::mdl::ILambda_function *lambda);
 

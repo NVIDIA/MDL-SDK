@@ -92,7 +92,6 @@ struct Static_module
 
 // start of modules without own module class
 STATIC_MODULE(M_BACKENDS,       "BAKEND");
-STATIC_MODULE(M_BRDF,           "BRDF"  );
 STATIC_MODULE(M_BSDF_MEASUREMENT,"BSDFM");
 STATIC_MODULE(M_BVH,            "BVH"   );
 STATIC_MODULE(M_CACHEOPT,       "COPT"  );
@@ -108,7 +107,6 @@ STATIC_MODULE(M_DISK_CACHE,     "DISKCA");
 STATIC_MODULE(M_DISPLACE,       "DISPLA");
 STATIC_MODULE(M_ENTY,           "ENTY"  );
 STATIC_MODULE(M_FFS,            "FFS"   );
-STATIC_MODULE(M_FRAMEBUFFER,    "FBFR"  );
 STATIC_MODULE(M_GCMP,           "GCMP"  );
 STATIC_MODULE(M_GDIFF,          "GDIFF" );
 STATIC_MODULE(M_GPRIM,          "GPRIM" );

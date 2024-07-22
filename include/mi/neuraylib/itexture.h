@@ -175,11 +175,6 @@ public:
     /// \see #set_gamma(), #get_gamma()
     virtual Float32 get_effective_gamma( Size frame_id, Size uvtile_id) const = 0;
 
-#ifdef MI_NEURAYLIB_DEPRECATED_12_1
-    inline  Float32 get_effective_gamma( Uint32 uvtile_id = 0) const
-    { return get_effective_gamma( 0, uvtile_id); }
-#endif // MI_NEURAYLIB_DEPRECATED_12_1
-
     //@}
     /// \name Miscellaneous methods
     //@{

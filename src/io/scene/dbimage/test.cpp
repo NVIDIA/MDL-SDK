@@ -79,29 +79,29 @@ public:
         const std::vector<mi::base::Handle<const mi::neuraylib::ICanvas>>& canvases)
       : m_canvases( canvases) { }
 
-    bool is_mdl_container() const { return false; }
+    bool is_mdl_container() const final { return false; }
 
-    const char* get_original_filename() const { return ""; }
+    const char* get_original_filename() const final { return ""; }
 
-    const char* get_container_filename() const { return ""; }
+    const char* get_container_filename() const final { return ""; }
 
-    const char* get_mdl_file_path() const { return ""; }
+    const char* get_mdl_file_path() const final { return ""; }
 
-    const char* get_selector() const { return nullptr; }
+    const char* get_selector() const final { return nullptr; }
 
-    const char* get_image_format() const { return ""; }
+    const char* get_image_format() const final { return ""; }
 
-    bool is_animated() const { return false; }
+    bool is_animated() const final { return false; }
 
-    bool is_uvtile() const { return true; }
+    bool is_uvtile() const final { return true; }
 
-    mi::Size get_length() const { return 1; }
+    mi::Size get_length() const final { return 1; }
 
-    mi::Size get_frame_number( mi::Size f) const { return 0; }
+    mi::Size get_frame_number( mi::Size f) const final { return 0; }
 
-    mi::Size get_frame_length( mi::Size f) const { return m_canvases.size(); }
+    mi::Size get_frame_length( mi::Size f) const final { return m_canvases.size(); }
 
-    void get_uvtile_uv( mi::Size f, mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const
+    void get_uvtile_uv( mi::Size f, mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const final
     {
         if( f > 0 || i >= m_canvases.size())
             return;
@@ -111,13 +111,13 @@ public:
         v = static_cast<mi::Sint32>( i);
     }
 
-    const char* get_resolved_filename( mi::Size f, mi::Size i) const { return ""; }
+    const char* get_resolved_filename( mi::Size f, mi::Size i) const final { return ""; }
 
-    const char* get_container_membername( mi::Size f, mi::Size i) const { return ""; }
+    const char* get_container_membername( mi::Size f, mi::Size i) const final { return ""; }
 
-    mi::neuraylib::IReader* open_reader( mi::Size f, mi::Size i) const { return nullptr; }
+    mi::neuraylib::IReader* open_reader( mi::Size f, mi::Size i) const final { return nullptr; }
 
-    mi::neuraylib::ICanvas* get_canvas( mi::Size f, mi::Size i) const
+    mi::neuraylib::ICanvas* get_canvas( mi::Size f, mi::Size i) const final
     {
         if( i >= m_canvases.size())
             return nullptr;
@@ -248,10 +248,10 @@ DB::Tag load_image(
     if( tag)
         return tag;
 
-    DBIMAGE::Image* image = new DBIMAGE::Image();
+    auto* image = new DBIMAGE::Image();
     mi::Sint32 result = image->reset_file( transaction, filename, /*selector*/ nullptr, impl_hash);
     if( result != 0)
-        return DB::Tag();
+        return {};
 
     MI_CHECK_EQUAL( image->get_selector(), std::string());
 
@@ -277,7 +277,7 @@ void check_simple_creation( DB::Transaction* transaction)
     // File-based
     {
         // Create a file-based image as DB element
-        DBIMAGE::Image* image = new DBIMAGE::Image();
+        auto* image = new DBIMAGE::Image();
         result = image->reset_file( transaction, file_path, /*selector*/ nullptr, unknown_hash);
         MI_CHECK_EQUAL( result, 0);
         image->dump();
@@ -307,7 +307,7 @@ void check_simple_creation( DB::Transaction* transaction)
         DB::Access<DBIMAGE::Image> image( tag, transaction);
         mi::base::Handle<const IMAGE::IMipmap> mipmap( image->get_mipmap( transaction, 0, 0));
         mi::base::Handle<IMAGE::IMipmap> mipmap_copy( g_image_module->copy_mipmap( mipmap.get()));
-        DBIMAGE::Image* image_copy = new DBIMAGE::Image();
+        auto* image_copy = new DBIMAGE::Image();
         image_copy->set_mipmap( transaction, mipmap_copy.get(), /*selector*/ nullptr, unknown_hash);
         image_copy->dump();
         check_mipmap( transaction, image_copy);
@@ -336,7 +336,7 @@ void check_simple_creation( DB::Transaction* transaction)
         DISK::File_reader_impl reader;
         bool success = reader.open( file_path.c_str());
         MI_CHECK( success);
-        DBIMAGE::Image* image = new DBIMAGE::Image();
+        auto* image = new DBIMAGE::Image();
         result = image->reset_reader(
             transaction, &reader, "png", /*selector*/ nullptr, unknown_hash);
         MI_CHECK_EQUAL( result, 0);
@@ -377,7 +377,7 @@ void check_simple_creation( DB::Transaction* transaction)
     // Default-constructed
     {
         // Create a default-constructed image DB element
-        DBIMAGE::Image* image = new DBIMAGE::Image();
+        auto* image = new DBIMAGE::Image();
         check_default_pink_dummy_mipmap( transaction, image);
         tag = transaction->store( image);
     }
@@ -535,7 +535,7 @@ void check_mask_handling()
     check_get_regex(
         "a(1701)<UDIM>b",   1, 0, DBIMAGE::MODE_UDIM,    0, "a\\(1701\\)" + udim   + "b");
     check_get_regex(
-        "a((1701))<UDIM>b", 1, 0, DBIMAGE::MODE_UDIM,    0, "a\\(\\(1701\\)\\)" + udim   + "b");
+        "a((1701))<UDIM>b", 1, 0, DBIMAGE::MODE_UDIM,    0, R"(a\(\(1701\)\))" + udim   + "b");
 
     check_parse_u_v( DBIMAGE::MODE_UDIM, "1001", 0, 0);
     check_parse_u_v( DBIMAGE::MODE_UDIM, "1009", 8, 0);
@@ -564,7 +564,7 @@ void check_animated_textures( DB::Transaction* transaction)
 
     {
         std::string file_path = TEST::mi_src_path( "io/image/image/tests/test_frame_<###>.png");
-        DBIMAGE::Image* image = new DBIMAGE::Image();
+        auto* image = new DBIMAGE::Image();
         image->reset_file( transaction, file_path, /*selector*/ nullptr, unknown_hash);
         image->dump();
         DB::Tag tag = transaction->store_for_reference_counting( image); // triggers serialization
@@ -585,7 +585,7 @@ void check_animated_textures( DB::Transaction* transaction)
     // only two digits
     {
         std::string file_path = TEST::mi_src_path( "io/image/image/tests/test_frame_<##>.png");
-        DBIMAGE::Image* image = new DBIMAGE::Image();
+        auto* image = new DBIMAGE::Image();
         image->reset_file( transaction, file_path, /*selector*/ nullptr, unknown_hash);
         image->dump();
         DB::Tag tag = transaction->store_for_reference_counting( image); // triggers serialization
@@ -599,7 +599,7 @@ void check_animated_textures( DB::Transaction* transaction)
     // only one digit
     {
         std::string file_path = TEST::mi_src_path( "io/image/image/tests/test_frame_<#>.png");
-        DBIMAGE::Image* image = new DBIMAGE::Image();
+        auto* image = new DBIMAGE::Image();
         image->reset_file( transaction, file_path, /*selector*/ nullptr, unknown_hash);
         image->dump();
         DB::Tag tag = transaction->store_for_reference_counting( image); // triggers serialization
@@ -617,7 +617,7 @@ void check_uvtiles( DB::Transaction* transaction)
     // UVTILE0
     {
         std::string file_path = TEST::mi_src_path( "io/image/image/tests/test_uvtile<UVTILE0>.png");
-        DBIMAGE::Image* image = new DBIMAGE::Image();
+        auto* image = new DBIMAGE::Image();
         image->reset_file( transaction, file_path, "R", unknown_hash);
         image->dump();
         DB::Tag tag = transaction->store_for_reference_counting( image); // triggers serialization
@@ -635,7 +635,7 @@ void check_uvtiles( DB::Transaction* transaction)
     // UVTILE1
     {
         std::string file_path = TEST::mi_src_path( "io/image/image/tests/test_uvtile<UVTILE1>.png");
-        DBIMAGE::Image* image = new DBIMAGE::Image();
+        auto* image = new DBIMAGE::Image();
         image->reset_file( transaction, file_path, "G", unknown_hash);
         image->dump();
         DB::Tag tag = transaction->store_for_reference_counting( image); // triggers serialization
@@ -653,7 +653,7 @@ void check_uvtiles( DB::Transaction* transaction)
     // UDIM
     {
         std::string file_path = TEST::mi_src_path( "io/image/image/tests/test_udim.<UDIM>.png");
-        DBIMAGE::Image* image = new DBIMAGE::Image();
+        auto* image = new DBIMAGE::Image();
         image->reset_file( transaction, file_path, "B", unknown_hash);
         image->dump();
         DB::Tag tag = transaction->store_for_reference_counting( image); // triggers serialization
@@ -671,7 +671,7 @@ void check_uvtiles( DB::Transaction* transaction)
     // UDIM with metacharacters for regular expressions
     {
         std::string file_path = TEST::mi_src_path( "io/image/image/tests/test_udim_((1701))_<UDIM>.png");
-        DBIMAGE::Image* image = new DBIMAGE::Image();
+        auto* image = new DBIMAGE::Image();
         image->reset_file( transaction, file_path, "B", unknown_hash);
         image->dump();
         DB::Tag tag = transaction->store_for_reference_counting( image); // triggers serialization
@@ -694,7 +694,7 @@ void check_uvtiles( DB::Transaction* transaction)
         canvases.push_back( canvas1);
 
         Test_canvas_image_set canvas_set( canvases);
-        DBIMAGE::Image* image = new DBIMAGE::Image();
+        auto* image = new DBIMAGE::Image();
         MI_CHECK( image->reset_image_set( transaction, &canvas_set, unknown_hash) == 0);
         image->dump();
         DB::Tag tag = transaction->store_for_reference_counting( image); // triggers serialization
@@ -713,7 +713,7 @@ void check_animated_uvtiles( DB::Transaction* transaction)
     {
         std::string file_path
             = TEST::mi_src_path( "io/image/image/tests/test_udim_<UDIM>_frame_<#>.png");
-        DBIMAGE::Image* image = new DBIMAGE::Image();
+        auto* image = new DBIMAGE::Image();
         image->reset_file( transaction, file_path, /*selector*/ nullptr, unknown_hash);
         image->dump();
         DB::Tag tag = transaction->store_for_reference_counting( image); // triggers serialization
@@ -740,7 +740,7 @@ void check_animated_uvtiles( DB::Transaction* transaction)
     {
         std::string file_path
             = TEST::mi_src_path( "io/image/image/tests/test_frame_<#>_uvtile<UVTILE0>.png");
-        DBIMAGE::Image* image = new DBIMAGE::Image();
+        auto* image = new DBIMAGE::Image();
         image->reset_file( transaction, file_path, /*selector*/ nullptr, unknown_hash);
         image->dump();
         DB::Tag tag = transaction->store_for_reference_counting( image); // triggers serialization
@@ -767,7 +767,7 @@ void check_animated_uvtiles( DB::Transaction* transaction)
     {
         std::string file_path
             = TEST::mi_src_path( "io/image/image/tests/test_frame_<#>_uvtile<UVTILE1>.png");
-        DBIMAGE::Image* image = new DBIMAGE::Image();
+        auto* image = new DBIMAGE::Image();
         image->reset_file( transaction, file_path, /*selector*/ nullptr, unknown_hash);
         image->dump();
         DB::Tag tag = transaction->store_for_reference_counting( image); // triggers serialization
@@ -920,11 +920,11 @@ MI_TEST_AUTO_FUNCTION( test_dbimage )
     MI_CHECK( plug_module->load_library( plugin_path_openimageio));
     MI_CHECK( plug_module->load_library( plugin_path_dds));
 
+    g_image_module.set();
+
     DB::Database* database = db_access.get_database();
     DB::Scope* scope = database->get_global_scope();
     DB::Transaction* transaction = scope->start_transaction();
-
-    g_image_module.set();
 
     check_mask_handling();
     check_simple_creation( transaction);
@@ -935,6 +935,8 @@ MI_TEST_AUTO_FUNCTION( test_dbimage )
     check_sharing( transaction, "test_simple.png");
 
     transaction->commit();
+
+    g_image_module.reset();
 }
 
 MI_TEST_MAIN_CALLING_TEST_MAIN();

@@ -45,11 +45,11 @@ namespace SCENE
 /// and because the get/set functions for names and types are in io/scene/scene.
 enum Attr_resv_id {
                                 //------------------ any element: flags -------
-    DISABLE,			///< pretend this node doesn't exist
-    VISIBLE,			///< visible to primary (eye) rays
-    SHADOW_CAST,		///< may cast raytraced shadows
-    SHADOW_RECV,		///< raytraced shadows fall on this object
-    MOVABLE,			///< transform can be modified at runtime
+    DISABLE,                    ///< pretend this node doesn't exist
+    VISIBLE,                    ///< visible to primary (eye) rays
+    SHADOW_CAST,                ///< may cast raytraced shadows
+    SHADOW_RECV,                ///< raytraced shadows fall on this object
+    MOVABLE,                    ///< transform can be modified at runtime
     MATTE,                      ///< is this a matte object
     SHADOW_TERMINATOR_OFFSET,   ///< is the shadow terminator smoothing enabled
     MATTE_CONNECT_TO_ENV,       ///< connect matte to environment or backplate instead
@@ -57,8 +57,8 @@ enum Attr_resv_id {
     BACKPLATE_MESH,             ///< is the object a 3D-environment/backplate mesh
     NOT_PICKABLE,               ///< "invisible" to pick rays
     SELECTED,                   ///< include in rendering of selection subsets
-    N_FLAGS,			///< number of reserved flags, <= 31
-    N_MAXFLAGS		= 32,	///< can't have more than 32 reserved flags
+    N_FLAGS,                    ///< number of reserved flags, <= 31
+    N_MAXFLAGS          = 32,   ///< can't have more than 32 reserved flags
 
 // more reserved attribute IDs, that are not flags. There are no predefined
 // fields in Attribute_anchor for these. All attributes not here or in
@@ -71,39 +71,40 @@ enum Attr_resv_id {
 // modes, also change Nscene_opt_attrs in TRAVERSE to read and dump them.
 //
                                 //------------------ any element --------------
-    LABEL  = N_MAXFLAGS,	///< Uint       arbitrary identifying label
+    LABEL  = N_MAXFLAGS,        ///< Uint       arbitrary identifying label
     MATERIAL_ID,                ///< Uint       user-defined material label
     HANDLE_STRING,              ///< string     arbitrary identifying string label
                                 //------------------ object -------------------
-    MATERIAL,			///< Tag        material or array of materials
-    DECALS,			///< Tag        array of decal instances
+    MATERIAL,                   ///< Tag        material or array of materials
+    DECALS,                     ///< Tag        array of decal instances
     ENABLED_DECALS,             ///< Tag        array of enabled decal instances
     DISABLED_DECALS,            ///< Tag        array of disabled decal instances
-    PROJECTORS,			///< Tag        array of projector instances
+    PROJECTORS,                 ///< Tag        array of projector instances
     ACTIVE_PROJECTOR,           ///< Tag        the one active projector instance
-    APPROX,			///< Approx     tessellation accuracies
-    APPROX_CURVE,		///< Approx     curve approximation accuracies
+    APPROX,                     ///< Approx     tessellation accuracies
+    APPROX_CURVE,               ///< Approx     curve approximation accuracies
     MATTE_SHADOW_INTENSITY,     ///< Scalar     matte_shadow_intensity for fake shadows
     VOLUME_PRIORITY,            ///< Sint8      volume stack priority    
     BACKPLATE_MESH_FUNCTION,    ///< Tag        backplate mesh function
     GHOSTLIGHT_FACTOR,          ///< Scalar     factor to lower light visibility in glossy reflections
-
+    APPROX_TRIANGLE_LIMIT,      ///< Uint       triangle limit for tessellation
+    APPROX_VERTEX_OFFSET,       ///< Scalar     factor by which vertices are offset according to the shading normal
                                 //------------------ object, no inheritance ---
-    OBJ_NORMAL,			///< Vector3    vertex normal
-    OBJ_MOTION,			///< Vector3[]  vertex motion path
+    OBJ_NORMAL,                 ///< Vector3    vertex normal
+    OBJ_MOTION,                 ///< Vector3[]  vertex motion path
     // note that this is for all primitives EXCEPT quads! For quad primitives
     // there is another attribute carrying the same information, called
     // OBJ_MATERIAL_INDEX_QUAD!
-    OBJ_MATERIAL_INDEX,		///< Uint        per-face mtlidx in inst MATERIAL
-    OBJ_MATERIAL_INDEX_QUAD,	///< Uint        per-quad-face mtl idx as above
-    OBJ_DERIVS,			///< Vector3[2]  surface derivatives
-    OBJ_PRIM_LABEL,		///< Uint        user-defined primitive label
+    OBJ_MATERIAL_INDEX,         ///< Uint        per-face mtlidx in inst MATERIAL
+    OBJ_MATERIAL_INDEX_QUAD,    ///< Uint        per-quad-face mtl idx as above
+    OBJ_DERIVS,                 ///< Vector3[2]  surface derivatives
+    OBJ_PRIM_LABEL,             ///< Uint        user-defined primitive label
                                 //------------------ material --------------------
     EXCLUDE_FROM_WHITE_MODE,    /// < bool exclude from white mode
                                 //------------------ options --------------------
-    OPT_ANIMATION_TIME,		///< dscalar     animation time
-    OPT_FILTER,			///< uint        filter type: box triangle etc
-    OPT_RADIUS,			///< scalar      filter radius in pixels
+    OPT_ANIMATION_TIME,         ///< dscalar     animation time
+    OPT_FILTER,                 ///< uint        filter type: box triangle etc
+    OPT_RADIUS,                 ///< scalar      filter radius in pixels
     OPT_SECTION_PLANES,         ///< struct[]    section planes
     OPT_MDL_METERS_PER_SCENE_UNIT, ///< scalar   conversion config
     OPT_MDL_DISTILLING_TARGET,  /// < string
@@ -111,16 +112,17 @@ enum Attr_resv_id {
     OPT_IRAY_ALLOW_SURFACE_VOLUME_COEFFICIENTS, /// < bool allow surface-varying volume coeffs in iray
     OPT_IRAY_SPECTRAL_OBSERVER_CUSTOM_CURVE, /// < Vector3[]  photometric spectral color response curve
     OPT_IGNORE_MAX_DISPLACE,    ///< bool        ignore max displacement setting on objects
+    OPT_DISPLACE_ON_GPU,        ///< bool        enables gpu displacement
                                 //------------------ object, no inheritance ---------
-    OBJ_TEXTURE,		///< Scalar[]    first texture space
-    OBJ_TEXTURE_NUM	= 256,	///<             number of texture spaces
+    OBJ_TEXTURE,                ///< Scalar[]    first texture space
+    OBJ_TEXTURE_NUM     = 256,  ///<             number of texture spaces
 
     OBJ_USER        = OBJ_TEXTURE + OBJ_TEXTURE_NUM,  ///< Scalar[]    first user space
     OBJ_USER_NUM    = 16,                             ///<             number of user spaces
                                 //------------------ summaries ----------------
-    LAST_NONTEXTURE_ID	= OBJ_TEXTURE - 1,		  ///< texture is this+1
-    N_IDS		= OBJ_USER + OBJ_USER_NUM,  ///< last reserved ID+1
-    N_IDS_SIMPLE	= N_IDS - OBJ_TEXTURE_NUM - OBJ_USER_NUM - N_MAXFLAGS	///< non-flags & non-arrays
+    LAST_NONTEXTURE_ID  = OBJ_TEXTURE - 1,                ///< texture is this+1
+    N_IDS               = OBJ_USER + OBJ_USER_NUM,  ///< last reserved ID+1
+    N_IDS_SIMPLE        = N_IDS - OBJ_TEXTURE_NUM - OBJ_USER_NUM - N_MAXFLAGS   ///< non-flags & non-arrays
 };
 
 }

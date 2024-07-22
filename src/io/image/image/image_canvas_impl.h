@@ -30,6 +30,7 @@
 #define IO_IMAGE_IMAGE_IMAGE_CANVAS_IMPL_H
 
 #include <mi/neuraylib/icanvas.h>
+#include <mi/neuraylib/itile.h>
 
 #include <mi/base/interface_implement.h>
 #include <mi/base/handle.h>
@@ -80,7 +81,7 @@ public:
 ///
 /// File-based or container-based canvases could flush unused tiles if memory gets tight (not yet
 /// implemented).
-class Canvas_impl final // constructor invokes virtual method calls
+class Canvas_impl
   : public mi::base::Interface_implement<ICanvas>,
     public boost::noncopyable
 {

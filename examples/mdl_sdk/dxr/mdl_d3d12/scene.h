@@ -645,16 +645,25 @@ namespace mi { namespace examples { namespace mdl_d3d12
                 return m_instance_handle;
             }
 
-            const Structured_buffer<Scene_data::Info>* get_scene_data_info_buffer() const
+            /// Get the start index of the resources belonging to this instance.
+            /// The index can be used directly in the shader code.
+            /// The returned index corresponds to the scene data buffer.
+            /// The returned index + 1 corresponds to the scene data infos (optional).
+            uint32_t get_resource_heap_index() const
             {
-                return m_scene_data_infos;
+                return static_cast<uint32_t>(m_first_resource_heap_handle.get_heap_index());
             }
 
-            /// The per object/instance buffer data, can be NULL if there is no such data.
-            const Structured_buffer<uint32_t>* get_scene_data_buffer() const
-            {
-                return m_scene_data_buffer;
-            }
+            //const Structured_buffer<Scene_data::Info>* get_scene_data_info_buffer() const
+            //{
+            //    return m_scene_data_infos;
+            //}
+            //
+            ///// The per object/instance buffer data, can be NULL if there is no such data.
+            //const Structured_buffer<uint32_t>* get_scene_data_buffer() const
+            //{
+            //    return m_scene_data_buffer;
+            //}
 
         private:
             Base_application* m_app;
@@ -671,6 +680,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
             // contains scene data (GPU side)
             Structured_buffer<uint32_t>* m_scene_data_buffer;
 
+            // First handle on the descritor heap
+            Descriptor_heap_handle m_first_resource_heap_handle;
         };
 
         // --------------------------------------------------------------------
@@ -684,6 +695,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
         Instance* create_instance(const IScene_loader::Node& node_desc);
         bool upload_buffers(D3DCommandList* command_list);
 
+        // bool create_resource_view();
+
         const std::string& get_name() const { return m_name; }
 
         const std::vector<Geometry>& get_geometries() const { return m_geometries; }
@@ -692,6 +705,16 @@ namespace mi { namespace examples { namespace mdl_d3d12
         bool visit_geometries(std::function<bool(Geometry*)> action);
 
         const Vertex_buffer<uint8_t>* get_vertex_buffer() const { return m_vertex_buffer; }
+
+        /// Get the start index of the resources belonging to material mesh.
+        /// The index can be used directly in the shader code.
+        /// The returned index corresponds to the vertexbuffer.
+        /// The returned index + 1 corresponds to the indexbuffer.
+        uint32_t get_resource_heap_index() const
+        {
+            return static_cast<uint32_t>(m_first_resource_heap_handle.get_heap_index());
+        }
+
         const Index_buffer* get_index_buffer() const { return m_index_buffer; }
 
         const Bounding_box& get_local_bounding_box() const { return m_local_aabb; };
@@ -702,6 +725,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         std::string m_name;
         Vertex_buffer<uint8_t>* m_vertex_buffer;
         Index_buffer* m_index_buffer;
+        Descriptor_heap_handle m_first_resource_heap_handle;
 
         Raytracing_acceleration_structure* m_acceleration_structur;
         Raytracing_acceleration_structure::BLAS_handle m_blas;
@@ -722,8 +746,6 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
         struct Constants
         {
-            DirectX::XMMATRIX view;
-            DirectX::XMMATRIX perspective;
             DirectX::XMMATRIX view_inv;
             DirectX::XMMATRIX perspective_inv;
         };
@@ -884,8 +906,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         enum class Flags
         {
             None            = 0,
-            Opaque          = 1 << 0, // allows to skip opacity evaluation
-            SingleSided     = 1 << 1  // geometry is only visible from the front side
+            SingleSided     = 1 << 0  // geometry is only visible from the front side
         };
 
         virtual ~IMaterial() = default;
@@ -903,11 +924,19 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// making them accessible in the shader.
         virtual uint32_t register_scene_data_name(const std::string& name) = 0;
 
-        /// get the GPU handle of to the first resource of the target in the descriptor heap
-        virtual D3D12_GPU_DESCRIPTOR_HANDLE get_target_descriptor_heap_region() const = 0;
+        // /// get the GPU handle of to the first resource of the target in the descriptor heap
+        // virtual D3D12_GPU_DESCRIPTOR_HANDLE get_target_descriptor_heap_region() const = 0;
+        // 
+        // /// get the GPU handle of to the first resource of this material in the descriptor heap
+        // virtual D3D12_GPU_DESCRIPTOR_HANDLE get_material_descriptor_heap_region() const = 0;
 
-        /// get the GPU handle of to the first resource of this material in the descriptor heap
-        virtual D3D12_GPU_DESCRIPTOR_HANDLE get_material_descriptor_heap_region() const = 0;
+        /// Get the start index of the resources belonging to the target code of this material.
+        /// The index can be used directly in the shader code.
+        virtual uint32_t get_target_resource_heap_index() const = 0;
+
+        /// Get the start index of the resources belonging to this individual material.
+        /// The index can be used directly in the shader code.
+        virtual uint32_t get_material_resource_heap_index() const = 0;
     };
 
     // --------------------------------------------------------------------------------------------

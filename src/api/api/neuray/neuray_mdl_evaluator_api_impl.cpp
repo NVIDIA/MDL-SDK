@@ -59,9 +59,7 @@
 #include <mdl/compiler/compilercore/compilercore_symbols.h>
 #include <mdl/compiler/compilercore/compilercore_tools.h>
 
-#include "neuray_expression_impl.h"
 #include "neuray_function_call_impl.h"
-#include "neuray_material_instance_impl.h"
 #include "neuray_mdl_evaluator_api_impl.h"
 #include "neuray_transaction_impl.h"
 
@@ -87,7 +85,7 @@ public:
     }
 
     /// Get the argument for the parameter with given index.
-    virtual MDL::IExpression const *get_parameter_argument(size_t index) final
+    MDL::IExpression const *get_parameter_argument(size_t index) final
     {
         return m_arguments->get_expression(index);
     }
@@ -125,7 +123,7 @@ public:
     , m_param_cp(param_cb)
     , m_arena(m_compiler->get_allocator())
     , m_sym_tab(m_arena)
-    , m_type_fact(m_arena, m_compiler, &m_sym_tab)
+    , m_type_fact(m_arena, *m_compiler, m_sym_tab)
     , m_value_fact(m_arena, m_type_fact)
     , m_max_size(8*1024*1024)
     , m_max_cycles(1024)
@@ -146,7 +144,7 @@ public:
         }
         --m_max_cycles;
 
-        mi::mdl::IDefinition::Semantics sema = def->get_mdl_semantic();
+        mi::mdl::IDefinition::Semantics sema = def->get_core_semantic();
 
         bool strict = true;
 
@@ -210,7 +208,7 @@ public:
         case mi::mdl::IDefinition::DS_CONV_OPERATOR:
         case mi::mdl::IDefinition::DS_CONV_CONSTRUCTOR:
             ASSERT(M_MDLC, n_args == 1);
-            return values[0]->convert(&m_value_fact, def->get_mdl_return_type(m_trans));
+            return values[0]->convert(&m_value_fact, def->get_core_return_type(m_trans));
         default:
             break;
         }
@@ -399,60 +397,6 @@ public:
         return m_value_fact.create_bad();
     }
 
-    /// Evaluate a neuray expression.
-    mi::mdl::IValue const *evaluate(mi::neuraylib::IExpression const *expr)
-    {
-        switch (expr->get_kind()) {
-        case mi::neuraylib::IExpression::EK_CONSTANT:
-            {
-                mi::base::Handle<mi::neuraylib::IExpression_constant const> c(
-                    expr->get_interface<mi::neuraylib::IExpression_constant>());
-                Expression_constant const *c_imp =
-                    static_cast<Expression_constant const *>(c.get());
-
-                return evaluate(c_imp);
-            }
-            break;
-        case mi::neuraylib::IExpression::EK_CALL:
-            {
-                mi::base::Handle<mi::neuraylib::IExpression_call const> call(
-                    expr->get_interface<mi::neuraylib::IExpression_call>());
-                Expression_call const *c_impl =
-                    static_cast<Expression_call const *>(call.get());
-                return evaluate(c_impl);
-            }
-        case mi::neuraylib::IExpression::EK_PARAMETER:
-            {
-                mi::base::Handle<mi::neuraylib::IExpression_parameter const> param(
-                    expr->get_interface<mi::neuraylib::IExpression_parameter>());
-                Expression_parameter const *p_impl =
-                    static_cast<Expression_parameter const *>(param.get());
-                return evaluate(p_impl);
-            }
-        case mi::neuraylib::IExpression::EK_DIRECT_CALL:
-            {
-                mi::base::Handle<mi::neuraylib::IExpression_direct_call const> dcall(
-                    expr->get_interface<mi::neuraylib::IExpression_direct_call>());
-                Expression_direct_call const *d_impl =
-                    static_cast<Expression_direct_call const *>(dcall.get());
-                return evaluate(d_impl);
-            }
-        case mi::neuraylib::IExpression::EK_TEMPORARY:
-            {
-                mi::base::Handle<mi::neuraylib::IExpression_temporary const> temp(
-                    expr->get_interface<mi::neuraylib::IExpression_temporary>());
-                Expression_temporary const *t_impl =
-                    static_cast<Expression_temporary const *>(temp.get());
-                return evaluate(t_impl);
-            }
-        case mi::neuraylib::IExpression::EK_FORCE_32_BIT:
-            break;
-        }
-        ASSERT(M_MDLC, !"unsupported expression kind");
-        set_error(EC_UNSUPPORTED);
-        return m_value_fact.create_bad();
-    }
-
     /// Get a parameter argument expression.
     MDL::IExpression const *get_parameter_argument(size_t index)
     {
@@ -476,7 +420,6 @@ public:
                 mi::base::Handle<MDL::IExpression_constant const> c(
                     expr->get_interface<MDL::IExpression_constant>());
                 mi::base::Handle<MDL::IValue const> v(c->get_value());
-
                 return evaluate(v.get());
             }
             break;
@@ -486,22 +429,21 @@ public:
                     expr->get_interface<MDL::IExpression_call>());
                 DB::Tag tag = call->get_call();
                 SERIAL::Class_id class_id = m_trans->get_class_id(tag);
-
-                if (class_id != MDL::Mdl_function_call::id) {
+                if (class_id != MDL::ID_MDL_FUNCTION_CALL) {
                     set_error(EC_NON_FUNCTION_CALL);
                     return m_value_fact.create_bad();
                 }
+
                 DB::Access<MDL::Mdl_function_call> fcall(tag, m_trans);
                 DB::Tag def_tag = fcall->get_function_definition(m_trans);
                 if (!def_tag.is_valid()) {
                     set_error(EC_INVALID_CALL);
                     return m_value_fact.create_bad();
                 }
-                DB::Access<MDL::Mdl_function_definition> def(def_tag, m_trans);
 
+                DB::Access<MDL::Mdl_function_definition> def(def_tag, m_trans);
                 mi::base::Handle<MDL::IExpression_list const> args(
                     fcall->get_arguments());
-
                 return evaluate_call(def.get_ptr(), args.get());
             }
         case MDL::IExpression::EK_PARAMETER:
@@ -509,12 +451,11 @@ public:
                 mi::base::Handle<MDL::IExpression_parameter const> param(
                     expr->get_interface<MDL::IExpression_parameter>());
                 size_t index = param->get_index();
-
                 mi::base::Handle<MDL::IExpression const> arg(
                     get_parameter_argument(index));
-
                 if (arg.is_valid_interface())
                     return evaluate(arg.get());
+
                 set_error(EC_PARAMETER);
                 return m_value_fact.create_bad();
             }
@@ -528,12 +469,13 @@ public:
                     set_error(EC_INVALID_CALL);
                     return m_value_fact.create_bad();
                 }
-                SERIAL::Class_id class_id = m_trans->get_class_id(tag);
 
-                if (class_id != MDL::Mdl_function_definition::id) {
+                SERIAL::Class_id class_id = m_trans->get_class_id(tag);
+                if (class_id != MDL::ID_MDL_FUNCTION_DEFINITION) {
                     set_error(EC_NON_FUNCTION_CALL);
                     return m_value_fact.create_bad();
                 }
+
                 DB::Access<MDL::Mdl_function_definition> def(tag, m_trans);
                 mi::base::Handle<MDL::IExpression_list const> args(
                     dcall->get_arguments());
@@ -839,233 +781,14 @@ public:
         return m_value_fact.create_bad();
     }
 
-    /// Creates a new user enum type.
-    mi::mdl::IType const *create_enum(MDL::IType_enum const *e_tp)
-    {
-        char const *name = e_tp->get_symbol();
-
-        mi::mdl::ISymbol const *sym = m_sym_tab.create_user_type_symbol(name);
-        mi::mdl::IType_enum    *res = m_type_fact.create_enum(sym);
-
-        for (size_t i = 0, n = e_tp->get_size(); i < n; ++i) {
-            char const *v_name = e_tp->get_value_name(i);
-            mi::Sint32 v_code  = e_tp->get_value_code(i);
-
-            res->add_value(m_sym_tab.get_symbol(v_name), v_code);
-        }
-
-        m_user_types.insert(User_type_map::value_type(name, res));
-        return res;
-    }
-
-    /// Creates a new user struct type.
-    mi::mdl::IType const *create_struct(MDL::IType_struct const *s_tp)
-    {
-        size_t n = s_tp->get_size();
-        MDL::Small_VLA <mi::mdl::IType const *, 8> elem(n);
-
-        for (size_t i = 0; i < n; ++i) {
-            mi::base::Handle<MDL::IType const> e(s_tp->get_field_type(i));
-
-            mi::mdl::IType const *e_tp = translate(e.get());
-
-            if (mi::mdl::is<mi::mdl::IType_error>(e_tp)) {
-                // already error
-                return e_tp;
-            }
-            elem[i] = e_tp;
-        }
-
-        char const *name = s_tp->get_symbol();
-
-        mi::mdl::ISymbol const *sym = m_sym_tab.create_user_type_symbol(name);
-        mi::mdl::IType_struct  *res = m_type_fact.create_struct(sym);
-
-        for (size_t i = 0; i < n; ++i) {
-            char const *fname = s_tp->get_field_name(i);
-
-            res->add_field(elem[i], m_sym_tab.get_symbol(fname));
-        }
-        m_user_types.insert(User_type_map::value_type(name, res));
-        return res;
-    }
-
-    /// Translate a type-
+    /// Translate a type
     mi::mdl::IType const *translate(MDL::IType const *type)
     {
-        switch (type->get_kind()) {
-        case MDL::IType::TK_ALIAS:
-            {
-                // here we ignore alias types
-                mi::base::Handle<MDL::IType_alias const> a(
-                    type->get_interface<MDL::IType_alias>());
-                mi::base::Handle<MDL::IType const> t(a->get_aliased_type());
-                return translate(t.get());
-            }
-        case MDL::IType::TK_BOOL:
-            return m_type_fact.create_bool();
-        case MDL::IType::TK_INT:
-            return m_type_fact.create_int();
-        case MDL::IType::TK_ENUM:
-            {
-                mi::base::Handle<MDL::IType_enum const> e(
-                    type->get_interface<MDL::IType_enum>());
+        mi::mdl::IType const *result = MDL::int_type_to_core_type(type, m_type_fact);
+        if (result)
+            return result;
 
-                switch (e->get_predefined_id()) {
-                case MDL::IType_enum::EID_USER:
-                    {
-                        char const *sym = e->get_symbol();
-                        User_type_map::const_iterator it(m_user_types.find(sym));
-
-                        if (it != m_user_types.end()) {
-                            return it->second;
-                        }
-                        return create_enum(e.get());
-                    }
-                case MDL::IType_enum::EID_TEX_GAMMA_MODE:
-                    return m_type_fact.get_predefined_enum(mi::mdl::IType_enum::EID_TEX_GAMMA_MODE);
-                case MDL::IType_enum::EID_INTENSITY_MODE:
-                    return m_type_fact.get_predefined_enum(mi::mdl::IType_enum::EID_INTENSITY_MODE);
-                case MDL::IType_enum::EID_FORCE_32_BIT:
-                    break;
-                }
-                ASSERT(M_MDLC, !"Unsupported predefined enum");
-                set_error(EC_UNSUPPORTED);
-                return m_type_fact.create_error();
-            }
-            break;
-        case MDL::IType::TK_FLOAT:
-            return m_type_fact.create_float();
-        case MDL::IType::TK_DOUBLE:
-            return m_type_fact.create_double();
-        case MDL::IType::TK_STRING:
-            return m_type_fact.create_string();
-        case MDL::IType::TK_VECTOR:
-            {
-                mi::base::Handle<MDL::IType_vector const> v(
-                    type->get_interface<MDL::IType_vector>());
-
-                mi::base::Handle<MDL::IType_atomic const> e(v->get_element_type());
-                mi::mdl::IType_atomic const *e_tp =
-                    mi::mdl::as<mi::mdl::IType_atomic>(translate(e.get()));
-
-                if (e_tp != nullptr) {
-                    return m_type_fact.create_vector(e_tp, int(v->get_size()));
-                }
-                set_error(EC_UNSUPPORTED);
-                return m_type_fact.create_error();
-            }
-        case MDL::IType::TK_MATRIX:
-            {
-                mi::base::Handle<MDL::IType_matrix const> m(
-                    type->get_interface<MDL::IType_matrix>());
-
-                mi::base::Handle<MDL::IType_vector const> e(m->get_element_type());
-                mi::mdl::IType_vector const *e_tp =
-                    mi::mdl::as<mi::mdl::IType_vector>(translate(e.get()));
-
-                if (e_tp != nullptr) {
-                    return m_type_fact.create_matrix(e_tp, int(m->get_size()));
-                }
-                set_error(EC_UNSUPPORTED);
-                return m_type_fact.create_error();
-            }
-        case MDL::IType::TK_COLOR:
-            return m_type_fact.create_color();
-        case MDL::IType::TK_ARRAY:
-            {
-                mi::base::Handle<MDL::IType_array const> a(
-                    type->get_interface<MDL::IType_array>());
-
-                if (a->is_immediate_sized()) {
-                    mi::base::Handle<MDL::IType const> e(a->get_element_type());
-                    mi::mdl::IType const *e_tp = translate(e.get());
-
-                    if (!mi::mdl::is<mi::mdl::IType_error>(e_tp)) {
-                        return m_type_fact.create_array(e_tp, a->get_size());
-                    }
-                    // already error
-                    return e_tp;
-                }
-                set_error(EC_UNSUPPORTED);
-                return m_type_fact.create_error();
-            }
-        case MDL::IType::TK_STRUCT:
-            {
-                mi::base::Handle<MDL::IType_struct const> s(
-                    type->get_interface<MDL::IType_struct>());
-
-                switch (s->get_predefined_id()) {
-                case MDL::IType_struct::SID_USER:
-                    {
-                        char const *sym = s->get_symbol();
-                        User_type_map::const_iterator it(m_user_types.find(sym));
-
-                        if (it != m_user_types.end()) {
-                            return it->second;
-                        }
-                        return create_struct(s.get());
-                    }
-                case MDL::IType_struct::SID_MATERIAL_EMISSION:
-                    return m_type_fact.get_predefined_struct(
-                        mi::mdl::IType_struct::SID_MATERIAL_EMISSION);
-                case MDL::IType_struct::SID_MATERIAL_SURFACE:
-                    return m_type_fact.get_predefined_struct(
-                        mi::mdl::IType_struct::SID_MATERIAL_SURFACE);
-                case MDL::IType_struct::SID_MATERIAL_VOLUME:
-                    return m_type_fact.get_predefined_struct(
-                        mi::mdl::IType_struct::SID_MATERIAL_VOLUME);
-                case MDL::IType_struct::SID_MATERIAL_GEOMETRY:
-                    return m_type_fact.get_predefined_struct(
-                        mi::mdl::IType_struct::SID_MATERIAL_GEOMETRY);
-                case MDL::IType_struct::SID_MATERIAL:
-                    return m_type_fact.get_predefined_struct(
-                        mi::mdl::IType_struct::SID_MATERIAL);
-                case MDL::IType_struct::SID_FORCE_32_BIT:
-                    break;
-                }
-                ASSERT(M_MDLC, !"Unsupported predefined struct");
-                set_error(EC_UNSUPPORTED);
-                return m_type_fact.create_error();
-            }
-        case MDL::IType::TK_TEXTURE:
-            {
-                mi::base::Handle<MDL::IType_texture const> t(
-                    type->get_interface<MDL::IType_texture>());
-
-                switch (t->get_shape()) {
-                case MDL::IType_texture::TS_2D:
-                    return m_type_fact.create_texture(mi::mdl::IType_texture::TS_2D);
-                case MDL::IType_texture::TS_3D:
-                    return m_type_fact.create_texture(mi::mdl::IType_texture::TS_3D);
-                case MDL::IType_texture::TS_CUBE:
-                    return m_type_fact.create_texture(mi::mdl::IType_texture::TS_CUBE);
-                case MDL::IType_texture::TS_PTEX:
-                    return m_type_fact.create_texture(mi::mdl::IType_texture::TS_PTEX);
-                case MDL::IType_texture::TS_BSDF_DATA:
-                    return m_type_fact.create_texture(mi::mdl::IType_texture::TS_BSDF_DATA);
-                case MDL::IType_texture::TS_FORCE_32_BIT:
-                    break;
-                }
-                ASSERT(M_MDLC, !"Unsupported texture shape");
-            }
-            break;
-        case MDL::IType::TK_LIGHT_PROFILE:
-            return m_type_fact.create_light_profile();
-        case MDL::IType::TK_BSDF_MEASUREMENT:
-            return m_type_fact.create_bsdf_measurement();
-        case MDL::IType::TK_BSDF:
-            return m_type_fact.create_bsdf();
-        case MDL::IType::TK_HAIR_BSDF:
-            return m_type_fact.create_hair_bsdf();
-        case MDL::IType::TK_EDF:
-            return m_type_fact.create_edf();
-        case MDL::IType::TK_VDF:
-            return m_type_fact.create_vdf();
-        case MDL::IType::TK_FORCE_32_BIT:
-            break;
-        }
-        ASSERT(M_MDLC, !"Unsupported type kind");
+        ASSERT(M_MDLC, !"Unexpected type translation failure");
         set_error(EC_UNSUPPORTED);
         return m_type_fact.create_error();
     }
@@ -1075,7 +798,8 @@ public:
 
 private:
     /// Set the error code.
-    void set_error(Err_codes code) {
+    void set_error(Err_codes code)
+    {
         if (m_error == EC_OK)
             m_error = code;
     }
@@ -1101,7 +825,7 @@ private:
     /// A value factory.
     mi::mdl::Value_factory m_value_fact;
 
-    typedef std::map<std::string, mi::mdl::IType const *> User_type_map;
+    using User_type_map = std::map<std::string, const mi::mdl::IType*>;
 
     /// The map for user types.
     User_type_map m_user_types;
@@ -1136,14 +860,14 @@ mi::neuraylib::IValue_bool const *Mdl_evaluator_api_impl::is_function_parameter_
     mi::neuraylib::IValue_factory           *fact,
     mi::neuraylib::IFunction_call const     *call,
     mi::Size                                index,
-    mi::Sint32                              *error) const
+    mi::Sint32                              *errors) const
 {
     mi::Sint32 dummy_error;
-    if (error == nullptr)
-        error = &dummy_error;
+    if (errors == nullptr)
+        errors = &dummy_error;
 
     if (trans == nullptr || fact == nullptr || call == nullptr) {
-        *error = -1;
+        *errors = -1;
         return nullptr;
     }
 
@@ -1153,7 +877,7 @@ mi::neuraylib::IValue_bool const *Mdl_evaluator_api_impl::is_function_parameter_
     char const *name = db_call->get_parameter_name(index);
     if (name == nullptr) {
         // wrong index
-        *error = -2;
+        *errors = -2;
         return nullptr;
     }
 
@@ -1163,7 +887,7 @@ mi::neuraylib::IValue_bool const *Mdl_evaluator_api_impl::is_function_parameter_
 
     if (!cond) {
         // the parameter has no condition, always enabled
-        *error = 0;
+        *errors = 0;
         return fact->create_bool(true);
     }
 
@@ -1178,27 +902,27 @@ mi::neuraylib::IValue_bool const *Mdl_evaluator_api_impl::is_function_parameter_
         // could not be evaluated
         switch (eval.get_error()) {
         case Evaluator::EC_OK:
-            *error = 0;
+            *errors = 0;
             break;
         case Evaluator::EC_TEMPORARY:
-            *error = -3;
+            *errors = -3;
             break;
         case Evaluator::EC_NOT_CONSTANT:
         case Evaluator::EC_UNSUPPORTED:
         case Evaluator::EC_NON_FUNCTION_CALL:
         case Evaluator::EC_PARAMETER:
         case Evaluator::EC_INVALID_CALL:
-            *error = -4;
+            *errors = -4;
             break;
         case Evaluator::EC_MEMORY_EXHAUSTED:
         case Evaluator::EC_CYCLES_EXHAUSTED:
-            *error = -5;
+            *errors = -5;
             break;
         }
         return nullptr;
     }
 
-    *error = 0;
+    *errors = 0;
     return fact->create_bool(mi::mdl::cast<mi::mdl::IValue_bool>(res)->get_value());
 }
 

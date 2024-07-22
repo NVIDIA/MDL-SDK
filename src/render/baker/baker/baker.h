@@ -116,8 +116,6 @@ class Baker_module_impl : public Baker_module
 public:
     Baker_module_impl();
 
-    ~Baker_module_impl();
-
     bool init();
 
     void exit();
@@ -146,6 +144,17 @@ public:
         mi::Uint32 samples,
         mi::Uint32 state_flags) const;
 
+    mi::Sint32 bake_texture(
+        DB::Transaction* transaction,
+        const IBaker_code* baker_code,
+        mi::neuraylib::ICanvas* texture,
+        mi::Float32 min_u,
+        mi::Float32 max_u,
+        mi::Float32 min_v,
+        mi::Float32 max_v,
+        mi::Uint32 samples,
+        mi::Uint32 state_flags) const;
+
     mi::Sint32 bake_constant(
         DB::Transaction* transaction,
         const IBaker_code* baker_code,
@@ -154,6 +163,7 @@ public:
         const char* pixel_type) const;
 
 private:
+
     const IBaker_code* create_baker_code_internal(
         DB::Transaction* transaction,
         const MDL::Mdl_compiled_material* compiled_material,
@@ -162,7 +172,8 @@ private:
         mi::neuraylib::Baker_resource resource,
         mi::Uint32 gpu_device_id,
         std::string& pixel_type,
-        bool& is_uniform) const;
+        bool& is_uniform,
+        bool use_custom_cpu_tex_runtime) const;
 
 
 

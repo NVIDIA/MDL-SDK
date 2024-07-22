@@ -196,13 +196,21 @@ void Vulkan_example_app::run(const Config& config)
 
     if (!m_config.headless)
     {
+        uint32_t frame_index = 0;
+
         while (!glfwWindowShouldClose(m_window))
         {
             glfwPollEvents();
 
+            // Wait for the GPU to finish the current command buffer
+            VK_CHECK(vkWaitForFences(
+                m_device, 1, &m_frame_inflight_fences[frame_index], true, UINT64_MAX));
+            VK_CHECK(vkResetFences(
+                m_device, 1, &m_frame_inflight_fences[frame_index]));
+
             uint32_t image_index;
             VkResult result = vkAcquireNextImageKHR(m_device, m_swapchain, UINT64_MAX,
-                m_image_available_semaphore, nullptr, &image_index);
+                m_image_available_semaphores[frame_index], nullptr, &image_index);
             if (result == VK_ERROR_OUT_OF_DATE_KHR)
             {
                 recreate_swapchain_or_framebuffer_image();
@@ -211,7 +219,7 @@ void Vulkan_example_app::run(const Config& config)
             else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
                 VK_CHECK(result); // This will output the error
 
-            render_loop_iteration(image_index, last_frame_time);
+            render_loop_iteration(frame_index, image_index, last_frame_time);
 
             if (m_screenshot_requested)
             {
@@ -223,7 +231,7 @@ void Vulkan_example_app::run(const Config& config)
             VkPresentInfoKHR present_info = {};
             present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
             present_info.waitSemaphoreCount = 1;
-            present_info.pWaitSemaphores = &m_render_finished_semaphore;
+            present_info.pWaitSemaphores = &m_render_finished_semaphores[frame_index];
             present_info.swapchainCount = 1;
             present_info.pSwapchains = &m_swapchain;
             present_info.pImageIndices = &image_index;
@@ -239,12 +247,24 @@ void Vulkan_example_app::run(const Config& config)
             }
             else if (result != VK_SUCCESS)
                 VK_CHECK(result); // This will output the error
+
+            frame_index = (frame_index + 1) % m_image_count;
         }
     }
     else
     {
         for (uint32_t i = 0; i < m_config.iteration_count; i++)
-            render_loop_iteration(i % m_image_count, last_frame_time);
+        {
+            uint32_t image_index = i % m_image_count;
+
+            // Wait for the GPU to finish the current command buffer
+            VK_CHECK(vkWaitForFences(
+                m_device, 1, &m_frame_inflight_fences[image_index], true, UINT64_MAX));
+            VK_CHECK(vkResetFences(
+                m_device, 1, &m_frame_inflight_fences[image_index]));
+
+            render_loop_iteration(image_index, image_index, last_frame_time);
+        }
     }
 
     // Wait for all resources to be unused
@@ -396,11 +416,13 @@ void Vulkan_example_app::cleanup()
     }
     else
         vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
-
-    for (VkFence fence : m_frame_inflight_fences)
-        vkDestroyFence(m_device, fence, nullptr);
-    vkDestroySemaphore(m_device, m_image_available_semaphore, nullptr);
-    vkDestroySemaphore(m_device, m_render_finished_semaphore, nullptr);
+ 
+    for (uint32_t i = 0; i < m_image_count; i++)
+    {
+        vkDestroyFence(m_device, m_frame_inflight_fences[i], nullptr);
+        vkDestroySemaphore(m_device, m_image_available_semaphores[i], nullptr);
+        vkDestroySemaphore(m_device, m_render_finished_semaphores[i], nullptr);
+    }
 
     vkDestroyDevice(m_device, nullptr);
     if (!m_config.headless)
@@ -1045,15 +1067,21 @@ void Vulkan_example_app::init_command_pool_and_buffers()
 void Vulkan_example_app::init_synchronization_objects()
 {
     // If called in recreate_swapchain only the fences need to be created
-    if (!m_image_available_semaphore)
+    if (m_image_available_semaphores.empty())
     {
+        m_image_available_semaphores.resize(m_image_count);
+        m_render_finished_semaphores.resize(m_image_count);
+
         VkSemaphoreCreateInfo semaphore_create_info = {};
         semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-        VK_CHECK(vkCreateSemaphore(
-            m_device, &semaphore_create_info, nullptr, &m_image_available_semaphore));
-        VK_CHECK(vkCreateSemaphore(
-            m_device, &semaphore_create_info, nullptr, &m_render_finished_semaphore));
+        for (size_t i = 0; i < m_image_count; i++)
+        {
+            VK_CHECK(vkCreateSemaphore(
+                m_device, &semaphore_create_info, nullptr, &m_image_available_semaphores[i]));
+            VK_CHECK(vkCreateSemaphore(
+                m_device, &semaphore_create_info, nullptr, &m_render_finished_semaphores[i]));
+        }
     }
 
     m_frame_inflight_fences.resize(m_image_count);
@@ -1123,23 +1151,17 @@ void Vulkan_example_app::recreate_swapchain_or_framebuffer_image()
     recreate_size_dependent_resources();
 }
 
-void Vulkan_example_app::render_loop_iteration(uint32_t image_index, double& last_frame_time)
+void Vulkan_example_app::render_loop_iteration(uint32_t frame_index, uint32_t image_index, double& last_frame_time)
 {
-    // Wait for the GPU to finish the current command buffer
-    VK_CHECK(vkWaitForFences(
-        m_device, 1, &m_frame_inflight_fences[image_index], true, UINT64_MAX));
-    VK_CHECK(vkResetFences(
-        m_device, 1, &m_frame_inflight_fences[image_index]));
-
     // Measure elapsed seconds since last frame and update application logic
     double current_frame_time = glfwGetTime();
     float elapsed_time = static_cast<float>(current_frame_time - last_frame_time);
     last_frame_time = current_frame_time;
 
-    update(elapsed_time, image_index);
+    update(elapsed_time, frame_index);
 
     // Record command buffer
-    VkCommandBuffer command_buffer = m_command_buffers[image_index];
+    VkCommandBuffer command_buffer = m_command_buffers[frame_index];
     VK_CHECK(vkResetCommandBuffer(command_buffer, 0));
 
     VkCommandBufferBeginInfo begin_info = {};
@@ -1148,7 +1170,7 @@ void Vulkan_example_app::render_loop_iteration(uint32_t image_index, double& las
     VK_CHECK(vkBeginCommandBuffer(command_buffer, &begin_info));
 
     // Let application fill the command buffer
-    render(command_buffer, image_index);
+    render(command_buffer, frame_index, image_index);
 
     VK_CHECK(vkEndCommandBuffer(command_buffer));
 
@@ -1163,16 +1185,14 @@ void Vulkan_example_app::render_loop_iteration(uint32_t image_index, double& las
     if (!m_config.headless)
     {
         submit_info.waitSemaphoreCount = 1;
-        submit_info.pWaitSemaphores = &m_image_available_semaphore;
+        submit_info.pWaitSemaphores = &m_image_available_semaphores[frame_index];
         submit_info.pWaitDstStageMask = &wait_stage;
         submit_info.signalSemaphoreCount = 1;
-        submit_info.pSignalSemaphores = &m_render_finished_semaphore;
+        submit_info.pSignalSemaphores = &m_render_finished_semaphores[frame_index];
     }
 
     VK_CHECK(vkQueueSubmit(
-        m_graphics_queue, 1, &submit_info, m_frame_inflight_fences[image_index]));
-
-    after_submit_callback(image_index);
+        m_graphics_queue, 1, &submit_info, m_frame_inflight_fences[frame_index]));
 }
 
 void Vulkan_example_app::internal_key_callback(

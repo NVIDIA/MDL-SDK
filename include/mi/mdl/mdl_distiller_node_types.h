@@ -55,7 +55,7 @@ enum Mdl_node_type_enum {
     material_emission,
     material_volume,
     material_geometry,
-    bsdf, // used to be bsdf_null
+    bsdf,
     diffuse_reflection_bsdf,
     dusty_diffuse_reflection_bsdf,
     diffuse_transmission_bsdf,
@@ -82,21 +82,27 @@ enum Mdl_node_type_enum {
     bsdf_mix_1,
     bsdf_mix_2,
     bsdf_mix_3,
+    bsdf_mix_4,
     bsdf_clamped_mix_1,
     bsdf_clamped_mix_2,
     bsdf_clamped_mix_3,
+    bsdf_clamped_mix_4,
     bsdf_unbounded_mix_1,
     bsdf_unbounded_mix_2,
     bsdf_unbounded_mix_3,
+    bsdf_unbounded_mix_4,
     bsdf_color_mix_1,
     bsdf_color_mix_2,
     bsdf_color_mix_3,
+    bsdf_color_mix_4,
     bsdf_color_clamped_mix_1,
     bsdf_color_clamped_mix_2,
     bsdf_color_clamped_mix_3,
+    bsdf_color_clamped_mix_4,
     bsdf_color_unbounded_mix_1,
     bsdf_color_unbounded_mix_2,
     bsdf_color_unbounded_mix_3,
+    bsdf_color_unbounded_mix_4,
     weighted_layer,
     color_weighted_layer,
     fresnel_layer,
@@ -107,7 +113,7 @@ enum Mdl_node_type_enum {
     color_measured_curve_layer,
     last_bsdf = color_measured_curve_layer,
     //
-    edf, // used to be edf_null
+    edf,
     diffuse_edf,
     spot_edf,
     measured_edf,
@@ -116,46 +122,58 @@ enum Mdl_node_type_enum {
     edf_mix_1,
     edf_mix_2,
     edf_mix_3,
+    edf_mix_4,
     edf_clamped_mix_1,
     edf_clamped_mix_2,
     edf_clamped_mix_3,
+    edf_clamped_mix_4,
     edf_unbounded_mix_1,
     edf_unbounded_mix_2,
     edf_unbounded_mix_3,
+    edf_unbounded_mix_4,
     edf_color_mix_1,
     edf_color_mix_2,
     edf_color_mix_3,
+    edf_color_mix_4,
     edf_color_clamped_mix_1,
     edf_color_clamped_mix_2,
     edf_color_clamped_mix_3,
+    edf_color_clamped_mix_4,
     edf_color_unbounded_mix_1,
     edf_color_unbounded_mix_2,
     edf_color_unbounded_mix_3,
-    last_edf = edf_color_unbounded_mix_3,
+    edf_color_unbounded_mix_4,
+    last_edf = edf_color_unbounded_mix_4,
     //
-    vdf, // used to be vdf_null
+    vdf,
     vdf_anisotropic,
     vdf_fog,
     vdf_tint,
     vdf_mix_1,
     vdf_mix_2,
     vdf_mix_3,
+    vdf_mix_4,
     vdf_clamped_mix_1,
     vdf_clamped_mix_2,
     vdf_clamped_mix_3,
+    vdf_clamped_mix_4,
     vdf_unbounded_mix_1,
     vdf_unbounded_mix_2,
     vdf_unbounded_mix_3,
+    vdf_unbounded_mix_4,
     vdf_color_mix_1,
     vdf_color_mix_2,
     vdf_color_mix_3,
+    vdf_color_mix_4,
     vdf_color_clamped_mix_1,
     vdf_color_clamped_mix_2,
     vdf_color_clamped_mix_3,
+    vdf_color_clamped_mix_4,
     vdf_color_unbounded_mix_1,
     vdf_color_unbounded_mix_2,
     vdf_color_unbounded_mix_3,
-    last_vdf = vdf_color_unbounded_mix_3,
+    vdf_color_unbounded_mix_4,
+    last_vdf = vdf_color_unbounded_mix_4,
     //
     hair_bsdf,
     hair_bsdf_chiang,
@@ -174,12 +192,10 @@ enum Mdl_node_type_enum {
 
 /// A node parameter storing a type, name, and default value
 struct Node_param {
-    std::string param_type;
-    std::string param_name;
-    std::string param_default;
+    char const *param_type;
+    char const *param_name;
+    char const *param_default;
 
-    Node_param( std::string param_tp, std::string param_nm, std::string param_dflt)
-        : param_type(param_tp), param_name( param_nm), param_default( param_dflt) {}
     Node_param( const char* param_tp, const char* param_nm, const char* param_dflt)
         : param_type(param_tp), param_name( param_nm), param_default( param_dflt) {}
 };
@@ -187,19 +203,17 @@ struct Node_param {
 /// Node type
 struct Node_type {
     /// Type name of the node type
-    std::string type_name;
+    char const *type_name;
 
     /// MDL type name of the node type
-    std::string mdl_type_name;
+    char const *mdl_type_name;
 
     /// Semantics for the node in the DAG back-end
     mi::mdl::IDefinition::Semantics semantics;
 
-#ifdef MI_MDLTLC_NODE_TYPES
     /// Selector for the node in the matcher, equivalent to DAG_call semantics except for
     /// DAG_constant and the material structures
-    std::string selector_enum;
-#endif
+    char const *selector_enum;
 
     /// Mandatory parameters, all others beyond that have defaults that are
     /// known to the system
@@ -208,22 +222,13 @@ struct Node_type {
     /// Vector of parameter definitions
     std::vector<Node_param> parameters;
 
-    Node_type( std::string type, std::string mdl_type,
-               mi::mdl::IDefinition::Semantics sem, const std::string& sel, size_t min_param)
-        : type_name(type), mdl_type_name(mdl_type), semantics(sem),
-#ifdef MI_MDLTLC_NODE_TYPES
-          selector_enum(sel),
-#endif
-          min_parameters( min_param) { (void)sel; }
     Node_type( const char* type, const char* mdl_type,
                mi::mdl::IDefinition::Semantics sem, const char* sel, size_t min_param)
-        : type_name(type), mdl_type_name(mdl_type), semantics(sem),
-#ifdef MI_MDLTLC_NODE_TYPES
-          selector_enum(sel),
-#endif
-          min_parameters( min_param) { (void)sel; }
-
-    std::string get_return_type() const;
+        : type_name(type)
+        , mdl_type_name(mdl_type)
+        , semantics(sem)
+        , selector_enum(sel)
+        , min_parameters( min_param) {}
 
     std::string get_signature() const;
 };
@@ -231,104 +236,103 @@ struct Node_type {
 /// All known Node-types. Kind of singleton, explicit init() method for setup
 /// and exit() method for cleanup.
 class Node_types {
-    typedef std::map<std::string,int>    Map_type_to_idx;
-    typedef std::vector<Node_type>  Node_type_vector;
-
-    /// Sequence of all registered node types.
-    static Node_type_vector*  s_node_types;
-
-    /// Name lookup map that returns the node type index for its given type name.
-    static Map_type_to_idx*   s_map_type_to_idx;
-
-    /// Add node-type, variants from zero parameters to ten parameters
-    static void push( Mdl_node_type type, const char* type_name, const char* mdl_type_name,
-                      mi::mdl::IDefinition::Semantics sem, const char* sel, size_t min_param);
-    static void push( Mdl_node_type type, const char* type_name, const char* mdl_type_name,
-                      mi::mdl::IDefinition::Semantics sem, const char* sel, size_t min_param,
-                      const Node_param& param1);
-    static void push( Mdl_node_type type, const char* type_name, const char* mdl_type_name,
-                      mi::mdl::IDefinition::Semantics sem, const char* sel, size_t min_param,
-                      const Node_param& param1, const Node_param& param2);
-    static void push( Mdl_node_type type, const char* type_name, const char* mdl_type_name,
-                      mi::mdl::IDefinition::Semantics sem, const char* sel, size_t min_param,
-                      const Node_param& param1, const Node_param& param2, const Node_param& param3);
-    static void push( Mdl_node_type type, const char* type_name, const char* mdl_type_name,
-                      mi::mdl::IDefinition::Semantics sem, const char* sel, size_t min_param,
-                      const Node_param& param1, const Node_param& param2, const Node_param& param3,
-                      const Node_param& param4);
-    static void push( Mdl_node_type type, const char* type_name, const char* mdl_type_name,
-                      mi::mdl::IDefinition::Semantics sem, const char* sel, size_t min_param,
-                      const Node_param& param1, const Node_param& param2, const Node_param& param3,
-                      const Node_param& param4, const Node_param& param5);
-    static void push( Mdl_node_type type, const char* type_name, const char* mdl_type_name,
-                      mi::mdl::IDefinition::Semantics sem, const char* sel, size_t min_param,
-                      const Node_param& param1, const Node_param& param2, const Node_param& param3,
-                      const Node_param& param4, const Node_param& param5, const Node_param& param6);
-    static void push( Mdl_node_type type, const char* type_name, const char* mdl_type_name,
-                      mi::mdl::IDefinition::Semantics sem, const char* sel, size_t min_param,
-                      const Node_param& param1, const Node_param& param2, const Node_param& param3,
-                      const Node_param& param4, const Node_param& param5, const Node_param& param6,
-                      const Node_param& param7);
-    static void push( Mdl_node_type type, const char* type_name, const char* mdl_type_name,
-                      mi::mdl::IDefinition::Semantics sem, const char* sel, size_t min_param,
-                      const Node_param& param1, const Node_param& param2, const Node_param& param3,
-                      const Node_param& param4, const Node_param& param5, const Node_param& param6,
-                      const Node_param& param7, const Node_param& param8);
-    static void push( Mdl_node_type type, const char* type_name, const char* mdl_type_name,
-                      mi::mdl::IDefinition::Semantics sem, const char* sel, size_t min_param,
-                      const Node_param& param1, const Node_param& param2, const Node_param& param3,
-                      const Node_param& param4, const Node_param& param5, const Node_param& param6,
-                      const Node_param& param7, const Node_param& param8, const Node_param& param9);
-    static void push( Mdl_node_type type, const char* type_name, const char* mdl_type_name,
-                      mi::mdl::IDefinition::Semantics sem, const char* sel, size_t min_param,
-                      const Node_param& param1, const Node_param& param2, const Node_param& param3,
-                      const Node_param& param4, const Node_param& param5, const Node_param& param6,
-                      const Node_param& param7, const Node_param& param8, const Node_param& param9,
-                      const Node_param& param10);
 
 public:
 
-    /// Register all known node types with their parameter definitions.
-    static void init();
-
-    /// Clean up dynamically allocated memory. Can be initialized again.
-    static void exit();
+    // Constructor.
+    Node_types();
 
     /// Returns the type index for a type name and -1 if not a type.
-    virtual int idx_from_type( const char* type_name);
-    static int static_idx_from_type( const char* type_name);
+    virtual int idx_from_type( const char* type_name) const;
 
     /// Returns the type for an index.
     virtual const Node_type* type_from_idx( int idx) const;
-    static const Node_type* static_type_from_idx( int idx);
 
     /// Returns the type for an index.
-    static const Node_type* type_from_name( const char* type_name);
+    virtual const Node_type* type_from_name( const char* type_name);
 
     /// Returns the type name for the type of the given index.
-    static const std::string& type_name( int idx);
+    virtual char const *type_name( int idx);
 
     /// Returns the MDL type name for the type of the given index.
-    const std::string& mdl_type_name( int idx);
+    virtual char const *mdl_type_name( int idx);
 
-    static bool is_type( const char* type_name);
+    virtual bool is_type( const char* type_name);
 
-    static size_t get_n_params( Mdl_node_type node_type);
+    virtual size_t get_n_params( Mdl_node_type node_type);
 
-    static const std::string& get_param_type( Mdl_node_type node_type, size_t arg_idx);
+    virtual char const *get_param_type( Mdl_node_type node_type, size_t arg_idx);
 
-    static const std::string& get_param_name( Mdl_node_type node_type, size_t arg_idx);
+    virtual char const *get_param_name( Mdl_node_type node_type, size_t arg_idx);
 
-    static const std::string& get_param_default( Mdl_node_type node_type, size_t arg_idx);
+    virtual char const *get_param_default( Mdl_node_type node_type, size_t arg_idx);
 
     // returns true if the provided parameter type is a node type
-    static bool is_param_node_type( const std::string& param_type_name);
+    virtual bool is_param_node_type( char const *param_type_name);
 
-    static bool is_param_node_type( Mdl_node_type node_type, size_t arg_idx);
+    virtual bool is_param_node_type( Mdl_node_type node_type, size_t arg_idx);
 
-    static void print_all_nodes( std::ostream& out);
+    virtual void print_all_nodes( std::ostream& out);
 
-    static void print_all_mdl_nodes( std::ostream& out);
+    virtual void print_all_mdl_nodes( std::ostream& out);
+
+    virtual char const *get_return_type(size_t i) const;
+private:
+
+    /// Add node-type, variants from zero parameters to ten parameters
+    void push(Mdl_node_type type, const char *type_name, const char *mdl_type_name,
+        mi::mdl::IDefinition::Semantics sem, const char *sel, size_t min_param);
+    void push(Mdl_node_type type, const char *type_name, const char *mdl_type_name,
+        mi::mdl::IDefinition::Semantics sem, const char *sel, size_t min_param,
+        const Node_param &param1);
+    void push(Mdl_node_type type, const char *type_name, const char *mdl_type_name,
+        mi::mdl::IDefinition::Semantics sem, const char *sel, size_t min_param,
+        const Node_param &param1, const Node_param &param2);
+    void push(Mdl_node_type type, const char *type_name, const char *mdl_type_name,
+        mi::mdl::IDefinition::Semantics sem, const char *sel, size_t min_param,
+        const Node_param &param1, const Node_param &param2, const Node_param &param3);
+    void push(Mdl_node_type type, const char *type_name, const char *mdl_type_name,
+        mi::mdl::IDefinition::Semantics sem, const char *sel, size_t min_param,
+        const Node_param &param1, const Node_param &param2, const Node_param &param3,
+        const Node_param &param4);
+    void push(Mdl_node_type type, const char *type_name, const char *mdl_type_name,
+        mi::mdl::IDefinition::Semantics sem, const char *sel, size_t min_param,
+        const Node_param &param1, const Node_param &param2, const Node_param &param3,
+        const Node_param &param4, const Node_param &param5);
+    void push(Mdl_node_type type, const char *type_name, const char *mdl_type_name,
+        mi::mdl::IDefinition::Semantics sem, const char *sel, size_t min_param,
+        const Node_param &param1, const Node_param &param2, const Node_param &param3,
+        const Node_param &param4, const Node_param &param5, const Node_param &param6);
+    void push(Mdl_node_type type, const char *type_name, const char *mdl_type_name,
+        mi::mdl::IDefinition::Semantics sem, const char *sel, size_t min_param,
+        const Node_param &param1, const Node_param &param2, const Node_param &param3,
+        const Node_param &param4, const Node_param &param5, const Node_param &param6,
+        const Node_param &param7);
+    void push(Mdl_node_type type, const char *type_name, const char *mdl_type_name,
+        mi::mdl::IDefinition::Semantics sem, const char *sel, size_t min_param,
+        const Node_param &param1, const Node_param &param2, const Node_param &param3,
+        const Node_param &param4, const Node_param &param5, const Node_param &param6,
+        const Node_param &param7, const Node_param &param8);
+    void push(Mdl_node_type type, const char *type_name, const char *mdl_type_name,
+        mi::mdl::IDefinition::Semantics sem, const char *sel, size_t min_param,
+        const Node_param &param1, const Node_param &param2, const Node_param &param3,
+        const Node_param &param4, const Node_param &param5, const Node_param &param6,
+        const Node_param &param7, const Node_param &param8, const Node_param &param9);
+    void push(Mdl_node_type type, const char *type_name, const char *mdl_type_name,
+        mi::mdl::IDefinition::Semantics sem, const char *sel, size_t min_param,
+        const Node_param &param1, const Node_param &param2, const Node_param &param3,
+        const Node_param &param4, const Node_param &param5, const Node_param &param6,
+        const Node_param &param7, const Node_param &param8, const Node_param &param9,
+        const Node_param &param10);
+
+    typedef std::map<std::string, int> Map_type_to_idx;
+    typedef std::vector<Node_type> Node_type_vector;
+
+    /// Sequence of all registered node types.
+    Node_type_vector m_node_types;
+
+    /// Name lookup map that returns the node type index for its given type name.
+    Map_type_to_idx m_map_type_to_idx;
 };
 
 } // namespace mdl

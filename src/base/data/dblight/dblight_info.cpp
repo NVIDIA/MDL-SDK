@@ -36,8 +36,6 @@
 #include <boost/core/ignore_unused.hpp>
 
 #include <base/data/db/i_db_element.h>
-#include <base/hal/thread/i_thread_block.h>
-#include <base/hal/thread/i_thread_rw_lock.h>
 #include <base/lib/config/config.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/util/registry/i_config_registry.h>
@@ -45,6 +43,7 @@
 #include <base/system/main/i_assert.h>
 
 #include "dblight_database.h"
+#include "dblight_scope.h"
 #include "dblight_transaction.h"
 #include "dblight_util.h"
 
@@ -52,66 +51,84 @@ namespace MI {
 
 namespace DBLIGHT {
 
+bool operator==( const Info_base& lhs, const Info_base& rhs)
+{
+    if( lhs.m_scope_id != rhs.m_scope_id)
+        return false;
+    if( lhs.m_transaction_id != rhs.m_transaction_id)
+        return false;
+    if( lhs.m_version != rhs.m_version)
+        return false;
+    return true;
+}
+
+bool operator!=( const Info_base& lhs, const Info_base& rhs)
+{
+    return ! (lhs == rhs);
+}
+
+bool operator<( const Info_base& lhs, const Info_base& rhs)
+{
+    if( lhs.m_scope_id < rhs.m_scope_id)
+        return true;
+    if( lhs.m_scope_id > rhs.m_scope_id)
+        return false;
+    if( lhs.m_transaction_id < rhs.m_transaction_id)
+        return true;
+    if( lhs.m_transaction_id > rhs.m_transaction_id)
+        return false;
+    if( lhs.m_version < rhs.m_version)
+        return true;
+    return false;
+}
+
+bool operator<=( const Info_base& lhs, const Info_base& rhs)
+{
+    return ! (rhs < lhs);
+}
+
+bool operator>( const Info_base& lhs, const Info_base& rhs)
+{
+    return rhs < lhs;
+}
+
+bool operator>=( const Info_base& lhs, const Info_base& rhs)
+{
+    return rhs <= lhs;
+}
+
 Info_impl::Info_impl(
     DB::Element_base* element,
-    DB::Scope_id scope_id,
+    Scope_impl* scope,
     Transaction_impl* transaction,
     mi::Uint32 version,
     DB::Tag tag,
-    const char* name)
-  : m_element( element),
-    m_scope_id( scope_id),
-    m_transaction_id( transaction->get_id()),
-    m_version( version),
+    DB::Privacy_level privacy_level,
+    const char* name,
+    DB::Tag_set& references)
+  : Info_base( scope->get_id(), transaction->get_id(), version),
+    m_element( element),
     m_tag( tag),
     m_name( name),
-    m_transaction( transaction)
+    m_scope( scope),
+    m_references( std::move( references)),
+    m_transaction( transaction),
+    m_privacy_level( privacy_level)
 {
-    element->get_references( &m_references);
-
     MI_ASSERT( m_references.find( m_tag) == m_references.end());
     MI_ASSERT( m_references.find( DB::Tag()) == m_references.end());
 }
 
 Info_impl::Info_impl(
-    DB::Element_base* element,
-    DB::Scope_id scope_id,
-    Transaction_impl* transaction,
-    mi::Uint32 version,
-    DB::Tag tag,
-    const char* name,
-    const DB::Tag_set& references)
-  : m_element( element),
-    m_scope_id( scope_id),
-    m_transaction_id( transaction->get_id()),
-    m_version( version),
-    m_tag( tag),
-    m_name( name),
-    m_references( references),
-    m_transaction( transaction)
-{
-}
-
-Info_impl::Info_impl(
-    DB::Scope_id scope_id,
+    Scope_impl* scope,
     Transaction_impl* transaction,
     mi::Uint32 version,
     DB::Tag tag)
-  : m_scope_id( scope_id),
-    m_transaction_id( transaction->get_id()),
-    m_version( version),
+  : Info_base( scope->get_id(), transaction->get_id(), version),
     m_tag( tag),
-    m_transaction( transaction)
-{
-}
-
-Info_impl::Info_impl(
-    DB::Scope_id scope_id,
-    DB::Transaction_id transaction_id,
-    mi::Uint32 version)
-  : m_scope_id( scope_id),
-    m_transaction_id( transaction_id),
-    m_version( version)
+    m_scope( scope),
+    m_transaction( transaction),
+    m_privacy_level( scope->get_level())
 {
 }
 
@@ -160,51 +177,7 @@ void Info_impl::set_element( DB::Element_base* element)
     m_element = element;
 }
 
-bool operator==( const Info_impl& lhs, const Info_impl& rhs)
-{
-    if( lhs.get_scope_id() != rhs.get_scope_id())
-        return false;
-    if( lhs.get_transaction_id() != rhs.get_transaction_id())
-        return false;
-    if( lhs.get_version() != rhs.get_version())
-        return false;
-    return true;
-}
-
-bool operator!=( const Info_impl& lhs, const Info_impl& rhs)
-{
-    return ! (lhs == rhs);
-}
-
-bool operator<( const Info_impl& lhs, const Info_impl& rhs)
-{
-    if( lhs.get_scope_id() < rhs.get_scope_id())
-        return true;
-    if( lhs.get_scope_id() > rhs.get_scope_id())
-        return false;
-    if( lhs.get_transaction_id() < rhs.get_transaction_id())
-        return true;
-    if( lhs.get_transaction_id() > rhs.get_transaction_id())
-        return false;
-    if( lhs.get_version() < rhs.get_version())
-        return true;
-    return false;
-}
-
-bool operator<=( const Info_impl& lhs, const Info_impl& rhs)
-{
-    return (lhs < rhs) || (lhs == rhs);
-}
-
-bool operator>( const Info_impl& lhs, const Info_impl& rhs)
-{
-    return rhs < lhs;
-}
-
-bool operator>=( const Info_impl& lhs, const Info_impl& rhs)
-{
-    return (lhs > rhs) || (lhs == rhs);
-}
+namespace {
 
 /// Indicates whether the transaction has been committed.
 bool is_committed( const Transaction_impl_ptr& transaction)
@@ -212,8 +185,66 @@ bool is_committed( const Transaction_impl_ptr& transaction)
     return transaction && (transaction->get_state() == Transaction_impl::COMMITTED);
 }
 
+/// Indicates whether the transaction has been aborted.
+bool is_aborted( const Transaction_impl_ptr& transaction)
+{
+    return transaction && (transaction->get_state() == Transaction_impl::ABORTED);
+}
+
+/// Indicates whether two transactions definitely have the same visibility.
+///
+/// Assumes that globally visible transactions have already been cleared.
+///
+/// Note that the computation based on the visibility ID is an approximation and the method errs
+/// on the safe side for GC purposes. It returns \c true if both transaction definitely have the
+/// same visibility. It might return \c false if the visibility is indeed identical, but this
+/// cannot be determined due to the approximation scheme.
+bool same_visibility( const Transaction_impl_ptr& lhs, const Transaction_impl_ptr& rhs)
+{
+    // Indistinguishable transactions (either identical IDs, or both globally visible).
+    if( lhs == rhs)
+        return true;
+    // Exactly one transaction globally visible.
+    if( !!lhs ^ !!rhs)
+        return false;
+    // Compare visibility IDs (Could be improved by replacing each visibility ID by the lowest open
+    // transaction larger than or equal to that visibility ID.)
+    return lhs->get_visibility_id() == rhs->get_visibility_id();
+}
+
+/// Indicates whether the info is a removal info.
+template <class T>
+bool is_removal( T info)
+{
+    return info->get_is_removal();
+}
+
+/// Indicates whether the info is a global removal info.
+template <class T>
+bool is_global_removal( T info)
+{
+    return info->get_is_removal() && info->get_scope_id() == 0;
+}
+
+/// Indicates whether the info is a local removal info.
+template <class T>
+bool is_local_removal( T info)
+{
+    return info->get_is_removal() && info->get_scope_id() != 0;
+}
+
+} // namespace
+
 /// Non-trivial code shared between Infos_per_name and Infos_per_tag.
 namespace IMPL {
+
+/// Comparison functor for (Info_impl,Info_base) pairs.
+class Info_comp
+{
+public:
+    bool operator()( const Info_impl& lhs, const Info_base& rhs) const { return lhs < rhs; }
+    bool operator()( const Info_base& lhs, const Info_impl& rhs) const { return rhs > lhs; }
+};
 
 /// Returns an iterator to the last info that is less than or equal to the given key.
 ///
@@ -223,8 +254,8 @@ typename T::iterator find_less_or_equal(
     T& infos, DB::Scope_id scope_id, DB::Transaction_id transaction_id, mi::Uint32 version)
 {
     // Find first info that is larger than the requested one.
-    Info_impl pattern( scope_id, transaction_id, version);
-    auto it = infos.upper_bound( pattern);
+    Info_base pattern( scope_id, transaction_id, version);
+    auto it = infos.upper_bound( pattern, Info_comp());
     MI_ASSERT( (it == infos.end()) || (*it > pattern));
 
     // Decrement iterator to get to the last info that is lesser than or equal to the requested one.
@@ -237,57 +268,76 @@ typename T::iterator find_less_or_equal(
 
 /// Looks up an info.
 ///
-/// \param infos            The intrusive set to use for the look up.
-/// \param scope            The scope where to start the look up.
-/// \param transaction_id   The transaction ID looking up the info.
-/// \return                 The looked up info, or \c nullptr in case of failure.
+/// \param infos              The intrusive set to use for the look up.
+/// \param scope              The scope where to start the look up.
+/// \param transaction_id     The transaction ID looking up the info.
+/// \param[out] level_found   The privacy level of the scope that contains the returned info,
+///                           or unspecified in case of failure.
+/// \return                   The looked up info, or \c nullptr in case of failure.
 template <class T>
 Info_impl* lookup_info(
-    T& infos, DB::Scope* scope, DB::Transaction_id transaction_id)
+    T& infos, DB::Scope* scope, DB::Transaction_id transaction_id, DB::Privacy_level* level_found)
 {
-    MI_ASSERT( scope->get_id() == 0);
+    MI_ASSERT( scope);
 
-    auto it = find_less_or_equal( infos, scope->get_id(), transaction_id, ~0U);
-    if( it == infos.end())
-        return nullptr;
+    while( scope) {
 
-    while( true) {
+        DB::Scope_id scope_id = scope->get_id();
 
-        // Removal infos can not be looked up.
-        if( it->get_is_removal()) {
-            if( it == infos.begin())
-                return nullptr;
-            --it;
-            continue;
-        }
-
-        // Check whether the info is visible for all open (and future) transactions.
-        const Transaction_impl_ptr& creator_transaction = it->get_transaction();
-        if( !creator_transaction) {
-            it->pin();
-            return & *it;
-        }
-
-        // Check whether the info is from an aborted transaction (those can never be found). With a
-        // synchronous garbage collection those infos should actually never survive the lock unless
-        // the user incorrectly pins them while aborting the transaction.
-        if( creator_transaction->get_state() == Transaction_impl::ABORTED) {
-            MI_ASSERT( !"Found info from aborted transaction");
-            if( it == infos.begin())
-                return nullptr;
-            --it;
-            continue;
-        }
-
-        // Check whether the info is visible for the given transaction ID.
-        if( creator_transaction->is_visible_for( transaction_id)) {
-            it->pin();
-            return & *it;
-        }
-
-        if( it == infos.begin())
+        auto it = find_less_or_equal( infos, scope_id, transaction_id, ~0U);
+        if( it == infos.end())
             return nullptr;
-        --it;
+
+        while( it->get_scope_id() == scope_id) {
+
+            // Skip global removal infos which can not be looked up.
+            if( is_global_removal( it)) {
+                if( it == infos.begin())
+                    break;
+                --it;
+                continue;
+            }
+
+            // Check whether the info is visible for all open (and future) transactions.
+            const Transaction_impl_ptr& creator_transaction = it->get_transaction();
+            if( !creator_transaction) {
+                // Visible local removal infos hide any previous infos in that scope.
+                if( is_local_removal( it))
+                     break;
+                it->pin();
+                if( level_found)
+                    *level_found = scope->get_level();
+                return & *it;
+            }
+
+            // Check whether the info is from an aborted transaction (those can never be found).
+            // With a synchronous garbage collection those infos should actually never survive the
+            // lock unless the user incorrectly pins them while aborting the transaction.
+            if( creator_transaction->get_state() == Transaction_impl::ABORTED) {
+                MI_ASSERT( !"Found info from aborted transaction");
+                if( it == infos.begin())
+                    break;
+                --it;
+                continue;
+            }
+
+            // Check whether the info is visible for the given transaction ID.
+            if( creator_transaction->is_visible_for( transaction_id)) {
+                // Visible local removal infos hide any previous infos in that scope.
+                if( is_local_removal( it))
+                     break;
+                it->pin();
+                if( level_found)
+                    *level_found = scope->get_level();
+                return & *it;
+            }
+
+            if( it == infos.begin())
+                break;
+            --it;
+        }
+
+        scope = scope->get_parent();
     }
 
     return nullptr;
@@ -316,9 +366,9 @@ Infos_per_name::Infos_per_name_set::iterator Infos_per_name::erase_info( Info_im
 }
 
 Info_impl* Infos_per_name::lookup_info(
-    DB::Scope* scope, DB::Transaction_id transaction_id)
+    DB::Scope* scope, DB::Transaction_id transaction_id, DB::Privacy_level* level_found)
 {
-    return IMPL::lookup_info( m_infos, scope, transaction_id);
+    return IMPL::lookup_info( m_infos, scope, transaction_id, level_found);
 }
 
 void Infos_per_tag::insert_info( Info_impl* info)
@@ -339,9 +389,9 @@ Infos_per_tag::Infos_per_tag_set::iterator Infos_per_tag::erase_info( Info_impl*
 }
 
 Info_impl* Infos_per_tag::lookup_info(
-    DB::Scope* scope, DB::Transaction_id transaction_id)
+    DB::Scope* scope, DB::Transaction_id transaction_id, DB::Privacy_level* level_found)
 {
-    return IMPL::lookup_info( m_infos, scope, transaction_id);
+    return IMPL::lookup_info( m_infos, scope, transaction_id, level_found);
 }
 
 void Infos_per_tag::set_removed()
@@ -352,8 +402,8 @@ void Infos_per_tag::set_removed()
 
 Minor_page::Minor_page()
 {
-    for( size_t i = 0; i < N; ++i)
-        m_infos_per_tags[i] = nullptr;
+    for( auto& infos_per_tag : m_infos_per_tags)
+        infos_per_tag = nullptr;
 }
 
 Infos_per_tag* Minor_page::find( size_t index) const
@@ -382,28 +432,28 @@ void Minor_page::erase( size_t index)
 
 void Minor_page::apply( std::function<void( Infos_per_tag*)> f) const
 {
-    for( size_t i = 0; i < N; ++i)
-        if( m_infos_per_tags[i])
-            f( m_infos_per_tags[i]);
+    for( auto infos_per_tag : m_infos_per_tags)
+        if( infos_per_tag)
+            f( infos_per_tag);
 }
 
 void Minor_page::get_tags( std::vector<DB::Tag>& tags) const
 {
-    for( size_t i = 0; i < N; ++i)
-        if( m_infos_per_tags[i])
-            tags.push_back( m_infos_per_tags[i]->get_tag());
+    for( auto infos_per_tag : m_infos_per_tags)
+        if( infos_per_tag)
+            tags.push_back( infos_per_tag->get_tag());
 }
 
 Major_page::Major_page()
 {
-    for( size_t i = 0; i < N; ++i)
-        m_minor_pages[i] = nullptr;
+    for( auto& minor_page : m_minor_pages)
+        minor_page = nullptr;
 }
 
 Major_page::~Major_page()
 {
-    for( size_t i = 0; i < N; ++i)
-        delete m_minor_pages[i];
+    for( auto& minor_page : m_minor_pages)
+        delete minor_page;
 }
 
 Infos_per_tag* Major_page::find( size_t index) const
@@ -443,8 +493,7 @@ void Major_page::erase( size_t index)
 
 void Major_page::apply( std::function<void( Infos_per_tag*)> f) const
 {
-    for( size_t i = 0; i < N; ++i) {
-    auto ptr = m_minor_pages[i];
+    for( auto ptr : m_minor_pages) {
         if( ptr)
             ptr->apply( f);
     }
@@ -452,8 +501,7 @@ void Major_page::apply( std::function<void( Infos_per_tag*)> f) const
 
 void Major_page::get_tags( std::vector<DB::Tag>& tags) const
 {
-   for( size_t i = 0; i < N; ++i) {
-        auto ptr = m_minor_pages[i];
+   for( auto ptr : m_minor_pages) {
         if( ptr)
             ptr->get_tags( tags);
     }
@@ -461,14 +509,14 @@ void Major_page::get_tags( std::vector<DB::Tag>& tags) const
 
 Tag_tree::Tag_tree()
 {
-    for( size_t i = 0; i < N; ++i)
-        m_major_pages[i] = nullptr;
+    for( auto& major_page : m_major_pages)
+        major_page = nullptr;
 }
 
 Tag_tree::~Tag_tree()
 {
-    for( size_t i = 0; i < N; ++i)
-        delete m_major_pages[i];
+    for( auto & major_page : m_major_pages)
+        delete major_page;
 }
 
 Infos_per_tag* Tag_tree::find( DB::Tag tag) const
@@ -517,8 +565,7 @@ void Tag_tree::erase( DB::Tag tag)
 
 void Tag_tree::apply( std::function<void( Infos_per_tag*)> f) const
 {
-   for( size_t i = 0; i < N; ++i) {
-        auto ptr = m_major_pages[i];
+   for( auto ptr : m_major_pages) {
         if( ptr)
             ptr->apply( f);
     }
@@ -526,8 +573,7 @@ void Tag_tree::apply( std::function<void( Infos_per_tag*)> f) const
 
 void Tag_tree::get_tags( std::vector<DB::Tag>& tags) const
 {
-   for( size_t i = 0; i < N; ++i) {
-        auto ptr = m_major_pages[i];
+   for( auto ptr : m_major_pages) {
         if( ptr)
             ptr->get_tags( tags);
     }
@@ -548,7 +594,7 @@ Info_manager::Info_manager( Database_impl* database)
             m_gc_method = GC_GENERAL_CANDIDATES_THEN_PIN_COUNT_ZERO;
         else
             LOG::mod_log->error( M_DB, LOG::Mod_log::C_DATABASE,
-                "Invalid value \"%s\" for debug option \"dblight_gc_method\".", gc_method.c_str());
+                R"(Invalid value "%s" for debug option "dblight_gc_method".)", gc_method.c_str());
     }
 }
 
@@ -558,37 +604,22 @@ Info_manager::~Info_manager()
     MI_ASSERT( m_gc_candidates_general.empty());
     MI_ASSERT( m_gc_candidates_pin_count_zero.empty());
 
-    // Each info has a tag, but not necessarily a name. Hence, clearing by name first does not
-    // require a deleter for the infos, only when clearing by tag second.
-
-    // We ignore decrementing the pin count of the referenced DB elements when destroying an info
-    // (as during garbage collection) since (a) the corresponding Infos_per_tag container might no
-    // longer exist and (b) all infos and Infos_per_tag containers are to be destroyed anyway.
-
-    // This invalidates the Info::m_name pointers.
-    for( auto& it: m_infos_by_name)
-        delete it.second;
-
-    auto Destroy_infos_per_tag = []( Infos_per_tag* ipt){
-        // Check that there is exactly one version per tag. Otherwise the GC might have missed
-        // something.
-        MI_ASSERT( ipt->get_infos().get_size() == 1);
-        auto Destroy_infos = []( Info_impl* info){ delete info; };
-        ipt->get_infos().clear_and_dispose( Destroy_infos);
-        delete ipt;
-    };
-    m_infos_by_tag.apply( Destroy_infos_per_tag);
+    // Removal of all scopes should not leave any infos behind.
+    MI_ASSERT( m_infos_by_tag.empty());
+    MI_ASSERT( m_infos_by_name.empty());
 }
 
 void Info_manager::store(
     DB::Element_base* element,
-    DB::Scope_id scope_id,
+    Scope_impl* scope,
     Transaction_impl* transaction,
     mi::Uint32 version,
     DB::Tag tag,
-    const char* name)
+    DB::Privacy_level privacy_level,
+    const char* name,
+    DB::Tag_set& references)
 {
-    THREAD::Block block( &m_database->get_lock());
+    m_database->get_lock().check_is_owned();
 
     // Retrieve (or create) set of infos for \p tag.
     Infos_per_tag* infos_per_tag = m_infos_by_tag.find( tag);
@@ -611,17 +642,18 @@ void Info_manager::store(
         name = infos_per_name->get_name().c_str();
     }
 
-    // Create info.
-    Info_impl* info = new Info_impl( element, scope_id, transaction, version, tag, name);
+    // Record DB element references of this info.
+    increment_pin_counts( references);
 
-    // Insert info into the sets of infos for that tag/name.
+    // Create info (destroys references).
+    auto* info = new Info_impl(
+        element, scope, transaction, version, tag, privacy_level, name, references);
+
+    // Insert info into the sets of infos for that tag/name/scope.
     infos_per_tag->insert_info( info);
     if( infos_per_name)
         infos_per_name->insert_info( info);
-
-    // Record DB element references of this info.
-    const DB::Tag_set& references = info->get_references();
-    increment_pin_counts( references);
+    scope->insert_info( info);
 
     // Consider tag as a candidate for garbage collection.
     if( m_gc_method == GC_GENERAL_CANDIDATES_THEN_PIN_COUNT_ZERO)
@@ -631,45 +663,52 @@ void Info_manager::store(
 }
 
 Info_impl* Info_manager::lookup_info(
-    DB::Tag tag, DB::Scope* scope, DB::Transaction_id transaction_id)
+    DB::Tag tag,
+    DB::Scope* scope,
+    DB::Transaction_id transaction_id,
+    DB::Privacy_level* level_found)
 {
     Statistics_helper helper( g_lookup_info_by_tag);
 
-    THREAD::Block_shared block( &m_database->get_lock());
+    m_database->get_lock().check_is_owned_shared_or_exclusive();
 
     Infos_per_tag* infos_per_tag = m_infos_by_tag.find( tag);
     if( !infos_per_tag)
         return nullptr;
 
-    return infos_per_tag->lookup_info( scope, transaction_id);
+    return infos_per_tag->lookup_info( scope, transaction_id, level_found);
 }
 
 Info_impl* Info_manager::lookup_info(
-    const char* name, DB::Scope* scope, DB::Transaction_id transaction_id)
+    const char* name,
+    DB::Scope* scope,
+    DB::Transaction_id transaction_id,
+    DB::Privacy_level* level_found)
 {
     Statistics_helper helper( g_lookup_info_by_name);
 
-    MI_ASSERT( name);
+    m_database->get_lock().check_is_owned_shared_or_exclusive();
 
-    THREAD::Block_shared block( &m_database->get_lock());
+    MI_ASSERT( name);
 
     auto it = m_infos_by_name.find( name);
     if( it == m_infos_by_name.end())
         return nullptr;
 
-    return it->second->lookup_info( scope, transaction_id);
+    return it->second->lookup_info( scope, transaction_id, level_found);
 }
 
 Info_impl* Info_manager::start_edit(
     DB::Element_base* element,
-    DB::Scope_id scope_id,
+    Scope_impl* scope,
     Transaction_impl* transaction,
     mi::Uint32 version,
     DB::Tag tag,
+    DB::Privacy_level privacy_level,
     const char* name,
     const DB::Tag_set& references)
 {
-    THREAD::Block block( &m_database->get_lock());
+    m_database->get_lock().check_is_owned();
 
     // Retrieve set of infos for \p tag.
     Infos_per_tag* infos_per_tag = m_infos_by_tag.find( tag);
@@ -682,14 +721,16 @@ Info_impl* Info_manager::start_edit(
         MI_ASSERT( name == infos_per_name->get_name().c_str());
     }
 
-    // Create info.
-    Info_impl* info = new Info_impl(
-        element, scope_id, transaction, version, tag, name, references);
+    // Create info (modifies copy_references).
+    DB::Tag_set copy_references( references);
+    auto* info = new Info_impl(
+        element, scope, transaction, version, tag, privacy_level, name, copy_references);
 
-    // Insert info into the sets of infos for that tag/name.
+    // Insert info into the sets of infos for that tag/name/scope.
     infos_per_tag->insert_info( info);
     if( infos_per_name)
         infos_per_name->insert_info( info);
+    scope->insert_info( info);
 
     // Record DB element references of this info.
     increment_pin_counts( references);
@@ -701,9 +742,9 @@ Info_impl* Info_manager::start_edit(
     return info;
 }
 
-void Info_manager::finish_edit( Info_impl* info)
+void Info_manager::finish_edit( Info_impl* info, Transaction_impl* transaction)
 {
-    THREAD::Block block( &m_database->get_lock());
+    m_database->get_lock().check_is_owned();
 
     const DB::Tag_set& old_references = info->get_references();
     decrement_pin_counts( old_references, /*from_gc*/ false);
@@ -711,44 +752,95 @@ void Info_manager::finish_edit( Info_impl* info)
     info->update_references();
 
     const DB::Tag_set& new_references = info->get_references();
+
+    // Check privacy levels.
+    if( m_database->get_check_privacy_levels()) {
+        DB::Privacy_level referencing_level = info->get_privacy_level();
+        DB::Tag tag = info->get_tag();
+        const char* name = info->get_name();
+        transaction->check_privacy_levels(
+            referencing_level, new_references, tag, name, /*store*/ false);
+    }
+
     increment_pin_counts( new_references);
 
     info->unpin();
 }
 
 bool Info_manager::remove(
-    DB::Scope_id scope_id,
+    Scope_impl* scope,
     Transaction_impl* transaction,
     mi::Uint32 version,
-    DB::Tag tag)
+    DB::Tag tag,
+    bool remove_local_copy)
 {
-    MI_ASSERT( scope_id == 0);
+    m_database->get_lock().check_is_owned();
 
-    THREAD::Block block( &m_database->get_lock());
+    // Ignore removal_local_copy flag for the global scope.
+    bool is_global_removal = !remove_local_copy || scope->get_id() == 0;
 
     // Retrieve set of infos for \p tag.
     Infos_per_tag* ipt = m_infos_by_tag.find( tag);
     if( !ipt)
         return false;
 
-    if( ipt->get_is_removed())
-        return true;
+    if( is_global_removal) {
+
+        // Prevent double global removals (still counts as successful request).
+        if( ipt->get_is_removed())
+            return true;
+
+        // Make sure that global removals are recorded as such.
+        if( scope->get_id() != 0)
+            scope = static_cast<Scope_impl*>( m_database->get_scope_manager()->lookup_scope( 0));
+
+    } else {
+
+        Info_impl* info = ipt->lookup_info( scope, transaction->get_id());
+        if( !info)
+            return false;
+
+        // Reject local removals without a version in the current scope.
+        if( info->get_scope_id() != scope->get_id()) {
+            info->unpin();
+            return false;
+        }
+
+        info->unpin();
+
+        // Reject local removals without another version in a more global scope (otherwise we can
+        // end up with invalid tag references).
+        auto* parent_scope = static_cast<Scope_impl*>( scope->get_parent());
+        Info_impl* parent_info = ipt->lookup_info( parent_scope, transaction->get_id());
+        if( !parent_info)
+            return false;
+
+        parent_info->unpin();
+    }
 
     // Create removal info.
-    Info_impl* info = new Info_impl( scope_id, transaction, version, tag);
+    auto* info = new Info_impl( scope, transaction, version, tag);
 
-    // Insert info into the sets of infos for that tag (not name).
+    // Insert info into the sets of infos for that tag/scope (not name).
     ipt->insert_info( info);
+    scope->insert_info( info);
 
     // Consider tag as a candidate for garbage collection.
     if( m_gc_method == GC_GENERAL_CANDIDATES_THEN_PIN_COUNT_ZERO)
         m_gc_candidates_general.insert( tag);
 
-    // Prevent double removals.
-    ipt->set_removed();
+    // Prevent double global removals.
+    if( is_global_removal)
+        ipt->set_removed();
 
     info->unpin();
     return true;
+}
+
+void Info_manager::consider_tag_for_gc( DB::Tag tag)
+{
+    if( m_gc_method == GC_GENERAL_CANDIDATES_THEN_PIN_COUNT_ZERO)
+        m_gc_candidates_general.insert( tag);
 }
 
 void Info_manager::garbage_collection( DB::Transaction_id lowest_open)
@@ -834,7 +926,7 @@ void Info_manager::garbage_collection( DB::Transaction_id lowest_open)
 
 mi::Uint32 Info_manager::get_tag_reference_count( DB::Tag tag)
 {
-    THREAD::Block_shared block( &m_database->get_lock());
+    m_database->get_lock().check_is_owned_shared_or_exclusive();
 
     // Retrieve set of infos for \p tag.
     Infos_per_tag* ipt = m_infos_by_tag.find( tag);
@@ -846,7 +938,7 @@ mi::Uint32 Info_manager::get_tag_reference_count( DB::Tag tag)
 
 bool Info_manager::get_tag_is_removed( DB::Tag tag)
 {
-    THREAD::Block_shared block( &m_database->get_lock());
+    m_database->get_lock().check_is_owned_shared_or_exclusive();
 
    // Retrieve set of infos for \p tag.
     Infos_per_tag* ipt = m_infos_by_tag.find( tag);
@@ -890,15 +982,18 @@ void dump( std::ostream& s, bool mask_pointer_values, const Infos_per_name* ipn,
         if( !mask_pointer_values)
             s << " at " << &i;
         s << ": ";
-        // s << "scope = " << i.get_scope_id() << ", ";
-        s << "transaction ID = " << i.get_transaction_id()() << " (";
+        s << "scope ID = " << i.get_scope_id() << ", ";
+        // Omit the scope pointer. With a correct synchronous GC the cleared state should never be
+        // visible from the outside.
+        s << "transaction ID = " << i.get_transaction_id()();
         if( !mask_pointer_values)
-            s << i.get_transaction().get();
+            s << " (" << i.get_transaction().get() << ")";
         else
-            s << (i.get_transaction().get() ? "set" : "cleared");
-        s << "), version = " << i.get_version();
+            s << (i.get_transaction().get() ? " (set)" : " (cleared)");
+        s << ", version = " << i.get_version();
         s << ", pin count = " << i.get_pin_count();
         s << ", tag = " << i.get_tag()();
+        s << ", privacy level = " << static_cast<mi::Uint32>( i.get_privacy_level());
         s << ", removal = " << i.get_is_removal();
         if( !mask_pointer_values)
             s << ", element = " << i.get_element();
@@ -928,15 +1023,18 @@ void dump( std::ostream& s, bool mask_pointer_values, const Infos_per_tag* ipt, 
         if( !mask_pointer_values)
             s << " at " << &i;
         s << ": ";
-        // s << "scope = " << i.get_scope_id() << ", ";
-        s << "transaction ID = " << i.get_transaction_id()() << " (";
+        s << "scope ID = " << i.get_scope_id() << ", ";
+        // Omit the scope pointer. With a correct synchronous GC the cleared state should never be
+        // visible from the outside.
+        s << "transaction ID = " << i.get_transaction_id()();
         if( !mask_pointer_values)
-            s << i.get_transaction().get();
+            s << " (" << i.get_transaction().get() << ")";
         else
-            s << (i.get_transaction().get() ? "set" : "cleared");
-        s << "), version = " << i.get_version();
+            s << (i.get_transaction().get() ? " (set)" : " (cleared)");
+        s << ", version = " << i.get_version();
         s << ", pin count = " << i.get_pin_count();
         s << ", tag = " << i.get_tag()();
+        s << ", privacy level = " << static_cast<mi::Uint32>( i.get_privacy_level());
         s << ", removal = " << i.get_is_removal();
         if( !mask_pointer_values)
             s << ", element = " << i.get_element();
@@ -950,6 +1048,8 @@ void dump( std::ostream& s, bool mask_pointer_values, const Infos_per_tag* ipt, 
 
 void Info_manager::dump( std::ostream& s, bool mask_pointer_values)
 {
+    m_database->get_lock().check_is_owned_shared_or_exclusive();
+
     s << "Count of infos by distinct names: " << m_infos_by_name.size() << std::endl;
 
     size_t j1 = 0;
@@ -973,38 +1073,6 @@ void Info_manager::dump( std::ostream& s, bool mask_pointer_values)
 
     s << std::endl;
 }
-
-namespace {
-
-/// Indicates whether the transaction has been aborted.
-bool is_aborted( const Transaction_impl_ptr& transaction)
-{
-    return transaction && (transaction->get_state() == Transaction_impl::ABORTED);
-}
-
-/// Indicates whether two transactions definitely have the same visibility.
-///
-/// Assumes that both transactions are from the same scope, and that globally visible transactions
-/// have already been cleared.
-///
-/// Note that the computation based on the visibility ID is an approximation and the method errs
-/// on the safe side for GC purposes. It returns \c true if both transaction definitely have the
-/// same visibility. It might return \c false if the visibility is indeed identical, but this
-/// cannot be determined due to the approximation scheme.
-bool same_visibility( const Transaction_impl_ptr& lhs, const Transaction_impl_ptr& rhs)
-{
-    // Indistinguishable transactions (either identical IDs, or both globally visible).
-    if( lhs == rhs)
-        return true;
-    // Exactly one transaction globally visible.
-    if( !!lhs ^ !!rhs)
-        return false;
-    // Compare visibility IDs (Could be improved by replacing each visibility ID by the lowest open
-    // transaction larger than or equal to that visibility ID.)
-    return lhs->get_visibility_id() == rhs->get_visibility_id();
-}
-
-} // namespace
 
 void Info_manager::cleanup_tag_general( DB::Tag tag, DB::Transaction_id lowest_open, bool& progress)
 {
@@ -1041,6 +1109,16 @@ void Info_manager::cleanup_tag_general( DB::Tag tag, DB::Transaction_id lowest_o
 
         // Clear creator transaction for infos that are globally visible. This is required to
         // eventually release the transaction, but does not count as GC progress w.r.t. the infos.
+        //
+        // Note that the check for the committed state implies that it is not the lowest open
+        // transaction and is required to rule out the ID equality check in is_visible_for().
+        //
+        // This can be improved as follows to clear transactions faster in case of unrelated scopes:
+        // We do not really need to know whether that info is globally visible, just whether it is
+        // visible in all open transactions in the entire subtree of scopes rooted at the scope of
+        // this info. This could be checked by tracking the lowest open transaction ID per scope
+        // and computing the lowest open transaction ID for the scope subtree rooted at the scope
+        // of this info.
         bool globally_visible = !transaction
             || (is_committed( transaction) && transaction->is_visible_for( lowest_open));
         if( transaction) {
@@ -1052,8 +1130,15 @@ void Info_manager::cleanup_tag_general( DB::Tag tag, DB::Transaction_id lowest_o
             }
         }
 
+        // Erase infos from removed scopes.
+        if( !current->get_scope()) {
+            current = cleanup_info( infos_per_tag, current);
+            progress = true;
+            continue;
+        }
+
         // Process globally visible removal infos.
-        if( current->get_is_removal()) {
+        if( is_global_removal( current)) {
             if( globally_visible) {
                 mi::Uint32 pin_count = infos_per_tag->unpin();
                 if( (pin_count == 0) && (m_gc_method != GC_FULL_SWEEPS_ONLY))
@@ -1104,29 +1189,39 @@ void Info_manager::cleanup_tag_general( DB::Tag tag, DB::Transaction_id lowest_o
             if( next == infos.end())
                 break;
 
-            // Skip infos with non-zero pin count.
-            if( current->get_pin_count() > 0) {
-                temporarily_skipped = true;
-                ++current;
-                continue;
-            }
+            bool same_scope = current->get_scope_id() == next->get_scope_id();
 
-            // Skip removal infos.
-            if( current->get_is_removal() || next->get_is_removal()) {
-                temporarily_skipped = true;
-                ++current;
-                continue;
-            }
-
-            // Remove current info in favor of next one if both have the same visibility,
+            // Remove current info in favor of next one if both are from the same scope and have
+            // the same visibility, unless one of them is a global removal (which are processed
+            // invidividually further up) or the current info is a local removal (processed further
+            // down in a different iteration of the loop).
             const Transaction_impl_ptr& current_transaction = current->get_transaction();
             const Transaction_impl_ptr& next_transaction = next->get_transaction();
-            if( same_visibility( current_transaction, next_transaction)) {
-                current = cleanup_info( infos_per_tag, current);
-                progress = true;
-                continue;
-            } else {
-                temporarily_skipped = true;
+            if( same_scope && !is_removal( current) && !is_global_removal( next)) {
+                if(    same_visibility( current_transaction, next_transaction)
+                    && (current->get_pin_count() == 0)) {
+                    current = cleanup_info( infos_per_tag, current);
+                    progress = true;
+                    continue;
+                } else {
+                    temporarily_skipped = true;
+                    ++current;
+                    continue;
+                }
+            }
+
+            // Remove the next info if it is a local removal and it is the first in its scope,
+            // i.e., it is in a different scope than the current info.
+            if( is_local_removal( next) && !same_scope) {
+                if( next->get_pin_count() == 0) {
+                    /*next =*/ cleanup_info( infos_per_tag, next);
+                    progress = true;
+                    continue;
+                } else {
+                    temporarily_skipped = true;
+                    ++current;
+                    continue;
+                }
             }
 
             ++current;
@@ -1179,6 +1274,8 @@ void Info_manager::cleanup_tag_with_pin_count_zero( DB::Tag tag, bool& progress)
 Infos_per_tag::Infos_per_tag_set::iterator Info_manager::cleanup_info(
     Infos_per_tag* infos_per_tag, Infos_per_tag::Infos_per_tag_set::iterator it)
 {
+    m_database->get_lock().check_is_owned();
+
     Info_impl* info = & *it;
     MI_ASSERT( info->get_pin_count() == 0);
 
@@ -1193,6 +1290,10 @@ Infos_per_tag::Infos_per_tag_set::iterator Info_manager::cleanup_info(
     }
 
     auto next = infos_per_tag->erase_info( info);
+
+    Scope_impl* scope = info->get_scope();
+    if( scope)
+        scope->erase_info( info);
 
     const DB::Tag_set& old_references = info->get_references();
     decrement_pin_counts( old_references, /*from_gc*/ true);

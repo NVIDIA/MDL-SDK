@@ -237,38 +237,48 @@ namespace mi { namespace examples { namespace mdl_d3d12
         ///
         /// \param slot     The slot that the constant is bound to.
         ///                 Available in the shader as register(b<slot>).
-        /// \return         True in case of success.
+        /// \param space                The register space to use.
+        /// \return         The root parameter slot for the created entry, or -1.
         template<typename T>
-        bool register_constants(size_t slot)
+        uint32_t register_constants(size_t slot, size_t space = 0)
         {
-            return register_constants(slot, sizeof(T));
+            return register_constants(slot, space, sizeof(T));
         }
+
         /// Initialize a root signature entry for a constant buffer view.
         ///
         /// \param slot     The slot that the CBV is bound to.
         ///                 Available in the shader as register(b<slot>).
-        /// \return         True in case of success.
-        bool register_cbv(size_t slot);
+        /// \param space                The register space to use.
+        /// \return         The root parameter slot for the created entry, or -1.
+        uint32_t register_cbv(size_t slot, size_t space = 0);
 
         /// Initialize a root signature entry for a unordered access view.
         ///
         /// \param slot     The slot that the UAV is bound to.
         ///                 Available in the shader as register(u<slot>).
-        /// \return         True in case of success.
-        bool register_uav(size_t slot);
+        /// \param space                The register space to use.
+        /// \return         The root parameter slot for the created entry, or -1.
+        uint32_t register_uav(size_t slot, size_t space = 0);
 
         /// Initialize a root signature entry for a shader resource view.
         ///
         /// \param slot     The slot that the SRV is bound to.
         ///                 Available in the shader as register(t<slot>).
-        /// \return         True in case of success.
-        bool register_srv(size_t slot);
+        /// \return         The root parameter slot for the created entry, or -1.
+        uint32_t register_srv(size_t slot, size_t space = 0);
 
         /// Initialize a root signature entry for a descriptor table.
         ///
+        /// \param space                The register space to use.
         /// \param descriptor_table     The table to register.
-        /// \return                     True in case of success.
-        bool register_dt(const Descriptor_table& descriptor_table);
+        /// \return                     The root parameter slot for the created entry, or -1.
+        uint32_t register_dt(const Descriptor_table& descriptor_table);
+
+        /// Initialize a root signature entry for binding the complete descriptor heap.
+        ///
+        /// \return         The root parameter slot for the created entry, or -1.
+        uint32_t register_unbounded_descriptor_ranges();
 
         bool register_static_sampler(const D3D12_STATIC_SAMPLER_DESC& sampler_desc);
 
@@ -293,7 +303,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         size_t get_root_parameter_count() const { return m_root_parameters.size(); }
 
     private:
-        bool register_constants(size_t slot, size_t size_in_byte);
+        uint32_t register_constants(size_t slot, size_t space, size_t size_in_byte);
 
         Base_application* m_app;
         const std::string m_debug_name;
@@ -308,8 +318,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
         std::unordered_map<size_t, Element> m_root_elements_b;
         std::unordered_map<size_t, Element> m_root_elements_t;
         std::unordered_map<size_t, Element> m_root_elements_u;
-        std::vector<D3D12_STATIC_SAMPLER_DESC> m_static_samplers;
         std::vector<Element> m_root_elements_dt;
+        std::vector<D3D12_STATIC_SAMPLER_DESC> m_static_samplers;
+        std::vector<CD3DX12_DESCRIPTOR_RANGE1> m_unbounded_descriptor_ranges;
         D3D12_ROOT_SIGNATURE_FLAGS m_flags;
         ComPtr<ID3D12RootSignature> m_root_signature;
     };

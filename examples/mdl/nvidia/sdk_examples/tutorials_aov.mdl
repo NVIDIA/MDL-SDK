@@ -1,0 +1,169 @@
+/******************************************************************************
+ * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+mdl 1.9;
+
+import ::anno::*;
+import ::base::*;
+import ::df::*;
+import ::math::*;
+import ::state::*;
+import ::tex::*;
+
+// Example declarative struct that can be used as a material for
+// rendering in examples that support user-defined materials.
+// The types of the fields that can be rendered depend on the
+// support in the examples.
+export declarative struct aov_material in material_category {
+    // Fields can make use of state functions.
+    float3 example = float3(0.315f, 0.625f, 1.0f) * state::normal();
+    
+    // This renders as white because it gets converted into a color
+    // that saturates all channels.
+    int magic = 42;
+    
+    // The black default bsdf.
+    bsdf scattering = bsdf();
+};
+
+// A default inintialized instance of the aov_material.
+export aov_material default_constructed() = aov_material();
+
+// An instance of aov_material that overrides the example and
+// scattering fields.
+export aov_material green()
+= aov_material(
+    example: float3(0.0f, 1.0f, 0.0f),
+    scattering: df::diffuse_reflection_bsdf(tint: color(0.0f, 1.0f, 1.0f))
+);
+
+// An instance of aov_material that overrides the example and
+// scattering fields.
+export aov_material scaled(aov_material a = aov_material(), float scale = 0.1)
+= aov_material(
+    example: a.example * scale,
+    magic: int(float(a.magic) * scale),
+    scattering: df::tint(color(scale), a.scattering)
+);
+
+
+// This is an example of a user-defined material modifer. It merges two
+// parameters according to a mix parameter.
+export aov_material merge(
+    aov_material a = default_constructed(),
+    aov_material b = green(),
+    float mix = 0.5 [[ anno::hard_range(0.0, 1.0) ]]
+) = aov_material(
+    example: (1.0f - mix) * a.example +  mix * b.example,
+    magic: int(math::lerp(float(a.magic), float(b.magic), mix))
+);
+
+// A second user-defined material.
+export struct aov_material2 in material_category {
+    float3 example2 = float3(1.0f, 1.0f, 0.0f);
+};
+
+// Combine the two different user-defined materials according to
+// a mix parameter.
+export aov_material merge2(
+    aov_material a = default_constructed(),
+    aov_material2 b = aov_material2(
+        example2: float3(0.25f, 0.5f, 0.25f)
+    ),
+    float mix = 0.5 [[ anno::hard_range(0.0, 1.0) ]]
+) = aov_material(
+    example: (1.0f - mix) * a.example +  mix * b.example2,
+    magic: a.magic
+);
+
+// In this example, we mix two different materials using the merge()
+// function. Since the material parameters to merge are both of type
+// aov_material, the second value is converted into that type, effectively
+// default-constructing it. Therefore, two default materials of type
+// aov_material are mixed together, so that the mix parameter has no effect.
+export aov_material merge3(
+    float mix = 0.5 [[ anno::hard_range(0.0, 1.0) ]]
+) = merge(
+    a: default_constructed(),
+    b: aov_material2(example2: float3(0.25f, 0.5f, 0.25f)),
+    mix: mix
+);
+
+// Similar to merge, except that the default for b is implicitly converted
+// to match its parameter type.
+export aov_material merge4(
+    aov_material a = default_constructed(),
+    aov_material b = aov_material2(),
+    float mix = 0.5 [[ anno::hard_range(0.0, 1.0) ]]
+) = aov_material(
+    example: (1.0f - mix) * a.example +  mix * b.example,
+    magic: int(math::lerp(float(a.magic), float(b.magic), mix))
+);
+
+// Similar to merge, except that b is implicitly converted in the 
+// let expression to the type of b2.
+export aov_material merge5(
+    aov_material a = default_constructed(),
+    aov_material2 b = aov_material2(),
+    float mix = 0.5 [[ anno::hard_range(0.0, 1.0) ]]
+) =
+   let { aov_material b2 = b; } in
+   aov_material(
+    example: (1.0f - mix) * a.example +  mix * b2.example,
+    magic: int(math::lerp(float(a.magic), float(b2.magic), mix))
+);
+
+// Example of an empty material.
+// FIXME: assertion fails.
+export struct empty_material in material_category {
+};
+export empty_material empty() = empty_material();

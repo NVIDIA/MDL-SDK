@@ -59,7 +59,7 @@ public:
     ///
     /// Part 1 encompasses all classes derived from mi::IData. They do not need the database
     /// or the deserialization manager and can be used before neuray has been started.
-    static void register_classes_part1( Class_factory* factory);
+    static void register_classes_part1( Class_factory* factory) { }
 
     /// Registers all built-in classes, part 2.
     ///

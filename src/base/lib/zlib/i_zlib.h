@@ -38,7 +38,7 @@
 #ifndef BASE_LIB_ZLIB_H
 #define BASE_LIB_ZLIB_H
 
-#include "zlib.h"			// the actual main ZLIB header file
+#include "zlib.h"                       // the actual main ZLIB header file
 
 #include <base/system/main/types.h>
 #include <cstddef>

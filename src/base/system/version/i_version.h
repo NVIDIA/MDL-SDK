@@ -28,9 +28,9 @@
 /// \file
 /// \brief build number, platform and build date information.
 ///
-/// - #get_platform_version	return product version number
-/// - #get_platform_date	return product compile date
-/// - #get_platform_os		return product compile platform
+/// - #get_platform_version     return product version number
+/// - #get_platform_date        return product compile date
+/// - #get_platform_os          return product compile platform
 ///
 /// Keeping this in a single place reduces the amount of
 /// recompilation needed when the version number changes.  
@@ -48,4 +48,4 @@ namespace VERSION {
 } // namespace VERSION
 } // namespace MI
 
-#endif	// BASE_SYSTEM_VERSION_I_VERSION_H
+#endif  // BASE_SYSTEM_VERSION_I_VERSION_H

@@ -36,7 +36,7 @@
 #include <memory>
 #include <string>
 
-#include <base/hal/thread/i_thread_rw_lock.h>
+#include "dblight_util.h"
 
 namespace MI {
 
@@ -47,6 +47,7 @@ namespace DBLIGHT {
 
 class Info_manager;
 class Scope_impl;
+class Scope_manager;
 class Transaction_manager;
 
 /// The database class manages the whole database.
@@ -75,7 +76,7 @@ public:
     DB::Scope* get_global_scope() override;
     DB::Scope* lookup_scope( DB::Scope_id id) override;
     DB::Scope* lookup_scope( const std::string& name) override;
-    bool remove( DB::Scope_id id) override { return false; }
+    bool remove_scope( DB::Scope_id id) override;
 
     void prepare_close() override { }
     void close() override { delete this; }
@@ -96,9 +97,13 @@ public:
     /*NI*/ void register_scope_listener( DB::IScope_listener* listener) override;
     /*NI*/ void unregister_scope_listener( DB::IScope_listener* listener) override;
 
+    /// Only the scheduling mode LOCAL is supported.
     mi::Sint32 execute_fragmented( DB::Fragmented_job* job, size_t count) override;
+
+    /// Only the scheduling mode LOCAL is supported.
     mi::Sint32 execute_fragmented_async(
         DB::Fragmented_job* job, size_t count, DB::IExecution_listener* listener) override;
+
     void suspend_current_job() override;
     void resume_current_job() override;
     void yield() override;
@@ -110,6 +115,9 @@ public:
 
     /// Returns the info manager.
     Info_manager* get_info_manager() { return m_info_manager.get(); }
+
+    /// Returns the scope manager.
+    Scope_manager* get_scope_manager() { return m_scope_manager.get(); }
 
     /// Returns the transaction manager.
     Transaction_manager* get_transaction_manager() { return m_transaction_manager.get(); }
@@ -142,6 +150,10 @@ public:
         DB::IExecution_listener* listener);
 
     /// Returns the deserialization manager used for serialization checks.
+    ///
+    /// Note that the database itself does \em not require to register all classes of possible
+    /// database elements upfront with the deserialization manager. This is only necessary if the
+    /// debug options for serializer checks are enabled.
     SERIAL::Deserialization_manager* get_deserialization_manager();
 
     /// Indicates whether serialization should be tested in Transaction::store().
@@ -149,6 +161,10 @@ public:
 
     /// Indicates whether serialization should be tested in Transaction::finish_edit().
     bool get_check_serialization_edit() const { return m_check_serialization_edit; }
+
+    /// Indicates whether privacy levels of tag references should be checked in Transaction::store()
+    /// and Transaction::finish_edit().
+    bool get_check_privacy_levels() const { return m_check_privacy_levels; }
 
     /// Dumps the state of the database to the stream.
     void dump( std::ostream& s, bool mask_pointer_values = false);
@@ -160,11 +176,11 @@ private:
     /// The info manager.
     std::unique_ptr<Info_manager> m_info_manager;
 
+    /// The scope manager.
+    std::unique_ptr<Scope_manager> m_scope_manager;
+
     /// The transaction manager.
     std::unique_ptr<Transaction_manager> m_transaction_manager;
-
-    /// The global scope is currently the only scope.
-    Scope_impl* m_global_scope;
 
     /// The thread pool.
     std::unique_ptr<THREAD_POOL::Thread_pool> m_thread_pool;
@@ -180,6 +196,17 @@ private:
 
     /// Indicates whether serialization should be tested in Transaction::finish_edit().
     bool m_check_serialization_edit = false;
+
+    /// Indicates whether privacy levels of tag references should be checked in Transaction::store()
+    /// and Transaction::finish_edit().
+    ///
+    /// Ideally this check should always be enabled. Due to unclear performance implications it is
+    /// enabled by default only for debug builds.
+#ifdef NDEBUG
+    bool m_check_privacy_levels = false;
+#else
+    bool m_check_privacy_levels = true;
+#endif
 };
 
 } // namespace DBLIGHT

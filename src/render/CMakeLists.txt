@@ -26,6 +26,10 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #*****************************************************************************
 
+if(NOT MDL_BUILD_SDK)
+    return()
+endif()
+
 add_subdirectory(${MDL_SRC_FOLDER}/render/baker/baker)
 add_subdirectory(${MDL_SRC_FOLDER}/render/mdl/backends)
 add_subdirectory(${MDL_SRC_FOLDER}/render/mdl/runtime)

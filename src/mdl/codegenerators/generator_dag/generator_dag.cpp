@@ -392,6 +392,48 @@ IGenerated_code_dag const *deserialize_code_dag(
     return code.get();
 }
 
+// Serialize the material instance.
+void serialize_material_instance(
+    IMaterial_instance const *instance,
+    ISerializer              *is,
+    MDL_binary_serializer    &bin_serializer)
+{
+    Generated_code_dag::Material_instance const *inst = impl_cast<Generated_code_dag::Material_instance>(instance);
+
+    inst->serialize(is, &bin_serializer);
+}
+
+// Deserialize the material instance.
+IMaterial_instance const *deserialize_material_instance(
+    IDeserializer           *ds,
+    MDL_binary_deserializer &bin_deserializer,
+    MDL                     *compiler)
+{
+    Tag_t t;
+
+    // currently we support only binaries, no single units
+    t = bin_deserializer.read_section_tag();
+    MDL_ASSERT(t == Serializer::ST_INSTANCE_START);
+    DOUT(("Starting material instance Deserialization\n")); INC_SCOPE();
+
+    mi::base::Handle<IMaterial_instance const> instance;
+    for (;;) {
+        instance = mi::base::make_handle(
+            Generated_code_dag::Material_instance::deserialize(ds, &bin_deserializer, compiler));
+        t = bin_deserializer.read_section_tag();
+        if (t != Serializer::ST_INSTANCE_END) {
+        } else {
+            MDL_ASSERT(t == Serializer::ST_INSTANCE_END);
+            DEC_SCOPE(); DOUT(("Material instance Deserialization Finished\n\n"));
+            break;
+        }
+    }
+
+    if (instance.is_valid_interface())
+        instance->retain();
+    return instance.get();
+}
+
 } // mdl
 } // mi
 

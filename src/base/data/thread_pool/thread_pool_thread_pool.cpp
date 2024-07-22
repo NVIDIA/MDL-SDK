@@ -70,8 +70,8 @@ Thread_pool::Thread_pool(
     m_next_cpu_id( 0),
     m_shutdown( false)
 {
-    for( mi::Size i = 0; i < N_THREAD_STATES; ++i)
-        m_thread_state_counter[i] = 0;
+    for( auto& counter : m_thread_state_counter)
+        counter = 0;
 
     for( mi::Size i = 0; i < nr_of_worker_threads; ++i)
         create_worker_thread();
@@ -102,8 +102,8 @@ Thread_pool::~Thread_pool()
     // are told to shutdown (without blocking) and wait in a loop similar as above for confirmations
     // from all threads that they left their main loop.
     block.release();
-    for( mi::Size i = 0; i < m_all_threads.size(); ++i)
-        m_all_threads[i]->shutdown();
+    for( auto& thread : m_all_threads)
+        thread->shutdown();
     block.set( &m_lock);
 
     ASSERT( M_THREAD_POOL, m_job_queue.empty());
@@ -117,8 +117,8 @@ Thread_pool::~Thread_pool()
     ASSERT( M_THREAD_POOL, m_thread_state_counter[THREAD_SUSPENDED] == 0);
     ASSERT( M_THREAD_POOL, m_thread_state_counter[THREAD_SHUTDOWN]  == m_all_threads.size());
 
-    for( mi::Size i = 0; i < m_all_threads.size(); ++i)
-        delete m_all_threads[i];
+    for( auto& thread : m_all_threads)
+        delete thread;
     m_all_threads.clear();
     m_sleeping_threads.clear();
 
@@ -189,8 +189,8 @@ bool Thread_pool::set_thread_affinity_enabled( bool value)
 
     m_thread_affinity = value;
 
-    for( mi::Size i = 0; i < m_all_threads.size(); ++i)
-        m_all_threads[i]->set_thread_affinity_enabled( value);
+    for( auto& thread : m_all_threads)
+        thread->set_thread_affinity_enabled( value);
     return true;
 }
 
@@ -246,12 +246,12 @@ bool Thread_pool::remove_job( IJob* job)
 {
     mi::base::Lock::Block block( &m_lock);
 
-    Job_queue::iterator it_map     = m_job_queue.begin();
-    Job_queue::iterator it_map_end = m_job_queue.end();
+    auto it_map     = m_job_queue.begin();
+    auto it_map_end = m_job_queue.end();
     while( it_map != it_map_end) {
 
-        Job_list::iterator it_list     = it_map->second.begin();
-        Job_list::iterator it_list_end = it_map->second.end();
+        auto it_list     = it_map->second.begin();
+        auto it_list_end = it_map->second.end();
         while( it_list != it_list_end) {
 
             if( it_list->get() == job) {
@@ -292,15 +292,15 @@ IJob* Thread_pool::get_next_job( Worker_thread* thread)
 
     ASSERT( M_THREAD_POOL, thread->get_state() == THREAD_IDLE);
 
-    Job_queue::iterator it_map      = m_job_queue.begin();
-    Job_queue::iterator it_map_end  = m_job_queue.end();
+    auto it_map      = m_job_queue.begin();
+    auto it_map_end  = m_job_queue.end();
     Job_list::iterator  it_list;
     Job_list::iterator  it_list_end;
 #ifdef MI_THREAD_POOL_VERBOSE
     mi::Size k = 0;
 #endif // MI_THREAD_POOL_VERBOSE
 
-    IJob* job = 0;
+    IJob* job = nullptr;
     mi::Float32 requested_cpu_load = 0.f;
     mi::Float32 requested_gpu_load = 0.f;
 
@@ -329,7 +329,7 @@ IJob* Thread_pool::get_next_job( Worker_thread* thread)
 #ifdef MI_THREAD_POOL_VERBOSE
             ++k;
 #endif // MI_THREAD_POOL_VERBOSE
-            job = 0;
+            job = nullptr;
         }
         if( job)
             break;
@@ -342,7 +342,7 @@ IJob* Thread_pool::get_next_job( Worker_thread* thread)
         std::pair<Sleeping_threads::iterator,bool> result = m_sleeping_threads.insert( thread);
         ASSERT( M_THREAD_POOL, result.second);
         boost::ignore_unused( result);
-        return 0;
+        return nullptr;
     }
 
 #ifdef MI_THREAD_POOL_VERBOSE
@@ -412,7 +412,7 @@ void Thread_pool::job_execution_finished( Worker_thread* thread, IJob* job)
 
     // unmap job from thread
     mi::Uint64 thread_id = thread->get_thread_id();
-    Job_map::iterator it = m_running_jobs.find( thread_id);
+    auto it = m_running_jobs.find( thread_id);
     ASSERT( M_THREAD_POOL, it != m_running_jobs.end());
     m_running_jobs.erase( it); //-V783 PVS
 }
@@ -520,7 +520,7 @@ bool Thread_pool::suspend_current_job_internal( bool only_for_higher_priority)
 
     // check whether we actually suspend if the flag is set, part 2
     if( only_for_higher_priority) {
-        Job_queue::iterator it = m_job_queue.begin();
+        auto it = m_job_queue.begin();
         if( it->first >= priority)
             return false;
     }
@@ -533,7 +533,7 @@ bool Thread_pool::suspend_current_job_internal( bool only_for_higher_priority)
     m_current_gpu_load -= gpu_load;
 
     // move job from map of running threads to map of suspended threads
-    Job_map::iterator it = m_running_jobs.find( thread_id);
+    auto it = m_running_jobs.find( thread_id);
     ASSERT( M_THREAD_POOL, it != m_running_jobs.end());
     ASSERT( M_THREAD_POOL, m_suspended_jobs.find( thread_id) == m_suspended_jobs.end());
     m_suspended_jobs[thread_id] = it->second; //-V783 PVS
@@ -579,7 +579,7 @@ void Thread_pool::resume_current_job_internal()
 
     // move job from map of suspended threads to map of running threads
     mi::base::Lock::Block block( &m_lock);
-    Job_map::iterator it = m_suspended_jobs.find( thread_id);
+    auto it = m_suspended_jobs.find( thread_id);
     ASSERT( M_THREAD_POOL, it != m_suspended_jobs.end());
     ASSERT( M_THREAD_POOL, m_running_jobs.find( thread_id) == m_running_jobs.end());
     m_running_jobs[thread_id] = it->second; //-V783 PVS
@@ -595,7 +595,7 @@ void Thread_pool::create_worker_thread()
         return;
 
     // The caller is supposed to hold m_lock.
-    Worker_thread* thread = new Worker_thread( this, m_next_cpu_id);
+    auto* thread = new Worker_thread( this, m_next_cpu_id);
     m_next_cpu_id = (m_next_cpu_id+1) % THREAD::Thread::get_nr_of_cpus();
     thread->set_thread_affinity_enabled( m_thread_affinity);
     thread->start();

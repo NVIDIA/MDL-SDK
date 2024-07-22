@@ -64,10 +64,12 @@ export int fd_light_profile_failure(
 
 // Test resource lookup with non-leading ".." (triggers error message).
 export int fd_bsdf_measurement_failure(
-    uniform bsdf_measurement b = bsdf_measurement("resources/../resources/test.mbsdf") [[ unused() ]]
+    uniform bsdf_measurement b
+         = bsdf_measurement("resources/../resources/test.mbsdf") [[ unused() ]]
 ) { return 0; }
 
 // Test resource lookup with absolute ".." (triggers error message).
 export int fd_bsdf_measurement_failure2(
-    uniform bsdf_measurement b = bsdf_measurement("/../mdl_elements/resources/test.mbsdf") [[ unused() ]]
+    uniform bsdf_measurement b
+        = bsdf_measurement("/../mdl_elements/resources/test.mbsdf") [[ unused() ]]
 ) { return 0; }

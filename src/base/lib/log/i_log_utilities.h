@@ -28,22 +28,48 @@
 
 #pragma once
 
+#include "i_log_logger.h"
+
 #include <mi/base/ilogger.h>
+#include <mi/base/interface_implement.h>
 
 namespace MI {
+
 namespace LOG {
 
-
-/// Converts a LOG log severity to an API message severity
+/// Converts a LOG log severity to an API message severity.
 ///
 /// \return   The hightest API message severity that includes the given LOG log severity.
 mi::base::Message_severity convert_severity( int severity);
 
 /// Converts an API message severity to a LOG log severity
 ///
-/// \return the LOG log severity, or -1 in case of failure
+/// \return   The LOG log severity, or -1 in case of failure.
 int convert_severity( mi::base::Message_severity severity);
 
+/// Converts a log category from enum into a string representation
+///
+/// \return   A string representation of the log category, or \c NULL in case of errors (e.g.,
+///           an invalid value casted to the Category enum).
+const char* convert_category_to_string( ILogger::Category category);
 
-}}
+/// Converts a log category from string to enum representation
+///
+/// \param in         String representation of the log category.
+/// \param[out] out   Enum representation of the log category, or undefined in case of failure.
+/// \return           \c true in case of success, \c false in case of failure.
+bool convert_string_to_category( const char* in, ILogger::Category& out);
 
+/// This logger forwards all messages to the LOG module.
+class Forwarding_logger : public mi::base::Interface_implement<mi::base::ILogger>
+{
+public:
+    void message(
+        mi::base::Message_severity level,
+        const char* category,
+        const mi::base::Message_details&,
+        const char* message);
+};
+
+}
+}

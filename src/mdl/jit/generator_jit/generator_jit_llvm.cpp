@@ -979,13 +979,10 @@ public:
                             f_name = string(dot, alloc);
                         }
 
-                        for (int i = 0, n = s_type->get_field_count(); i < n; ++i) {
-                            mi::mdl::ISymbol const *f_sym;
-                            mi::mdl::IType const   *f_tp;
+                        for (size_t i = 0, n = s_type->get_field_count(); i < n; ++i) {
+                            mi::mdl::IType_struct::Field const *field = s_type->get_field(i);
 
-                            s_type->get_field(i, f_tp, f_sym);
-
-                            if (f_sym->get_name() == f_name) {
+                            if (field->get_symbol()->get_name() == f_name) {
                                 return i;
                             }
                         }
@@ -1059,7 +1056,7 @@ public:
     DAG_call const *as_dag_call() const MDL_FINAL { return m_call; }
 
     /// If possible, convert into an AST expression.
-    virtual mi::mdl::IExpression_call const *as_expr_call() const MDL_FINAL { return NULL; }
+    mi::mdl::IExpression_call const *as_expr_call() const MDL_FINAL { return NULL; }
 
     /// Get the source position of this call itself.
     mi::mdl::Position const *get_position() const MDL_FINAL
@@ -1387,6 +1384,11 @@ LLVM_code_generator::LLVM_code_generator(
 , m_node_value_map(0, Node_value_map::hasher(), Node_value_map::key_equal(), get_allocator())
 , m_last_bb(0)
 , m_curr_bb(get_next_bb())
+, m_scatter_components_map(
+    0,
+    Scatter_components_map::hasher(),
+    Scatter_components_map::key_equal(),
+    get_allocator())
 , m_global_const_map(0, Global_const_map::hasher(), Global_const_map::key_equal(), get_allocator())
 , m_internalized_string_map(
     0,
@@ -1396,6 +1398,11 @@ LLVM_code_generator::LLVM_code_generator(
 , m_ro_segment(NULL)
 , m_next_ro_data_offset(0)
 , m_ro_data_values(jitted_code->get_allocator())
+, m_force_inlining_targets(
+    0,
+    Force_inline_targets::hasher(),
+    Force_inline_targets::key_equal(),
+    get_allocator())
 , m_optix_cp_from_id(NULL)
 , m_captured_args_mdl_types(get_allocator())
 , m_captured_args_type(NULL)
@@ -1430,6 +1437,7 @@ LLVM_code_generator::LLVM_code_generator(
 , m_link_libmdlrt(false)
 , m_link_libbsdf_df_handle_slot_mode(parse_df_handle_slot_mode(
     options.get_string_option(MDL_JIT_OPTION_LINK_LIBBSDF_DF_HANDLE_SLOT_MODE)))
+, m_libbsdf_flags_in_bsdf_data(options.get_bool_option(MDL_JIT_OPTION_LIBBSDF_FLAGS_IN_BSDF_DATA))
 , m_incremental(incremental)
 , m_texruntime_with_derivs(options.get_bool_option(MDL_JIT_OPTION_TEX_RUNTIME_WITH_DERIVATIVES))
 , m_deriv_infos(NULL)
@@ -1531,6 +1539,24 @@ LLVM_code_generator::LLVM_code_generator(
     }
 
     prepare_internal_functions();
+
+    //
+    // Force-inline some functions to avoid matrices on the stack for PTX
+    //
+    #define TARGET_BIT(x) (1 << ICode_generator::TL_##x)
+
+    // base::transform_coordinate()
+    m_force_inlining_targets[
+        "_ZN4base20transform_coordinateEu8float4x4N4base23texture_coordinate_infoE"]
+        = TARGET_BIT(PTX);
+
+    // base::lookup_volume_coefficients()
+    m_force_inlining_targets[
+        "_ZN4base26lookup_volume_coefficientsEU7uniformu10texture_3dU7uniformu5colorU7uniform"
+        "u5colorU7uniformu5colorU7uniformu5colorU7uniformu8float4x4U7uniformfU7uniformb"]
+        = TARGET_BIT(PTX);
+
+    #undef TARGET_BIT
 }
 
 // Get the optimization level from the options and environment.
@@ -3094,6 +3120,12 @@ LLVM_context_data *LLVM_code_generator::declare_function(
 
     string func_name(mangle(inst, name_prefix));
 
+    bool enforce_inlining = false;
+    Force_inline_targets::const_iterator it = m_force_inlining_targets.find(func_name.c_str());
+    if (it != m_force_inlining_targets.end()) {
+        enforce_inlining = (it->second & (1 << m_target_lang)) != 0;
+    }
+
     if (char const *mapped_name = m_func_remap.get_mapper_symbol(func_name.c_str())) {
         // mapped to an external one
         flags |= LLVM_context_data::FL_IS_MAPPED;
@@ -3162,6 +3194,9 @@ LLVM_context_data *LLVM_code_generator::declare_function(
         func_name.c_str(),
         m_module);
     set_llvm_function_attributes(func, /*mark_noinline=*/is_native);
+    if (enforce_inlining) {
+        func->addFnAttr(llvm::Attribute::AlwaysInline);
+    }
 
     if (is_entry_point) {
         func->setCallingConv(llvm::CallingConv::C);
@@ -3241,9 +3276,11 @@ LLVM_context_data *LLVM_code_generator::declare_function(
 
         arg_it->setName(p_sym->get_name());
 
-        // parameters are not captured
+        // parameters are not captured and due to creation of shadow copies on write,
+        // we can also ignore aliasing
         if (arg_it->getType()->isPointerTy()) {
             func->addParamAttr(arg_it->getArgNo(), llvm::Attribute::NoCapture);
+            func->addParamAttr(arg_it->getArgNo(), llvm::Attribute::NoAlias);
         }
     }
 
@@ -3994,6 +4031,7 @@ void LLVM_code_generator::translate_declaration(
 
     case mi::mdl::IDeclaration::DK_IMPORT:
     case mi::mdl::IDeclaration::DK_ANNOTATION:
+    case mi::mdl::IDeclaration::DK_STRUCT_CATEGORY:
     case mi::mdl::IDeclaration::DK_CONSTANT:
         // should NOT occur inside functions, but even then, generates no code
         return;
@@ -5834,7 +5872,8 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
 
     case mi::mdl::IExpression_binary::OK_LOGICAL_AND:
     case mi::mdl::IExpression_binary::OK_LOGICAL_OR:
-        if (is<mi::mdl::IType_bool>(lhs->get_type()) && is<mi::mdl::IType_bool>(rhs->get_type())) {
+        if (is<mi::mdl::IType_bool>(lhs->get_type()->skip_type_alias()) &&
+                is<mi::mdl::IType_bool>(rhs->get_type()->skip_type_alias())) {
             // shortcut evaluation here
             llvm::Value      *tmp      = ctx.create_local(m_type_mapper.get_bool_type(), "sc_tmp");
             llvm::BasicBlock *true_bb  = ctx.create_bb("sc_true");
@@ -6026,8 +6065,8 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
     case mi::mdl::IExpression_binary::OK_LOGICAL_AND:
     case mi::mdl::IExpression_binary::OK_LOGICAL_OR:
         {
-            mi::mdl::IType const *l_type = bin_expr->get_argument_type(0);
-            mi::mdl::IType const *r_type = bin_expr->get_argument_type(1);
+            mi::mdl::IType const *l_type = bin_expr->get_argument_type(0)->skip_type_alias();
+            mi::mdl::IType const *r_type = bin_expr->get_argument_type(1)->skip_type_alias();
 
             if (is<mi::mdl::IType_bool>(l_type) && is<mi::mdl::IType_bool>(r_type)) {
                 // shortcut evaluation here
@@ -6655,11 +6694,12 @@ Expression_result LLVM_code_generator::translate_assign(
 
     // is_deriv_var is only defined on the top level variables. For a variable in a struct, this
     // would be the struct. While the struct could be a derivative value, it could also contain
-    // values which cannot be used as derivatives like integers.
+    // values which cannot be used as derivatives like integers. Also consider the struct itself
+    // or sub-structs containing floating point types.
     IDefinition const *lhs_base_def = Analysis::get_lvalue_base(lhs);
     bool lhs_base_is_deriv = is_deriv_var(lhs_base_def);
     bool lhs_is_deriv = lhs_base_is_deriv &&
-        m_type_mapper.is_floating_point_based_type(lhs->get_type());
+        m_type_mapper.contains_floating_point_type(lhs->get_type());
 
     llvm::Value *res = NULL;
 
@@ -7181,66 +7221,7 @@ Expression_result LLVM_code_generator::translate_call(
                 return Expression_result::value(translate_unary(ctx, uop, arg.as_value(ctx)));
             }
         } else if (is_binary_operator(op)) {
-            mi::mdl::IExpression_binary::Operator bop = mi::mdl::IExpression_binary::Operator(op);
-
-            llvm::Value *l = call_expr->translate_argument_value(*this, ctx, 0, return_derivs);
-            llvm::Value *r = call_expr->translate_argument_value(*this, ctx, 1, return_derivs);
-
-            llvm::Value *res = NULL;
-            switch (bop) {
-            case mi::mdl::IExpression_binary::OK_MULTIPLY:
-                {
-                    mi::mdl::IType const *l_type   = call_expr->get_argument_type(0);
-                    mi::mdl::IType const *r_type   = call_expr->get_argument_type(1);
-
-                    res = translate_multiply(
-                        ctx, lookup_type_or_deriv_type(ctx, call_expr), l_type, l, r_type, r);
-                }
-                break;
-            case mi::mdl::IExpression_binary::OK_LOGICAL_AND:
-            case mi::mdl::IExpression_binary::OK_LOGICAL_OR:
-                {
-                    mi::mdl::IType const *l_type =
-                        call_expr->get_argument_type(0)->skip_type_alias();
-                    mi::mdl::IType const *r_type =
-                        call_expr->get_argument_type(1)->skip_type_alias();
-
-                    if (is<mi::mdl::IType_bool>(l_type) && is<mi::mdl::IType_bool>(r_type)) {
-                        // shortcut evaluation here
-                        llvm::BasicBlock *true_bb  = ctx.create_bb("sc_true");
-                        llvm::BasicBlock *false_bb = ctx.create_bb("sc_false");
-                        llvm::BasicBlock *end_bb   = ctx.create_bb("sc_end");
-                        llvm::Value      *tmp      =
-                            ctx.create_local(m_type_mapper.get_bool_type(), "sc_tmp");
-
-                        call_expr->translate_boolean_branch(*this, ctx, true_bb, false_bb);
-
-                        ctx->SetInsertPoint(true_bb);
-                        ctx->CreateStore(ctx.get_constant(true), tmp);
-                        ctx->CreateBr(end_bb);
-
-                        ctx->SetInsertPoint(false_bb);
-                        ctx->CreateStore(ctx.get_constant(false), tmp);
-                        ctx->CreateBr(end_bb);
-
-                        ctx->SetInsertPoint(end_bb);
-                        res = ctx->CreateLoad(tmp);
-                    } else {
-                        // no shortcut execution possible on vectors, execute bitwise
-                        if (bop == mi::mdl::IExpression_binary::OK_LOGICAL_AND) {
-                            bop = mi::mdl::IExpression_binary::OK_BITWISE_AND;
-                        } else {
-                            bop = mi::mdl::IExpression_binary::OK_BITWISE_OR;
-                        }
-                        res = translate_binary_basic(ctx, bop, l, r, /*expr_pos=*/ NULL);
-                    }
-                }
-                break;
-
-            default:
-                res = translate_binary_no_side_effect(ctx, call_expr);
-                break;
-            }
+            llvm::Value *res = translate_binary_no_side_effect(ctx, call_expr);
             return Expression_result::value(res);
         } else if (op == IExpression::OK_TERNARY) {
             if (m_eval_dag_ternary_strictly && call_expr->as_dag_call() != NULL) {
@@ -7424,10 +7405,26 @@ Expression_result LLVM_code_generator::translate_call(
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA:
         return translate_dag_call_lambda(ctx, call_expr);
 
+    case mi::mdl::IDefinition::DS_INTRINSIC_DAG_DECL_CAST:
+        error(INTERNAL_JIT_BACKEND_ERROR, "Cannot compile decl_cast nodes");
+        return Expression_result::undef(lookup_type(call_expr->get_type()));
+
     case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_ISVALID:
-        if (!target_is_structured_language() &&
-            m_target_lang != ICode_generator::TL_PTX &&
-            !(m_target_lang == ICode_generator::TL_NATIVE && !m_has_res_handler)) {
+        if ((m_target_lang == ICode_generator::TL_NATIVE && m_has_res_handler) ||
+            m_target_lang == ICode_generator::TL_LLVM_IR ||
+            m_state_mode == State_subset_mode::SSM_ENVIRONMENT)
+        {
+            if (m_state_mode == State_subset_mode::SSM_ENVIRONMENT) {
+                mi::mdl::Position const *pos = call_expr->get_position();
+                if (pos == NULL) {
+                    pos = &zero;
+                }
+                warning(
+                    SCENE_DATA_CALL_IN_ENVIRONMENT_FUNCTION,
+                    Exc_location(*this, pos),
+                    Error_params(get_allocator()));
+            }
+
             // TODO: implement calling renderer runtime. For now just return false
             return Expression_result::value(ctx.get_constant(false));
         }
@@ -7455,9 +7452,21 @@ Expression_result LLVM_code_generator::translate_call(
     case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
     case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4X4:
     case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4X4:
-        if (!target_is_structured_language() &&
-            m_target_lang != ICode_generator::TL_PTX &&
-            !(m_target_lang == ICode_generator::TL_NATIVE && !m_has_res_handler)) {
+        if ((m_target_lang == ICode_generator::TL_NATIVE && m_has_res_handler) ||
+            m_target_lang == ICode_generator::TL_LLVM_IR ||
+            m_state_mode == State_subset_mode::SSM_ENVIRONMENT)
+        {
+            if (m_state_mode == State_subset_mode::SSM_ENVIRONMENT) {
+                mi::mdl::Position const *pos = call_expr->get_position();
+                if (pos == NULL) {
+                    pos = &zero;
+                }
+                warning(
+                    SCENE_DATA_CALL_IN_ENVIRONMENT_FUNCTION,
+                    Exc_location(*this, pos),
+                    Error_params(get_allocator()));
+            }
+
             // TODO: implement calling renderer runtime. For now just return second argument
             return call_expr->translate_argument(*this, ctx, 1, return_derivs);
         }
@@ -7757,7 +7766,7 @@ Expression_result LLVM_code_generator::translate_dag_call_lambda(
     MDL_ASSERT(call_expr->get_semantics() == IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA);
 
     DAG_call const *dag_call = call_expr->as_dag_call();
-    MDL_ASSERT(dag_call);
+    MDL_ASSERT(dag_call != NULL && "Cannot convert lambda call to DAG node");
 
     size_t lambda_index = strtoul(dag_call->get_name(), NULL, 10);
     return translate_precalculated_lambda(

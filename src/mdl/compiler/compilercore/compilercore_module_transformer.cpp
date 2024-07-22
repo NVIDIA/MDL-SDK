@@ -786,6 +786,7 @@ IExpression *Module_inliner::clone_expr_reference(IExpression_reference const *r
             }
             break;
         case IDefinition::DK_ANNOTATION:
+        case IDefinition::DK_STRUCT_CATEGORY:
         case IDefinition::DK_TYPE:
         case IDefinition::DK_VARIABLE:
         case IDefinition::DK_MEMBER:
@@ -1085,7 +1086,7 @@ IStatement *Module_inliner::clone_statement(IStatement const *stmt)
             IStatement_compound const *stmt_cmp = cast<IStatement_compound>(stmt);
 
             IStatement_compound *new_cmp = m_sf.create_compound();
-            for (int i = 0, n = stmt_cmp->get_statement_count(); i < n; ++i) {
+            for (size_t i = 0, n = stmt_cmp->get_statement_count(); i < n; ++i) {
                 IStatement *n_stmt = clone_statement(stmt_cmp->get_statement(i));
                 if (n_stmt != NULL) {
                     new_cmp->add_statement(n_stmt);
@@ -1114,7 +1115,7 @@ IStatement *Module_inliner::clone_statement(IStatement const *stmt)
                 new_label = m_target_module->clone_expr(label, this);
             }
             IStatement_case *new_stmt_case = m_sf.create_switch_case(new_label);
-            for (int i = 0, n = stmt_case->get_statement_count(); i < n; ++i) {
+            for (size_t i = 0, n = stmt_case->get_statement_count(); i < n; ++i) {
                 IStatement *new_stmt = clone_statement(stmt_case->get_statement(i));
                 new_stmt_case->add_statement(new_stmt);
             }
@@ -1183,7 +1184,7 @@ IStatement *Module_inliner::clone_statement(IStatement const *stmt)
                 new_cond = m_target_module->clone_expr(cond, this);
             }
             IStatement_switch *new_sw = m_sf.create_switch(new_cond);
-            for (int i = 0, n = stmt_sw->get_case_count(); i < n; ++i) {
+            for (size_t i = 0, n = stmt_sw->get_case_count(); i < n; ++i) {
                 new_sw->add_case(clone_statement(stmt_sw->get_case(i)));
             }
             return new_sw;
@@ -1397,7 +1398,7 @@ IDeclaration_function *Module_inliner::clone_declaration(
     }
 
     IDeclaration_function *new_decl = m_df.create_function(
-        ret_tn, new_ret_annos, function_name, decl->is_preset(),
+        decl->is_declarative(), ret_tn, new_ret_annos, function_name, decl->is_preset(),
         new_stmt, new_fct_annos, /*is_exported=*/is_exported);
     new_decl->set_qualifier(decl->get_qualifier());
 
@@ -1445,7 +1446,7 @@ IDeclaration_type_enum *Module_inliner::clone_declaration(
     IDeclaration_type_enum *new_enum = m_df.create_enum(
         enum_name, new_enum_annos, is_exported, decl->is_enum_class());
 
-    for (int i = 0, n = decl->get_value_count(); i < n; ++i) {
+    for (size_t i = 0, n = decl->get_value_count(); i < n; ++i) {
         ISimple_name const *value_name = decl->get_value_name(i);
         ISimple_name const *new_name;
         if (m_is_root) {
@@ -1474,11 +1475,15 @@ IDeclaration_type_struct *Module_inliner::clone_declaration(
     bool                           is_exported)
 {
     IAnnotation_block *new_struct_annos = create_annotation_block(
-            decl->get_definition(),
-            decl->get_annotations());
+        decl->get_definition(),
+        decl->get_annotations());
 
+    IQualified_name const *category = decl->get_struct_category_name();
+    if (category != NULL) {
+        category = m_target_module->clone_name(category, /*modifier=*/ NULL);
+    }
     IDeclaration_type_struct *new_struct = m_df.create_struct(
-        struct_name, new_struct_annos, is_exported);
+        decl->is_declarative(), struct_name, category, new_struct_annos, is_exported);
 
     for (int i = 0, n = decl->get_field_count(); i < n; ++i) {
         ISimple_name const *new_name = m_target_module->clone_name(decl->get_field_name(i));
@@ -1614,11 +1619,8 @@ void Module_inliner::register_child_types(
         {
             IType_struct const *s_tp = cast<IType_struct>(tp);
 
-            for (int i = 0, n = s_tp->get_field_count(); i < n; ++i) {
-                ISymbol const *f_sym;
-                IType const   *f_tp;
-
-                s_tp->get_field(i, f_tp, f_sym);
+            for (size_t i = 0, n = s_tp->get_field_count(); i < n; ++i) {
+                IType const *f_tp = s_tp->get_field(i)->get_type();
                 do_type(f_tp);
             }
         }
@@ -1979,7 +1981,7 @@ IMDL::MDL_version MDL_module_transformer::compute_mdl_version(
 {
     IMDL::MDL_version v = root->get_mdl_version();
 
-    for (int i = 0, n = root->get_import_count(); i < n; ++i) {
+    for (size_t i = 0, n = root->get_import_count(); i < n; ++i) {
         base::Handle<Module const> import(root->get_import(i));
         if (import->is_builtins() || import->is_stdlib()) {
             // we can safely ignore the standard library: all modules there are multi-versioned
@@ -2019,7 +2021,7 @@ IModule *MDL_module_transformer::inline_module(
     Module const *module = impl_cast<Module>(imodule);
 
     bool user_imports = false;
-    for (int i = 0, n = module->get_import_count(); i < n; ++i) {
+    for (size_t i = 0, n = module->get_import_count(); i < n; ++i) {
         base::Handle<IModule const> im(module->get_import(i));
         if (!(im->is_builtins() || im->is_stdlib())) {
             user_imports = true;

@@ -11,24 +11,30 @@ if report_coverage:
         report_coverage = False
 
 
-def run():
+def run() -> int:
     loader = unittest.TestLoader()
     suite = loader.discover(os.path.dirname(os.path.abspath(__file__)), pattern="test_*.py")
     runner = unittest.TextTestRunner()
-    runner.run(suite)
-
-
+    result: unittest.TestResult = runner.run(suite)
+    if len(result.errors) == 0 and len(result.failures) == 0:
+        return 0
+    else:
+        print(f"error : unit tests exited with {len(result.errors)} errors and {len(result.failures)} failures.")
+        return -1
+    
 # run all tests
 # independent of the cmake option we generate a report here in case the coverage module is installed
 if __name__ == '__main__':
+    ret_code: int = -2
     if report_coverage:
         folder: str = 'coverage_report'
         cov = coverage.Coverage(data_file=folder + '/.coverage')
         cov.exclude('.*No constructor defined - class is abstract.*')
         cov.start()
-        run()
+        ret_code = run()
         cov.stop()
         cov.save()
         cov.html_report(directory=folder)
     else:
-        run()
+        ret_code = run()
+    exit(ret_code)

@@ -42,10 +42,6 @@
 namespace MI {
 namespace MDLRT {
 
-Light_profile::Light_profile()
-{
-}
-
 Light_profile::Light_profile(
     Tag_type const  &tex_t,
     DB::Transaction *trans)
@@ -57,7 +53,7 @@ Light_profile::Light_profile(
 
     m_start_t = m_light_profile->get_theta(0);
     m_start_p = m_light_profile->get_phi(0);
-    
+
     m_delta_t = m_light_profile->get_theta(1) - m_start_t;
     m_delta_p = m_light_profile->get_phi(1) - m_start_p;
 
@@ -69,7 +65,7 @@ Light_profile::Light_profile(
     m_candela_multiplier = m_light_profile->get_candela_multiplier();
     m_total_power = 0.0f;
 
-    // -------------------------------------------------------------------------------------------- 
+    // --------------------------------------------------------------------------------------------
     // compute total power
     // compute inverse CDF data for sampling
     // sampling will work on cells rather than grid nodes (used for evaluation)
@@ -130,7 +126,7 @@ Light_profile::Light_profile(
 
 Light_profile::~Light_profile()
 {
-    if (m_cdf_data) 
+    if (m_cdf_data)
         delete[] m_cdf_data;
 }
 
@@ -152,7 +148,7 @@ mi::Float32 Light_profile::evaluate(const mi::Float32_2& theta_phi) const
     // floorf wraps phi range into 0..2pi
     phi = phi - m_start_p - floorf((phi - m_start_p) * float(0.5 / M_PI)) * float(2.0 * M_PI);
 
-    // (phi < 0.0f) is no problem, this is handle by the (black) border 
+    // (phi < 0.0f) is no problem, this is handle by the (black) border
     // since it implies lp.theta_phi_start.y > 0 (and we really have "no data" below that)
     float v = phi * m_inv_delta_p; // range 0..m_res_p
 
@@ -160,8 +156,8 @@ mi::Float32 Light_profile::evaluate(const mi::Float32_2& theta_phi) const
     const int idx_phi = int(v);
 
     // outside the measured patch the value is zero
-    if (idx_theta < 0 || idx_theta >= m_res_t || 
-        idx_phi   < 0 || idx_phi   >= m_res_p) 
+    if (idx_theta < 0 || idx_theta >= m_res_t ||
+        idx_phi   < 0 || idx_phi   >= m_res_p)
             return 0.0f;
 
     // map to 0..1 range
@@ -259,14 +255,14 @@ mi::Float32_3 Light_profile::sample(const mi::Float32_3& xi) const
     result.x = acos(cos_theta);
     result.y = m_start_p + (float(idx_phi) + xi1) * m_delta_p;
 
-    // align phi 
+    // align phi
     if (result.y > float(2.0 * M_PI)) result.y -= float(2.0 * M_PI);                // wrap
     if (result.y > float(1.0 * M_PI)) result.y = float(-2.0 * M_PI) + result.y;     // to [-pi, pi]
 
     // compute pdf
     //-------------------------------------------
     result.z = prob_theta * prob_phi / (m_delta_p * (cos_theta_0 - cos_theta_1));
-    
+
     return result;
 }
 
@@ -283,7 +279,7 @@ mi::Float32 Light_profile::pdf(const mi::Float32_2& theta_phi) const
     phi = phi - m_start_p -
         floorf((phi -m_start_p) * float(0.5 / M_PI)) * float(2.0 * M_PI);
 
-    // (phi < 0.0f) is no problem, this is handle by the (black) border 
+    // (phi < 0.0f) is no problem, this is handle by the (black) border
     // since it implies lp.theta_phi_m_start_p > 0 (and we really have "no data" below that)
     const int idx_phi = int(phi * m_inv_delta_p);
 
@@ -314,7 +310,7 @@ mi::Float32 Light_profile::pdf(const mi::Float32_2& theta_phi) const
         prob_phi -= tmp;
     }
 
-    // compute probability to select a position in the sphere patch 
+    // compute probability to select a position in the sphere patch
     const float cos_theta_0 = cos(m_start_t + float(idx_theta)      * m_delta_t);
     const float cos_theta_1 = cos(m_start_t + float(idx_theta + 1u) * m_delta_t);
 

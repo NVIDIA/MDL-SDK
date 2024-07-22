@@ -157,7 +157,7 @@ private:
     /// times. In such a case they appear in a continuous section in this list.
     std::vector<std::pair<std::string, std::string> > m_fields;
 
-    typedef std::map<std::string, std::pair<size_t, size_t> > Index_count_map;
+    using Index_count_map = std::map<std::string, std::pair<size_t, size_t>>;
 
     /// Stores for each key the (first) index into m_fields and the number of such keys.
     Index_count_map m_index_count;

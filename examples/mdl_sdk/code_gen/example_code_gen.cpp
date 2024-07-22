@@ -67,6 +67,7 @@ public:
     bool m_ignore_noinline = true;
     bool m_disable_pdf = false;
     bool m_enable_aux = false;
+    bool m_enable_bsdf_flags = false;
     std::string m_lambda_return_mode;
     bool m_warn_spectrum_conv = false;
     std::string m_backend = "hlsl";
@@ -76,6 +77,7 @@ public:
     bool m_adapt_normal = false;
     bool m_adapt_microfacet_roughness = false;
     bool m_experimental = false;
+    bool m_run_material_analysis = false;
 
     /// MDL qualified material name to generate code for.
     std::string m_qualified_material_name = "::nvidia::sdk_examples::tutorials::example_material";
@@ -172,6 +174,18 @@ void dump_metadata(mi::base::Handle<const mi::neuraylib::ITarget_code> code, std
         out << "   " << i << ": \"" << c << "\" " << b << "\n";
     }
     out << "*/\n\n";
+}
+
+static char const *opacity(mi::neuraylib::Material_opacity o)
+{
+    switch (o) {
+    case mi::neuraylib::OPACITY_OPAQUE:
+        return "OPAQUE";
+    case mi::neuraylib::OPACITY_TRANSPARENT:
+        return "TRANSPARENT";
+    default:
+        return "UNKNOWN";
+    }
 }
 
 /// The main content of the example
@@ -289,6 +303,11 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
         context->set_option("fold_all_enum_parameters", options.m_fold_all_enum_parameters);
         context->set_option("ignore_noinline", options.m_ignore_noinline);
 
+        // do not convert to target type SID_MATERIAL here
+        // this example can produce code for user defined structures, too
+        // if you specify a function that returns a custom (declarative) struct, make sure
+        // to run example with corresponding -e/--expr_path options.
+
         mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance2(
             material_instance->get_interface<mi::neuraylib::IMaterial_instance>());
         mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
@@ -381,6 +400,8 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
                 !options.m_disable_pdf ? "on" : "off");
             backend->set_option("enable_auxiliary",
                 options.m_enable_aux ? "on" : "off");
+            backend->set_option("libbsdf_flags_in_bsdf_data",
+                options.m_enable_bsdf_flags ? "on" : "off");
             if (!options.m_lambda_return_mode.empty()) {
                 if (backend->set_option(
                        "lambda_return_mode", options.m_lambda_return_mode.c_str()) != 0) {
@@ -496,6 +517,26 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
         mi::base::Uuid hash = compiled_material->get_hash();
         std::cout << "compiled material hash: \n" << std::hex << hash.m_id1 << " " << hash.m_id2
                     << " " << hash.m_id3 << " " << hash.m_id4 << std::dec  <<"\n";
+
+        if (options.m_run_material_analysis) {
+            std::cout << "\n\n\n";
+            std::cout << "Might depend on transform state functions: " <<
+                (compiled_material->depends_on_state_transform() ? "YES" : "NO") << "\n";
+            std::cout << "Might depend on state::object_id(): " <<
+                (compiled_material->depends_on_state_object_id() ? "YES" : "NO") << "\n";
+            std::cout << "Might depend on global distribution: " <<
+                (compiled_material->depends_on_global_distribution() ? "YES" : "NO") << "\n";
+            std::cout << "Might depend on uniform scene data: " <<
+                (compiled_material->depends_on_uniform_scene_data() ? "YES" : "NO") << "\n";
+            std::cout << "Opacity of this instance: " <<
+                opacity(compiled_material->get_opacity()) << "\n";
+            std::cout << "Surface opacity of this instance: " <<
+                opacity(compiled_material->get_surface_opacity()) << "\n";
+            mi::Float32 cutout_opacity = -1.0;
+            std::cout << "Has constant cutout opacity: " <<
+                (compiled_material->get_cutout_opacity(&cutout_opacity) ? "YES" : "NO") << "\n";
+            std::cout << "Cutout opacity of this instance: " << cutout_opacity << "\n";
+        }
     }
 
     // All transactions need to get committed or aborted before closing the application.
@@ -597,15 +638,15 @@ options:
   --dian                        Disable ignoring anno::noinline() annotations.
   --disable_pdf                 Disable generation of separate PDF function.
   --enable_aux                  Enable generation of auxiliary function.
+  --enable_bsdf_flags           Enable "flags" field in BSDF data structures in generated code
   --lambda_return_mode <mode>   Set how base types and vector types are returned for PTX and LLVM
                                 backends. One of {default, sret, value}.
   --adapt_normal                Enable renderer callback to adapt the normal.
   --adapt_microfacet_roughness  Enable renderer callback to adapt the roughness for
                                 microfacet BSDFs.
   --experimental                Enable experimental compiler features (for internal testing).
-  --warn-spectrum-conv          Warn if a spectrum constructor is converted into RGB.)";
-
-    s << R"(
+  --warn-spectrum-conv          Warn if a spectrum constructor is converted into RGB.
+  --analyze                     Run backend analysis
   --distill <target>            Distill the material before running the code generation.)";
 
     s << std::endl;
@@ -641,6 +682,8 @@ bool Options::parse(int argc, char* argv[])
                 m_disable_pdf = true;
             else if (arg == "--enable_aux")
                 m_enable_aux = true;
+            else if (arg == "--enable_bsdf_flags")
+                m_enable_bsdf_flags = true;
             else if (arg == "--lambda_return_mode") {
                 if (i == argc - 1)
                 {
@@ -653,6 +696,8 @@ bool Options::parse(int argc, char* argv[])
                 m_adapt_normal = true;
             else if (arg == "--adapt_microfacet_roughness")
                 m_adapt_microfacet_roughness = true;
+            else if (arg == "--analyze")
+                m_run_material_analysis = true;
             else if (arg == "--experimental")
                 m_experimental = true;
             else if (arg == "--warn-spectrum-conv")

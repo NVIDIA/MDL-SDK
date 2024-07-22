@@ -51,6 +51,7 @@ Descriptor_heap_handle::Descriptor_heap_handle(Descriptor_heap* heap, size_t ind
 
 Descriptor_heap_handle Descriptor_heap_handle::create_offset(size_t offset)
 {
+    assert(is_valid());
     return Descriptor_heap_handle(m_descriptor_heap, m_index + offset);
 }
 
@@ -185,6 +186,9 @@ Descriptor_heap_handle Descriptor_heap::reserve_views(size_t count)
 
 void Descriptor_heap::free_views(Descriptor_heap_handle& handle)
 {
+    if (!handle.is_valid())
+        return;
+
     std::lock_guard<std::mutex> lock(m_entries_mutex);
 
     Entry entry = m_entries[handle];
@@ -223,7 +227,7 @@ void Descriptor_heap::print_debug_infos()
     {
         const Entry& e = m_entries[i];
 
-        msg += "\n  [" + std::to_string(i) + "]\t " +
+        msg += "\n  [global " + std::to_string(i) + "]\t " +
             "[block " + std::to_string(e.alloc_block_id) +
             " (" + std::to_string(e.alloc_block_index + 1) + "/" +
             std::to_string(e.alloc_block_size) + ")] [";

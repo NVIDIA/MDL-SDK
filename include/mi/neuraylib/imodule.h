@@ -33,8 +33,6 @@
 
 #include <mi/neuraylib/iexpression.h>
 #include <mi/neuraylib/iscene_element.h>
-#include <mi/neuraylib/version.h>
-
 
 namespace mi {
 
@@ -506,7 +504,7 @@ need. See the next section for details
 \section mi_neuray_mdl_template_like_function_definitions Template-like function definitions
 
 Usually, function definitions have a fixed set of parameter types and a fixed return type.
-Exceptions of this rule are the following five function definitions which rather have the character
+Exceptions of this rule are the following six function definitions which rather have the character
 of template functions with generic parameter and/or return types.
 
 - the array constructor (#mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR),
@@ -514,6 +512,7 @@ of template functions with generic parameter and/or return types.
 - the array index operator (#mi::neuraylib::IFunction_definition::DS_ARRAY_INDEX),
 - the ternary operator (#mi::neuraylib::IFunction_definition::DS_TERNARY), and
 - the cast operator (#mi::neuraylib::IFunction_definition::DS_CAST).
+- the decl_cast operator (#mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_DECL_CAST).
 
 The MDL and DB names of these function definitions use \c "<0>" or \c "T" to indicate such a generic
 parameter or return type. When querying the actual type, #mi::neuraylib::IType_int (arbitrary
@@ -529,7 +528,7 @@ with the desired parameter types).
 Template-like functions are those functions for which serialized name and DB name differ (see
 \ref mi_mdl_names).
 
-More details about the five different template-like function definitions follow.
+More details about the six different template-like function definitions follow.
 
 
 \subsection mi_neuray_mdl_array_constructor Array constructor
@@ -620,6 +619,30 @@ followed by the type name of the \c "cast_return" expression.
 See also #mi::neuraylib::IExpression_factory::create_cast().
 
 
+\subsection mi_neuray_mdl_decl_cast_operator Decl_cast operator
+
+The \c decl_cast operator is used to express casts between different struct types
+from the same struct category.
+
+Semantic: #mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_DECL_CAST \n
+DB name: \c "mdl::operator_decl_cast(%3C0%3E)" \n
+MDL name: \c "operator_decl_cast(%3C0%3E)" \n
+Serialized name (example):
+  \c "operator_decl_cast(%3C0%3E)<::foo::some_material_type,::foo::another_material_type>"
+
+The following requirements apply when creating function calls of the decl_cast operator:
+- the expression list for the arguments contains \em two expressions named \c "cast" and
+  \c "cast_return", respectively,
+- the expression named \c "cast" is a struct type with a struct category (this is
+  the intended argument of the function call),
+- the type of the expression named \c "cast_return" specifies the return type of the function
+  call (no frequency qualifiers; the expression itself is not used), and
+- the types of \c "cast" and \c "cast_return" are struct types from the same struct category.
+
+The suffix for the serialized name has two arguments, the type name of the \c "cast" expression,
+followed by the type name of the \c "cast_return" expression.
+
+
 @}*/ // end group mi_neuray_mdl_elements
 
 /** \addtogroup mi_neuray_mdl_elements
@@ -676,6 +699,9 @@ public:
     /// \param index    The index of the imported module.
     /// \return         The DB name of the imported module.
     virtual const char* get_import( Size index) const = 0;
+
+    /// Returns the struct categories exported by this module.
+    virtual const IStruct_category_list* get_struct_categories() const = 0;
 
     /// Returns the types exported by this module.
     virtual const IType_list* get_types() const = 0;
@@ -770,11 +796,12 @@ public:
     ///       #get_function_overloads(const char*,const IExpression_list*)const instead.
     ///
     /// \note This method does not work for the function definitions with the following semantics:
-    ///       - #mi::neuraylib::IFunction_definition::DS_CAST,
-    ///       - #mi::neuraylib::IFunction_definition::DS_TERNARY,
-    ///       - #mi::neuraylib::IFunction_definition::DS_ARRAY_INDEX,
     ///       - #mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,
-    ///       - #mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_ARRAY_LENGTH. and
+    ///       - #mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_ARRAY_LENGTH,
+    ///       - #mi::neuraylib::IFunction_definition::DS_ARRAY_INDEX,
+    ///       - #mi::neuraylib::IFunction_definition::DS_TERNARY,
+    ///       - #mi::neuraylib::IFunction_definition::DS_CAST,
+    ///       - #mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_DECL_CAST, and
     ///       - #mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_FIELD_ACCESS.
     ///       These are the \ref mi_neuray_mdl_template_like_function_definitions plus the field
     ///       access function definitions.
@@ -825,15 +852,6 @@ public:
         const char* module_source,
         bool recursive,
         IMdl_execution_context* context) = 0;
-
-    virtual const IType_resource* MI_NEURAYLIB_DEPRECATED_METHOD_12_1(get_resource_type)(
-        Size index) const = 0;
-
-    virtual const char* MI_NEURAYLIB_DEPRECATED_METHOD_12_1(get_resource_mdl_file_path)(
-        Size index) const = 0;
-
-    virtual const char* MI_NEURAYLIB_DEPRECATED_METHOD_12_1(get_resource_name)(
-        Size index) const = 0;
 };
 
 /**@}*/ // end group mi_neuray_mdl_elements

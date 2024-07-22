@@ -33,13 +33,13 @@
 /// base/data/serial/i_serial_buffer_serializer.h. The following
 /// example explains how to use it:
 /// \code
-///  	Some_serializable serializable(...);
-///  	File_serializer serializer;
-///  	serializable.serialize(serializer);
-///  	File_deserializer deserializer;
-///  	Some_serializable deserialized;
-///  	deserializer.deserialize(&deserialized, serializer->get_buffer(),
-/// 	    serializer->get_buffer_size());
+///     Some_serializable serializable(...);
+///     File_serializer serializer;
+///     serializable.serialize(serializer);
+///     File_deserializer deserializer;
+///     Some_serializable deserialized;
+///     deserializer.deserialize(&deserialized, serializer->get_buffer(),
+///         serializer->get_buffer_size());
 /// \endcode
 ///
 /// TODO: Current implementation do not care about endian.
@@ -107,7 +107,7 @@ void File_serializer::write_impl(const char* buffer, size_t size)
     ASSERT(M_DB, this->is_file_valid(m_p_file));
 
     if (m_p_file->write(buffer, size) != Sint64(size)){
-	this->set_valid(false);
+        this->set_valid(false);
     }
 }
 
@@ -212,7 +212,7 @@ void File_deserializer::read_impl(
     ASSERT(M_DB, this->is_file_valid(m_p_file));
 
     if(m_p_file->read(buffer, size) != Sint64(size)){
-	m_is_valid = false;
+        m_is_valid = false;
     }
 }
 

@@ -211,7 +211,7 @@ public:
 
 #ifdef MI_CXX_FEATURE_RVALUE_REFERENCES
     /// Move constructor.
-    Handle( Self&& other)
+    Handle( Self&& other) noexcept
       : m_iptr( other.m_iptr)
     {
         other.m_iptr = 0;
@@ -219,7 +219,7 @@ public:
 
     /// Converting move constructor.
     template <class Interface2>
-    Handle( Handle<Interface2>&& other)
+    Handle( Handle<Interface2>&& other) noexcept
       : m_iptr( other.m_iptr)
     {
         other.m_iptr = 0;
@@ -258,7 +258,7 @@ public:
 
 #ifdef MI_CXX_FEATURE_RVALUE_REFERENCES
     /// Move assignment operator, releases old interface.
-    Self& operator=( Self&& other)
+    Self& operator=( Self&& other) noexcept
     {
         if( this != &other) {
             if( m_iptr)
@@ -271,7 +271,7 @@ public:
 
     /// Converting move assignment operator, releases old interface.
     template <class Interface2>
-    Self& operator=( Handle<Interface2>&& other)
+    Self& operator=( Handle<Interface2>&& other) noexcept
     {
         if( m_iptr)
             m_iptr->release();

@@ -103,12 +103,12 @@ public:
     static Kind const s_kind = SK_COMPOUND;
 
     /// Get the statement count inside this compound statement.
-    virtual int get_statement_count() const = 0;
+    virtual size_t get_statement_count() const = 0;
 
     /// Get the statement at index.
     ///
     /// \param index the index of the requested sub-statement
-    virtual IStatement const *get_statement(int index) const = 0;
+    virtual IStatement const *get_statement(size_t index) const = 0;
 
     /// Add a statement (at the end of the statement list).
     ///
@@ -119,7 +119,7 @@ public:
     ///
     /// \param index  starting at this index, this all further sub-statements
     ///               are removed
-    virtual void drop_statements_after(int index) = 0;
+    virtual void drop_statements_after(size_t index) = 0;
 
     /// Replace all the statements with this new block.
     ///
@@ -215,12 +215,12 @@ public:
     virtual void set_condition(IExpression const *expr) = 0;
 
     /// Get the number of case statements inside this switch.
-    virtual int get_case_count() const = 0;
+    virtual size_t get_case_count() const = 0;
 
     /// Get the case statement at index, either an IStatement_invalid or an IStatement_case.
     ///
     /// \param index  the index of the requested case statement
-    virtual IStatement const *get_case(int index) const = 0;
+    virtual IStatement const *get_case(size_t index) const = 0;
 
     /// Add a case (at the end of the case statement list).
     ///

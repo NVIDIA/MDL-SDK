@@ -856,6 +856,18 @@ enum Bsdf_event_type {
 /// for this IOR field.
 #define MDL_CORE_BSDF_USE_MATERIAL_IOR (-1.0f)
 
+/// Flags controlling the calculation of DF results.
+enum Df_flags {
+    DF_FLAGS_NONE = 0,               ///< allows nothing -> black
+
+    DF_FLAGS_ALLOW_REFLECT = 1,
+    DF_FLAGS_ALLOW_TRANSMIT = 2,
+    DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT = DF_FLAGS_ALLOW_REFLECT | DF_FLAGS_ALLOW_TRANSMIT,
+    DF_FLAGS_ALLOWED_SCATTER_MODE_MASK = DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT,
+
+    DF_FLAGS_FORCE_32_BIT = 0xffffffffU
+};
+
 /// Input and output structure for BSDF sampling data.
 struct __align__(16) Bsdf_sample_data {
     tct_float3       ior1;           ///< mutual input: IOR current medium
@@ -868,6 +880,9 @@ struct __align__(16) Bsdf_sample_data {
     tct_float3       bsdf_over_pdf;  ///< output: bsdf * dot(normal, k2) / pdf
     Bsdf_event_type  event_type;     ///< output: the type of event for the generated sample
     tct_int          handle;         ///< output: handle of the sampled elemental BSDF (lobe)
+
+    Df_flags         flags;          ///< input: flags controlling calculation of result
+                                     ///<     (optional depending on backend options)
 };
 
 /// Type of Bsdf_evaluate_data variants, depending on the backend and its configuration.
@@ -900,6 +915,9 @@ struct Bsdf_evaluate_data : public Bsdf_evaluate_data_base
     tct_float3       bsdf_glossy[static_cast<size_t>(N)];  ///< output: (glossy part of the)
                                                            ///<     bsdf * dot(normal, k2)
     tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
+
+    Df_flags         flags;          ///< input: flags controlling calculation of result
+                                     ///<     (optional depending on backend options)
 };
 
 template<>
@@ -916,6 +934,9 @@ struct Bsdf_evaluate_data<DF_HSM_POINTER> : public Bsdf_evaluate_data_base
     tct_float3*      bsdf_diffuse;   ///< output: (diffuse part of the) bsdf * dot(normal, k2)
     tct_float3*      bsdf_glossy;    ///< output: (glossy part of the) bsdf * dot(normal, k2)
     tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
+
+    Df_flags         flags;          ///< input: flags controlling calculation of result
+                                     ///<     (optional depending on backend options)
 };
 
 template<>
@@ -929,6 +950,9 @@ struct Bsdf_evaluate_data<DF_HSM_NONE> : public Bsdf_evaluate_data_base
     tct_float3       bsdf_diffuse;   ///< output: (diffuse part of the) bsdf * dot(normal, k2)
     tct_float3       bsdf_glossy;    ///< output: (glossy part of the) bsdf * dot(normal, k2)
     tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
+
+    Df_flags         flags;          ///< input: flags controlling calculation of result
+                                     ///<     (optional depending on backend options)
 };
 
 /// Input and output structure for BSDF PDF calculation data.
@@ -939,6 +963,9 @@ struct __align__(16) Bsdf_pdf_data {
 
     tct_float3       k2;             ///< input: incoming direction
     tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
+
+    Df_flags         flags;          ///< input: flags controlling calculation of result
+                                     ///<     (optional depending on backend options)
 };
 
 /// Input and output structure for BSDF auxiliary calculation data.
@@ -960,6 +987,9 @@ struct Bsdf_auxiliary_data : public Bsdf_auxiliary_data_base
     tct_float3       normal[static_cast<size_t>(N)];        ///< output: normal
     tct_float3       roughness[static_cast<size_t>(N)];     ///< output: glossy roughness_u,
                                                             ///<     glossy roughness_v, bsdf_weight
+
+    Df_flags         flags;          ///< input: flags controlling calculation of result
+                                     ///<     (optional depending on backend options)
 };
 
 template<>
@@ -978,6 +1008,9 @@ struct Bsdf_auxiliary_data<DF_HSM_POINTER> : public Bsdf_auxiliary_data_base
     tct_float3*      normal;         ///< output: normal
     tct_float3*      roughness;      ///< output: glossy roughness_u, glossy roughness_v,
                                      ///<     bsdf_weight
+
+    Df_flags         flags;          ///< input: flags controlling calculation of result
+                                     ///<     (optional depending on backend options)
 };
 
 template<>
@@ -992,6 +1025,9 @@ struct Bsdf_auxiliary_data<DF_HSM_NONE> : public Bsdf_auxiliary_data_base
     tct_float3       normal;         ///< output: normal
     tct_float3       roughness;      ///< output: glossy roughness_u, glossy roughness_v,
                                      ///<     bsdf_weight
+
+    Df_flags         flags;          ///< input: flags controlling calculation of result
+                                     ///<     (optional depending on backend options)
 };
 
 // Signatures for generated target code functions.

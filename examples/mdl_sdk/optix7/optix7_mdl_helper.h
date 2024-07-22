@@ -183,8 +183,7 @@ public:
 
     /// Create an MDL SDK transaction.
     mi::base::Handle<mi::neuraylib::ITransaction> create_transaction() {
-        return mi::base::make_handle<mi::neuraylib::ITransaction>(
-            m_global_scope->create_transaction());
+        return mi::base::make_handle(m_global_scope->create_transaction());
     }
 
     /// Get the image API component.
@@ -194,8 +193,12 @@ public:
 
     /// Get the import export API component.
     mi::base::Handle<mi::neuraylib::IMdl_impexp_api> get_impexp_api() {
-        return mi::base::Handle<mi::neuraylib::IMdl_impexp_api>(
-            m_neuray->get_api_component<mi::neuraylib::IMdl_impexp_api>());
+        return make_handle(m_neuray->get_api_component<mi::neuraylib::IMdl_impexp_api>());
+    }
+
+    /// Get the factory API component.
+    mi::base::Handle<mi::neuraylib::IFactory> get_factory() {
+        return make_handle(m_neuray->get_api_component<mi::neuraylib::IFactory>());
     }
 
     /// Compile the MDL material into target code.

@@ -53,9 +53,6 @@
 #include <base/data/db/i_db_access.h>
 #include <base/data/serial/i_serializer.h>
 
-// Disable false positives (claiming expressions involving "class_id" always being true or false)
-//-V:class_id:547 PVS
-
 namespace MI {
 
 namespace MDL {
@@ -101,7 +98,7 @@ DB::Tag Expression_direct_call::get_definition( DB::Transaction* transaction) co
     DB::Access<Mdl_module> module( m_module_tag, transaction);
     SERIAL::Class_id class_id = transaction->get_class_id( m_definition_ident.first);
     if( class_id != ID_MDL_FUNCTION_DEFINITION)
-        return DB::Tag();
+        return {};
 
     if( module->has_definition(
         /*is_material*/ true, m_definition_db_name, m_definition_ident.second) == 0)
@@ -111,7 +108,7 @@ DB::Tag Expression_direct_call::get_definition( DB::Transaction* transaction) co
         /*is_material*/ false, m_definition_db_name, m_definition_ident.second) == 0)
         return m_definition_ident.first;
 
-    return DB::Tag();
+    return {};
 }
 
 const IExpression_list* Expression_direct_call::get_arguments() const
@@ -319,7 +316,7 @@ const IAnnotation* Annotation_definition::create_annotation(const IExpression_li
                 tf.get(),
                 arg_type.get(),
                 param_type.get(),
-                /*allow_cast=*/false,
+                /*allow_cast*/ false,
                 needs_cast)) {
                 return nullptr;
             }
@@ -331,8 +328,8 @@ const IAnnotation* Annotation_definition::create_annotation(const IExpression_li
         }
         mi::base::Handle<IExpression> cloned_arg(ef->clone(
             arg.get(),
-            /*transaction=*/nullptr,
-            /*copy_immutable_calls=*/false));
+            /*transaction*/ nullptr,
+            /*copy_immutable_calls*/ false));
         complete_arguments->add_expression(name, cloned_arg.get());
     }
     return new Annotation(m_name.c_str(), complete_arguments.get());
@@ -532,10 +529,6 @@ Expression_factory::Expression_factory( IValue_factory* value_factory)
 {
 }
 
-Expression_factory::~Expression_factory()
-{
-}
-
 IValue_factory* Expression_factory::get_value_factory() const
 {
     m_value_factory->retain();
@@ -678,13 +671,11 @@ IExpression* Expression_factory::clone(
                 ASSERT( M_SCENE, transaction);
                 DB::Tag call_tag = expr_call->get_call();
                 SERIAL::Class_id class_id = transaction->get_class_id( call_tag);
-                std::vector<mi::base::Handle<const IExpression>> dummy_call_context;
-                if( class_id == Mdl_function_call::id) {
-                    DB::Access<Mdl_function_call> fc( call_tag, transaction);
-                    if( fc->is_immutable())
-                        return deep_copy( this, transaction, expr_call.get(), dummy_call_context);
-                } else
+                if( class_id != ID_MDL_FUNCTION_CALL)
                     return nullptr;
+                DB::Access<Mdl_function_call> fc( call_tag, transaction);
+                if( fc->is_immutable())
+                    return deep_copy( this, transaction, expr_call.get(), /*call_context*/ nullptr);
             }
             return create_call( type.get(), expr_call->get_call());
         }
@@ -825,73 +816,155 @@ IExpression* Expression_factory::create_cast(
     bool direct_call,
     mi::Sint32* errors) const
 {
-    ASSERT(M_SCENE, src_expr);
-    ASSERT(M_SCENE, target_type);
-    ASSERT(M_SCENE, errors);
+    ASSERT( M_SCENE, src_expr);
+    ASSERT( M_SCENE, target_type);
+    ASSERT( M_SCENE, errors);
 
-    mi::base::Handle<const IType> src_type(src_expr->get_type());
+    mi::base::Handle<const IType> src_type( src_expr->get_type());
+    mi::base::Handle<const IType> stripped_src_type( src_type->skip_all_type_aliases());
+    mi::base::Handle<const IType> stripped_target_type( target_type->skip_all_type_aliases());
 
-    mi::base::Handle<const IType> stripped_src_type(src_type->skip_all_type_aliases());
-    mi::base::Handle<const IType> stripped_target_type(target_type->skip_all_type_aliases());
-
-    mi::base::Handle<IType_factory> tf(m_value_factory->get_type_factory());
-    mi::Sint32 r = tf->is_compatible(stripped_src_type.get(), stripped_target_type.get());
-    if (r < 0) {
+    mi::base::Handle<IType_factory> tf( m_value_factory->get_type_factory());
+    mi::Sint32 result = tf->is_compatible( stripped_src_type.get(), stripped_target_type.get());
+    if( result < 0) {
         *errors = -2;
         return nullptr;
     }
-    if (!force_cast && r == 1) {
+    if( (result == 1) && !force_cast) {
         src_expr->retain();
         return src_expr;
     }
 
-    DB::Tag cast_def_tag = transaction->name_to_tag(get_cast_operator_db_name());
-    ASSERT(M_SCENE, cast_def_tag.is_valid());
-    DB::Access<Mdl_function_definition> cast_def(cast_def_tag, transaction);
-    ASSERT(M_SCENE, cast_def);
+    const char* cast_name = get_cast_operator_db_name();
+    DB::Tag cast_def_tag = transaction->name_to_tag( cast_name);
+    ASSERT( M_SCENE, cast_def_tag);
+    DB::Access<Mdl_function_definition> cast_def( cast_def_tag, transaction);
 
-    mi::base::Handle<IExpression_list> args(create_expression_list( /*initial_capacity*/ 2));
-    args->add_expression_unchecked("cast", src_expr);
+    mi::base::Handle<IExpression_list> args( create_expression_list( /*initial_capacity*/ 2));
+    args->add_expression_unchecked( "cast", src_expr);
 
-    if (direct_call) {
+    if( direct_call) {
         return create_direct_call(
             stripped_target_type.get(),
-            cast_def->get_module(transaction),
-            Mdl_tag_ident(cast_def_tag, cast_def->get_ident()),
-            get_cast_operator_db_name(), args.get());
+            cast_def->get_module( transaction),
+            Mdl_tag_ident( cast_def_tag, cast_def->get_ident()),
+            cast_name,
+            args.get());
     }
 
-    DB::Privacy_level level = 0;
-    DB::Privacy_level store_level = 255;
-    if (src_expr->get_kind() == IExpression::EK_CALL) {
-        mi::base::Handle<IExpression_call> call(
-            src_expr->get_interface<IExpression_call>());
-        DB::Tag t = call->get_call();
-        level = transaction->get_tag_privacy_level(t);
-        store_level = transaction->get_tag_storage_level(t);
-    }
+    // Create dummy expression for target_type.
+    mi::base::Handle<IValue> target_type_value(
+        m_value_factory->create( stripped_target_type.get()));
+    mi::base::Handle<IExpression> target_type_expr( create_constant( target_type_value.get()));
+    args->add_expression_unchecked( "cast_return", target_type_expr.get());
 
-    mi::base::Handle<IValue> target_type_value(m_value_factory->create(stripped_target_type.get()));
-    mi::base::Handle<IExpression> target_type_expr(create_constant(target_type_value.get()));
-    args->add_expression_unchecked("cast_return", target_type_expr.get());
+    // Create the function call.
+    Mdl_function_call* cast_call = cast_def->create_function_call( transaction, args.get());
+    ASSERT( M_SCENE, cast_call);
 
+    // Compute the DB element name.
     std::string call_name;
-    if (cast_db_name) {
-        DB::Tag tag = transaction->name_to_tag(cast_db_name);
-        if (tag)
-            call_name = DETAIL::generate_unique_db_name(transaction, cast_db_name);
+    if( cast_db_name) {
+        DB::Tag tag = transaction->name_to_tag( cast_db_name);
+        if( tag)
+            call_name = DETAIL::generate_unique_db_name( transaction, cast_db_name);
         else
             call_name = cast_db_name;
-    }
-    else
-        call_name = DETAIL::generate_unique_db_name(transaction, "mdl::operator_cast");
+    } else
+        call_name = DETAIL::generate_unique_db_name( transaction, "mdl::operator_cast");
 
-    Mdl_function_call *cast_call = cast_def->create_function_call(transaction, args.get());
+    // Compute privacy and store level.
+    DB::Privacy_level privacy_level = transaction->get_scope()->get_level();
     DB::Tag call_tag = transaction->store_for_reference_counting(
-        cast_call, call_name.c_str(), level, store_level);
-    ASSERT(M_SCENE, call_tag); // should always succeed
+        cast_call, call_name.c_str(), privacy_level);
+    ASSERT( M_SCENE, call_tag);
 
-    return create_call(stripped_target_type.get(), call_tag);
+    return create_call( stripped_target_type.get(), call_tag);
+}
+
+IExpression* Expression_factory::create_decl_cast(
+    DB::Transaction* transaction,
+    IExpression* src_expr,
+    const IType_struct* target_type,
+    const char* cast_db_name,
+    bool force_decl_cast,
+    bool direct_call,
+    mi::Sint32* errors) const
+{
+    ASSERT( M_SCENE, src_expr);
+    ASSERT( M_SCENE, target_type);
+    ASSERT( M_SCENE, errors);
+
+    mi::base::Handle<const IType> src_type( src_expr->get_type());
+    mi::base::Handle<const IType> stripped_src_type( src_type->skip_all_type_aliases());
+    mi::base::Handle<const IType> stripped_target_type( target_type->skip_all_type_aliases());
+
+    mi::base::Handle<IType_factory> tf( m_value_factory->get_type_factory());
+    mi::Sint32 result = tf->from_same_struct_category(
+        stripped_src_type.get(), stripped_target_type.get());
+    if( result < 0) {
+        *errors = -2;
+        return nullptr;
+    }
+    if( (result == 1) && !force_decl_cast) {
+        src_expr->retain();
+        return src_expr;
+    }
+
+    const char* cast_name = get_decl_cast_operator_db_name();
+    DB::Tag cast_def_tag = transaction->name_to_tag( cast_name);
+    ASSERT( M_SCENE, cast_def_tag);
+    DB::Access<Mdl_function_definition> cast_def( cast_def_tag, transaction);
+
+    mi::base::Handle<IExpression_list> args( create_expression_list( /*initial_capacity*/ 2));
+    args->add_expression_unchecked( "cast", src_expr);
+
+    if( direct_call) {
+        return create_direct_call(
+            stripped_target_type.get(),
+            cast_def->get_module( transaction),
+            Mdl_tag_ident( cast_def_tag, cast_def->get_ident()),
+            cast_name,
+            args.get());
+    }
+
+    // Create dummy expression for target_type.
+    mi::base::Handle<IValue> target_type_value(
+        m_value_factory->create( stripped_target_type.get()));
+    mi::base::Handle<IExpression> target_type_expr( create_constant( target_type_value.get()));
+    args->add_expression_unchecked( "cast_return", target_type_expr.get());
+
+    // Create the function call.
+    Mdl_function_call* cast_call = cast_def->create_function_call( transaction, args.get());
+    ASSERT( M_SCENE, cast_call);
+
+    // Compute the DB element name.
+    std::string call_name;
+    if( cast_db_name) {
+        DB::Tag tag = transaction->name_to_tag( cast_db_name);
+        if( tag)
+            call_name = DETAIL::generate_unique_db_name( transaction, cast_db_name);
+        else
+            call_name = cast_db_name;
+    } else
+        call_name = DETAIL::generate_unique_db_name( transaction, "mdl::operator_decl_cast");
+
+    // Compute privacy and store level.
+    DB::Privacy_level privacy_level = 0;
+    DB::Privacy_level store_level   = 255;
+    if( src_expr->get_kind() == IExpression::EK_CALL) {
+        mi::base::Handle<IExpression_call> src_call(
+            src_expr->get_interface<IExpression_call>());
+        DB::Tag src_call_tag = src_call->get_call();
+        privacy_level = transaction->get_tag_privacy_level( src_call_tag);
+        store_level = transaction->get_tag_store_level( src_call_tag);
+    }
+
+    DB::Tag call_tag = transaction->store_for_reference_counting(
+        cast_call, call_name.c_str(), privacy_level, store_level);
+    ASSERT( M_SCENE, call_tag);
+
+    return create_call( stripped_target_type.get(), call_tag);
 }
 
 void Expression_factory::serialize( SERIAL::Serializer* serializer, const IExpression* expr) const
@@ -937,7 +1010,7 @@ void Expression_factory::serialize( SERIAL::Serializer* serializer, const IExpre
                 expr->get_interface<IExpression_direct_call>());
             DB::Tag module_tag = expr_direct_call->get_module();
             SERIAL::write(serializer, module_tag);
-            DB::Tag tag = expr_direct_call->get_definition(/*transaction=*/nullptr);
+            DB::Tag tag = expr_direct_call->get_definition(/*transaction*/ nullptr);
             SERIAL::write(serializer,  tag);
             Mdl_ident ident = expr_direct_call->get_definition_ident();
             SERIAL::write(serializer, ident);
@@ -968,7 +1041,7 @@ IExpression* Expression_factory::deserialize( SERIAL::Deserializer* deserializer
 {
     mi::Uint32 kind_as_uint32;
     SERIAL::read(deserializer,  &kind_as_uint32);
-    IExpression::Kind kind = static_cast<IExpression::Kind>( kind_as_uint32);
+    auto kind = static_cast<IExpression::Kind>( kind_as_uint32);
 
     switch( kind) {
 
@@ -1028,7 +1101,7 @@ IExpression* Expression_factory::deserialize( SERIAL::Deserializer* deserializer
 void Expression_factory::serialize_list(
     SERIAL::Serializer* serializer, const IExpression_list* list) const
 {
-    const Expression_list* list_impl = static_cast<const Expression_list*>( list);
+    const auto* list_impl = static_cast<const Expression_list*>( list);
 
     write( serializer, list_impl->m_index_name);
 
@@ -1040,7 +1113,7 @@ void Expression_factory::serialize_list(
 
 IExpression_list* Expression_factory::deserialize_list( SERIAL::Deserializer* deserializer) const
 {
-    Expression_list* list_impl = new Expression_list( /*initial capacity*/ 0);
+    auto* list_impl = new Expression_list( /*initial capacity*/ 0);
 
     read( deserializer, &list_impl->m_index_name);
 
@@ -1116,11 +1189,11 @@ IAnnotation_definition* Expression_factory::deserialize_annotation_definition(
 
     size_t n;
     deserializer->read_size_t( &n);
-    std::vector<std::string> mdl_parameter_type_names;
+    std::vector<std::string> core_parameter_type_names;
     for( size_t i = 0; i < n; ++i) {
         std::string s;
         SERIAL::read( deserializer, &s);
-        mdl_parameter_type_names.push_back( s);
+        core_parameter_type_names.push_back( s);
     }
 
     mi::neuraylib::IAnnotation_definition::Semantics semantic;
@@ -1142,7 +1215,7 @@ IAnnotation_definition* Expression_factory::deserialize_annotation_definition(
         name.c_str(),
         mdl_module_name.c_str(),
         mdl_simple_name.c_str(),
-        mdl_parameter_type_names,
+        core_parameter_type_names,
         semantic,
         is_exported,
         since_version,
@@ -1182,7 +1255,7 @@ IAnnotation_block* Expression_factory::deserialize_annotation_block(
 void Expression_factory::serialize_annotation_list(
     SERIAL::Serializer* serializer, const IAnnotation_list* list) const
 {
-    const Annotation_list* list_impl = static_cast<const Annotation_list*>( list);
+    const auto* list_impl = static_cast<const Annotation_list*>( list);
 
     write( serializer, list_impl->m_index_name);
 
@@ -1195,7 +1268,7 @@ void Expression_factory::serialize_annotation_list(
 IAnnotation_list* Expression_factory::deserialize_annotation_list(
     SERIAL::Deserializer* deserializer) const
 {
-    Annotation_list* list_impl = new Annotation_list( /*initial_capacity*/ 0);
+    auto* list_impl = new Annotation_list( /*initial_capacity*/ 0);
 
     read( deserializer, &list_impl->m_index_name);
 
@@ -1212,8 +1285,7 @@ void Expression_factory::serialize_annotation_definition_list(
     SERIAL::Serializer* serializer,
     const IAnnotation_definition_list* anno_def_list) const
 {
-    const Annotation_definition_list* anno_def_list_impl
-        = static_cast<const Annotation_definition_list*>( anno_def_list);
+    const auto* anno_def_list_impl = static_cast<const Annotation_definition_list*>( anno_def_list);
 
     mi::Size size = anno_def_list_impl->m_anno_definitions.size();
     SERIAL::write( serializer, size);
@@ -1225,7 +1297,7 @@ void Expression_factory::serialize_annotation_definition_list(
 IAnnotation_definition_list* Expression_factory::deserialize_annotation_definition_list(
     SERIAL::Deserializer* deserializer) const
 {
-    Annotation_definition_list* list_impl = new Annotation_definition_list( /*initial_capacity*/ 0);
+    auto* list_impl = new Annotation_definition_list( /*initial_capacity*/ 0);
 
     mi::Size size;
     SERIAL::read( deserializer, &size);
@@ -1305,7 +1377,7 @@ void Expression_factory::dump_static(
 #endif
             if( name)
                 s << name << " = ";
-            DB::Tag tag = expr_direct_call->get_definition(/*transaction=*/nullptr);
+            DB::Tag tag = expr_direct_call->get_definition(/*transaction*/ nullptr);
             if( transaction)
                 s << '\"' << transaction->tag_to_name( tag) << "\" (";
             else
@@ -1572,8 +1644,8 @@ mi::Sint32 Expression_factory::compare_static(
                 lhs->get_interface<IExpression_direct_call>());
             mi::base::Handle<const IExpression_direct_call> rhs_direct_call(
                 rhs->get_interface<IExpression_direct_call>());
-            DB::Tag lhs_tag = lhs_direct_call->get_definition(/*transaction=*/nullptr);
-            DB::Tag rhs_tag = rhs_direct_call->get_definition(/*transaction=*/nullptr);
+            DB::Tag lhs_tag = lhs_direct_call->get_definition(/*transaction*/ nullptr);
+            DB::Tag rhs_tag = rhs_direct_call->get_definition(/*transaction*/ nullptr);
             if( lhs_tag < rhs_tag) return -1;
             if( lhs_tag > rhs_tag) return +1;
             DB::Tag lhs_mtag = lhs_direct_call->get_module();

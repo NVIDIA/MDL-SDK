@@ -35,12 +35,13 @@
 
 #include <mi/base/enums.h>
 
-#include <set>
 #include <string>
 #include <vector>
 
 #include <boost/core/noncopyable.hpp>
+
 #include <base/data/db/i_db_tag.h>
+#include <base/lib/robin_hood/robin_hood.h>
 
 namespace mi {
 
@@ -417,7 +418,7 @@ private:
         DB::Tag_version* time_stamp,
         bool shortcuts_mdl,
         std::vector<DB::Tag>& result,
-        std::set<DB::Tag>& tags_seen);
+        robin_hood::unordered_set<DB::Tag>& tags_seen);
 
     /// Checks whether a character is a drive letter
     ///

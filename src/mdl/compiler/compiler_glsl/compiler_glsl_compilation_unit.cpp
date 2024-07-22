@@ -50,6 +50,7 @@ Compilation_unit::Compilation_unit(
 , m_is_analyzed(false)
 , m_is_valid(false)
 , m_glslang_context(lang)
+, m_glsl_keyword_map(m_arena, m_glslang_context)
 , m_sym_tab(m_arena)
 , m_type_factory(m_arena, m_sym_tab)
 , m_value_factory(m_arena, m_type_factory)
@@ -97,6 +98,18 @@ GLSLang_context &Compilation_unit::get_glslang_context()
 GLSLang_context const &Compilation_unit::get_glslang_context() const
 {
     return m_glslang_context;
+}
+
+// Get the keyboard map of this unit.
+GLSLKeywordMap &Compilation_unit::get_glsl_keyword_map()
+{
+    return m_glsl_keyword_map;
+}
+
+// Get the keyboard map of this unit.
+GLSLKeywordMap const &Compilation_unit::get_glsl_keyword_map() const
+{
+    return m_glsl_keyword_map;
 }
 
 // Analyze the unit.

@@ -29,7 +29,7 @@
 #include "util.h"
 #include "application.h"
 #include "errors.h"
-#include "version.h"
+#include "version_helper.h"
 #include "search_path.h"
 #include "xliff.h"
 #include <iostream>

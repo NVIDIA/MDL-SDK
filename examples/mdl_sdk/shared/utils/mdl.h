@@ -334,10 +334,7 @@ namespace mi { namespace examples { namespace mdl
         // try to load the requested plugin before adding any special handling
         mi::Sint32 res = plugin_conf->load_plugin_library(path);
         if (res == 0)
-        {
-            fprintf(stderr, "Successfully loaded the plugin library '%s'\n", path);
             return 0;
-        }
 
         // fall back to libraries in a relative lib folder, relevant for install targets
         if (strstr(path, "../../../lib/") != path)
@@ -407,36 +404,22 @@ namespace mi { namespace examples { namespace mdl
         }
         g_logger = logging_config->get_forwarding_logger();
 
-        // set the module and texture search path.
-        // mind the order
-        std::vector<std::string> mdl_paths;
-
-        if (options.add_admin_space_search_paths)
-        {
-            mdl_config->add_mdl_system_paths();
-        }
-
-        if (options.add_user_space_search_paths)
-        {
-            mdl_config->add_mdl_user_paths();
-        }
+        // collect the search paths to add
+        std::vector<std::string> mdl_paths(options.additional_mdl_paths);
 
         if (options.add_example_search_path)
         {
-            const std::string example_search_paths = mi::examples::mdl::get_examples_root() + "/mdl";
-            if (example_search_paths == "./mdl")
+            const std::string example_search_path = mi::examples::mdl::get_examples_root() + "/mdl";
+            if (example_search_path == "./mdl")
             {
                 fprintf(stderr,
                     "MDL Examples path was not found, "
                     "consider setting the environment variable MDL_SAMPLES_ROOT.");
             }
-            mdl_paths.push_back(example_search_paths);
+            mdl_paths.push_back(example_search_path);
         }
 
-        // ignore if any of these do not exist
-        mdl_paths.insert(mdl_paths.end(), options.additional_mdl_paths.begin(), options.additional_mdl_paths.end());
-
-        // add mdl and resource paths to allow the neuray API to resolve relative textures
+        // add the search paths for MDL module and resource resolution outside of MDL modules
         for (size_t i = 0, n = mdl_paths.size(); i < n; ++i) {
             if (mdl_config->add_mdl_path(mdl_paths[i].c_str()) != 0 ||
                     mdl_config->add_resource_path(mdl_paths[i].c_str()) != 0) {
@@ -444,6 +427,16 @@ namespace mi { namespace examples { namespace mdl
                     "Warning: Failed to set MDL path \"%s\".\n",
                     mdl_paths[i].c_str());
             }
+        }
+
+        // add user and system search paths with lowest priority
+        if (options.add_user_space_search_paths)
+        {
+            mdl_config->add_mdl_user_paths();
+        }
+        if (options.add_admin_space_search_paths)
+        {
+            mdl_config->add_mdl_system_paths();
         }
 
         // load plugins if not skipped

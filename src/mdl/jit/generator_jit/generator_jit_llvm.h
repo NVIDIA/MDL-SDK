@@ -34,6 +34,7 @@
 
 #include <mi/mdl/mdl_declarations.h>
 #include <mi/mdl/mdl_generated_dag.h>
+#include <mi/mdl/mdl_target_types.h>
 #include <mi/mdl/mdl_types.h>
 #include <mdl/compiler/compilercore/compilercore_bitset.h>
 #include <mdl/compiler/compilercore/compilercore_cstring_hash.h>
@@ -2867,6 +2868,13 @@ private:
         size_t           lambda_index,
         llvm::Type       *expected_type);
 
+public:
+    /// Get the lambda index from a lambda DAG call.
+    ///
+    /// \param call            the lambda DAG call
+    static size_t get_lambda_index_from_call(DAG_call const *call);
+
+private:
     /// Translate a DAG call argument which may be a precalculated lambda function to LLVM IR.
     ///
     /// \param ctx             the function context
@@ -2893,13 +2901,16 @@ private:
     /// \param ctx             the function context
     /// \param inst            the alloca instruction representing the array parameter
     /// \param weight_array    the array containing the component weights, can be local or global
+    /// \param df_flags_array  the array containing the component df_flags, can be local or global,
+    ///                        is nullptr if flags are disabled
     /// \param comp_info       the bsdf component information to use for the replacements
     /// \param delete_list     list of instructions to be deleted when function is fully processed
     void rewrite_df_component_usages(
         Function_context                           &ctx,
         llvm::AllocaInst                           *inst,
         llvm::Value                                *weight_array,
-        Df_component_info                        &comp_info,
+        llvm::Value                                *df_flags_array,
+        Df_component_info                          &comp_info,
         llvm::SmallVector<llvm::Instruction *, 16> &delete_list);
 
     /// Rewrite the address of a memcpy from a color_bsdf_component to the given weight array.
@@ -2932,6 +2943,9 @@ private:
 
     /// Returns true, if the given DAG node is a call to diffuse_reflection_bsdf(color(1), 0).
     bool is_default_diffuse_reflection(DAG_node const *node);
+
+    /// Returns the scatter components the given DAG node can return.
+    Df_flags get_bsdf_scatter_components(DAG_node const *node);
 
     // An optimization context for DF instantiation.
     class Instantiate_opt_context
@@ -4131,6 +4145,11 @@ private:
     /// The current basic block chain.
     size_t m_curr_bb;
 
+    typedef mi::mdl::ptr_hash_map<DAG_call const, Df_flags>::Type Scatter_components_map;
+
+    /// Map from DAG calls to their scatter components.
+    Scatter_components_map m_scatter_components_map;
+
     typedef mi::mdl::ptr_hash_map<void const, Value_offset_pair>::Type Global_const_map;
 
     /// Map large constants to llvm global constants.
@@ -4156,7 +4175,12 @@ private:
     /// The list of all values that goes into the RO data segment.
     Value_list m_ro_data_values;
 
-    typedef hash_set<char const *, cstring_hash, cstring_equal_to>::Type String_set;
+    typedef hash_map<char const *, unsigned, cstring_hash, cstring_equal_to>::Type
+        Force_inline_targets;
+
+    /// Map from mangled names of functions to a bitfield of targets where the function
+    /// should be marked as force-inline.
+    Force_inline_targets m_force_inlining_targets;
 
     /// The option rt_callable_program_from_id(_64) function once created.
     llvm::Function *m_optix_cp_from_id;
@@ -4236,8 +4260,11 @@ private:
     /// If true, link libmdlrt.
     bool m_link_libmdlrt;
 
-    /// The selected version of libbsdf that will be linked to the ouput.
+    /// The selected version of libbsdf that will be linked to the output.
     mdl::Df_handle_slot_mode m_link_libbsdf_df_handle_slot_mode;
+
+    /// If true, the BSDF data structures have an additional uint32 flags field as last field.
+    bool m_libbsdf_flags_in_bsdf_data;
 
     /// If true, this code generator will allow incremental compilation.
     bool m_incremental;

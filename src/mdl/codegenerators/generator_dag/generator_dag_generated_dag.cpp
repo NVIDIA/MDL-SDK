@@ -85,6 +85,9 @@ unsigned char get_function_properties(IDefinition const *f_def)
     if (f_def->get_property(IDefinition::DP_IS_NATIVE)) {
         func_properties |= 1 << IGenerated_code_dag::FP_IS_NATIVE;
     }
+    if (f_def->get_property(IDefinition::DP_IS_DECLARATIVE)) {
+        func_properties |= 1 << IGenerated_code_dag::FP_IS_DECLARATIVE;
+    }
 
     return func_properties;
 }
@@ -876,7 +879,7 @@ Generated_code_dag::Generated_code_dag(
 , m_mangler(alloc)
 , m_printer(m_mangler.get_printer())
 , m_sym_tab(m_arena)
-, m_type_factory(m_arena, compiler, &m_sym_tab)
+, m_type_factory(m_arena, *compiler, m_sym_tab)
 , m_value_factory(m_arena, m_type_factory)
 , m_messages(alloc, module != NULL ? impl_cast<Module>(module)->get_msg_name() : "")
 , m_module_imports(alloc)
@@ -884,9 +887,11 @@ Generated_code_dag::Generated_code_dag(
 , m_mdl(mi::base::make_handle_dup(compiler))
 , m_node_factory(compiler, m_arena, m_value_factory, internal_space)
 , m_module_annotations(alloc)
+, m_function_infos(alloc)
 , m_functions(alloc)
 , m_materials(alloc)
 , m_annotations(alloc)
+, m_user_struct_categories(alloc)
 , m_user_types(alloc)
 , m_user_constants(alloc)
 , m_internal_space(internal_space, alloc)
@@ -901,7 +906,8 @@ Generated_code_dag::Generated_code_dag(
 , m_resource_tagger(m_resource_tag_map)
 {
     m_node_factory.enable_unsafe_math_opt((options & UNSAFE_MATH_OPTIMIZATIONS) != 0);
-    m_node_factory.enable_expose_names_of_let_expressions((options & EXPOSE_NAMES_OF_LET_EXPRESSIONS) != 0);
+    m_node_factory.enable_expose_names_of_let_expressions(
+        (options & EXPOSE_NAMES_OF_LET_EXPRESSIONS) != 0);
 
     if (module != NULL) {
         size_t n = module->get_import_count();
@@ -916,21 +922,11 @@ Generated_code_dag::Generated_code_dag(
 }
 
 // Get the material info for a given material index or NULL if the index is out of range.
-Generated_code_dag::Material_info *Generated_code_dag::get_material_info(
-    size_t material_index)
-{
-    if (material_index < m_materials.size()) {
-        return &m_materials[material_index];
-    }
-    return NULL;
-}
-
-// Get the material info for a given material index or NULL if the index is out of range.
-Generated_code_dag::Material_info const *Generated_code_dag::get_material_info(
+Generated_code_dag::Function_info const *Generated_code_dag::get_material_info(
     size_t material_index) const
 {
     if (material_index < m_materials.size()) {
-        return &m_materials[material_index];
+        return &m_function_infos[m_materials[material_index]];
     }
     return NULL;
 }
@@ -941,9 +937,9 @@ Generated_code_dag::Parameter_info const *Generated_code_dag::get_mat_param_info
     size_t material_index,
     size_t parameter_index) const
 {
-    if (Material_info const *mat = get_material_info(material_index)) {
-        if (parameter_index < mat->get_parameter_count()) {
-            return &mat->get_parameter(parameter_index);
+    if (Function_info const *func = get_material_info(material_index)) {
+        if (parameter_index < func->get_parameter_count()) {
+            return &func->get_parameter(parameter_index);
         }
     }
     return NULL;
@@ -954,7 +950,7 @@ Generated_code_dag::Function_info const *Generated_code_dag::get_function_info(
     size_t function_index) const
 {
     if (function_index < m_functions.size()) {
-        return &m_functions[function_index];
+        return &m_function_infos[m_functions[function_index]];
     }
     return NULL;
 }
@@ -993,6 +989,16 @@ Generated_code_dag::Parameter_info const *Generated_code_dag::get_anno_param_inf
         if (parameter_index < anno->get_parameter_count()) {
             return &anno->get_parameter(parameter_index);
         }
+    }
+    return NULL;
+}
+
+// Get the user type info for a given type index or NULL if the index is out of range.
+Generated_code_dag::User_struct_category_info const *Generated_code_dag::get_struct_category_info(
+    size_t cat_index) const
+{
+    if (cat_index < m_user_struct_categories.size()) {
+        return &m_user_struct_categories[cat_index];
     }
     return NULL;
 }
@@ -1305,6 +1311,9 @@ void Generated_code_dag::compile_function(
     if (f_def == NULL) {
         // DAG generated functions are not native but always uniform
         func_properties |= 1 << FP_IS_UNIFORM;
+        if ((f_node->get_flags() & Dependence_node::FL_IS_DECLARATIVE) != 0) {
+            func_properties |= 1 << FP_IS_DECLARATIVE;
+        }
 
         // the rest of the processing is done inside the this module
         Module_scope scope(dag_builder, module);
@@ -1328,7 +1337,8 @@ void Generated_code_dag::compile_function(
 
         func.set_properties(func_properties);
 
-        m_functions.push_back(func);
+        m_functions.push_back(m_function_infos.size());
+        m_function_infos.push_back(func);
 
         build_function_temporaries(m_current_function_index);
         ++m_current_function_index;
@@ -1416,14 +1426,16 @@ void Generated_code_dag::compile_function(
         // convert the function body
         IExpression const *expr = get_single_expr_body(func_decl);
 
-        func.set_body(expr != NULL ? dag_builder.expr_to_dag(expr) : NULL);
+        func.set_body(expr != NULL ? dag_builder.maybe_insert_decl_cast(
+            ret_type, dag_builder.expr_to_dag(expr)) : NULL);
 
         collect_callees(func, f_node);
     }
 
     MDL_ASSERT(dag_builder.get_errors().size() == 0 && "Unexpected errors compiling function");
 
-    m_functions.push_back(func);
+    m_functions.push_back(m_function_infos.size());
+    m_function_infos.push_back(func);
 
     build_function_temporaries(m_current_function_index);
     ++m_current_function_index;
@@ -1679,7 +1691,8 @@ void Generated_code_dag::compile_local_function(
 
     // Note: we do NOT create defaults for local functions, even if they have ones
 
-    m_functions.push_back(func);
+    m_functions.push_back(m_function_infos.size());
+    m_function_infos.push_back(func);
 
     build_function_temporaries(m_current_function_index);
     ++m_current_function_index;
@@ -1741,9 +1754,14 @@ void Generated_code_dag::compute_control_dependencies(I &info)
 
 // Compile a material.
 void Generated_code_dag::compile_material(
-    DAG_builder           &dag_builder,
+    DAG_builder &dag_builder,
     Dependence_node const *m_node)
 {
+    IType const *ret_type = m_node->get_return_type();
+
+    // import the return type into our type factory
+    ret_type = m_type_factory.import(ret_type);
+
     IDefinition const *material_def = m_node->get_definition();
     MDL_ASSERT(material_def != NULL);
 
@@ -1758,16 +1776,31 @@ void Generated_code_dag::compile_material(
     Target_material_model_mode_scope tmm_scope(
         dag_builder, (m_options & TARGET_MATERIAL_MODEL_MODE) != 0);
 
-    string mat_name(dag_builder.def_to_name(material_def, module));
-    string mat_simple_name(dag_builder.def_to_name(material_def, (const char*)NULL));
+    string mat_name(dag_builder.def_to_name(material_def, module, false));
+    string mat_simple_name(dag_builder.def_to_name(material_def, (const char *)NULL, false));
     string orig_name(
         material_def->get_property(IDefinition::DP_IS_IMPORTED) ?
-        dag_builder.def_to_name(material_def) : string("", get_allocator()));
-
-    Material_info mat(get_allocator(), mat_name.c_str(), mat_simple_name.c_str(), orig_name.c_str());
+        dag_builder.def_to_name(material_def, false) :
+        string("", get_allocator()));
 
     IType_function const *fun_type = cast<IType_function>(material_def->get_type());
+    Function_info mat(
+        get_allocator(),
+        IDefinition::DS_UNKNOWN,
+        ret_type,
+        mat_name.c_str(),
+        mat_simple_name.c_str(),
+        orig_name.c_str(),
+        /*cloned=*/ NULL,
+        /*hash=*/ NULL);
+
     int parameter_count = fun_type->get_parameter_count();
+
+    unsigned char func_properties = 1 << FP_IS_EXPORTED;
+    if (material_def->get_property(IDefinition::DP_IS_DECLARATIVE)) {
+        func_properties |= 1 << FP_IS_DECLARATIVE;
+    }
+    mat.set_properties(func_properties);
 
     for (int k = 0; k < parameter_count; ++k) {
         IType const   *parameter_type;
@@ -1825,7 +1858,7 @@ void Generated_code_dag::compile_material(
                     mat.add_return_annotation(dag_builder.annotation_to_dag(anno));
                 }
             }
-            
+
         }
 
         // start temporaries
@@ -1920,7 +1953,7 @@ void Generated_code_dag::compile_material(
 
                 IExpression_let const *let = e.get_let();
 
-                for (int i = 0, n = let->get_declaration_count(); i < n; ++i) {
+                for (size_t i = 0, n = let->get_declaration_count(); i < n; ++i) {
                     IDeclaration_variable const *v_decl =
                         cast<IDeclaration_variable>(let->get_declaration(i));
 
@@ -2010,7 +2043,9 @@ void Generated_code_dag::compile_material(
             IStatement_expression const *expr_stmt =
                 cast<IStatement_expression>(mat_decl->get_body());
 
-            mat.set_body(dag_builder.expr_to_dag(expr_stmt->get_expression()));
+            IType const *ret_type = fun_type->get_return_type();
+            mat.set_body(dag_builder.maybe_insert_decl_cast(
+                ret_type, dag_builder.expr_to_dag(expr_stmt->get_expression())));
         }
     }
 
@@ -2036,7 +2071,8 @@ void Generated_code_dag::compile_material(
         }
         // KILL the current material if errors were detected
     } else {
-        m_materials.push_back(mat);
+        m_materials.push_back(m_function_infos.size());
+        m_function_infos.push_back(mat);
 
         // create temporaries based on CSE
         build_material_temporaries(m_current_material_index);
@@ -2124,6 +2160,7 @@ private:
 void Generated_code_dag::compile(IModule const *module)
 {
     m_current_material_index = 0;
+    m_current_function_index = 0;
 
     m_node_factory.enable_cse(true);
 
@@ -2140,7 +2177,7 @@ void Generated_code_dag::compile(IModule const *module)
     }
 
     // ... collect types and constants ... these are not really needed for the compilation itself
-    for (int i = 0, n = module->get_exported_definition_count(); i < n; ++i) {
+    for (size_t i = 0, n = module->get_exported_definition_count(); i < n; ++i) {
         IDefinition const *def = module->get_exported_definition(i);
         switch (def->get_kind()) {
         case IDefinition::DK_CONSTANT:
@@ -2148,6 +2185,9 @@ void Generated_code_dag::compile(IModule const *module)
             break;
         case IDefinition::DK_TYPE:
             compile_type(dag_builder, def, /*is_exported*/true);
+            break;
+        case IDefinition::DK_STRUCT_CATEGORY:
+            compile_struct_category(dag_builder, def, /*is_exported*/true);
             break;
         default:
             break;
@@ -2265,6 +2305,55 @@ DAG_node const *Generated_code_dag::build_material_dag(
         fun_type->get_return_type());
 }
 
+// Compile a user defined struct category.
+void Generated_code_dag::compile_struct_category(
+    DAG_builder       &dag_builder,
+    IDefinition const *def,
+    bool              is_exported)
+{
+    bool is_reexported = def->get_property(IDefinition::DP_IS_IMPORTED);
+
+    IAnnotation_block const *annotations = NULL;
+
+    // no declaration for re-exported types (as this point to the original module
+    IDeclaration const *decl = is_reexported ? NULL : def->get_declaration();
+
+    IStruct_category const *cat = def->get_category();
+    cat = cat ? m_type_factory.import_category(cat) : NULL;
+
+    ISymbol const *sym = def->get_symbol();
+
+    char const *orig_name = NULL;
+
+    // add original name
+    if (is_reexported && cat != NULL) {
+        ISymbol const *sym = cat->get_symbol();
+        if (sym != NULL) {
+            orig_name = sym->get_name();
+        }
+    }
+
+    IAllocator *alloc = get_allocator();
+    User_struct_category_info user_cat(alloc, is_exported, cat, sym->get_name(), orig_name);
+
+    if (decl == NULL) {
+        // imported type, no annotations
+    } else {
+        IDeclaration_struct_category const *c_decl = cast<IDeclaration_struct_category>(decl);
+        annotations = c_decl->get_annotations();
+    }
+
+    if (annotations != NULL) {
+        size_t annotation_count = annotations->get_annotation_count();
+        for (size_t k = 0; k < annotation_count; ++k) {
+            user_cat.add_annotation(
+                dag_builder.annotation_to_dag(annotations->get_annotation(k)));
+        }
+    }
+
+    m_user_struct_categories.push_back(user_cat);
+}
+
 // Compile a user defined type.
 void Generated_code_dag::compile_type(
     DAG_builder       &dag_builder,
@@ -2296,12 +2385,12 @@ void Generated_code_dag::compile_type(
             sym = cast<IType_enum>(type)->get_symbol();
             break;
         case IType::TK_ALIAS:
-            {
-                IType_alias const *a_type = cast<IType_alias>(type);
-                sym = a_type->get_symbol();
-                MDL_ASSERT(sym != NULL && "re-exported alias has no name");
-            }
-            break;
+        {
+            IType_alias const *a_type = cast<IType_alias>(type);
+            sym = a_type->get_symbol();
+            MDL_ASSERT(sym != NULL && "re-exported alias has no name");
+        }
+        break;
         default:
             MDL_ASSERT(!"re-exported type is neither a enum nor a struct, nor an alias");
             break;
@@ -2322,21 +2411,21 @@ void Generated_code_dag::compile_type(
             // no annotations on a typedef
             break;
         case IType::TK_STRUCT:
-            {
-                IType_struct const *s_tp = cast<IType_struct>(tp);
-                for (int i = 0, n = s_tp->get_field_count(); i < n; ++i) {
-                    user_type.add_entity(User_type_info::Entity_info(alloc));
-                }
+        {
+            IType_struct const *s_tp = cast<IType_struct>(tp);
+            for (size_t i = 0, n = s_tp->get_field_count(); i < n; ++i) {
+                user_type.add_entity(User_type_info::Entity_info(alloc));
             }
-            break;
+        }
+        break;
         case IType::TK_ENUM:
-            {
-                IType_enum const *e_tp = cast<IType_enum>(tp);
-                for (int i = 0, n = e_tp->get_value_count(); i < n; ++i) {
-                    user_type.add_entity(User_type_info::Entity_info(alloc));
-                }
+        {
+            IType_enum const *e_tp = cast<IType_enum>(tp);
+            for (size_t i = 0, n = e_tp->get_value_count(); i < n; ++i) {
+                user_type.add_entity(User_type_info::Entity_info(alloc));
             }
-            break;
+        }
+        break;
         default:
             MDL_ASSERT(!"unknown type kind");
             break;
@@ -2348,46 +2437,46 @@ void Generated_code_dag::compile_type(
             annotations = NULL;
             break;
         case IDeclaration::DK_TYPE_STRUCT:
-            {
-                IDeclaration_type_struct const *s_decl = cast<IDeclaration_type_struct>(decl);
+        {
+            IDeclaration_type_struct const *s_decl = cast<IDeclaration_type_struct>(decl);
 
-                annotations = s_decl->get_annotations();
+            annotations = s_decl->get_annotations();
 
-                for (int i = 0, n = s_decl->get_field_count(); i < n; ++i) {
-                    User_type_info::Entity_info ent(alloc);
+            for (int i = 0, n = s_decl->get_field_count(); i < n; ++i) {
+                User_type_info::Entity_info ent(alloc);
 
-                    if (IAnnotation_block const *field_annos = s_decl->get_annotations(i)) {
-                        size_t annotation_count = field_annos->get_annotation_count();
-                        for (size_t k = 0; k < annotation_count; ++k) {
-                           ent.add_annotation(
-                                dag_builder.annotation_to_dag(field_annos->get_annotation(k)));
-                        }
+                if (IAnnotation_block const *field_annos = s_decl->get_annotations(i)) {
+                    size_t annotation_count = field_annos->get_annotation_count();
+                    for (size_t k = 0; k < annotation_count; ++k) {
+                        ent.add_annotation(
+                            dag_builder.annotation_to_dag(field_annos->get_annotation(k)));
                     }
-
-                    user_type.add_entity(ent);
                 }
+
+                user_type.add_entity(ent);
             }
-            break;
+        }
+        break;
         case IDeclaration::DK_TYPE_ENUM:
-            {
-                IDeclaration_type_enum const *e_decl = cast<IDeclaration_type_enum>(decl);
-                annotations = e_decl->get_annotations();
+        {
+            IDeclaration_type_enum const *e_decl = cast<IDeclaration_type_enum>(decl);
+            annotations = e_decl->get_annotations();
 
-                for (int i = 0, n = e_decl->get_value_count(); i < n; ++i) {
-                    User_type_info::Entity_info ent(alloc);
+            for (size_t i = 0, n = e_decl->get_value_count(); i < n; ++i) {
+                User_type_info::Entity_info ent(alloc);
 
-                    if (IAnnotation_block const *value_annos = e_decl->get_annotations(i)) {
-                        size_t annotation_count = value_annos->get_annotation_count();
-                        for (size_t k = 0; k < annotation_count; ++k) {
-                            ent.add_annotation(
-                                dag_builder.annotation_to_dag(value_annos->get_annotation(k)));
-                        }
+                if (IAnnotation_block const *value_annos = e_decl->get_annotations(i)) {
+                    size_t annotation_count = value_annos->get_annotation_count();
+                    for (size_t k = 0; k < annotation_count; ++k) {
+                        ent.add_annotation(
+                            dag_builder.annotation_to_dag(value_annos->get_annotation(k)));
                     }
-
-                    user_type.add_entity(ent);
                 }
+
+                user_type.add_entity(ent);
             }
-            break;
+        }
+        break;
         default:
             MDL_ASSERT(!"unknown type kind");
             break;
@@ -2510,7 +2599,7 @@ void Generated_code_dag::compile_entity(
 
     if (kind == IDefinition::DK_ANNOTATION) {
         compile_annotation(owner, node);
-    } else if (kind == IDefinition::DK_FUNCTION && is_material_type(ret_type)) {
+    } else if (kind == IDefinition::DK_FUNCTION && is_material_category_type(ret_type)) {
         // functions returning materials ARE materials
         compile_material(dag_builder, node);
     } else {
@@ -2895,10 +2984,63 @@ size_t Generated_code_dag::get_material_count() const
     return m_materials.size();
 }
 
+// Get the function property fp of the material at material_index.
+bool Generated_code_dag::get_material_property(
+    size_t            material_index,
+    Function_property fp) const
+{
+    if (Function_info const *func = get_material_info(material_index)) {
+        return (func->get_properties() & (1 << fp)) != 0;
+    }
+    return false;
+}
+
+// Get the number of entities referenced by a material.
+size_t Generated_code_dag::get_material_references_count(size_t material_index) const
+{
+    if (Function_info const *func = get_material_info(material_index)) {
+        return func->get_ref_count();
+    }
+    return 0;
+}
+
+// Get the signature of the i'th reference of a material
+char const *Generated_code_dag::get_material_reference(
+    size_t material_index,
+    size_t callee_index) const
+{
+    if (Function_info const *func = get_material_info(material_index)) {
+        if (callee_index < func->get_ref_count()) {
+            return func->get_ref(callee_index).c_str();
+        }
+    }
+    return NULL;
+}
+
+// Get the return type of the material at material_index.
+IType const *Generated_code_dag::get_material_return_type(
+    size_t material_index) const
+{
+    if (Function_info const *func = get_material_info(material_index)) {
+        return func->get_return_type();
+    }
+    return NULL;
+}
+
+// Get the semantics of the material at material_index.
+IDefinition::Semantics Generated_code_dag::get_material_semantics(
+    size_t material_index) const
+{
+    if (Function_info const *func = get_material_info(material_index)) {
+        return func->get_semantics();
+    }
+    return IDefinition::DS_UNKNOWN;
+}
+
 // Get the name of the material at material_index.
 char const *Generated_code_dag::get_material_name(size_t material_index) const
 {
-    if (Material_info const *mat = get_material_info(material_index)) {
+    if (Function_info const *mat = get_material_info(material_index)) {
         return mat->get_name();
     }
     return NULL;
@@ -2907,7 +3049,7 @@ char const *Generated_code_dag::get_material_name(size_t material_index) const
 // Get the simple name of the material at material_index.
 char const *Generated_code_dag::get_simple_material_name(size_t material_index) const
 {
-    if (Material_info const *mat = get_material_info(material_index)) {
+    if (Function_info const *mat = get_material_info(material_index)) {
         return mat->get_simple_name();
     }
     return NULL;
@@ -2916,7 +3058,7 @@ char const *Generated_code_dag::get_simple_material_name(size_t material_index) 
 // Get the original name of the material at material_index if the material name is an alias.
 char const *Generated_code_dag::get_original_material_name(size_t material_index) const
 {
-    if (Material_info const *mat = get_material_info(material_index)) {
+    if (Function_info const *mat = get_material_info(material_index)) {
         return mat->get_original_name();
     }
     return NULL;
@@ -2925,7 +3067,7 @@ char const *Generated_code_dag::get_original_material_name(size_t material_index
 // Get the parameter count of the material at material_index.
 size_t Generated_code_dag::get_material_parameter_count(size_t material_index) const
 {
-    if (Material_info const *mat = get_material_info(material_index)) {
+    if (Function_info const *mat = get_material_info(material_index)) {
         return mat->get_parameter_count();
     }
     return 0;
@@ -2972,7 +3114,7 @@ size_t Generated_code_dag::get_material_parameter_index(
     size_t     material_index,
     char const *parameter_name) const
 {
-    if (Material_info const *mat = get_material_info(material_index)) {
+    if (Function_info const *mat = get_material_info(material_index)) {
         for (size_t i = 0, n = mat->get_parameter_count(); i < n; ++i) {
             if (strcmp(parameter_name, mat->get_parameter(i).get_name()) == 0) {
                 return i;
@@ -3018,6 +3160,16 @@ size_t Generated_code_dag::get_material_parameter_enable_if_condition_user(
         }
     }
     return ~size_t(0);
+}
+
+// Get the material hash value for the given material index if available.
+DAG_hash const *Generated_code_dag::get_material_hash(
+    size_t material_index) const
+{
+    if (Function_info const *func = get_material_info(material_index)) {
+        return func->get_hash();
+    }
+    return NULL;
 }
 
 // Get the node IR-node factory of this code DAG.
@@ -3157,11 +3309,28 @@ DAG_node const *Generated_code_dag::get_function_body(
     return NULL;
 }
 
+// Get the body of the function at function_index.
+DAG_node const *Generated_code_dag::get_function_value(
+    size_t function_index) const
+{
+    return get_function_body(function_index);
+}
+
+// Get the export flags of the function at function_index.
+bool Generated_code_dag::get_function_exported(size_t function_index) const
+{
+    if (get_function_info(function_index) != NULL) {
+        // currently, only exported functions are reported
+        return true;
+    }
+    return false;
+}
+
 // Get the number of annotations of the material at material_index.
 size_t Generated_code_dag::get_material_annotation_count(
     size_t material_index) const
 {
-    if (Material_info const *mat = get_material_info(material_index)) {
+    if (Function_info const *mat = get_material_info(material_index)) {
         return mat->get_annotation_count();
     }
     return 0;
@@ -3172,7 +3341,7 @@ DAG_node const *Generated_code_dag::get_material_annotation(
     size_t material_index,
     size_t annotation_index) const
 {
-    if (Material_info const *mat = get_material_info(material_index)) {
+    if (Function_info const *mat = get_material_info(material_index)) {
         if (annotation_index < mat->get_annotation_count()) {
             return mat->get_annotation(annotation_index);
         }
@@ -3184,7 +3353,7 @@ DAG_node const *Generated_code_dag::get_material_annotation(
 size_t Generated_code_dag::get_material_return_annotation_count(
     size_t material_index) const
 {
-    if (Material_info const *mat = get_material_info(material_index)) {
+    if (Function_info const *mat = get_material_info(material_index)) {
         return mat->get_return_annotation_count();
     }
     return 0;
@@ -3195,7 +3364,7 @@ DAG_node const *Generated_code_dag::get_material_return_annotation(
     size_t material_index,
     size_t annotation_index) const
 {
-    if (Material_info const *mat = get_material_info(material_index)) {
+    if (Function_info const *mat = get_material_info(material_index)) {
         if (size_t(annotation_index) < mat->get_return_annotation_count()) {
             return mat->get_return_annotation(annotation_index);
         }
@@ -3246,7 +3415,7 @@ DAG_node const *Generated_code_dag::get_material_parameter_annotation(
 size_t Generated_code_dag::get_material_temporary_count(
     size_t material_index) const
 {
-    if (Material_info const *mat = get_material_info(material_index)) {
+    if (Function_info const *mat = get_material_info(material_index)) {
         return mat->get_temporary_count();
     }
     return 0;
@@ -3257,7 +3426,7 @@ DAG_node const *Generated_code_dag::get_material_temporary(
     size_t material_index,
     size_t temporary_index) const
 {
-    if (Material_info const *mat = get_material_info(material_index)) {
+    if (Function_info const *mat = get_material_info(material_index)) {
         if (temporary_index < mat->get_temporary_count()) {
             return mat->get_temporary(temporary_index);
         }
@@ -3270,7 +3439,7 @@ char const *Generated_code_dag::get_material_temporary_name(
     size_t material_index,
     size_t temporary_index) const
 {
-    if (Material_info const *mat = get_material_info(material_index)) {
+    if (Function_info const *mat = get_material_info(material_index)) {
         if (temporary_index < mat->get_temporary_count()) {
             return mat->get_temporary_name(temporary_index);
         }
@@ -3282,10 +3451,17 @@ char const *Generated_code_dag::get_material_temporary_name(
 DAG_node const *Generated_code_dag::get_material_value(
     size_t material_index) const
 {
-    if (Material_info const *mat = get_material_info(material_index)) {
+    if (Function_info const *mat = get_material_info(material_index)) {
         return mat->get_body();
     }
     return NULL;
+}
+
+// Get the value of the material at material_index.
+DAG_node const *Generated_code_dag::get_material_body(
+    size_t material_index) const
+{
+    return get_material_value(material_index);
 }
 
 // Get the export flags of the material at material_index.
@@ -3303,7 +3479,7 @@ bool Generated_code_dag::get_material_exported(size_t material_index) const
 char const *Generated_code_dag::get_cloned_material_name(
     size_t material_index) const
 {
-    if (Material_info const *mat = get_material_info(material_index)) {
+    if (Function_info const *mat = get_material_info(material_index)) {
         return mat->get_cloned_name();
     }
     return NULL;
@@ -3321,7 +3497,7 @@ Generated_code_dag::Material_instance::Material_instance(
 , m_mdl(mi::base::make_handle_dup(impl_cast<MDL>(mdl)))
 , m_arena(alloc)
 , m_sym_tab(m_arena)
-, m_type_factory(m_arena, mdl, &m_sym_tab)
+, m_type_factory(m_arena, *impl_cast<MDL>(mdl), m_sym_tab)
 , m_value_factory(m_arena, m_type_factory)
 , m_node_factory(mdl, m_arena, m_value_factory, internal_space)
 , m_messages(alloc, /*owner_fname=*/"")
@@ -3503,7 +3679,8 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
     float                     wavelength_min,
     float                     wavelength_max,
     char const * const        fold_params[],
-    size_t                    num_fold_params)
+    size_t                    num_fold_params,
+    IType const               *target_type)
 {
 #if 0
     {
@@ -3644,7 +3821,7 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
     dag_builder.set_resource_modifier(resource_modifier);
 
     Target_material_model_mode_scope tmm_scope(
-        dag_builder, (flags & IGenerated_code_dag::IMaterial_instance::TARGET_MATERIAL_MODEL) != 0);
+        dag_builder, (flags & IMaterial_instance::TARGET_MATERIAL_MODEL) != 0);
 
     Instantiate_helper creator(
         *resolver,
@@ -3663,7 +3840,7 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
         fold_params,
         num_fold_params);
 
-    DAG_call const *constructor = creator.compile();
+    DAG_call const *constructor = creator.compile(target_type);
     set_constructor(constructor);
     m_default_param_values = creator.get_default_parameter_values();
     m_param_names          = creator.get_parameter_names();
@@ -3700,8 +3877,10 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
     // make sure, the observable state is deterministic
     std::sort(m_referenced_scene_data.begin(), m_referenced_scene_data.end());
 
+    bool is_std_material = is_material_type(m_constructor->get_type());
+
     Error_code res = EC_NONE;
-    if ((flags & CLASS_COMPILATION) == 0) {
+    if (is_std_material && (flags & CLASS_COMPILATION) == 0) {
         if (!check_thin_walled_material()) {
             res = EC_WRONG_TRANSMISSION_ON_THIN_WALLED;
         }
@@ -3849,8 +4028,9 @@ public:
     ///
     /// \param alloc  an allocator
     Instance_cloner(
-        IAllocator *alloc)
+        IAllocator *alloc, Generated_code_dag::Material_instance const *instance)
     : m_alloc(alloc)
+    , m_instance(instance)
     , m_marker_map(0, Visited_node_map::hasher(), Visited_node_map::key_equal(), alloc)
     , m_node_factory(NULL)
     , m_type_factory(NULL)
@@ -3878,6 +4058,9 @@ private:
 private:
     /// The allocator.
     IAllocator *m_alloc;
+
+    /// The material instance we are working on.
+    Generated_code_dag::Material_instance const *m_instance;
 
     typedef ptr_hash_map<DAG_node const, DAG_node const *>::Type Visited_node_map;
 
@@ -3996,6 +4179,23 @@ Generated_code_dag::Material_instance *Instance_cloner::clone(
     curr->m_param_names = src->m_param_names;
     curr->m_properties  = src->m_properties;
 
+    for (size_t i = 0, n = src->get_resource_tag_map_entries_count(); i < n; ++i) {
+        Resource_tag_tuple const *res_tuple = src->get_resource_tag_map_entry(i);
+        Resource_tag_tuple::Kind kind = res_tuple->m_kind;
+        char const *value = res_tuple->m_url;
+        char const *selector = res_tuple->m_selector;
+        unsigned tag = res_tuple->m_tag;
+
+        ISymbol const *shared_value = curr->m_sym_tab.get_shared_symbol(value);
+        char const *shared_sel = "";
+
+        if (selector && !selector[0]) {
+            shared_sel = curr->m_sym_tab.get_shared_symbol(selector)->get_name();
+        }
+        curr->m_resource_tag_map.push_back(
+            Resource_tag_tuple(kind, shared_value->get_name(), shared_sel, tag));
+    }
+
     if (flags & Material_instance::CF_RECALC_HASH) {
         // recalculate the hash values if requested
         curr->calc_hashes();
@@ -4016,7 +4216,7 @@ Generated_code_dag::Material_instance *Generated_code_dag::Material_instance::cl
     Clone_flags flags,
     bool        unsafe_math_opt) const
 {
-    Instance_cloner cloner(alloc);
+    Instance_cloner cloner(alloc, this);
 
     return cloner.clone(this, flags, unsafe_math_opt);
 }
@@ -4047,7 +4247,7 @@ void Generated_code_dag::Material_instance::dump_instance_dag(char const *name) 
 
 
 // Create a material instance.
-IGenerated_code_dag::IMaterial_instance *Generated_code_dag::create_material_instance(
+IMaterial_instance *Generated_code_dag::create_material_instance(
     size_t                          index,
     IGenerated_code_dag::Error_code *error_code) const
 {
@@ -4075,6 +4275,262 @@ IGenerated_code_dag::IMaterial_instance *Generated_code_dag::create_material_ins
     *error_code = EC_NONE;
     return result;
 }
+
+// Serialize this material instance.
+void Generated_code_dag::Material_instance::serialize(
+    ISerializer *serializer,
+    MDL_binary_serializer *bin_serializer) const
+{
+    DAG_serializer dag_serializer(get_allocator(), serializer, bin_serializer);
+    // mark the start of the material instance
+    dag_serializer.write_section_tag(Serializer::ST_INSTANCE_START);
+    DOUT(("Starting Serializing material instance\n")); INC_SCOPE();
+
+    // m_builder not serialized.
+    // m_mdl not serialized
+    // m_arena not serialized.
+
+    dag_serializer.write_cstring(m_node_factory.get_internal_space());
+    dag_serializer.write_unsigned(m_material_index);
+    dag_serializer.write_bool(m_node_factory.get_unsafe_math_opt());
+
+    m_sym_tab.serialize(dag_serializer);
+    m_type_factory.serialize(dag_serializer);
+    m_value_factory.serialize(dag_serializer);
+ 
+    // serialize the node factory m_node_factory by serializing all reachable DAGs
+    serialize_dags(dag_serializer);
+
+    dag_serializer.write_encoded(m_constructor);
+    dag_serializer.serialize(m_temporaries);
+
+    m_messages.serialize(dag_serializer);
+
+    dag_serializer.serialize(m_default_param_values);
+    dag_serializer.serialize(m_param_names);
+
+    for (size_t i = 0; i < m_hash.size(); ++i) {
+        dag_serializer.write_byte(m_hash.data()[i]);
+    }
+    for (size_t j = 0; j < dimension_of(m_slot_hashes); ++j) {
+        for (size_t i = 0; i < m_slot_hashes[j].size(); ++i) {
+            dag_serializer.write_byte(m_slot_hashes[j].data()[i]);
+        }
+    }
+
+    dag_serializer.write_unsigned(m_properties);
+
+    dag_serializer.serialize(m_referenced_scene_data);
+    
+    // serialize the resource table
+    size_t n_entries = m_resource_tag_map.size();
+    dag_serializer.write_unsigned(n_entries);
+
+    for (size_t i = 0; i < n_entries; ++i) {
+        Resource_tag_tuple const &e = m_resource_tag_map[i];
+
+        dag_serializer.write_byte(e.m_kind);
+        dag_serializer.write_cstring(e.m_url);
+        dag_serializer.write_cstring(e.m_selector);
+        dag_serializer.write_db_tag(e.m_tag);
+    }
+
+    // m_resource_tagger not serialized.
+
+    // mark the end of the instance
+    dag_serializer.write_section_tag(Serializer::ST_INSTANCE_END);
+    DEC_SCOPE(); DOUT(("Instance Serializing Finished\n\n"));
+}
+
+// Deserialize a material instance.
+Generated_code_dag::Material_instance const *Generated_code_dag::Material_instance::deserialize(
+    IDeserializer *deserializer,
+    MDL_binary_deserializer *bin_deserializer,
+    MDL *compiler)
+{
+    DAG_deserializer dag_deserializer(deserializer, bin_deserializer);
+
+    // start tag is expected to be already read
+    DOUT(("INSTANCE START\n"));
+    INC_SCOPE();
+
+    // m_builder not deserialized.
+    // m_mdl not deserialized
+    // m_arena not deserialized.
+
+    string internal_space(dag_deserializer.read_cstring(), dag_deserializer.get_allocator());
+    size_t material_index = dag_deserializer.read_unsigned();
+    bool math_opt = dag_deserializer.read_bool();
+
+    mi::base::Handle<Generated_code_dag::Material_instance> instance(
+        dag_deserializer.create_material_instance(
+            dag_deserializer.get_allocator(),
+            compiler,
+            material_index,
+            internal_space.c_str(),
+            math_opt,
+            // FIXME: we do not serialize the context name here because we do not want to break
+            // compatibility with the beta release.
+            // However, this IS safe, because only compiled entities are serialized/deserialized
+            // which are error free, so the context name is not needed.
+            "renderer"));
+
+    instance->m_sym_tab.deserialize(dag_deserializer);
+    instance->m_type_factory.deserialize(dag_deserializer);
+    instance->m_value_factory.deserialize(dag_deserializer);
+
+    // Deserialize the node factory m_node_factory by deserializing all reachable DAGs
+    instance->deserialize_dags(dag_deserializer);
+
+    instance->m_constructor = cast<DAG_call>(dag_deserializer.read_encoded<DAG_node const *>());
+    dag_deserializer.deserialize(instance->m_temporaries);
+
+    instance->m_messages.deserialize(dag_deserializer);
+
+    dag_deserializer.deserialize(instance->m_default_param_values);
+    dag_deserializer.deserialize(instance->m_param_names);
+
+    for (size_t i = 0; i < instance->m_hash.size(); ++i) {
+        instance->m_hash.data()[i] = dag_deserializer.read_byte();
+    }
+    for (size_t j = 0; j < dimension_of(instance->m_slot_hashes); ++j) {
+        for (size_t i = 0; i < instance->m_slot_hashes[j].size(); ++i) {
+            instance->m_slot_hashes[j].data()[i] = dag_deserializer.read_byte();
+        }
+    }
+
+    instance->m_properties = dag_deserializer.read_unsigned();
+
+    dag_deserializer.deserialize(instance->m_referenced_scene_data);
+
+    // Deserialize the resource table.
+    size_t n_entries = dag_deserializer.read_unsigned();
+    instance->m_resource_tag_map.clear();
+    for (size_t i = 0; i < n_entries; ++i) {
+        Resource_tag_tuple::Kind kind = Resource_tag_tuple::Kind(dag_deserializer.read_byte());
+        string value(dag_deserializer.read_cstring(), dag_deserializer.get_allocator());
+        string selector(dag_deserializer.read_cstring(), dag_deserializer.get_allocator());
+        unsigned tag = dag_deserializer.read_db_tag();
+
+        ISymbol const *shared_value = instance->m_sym_tab.get_shared_symbol(value.c_str());
+        char const *shared_sel = "";
+
+        if (!selector.empty()) {
+            shared_sel = instance->m_sym_tab.get_shared_symbol(selector.c_str())->get_name();
+        }
+        instance->m_resource_tag_map.push_back(
+            Resource_tag_tuple(kind, shared_value->get_name(), shared_sel, tag));
+    }
+
+    // m_resource_tagger not deserialized.
+
+    DEC_SCOPE(); DOUT(("INSTANCE END\n\n"));
+
+    instance->retain();
+    return instance.get();
+}
+
+// Serialize all DAGs of this code DAG.
+void Generated_code_dag::Material_instance::serialize_dags(DAG_serializer &dag_serializer) const
+{
+    // this is ugly, but the root set is scattered
+    Dag_vector entity_roots(get_allocator());
+
+    entity_roots.push_back(m_constructor);
+    Dag_vector const *roots[] = {
+        &entity_roots,
+        &m_temporaries
+    };
+
+    dag_serializer.write_dags(roots, dimension_of(roots));
+}
+
+// Deserialize all DAGs of this code DAG.
+void Generated_code_dag::Material_instance::deserialize_dags(DAG_deserializer &dag_deserializer)
+{
+    // disable CSE here: we do deserialization where the DAGs of different
+    // materials are mixed. If CSE would not be disabled, the DAGs would mix up.
+    No_CSE_scope no_cse(m_node_factory);
+
+    dag_deserializer.read_dags(m_node_factory);
+}
+
+
+/// Get the number of (exported and non-exported) user defined struct categories
+/// of this compiled module.
+size_t Generated_code_dag::get_struct_category_count() const
+{
+    return m_user_struct_categories.size();
+}
+
+/// Get the name of the user-defined struct category at index.
+ ///
+/// \param index  The index of the struct category.
+/// \returns      The name of the struct category.
+char const *Generated_code_dag::get_struct_category_name(
+    size_t index) const
+{
+    if (User_struct_category_info const *cat = get_struct_category_info(index)) {
+        return cat->get_name();
+    }
+    return NULL;
+
+}
+
+/// Get the user defined struct category at index.
+///
+/// \param index  The index of the struct category.
+/// \returns      The struct category.
+IStruct_category const *Generated_code_dag::get_struct_category(
+    size_t index) const
+{
+    if (User_struct_category_info const *cat = get_struct_category_info(index)) {
+        return cat->get_category();
+    }
+    return NULL;
+}
+
+/// Get the number of annotations of the user defined struct category at index.
+///
+/// \param index  The index of the struct category.
+/// \return       The number of annotations of the struct category.
+size_t Generated_code_dag::get_struct_category_annotation_count(
+    size_t index) const
+{
+    if (User_struct_category_info const *cat = get_struct_category_info(index)) {
+        return cat->get_annotation_count();
+    }
+    return 0;
+}
+
+/// Get the annotation at annotation_index of the user defined struct category
+///  at cat_index.
+///
+/// \param cat_index           The index of the struct category.
+/// \param annotation_index    The index of the annotation.
+/// \returns                   The annotation.
+DAG_node const *Generated_code_dag::get_struct_category_annotation(
+    size_t cat_index,
+    size_t annotation_index) const
+{
+    if (User_struct_category_info const *cat = get_struct_category_info(cat_index)) {
+        if (annotation_index < cat->get_annotation_count()) {
+            return cat->get_annotation(annotation_index);
+        }
+    }
+    return NULL;
+}
+
+// Returns true if the user defined struct category at index is exported.
+bool Generated_code_dag::is_struct_category_exported(
+    size_t index) const
+{
+    if (User_struct_category_info const *cat = get_struct_category_info(index)) {
+        return cat->is_exported();
+    }
+    return false;
+}
+
 
 // Get the number of (exported and non-exported) user defined types of this compiled module.
 size_t Generated_code_dag::get_type_count() const
@@ -4176,11 +4632,8 @@ char const *Generated_code_dag::get_type_sub_entity_name(
                     return NULL;
                 }
 
-                IType const   *f_type = NULL;
-                ISymbol const *f_sym  = NULL;
-                s_type->get_field(entity_index, f_type, f_sym);
-
-                return f_sym->get_name();
+                IType_struct::Field const *field = s_type->get_field(entity_index);
+                return field->get_symbol()->get_name();
             }
         case IType::TK_ENUM:
             {
@@ -4191,11 +4644,8 @@ char const *Generated_code_dag::get_type_sub_entity_name(
                     return NULL;
                 }
 
-                ISymbol const *v_sym = NULL;
-                int code = 0;
-                e_type->get_value(entity_index, v_sym, code);
-
-                return v_sym->get_name();
+                IType_enum::Value const *e_val = e_type->get_value(entity_index);
+                return e_val->get_symbol()->get_name();
             }
         default:
             MDL_ASSERT(!"unknown type kind");
@@ -4219,18 +4669,13 @@ IType const *Generated_code_dag::get_type_sub_entity_type(
             return NULL;
         case IType::TK_STRUCT:
             {
-                // return number of fields
                 IType_struct const *s_type = cast<IType_struct>(u_tp);
-
                 if (s_type->get_field_count() <= entity_index) {
                     return NULL;
                 }
 
-                IType const *f_type = NULL;
-                ISymbol const *f_sym = NULL;
-                s_type->get_field(entity_index, f_type, f_sym);
-
-                return f_type;
+                IType_struct::Field const *field = s_type->get_field(entity_index);
+                return field->get_type();
             }
         case IType::TK_ENUM:
             return NULL;
@@ -4381,16 +4826,474 @@ void Generated_code_dag::Material_instance::build_temporaries()
     walker.walk_instance(this, &inserter);
 }
 
+namespace {
+    // Assuming p points to the start of a component or at the end of the path, return the
+    // start of the component in 'start' and a pointer to the character after the last of 
+    // the component. Return the number of characters in the component.
+    void get_component(char const *p, char const *&start, char const *&end) {
+        start = p;
+        while (*p && *p != '.') {
+            ++p;
+        }
+        end = p;
+    }
+
+    // Return p advanced to the start of the next path component, or p itself if p is at the end
+    // of the path.
+    char const *next_component(char const *p) {
+        if (*p == '.') {
+            return p + 1;
+        } else {
+            return p;
+        }
+    }
+
+    /// Lookup the sub-value with the given name.
+    /// Return NULL for an invalid path.
+    IValue const *lookup_value(char const *path, IValue const *value) {
+        if (path[0] == '\0') {
+            return value;
+        }
+
+        switch (value->get_kind()) {
+            // All these are atomic, or their elements don't have names, so we cannot go on 
+            // with a non-empty path. This is an error, so we return NULL.
+        case IValue::VK_BAD:
+        case IValue::VK_BOOL:
+        case IValue::VK_INT:
+        case IValue::VK_ENUM:
+        case IValue::VK_FLOAT:
+        case IValue::VK_DOUBLE:
+        case IValue::VK_STRING:
+        case IValue::VK_INVALID_REF:
+        case IValue::VK_TEXTURE:
+        case IValue::VK_LIGHT_PROFILE:
+        case IValue::VK_BSDF_MEASUREMENT:
+            return NULL;
+
+        case IValue::VK_STRUCT:
+        {
+            IValue_struct const *sv = cast<IValue_struct>(value);
+            IType_struct const *st = sv->get_type();
+
+            char const *start = nullptr;
+            char const *end = nullptr;
+            get_component(path, start, end);
+
+            size_t fld_cnt = st->get_field_count();
+            for (size_t i = 0; i < fld_cnt; ++i) {
+                IType_struct::Field const *fld = st->get_field(i);
+                char const *fld_name = fld->get_symbol()->get_name();
+                char const *p = start;
+
+                while (*p && *fld_name && *p != '.' && *p == *fld_name) {
+                    ++p;
+                    ++fld_name;
+                }
+                if ((!*p || *p == '.') && !*fld_name) {
+                    // Found!
+                    IValue const *fld_val = sv->get_values()[i];
+                    char const *next_path = next_component(end);
+                    return lookup_value(next_path, fld_val);
+                }
+            }
+
+            // Return NULL for invalid field names.
+            return NULL;
+        }
+
+        case IValue::VK_VECTOR:
+        case IValue::VK_RGB_COLOR:
+        case IValue::VK_MATRIX:
+        case IValue::VK_ARRAY:
+        {
+            IValue_compound const *cv = cast<IValue_compound>(value);
+            char const *start = nullptr;
+            char const *end = nullptr;
+            get_component(path, start, end);
+
+            // Use 64-bit integer to detect 32-bit overflow in conversion below.
+            int64_t index = 0;
+            while (start < end) {
+                if (!std::isdigit(*start)) {
+                    // Invalid index.
+                    return NULL;
+                }
+                index = index * 10 + (*start - '0');
+                if (index > INT32_MAX) {
+                    // 32-bit overflow.
+                    return NULL;
+                }
+                ++start;
+            }
+            // SAFETY: we ensure that index fits in signed 32-bit value above, and size_t must
+            // be at least 32 bit for supported builds.
+            size_t size_index = size_t(index);
+
+            if (size_index >= cv->get_component_count()) {
+                // Invalid index.
+                return NULL;
+            }
+            IValue const *component_val = cv->get_values()[size_index];
+            char const *next_path = next_component(end);
+            return lookup_value(next_path, component_val);
+        }
+        }
+        MDL_ASSERT(false && "unreachable");
+        return NULL;
+    }
+
+    /// Calculate the hash for the given DAG constant.
+    /// Return true if hashing was successful and false for an invalid path.
+    void lookup_constant(
+        char const *path, 
+        DAG_constant const *cnst,
+        IValue const *&value_result) 
+    {
+        value_result = lookup_value(path, cnst->get_value());
+    }
+
+    void lookup_expr(
+        char const *path, 
+        DAG_node const *node,
+        DAG_node const *&node_result,
+        IValue const *&value_result);
+
+    /// Calculate the hash for the given DAG call expression.
+    /// Return true if hashing was successful and false for an invalid path.
+    void lookup_call(
+        char const *path, 
+        DAG_call const *call,
+        DAG_node const *&node_result,
+        IValue const *&value_result) 
+    {
+        char const *start = nullptr;
+        char const *end = nullptr;
+        get_component(path, start, end);
+
+        size_t arg_cnt = call->get_argument_count();
+        for (size_t i = 0; i < arg_cnt; ++i) {
+            char const *arg_name = call->get_parameter_name(i);
+            char const *p = start;
+
+            while (*p && *arg_name && *p != '.' && *p == *arg_name) {
+                ++p;
+                ++arg_name;
+            }
+            if ((!*p || *p == '.') && !*arg_name) {
+                // Found!
+                DAG_node const *arg_node = call->get_argument(i);
+                char const *next_path = next_component(end);
+                lookup_expr(next_path, arg_node, node_result, value_result);
+                return;
+            }
+        }
+    }
+
+    /// Calculate the hash for the node determined by the path, starting from the given node.
+    /// When the path is the empty string, the hash for the node itself is calculated.
+    /// The hash is calculated by updating the given Dag_hasher.
+    /// Return true if hashing was successful and false for an invalid path.
+    void lookup_expr(
+        char const *path, 
+        DAG_node const *node,
+        DAG_node const *&node_result,
+        IValue const *&value_result)
+    {
+        // Skip temporaries.
+        while (node->get_kind() == DAG_node::EK_TEMPORARY) {
+            node = cast<DAG_temporary>(node)->get_expr();
+        }
+
+        if (path[0] == '\0') {
+            node_result = node;
+            return;
+        }
+
+        switch (node->get_kind()) {
+        case DAG_node::EK_CONSTANT:
+        {
+            DAG_constant const *c = cast<DAG_constant>(node);
+            lookup_constant(path, c, value_result);
+            return;
+        }
+
+        case DAG_node::EK_PARAMETER:
+            // Parameters cannot be traversed further.
+            return;
+
+        case DAG_node::EK_TEMPORARY:
+        {
+            MDL_ASSERT(false && "unreachable");
+            return;
+        }
+
+        case DAG_node::EK_CALL:
+        {
+            DAG_call const *c = cast<DAG_call>(node);
+            lookup_call(path, c, node_result, value_result);
+            return;
+        }
+        }
+        MDL_ASSERT(false && "unreachable");
+    }
+
+    /// Calculate the hash for the given value.
+    /// Return true if hashing was successful and false for an invalid path.
+    bool hash_value(Dag_hasher &hasher, char const *path, IValue const *value) {
+        if (path[0] == '\0') {
+            hasher.hash(value);
+            return true;
+        }
+
+        switch (value->get_kind()) {
+        // All these are atomic, or their elements don't have names, so we cannot go on 
+        // with a non-empty path. This is an error, so we return false.
+        case IValue::VK_BAD:
+        case IValue::VK_BOOL:
+        case IValue::VK_INT:
+        case IValue::VK_ENUM:
+        case IValue::VK_FLOAT:
+        case IValue::VK_DOUBLE:
+        case IValue::VK_STRING:
+        case IValue::VK_INVALID_REF:
+        case IValue::VK_TEXTURE:
+        case IValue::VK_LIGHT_PROFILE:
+        case IValue::VK_BSDF_MEASUREMENT:
+            return false;
+
+        case IValue::VK_STRUCT:
+        {
+            IValue_struct const *sv = cast<IValue_struct>(value);
+            IType_struct const *st = sv->get_type();
+
+            char const *start = nullptr;
+            char const *end = nullptr;
+            get_component(path, start, end);
+
+            size_t fld_cnt = st->get_field_count();
+            for (size_t i = 0; i < fld_cnt; ++i) {
+                IType_struct::Field const *fld = st->get_field(i);
+                char const *fld_name = fld->get_symbol()->get_name();
+                char const *p = start;
+
+                while (*p && *fld_name && *p != '.' && *p == *fld_name) {
+                    ++p;
+                    ++fld_name;
+                }
+                if ((!*p || *p == '.') && !*fld_name) {
+                    // Found!
+                    IValue const *fld_val = sv->get_values()[i];
+                    char const *next_path = next_component(end);
+                    return hash_value(hasher, next_path, fld_val);
+                }
+            }
+
+            // Return false for invalid field names.
+            return false;
+        }
+
+        case IValue::VK_VECTOR:
+        case IValue::VK_RGB_COLOR:
+        case IValue::VK_MATRIX:
+        case IValue::VK_ARRAY:
+        {
+            IValue_compound const *cv = cast<IValue_compound>(value);
+            char const *start = nullptr;
+            char const *end = nullptr;
+            get_component(path, start, end);
+
+            // Use 64-bit integer to detect 32-bit overflow in conversion below.
+            int64_t index = 0;
+            while (start < end) {
+                if (!std::isdigit(*start)) {
+                    // Invalid index.
+                    return false;
+                }
+                index = index * 10 + (*start - '0');
+                if (index > INT32_MAX) {
+                    // 32-bit overflow.
+                    return false;
+                }
+                ++start;
+            }
+            // SAFETY: we ensure that index fits in signed 32-bit value above, and size_t must
+            // be at least 32 bit for supported builds.
+            size_t size_index = size_t(index);
+
+            if (size_index >= cv->get_component_count()) {
+                // Invalid index.
+                return false;
+            }
+            IValue const *component_val = cv->get_values()[size_index];
+            char const *next_path = next_component(end);
+            return hash_value(hasher, next_path, component_val);
+        }
+        }
+        MDL_ASSERT(false && "unreachable");
+        return false;
+    }
+
+    /// Calculate the hash for the given DAG constant.
+    /// Return true if hashing was successful and false for an invalid path.
+    bool hash_constant(Dag_hasher &hasher, char const *path, DAG_constant const *cnst) {
+        return hash_value(hasher, path, cnst->get_value());
+    }
+
+    bool hash_expr(Dag_hasher &hasher, char const *path, DAG_node const *node);
+
+    /// Calculate the hash for the given DAG call expression.
+    /// Return true if hashing was successful and false for an invalid path.
+    bool hash_call(Dag_hasher &hasher, char const *path, DAG_call const *call) {
+        char const *start = nullptr;
+        char const *end = nullptr;
+        get_component(path, start, end);
+
+        size_t arg_cnt = call->get_argument_count();
+        for (size_t i = 0; i < arg_cnt; ++i) {
+            char const *arg_name = call->get_parameter_name(i);
+            char const *p = start;
+
+            while (*p && *arg_name && *p != '.' && *p == *arg_name) {
+                ++p;
+                ++arg_name;
+            }
+            if ((!*p || *p == '.') && !*arg_name) {
+                // Found!
+                DAG_node const *arg_node = call->get_argument(i);
+                char const *next_path = next_component(end);
+                return hash_expr(hasher, next_path, arg_node);
+            }
+        }
+        return false;
+    }
+    
+    /// Calculate the hash for the node determined by the path, starting from the given node.
+    /// When the path is the empty string, the hash for the node itself is calculated.
+    /// The hash is calculated by updating the given Dag_hasher.
+    /// Return true if hashing was successful and false for an invalid path.
+    bool hash_expr(Dag_hasher &hasher, char const *path, DAG_node const *node)
+    {
+        if (path[0] == '\0') {
+            hasher.hash_dag(node);
+            return true;
+        }
+
+    restart:
+        switch (node->get_kind()) {
+        case DAG_node::EK_CONSTANT:
+        {
+            DAG_constant const *c = cast<DAG_constant>(node);
+            return hash_constant(hasher, path, c);
+        }
+
+        case DAG_node::EK_PARAMETER:
+            // Parameters are atomic, we cannot traverse further.
+            return false;
+
+        case DAG_node::EK_TEMPORARY:
+        {
+            node = cast<DAG_temporary>(node)->get_expr();
+            goto restart;
+        }
+
+        case DAG_node::EK_CALL:
+        {
+            DAG_call const *c = cast<DAG_call>(node);
+            return hash_call(hasher, path, c);
+        }
+        }
+        MDL_ASSERT(false && "unreachable");
+        return false;
+    }
+}
+
+/// Return the node determined by the path, starting from the root expression of the material
+/// instance.
+void Generated_code_dag::Material_instance::lookup_sub_expression(
+    char const *path, 
+    DAG_node const *&node_result, 
+    IValue const *&value_result) const
+{
+    MDL_ASSERT(path && "non-null path required");
+
+    // Define state of result(s).
+    node_result = NULL;
+    value_result = NULL;
+
+    lookup_expr(path, get_constructor(), node_result, value_result);
+}
+
+
+/// Calculate the hash for the node determined by the path, starting from the root 
+/// expression of the material instance.
+DAG_hash Generated_code_dag::Material_instance::get_sub_expression_hash(char const *path) const
+{
+    MDL_ASSERT(path && "non-null path required");
+
+    // Hash for root is pre-calculated.
+    if (path[0] == '\0') {
+        return m_hash;
+    }
+
+    // Hashes for standard slots are pre-calculated.
+    char const *slot_names[] = {
+        "thin_walled",
+        "surface.scattering",
+        "surface.emission.emission",
+        "surface.emission.intensity",
+        "surface.emission.mode",
+        "backface.scattering",
+        "backface.emission.emission",
+        "backface.emission.intensity",
+        "backface.emission.mode",
+        "ior",
+        "volume.scattering",
+        "volume.absorption_coefficient",
+        "volume.scattering_coefficient",
+        "volume.emission_intensity",
+        "geometry.displacement",
+        "geometry.cutout_opacity",
+        "geometry.normal",
+        "hair" 
+    };
+    constexpr size_t SLOT_COUNT = sizeof(slot_names) / sizeof(slot_names[0]);
+    
+    for (size_t i = 0; i < SLOT_COUNT; ++i) {
+        if (strcmp(path, slot_names[i]) == 0) {
+            return m_slot_hashes[i];
+        }
+    }
+
+    MD5_hasher md5_hasher;
+    for (size_t i = 0; i < m_param_names.size(); ++i) {
+        md5_hasher.update(m_param_names[i].c_str());
+    }
+
+    Dag_hasher dag_hasher(get_allocator(), md5_hasher);
+
+    DAG_node const *node = get_constructor();
+
+    bool success = hash_expr(dag_hasher, path, node);
+    if (!success) {
+        return DAG_hash();
+    }
+    
+    DAG_hash result;
+    md5_hasher.final(result.data());
+    return result;
+}
+
 // Calculate the hash values for this instance.
 void Generated_code_dag::Material_instance::calc_hashes()
 {
     MD5_hasher md5_hasher;
     // Feed all parameter names (in order) into the hasher that is used for slot
-    // and instance hashes. This is required for compiled materials that only 
-    // differ in parameter order. They are different materials and we want to prevent 
+    // and instance hashes. This is required for compiled materials that only
+    // differ in parameter order. They are different materials and we want to prevent
     // users to re-use target code in that case, therefore we include the parameters in
     // the hashes so that misuse is avoided.
-    for (int i = 0; i < m_param_names.size(); ++i) {
+    for (size_t i = 0; i < m_param_names.size(); ++i) {
         md5_hasher.update(m_param_names[i].c_str());
     }
 
@@ -4652,6 +5555,36 @@ Generated_code_dag::Material_instance::Properties
 Generated_code_dag::Material_instance::get_properties() const
 {
     return m_properties;
+}
+
+// Returns the amount of used memory by this material instance.
+size_t Generated_code_dag::Material_instance::get_memory_size() const
+{
+    size_t res = sizeof(*this);
+
+    res += m_arena.get_chunks_size();
+    res += dynamic_memory_consumption(m_messages);
+
+    res += dynamic_memory_consumption(m_temporaries);
+    res += dynamic_memory_consumption(m_default_param_values);
+    res += dynamic_memory_consumption(m_param_names);
+    res += dynamic_memory_consumption(m_referenced_scene_data);
+    res += dynamic_memory_consumption(m_resource_tag_map);
+
+    // These are on the arena or do not allocate dynamically:
+    // Symbol_table m_sym_tab;
+    // Type_factory m_type_factory;
+    // Value_factory m_value_factory;
+    // DAG_node_factory_impl m_node_factory;
+    // Messages_impl m_messages;
+    // size_t m_material_index;
+    // DAG_call const *m_constructor;
+    // DAG_hash m_hash;
+    // DAG_hash m_slot_hashes[MS_LAST + 1];
+    // Properties m_properties;
+    // mutable Resource_tagger m_resource_tagger;
+
+    return res;
 }
 
 // Get the internal space.
@@ -4958,6 +5891,7 @@ void Generated_code_dag::Material_instance::Instantiate_helper::handle_transpare
 
     case IDefinition::DS_INTRINSIC_DF_COLOR_WEIGHTED_LAYER:
         float_weight = false;
+        MDL_FALLTHROUGH
     case IDefinition::DS_INTRINSIC_DF_WEIGHTED_LAYER:
         index_weight = 0;
         index_layer  = 1;
@@ -4966,6 +5900,7 @@ void Generated_code_dag::Material_instance::Instantiate_helper::handle_transpare
 
     case IDefinition::DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER:
         float_weight = false;
+        MDL_FALLTHROUGH
     case IDefinition::DS_INTRINSIC_DF_FRESNEL_LAYER:
         index_weight = 1;
         index_layer  = 2;
@@ -4974,6 +5909,7 @@ void Generated_code_dag::Material_instance::Instantiate_helper::handle_transpare
 
     case IDefinition::DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER:
         float_weight = false;
+        MDL_FALLTHROUGH
     case IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER:
         index_weight = 3;
         index_layer  = 4;
@@ -4982,6 +5918,7 @@ void Generated_code_dag::Material_instance::Instantiate_helper::handle_transpare
 
     case IDefinition::DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER:
         float_weight = false;
+        MDL_FALLTHROUGH
     case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_LAYER:
         index_weight = 1;
         index_layer  = 2;
@@ -5171,13 +6108,14 @@ void Generated_code_dag::Material_instance::Instantiate_helper::process_string_c
 
 // Compile the material.
 DAG_call const *
-Generated_code_dag::Material_instance::Instantiate_helper::compile()
+Generated_code_dag::Material_instance::Instantiate_helper::compile(
+    IType const *target_type)
 {
     bool old_ignore_noinline = false;
     bool old_inline = false;
 
     // Ignore anno::noinline(), if requested
-    if ((m_flags & mi::mdl::IGenerated_code_dag::IMaterial_instance::IGNORE_NOINLINE) != 0) {
+    if ((m_flags & mi::mdl::IMaterial_instance::IGNORE_NOINLINE) != 0) {
         old_ignore_noinline = m_node_factory.enable_ignore_noinline(true);
     } else {
         // Otherwise, deactivate inlining in general: We want instantiation as fast as possible and
@@ -5194,13 +6132,19 @@ Generated_code_dag::Material_instance::Instantiate_helper::compile()
     handle_cutout_opacity();
     handle_transparent_layers();
 
-    DAG_node const *node = instantiate_dag(m_code_dag.get_material_value(m_material_index));
+    DAG_node const *root = m_code_dag.get_material_value(m_material_index);
+
+    // Perform decl_cast transformation if a target type is given.
+    target_type = target_type ? 
+        const_cast<Type_factory *>(m_code_dag.get_type_factory())->import(target_type) : NULL;
+    root = target_type ? translate_decl_cast(root, target_type) : root;
+
+    DAG_node const *node = instantiate_dag(root);
 
     m_visit_map.clear();
     m_resource_param_map.clear();
 
-    bool remove_dead_params =
-        (m_flags & mi::mdl::IGenerated_code_dag::IMaterial_instance::NO_DEAD_PARAMS) != 0;
+    bool remove_dead_params = (m_flags & mi::mdl::IMaterial_instance::NO_DEAD_PARAMS) != 0;
 
     if (m_params > 0) {
         // ensure that every parameter is used AFTER the optimization, if not, renumber
@@ -5208,21 +6152,22 @@ Generated_code_dag::Material_instance::Instantiate_helper::compile()
     }
 
     // Restore old node factory settings
-    if ((m_flags & mi::mdl::IGenerated_code_dag::IMaterial_instance::IGNORE_NOINLINE) != 0) {
+    if ((m_flags & mi::mdl::IMaterial_instance::IGNORE_NOINLINE) != 0) {
         m_node_factory.enable_ignore_noinline(old_ignore_noinline);
     } else {
         m_node_factory.enable_inline(old_inline);
     }
 
+    if (DAG_constant const *cnst = as<DAG_constant>(node)) {
+        node = m_dag_builder.constant_to_call(cnst);
+    }
     DAG_call const *constr = cast<DAG_call>(node);
 
     if (constr->get_semantic() != IDefinition::DS_ELEM_CONSTRUCTOR ||
-        strcmp(
-            constr->get_name(),
-            "material(bool,material_surface,material_surface,color,material_volume,"
-            "material_geometry,hair_bsdf)") != 0)
+        !is_material_type(constr->get_type()))
     {
-        // we are in target material material model mode
+        // the constructor is not the material elemental constructor: we are in target
+        // material model mode
         m_properties |= Generated_code_dag::Material_instance::IP_TARGET_MATERIAL_MODEL;
     }
 
@@ -5471,7 +6416,10 @@ private:
     ///
     /// \param parent  the parent analysis
     /// \param owner   the owner of the entity to analyze
-    Ast_dependence_analysis(IAllocator *alloc, Ast_dependence_analysis &parent, IModule const *owner)
+    Ast_dependence_analysis(
+        IAllocator              *alloc,
+        Ast_dependence_analysis &parent,
+        IModule const           *owner)
     : m_alloc(alloc)
     , m_owner(owner)
     , m_cache(parent.m_cache)
@@ -5847,6 +6795,122 @@ Generated_code_dag::Material_instance::Instantiate_helper::supported_arguments(
     return true;
 }
 
+/// Check if dst_type is equal to the imported src_type.get_field(index) type.
+static bool same_type(
+    IType const        *dst_type,
+    IType_factory      &owner_tf,
+    IType_struct const *src_type,
+    int                src_index)
+{
+    IType const *src_field_type = src_type->get_field(src_index)->get_type();
+
+    dst_type       = dst_type->skip_type_alias();
+    src_field_type = src_field_type->skip_type_alias();
+
+    if (dst_type == src_field_type) {
+        return true;
+    }
+
+    return dst_type == owner_tf.import(src_field_type);
+}
+
+DAG_node const *
+Generated_code_dag::Material_instance::Instantiate_helper::translate_decl_cast(
+    DAG_node const *node, IType const *target_type) 
+{
+    DAG_node const *res = NULL;
+
+    IType_struct const *src_type =
+        cast<IType_struct>(node->get_type()->skip_type_alias());
+    IType_struct const *dst_type =
+        cast<IType_struct>(target_type->skip_type_alias());
+
+    // find the definition for the dst elemental constructor.
+    char const *dst_name = dst_type->get_symbol()->get_name();
+
+    mi::base::Handle<Module const> owner(
+        impl_cast<Module>(m_resolver.get_owner_module(dst_name)));
+
+    IType_struct const *o_dst_type = NULL;
+
+    if (dst_type->get_predefined_id() != IType_struct::SID_USER) {
+        o_dst_type = owner->get_type_factory()->get_predefined_struct(
+            dst_type->get_predefined_id());
+    } else {
+        // get the owner type by looking up the owner module
+        o_dst_type = owner->get_type_factory()->lookup_struct(
+            dst_name);
+    }
+
+    Definition const *elem_constr =
+        o_dst_type != NULL ? owner->get_elemental_constructor(o_dst_type) : NULL;
+
+    if (elem_constr == NULL) {
+        MDL_ASSERT(!"elemental constructor for decl_cast destination type not found");
+    } else {
+        IType_factory &tf = *m_value_factory.get_type_factory();
+
+        size_t n_fields = o_dst_type->get_field_count();
+        Small_VLA <DAG_call::Call_argument, 4> args(get_allocator(), n_fields);
+
+        for (size_t i = 0; i < n_fields; ++i) {
+            IType_struct::Field const *field = o_dst_type->get_field(i);
+
+            // beware, src_type might originate from another module, so we
+            // cannot search by symbol
+            char const *f_name = field->get_symbol()->get_name();
+            IType const *f_type = tf.import(field->get_type());
+            size_t     src_index = src_type->find_field_index(f_name);
+
+            DAG_node const *f_node = NULL;
+            if (src_index != ~size_t(0) && same_type(f_type, tf, src_type, src_index)) {
+                // this fields exists in the src, extract it
+                f_node = m_dag_builder.create_field_select(
+                    node, f_name, field->get_type());
+            } else {
+                // this field does not exists, construct it from the initializer
+                IExpression const *init = elem_constr->get_default_param_initializer(i);
+                if (init != NULL) {
+                    Module_scope scope(m_dag_builder, owner.get());
+                    f_node = m_dag_builder.expr_to_dag(init);
+                } else {
+                    // default construct
+                    IValue const *v = m_value_factory.create_zero(f_type);
+
+                    f_node = m_node_factory.create_constant(v);
+                }
+            }
+            args[i].param_name = field->get_symbol()->get_name();
+            args[i].arg = f_node;
+        }
+
+        string signature(m_dag_builder.def_to_name(elem_constr, owner.get()));
+
+        IType const *res_type = tf.import(dst_type);
+        res_type = tf.create_alias(res_type, /*name=*/NULL, IType::MK_UNIFORM);
+
+        res = m_node_factory.create_call(
+            signature.c_str(),
+            IDefinition::DS_ELEM_CONSTRUCTOR,
+            args.data(),
+            args.size(),
+            res_type);
+    }
+    return res;
+}
+
+DAG_node const *
+Generated_code_dag::Material_instance::Instantiate_helper::translate_decl_cast_call(
+    DAG_call const *call) 
+{
+    DAG_node const *arg = call->get_argument(0);
+
+    IType_struct const *dst_type =
+        cast<IType_struct>(call->get_type()->skip_type_alias());
+
+    return translate_decl_cast(arg, dst_type);
+}
+
 // Instantiate a DAG expression.
 DAG_node const *
 Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag(
@@ -5897,9 +6961,21 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag(
 
             res = NULL;
 
+            IDefinition::Semantics sema = call->get_semantic();
+
+            if (sema == IDefinition::DS_INTRINSIC_DAG_DECL_CAST) {
+                // ALWAYS optimize decl_cast node away
+                res = translate_decl_cast_call(call);
+
+                if (res != NULL) {
+                    m_visit_map[node] = res;
+                    return res;
+                }
+            }
+
             bool args_processed = false;
             if (m_flags & NO_TERNARY_ON_DF) {
-                if (call->get_semantic() == operator_to_semantic(IExpression::OK_TERNARY)) {
+                if (sema == operator_to_semantic(IExpression::OK_TERNARY)) {
                     if (is<IType_df>(call->get_type()->skip_type_alias())) {
                         DAG_node const *cond = call->get_argument(0);
 
@@ -6095,13 +7171,10 @@ restart:
         {
             IType_struct const *s_tp = cast<IType_struct>(tp);
 
-            for (int i = 0, n = s_tp->get_field_count(); i < n; ++i) {
-                IType const   *f_tp;
-                ISymbol const *f_sym;
+            for (size_t i = 0, n = s_tp->get_field_count(); i < n; ++i) {
+                IType_struct::Field const *field = s_tp->get_field(i);
 
-                s_tp->get_field(i, f_tp, f_sym);
-
-                if (contains_string_type(f_tp)) {
+                if (contains_string_type(field->get_type())) {
                     return true;
                 }
             }
@@ -6163,6 +7236,9 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag_argum
                 res = m_node_factory.create_constant(v);
             } else if ((m_flags & NO_ENUM_PARAMS) != 0 && is<IType_enum>(t)) {
                 // do not create plain enum parameters
+                res = m_node_factory.create_constant(v);
+            } else if (is<IType_struct>(t) && t->is_declarative()) {
+                // do not create parameters of declarative type
                 res = m_node_factory.create_constant(v);
             } else {
                 // we reach a leave: create new argument(s) for it
@@ -6247,7 +7323,8 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag_argum
                             mi::base::Handle<IGenerated_code_dag const> owner_dag(
                                 m_resolver.get_owner_dag(signature.c_str()));
 
-                            res = m_dag_builder.try_inline(owner_dag.get(), def, args.data(), n_args);
+                            res = m_dag_builder.try_inline(
+                                owner_dag.get(), def, args.data(), n_args);
 
                             // must be analyzed when was inlined; do this here by analyzing the
                             // inlined function
@@ -6301,25 +7378,6 @@ size_t dynamic_memory_consumption(Generated_code_dag::Parameter_info const &para
         dynamic_memory_consumption(param.m_annotations);
 }
 
-bool has_dynamic_memory_consumption(Generated_code_dag::Material_info const &)
-{
-    return true;
-}
-
-size_t dynamic_memory_consumption(Generated_code_dag::Material_info const &mat)
-{
-    return
-        dynamic_memory_consumption(mat.m_name) +
-        dynamic_memory_consumption(mat.m_simple_name) +
-        dynamic_memory_consumption(mat.m_original_name) +
-        dynamic_memory_consumption(mat.m_cloned) +
-        dynamic_memory_consumption(mat.m_parameters) +
-        dynamic_memory_consumption(mat.m_annotations) +
-        dynamic_memory_consumption(mat.m_temporaries) +
-        dynamic_memory_consumption(mat.m_temporary_names) +
-        dynamic_memory_consumption(mat.m_return_annos);
-}
-
 bool has_dynamic_memory_consumption(Generated_code_dag::Function_info const &)
 {
     return true;
@@ -6354,6 +7412,20 @@ size_t dynamic_memory_consumption(Generated_code_dag::Annotation_info const &fun
         dynamic_memory_consumption(func.m_parameters) +
         dynamic_memory_consumption(func.m_annotations);
 }
+
+bool has_dynamic_memory_consumption(Generated_code_dag::User_struct_category_info const &)
+{
+    return true;
+}
+
+size_t dynamic_memory_consumption(Generated_code_dag::User_struct_category_info const &cat)
+{
+    return
+        dynamic_memory_consumption(cat.m_name) +
+        dynamic_memory_consumption(cat.m_original_name) +
+        dynamic_memory_consumption(cat.m_annotations);
+}
+
 
 bool has_dynamic_memory_consumption(Generated_code_dag::User_type_info::Entity_info const &)
 {
@@ -6401,6 +7473,7 @@ size_t Generated_code_dag::get_memory_size() const
     res += dynamic_memory_consumption(m_module_imports);
 
     res += dynamic_memory_consumption(m_module_annotations);
+    res += dynamic_memory_consumption(m_function_infos);
     res += dynamic_memory_consumption(m_functions);
     res += dynamic_memory_consumption(m_materials);
     res += dynamic_memory_consumption(m_user_types);
@@ -6410,7 +7483,7 @@ size_t Generated_code_dag::get_memory_size() const
     return res;
 }
 
-// Get the export flags of the function at function_index.
+// Get the function property fp of the function at function_index.
 bool Generated_code_dag::get_function_property(
     size_t            function_index,
     Function_property fp) const
@@ -6751,7 +7824,6 @@ void Generated_code_dag::serialize(
     dag_serializer.serialize(m_module_annotations);
 
     serialize_functions(dag_serializer);
-    serialize_materials(dag_serializer);
     serialize_user_types(dag_serializer);
     serialize_constants(dag_serializer);
 
@@ -6789,8 +7861,8 @@ void Generated_code_dag::serialize_dags(DAG_serializer &dag_serializer) const
     Dag_vector entity_roots(get_allocator());
 
     // functions
-    for (size_t i = 0, n_functions = get_function_count(); i < n_functions; ++i) {
-        Function_info const &func = m_functions[i];
+    for (size_t i = 0, n_functions = m_function_infos.size(); i < n_functions; ++i) {
+        Function_info const &func = m_function_infos[i];
 
         for (size_t j = 0, n_params = func.get_parameter_count(); j < n_params; ++j) {
             Parameter_info const &param = func.get_parameter(j);
@@ -6814,36 +7886,6 @@ void Generated_code_dag::serialize_dags(DAG_serializer &dag_serializer) const
         }
         if (DAG_node const *body = func.get_body()) {
             entity_roots.push_back(body);
-        }
-    }
-
-    // materials
-    for (size_t i = 0, n_functions = get_material_count(); i < n_functions; ++i) {
-        Material_info const &mat = m_materials[i];
-
-        entity_roots.push_back(mat.get_body());
-
-        // not strictly necessary, temporaries are also reachable from the body
-        for (size_t j = 0, n_tmps = mat.get_temporary_count(); j < n_tmps; ++j) {
-            entity_roots.push_back(mat.get_temporary(j));
-        }
-
-        for (size_t j = 0, n_params = mat.get_parameter_count(); j < n_params; ++j) {
-            Parameter_info const &param = mat.get_parameter(j);
-
-            entity_roots.push_back(param.get_default());
-            entity_roots.push_back(param.get_enable_if_condition());
-
-            for (size_t k = 0, n_annos = param.get_annotation_count(); k < n_annos; ++k) {
-                entity_roots.push_back(param.get_annotation(k));
-            }
-        }
-
-        for (size_t j = 0, n_annos = mat.get_annotation_count(); j < n_annos; ++j) {
-            entity_roots.push_back(mat.get_annotation(j));
-        }
-        for (size_t j = 0, n_annos = mat.get_return_annotation_count(); j < n_annos; ++j) {
-            entity_roots.push_back(mat.get_return_annotation(j));
         }
     }
 
@@ -6887,7 +7929,7 @@ void Generated_code_dag::serialize_dags(DAG_serializer &dag_serializer) const
 void Generated_code_dag::deserialize_dags(DAG_deserializer &dag_deserializer)
 {
     // disable CSE here: we do deserialization where the DAGs of different
-    // materials are mixed. If CSE would not be disabled, the DAGs would mixes up.
+    // materials are mixed. If CSE would not be disabled, the DAGs would mix up.
     No_CSE_scope no_cse(m_node_factory);
 
     dag_deserializer.read_dags(m_node_factory);
@@ -6896,11 +7938,11 @@ void Generated_code_dag::deserialize_dags(DAG_deserializer &dag_deserializer)
 // Serialize all Function_infos of this code DAG.
 void Generated_code_dag::serialize_functions(DAG_serializer &dag_serializer) const
 {
-    size_t l = m_functions.size();
+    size_t l = m_function_infos.size();
 
     dag_serializer.write_encoded_tag(l);
     for (size_t i = 0; i < l; ++i) {
-        Function_info const &func = m_functions[i];
+        Function_info const &func = m_function_infos[i];
 
         dag_serializer.write_encoded(func.m_semantics);
         dag_serializer.write_encoded(func.m_return_type);
@@ -6940,11 +7982,15 @@ void Generated_code_dag::serialize_functions(DAG_serializer &dag_serializer) con
     }
 }
 
-// Deserialize all Material_infos of this code DAG.
+// Deserialize all Function_infos of this code DAG.
 void Generated_code_dag::deserialize_functions(DAG_deserializer &dag_deserializer)
 {
     size_t l = dag_deserializer.read_encoded_tag();
-    m_functions.reserve(l);
+    m_function_infos.reserve(l);
+    m_functions.clear();
+    m_materials.clear();
+    m_current_function_index = 0;
+    m_current_material_index = 0;
 
     for (size_t i = 0; i < l; ++i) {
         Definition::Semantics sema        = dag_deserializer.read_encoded<Definition::Semantics>();
@@ -6990,59 +8036,14 @@ void Generated_code_dag::deserialize_functions(DAG_deserializer &dag_deserialize
             func.m_body= NULL;
         }
 
-        m_functions.push_back(func);
-    }
-}
-
-// Serialize all Material_infos of this code DAG.
-void Generated_code_dag::serialize_materials(DAG_serializer &dag_serializer) const
-{
-    size_t l = m_materials.size();
-
-    dag_serializer.write_encoded_tag(l);
-    for (size_t i = 0; i < l; ++i) {
-        Material_info const &mat = m_materials[i];
-
-        dag_serializer.write_encoded(mat.m_name);
-        dag_serializer.write_encoded(mat.m_simple_name);
-        dag_serializer.write_encoded(mat.m_original_name);
-        dag_serializer.write_encoded(mat.m_cloned);
-
-        serialize_parameters(mat, dag_serializer);
-
-        dag_serializer.serialize(mat.m_annotations);
-        dag_serializer.serialize(mat.m_return_annos);
-        dag_serializer.serialize(mat.m_temporaries);
-        dag_serializer.serialize(mat.m_temporary_names);
-
-        dag_serializer.write_encoded(mat.m_body);
-    }
-}
-
-// Deserialize all Material_infos of this code DAG.
-void Generated_code_dag::deserialize_materials(DAG_deserializer &dag_deserializer)
-{
-    size_t l = dag_deserializer.read_encoded_tag();
-    m_materials.reserve(l);
-
-    for (size_t i = 0; i < l; ++i) {
-        string name        = dag_deserializer.read_encoded<string>();
-        string simple_name = dag_deserializer.read_encoded<string>();
-        string orig_name   = dag_deserializer.read_encoded<string>();
-        Material_info mat(get_allocator(), name.c_str(), simple_name.c_str(), orig_name.c_str());
-
-        mat.m_cloned = dag_deserializer.read_encoded<string>();
-
-        deserialize_parameters(mat, dag_deserializer);
-
-        dag_deserializer.deserialize(mat.m_annotations);
-        dag_deserializer.deserialize(mat.m_return_annos);
-        dag_deserializer.deserialize(mat.m_temporaries);
-        dag_deserializer.deserialize(mat.m_temporary_names);
-
-        mat.m_body = dag_deserializer.read_encoded<DAG_node const *>();
-
-        m_materials.push_back(mat);
+        if (func.get_semantics() == IDefinition::DS_UNKNOWN && is_material_category_type(ret_type)) {
+            m_materials.push_back(m_function_infos.size());
+            m_current_material_index++;
+        } else {
+            m_functions.push_back(m_function_infos.size());
+            m_current_function_index++;
+        }
+        m_function_infos.push_back(func);
     }
 }
 
@@ -7183,33 +8184,6 @@ void Generated_code_dag::deserialize_parameters(
 
     for (size_t i = 0; i < l; ++i) {
         func.add_parameter(deserialize_parameter(dag_deserializer));
-    }
-}
-
-// Serialize all parameters of a material.
-void Generated_code_dag::serialize_parameters(
-    Material_info const &mat,
-    DAG_serializer      &dag_serializer) const
-{
-    size_t l = mat.get_parameter_count();
-
-    dag_serializer.write_encoded_tag(l);
-
-    for (size_t i = 0; i < l; ++i) {
-        serialize_parameter(mat.get_parameter(i), dag_serializer);
-    }
-}
-
-// Deserialize all parameters of a material.
-void Generated_code_dag::deserialize_parameters(
-    Material_info    &mat,
-    DAG_deserializer &dag_deserializer)
-{
-    size_t l = dag_deserializer.read_encoded_tag();
-    mat.m_parameters.reserve(l);
-
-    for (size_t i = 0; i < l; ++i) {
-        mat.add_parameter(deserialize_parameter(dag_deserializer));
     }
 }
 
@@ -7410,7 +8384,6 @@ Generated_code_dag const *Generated_code_dag::deserialize(
     dag_deserializer.deserialize(code->m_module_annotations);
 
     code->deserialize_functions(dag_deserializer);
-    code->deserialize_materials(dag_deserializer);
     code->deserialize_user_types(dag_deserializer);
     code->deserialize_constants(dag_deserializer);
 
@@ -7455,7 +8428,7 @@ int Generated_code_dag::add_material_temporary(
     DAG_node const *node,
     char const     *name)
 {
-    Material_info &mat = m_materials[mat_index];
+    Function_info &mat = m_function_infos[m_materials[mat_index]];
     size_t idx = mat.add_temporary(node, name);
     return int(idx);
 }
@@ -7466,7 +8439,7 @@ int Generated_code_dag::add_function_temporary(
     DAG_node const *node,
     char const     *name)
 {
-    Function_info &func = m_functions[func_index];
+    Function_info &func = m_function_infos[m_functions[func_index]];
     size_t idx = func.add_temporary(node, name);
     return int(idx);
 }

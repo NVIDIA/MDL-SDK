@@ -55,8 +55,8 @@ typedef bool (*Compare)(const Type& typ);
 /// to a separately allocated array. Note the alignment on 64-bit hosts.
 struct Dynamic_array
 {
-    unsigned int m_count;				///< number of array elements
-    char* m_value;					///< m_count array members
+    unsigned int m_count;                               ///< number of array elements
+    char* m_value;                                      ///< m_count array members
 };
 
 
@@ -64,9 +64,9 @@ struct Dynamic_array
 /// values. That propagation can be performed in several ways - this enumeration
 /// specifies in which.
 enum Attribute_propagation {
-    PROPAGATION_STANDARD,		///< every new attribute overrides the inherited
-    PROPAGATION_OVERRIDE,		///< the inherited attribute overrides everything
-    PROPAGATION_UNDEF			///< undefined
+    PROPAGATION_STANDARD,               ///< every new attribute overrides the inherited
+    PROPAGATION_OVERRIDE,               ///< the inherited attribute overrides everything
+    PROPAGATION_UNDEF                   ///< undefined
 };
 
 
@@ -74,7 +74,7 @@ enum Attribute_propagation {
 enum Scene_type {
     ID_ATTRIBUTE_SET    = 0x5f417453,   ///< '_AtS'
     ID_ATTRIBUTE        = 0x5f417472,   ///< '_Atr'
-    ID_ATTRIBUTE_LIST	= 0x5f41744C,	///< '_AtL'
+    ID_ATTRIBUTE_LIST   = 0x5f41744C,   ///< '_AtL'
     ID_TYPE             = 0x5f547970    ///< '_Typ'
 };
 

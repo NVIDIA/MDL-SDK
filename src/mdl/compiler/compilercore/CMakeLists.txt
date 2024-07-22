@@ -166,6 +166,7 @@ set(PROJECT_SOURCES
     "compilercore_streams.cpp"
     "compilercore_symbols.cpp"
     "compilercore_thread_context.cpp"
+    "compilercore_type_builder.cpp"
     "compilercore_values.cpp"
     "compilercore_visitor.cpp"
     "compilercore_wchar_support.cpp"

@@ -210,7 +210,7 @@ Module::Module(
 , m_decl_factory(m_arena)
 , m_expr_factory(m_arena)
 , m_stmt_factory(m_arena)
-, m_type_factory(m_arena, compiler, &m_sym_tab)
+, m_type_factory(m_arena, *compiler, m_sym_tab)
 , m_value_factory(m_arena, m_type_factory)
 , m_anno_factory(m_arena)
 , m_def_tab(*this)
@@ -295,6 +295,7 @@ void Module::get_version(IMDL::MDL_version version, int &major, int &minor)
     case IMDL::MDL_VERSION_1_6:     major = 1; minor = 6; return;
     case IMDL::MDL_VERSION_1_7:     major = 1; minor = 7; return;
     case IMDL::MDL_VERSION_1_8:     major = 1; minor = 8; return;
+    case IMDL::MDL_VERSION_1_9:     major = 1; minor = 9; return;
     case IMDL::MDL_VERSION_EXP:     major = 99; minor = 99; return;
     }
     MDL_ASSERT(!"MDL version not known");
@@ -393,15 +394,15 @@ bool Module::is_valid() const
 }
 
 // Get the number of imports.
-int Module::get_import_count() const
+size_t Module::get_import_count() const
 {
-    return int(m_imported_modules.size());
+    return m_imported_modules.size();
 }
 
 // Get the import at index.
-Module const *Module::get_import(int index) const
+Module const *Module::get_import(size_t index) const
 {
-    if (index < 0 || index >= get_import_count()) {
+    if (index >= get_import_count()) {
         return NULL;
     }
     Import_entry const &entry = m_imported_modules[index];
@@ -417,28 +418,28 @@ Module const *Module::get_import(int index) const
 }
 
 // Get the number of exported definitions.
-int Module::get_exported_definition_count() const
+size_t Module::get_exported_definition_count() const
 {
-    return int(m_exported_definitions.size());
+    return m_exported_definitions.size();
 }
 
 // Get the exported definition at index.
-Definition const *Module::get_exported_definition(int index) const
+Definition const *Module::get_exported_definition(size_t index) const
 {
-    if (index < 0 || index >= get_exported_definition_count()) {
+    if (index >= get_exported_definition_count()) {
         return NULL;
     }
     return m_exported_definitions[index];
 }
 
 // Get the number of declarations.
-int Module::get_declaration_count() const
+size_t Module::get_declaration_count() const
 {
-    return int(m_declarations.size());
+    return m_declarations.size();
 }
 
 // Get the declaration at index.
-IDeclaration const *Module::get_declaration(int index) const
+IDeclaration const *Module::get_declaration(size_t index) const
 {
     return m_declarations[index];
 }
@@ -795,7 +796,7 @@ bool Module::is_name_defined(char const *name) const
         // not nice, but we do not modify the table here
         Definition_table *def_tab = const_cast<Definition_table *>(&m_def_tab);
 
-        Definition_table::Scope_transition(*def_tab, def_tab->get_global_scope());
+        Definition_table::Scope_transition scope(*def_tab, def_tab->get_global_scope());
 
         Definition const *def = def_tab->get_definition(sym);
         return def != NULL;
@@ -804,15 +805,15 @@ bool Module::is_name_defined(char const *name) const
 }
 
 // Get the number of builtin definitions.
-int Module::get_builtin_definition_count() const
+size_t Module::get_builtin_definition_count() const
 {
-    return int(m_builtin_definitions.size());
+    return m_builtin_definitions.size();
 }
 
 // Get the builtin definition at index.
-IDefinition const *Module::get_builtin_definition(int index) const
+IDefinition const *Module::get_builtin_definition(size_t index) const
 {
-    if (0 <= index && size_t(index) < m_builtin_definitions.size()) {
+    if (index < m_builtin_definitions.size()) {
         return m_builtin_definitions[index];
     }
     return NULL;
@@ -1397,6 +1398,7 @@ char const *Module::mangle_dag_name(
         case IDefinition::DK_ERROR:
         case IDefinition::DK_CONSTANT:
         case IDefinition::DK_ENUM_VALUE:
+        case IDefinition::DK_STRUCT_CATEGORY:
         case IDefinition::DK_TYPE:
         case IDefinition::DK_VARIABLE:
         case IDefinition::DK_MEMBER:
@@ -1699,6 +1701,13 @@ IType const *Module::import_type(IType const *type)
     return m_type_factory.import(type);
 }
 
+// Import a struct category from another module.
+IStruct_category const *Module::import_struct_category(IStruct_category const *cat)
+{
+    return m_type_factory.import_category(cat);
+}
+
+
 // Import a value from another module.
 IValue const *Module::import_value(IValue const *value) const
 {
@@ -1945,7 +1954,8 @@ IExpression *Module::clone_expr(
         {
             IExpression_unary const *unexpr = cast<IExpression_unary>(expr);
             IExpression const *arg = clone_expr(unexpr->get_argument(), modifier);
-            IExpression_unary *res_unexpr = m_expr_factory.create_unary(unexpr->get_operator(), arg);
+            IExpression_unary *res_unexpr =
+                m_expr_factory.create_unary(unexpr->get_operator(), arg);
             if (res_unexpr->get_operator() == IExpression_unary::OK_CAST) {
                 res_unexpr->set_type_name(clone_name(unexpr->get_type_name(), modifier));
             }
@@ -3577,7 +3587,7 @@ public:
                     return false;
                 }
 
-                int n_vals = etp->get_value_count();
+                size_t n_vals = etp->get_value_count();
                 if (n_vals != oetp->get_value_count()) {
                     return false;
                 }
@@ -3586,16 +3596,16 @@ public:
                     return false;
                 }
 
-                for (int i = 0; i < n_vals; ++i) {
-                    ISymbol const *v_sym, *ov_sym;
-                    int code, ocode;
+                for (size_t i = 0; i < n_vals; ++i) {
+                    IType_enum::Value const *e_value  = etp->get_value(i);
+                    IType_enum::Value const *oe_value = oetp->get_value(i);
 
-                    etp->get_value(i, v_sym, code);
-                    oetp->get_value(i, ov_sym, ocode);
-
-                    if (code != ocode) {
+                    if (e_value->get_code() != oe_value->get_code()) {
                         return false;
                     }
+
+                    ISymbol const *v_sym  = e_value->get_symbol();
+                    ISymbol const *ov_sym = oe_value->get_symbol();
                     if (strcmp(v_sym->get_name(), ov_sym->get_name()) != 0) {
                         return false;
                     }
@@ -3612,7 +3622,7 @@ public:
                     return false;
                 }
 
-                int n_fields = stp->get_field_count();
+                size_t n_fields = stp->get_field_count();
                 if (n_fields != ostp->get_field_count()) {
                     return false;
                 }
@@ -3621,16 +3631,20 @@ public:
                     return false;
                 }
 
-                for (int i = 0; i < n_fields; ++i) {
-                    ISymbol const *s_f, *os_f;
-                    IType const *f_tp, *of_tp;
+                for (size_t i = 0; i < n_fields; ++i) {
+                    IType_struct::Field const *s_field  = stp->get_field(i);
+                    IType_struct::Field const *os_field = ostp->get_field(i);
 
-                    stp->get_field(i, f_tp, s_f);
-                    ostp->get_field(i, of_tp, os_f);
+                    ISymbol const *s_f  = s_field->get_symbol();
+                    ISymbol const *os_f = os_field->get_symbol();
 
                     if (strcmp(s_f->get_name(), os_f->get_name()) != 0) {
                         return false;
                     }
+
+                    IType const *f_tp  = s_field->get_type();
+                    IType const *of_tp = os_field->get_type();
+
                     if (!check_types(f_tp, of_tp)) {
                         return false;
                     }

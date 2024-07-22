@@ -39,7 +39,7 @@ mi::base::Handle<mi::base::ILogger> g_logger;
 
 void log( mi::base::Message_severity severity, const char* message)
 {
-    if( !g_logger.is_valid_interface())
+    if( !g_logger)
         return;
 
     g_logger->message( severity, "DDS:IMAGE", message);

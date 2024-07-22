@@ -43,9 +43,9 @@
 #include "mdl/codegenerators/generator_dag/generator_dag_tools.h"
 #include "mdl/codegenerators/generator_dag/generator_dag_walker.h"
 
-
 #include "generator_jit.h"
 #include "generator_jit_llvm.h"
+
 
 #define DEBUG_TYPE "df_instantiation"
 
@@ -576,7 +576,7 @@ private:
                 {
                     DAG_call const *call = mi::mdl::cast<DAG_call>(expr);
                     if (call->get_semantic() == IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA) {
-                        size_t lambda_index = strtoul(call->get_name(), NULL, 10);
+                        size_t lambda_index = LLVM_code_generator::get_lambda_index_from_call(call);
                         add_dependency(unsigned(lambda_index), infos);
                         return;
                     }
@@ -913,8 +913,26 @@ enum Libbsdf_DF_func_kind
     LDFK_PDF,
     LDFK_AUXILIARY,
     LDFK_IS_BLACK,
-    LDFK_IS_DEFAULT_DIFFUSE_REFLECTION
+    LDFK_IS_DEFAULT_DIFFUSE_REFLECTION,
+    LDFK_HAS_ALLOWED_COMPONENTS
 };
+
+/// Get the kind of BSDF/EDF function call for a constant BSDF field index in libbsdf.
+static Libbsdf_DF_func_kind get_libbsdf_df_func_kind(llvm::ConstantInt *bsdf_field_index)
+{
+    switch (bsdf_field_index->getValue().getZExtValue()) {
+    case 0: return LDFK_SAMPLE;
+    case 1: return LDFK_EVALUATE;
+    case 2: return LDFK_PDF;
+    case 3: return LDFK_AUXILIARY;
+    case 4: return LDFK_IS_BLACK;
+    case 5: return LDFK_IS_DEFAULT_DIFFUSE_REFLECTION;
+    case 6: return LDFK_HAS_ALLOWED_COMPONENTS;
+    default:
+        MDL_ASSERT(!"Unknown DF struct index");
+        return LDFK_INVALID;
+    }
+}
 
 /// Get the kind of BSDF/EDF function call for a member call for an BSDF/EDF object in libbsdf.
 static Libbsdf_DF_func_kind get_libbsdf_df_func_kind(llvm::CallInst *call)
@@ -936,26 +954,30 @@ static Libbsdf_DF_func_kind get_libbsdf_df_func_kind(llvm::CallInst *call)
                 MDL_ASSERT(
                     df_type->getName() == "struct.BSDF" || df_type->getName() == "struct.EDF");
                 MDL_ASSERT(gep->getNumOperands() == 3 && "Unknown DF struct access");
-                llvm::Value *struct_idx_val = gep->getOperand(2);
-                llvm::ConstantInt *struct_idx_const =
-                    llvm::dyn_cast<llvm::ConstantInt>(struct_idx_val);
-                MDL_ASSERT(struct_idx_const);
-                switch (struct_idx_const->getValue().getZExtValue()) {
-                case 0: return LDFK_SAMPLE;
-                case 1: return LDFK_EVALUATE;
-                case 2: return LDFK_PDF;
-                case 3: return LDFK_AUXILIARY;
-                case 4: return LDFK_IS_BLACK;
-                case 5: return LDFK_IS_DEFAULT_DIFFUSE_REFLECTION;
-                default:
-                    MDL_ASSERT(!"Unknown DF struct index");
-                    break;
-                }
+                llvm::Value *bsdf_field_index = gep->getOperand(2);
+                llvm::ConstantInt *bsdf_field_index_const =
+                    llvm::dyn_cast<llvm::ConstantInt>(bsdf_field_index);
+                MDL_ASSERT(bsdf_field_index_const);
+                return get_libbsdf_df_func_kind(bsdf_field_index_const);
             }
         }
     }
     MDL_ASSERT(!"Unknown DF call");
     return LDFK_INVALID;
+}
+
+static LLVM_code_generator::Distribution_function_state convert_to_df_state(
+    Libbsdf_DF_func_kind df_func_kind)
+{
+    switch (df_func_kind) {
+    case LDFK_SAMPLE:    return LLVM_code_generator::DFSTATE_SAMPLE;
+    case LDFK_EVALUATE:  return LLVM_code_generator::DFSTATE_EVALUATE;
+    case LDFK_PDF:       return LLVM_code_generator::DFSTATE_PDF;
+    case LDFK_AUXILIARY: return LLVM_code_generator::DFSTATE_AUXILIARY;
+    default:
+        MDL_ASSERT(!"Unexpected df call kind");
+        return LLVM_code_generator::DFSTATE_NONE;
+    }
 }
 
 // Create the BSDF function types using the BSDF data types from the already linked libbsdf
@@ -1515,6 +1537,7 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
     }
 
     // reset some fields
+    m_scatter_components_map.clear();
     m_deriv_infos = NULL;
     m_dist_func = NULL;
     m_cur_main_func_index = 0;
@@ -1810,6 +1833,18 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
     }
 
     llvm::StringRef func_name = called_func->getName();
+
+    if (func_name == "is_bsdf_flags_enabled") {
+        call->replaceAllUsesWith(
+            llvm::ConstantInt::get(
+                llvm::IntegerType::get(m_llvm_context, 1),
+                m_libbsdf_flags_in_bsdf_data ? 1 : 0));
+
+        // Remove old call and let iterator point to instruction before old call
+        ii = --ii->getParent()->getInstList().erase(call);
+        return true;
+    }
+
     if (!func_name.startswith("_Z") || !called_func->isDeclaration()) {
         return true;   // ignore non-mangled functions and functions with definitions
     }
@@ -2241,6 +2276,12 @@ bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
 
     // also avoid LLVM warning on console about mixing different data layouts
     libbsdf->setDataLayout(m_module->getDataLayout());
+
+    // remove all comdat infos from functions in the libbsdf module,
+    // as this is not used by us and not supported on MacOS
+    for (llvm::Function &f : libbsdf->functions()) {
+        f.setComdat(nullptr);
+    }
 
     // collect all functions available before linking
     // note: we cannot use the function pointers, as linking removes some function declarations and
@@ -2983,6 +3024,14 @@ Expression_result LLVM_code_generator::translate_precalculated_lambda(
     return Expression_result::value(ctx.load_and_convert(expected_type, res.as_ptr(ctx)));
 }
 
+// Get the lambda index from a lambda DAG call.
+size_t LLVM_code_generator::get_lambda_index_from_call(DAG_call const *call)
+{
+    MDL_ASSERT(call->get_semantic() == IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA);
+    size_t lambda_index = strtoul(call->get_name(), NULL, 10);
+    return lambda_index;
+}
+
 // Translate a DAG call argument which may be a precalculated lambda function to LLVM IR.
 Expression_result LLVM_code_generator::translate_call_arg(
     Function_context &ctx,
@@ -3002,8 +3051,7 @@ Expression_result LLVM_code_generator::translate_call_arg(
     // determine expression lambda index
     MDL_ASSERT(arg->get_kind() == DAG_node::EK_CALL);
     DAG_call const *arg_call = mi::mdl::cast<DAG_call>(arg);
-    MDL_ASSERT(arg_call->get_semantic() == IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA);
-    size_t lambda_index = strtoul(arg_call->get_name(), NULL, 10);
+    size_t lambda_index = get_lambda_index_from_call(arg_call);
 
     return translate_precalculated_lambda(ctx, lambda_index, expected_type);
 }
@@ -3100,6 +3148,7 @@ void LLVM_code_generator::rewrite_df_component_usages(
     Function_context                           &ctx,
     llvm::AllocaInst                           *inst,
     llvm::Value                                *weight_array,
+    llvm::Value                                *df_flags_array,
     Df_component_info                          &comp_info,
     llvm::SmallVector<llvm::Instruction *, 16> &delete_list)
 {
@@ -3180,10 +3229,17 @@ void LLVM_code_generator::rewrite_df_component_usages(
         if (struct_idx == 1) {
             // We have to rewrite all accesses.
             // The code we search for should look like this:
-            //  - %elemptr = getelementptr %components, %i, 1, 0
+            //  - %elemptr = getelementptr %components, %i, 1, bsdf_field_index
             //  - %funcptr = load %elemptr
             //  - call %funcptr
             // So iterate over all usages of the gep and the loads
+            MDL_ASSERT(gep->getNumOperands() == 4);
+            llvm::Value *bsdf_field_index = gep->getOperand(3);
+            llvm::ConstantInt *bsdf_field_index_const =
+                llvm::dyn_cast<llvm::ConstantInt>(bsdf_field_index);
+            MDL_ASSERT(bsdf_field_index_const);
+            Libbsdf_DF_func_kind df_func_kind = get_libbsdf_df_func_kind(bsdf_field_index_const);
+
             for (auto gep_user : gep->users()) {
                 llvm::LoadInst *load = llvm::dyn_cast<llvm::LoadInst>(gep_user);
                 MDL_ASSERT(load);
@@ -3191,10 +3247,34 @@ void LLVM_code_generator::rewrite_df_component_usages(
                 for (auto load_user : load->users()) {
                     llvm::CallInst *call = llvm::dyn_cast<llvm::CallInst>(load_user);
                     MDL_ASSERT(call);
-                    MDL_ASSERT(call->getType() != llvm::IntegerType::get(m_llvm_context, 1) &&
-                        "bsdfs in bsdf_component currently don't support is_black()");
 
-                    Distribution_function_state call_state = get_dist_func_state_from_call(call);
+                    if (df_func_kind == LDFK_HAS_ALLOWED_COMPONENTS) {
+                        if (m_libbsdf_flags_in_bsdf_data) {
+                            ctx->SetInsertPoint(call);
+
+                            llvm::Value *comp_val = ctx->CreateLoad(
+                                ctx.create_simple_gep_in_bounds(df_flags_array, component_idx_val),
+                                "df_flags");
+                            llvm::Value *allowed_val = call->getArgOperand(0);
+                            llvm::Value *union_val = ctx->CreateAnd(comp_val, allowed_val);
+                            llvm::Value *comp = ctx->CreateICmpNE(union_val, ctx.get_constant(0));
+                            call->replaceAllUsesWith(comp);
+                        } else {
+                            // no flags available -> no restriction on allowed components -> true
+                            call->replaceAllUsesWith(
+                                llvm::ConstantInt::get(
+                                    llvm::IntegerType::get(m_llvm_context, 1), 1));
+                        }
+                        delete_list.push_back(call);
+                        continue;
+                    }
+
+                    MDL_ASSERT((df_func_kind == LDFK_SAMPLE || df_func_kind == LDFK_EVALUATE
+                        || df_func_kind == LDFK_PDF || df_func_kind == LDFK_AUXILIARY) &&
+                        "bsdfs in bsdf_component currently only support has_allowed_components() "
+                        "and sample/evaluate/pdf/auxiliary()");
+
+                    Distribution_function_state call_state = convert_to_df_state(df_func_kind);
                     llvm::Function *df_func = comp_info.get_df_function(ctx, call_state);
 
                     // convert 64-bit index to 32-bit index
@@ -3209,17 +3289,15 @@ void LLVM_code_generator::rewrite_df_component_usages(
 
                     // call it with state parameters added
                     llvm::SmallVector<llvm::Value *, 5> llvm_args;
-                    llvm_args.push_back(call->getArgOperand(0));     // res_pointer
+                    llvm_args.push_back(call->getArgOperand(0));      // res_pointer
                     llvm_args.push_back(ctx.has_exec_ctx_parameter() ?
                         ctx.get_exec_ctx_parameter() : ctx.get_state_parameter());
-                    llvm_args.push_back(call->getArgOperand(2));     // inherited_normal param
-                    if (call_state == Distribution_function_state::DFSTATE_EVALUATE ||
-                        call_state == Distribution_function_state::DFSTATE_AUXILIARY)
-                    {
+                    llvm_args.push_back(call->getArgOperand(2));      // inherited_normal param
+                    if (df_func_kind == LDFK_EVALUATE || df_func_kind == LDFK_AUXILIARY) {
                         llvm_args.push_back(call->getArgOperand(3));  // inherited_weight param
                     }
                     if (comp_info.is_switch_function()) {
-                        llvm_args.push_back(idx_val);                // BSDF function index
+                        llvm_args.push_back(idx_val);                 // BSDF function index
                     }
                     llvm::CallInst::Create(df_func, llvm_args, "", call);
                     delete_list.push_back(call);
@@ -3289,7 +3367,7 @@ void LLVM_code_generator::handle_df_array_parameter(
             return;
         }
 
-        // is it a BSDF_component array?
+        // is it a constant BSDF_component array?
         bool color_df_component = false;
         if (elem_type->isStructTy() && !llvm::cast<llvm::StructType>(elem_type)->isLiteral() && (
                 elem_type->getStructName() == "struct.BSDF_component" ||
@@ -3302,8 +3380,6 @@ void LLVM_code_generator::handle_df_array_parameter(
                 m_float3_struct_type : m_type_mapper.get_float_type(); 
 
             // create a global constant weight array
-            llvm::ArrayType *weight_array_type =
-                llvm::ArrayType::get(weight_type, elem_count);
             llvm::SmallVector<llvm::Constant *, 8> elems(elem_count);
             for (int i = 0; i < elem_count; ++i) {
                 MDL_ASSERT(arg_array->get_value(i)->get_kind() == mi::mdl::IValue::VK_STRUCT);
@@ -3330,6 +3406,7 @@ void LLVM_code_generator::handle_df_array_parameter(
                 }
             }
 
+            llvm::ArrayType *weight_array_type = llvm::ArrayType::get(weight_type, elem_count);
             llvm::Constant *array = llvm::ConstantArray::get(weight_array_type, elems);
             llvm::Value *weight_array_global = new llvm::GlobalVariable(
                 *m_module,
@@ -3337,8 +3414,20 @@ void LLVM_code_generator::handle_df_array_parameter(
                 /*isConstant=*/ true,
                 llvm::GlobalValue::InternalLinkage,
                 array,
-                "_global_libbsdf_const");
+                "_global_libbsdf_weights_const");
 
+            llvm::Value *df_flags_array_global = nullptr;
+            if (m_libbsdf_flags_in_bsdf_data) {
+                llvm::ArrayType *df_array_type =
+                    llvm::ArrayType::get(m_type_mapper.get_int_type(), elem_count);
+                df_flags_array_global = new llvm::GlobalVariable(
+                    *m_module,
+                    weight_array_type,
+                    /*isConstant=*/ true,
+                    llvm::GlobalValue::InternalLinkage,
+                    llvm::ConstantAggregateZero::get(df_array_type),
+                    "_global_libbsdf_df_flags_const");
+            }
 
             const IType_array* array_type = as<IType_array>(arg->get_type());
             const IType_struct* element_type = as<IType_struct>(array_type->get_element_type());
@@ -3352,6 +3441,7 @@ void LLVM_code_generator::handle_df_array_parameter(
                 ctx,
                 inst,
                 weight_array_global,
+                df_flags_array_global,
                 comp_info,
                 delete_list);
             return;
@@ -3388,7 +3478,7 @@ void LLVM_code_generator::handle_df_array_parameter(
             // the whole array is calculated by a lambda function
 
             // read precalculated lambda result
-            size_t lambda_index = strtoul(arg_call->get_name(), NULL, 10);
+            size_t lambda_index = get_lambda_index_from_call(arg_call);
             Expression_result array_res = translate_precalculated_lambda(
                 ctx, lambda_index, color_array_type);
             color_array = array_res.as_ptr(ctx);
@@ -3419,7 +3509,7 @@ void LLVM_code_generator::handle_df_array_parameter(
         return;
     }
 
-    // is it a BSDF_component array?
+    // is it a non-constant BSDF_component array?
     bool color_df_component = false;
     if (elem_type->isStructTy() && !llvm::cast<llvm::StructType>(elem_type)->isLiteral() && (
             elem_type->getStructName() == "struct.BSDF_component" ||
@@ -3434,10 +3524,16 @@ void LLVM_code_generator::handle_df_array_parameter(
         llvm::Type *weight_type = color_df_component ?
             m_float3_struct_type : m_type_mapper.get_float_type(); 
 
-        // create local weight array and instantiate all BSDF components
+        // create local weight and Df_flags array and instantiate all BSDF components
         llvm::ArrayType *weight_array_type = llvm::ArrayType::get(weight_type, elem_count);
         llvm::Value *weight_array = ctx.create_local(weight_array_type, "weights");
 
+        llvm::Value *df_flags_array = nullptr;
+        if (m_libbsdf_flags_in_bsdf_data) {
+            llvm::ArrayType *df_flags_array_type =
+                llvm::ArrayType::get(m_type_mapper.get_int_type(), elem_count);
+            df_flags_array = ctx.create_local(df_flags_array_type, "df_flags");
+        }
 
         // get df kind
         IType_array const  *array_type   = cast<IType_array>(arg->get_type());
@@ -3450,6 +3546,7 @@ void LLVM_code_generator::handle_df_array_parameter(
             DAG_node const *elem_node = arg_call->get_argument(i);
 
             Expression_result weight_res;
+            llvm::Value *df_flags_val = nullptr;
 
             // is the i-th element a BSDF_component constant?
             if (elem_node->get_kind() == DAG_node::EK_CONSTANT) {
@@ -3459,10 +3556,19 @@ void LLVM_code_generator::handle_df_array_parameter(
                 mi::mdl::IValue const *weight_val = value->get_field("weight");
                 weight_res = translate_value(ctx, weight_val);
 
+                if (weight_res.get_value_type() != weight_type) {
+                    weight_res = Expression_result::value(
+                        ctx.load_and_convert(weight_type, weight_res.as_ptr(ctx)));
+                }
+
                 // only "bsdf()" can be part of a constant
                 MDL_ASSERT(value->get_field("component")->get_kind() ==
                     mi::mdl::IValue::VK_INVALID_REF);
                 comp_info.add_component_df(elem_node);
+
+                if (m_libbsdf_flags_in_bsdf_data) {
+                    df_flags_val = ctx.get_constant(int(DF_FLAGS_NONE));
+                }
             } else {
                 // should be a BSDF_component constructor call
                 MDL_ASSERT(elem_node->get_kind() == DAG_node::EK_CALL);
@@ -3473,15 +3579,20 @@ void LLVM_code_generator::handle_df_array_parameter(
                 // instantiate BSDF for component parameter of the constructor
                 DAG_node const *component_node = elem_call->get_argument("component");
                 comp_info.add_component_df(component_node);
+
+                if (m_libbsdf_flags_in_bsdf_data) {
+                    df_flags_val = ctx.get_constant(
+                        int(get_bsdf_scatter_components(component_node)));
+                }
             }
 
-            // store result in weights array
-            llvm::Value *idxs[] = {
-                llvm::ConstantInt::getNullValue(m_type_mapper.get_int_type()),
-                llvm::ConstantInt::get(m_type_mapper.get_int_type(), i)
-            };
+            // store results in arrays
             ctx->CreateStore(weight_res.as_value(ctx),
-                ctx->CreateGEP(weight_array, idxs, "weights_elem"));
+                ctx.create_simple_gep_in_bounds(weight_array, unsigned(i)));
+            if (m_libbsdf_flags_in_bsdf_data) {
+                ctx->CreateStore(df_flags_val,
+                    ctx.create_simple_gep_in_bounds(df_flags_array, unsigned(i)));
+            }
         }
 
         // rewrite all usages of the components variable
@@ -3489,6 +3600,7 @@ void LLVM_code_generator::handle_df_array_parameter(
             ctx,
             inst,
             weight_array,
+            df_flags_array,
             comp_info,
             delete_list);
         return;
@@ -3911,6 +4023,151 @@ bool LLVM_code_generator::is_default_diffuse_reflection(DAG_node const *node)
     return true;
 }
 
+// Returns the scatter components the given DAG node can return.
+Df_flags LLVM_code_generator::get_bsdf_scatter_components(
+    DAG_node const *node)
+{
+    DAG_call const *dag_call = as<DAG_call>(node);
+    if (dag_call == NULL) {
+        return DF_FLAGS_NONE;
+    }
+
+    Scatter_components_map::const_iterator it = m_scatter_components_map.find(dag_call);
+    if (it != m_scatter_components_map.end()) {
+        return it->second;
+    }
+
+    Df_flags res;
+    int scatter_arg_index = -1;
+
+    switch (unsigned(dag_call->get_semantic())) {
+    case IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_DUSTY_DIFFUSE_REFLECTION_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_BACKSCATTERING_GLOSSY_REFLECTION_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
+        res = DF_FLAGS_ALLOW_REFLECT;
+        break;
+
+    case IDefinition::DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF:
+        res = DF_FLAGS_ALLOW_TRANSMIT;
+        break;
+
+    case IDefinition::DS_INTRINSIC_DF_SPECULAR_BSDF:
+        scatter_arg_index = 1;
+        break;
+
+    case IDefinition::DS_INTRINSIC_DF_MEASURED_BSDF:
+        scatter_arg_index = 2;
+        break;
+
+    case IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_SMITH_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_SMITH_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_VCAVITIES_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
+        scatter_arg_index = 5;
+        break;
+
+    case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
+        {
+            Df_flags multiscatter_comps = get_bsdf_scatter_components(dag_call->get_argument(3));
+            res = Df_flags(int(DF_FLAGS_ALLOW_REFLECT) | multiscatter_comps);
+            break;
+        }
+
+    case IDefinition::DS_INTRINSIC_DF_TINT:
+    case IDefinition::DS_INTRINSIC_DF_THIN_FILM:
+    case IDefinition::DS_INTRINSIC_DF_DIRECTIONAL_FACTOR:
+    case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR:
+    case IDefinition::DS_INTRINSIC_DF_FRESNEL_FACTOR:
+    case IDefinition::DS_INTRINSIC_DF_MEASURED_FACTOR:
+        // last argument is the base bsdf
+        res = get_bsdf_scatter_components(
+            dag_call->get_argument(dag_call->get_argument_count() - 1));
+        break;
+
+    case IDefinition::DS_INTRINSIC_DF_WEIGHTED_LAYER:
+    case IDefinition::DS_INTRINSIC_DF_FRESNEL_LAYER:
+    case IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER:
+    case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_LAYER:
+    case IDefinition::DS_INTRINSIC_DF_COLOR_WEIGHTED_LAYER:
+    case IDefinition::DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER:
+    case IDefinition::DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER:
+    case IDefinition::DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER:
+        {
+            // the last three parameters are layer, base and normal
+            Df_flags layer_comps = get_bsdf_scatter_components(
+                dag_call->get_argument(dag_call->get_argument_count() - 3));
+            Df_flags base_comps = get_bsdf_scatter_components(
+                dag_call->get_argument(dag_call->get_argument_count() - 2));
+            res = Df_flags(int(layer_comps) | int(base_comps));
+            break;
+        }
+
+    // case IDefinition::DS_INTRINSIC_DF_CHIANG_HAIR_BSDF:
+
+    case IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX:
+    case IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX:
+    case IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX:
+    case IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX:
+    case IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX:
+    case IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX:
+        {
+            // only argument is components array
+            res = DF_FLAGS_NONE;
+            DAG_call const *components_array = as<DAG_call>(dag_call->get_argument(0));
+            if (components_array == nullptr) {
+                MDL_ASSERT(is<DAG_constant>(dag_call->get_argument(0)) && "expected empty array");
+                break;
+            }
+            for (int i = 0, n = components_array->get_argument_count(); i < n; ++i) {
+                DAG_call const *comp_struct = as<DAG_call>(components_array->get_argument(i));
+                if (comp_struct == nullptr) {
+                    MDL_ASSERT(is<DAG_constant>(components_array->get_argument(i)) &&
+                        "expected component with black BSDF");
+                    continue;
+                }
+                DAG_node const *comp_bsdf = comp_struct->get_argument(1);
+                Df_flags comp_res = get_bsdf_scatter_components(comp_bsdf);
+                res = Df_flags(int(res) | int(comp_res));
+            }
+            break;
+        }
+
+    case IDefinition::Semantics(IDefinition::DS_OP_BASE + IExpression::OK_TERNARY):
+        {
+            Df_flags true_comps = get_bsdf_scatter_components(
+                dag_call->get_argument(1));
+            Df_flags false_comps = get_bsdf_scatter_components(
+                dag_call->get_argument(2));
+            res = Df_flags(int(true_comps) | int(false_comps));
+            break;
+        }
+
+    default:
+        MDL_ASSERT(!"Unexpected DAG call for get_bsdf_scatter_components");
+        res = DF_FLAGS_NONE;
+        break;
+    }
+
+    // if there is a scatter_mode argument, get it from BSDF node and
+    // convert to Bsdf_scatter_components
+    if (scatter_arg_index != -1) {
+        DAG_node const *scatter_arg = dag_call->get_argument(scatter_arg_index);
+        if (DAG_constant const *scatter_const = as<DAG_constant>(scatter_arg)) {
+            int scatter_const_int = cast<IValue_enum>(scatter_const->get_value())->get_value();
+            res = Df_flags(scatter_const_int + 1);
+        } else {
+            // for now, if we get a lambda expression call here (can be material parameter or code),
+            // return a conservative answer
+            res = DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT;
+        }
+    }
+
+    m_scatter_components_map[dag_call] = res;
+    return res;
+}
+
 // Instantiate a DF from the given DAG node and call the resulting function.
 llvm::CallInst *LLVM_code_generator::instantiate_and_call_df(
     Function_context            &ctx,
@@ -3982,16 +4239,21 @@ llvm::Function *LLVM_code_generator::instantiate_df(
     if (DAG_constant const *c = as<DAG_constant>(node)) {
         IValue const *value = c->get_value();
 
-        // check for "bsdf()" or "df::bsdf_component(weight, bsdf())" constant
+        // check for "bsdf()" or "df::[color_]bsdf_component(weight, bsdf())" constant
         if ( (
                 // "bsdf()"
                 is<IValue_invalid_ref>(value) && 
                 (is<IType_bsdf>(value->get_type()) || is<IType_hair_bsdf>(value->get_type()))
             ) || (
-                // "df::bsdf_component(weight, bsdf())"
+                // "df::bsdf_component(weight, bsdf())" / "df::color_bsdf_component(weight, bsdf())"
                 is<IValue_struct>(value) &&
-                strcmp(cast<IValue_struct>(value)->get_type()->get_symbol()->get_name(),
-                    "::df::bsdf_component") == 0
+                (
+                    strcmp(cast<IValue_struct>(value)->get_type()->get_symbol()->get_name(),
+                        "::df::bsdf_component") == 0
+                ||
+                    strcmp(cast<IValue_struct>(value)->get_type()->get_symbol()->get_name(),
+                        "::df::color_bsdf_component") == 0
+                )
             ) )
         {
             mi::mdl::string func_name("gen_black_bsdf", get_allocator());
@@ -4004,15 +4266,20 @@ llvm::Function *LLVM_code_generator::instantiate_df(
             return df_lib_func;   // the black_bsdf needs no instantiation, return it directly
         }
 
-        // check for "edf()" or "df::edf_component(weight, edf())" constant
+        // check for "edf()" or "df::[color_]edf_component(weight, edf())" constant
         if ( (
                 // "edf()"
                 is<IValue_invalid_ref>(value) && is<IType_edf>(value->get_type())
             ) || (
-                // "df::edf_component(weight, edf())"
+                // "df::edf_component(weight, edf())" / "df::color_edf_component(weight, edf())"
                 is<IValue_struct>(value) &&
-                strcmp(cast<IValue_struct>(value)->get_type()->get_symbol()->get_name(),
-                "::df::edf_component") == 0
+                (
+                    strcmp(cast<IValue_struct>(value)->get_type()->get_symbol()->get_name(),
+                        "::df::edf_component") == 0
+                ||
+                    strcmp(cast<IValue_struct>(value)->get_type()->get_symbol()->get_name(),
+                        "::df::color_edf_component") == 0
+                )
             ) )
         {
             mi::mdl::string func_name("gen_black_edf", get_allocator());
@@ -4418,18 +4685,31 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                             llvm::ConstantInt::get(
                                 bool_type,
                                 is_default_diffuse_reflection(arg) ? 1 : 0));
-                    } else if (!opt_ctx.m_skip_bsdf_call) {
-                        Distribution_function_state new_state;
+                    } else if (df_func_kind == LDFK_HAS_ALLOWED_COMPONENTS) {
+                        if (m_libbsdf_flags_in_bsdf_data) {
+                            ctx->SetInsertPoint(call);
 
-                        switch (df_func_kind) {
-                        case LDFK_SAMPLE:    new_state = DFSTATE_SAMPLE;    break;
-                        case LDFK_EVALUATE:  new_state = DFSTATE_EVALUATE;  break;
-                        case LDFK_PDF:       new_state = DFSTATE_PDF;       break;
-                        case LDFK_AUXILIARY: new_state = DFSTATE_AUXILIARY; break;
-                        default:
-                            MDL_ASSERT(!"Unexpected df call kind");
-                            continue;
+                            Df_flags components = get_bsdf_scatter_components(arg);
+                            llvm::Value *comp_val = ctx.get_constant(int(components));
+                            llvm::Value *allowed_val = call->getArgOperand(0);
+                            llvm::Value *union_val = ctx->CreateAnd(comp_val, allowed_val);
+                            llvm::Value *comp = ctx->CreateICmpNE(union_val, ctx.get_constant(0));
+                            call->replaceAllUsesWith(comp);
+                        } else {
+                            // no flags available -> no restriction on allowed components
+                            // only no allowed component, if the df is black
+                            bool is_black = false;
+                            if (is<DAG_constant>(arg)) {
+                                IValue const *value = cast<DAG_constant>(arg)->get_value();
+                                is_black =
+                                    is<IValue_invalid_ref>(value) && is<IType_df>(value->get_type());
+                            }
+
+                            call->replaceAllUsesWith(
+                                llvm::ConstantInt::get(bool_type, is_black ? 0 : 1));
                         }
+                    } else if (!opt_ctx.m_skip_bsdf_call) {
+                        Distribution_function_state new_state = convert_to_df_state(df_func_kind);
 
                         instantiate_and_call_df(
                             ctx,
@@ -4844,6 +5124,13 @@ void LLVM_code_generator::translate_distribution_function(
                 llvm::Value *data =
                     ctx->CreateLoad(ctx->CreateStructGEP(sample_data, i));
                 ctx->CreateStore(data, ctx->CreateStructGEP(pdf_data, i));
+            }
+
+            // copy libbsdf flags if used
+            if (m_libbsdf_flags_in_bsdf_data) {
+                llvm::Value *flags =
+                    ctx->CreateLoad(ctx->CreateStructGEP(sample_data, 9));
+                ctx->CreateStore(flags, ctx->CreateStructGEP(pdf_data, 5));
             }
         }
 

@@ -32,6 +32,7 @@
 #include <cstdint>
 #include <vector_types.h>
 #include <texture_types.h>
+#include <mi/neuraylib/target_code_types.h>
 
 struct Target_code_data;
 
@@ -161,12 +162,13 @@ struct Kernel_params {
     unsigned      display_buffer_index;
 
     // parameters
-    unsigned int iteration_start;
-    unsigned int iteration_num;
-    unsigned int mdl_test_type;
-    unsigned int max_path_length;
-    unsigned int use_derivatives;
-    unsigned int disable_aa;
+    unsigned int            iteration_start;
+    unsigned int            iteration_num;
+    unsigned int            mdl_test_type;
+    unsigned int            max_path_length;
+    unsigned int            use_derivatives;
+    unsigned int            disable_aa;
+    mi::neuraylib::Df_flags bsdf_data_flags;
 
     // camera
     float3 cam_pos;

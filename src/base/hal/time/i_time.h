@@ -113,11 +113,11 @@ public:
 
     // Create time.
     static Time mktime(
-	struct tm   *tm);   // the time struct
+        struct tm   *tm);   // the time struct
 
     // Report local time.
     static int localtime(
-	struct tm   *now);  // the local time
+        struct tm   *now);  // the local time
 
 private:
     // The seconds of the timer class. This might differ beyond different
@@ -153,7 +153,7 @@ Time get_wallclock_time();
 /// Suspend current thread for at least the given time interval
 /// Uses high resolution sleep functions (Unix: ::usleep(), Windows: ::Sleep(), the latter must rely on timeBeginPeriod(1) being set by the app)
 void sleep (
-     const Time interval);		// sleep time in seconds
+     const Time interval);              // sleep time in seconds
 
 }} // namespace MI::TIME
 

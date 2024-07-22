@@ -53,7 +53,7 @@
 #include "generator_jit_hlsl_writer.h"
 #include "generator_jit_glsl_writer.h"
 
-#define NEW_OUT_OF_SSA 0
+#define NEW_OUT_OF_SSA 1
 #define DEBUG_NEW_OUT_OF_SSA 0
 
 #if !NEW_OUT_OF_SSA
@@ -99,6 +99,7 @@ SLWriterPass<BasePass>::SLWriterPass(
     0, typename Struct_map::hasher(), typename Struct_map::key_equal(), alloc)
 , m_llvm_function_map(
     0, typename Function_map::hasher(), typename Function_map::key_equal(), alloc)
+, m_curr_ast_func(nullptr)
 , m_out_def(nullptr)
 , m_num_texture_spaces(num_texture_spaces)
 , m_num_texture_results(num_texture_results)
@@ -206,6 +207,7 @@ void SLWriterPass<BasePass>::register_api_types(
             "bsdf_over_pdf",
             "event_type",
             "handle",
+            "flags",
         };
         Base::add_api_type_info("struct.BSDF_sample_data", "Bsdf_sample_data", fields);
     }
@@ -220,6 +222,7 @@ void SLWriterPass<BasePass>::register_api_types(
             "bsdf_diffuse",
             "bsdf_glossy",
             "pdf",
+            "flags",
         };
         Base::add_api_type_info("struct.BSDF_evaluate_data", "Bsdf_evaluate_data", fields);
     } else /* DF_HSM_FIXED (no pointers in HLSL) */ {
@@ -232,6 +235,7 @@ void SLWriterPass<BasePass>::register_api_types(
             "bsdf_diffuse",
             "bsdf_glossy",
             "pdf",
+            "flags",
         };
         Base::add_api_type_info("struct.BSDF_evaluate_data", "Bsdf_evaluate_data", fields);
     }
@@ -244,6 +248,7 @@ void SLWriterPass<BasePass>::register_api_types(
             "k1",
             "k2",
             "pdf",
+            "flags",
         };
         Base::add_api_type_info("struct.BSDF_pdf_data", "Bsdf_pdf_data", fields);
     }
@@ -258,6 +263,7 @@ void SLWriterPass<BasePass>::register_api_types(
             "albedo_glossy",
             "normal",
             "roughness",
+            "flags",
         };
         Base::add_api_type_info("struct.BSDF_auxiliary_data", "Bsdf_auxiliary_data", fields);
     } else /* DF_HSM_FIXED (no pointers in HLSL) */ {
@@ -270,6 +276,7 @@ void SLWriterPass<BasePass>::register_api_types(
             "albedo_glossy",
             "normal",
             "roughness",
+            "flags",
         };
         Base::add_api_type_info("struct.BSDF_auxiliary_data", "Bsdf_auxiliary_data", fields);
     }
@@ -452,6 +459,8 @@ template<typename BasePass>
 void SLWriterPass<BasePass>::translate_function(
     llvm::sl::StructuredFunction const *ast_func)
 {
+    Store<llvm::sl::StructuredFunction const *> ast_store(m_curr_ast_func, ast_func);
+
     llvm::Function *llvm_func = &ast_func->getFunction();
 
     Store<llvm::Function *> func_store(m_curr_func, llvm_func);
@@ -521,6 +530,7 @@ void SLWriterPass<BasePass>::translate_function(
             ++first_param_ofs;
         }
 
+        unsigned param_idx = 0;
         for (llvm::Argument &arg_it : llvm_func->args()) {
             llvm::Type *arg_llvm_type = arg_it.getType();
             Type *param_type    = Base::convert_type(arg_llvm_type);
@@ -530,17 +540,16 @@ void SLWriterPass<BasePass>::translate_function(
                 continue;
             }
 
-            unsigned          i                = arg_it.getArgNo();
             Type_name         *param_type_name =
                 Base::get_type_name(inner_element_type(param_type));
             Declaration_param *decl_param = Base::m_decl_factory.create_param(param_type_name);
             Base::add_array_specifiers(decl_param, param_type);
 
             // add parameter qualifier for targets that have it
-            Base::add_param_qualifier(param_type_name, func_type, i + first_param_ofs);
+            Base::add_param_qualifier(param_type_name, func_type, param_idx + first_param_ofs);
 
             char templ[16];
-            snprintf(templ, sizeof(templ), "p_%u", i);
+            snprintf(templ, sizeof(templ), "p_%u",param_idx);
 
             Symbol *param_sym  = Base::get_unique_sym(arg_it.getName(), templ);
             Name   *param_name = Base::get_name(Base::zero_loc, param_sym);
@@ -554,6 +563,8 @@ void SLWriterPass<BasePass>::translate_function(
             m_local_var_map[&arg_it] = param_def;
 
             decl_func->add_param(decl_param);
+
+            ++param_idx;
         }
 
         // local variables possibly used in outer scopes will be declared in the
@@ -792,27 +803,123 @@ public:
         }
     }
 };
+#endif
 
-// Return true if the value phi is used in any terminating instruction,
-// which requires special handling in the out-of-SSA transformation.
-static bool used_in_terminator(llvm::Value* phi)
-{
-    for (llvm::Value* user : phi->users()) {
-        if (llvm::isa<llvm::Instruction>(user)) {
-            llvm::Instruction *inst = llvm::cast<llvm::Instruction>(user);
-            if (inst->isTerminator()) {
+namespace {
+
+    // Return true if the value phi is used in any terminating instruction,
+    // which requires special handling in the out-of-SSA transformation.
+    bool used_in_terminator(llvm::Value* phi)
+    {
+        for (llvm::Value* user : phi->users()) {
+            if (llvm::isa<llvm::Instruction>(user)) {
+                llvm::Instruction *inst = llvm::cast<llvm::Instruction>(user);
+                if (inst->isTerminator()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    bool flows_into_terminator(llvm::Value *value, llvm::BasicBlock *bb, size_t limit = 10)
+    {
+        if (limit == 0) {
+            // Safely return true if nested too deply.
+            return true;
+        }
+        for (llvm::Value *user : value->users()) {
+            if (llvm::isa<llvm::Instruction>(user)) {
+                llvm::Instruction *inst = llvm::cast<llvm::Instruction>(user);
+                if (inst->getParent() != bb) {
+                    // Uses across basic blocks are already taken care of:
+                    // 1. Normal values are materialized.
+                    // 2. PHI nodes are handled by out-of-SSA transformation.
+                    // Therefore, we can safely ignore this use.
+                    return false;
+                }
+                if (inst->isTerminator()) {
+                    return true;
+                }
+            }
+            if (flows_into_terminator(user, bb, limit - 1)) {
                 return true;
             }
         }
+        return false;
     }
-    return false;
 }
-#endif
 
 static bool has_non_const_index(llvm::InsertElementInst *inst)
 {
     llvm::Value *index = inst->getOperand(2);
     return !llvm::isa<llvm::ConstantInt>(index);
+}
+
+// Get the AST region for a block.
+template<typename BasePass>
+llvm::sl::Region *SLWriterPass<BasePass>::get_ast_region(
+    llvm::BasicBlock *bb)
+{
+    llvm::sl::Region        *r     = m_curr_ast_func->getRegion(bb);
+    llvm::sl::RegionComplex *owner = r->getOwnerRegion();
+    if (false && owner->getHead() == r) {
+        // ugly special case: the AST element of a head is the AST node itself...
+
+        if (!llvm::sl::is<llvm::sl::RegionNaturalLoop>(owner)) {
+            // except for natural loops
+            return owner;
+        }
+    }
+    return r;
+}
+
+// Check if instructions in two basic blocks would end up in different scopes.
+template<typename BasePass>
+bool SLWriterPass<BasePass>::in_different_scopes(
+    llvm::BasicBlock *bb1,
+    llvm::BasicBlock *bb2)
+{
+#if 1
+    return bb1 != bb2;
+#else
+    // currently buggy
+    if (bb1 == bb2) {
+        return false;
+    }
+
+    llvm::sl::Region *r1 = get_ast_region(bb1);
+    llvm::sl::Region *r2 = get_ast_region(bb2);
+    unsigned d1 = r1->get_depth();
+    unsigned d2 = r2->get_depth();
+
+    if (d1 == d2) {
+        // same depth, but different regions, different scope
+        return true;
+    }
+    if (d2 > d1) {
+        do {
+            r2 = r2->getOwnerRegion();
+        } while (r2 != nullptr && r2->get_depth() > d1);
+    } else {
+        do {
+            r1 = r1->getOwnerRegion();
+        } while (r1 != nullptr && r1->get_depth() > d2);
+    }
+
+    if (r1 == r2) {
+        return false;
+    }
+
+    // special case: if the regions are different, but both part of the same sequence,
+    // then the scope is the same
+    llvm::sl::RegionComplex *owner = r1->getOwnerRegion();
+    if (llvm::sl::is<llvm::sl::RegionSequence>(owner) && owner == r2->getOwnerRegion()) {
+        return false;
+    }
+
+    return true;
+#endif
 }
 
 // Translate a block-region into an AST.
@@ -985,13 +1092,16 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
                         break;
                     }
 
+                    if (!llvm::isa<llvm::Instruction>(user))
+                        continue;
+
+                    llvm::Instruction *user_inst = llvm::cast<llvm::Instruction>(user);
+
                     // is inst a live-out?
-                    if (llvm::cast<llvm::Instruction>(user)->getParent() != bb) {
+                    if (user_inst->getParent() != bb) {
                         gen_statement = true;
                         break;
                     }
-
-                    llvm::Instruction *user_inst = llvm::cast<llvm::Instruction>(user);
 
                     // some constructs might require materialization of the instruction,
                     // for instance GLSL does not support Xor on non boolean types
@@ -999,6 +1109,21 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
                         gen_statement = true;
                         break;
                     }
+                }
+            }
+
+            if (!gen_statement) {
+                bool has_phi_operands = false;
+                if (llvm::Instruction *inst = llvm::dyn_cast<llvm::Instruction>(&value)) {
+                    for (auto &operand : value.operands()) {
+                        if (llvm::isa<llvm::PHINode>(&operand)) {
+                            has_phi_operands = true;
+                            break;
+                        }
+                    }
+                }
+                if (has_phi_operands && flows_into_terminator(&value, bb)) {
+                    gen_statement = true;
                 }
             }
         }
@@ -1082,7 +1207,7 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
         bool move_decl_to_prolog = false;
         for (auto user : value->users()) {
             // is inst a live-out?
-            if (llvm::cast<llvm::Instruction>(user)->getParent() != bb) {
+            if (in_different_scopes(llvm::cast<llvm::Instruction>(user)->getParent(), bb)) {
                 move_decl_to_prolog = true;
                 break;
             }
@@ -1171,16 +1296,14 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
     // check for phis in successor blocks and assign to their in-variables at the end of this block
     for (llvm::BasicBlock *succ_bb : successors(bb->getTerminator())) {
         for (llvm::PHINode &phi : succ_bb->phis()) {
-#if NEW_OUT_OF_SSA
             bool used_in_branch = used_in_terminator(&phi);
-#endif
             for (unsigned i = 0, n = phi.getNumIncomingValues(); i < n; ++i) {
                 if (phi.getIncomingBlock(i) == bb) {
                     llvm::Value *incoming = phi.getIncomingValue(i);
 #if NEW_OUT_OF_SSA
                     if (used_in_branch) {
                         // This is a variable used in a terminating instruction: copy it's value
-                        // into the temporary that holds it's value for the sucessor block.
+                        // into the temporary that holds it's value for the successor block.
                         Def_variable *phi_in_var = get_phi_in_var(&phi, true);
                         Expr *res = translate_expr(incoming);
                         stmts.push_back(create_assign_stmt(phi_in_var, res));
@@ -1437,7 +1560,9 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_return(
 
     Expr *sl_ret_expr = nullptr;
     if (ret_val != nullptr) {
-        sl_ret_expr = translate_expr(ret_val);
+        if (!is<Type_void>(Base::convert_type(ret_val->getType()))) {
+            sl_ret_expr = translate_expr(ret_val);
+        }
     }
 
     Stmt *ret_stmt = nullptr;
@@ -1480,44 +1605,86 @@ template<typename BasePass>
 llvm::Value *SLWriterPass<BasePass>::process_pointer_address_recurse(
     Type_walk_stack &stack,
     llvm::Value     *pointer,
-    uint64_t        write_size)
+    uint64_t        write_size,
+    bool            allow_early_out)
 {
     llvm::Value *base_pointer;
 
     // skip bitcasts
+    llvm::Value *orig_pointer = pointer;
     pointer = pointer->stripPointerCasts();
 
     if (llvm::GEPOperator *gep = llvm::dyn_cast<llvm::GEPOperator>(pointer)) {
-        base_pointer = process_pointer_address_recurse(stack, gep->getPointerOperand(), write_size);
+        // process pointer of GEP without early out, as the GEP will modify the pointer
+        base_pointer = process_pointer_address_recurse(
+            stack, gep->getPointerOperand(), write_size, /*allow_early_out=*/ false);
         if (base_pointer == nullptr) {
             return nullptr;
         }
 
         llvm::Type *cur_llvm_type = stack.back().field_type;
-        uint64_t cur_type_size = 0;
+        unsigned num_indices = gep->getNumIndices();
 
-        for (unsigned i = 1, num_indices = gep->getNumIndices(); i < num_indices; ++i) {
+        // handle non-zero first index
+        // example:
+        //    %.repack = getelementptr %struct.BSDF_eval_data, %struct.BSDF_eval_data* %sret_ptr,
+        //               i64 0, i32 4, i32 0
+        //    %5 = getelementptr inbounds float, float* %.repack, i64 1
+        if (num_indices > 0) {
+            if (llvm::ConstantInt *idx = llvm::dyn_cast<llvm::ConstantInt>(gep->getOperand(1))) {
+                if (!idx->isZero()) {
+                    // We currently don't support bitcasts between GEPs, like
+                    //   %.repack = getelementptr %struct.BSDF_eval_data,
+                    //              %struct.BSDF_eva_data* %sret_ptr, i64 0, i32 4, i32 0
+                    //   %5 = bitcast float* %.repack to i8*
+                    //   %6 = getelementptr inbounds i8, i8* %5, i64 4
+                    if (pointer != orig_pointer) {
+                        MDL_ASSERT(!"Cannot move to next element when GEP was casted");
+                        Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
+                        return nullptr;
+                    }
+
+                    // Move to the idx'th next element
+                    unsigned idx_imm = unsigned(idx->getZExtValue());
+                    for (unsigned i = 0; i < idx_imm; ++i) {
+                        if (!move_to_next_compound_elem(stack, write_size)) {
+                            MDL_ASSERT(!"Failed to move to idx'th next element");
+                            Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
+                            return nullptr;
+                        }
+                    }
+                }
+            } else {
+                MDL_ASSERT(!"First GEP index is not a constant");
+                Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
+                return nullptr;
+            }
+        }
+
+        for (unsigned i = 1; i < num_indices; ++i) {
             // check whether we can stop going deeper into the compound
-            cur_type_size = m_cur_data_layout->getTypeStoreSize(cur_llvm_type);
-            if (cur_type_size <= write_size) {
-                // we can only stop if all of the remaining indices are zero
-                bool all_zero = true;
-                for (unsigned j = i; j < num_indices; ++j) {
-                    if (llvm::ConstantInt *idx =
-                        llvm::dyn_cast<llvm::ConstantInt>(gep->getOperand(j + 1)))
-                    {
-                        if (!idx->isZero()) {
+            if (allow_early_out) {
+                uint64_t cur_type_size = m_cur_data_layout->getTypeStoreSize(cur_llvm_type);
+                if (cur_type_size <= write_size) {
+                    // we can only stop if all of the remaining indices are zero
+                    bool all_zero = true;
+                    for (unsigned j = i; j < num_indices; ++j) {
+                        if (llvm::ConstantInt *idx =
+                            llvm::dyn_cast<llvm::ConstantInt>(gep->getOperand(j + 1)))
+                        {
+                            if (!idx->isZero()) {
+                                all_zero = false;
+                                break;
+                            }
+                        } else {
                             all_zero = false;
                             break;
                         }
-                    } else {
-                        all_zero = false;
+                    }
+                    // we can stop here
+                    if (all_zero) {
                         break;
                     }
-                }
-                // we can stop here
-                if (all_zero) {
-                    break;
                 }
             }
 
@@ -1533,6 +1700,7 @@ llvm::Value *SLWriterPass<BasePass>::process_pointer_address_recurse(
                     !llvm::isa<llvm::VectorType>(cur_llvm_type))
                 {
                     stack.clear();
+                    Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
                     return nullptr;
                 }
                 llvm::Type *field_type =
@@ -1543,7 +1711,7 @@ llvm::Value *SLWriterPass<BasePass>::process_pointer_address_recurse(
             }
         }
     } else {
-        // should be alloca or pointer parameter
+        // should be alloca, pointer parameter or global
         base_pointer = pointer;
 
         llvm::Type *compound_type = pointer->getType()->getPointerElementType();
@@ -1562,6 +1730,9 @@ llvm::Value *SLWriterPass<BasePass>::process_pointer_address(
     uint64_t write_size)
 {
     llvm::Value *base_pointer = process_pointer_address_recurse(stack, pointer, write_size);
+    if (base_pointer == nullptr) {
+        return nullptr;
+    }
 
     // move deeper into compound elements, if necessary
     move_into_compound_elem(stack, write_size);
@@ -1578,12 +1749,12 @@ bool SLWriterPass<BasePass>::move_into_compound_elem(
     uint64_t cur_type_size = m_cur_data_layout->getTypeStoreSize(cur_llvm_type);
 
     // still too big? check whether we can go deeper
-    // example: %10 = bitcast [16 x <4 x float>]* %0 to i32*
-    //
-    // handle for instance T[1]
+    // examples:
+    //   - %10 = bitcast [16 x <4 x float>]* %0 to i32*
+    //   - writing 16 bytes from bsdf_diffuse.y to bsdf_glossy.y, we need to go from
+    //     bsdf_glossy down to bsdf_glossy.x when there are still 8 bytes left to write
     while (cur_type_size >= target_size) {
         // check for array, vector or struct
-
         if (!llvm::isa<llvm::ArrayType>(cur_llvm_type) &&
                 !llvm::isa<llvm::FixedVectorType>(cur_llvm_type) &&
                 !llvm::isa<llvm::StructType>(cur_llvm_type)) {
@@ -1592,11 +1763,10 @@ bool SLWriterPass<BasePass>::move_into_compound_elem(
 
         llvm::Type *first_type = cur_llvm_type->getContainedType(0);
         uint64_t first_type_size = m_cur_data_layout->getTypeStoreSize(first_type);
-        if (first_type_size < target_size) {
-            // do not enter into an element which is too small
+        if (cur_type_size == target_size && first_type_size < target_size) {
+            // with target size already found, don't go deeper, if this isn't the right size anymore
             break;
         }
-
         stack.push_back(Type_walk_element(cur_llvm_type, ~0, nullptr, 0, first_type));
         cur_llvm_type = first_type;
         cur_type_size = first_type_size;
@@ -1722,9 +1892,10 @@ bool SLWriterPass<BasePass>::is_valid_composite_index(
     return false;
 }
 
-// Go to the next element in the stack.
+/// Go to the next element in the stack and into the element until element size is not
+/// too big anymore.
 template<typename BasePass>
-bool SLWriterPass<BasePass>::move_to_next_compound_elem(Type_walk_stack &stack)
+bool SLWriterPass<BasePass>::move_to_next_compound_elem(Type_walk_stack &stack, size_t target_size)
 {
     Type_walk_element *cur_elem = &stack.back();
     while (true) {
@@ -1742,7 +1913,7 @@ bool SLWriterPass<BasePass>::move_to_next_compound_elem(Type_walk_stack &stack)
             ++cur_elem->field_index_offs;
             cur_elem->field_type = llvm::GetElementPtrInst::getTypeAtIndex(
                 cur_elem->llvm_type, index + 1);
-            return true;
+            return move_into_compound_elem(stack, target_size);
         }
 
         // try parent type
@@ -1840,6 +2011,9 @@ bool SLWriterPass<BasePass>::translate_intrinsic_call(
 
             Type_walk_stack stack;
             llvm::Value *base_pointer = process_pointer_address(stack, dest, write_size);
+            if (base_pointer == nullptr) {
+                return false;
+            }
 
             uint64_t cur_offs = 0;  // TODO: is it valid to assume correct alignment here?
             while (write_size > 0) {
@@ -1864,7 +2038,7 @@ bool SLWriterPass<BasePass>::translate_intrinsic_call(
                 }
 
                 // go to next element
-                if (!move_to_next_compound_elem(stack)) {
+                if (!move_to_next_compound_elem(stack, write_size)) {
                     return false;
                 }
             }
@@ -1906,6 +2080,9 @@ bool SLWriterPass<BasePass>::translate_intrinsic_call(
             Type_walk_stack stack_src;
             llvm::Value *base_pointer_dest = process_pointer_address(stack_dest, dest, write_size);
             llvm::Value *base_pointer_src = process_pointer_address(stack_src, src, write_size);
+            if (base_pointer_dest == nullptr || base_pointer_src == nullptr) {
+                return false;
+            }
 
             uint64_t cur_offs = 0;  // TODO: is it valid to assume correct alignment here?
             while (write_size > 0) {
@@ -1932,10 +2109,10 @@ bool SLWriterPass<BasePass>::translate_intrinsic_call(
                 }
 
                 // go to next element in both stacks
-                if (!move_to_next_compound_elem(stack_dest)) {
+                if (!move_to_next_compound_elem(stack_dest, write_size)) {
                     return false;
                 }
-                if (!move_to_next_compound_elem(stack_src)) {
+                if (!move_to_next_compound_elem(stack_src, write_size)) {
                     return false;
                 }
             }
@@ -2044,6 +2221,9 @@ void SLWriterPass<BasePass>::translate_store(
 
     Type_walk_stack stack;
     llvm::Value *base_pointer = process_pointer_address(stack, pointer, target_size);
+    if (base_pointer == nullptr) {
+        return;
+    }
 
     // handle cases like:
     //   - bitcast float* %0 to i32*
@@ -2134,7 +2314,7 @@ void SLWriterPass<BasePass>::translate_store(
         }
 
         // go to next element
-        if (!move_to_next_compound_elem(stack)) {
+        if (!move_to_next_compound_elem(stack, target_size)) {
             MDL_ASSERT(!"moving to next element failed");
             return;
         }
@@ -3355,6 +3535,9 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_expr_lo
 
     Type_walk_stack stack;
     llvm::Value *base_pointer = process_pointer_address(stack, pointer, target_size);
+    if (base_pointer == nullptr) {
+        return Base::m_expr_factory.create_invalid(Base::zero_loc);
+    }
 
     Type    *res_type      = Base::convert_type(inst->getType());
     Type    *res_elem_type = nullptr;
@@ -3426,7 +3609,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_expr_lo
         }
 
         // go to next element
-        if (!move_to_next_compound_elem(stack)) {
+        if (!move_to_next_compound_elem(stack, target_size)) {
             Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
             return Base::m_expr_factory.create_invalid(Base::zero_loc);
         }

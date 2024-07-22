@@ -75,9 +75,13 @@ public:
     ///
     /// The gamma value should be a positive number. Typical values are 2.2 for LDR pixel types, and
     /// 1.0 for HDR pixel types.
+    ///
+    /// The alpha channel (if present) is always linear.
     virtual Float32 get_gamma() const = 0;
 
     /// Sets the gamma value.
+    ///
+    /// The alpha channel (if present) is always linear.
     ///
     /// \note This method just sets the gamma value. It does \em not change the pixel data itself.
     virtual void set_gamma( Float32 gamma) = 0;

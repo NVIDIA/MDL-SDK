@@ -33,19 +33,20 @@
 #include "config.h"
 #include "config_impl.h"
 
+#include <any>
+#include <cstring>
+#include <string>
+#include <sstream>
+#include <vector>
+
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/log/i_log_module.h>
 #include <base/system/main/access_module.h>
 #include <base/system/main/i_module_id.h>
 #include <base/system/main/module_registration.h>
-#include <base/system/stlext/i_stlext_any.h>
 #include <base/util/registry/i_config_registry.h>
 #include <base/util/string_utils/i_string_utils.h>
 #include <base/util/string_utils/i_string_lexicographic_cast.h>
-
-#include <string>
-#include <sstream>
-#include <vector>
 
 namespace MI {
 namespace CONFIG {
@@ -91,21 +92,6 @@ struct Bool_setter
     bool m_value;
 };
 
-}
-
-// Configure logging. Since now both the command line and the initrc are read, explicitly
-// tell the log module to use the read values to initialize itself finally.
-void Config_module_impl::configure_log_module()
-{
-    if (SYSTEM::Access_module<LOG::Log_module, SYSTEM::OPTIONAL_MODULE>::is_module_initialized())
-    {
-        SYSTEM::Access_module<LOG::Log_module, SYSTEM::OPTIONAL_MODULE> log_module("LOG");
-        log_module->configure();
-    }
-}
-
-namespace {
-
 //--------------------------------------------------------------------------------------------------
 
 bool is_all_capital_letters_(
@@ -139,10 +125,10 @@ struct Stripper {
 /// \note So far, only one value per variable is supported. Checked with an assertion.
 /// \param opt the line to parse
 /// \return a pair of <variable name, variable value> or an empty pair if there is a problem
-std::pair<std::string, STLEXT::Any> parse(
+std::pair<std::string, std::any> parse(
     const char* opt)
 {
-    std::pair<std::string, STLEXT::Any> result;
+    std::pair<std::string, std::any> result;
     if (!opt) {
         mod_log->error(M_CONFIG, Mod_log::C_MISC, 2, "Empty configuration option not allowed");
         return result;
@@ -170,20 +156,20 @@ std::pair<std::string, STLEXT::Any> parse(
     const char* word = token_list[1].c_str();
 
     // comma-separated value list, no more whitespace allowed
-    std::vector<std::string> value;			// start of val in opt
-    char	newtype = 0;				// detect type change
+    std::vector<std::string> value;                     // start of val in opt
+    char        newtype = 0;                            // detect type change
 
     int l;
     std::string str_value;
     while (true) {
-        if (*word == '"') {				// string value:
+        if (*word == '"') {                             // string value:
             // this requires some caution: since the string starts with a \" it ends with a
             // \" too - before the closing "!
             // eg ""string"" should be stripped to "string", """" to "", etc...
             newtype = 's';
             word++;
             const std::string::size_type pos = token_list[1].find('\"', 1);
-            for (l=0; word[l] && word[l] != '"'; l++);	// find end of string
+            for (l=0; word[l] && word[l] != '"'; l++);  // find end of string
             if (word[l] != '"') {
                 mod_log->error(M_CONFIG, Mod_log::C_MISC, 14,
                     "Illegal configuration option \"%s\", missing trailing quote", opt);
@@ -197,14 +183,14 @@ std::pair<std::string, STLEXT::Any> parse(
             for (l=1; word[l] && strchr("0123456789.eE+-", word[l]); l++);
             str_value = word;
         }
-        else {						// not string, not num
+        else {                                          // not string, not num
             mod_log->error(M_CONFIG, Mod_log::C_MISC, 5,
                 "Illegal configuration option \"%s\", unrecognized value at '%c'", opt, *word);
             return result;
         }
         // since we currently do not support multiple values we don't check here neither
 #if 0
-        if (m_type && m_type != newtype) {		// all strng or all num
+        if (m_type && m_type != newtype) {              // all strng or all num
             mod_log->error(M_CONFIG, Mod_log::C_MISC, 15,
                 "Illegal configuration option \"%s\", cannot mix strings and numbers", opt);
             return result;
@@ -214,9 +200,9 @@ std::pair<std::string, STLEXT::Any> parse(
         value.push_back(str_value);
 
         word += l + (newtype == 's');
-        if (*word <= ' ')				// end of opt: break
+        if (*word <= ' ')                               // end of opt: break
             break;
-        if (*word++ != ',') {				// comma, next value
+        if (*word++ != ',') {                           // comma, next value
             mod_log->error(M_CONFIG, Mod_log::C_MISC, 7,
                 "Illegal configuration option \"%s\", expected comma at '%c'", opt, *word);
             return result;
@@ -226,17 +212,17 @@ std::pair<std::string, STLEXT::Any> parse(
     ASSERT(M_CONFIG, !value.empty());
 
     // parsing succeeded, store key and values
-    ASSERT(M_CONFIG, value.size() == 1);		// currently support for one argument only!
+    ASSERT(M_CONFIG, value.size() == 1);                // currently support for one argument only!
     result.first = key;
 
-    if (newtype == 's') {				// strings: dup
+    if (newtype == 's') {                               // strings: dup
         if (!value.front().empty())
-            result.second = STLEXT::Any(value.front());
+            result.second = std::any(value.front());
     }
-    else {						// numbers: copy
+    else {                                              // numbers: copy
         ASSERT(M_CONFIG, newtype == 'f');
         float val = float(atof(value[0].c_str()));
-        result.second = STLEXT::Any(val);
+        result.second = std::any(val);
     }
 
     return result;
@@ -249,7 +235,7 @@ std::pair<std::string, STLEXT::Any> parse(
 // the config file (except that the file's help text is extracted). The
 // string is parsed just like a config file line. Return false on failure.
 bool Config_module_impl::override(
-    const char* opt)		// option to parse
+    const char* opt)            // option to parse
 {
     const char* p;
     // skip white space
@@ -261,7 +247,7 @@ bool Config_module_impl::override(
         // comment
         return false;
 
-    const std::pair<std::string, STLEXT::Any> record = parse(p);
+    const std::pair<std::string, std::any> record = parse(p);
     if (record.first.empty())
         return false;
 
@@ -275,15 +261,15 @@ bool Config_module_impl::override(
 string Config_module_impl::get_config_value_as_string(
     const string& key) const
 {
-    STLEXT::Any v = m_configuration.get_value(key);
-    if (v.empty())
+    std::any v = m_configuration.get_value(key);
+    if (!v.has_value())
         return string();
-    if (STLEXT::any_cast<string>(&v))
-        return *STLEXT::any_cast<string>(&v);
-    else if (STLEXT::any_cast<float>(&v))
-        return STRING::lexicographic_cast_s<std::string>(*STLEXT::any_cast<float>(&v));
-    else if (STLEXT::any_cast<bool>(&v)) {
-        if (*STLEXT::any_cast<bool>(&v))
+    if (std::any_cast<string>(&v))
+        return *std::any_cast<string>(&v);
+    else if (std::any_cast<float>(&v))
+        return STRING::lexicographic_cast_s<std::string>(*std::any_cast<float>(&v)).value();
+    else if (std::any_cast<bool>(&v)) {
+        if (*std::any_cast<bool>(&v))
             return "true";
         else
             return "false";
@@ -298,9 +284,9 @@ string Config_module_impl::get_config_value_as_string(
 // Update the host's config parameter with the current registered value.
 // Return true when a value for name was already registered, false else.
 bool Config_module_impl::update(
-    const char* name,		// name of variable
-    const char* help,		// meaning of var, for http/comments
-    std::string& value)	// store pointers to string here
+    const char* name,           // name of variable
+    const char* help,           // meaning of var, for http/comments
+    std::string& value) // store pointers to string here
 {
     const CONFIG::Config_registry& registry = get_configuration();
 
@@ -347,9 +333,9 @@ std::string Config_module_impl::get_product_version() const
     std::string result;
 
     const Config_registry& registry = get_configuration();
-    STLEXT::Any any = registry.get_value("product_version");
-    if (!any.empty()) {
-        std::string* res = STLEXT::any_cast<std::string>(&any);
+    std::any any = registry.get_value("product_version");
+    if (any.has_value()) {
+        std::string* res = std::any_cast<std::string>(&any);
         if (res)
             result = *res;
     }
@@ -363,9 +349,9 @@ std::string Config_module_impl::get_product_name() const
     std::string result;
 
     const Config_registry& registry = get_configuration();
-    STLEXT::Any any = registry.get_value("product_name");
-    if (!any.empty()) {
-        std::string* res = STLEXT::any_cast<std::string>(&any);
+    std::any any = registry.get_value("product_name");
+    if (any.has_value()) {
+        std::string* res = std::any_cast<std::string>(&any);
         if (res)
             result = *res;
     }

@@ -103,13 +103,13 @@ const char *Distilling_target_plugin::get_required_module_name(mi::Size target_i
 }
 
 /// Main function to distill an MDL material.
-const mi::mdl::IGenerated_code_dag::IMaterial_instance* Distilling_target_plugin::distill(
-    mi::mdl::IDistiller_plugin_api&                         api,
-    mi::mdl::IRule_matcher_event*                           event_handler,
-    const mi::mdl::IGenerated_code_dag::IMaterial_instance* material_instance,
-    mi::Size                                                target_index,
-    mi::mdl::Distiller_options*                             options,
-    mi::Sint32*                                             p_error) const
+const mi::mdl::IMaterial_instance* Distilling_target_plugin::distill(
+    mi::mdl::IDistiller_plugin_api&    api,
+    mi::mdl::IRule_matcher_event*      event_handler,
+    const mi::mdl::IMaterial_instance* material_instance,
+    mi::Size                           target_index,
+    mi::mdl::Distiller_options*        options,
+    mi::Sint32*                        p_error) const
 {
     // Switch from error pointer to reference to simplify later code for the case of p_error == 0.
     mi::Sint32 dummy;
@@ -122,7 +122,7 @@ const mi::mdl::IGenerated_code_dag::IMaterial_instance* Distilling_target_plugin
         return nullptr;
     }
 
-    mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance const> res;
+    mi::base::Handle<mi::mdl::IMaterial_instance const> res;
 
 #define CHECK_RESULT  if(error != 0) { return NULL; }
 

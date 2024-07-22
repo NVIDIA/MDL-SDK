@@ -66,7 +66,7 @@ namespace ATTR {
 /// a fixed or dynamic number of values.
 /// Eg
 /// \code
-///	struct { Scalar x[2]; struct {int a; bool b;}; Vector3[] t; }
+///     struct { Scalar x[2]; struct {int a; bool b;}; Vector3[] t; }
 /// \endcode
 ///
 /// would be
@@ -76,7 +76,7 @@ namespace ATTR {
 ///     TYPE_STRUCT      8        8         1            0      yes -+  yes -+
 ///        TYPE_INT32    4        4         1           "a"     yes  |  no  <+
 ///        TYPE_BOOLEAN  1        1         1           "b"     no   |  no
-///	TYPE_VECTOR3    12        4         0           "t"     no <-+  no
+///     TYPE_VECTOR3    12        4         0           "t"     no <-+  no
 /// \endcode
 /// Note how the \c TYPE_STRUCT size is 8, not 5, due to C++ padding. The indented
 /// lines indicate that they are children of the struct. The dynamic array
@@ -255,7 +255,7 @@ class Type : public SERIAL::Serializable
     /// Retrieve the number of components in \c Type \p type.
     /// \param type \c Type_code of the \c Type in question
     /// \return the number of components
-    static Uint component_count(	// number of components in the type
+    static Uint component_count(        // number of components in the type
         Type_code type);
     /// Retrieve the base type of the \c Type's components. E.g.
     /// \code
@@ -358,7 +358,7 @@ class Type : public SERIAL::Serializable
     /// \param deser the \c Deserializer to use
     /// \return a pointer behind itself (e.g. this + 1) to handle arrays
     SERIAL::Serializable* deserialize(
-        SERIAL::Deserializer* deser);	// useful functions for byte streams
+        SERIAL::Deserializer* deser);   // useful functions for byte streams
     /// Serialize the given data assuming that the data is described by this type.
     /// \param serializer the \c Serializer to use
     /// \param values the actual data to be serialized
@@ -413,22 +413,22 @@ class Type : public SERIAL::Serializable
     /// The private type info type.
     struct Typeinfo
     {
-        const char*	name;				///< the name
-        Uint		comp;				///< number of components
-        Type_code	base;				///< type of base
-        size_t		size;				///< size
+        const char*     name;                           ///< the name
+        Uint            comp;                           ///< number of components
+        Type_code       base;                           ///< type of base
+        size_t          size;                           ///< size
     };
     /// The table of all supported types with their type infos.
     static const Typeinfo m_typeinfo[];
 
-    std::string m_name;				///< field name, must be defined
-    Uint8 m_typecode;					///< primitive Type_code: bool, int, ...
-    bool m_const;					///< immutable value, can hardwire in shd
-    bool m_spare;					///< not used
-    Uint m_arraysize;					///< number of elements, 0=dynamic
-    Type* m_next;					///< if part of struct, next member
+    std::string m_name;                         ///< field name, must be defined
+    Uint8 m_typecode;                                   ///< primitive Type_code: bool, int, ...
+    bool m_const;                                       ///< immutable value, can hardwire in shd
+    bool m_spare;                                       ///< not used
+    Uint m_arraysize;                                   ///< number of elements, 0=dynamic
+    Type* m_next;                                       ///< if part of struct, next member
     union {
-    Type* m_child;					///< if TYPE_STRUCT, list of members
+    Type* m_child;                                      ///< if TYPE_STRUCT, list of members
     std::vector<std::pair<int, std::string> >* m_enum;
     };
     std::string m_type_name;                          ///< the unique name of the type

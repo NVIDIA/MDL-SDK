@@ -1329,9 +1329,25 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
         }
         mat.alpha_cutoff = m.alphaCutoff;
 
-        // single sided is not working in ray-tracer, at least not
-        // physically plausible
-        // mat.single_sided = !m.doubleSided;
+        // single sided is not working "correctly" in ray-tracer, at least not in the same way
+        // as in a rasterizer. A good example can be found in the glTF examples:
+        // https://github.com/KhronosGroup/glTF-Sample-Models/tree/main/2.0/TextureSettingsTest
+        // Here single sided is tested by adding a red cross textured billboard slightly above
+        // the green checkmark. That billboard is transparent on the side facing to us. Therefore,
+        // the doubleSided == False case is handled correctly, we should not see that cross.
+        // However, the shadow ray that bounces back from green checkmark below hits visible side
+        // and gets blocked. As consequence we see the shadow of the red cross.
+        // This behaviors is expected and will not be fixed because physically, it's correct.
+        // For volumes we could skip further evaluation of the backface after applying the
+        // absorbtion to resprect the doubleSided flag. However, this isn't done in the reference 
+        // for path traced scene here:
+        // https://github.com/KhronosGroup/glTF-Sample-Models/tree/main/2.0/DragonAttenuation
+        // instead, the material is considered double sided and since this makes sense we do
+        // the same here. If there are volume properties defined, the material is double sided.
+        if (m.materialsVolume.present)
+            mat.single_sided = false;
+        else
+            mat.single_sided = !m.doubleSided;
 
         m_scene->materials.push_back(std::move(mat));
     }

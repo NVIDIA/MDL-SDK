@@ -37,8 +37,9 @@
 
 #include <base/system/test/i_test_auto_driver.h>
 #include <base/system/test/i_test_auto_case.h>
-#include <vector>
+
 #include <sstream>
+#include <vector>
 
 #include <mi/base/handle.h>
 
@@ -82,7 +83,7 @@ void verify_values( mi::ICompound* compound, T* source, mi::Size N)
     U* buffer = new U[N];
     compound->get_values( buffer);
     MI_CHECK( verify_buffer( buffer, source, N));
-        delete[] buffer;
+    delete[] buffer;
 }
 
 // read data from compound via get_value() and verify
@@ -98,11 +99,11 @@ void verify_value( mi::ICompound* compound, T* source, mi::Size m, mi::Size n)
 
     for( mi::Size i = 0; i < m; ++i)
         for( mi::Size j = 0; j < n; ++j) {
-            buffer[i*n+j] = static_cast<U>( 0);
-            MI_CHECK( buffer[i*n+j] = compound->get_value<U>( i, j));
+            buffer[i*n+j] = compound->get_value<U>( i, j);
+            MI_CHECK( buffer[i*n+j]);
         }
     MI_CHECK( verify_buffer( buffer, source, m*n));
-        delete[] buffer;
+    delete[] buffer;
 }
 
 // test data
@@ -145,7 +146,7 @@ void test_compound(
 
     // check has_key()
 
-    MI_CHECK( !compound->has_key( 0));
+    MI_CHECK( !compound->has_key( nullptr));
     MI_CHECK( !compound->has_key( ""));
     MI_CHECK( !compound->has_key( "c"));
     MI_CHECK( !compound->has_key( "cc"));
@@ -257,7 +258,7 @@ void test_compound(
     mi::base::Handle<mi::INumber> element(
         transaction->create<mi::INumber>( element_type_name));
     MI_CHECK( element.is_valid_interface());
-    MI_CHECK_EQUAL( -1, data_collection->set_value( zero_size, 0));
+    MI_CHECK_EQUAL( -1, data_collection->set_value( zero_size, nullptr));
     MI_CHECK_EQUAL( -2, data_collection->set_value( m*n, element.get()));
     mi::base::Handle<mi::IVoid> void_( transaction->create<mi::IVoid>( "Void"));
     MI_CHECK_EQUAL( -3, data_collection->set_value( zero_size, void_.get()));
@@ -270,7 +271,8 @@ void test_compound(
 
 // test vector interfaces
 template <class I, class T, mi::Size ROWS>
-void test_vector( mi::neuraylib::ITransaction* transaction, const char* type_name, I* icompound = 0)
+void test_vector(
+    mi::neuraylib::ITransaction* transaction, const char* type_name, I* icompound = nullptr)
 {
     // prepare test data
 
@@ -312,7 +314,8 @@ void test_vector( mi::neuraylib::ITransaction* transaction, const char* type_nam
 
 // test matrix interfaces
 template <class I, class T, mi::Size ROWS, mi::Size COLUMNS>
-void test_matrix( mi::neuraylib::ITransaction* transaction, const char* type_name, I* icompound = 0)
+void test_matrix(
+    mi::neuraylib::ITransaction* transaction, const char* type_name, I* icompound = nullptr)
 {
     // prepare test data
 
@@ -355,7 +358,8 @@ void test_matrix( mi::neuraylib::ITransaction* transaction, const char* type_nam
 
 // test mi::IColor interface
 template <class I, class T>
-void test_color( mi::neuraylib::ITransaction* transaction, const char* type_name, I* icompound = 0)
+void test_color(
+    mi::neuraylib::ITransaction* transaction, const char* type_name, I* icompound = nullptr)
 {
     // prepare test data
 
@@ -397,7 +401,8 @@ void test_color( mi::neuraylib::ITransaction* transaction, const char* type_name
 
 // test mi::IColor3 interface
 template <class I, class T>
-void test_color3( mi::neuraylib::ITransaction* transaction, const char* type_name, I* icompound = 0)
+void test_color3(
+    mi::neuraylib::ITransaction* transaction, const char* type_name, I* icompound = nullptr)
 {
     // prepare test data
 
@@ -439,7 +444,8 @@ void test_color3( mi::neuraylib::ITransaction* transaction, const char* type_nam
 
 // test mi::ISpectrum interface
 template <class I, class T>
-void test_spectrum( mi::neuraylib::ITransaction* transaction, const char* type_name, I* icompound = 0)
+void test_spectrum(
+    mi::neuraylib::ITransaction* transaction, const char* type_name, I* icompound = nullptr)
 {
     // prepare test data
 
@@ -481,7 +487,8 @@ void test_spectrum( mi::neuraylib::ITransaction* transaction, const char* type_n
 
 // test bbox interface
 template <class I, class T>
-void test_bbox( mi::neuraylib::ITransaction* transaction, const char* type_name, I* icompound = 0)
+void test_bbox(
+     mi::neuraylib::ITransaction* transaction, const char* type_name, I* icompound = nullptr)
 {
     // prepare test data
 
@@ -760,7 +767,7 @@ MI_TEST_AUTO_FUNCTION( test_types_compound )
     }
 
 
-    neuray = 0;
+    neuray = nullptr;
     MI_CHECK( unload());
 }
 

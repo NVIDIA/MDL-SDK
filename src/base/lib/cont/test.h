@@ -52,17 +52,17 @@ public:
     virtual bool test() = 0;
 
     void start_time() {
-	m_watch.reset();
-	m_watch.start();
+        m_watch.reset();
+        m_watch.start();
     }
 
     void stop_time() {
-	m_watch.stop();
+        m_watch.stop();
     }
 
     void print_time() {
-	MI::LOG::mod_log->debug(M_CONT, MI::LOG::Mod_log::C_MEMORY,
- 				"elapsed time %g\n", m_watch.elapsed());
+        MI::LOG::mod_log->debug(M_CONT, MI::LOG::Mod_log::C_MEMORY,
+                                "elapsed time %g\n", m_watch.elapsed());
     }
 
 private:

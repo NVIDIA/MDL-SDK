@@ -171,12 +171,12 @@ public:
         IConst_fold_handler *handler) const = 0;
 
     /// Return the number of sub expressions of this expression.
-    virtual int get_sub_expression_count() const = 0;
+    virtual size_t get_sub_expression_count() const = 0;
 
     /// Return the i'th sub expression of this expression.
     ///
     /// \param i  the index of the requested subexpression
-    virtual IExpression const *get_sub_expression(int i) const = 0;
+    virtual IExpression const *get_sub_expression(size_t i) const = 0;
 };
 
 /// An invalid expression, created by the parser in case of a syntax error.
@@ -519,12 +519,12 @@ public:
     virtual void set_expression(IExpression const *expr) = 0;
 
     /// Get the number of declarations in the let.
-    virtual int get_declaration_count() const = 0;
+    virtual size_t get_declaration_count() const = 0;
 
     /// Get the declaration at index.
     ///
     /// \param index  the index of the requested declaration
-    virtual IDeclaration const *get_declaration(int index) const = 0;
+    virtual IDeclaration const *get_declaration(size_t index) const = 0;
 
     /// Add a declaration (at the end of the declaration list).
     ///

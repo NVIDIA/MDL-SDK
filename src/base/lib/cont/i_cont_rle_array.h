@@ -63,15 +63,15 @@ class Rle_iterator
 
     // Constructor.
     explicit Rle_iterator(
-	const The_array* array=0,	// array to iterate on
-	size_t index=0,			// start index in index array
-	size_t data=0);			// start index in data array
+        const The_array* array=0,       // array to iterate on
+        size_t index=0,                 // start index in index array
+        size_t data=0);                 // start index in data array
     // Copy Constructor.
     Rle_iterator(
-	const Rle_iterator& other);	// the other
+        const Rle_iterator& other);     // the other
     // Assignment operator.
     Rle_iterator& operator=(
-	const Rle_iterator& other);	// the other
+        const Rle_iterator& other);     // the other
 
     // Preincrement.
     Iterator& operator++();
@@ -89,13 +89,13 @@ class Rle_iterator
 
     // Comparison.
     bool operator==(
-	const Iterator& other) const;	// the other one
+        const Iterator& other) const;   // the other one
     // Unequality comparison.
     bool operator!=(
-	const Iterator& other) const;	// the other one
+        const Iterator& other) const;   // the other one
 
   private:
-    const The_array* m_array;		// array to operate on
+    const The_array* m_array;           // array to operate on
     size_t m_index;                     // index into index array
     size_t m_offset;                    // offset in m_index' data
 };
@@ -116,8 +116,8 @@ class Rle_chunk_iterator
 
     // Constructor.
     Rle_chunk_iterator(
-	const The_array& array,		// array to iterate on
-	size_t index);			// start index in index array
+        const The_array& array,         // array to iterate on
+        size_t index);                  // start index in index array
 
     // Preincrement.
     Iterator& operator++();
@@ -140,13 +140,13 @@ class Rle_chunk_iterator
 
     // Comparison.
     bool operator==(
-	const Rle_chunk_iterator& other) const;	// the other one
+        const Rle_chunk_iterator& other) const; // the other one
     // Unequality comparison.
     bool operator!=(
-	const Rle_chunk_iterator& other) const;	// the other one
+        const Rle_chunk_iterator& other) const; // the other one
 
   private:
-    const The_array& m_array;		// array to operate on
+    const The_array& m_array;           // array to operate on
     size_t m_index;                        // index into index array
 };
 
@@ -169,14 +169,14 @@ class Rle_array
 
     // Add another item into array.
     void push_back(
-	const T& item,			// item to add
-	size_t n=1);			// number of times to add
+        const T& item,                  // item to add
+        size_t n=1);                    // number of times to add
     // Remove last item from array.
     void pop_back();
 
     // Return the i-th item in the array.
     const T& operator[](
-	size_t i) const;		// index of requested element
+        size_t i) const;                // index of requested element
     // Return the first item in the array.
     const T& front() const;
     // Return the last item in the array.

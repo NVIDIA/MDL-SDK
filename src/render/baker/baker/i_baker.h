@@ -64,6 +64,7 @@ enum Baker_state_flags {
     BAKER_STATE_POSITION_DIRECTION = 1u << 0  // state::position() is direction for spherical environment map
 };
 
+
 class Baker_module: public SYSTEM::IModule
 {
 public:
@@ -107,6 +108,21 @@ public:
         mi::Uint32 samples,
         mi::Uint32 state_flags = 0) const = 0;
 
+    /// Bake a texture.
+    ///
+    /// \return  0  on success
+    /// \return -1  execution error
+    virtual mi::Sint32 bake_texture(
+        DB::Transaction* transaction,
+        const IBaker_code* baker_code,
+        mi::neuraylib::ICanvas* texture,
+        mi::Float32 min_u,
+        mi::Float32 max_u,
+        mi::Float32 min_v,
+        mi::Float32 max_v,
+        mi::Uint32 samples,
+        mi::Uint32 state_flags = 0) const = 0;
+
     /// Bake a constant (aka constant texture).
     ///
     /// \return  0  on success
@@ -117,6 +133,7 @@ public:
         Constant_result& constant,
         mi::Uint32 samples,
         const char *pixel_type) const = 0;
+
 };
 
 } // namespace BAKER
@@ -124,3 +141,4 @@ public:
 } // namespace MI
 
 #endif // RENDER_BAKER_BAKER_I_BAKER_H
+

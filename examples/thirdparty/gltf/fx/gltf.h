@@ -765,6 +765,7 @@ namespace gltf
             std::array<float, 3> attenuationColor = { defaults::IdentityVec3 };
 
             nlohmann::json extensionsAndExtras{};
+            bool present = false; // interacts with the doubleSided property
 
             bool empty() const
             {
@@ -1362,6 +1363,7 @@ namespace gltf
         detail::ReadOptionalField("thicknessFactor", json, materialsVolume.thicknessFactor);
         detail::ReadOptionalField("attenuationDistance", json, materialsVolume.attenuationDistance);
         detail::ReadOptionalField("attenuationColor", json, materialsVolume.attenuationColor);
+        materialsVolume.present = true;
 
         detail::ReadExtensionsAndExtras(json, materialsVolume.extensionsAndExtras);
     }

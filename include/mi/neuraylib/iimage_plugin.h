@@ -38,6 +38,8 @@
 
 namespace mi {
 
+class IMap;
+
 namespace neuraylib {
 
 class IImage_file;
@@ -60,7 +62,7 @@ class IWriter;
 */
 
 /// Type of image plugins
-#define MI_NEURAY_IMAGE_PLUGIN_TYPE "image v35"
+#define MI_NEURAY_IMAGE_PLUGIN_TYPE "image v38"
 
 /// Abstract interface for image plugins.
 ///
@@ -148,20 +150,21 @@ public:
     ///
     /// This method is called to start an image export operation.
     ///
-    /// \param writer         A writer representing the stream to write to.
-    /// \param pixel_type     The pixel type of the image tiles. This is one of the pixel types
-    ///                       returned by #get_supported_type().
-    /// \param resolution_x   The resolution of the image in x direction.
-    /// \param resolution_y   The resolution of the image in y direction.
-    /// \param nr_of_layers   The number of layers in the image.
-    /// \param miplevels      The number of mipmap levels in the image.
-    /// \param is_cubemap     \c true if the image is supposed to be cubemap, \c false otherwise.
-    /// \param gamma          The gamma value of the image.
-    /// \param quality        The desired compression quality. The compression quality is an
-    ///                       integer in the range from 0 to 100, where 0 is the lowest quality,
-    ///                       and 100 is the highest quality. Support for compression quality is
-    ///                       optional.
-    /// \return               The object that writes the image to a stream.
+    /// \param writer             A writer representing the stream to write to.
+    /// \param pixel_type         The pixel type of the image tiles. This is one of the pixel types
+    ///                           returned by #get_supported_type().
+    /// \param resolution_x       The resolution of the image in x direction.
+    /// \param resolution_y       The resolution of the image in y direction.
+    /// \param nr_of_layers       The number of layers in the image.
+    /// \param miplevels          The number of mipmap levels in the image.
+    /// \param is_cubemap         \c true if the image is supposed to be cubemap, \c false
+    ///                           otherwise.
+    /// \param gamma              The gamma value of the image.
+    /// \param export_options     See \ref mi_image_export_options for options that should be
+    ///                           supported by an exporter for the corresponding format. The option
+    ///                           \c "force_default_gamma" is handled by \neurayProductName and
+    ///                           can be ignored in the plugin.
+    /// \return                   The object that writes the image to a stream.
     virtual IImage_file* open_for_writing(
         IWriter* writer,
         const char* pixel_type,
@@ -171,7 +174,7 @@ public:
         Uint32 miplevels,
         bool is_cubemap,
         Float32 gamma,
-        Uint32 quality) const = 0;
+        const IMap* export_options) const = 0;
 };
 
 /// Abstract interface for image files.
@@ -191,19 +194,19 @@ public:
     ///
     /// \param level   The mipmap level (always 0 if the image is not a mipmap).
     /// \return        The resolution of the image in x direction.
-    virtual Uint32 get_resolution_x( Uint32 level = 0) const = 0;
+    virtual Uint32 get_resolution_x( Uint32 level) const = 0;
 
     /// Returns the resolution of the image in y direction.
     ///
     /// \param level   The mipmap level (always 0 if the image is not a mipmap).
     /// \return        The resolution of the image in y direction.
-    virtual Uint32 get_resolution_y( Uint32 level = 0) const = 0;
+    virtual Uint32 get_resolution_y( Uint32 level) const = 0;
 
     /// Returns the number of layers of the image.
     ///
     /// \param level   The mipmap level (always 0 if the image is not a mipmap).
     /// \return        The number of layers of the image.
-    virtual Uint32 get_layers_size( Uint32 level = 0) const = 0;
+    virtual Uint32 get_layers_size( Uint32 level) const = 0;
 
     /// Returns number of miplevels.
     virtual Uint32 get_miplevels() const = 0;
@@ -223,8 +226,8 @@ public:
     ///
     /// \param z     The z layer (for 3d textures or cubemaps).
     /// \param level The mipmap level (always 0 if the image is not a mipmap).
-    /// \return      The tile with the read data, or \c nullptr in case of failures.
-    virtual ITile* read( Uint32 z, Uint32 level = 0) const = 0;
+    /// \return      The tile with the read data, or \c NULL in case of failures.
+    virtual ITile* read( Uint32 z, Uint32 level) const = 0;
 
     /// Write pixels from a tile into the image file.
     ///
@@ -235,7 +238,7 @@ public:
     /// \param z     The z layer (for 3d textures or cubemaps).
     /// \param level The mipmap level (always 0 if the image is not a mipmap).
     /// \return      \c true if the tile was successfully written, \c false otherwise.
-    virtual bool write( const ITile* tile, Uint32 z, Uint32 level = 0) = 0;
+    virtual bool write( const ITile* tile, Uint32 z, Uint32 level) = 0;
 };
 
 /**@}*/ // end group mi_neuray_plugins

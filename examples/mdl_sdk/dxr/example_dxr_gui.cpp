@@ -59,14 +59,22 @@ Gui_section_rendering::Gui_section_rendering(
     , m_dynamic_options(app->get_dynamic_options())
     , m_enable_firefly_clamping(scene_data->firefly_clamp_threshold > 0.0f)
     , m_enable_animation(false)
+    , m_current_aov_index(app->get_dynamic_options()->get_active_aov())
+    , m_default_aov_index(0)
 {
     const std::string& active_lpe = m_dynamic_options->get_active_lpe();
-    if (active_lpe == "albedo_diffuse")
+    if (active_lpe == "albedo")
+        m_default_output_buffer_index = static_cast<uint32_t>(Display_buffer_options::Albedo);
+    else if (active_lpe == "albedo_diffuse")
         m_default_output_buffer_index = static_cast<uint32_t>(Display_buffer_options::Albedo_Diffuse);
     else if (active_lpe == "albedo_glossy")
         m_default_output_buffer_index = static_cast<uint32_t>(Display_buffer_options::Albedo_Glossy);
     else if (active_lpe == "normal")
         m_default_output_buffer_index = static_cast<uint32_t>(Display_buffer_options::Normal);
+    else if (active_lpe == "roughness")
+        m_default_output_buffer_index = static_cast<uint32_t>(Display_buffer_options::Roughness);
+    else if (active_lpe == "aov")
+        m_default_output_buffer_index = static_cast<uint32_t>(Display_buffer_options::AOV);
     else
         m_default_output_buffer_index = static_cast<uint32_t>(Display_buffer_options::Beauty);
     m_current_output_buffer_index = m_default_output_buffer_index;
@@ -110,7 +118,8 @@ void Gui_section_rendering::update(mi::neuraylib::ITransaction* /*transaction*/)
         { "albedo_diffuse", "Albedo (Diffuse)" },
         { "albedo_glossy", "Albedo (Glossy)" },
         { "normal", "Normal"},
-        { "roughness", "Roughness"}
+        { "roughness", "Roughness"},
+        { "aov", "AOV"}
     };
 
     if (Gui_control::selection<uint32_t>(
@@ -121,6 +130,22 @@ void Gui_section_rendering::update(mi::neuraylib::ITransaction* /*transaction*/)
         }))
     {
         m_dynamic_options->set_active_lpe(supported_lpes[m_current_output_buffer_index].first);
+    }
+
+    auto aov_enabled_flag = m_dynamic_options->get_active_lpe() == "aov"
+        ? Gui_control::Flags::None : Gui_control::Flags::Disabled;
+    if (Gui_control::selection<uint32_t>(
+        "Selected AOV", "The AOV to show when 'Output Buffer' is set to 'AOV'. "
+        "This list ist empty, if the material type is the standard material "
+        "or the --aov option was not set",
+        &m_current_aov_index, &m_default_aov_index,
+        aov_enabled_flag, [this](uint32_t i) -> const char* {
+            return i < m_dynamic_options->get_available_aovs().size()
+                ? m_dynamic_options->get_available_aovs()[i].c_str()
+                : nullptr;
+        }))
+    {
+        m_dynamic_options->set_active_aov(m_current_aov_index);
     }
 
     if (Gui_control::checkbox(
@@ -311,7 +336,7 @@ Gui_section_mdl_options::Gui_section_mdl_options(
         {
             std::string target = m_app->get_mdl_sdk().get_distiller().get_target_name(i);
             distilling_targets.push_back(target);
-            if (mdl_options.distilling_target == target)
+            if (mdl_options.distill_target == target)
                 distilling_target_selected = i;
         }
     }
@@ -386,7 +411,7 @@ void Gui_section_mdl_options::update(mi::neuraylib::ITransaction* /*transaction*
             &distilling_target_selected, &size_t_zero,
             mi::examples::gui::Control::Flags::None, distilling_targets))
         {
-            mdl_options.distilling_target = distilling_targets[distilling_target_selected].c_str();
+            mdl_options.distill_target = distilling_targets[distilling_target_selected].c_str();
             create_event(static_cast<mi::Size>(Example_dxr_gui_event::Recompile_all_materials));
         }
     }

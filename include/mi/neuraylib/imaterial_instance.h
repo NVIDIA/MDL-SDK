@@ -80,6 +80,15 @@ public:
     ///                         Default: 380.0f.
     ///                       - #mi::Float32 "wavelength_max": The largest supported wavelength.
     ///                         Default: 780.0f.
+    ///                       - #mi::base::IInterface* "target_type": A declarative struct type
+    ///                         indicating the desired type of the compiled material. Conceptually,
+    ///                         this option inserts an instance of the decl_cast operator if the
+    ///                         given type and the one of this material instance differ. (This
+    ///                         implies that the given type is from the struct category
+    ///                         \c "::material_category".) See also
+    ///                         \ref mi_neuray_mdl_decl_cast_operator and
+    ///                         #mi::neuraylib::IExpression_factory::create_decl_cast().
+    ///                         Default: \c NULL (implying no type change).
     ///                       .
     ///                       The following options are supported in class compilation mode:
     ///                       - \c bool "fold_ternary_on_df": Fold all ternary operators of *df
@@ -88,7 +97,7 @@ public:
     ///                         Default: \c false.
     ///                       - \c bool "fold_all_enum_parameters": Fold all enum parameters.
     ///                         Default: \c false.
-    ///                       - #mi::base::IInterface *"fold_parameters": A static or dynamic array
+    ///                       - #mi::base::IInterface* "fold_parameters": A static or dynamic array
     ///                         of strings of the parameters to fold. The names of the parameters
     ///                         are those that would otherwise be reported in
     ///                         #mi::neuraylib::ICompiled_material::get_parameter_name().

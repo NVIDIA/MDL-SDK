@@ -262,6 +262,15 @@ private:
     Stmt *translate_region(
         llvm::sl::Region const *region);
 
+    /// Get the AST region for a block.
+    llvm::sl::Region *get_ast_region(
+        llvm::BasicBlock *bb);
+
+    /// Check if instructions in two basic blocks would end up in different scopes.
+    bool in_different_scopes(
+        llvm::BasicBlock *bb1,
+        llvm::BasicBlock *bb2);
+
     /// Translate a block-region into an AST.
     ///
     /// \param region  the region to translate
@@ -309,10 +318,21 @@ private:
         llvm::Value *pointer);
 
     /// Recursive part of process_pointer_address implementation.
+    ///
+    /// \param stack             the type walk stack to initialize
+    /// \param pointer           the pointer to process
+    /// \param write_size        the size to be written
+    /// \param allow_early_out   if false, all indices of a GEP will be processed, even
+    ///                          if the largest sub-element smaller or equal to write size
+    ///                          is already found
+    ///
+    /// \return  the base pointer for the pointer (alloca or parameter) or nullptr if
+    ///          processing failed
     llvm::Value *process_pointer_address_recurse(
         Type_walk_stack &stack,
         llvm::Value     *pointer,
-        uint64_t        write_size);
+        uint64_t        write_size,
+        bool            allow_early_out = true);
 
     /// Initialize the type walk stack for the given pointer and the size to be written
     /// and return the base pointer. The stack will be filled until the largest sub-element
@@ -343,11 +363,12 @@ private:
         llvm::Type *type,
         size_t     index);
 
-    /// Go to the next element in the stack.
+    /// Go to the next element in the stack and into the element until element size is not
+    /// too big anymore.
     ///
     /// \returns false, on failure
     bool move_to_next_compound_elem(
-        Type_walk_stack &stack);
+        Type_walk_stack &stack, size_t target_size);
 
     /// Move into compound elements in the stack until element size is not too big anymore.
     /// \returns false, on failure
@@ -808,6 +829,9 @@ private:
 
     /// The map from LLVM functions to AST function definitions.
     Function_map m_llvm_function_map;
+
+    /// The currently processed AST function.
+    llvm::sl::StructuredFunction const *m_curr_ast_func;
 
     /// If non-null, the definition of the current out-parameter used to pass the result.
     Def_param *m_out_def;

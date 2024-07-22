@@ -289,12 +289,6 @@ public:
 
     Image& operator=( const Image&) = delete;
 
-    /// Destructor.
-    ///
-    /// Explicit trivial destructor because the implicitly generated one requires the full
-    /// definition of IMAGE::IMipmap.
-    ~Image();
-
     /// Imports a mipmap from a file.
     ///
     /// Uvtiles/animated textures in containers are not supported.

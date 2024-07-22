@@ -84,9 +84,9 @@ MI_TEST_SAFE_CAST_TYPE(char)
 MI_TEST_SAFE_CAST_TYPE(short)
 MI_TEST_SAFE_CAST_TYPE(int)
 MI_TEST_SAFE_CAST_TYPE(long)
-typedef long long long_long;
-typedef signed long long signed_long_long;
-typedef unsigned long long unsigned_long_long;
+using long_long = long long;
+using signed_long_long = long long;
+using unsigned_long_long = unsigned long long;
 MI_TEST_SAFE_CAST_SIGNED_UNSIGNED_TYPE(long_long)
 
 MI_SUCCEED_SAFE_CAST_FROM_TO(max, int, char)

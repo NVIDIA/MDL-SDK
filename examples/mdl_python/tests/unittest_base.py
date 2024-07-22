@@ -7,6 +7,7 @@ except ImportError:  # pragma: no cover
     from setup import UnittestFrameworkBase
     import pymdlsdk
 
+import warnings
 
 # shared test helper function
 class UnittestBase(UnittestFrameworkBase):
@@ -53,6 +54,10 @@ class UnittestBase(UnittestFrameworkBase):
                 # self.assertEqual(iinterface2.get_iid(), iinterface3.get_iid())
         self.assertEqual(ref1, iinterface2.__iinterface_refs__(), msg)
         self.assertNotEqual(iinterface2.get_iid(), pymdlsdk.Uuid(), msg)
+
+    def assertIsNotValidInterface(self, iinterface: pymdlsdk.IInterface, msg=None):
+        self.assertIsNotNone(iinterface, msg)
+        self.assertFalse(iinterface.is_valid_interface(), msg)
 
     def log_context_messages(self, context: pymdlsdk.IMdl_execution_context) -> bool:
         """print all messages from the context. Return false if there have been errors"""
@@ -103,3 +108,28 @@ class UnittestBase(UnittestFrameworkBase):
     def assertStartswith(self, text: str, prefix: str, msg=None):
         self.assertIsInstance(text, str, msg)
         self.assertTrue(text.startswith(prefix), msg)
+
+    def assertMd5Hash(self, filename: str, hash: str):
+        import hashlib
+        import os
+        hash_md5 = hashlib.md5()
+        self.assertTrue(os.path.isfile(filename), f"File for MD5-hashing does not exist: {filename}")
+        with open(filename, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_md5.update(chunk)
+        self.assertEqual(hash_md5.hexdigest(), hash, f"MD5-hash not matching: {filename}")
+
+    def assertDeprecationWarning(self, func):
+        with self.assertWarns(DeprecationWarning):
+            return func()
+        
+    def assertException(self, expectedException, func):
+        if expectedException == None:  # allow to pass none when testing
+            return func()
+        with self.assertRaises(expectedException):
+            func()  # no return needed
+
+    def assertNoWarning(self, func):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            return func()

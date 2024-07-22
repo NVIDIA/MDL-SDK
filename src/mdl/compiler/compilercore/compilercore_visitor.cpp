@@ -155,8 +155,17 @@ void Module_visitor::post_visit(IDeclaration_import *decl) {
 bool Module_visitor::pre_visit(IDeclaration_annotation *anno) {
     return pre_visit(static_cast<IDeclaration *>(anno));
 }
+
 void Module_visitor::post_visit(IDeclaration_annotation *anno) {
     post_visit(static_cast<IDeclaration *>(anno));
+}
+
+bool Module_visitor::pre_visit(IDeclaration_struct_category *cat) {
+    return pre_visit(static_cast<IDeclaration *>(cat));
+}
+
+void Module_visitor::post_visit(IDeclaration_struct_category *cat) {
+    post_visit(static_cast<IDeclaration *>(cat));
 }
 
 bool Module_visitor::pre_visit(IDeclaration_constant *con) {
@@ -1180,6 +1189,20 @@ void Module_visitor::do_declaration_annotation(
     DOUT(("END declaration_annotation\n"));
 }
 
+void Module_visitor::do_declaration_struct_category(
+    IDeclaration_struct_category const *cat)
+{
+    IDeclaration_struct_category *d = const_cast<IDeclaration_struct_category *>(cat);
+
+    if (pre_visit(d)) {
+        do_simple_name(d->get_name());
+        if (IAnnotation_block const *p_anno = d->get_annotations()) {
+            do_annotations(p_anno);
+        }
+    }
+    post_visit(d);
+}
+
 void Module_visitor::do_declaration_constant(
     IDeclaration_constant const *con)
 {
@@ -1424,6 +1447,13 @@ void Module_visitor::do_declaration(
             IDeclaration_annotation const *anno =
                 static_cast<IDeclaration_annotation const *>(decl);
             do_declaration_annotation(anno);
+            break;
+        }
+    case IDeclaration::DK_STRUCT_CATEGORY:
+        {
+            IDeclaration_struct_category const *cat =
+                static_cast<IDeclaration_struct_category const *>(decl);
+            do_declaration_struct_category(cat);
             break;
         }
     case IDeclaration::DK_CONSTANT:

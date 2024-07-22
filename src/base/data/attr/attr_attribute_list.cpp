@@ -113,25 +113,25 @@ SERIAL::Serializable* Attribute_list::deserialize(
 // Reallocate if the new list size is less than 1/1.5 of the old size; and
 // if the new size is greater than the old one in which case grow by 1.5.
 void Attribute_list::set_listsize(
-    Uint		list_size,	// new size, 0 means no change
-    bool		force)		// use the exact size, don't optimize
+    Uint                list_size,      // new size, 0 means no change
+    bool                force)          // use the exact size, don't optimize
 {
-    if (list_size == m_listsize)	// same as before: do nothing
+    if (list_size == m_listsize)        // same as before: do nothing
         return;
 
-    if (force) {			// force: use requested size
+    if (force) {                        // force: use requested size
         if ( list_size < m_listsize ) {
             list_shrink(list_size);
         } else {
             list_reserve(list_size);
         }
     }
-    else {					// otherwise optimize:
+    else {                                      // otherwise optimize:
         if (!list_size)                         // - shrink only if set to 0
             list_shrink(list_size);
-        if (list_size > m_listalloc) {		// - grow to more than alloc:
+        if (list_size > m_listalloc) {          // - grow to more than alloc:
             Uint newcapacity = m_listalloc*3/2; //   grow by 50% but
-            if (list_size > newcapacity)	//   at least as much as asked
+            if (list_size > newcapacity)        //   at least as much as asked
                 newcapacity = list_size;
             list_reserve(newcapacity);
         }

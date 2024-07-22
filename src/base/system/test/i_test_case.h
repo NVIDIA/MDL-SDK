@@ -65,7 +65,9 @@
 #include "i_test_pretty_print.h"
 #include "i_test_environment.h"
 #include "i_test_current_location.h"
+
 #include <base/system/stlext/i_stlext_concepts.h>
+
 #include <cassert>
 #include <iterator>
 #include <algorithm>
@@ -184,25 +186,22 @@ struct Test_case_skipped : public Runtime_error
     {}
 };
 
-#define MI_TEST_IMPL(result_type,result,literal,expression,extra_scope)                 \
-    do                                                                                  \
-    {                                                                                   \
-        if (!(result))                                                                  \
-        {                                                                               \
-            std::ostringstream __mi_test_os;                                          \
-            __mi_test_os.setf( std::ios::fixed );                                     \
-            __mi_test_os.unsetf( std::ios::showpoint );                               \
-            __mi_test_os.precision( 16 );                                               \
-            __mi_test_os << extra_scope;                                                \
-            std::string __mi_test_scope( __mi_test_os.str() );                        \
-            if (!__mi_test_scope.empty())                                               \
-                __mi_test_scope.insert(__mi_test_scope.begin(), ':');                   \
-            __mi_test_scope.insert(0u, MI::TEST::show(MI_CURRENT_LOCATION));            \
-            result_type __mi_test_r(literal, expression, __mi_test_scope);              \
-            throw __mi_test_r;                                                          \
-        }                                                                               \
-    }                                                                                   \
-    while(false)
+// The check for test failure itself intentionally happens outside this function call. Otherwise,
+// the function call overhead becomes noticable if the test macros are used inside a tight loop.
+template <class Result_type>
+void test_fail(
+    std::string literal,
+    std::string expression,
+    const Current_location& location,
+    std::string msg)
+{
+    std::string s(show(location));
+    if (!msg.empty())
+        s += ":" + msg;
+
+    Result_type r(literal, expression, s);
+    throw r;
+}
 
 template <class Number_type>
 inline Number_type abs_distance(Number_type const & lhs, Number_type const & rhs)
@@ -271,214 +270,312 @@ inline void is_close_collection( std::string const &    literal
 
 }} // MI::TEST
 
-#define MI_TEST_FUNCTION(func)                                                          \
+#define MI_TEST_FUNCTION(func) \
     new MI::TEST::Function_test_case(MI::TEST::pretty_function_name(#func), &(func))
 
-#define MI_TEST_METHOD(object, method)                                                  \
-    new MI::TEST::Method_test_case<object>( MI::TEST::pretty_function_name(#method)     \
-                                          , *this, &object::method                      \
+#define MI_TEST_METHOD(object, method) \
+    new MI::TEST::Method_test_case<object>( MI::TEST::pretty_function_name(#method) \
+                                          , *this, &object::method \
                                           )
+
+#define MI_TEST_PREFIX_LHS_RHS(lhs,rhs) do { \
+    const auto& test_eval_lhs = (lhs); \
+    const auto& test_eval_rhs = (rhs);
+
+#define MI_TEST_PREFIX_EXPR(expr) do { \
+    const auto& test_eval_expr = (expr);
+
+#define MI_TEST_SUFFIX } while( false )
 
 //
 // MI_CHECK Macros
 //
 
-#define MI_CHECK_MSG(expr,extra_scope)                                                  \
-  MI_TEST_IMPL( MI::TEST::Test_case_failure                                             \
-              , (expr)                                                                  \
-              , #expr                                                                   \
-              , ""                                                                      \
-              , extra_scope                                                             \
-              )
+#define MI_CHECK_MSG(expr,msg) \
+    MI_TEST_PREFIX_EXPR(expr) \
+    if( !test_eval_expr ) \
+        MI::TEST::test_fail<MI::TEST::Test_case_failure> \
+            ( #expr \
+            , "" \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
 
-#define MI_CHECK_EQUAL_MSG(lhs,rhs,extra_scope)                                         \
-  MI_TEST_IMPL( MI::TEST::Test_case_failure                                             \
-              , (lhs) == (rhs)                                                          \
-              , std::string(#lhs) + " == " + std::string(#rhs)                      \
-              , MI::TEST::show(lhs) + " != " + MI::TEST::show(rhs)                      \
-              , extra_scope                                                             \
-              )
+#define MI_CHECK_EQUAL_MSG(lhs,rhs,msg) \
+    MI_TEST_PREFIX_LHS_RHS(lhs,rhs) \
+    if( !(test_eval_lhs == test_eval_rhs) ) \
+        MI::TEST::test_fail<MI::TEST::Test_case_failure> \
+            ( std::string(#lhs) + " == " + std::string(#rhs) \
+            , MI::TEST::show(test_eval_lhs) + " != " + MI::TEST::show(test_eval_rhs) \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
 
-#define MI_CHECK_NOT_EQUAL_MSG(lhs,rhs,extra_scope)                                     \
-  MI_TEST_IMPL( MI::TEST::Test_case_failure                                             \
-              , (lhs) != (rhs)                                                          \
-              , std::string(#lhs) + " != " + std::string(#rhs)                      \
-              , MI::TEST::show(lhs) + " == " + MI::TEST::show(rhs)                      \
-              , extra_scope                                                             \
-              )
+#define MI_CHECK_NOT_EQUAL_MSG(lhs,rhs,msg) \
+    MI_TEST_PREFIX_LHS_RHS(lhs,rhs) \
+    if( !(test_eval_lhs != test_eval_rhs) ) \
+        MI::TEST::test_fail<MI::TEST::Test_case_failure> \
+            ( std::string(#lhs) + " != " + std::string(#rhs) \
+            , MI::TEST::show(test_eval_lhs) + " == " + MI::TEST::show(test_eval_rhs) \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
 
-#define MI_CHECK_LESS_MSG(lhs,rhs,extra_scope)                                          \
-  MI_TEST_IMPL( MI::TEST::Test_case_failure                                             \
-              , (lhs) < (rhs)                                                           \
-              , std::string(#lhs) + " < " + std::string(#rhs)                       \
-              , MI::TEST::show(lhs) + " >= " + MI::TEST::show(rhs)                      \
-              , extra_scope                                                             \
-              )
+#define MI_CHECK_LESS_MSG(lhs,rhs,msg) \
+    MI_TEST_PREFIX_LHS_RHS(lhs,rhs) \
+    if( !(test_eval_lhs < test_eval_rhs) ) \
+        MI::TEST::test_fail<MI::TEST::Test_case_failure> \
+            ( std::string(#lhs) + " < " + std::string(#rhs) \
+            , MI::TEST::show(test_eval_lhs) + " >= " + MI::TEST::show(test_eval_rhs) \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
 
-#define MI_CHECK_LESS_OR_EQUAL_MSG(lhs,rhs,extra_scope)                                 \
-  MI_TEST_IMPL( MI::TEST::Test_case_failure                                             \
-              , (lhs) <= (rhs)                                                          \
-              , std::string(#lhs) + " <= " + std::string(#rhs)                      \
-              , MI::TEST::show(lhs) + " > " + MI::TEST::show(rhs)                       \
-              , extra_scope                                                             \
-              )
+#define MI_CHECK_LESS_OR_EQUAL_MSG(lhs,rhs,msg) \
+    MI_TEST_PREFIX_LHS_RHS(lhs,rhs) \
+    if( !(test_eval_lhs <= test_eval_rhs) ) \
+        MI::TEST::test_fail<MI::TEST::Test_case_failure> \
+            ( std::string(#lhs) + " <= " + std::string(#rhs) \
+            , MI::TEST::show(test_eval_lhs) + " > " + MI::TEST::show(test_eval_rhs) \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
 
-#define MI_CHECK_GREATER_MSG(lhs,rhs,extra_scope)                                       \
-  MI_TEST_IMPL( MI::TEST::Test_case_failure                                             \
-              , (lhs) > (rhs)                                                           \
-              , std::string(#lhs) + " > " + std::string(#rhs)                       \
-              , MI::TEST::show(lhs) + " <= " + MI::TEST::show(rhs)                      \
-              , extra_scope                                                             \
-              )
+#define MI_CHECK_GREATER_MSG(lhs,rhs,msg) \
+    MI_TEST_PREFIX_LHS_RHS(lhs,rhs) \
+    if( !(test_eval_lhs > test_eval_rhs) ) \
+        MI::TEST::test_fail<MI::TEST::Test_case_failure> \
+            ( std::string(#lhs) + " > " + std::string(#rhs) \
+            , MI::TEST::show(test_eval_lhs) + " <= " + MI::TEST::show(test_eval_rhs) \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
 
-#define MI_CHECK_GREATER_OR_EQUAL_MSG(lhs,rhs,extra_scope)                              \
-  MI_TEST_IMPL( MI::TEST::Test_case_failure                                             \
-              , (lhs) >= (rhs)                                                          \
-              , std::string(#lhs) + " >= " + std::string(#rhs)                      \
-              , MI::TEST::show(lhs) + " < " + MI::TEST::show(rhs)                       \
-              , extra_scope                                                             \
-              )
+#define MI_CHECK_GREATER_OR_EQUAL_MSG(lhs,rhs,msg) \
+    MI_TEST_PREFIX_LHS_RHS(lhs,rhs) \
+    if( !(test_eval_lhs >= test_eval_rhs) ) \
+        MI::TEST::test_fail<MI::TEST::Test_case_failure> \
+            ( std::string(#lhs) + " >= " + std::string(#rhs) \
+            , MI::TEST::show(test_eval_lhs) + " < " + MI::TEST::show(test_eval_rhs) \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
 
-#define MI_CHECK_CLOSE_MSG(lhs,rhs,eps,extra_scope)                                     \
-  MI_TEST_IMPL( MI::TEST::Test_case_failure                                             \
-              , MI::TEST::abs_distance((lhs), (rhs)) < (eps)                            \
-              , std::string("abs(") + #lhs + " - " + #rhs + ") < " #eps               \
-              , std::string("abs(") + MI::TEST::show(lhs) + " - " + MI::TEST::show(rhs) + ") >= " + MI::TEST::show(eps) \
-              , extra_scope                                                             \
-              )
+#define MI_CHECK_CLOSE_MSG(lhs,rhs,eps,msg) \
+    MI_TEST_PREFIX_LHS_RHS(lhs,rhs) \
+    if( !(MI::TEST::abs_distance((test_eval_lhs), (test_eval_rhs)) < (eps)) ) \
+        MI::TEST::test_fail<MI::TEST::Test_case_failure> \
+            ( std::string("abs(") + #lhs + " - " + #rhs + ") < " #eps \
+            , std::string("abs(") + MI::TEST::show(test_eval_lhs) + " - " + MI::TEST::show(test_eval_rhs) + ") >= " + MI::TEST::show(eps) \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
 
-#define MI_CHECK_EQUAL_COLLECTIONS(lb,le,rb,re)                                         \
-    MI::TEST::is_equal_collection<MI::TEST::Test_case_failure>                          \
-      ( std::string("{ ") + #lb + ", " + #le + " } == { " + #rb + ", " + #re + " }"   \
-      , MI_CURRENT_LOCATION                                                             \
-      , (lb), (le), (rb), (re)                                                          \
-      )
+#define MI_CHECK_EQUAL_COLLECTIONS(lb,le,rb,re) \
+    MI::TEST::is_equal_collection<MI::TEST::Test_case_failure> \
+            ( std::string("{ ") + #lb + ", " + #le + " } == { " + #rb + ", " + #re + " }" \
+            , MI_CURRENT_LOCATION \
+            , (lb), (le), (rb), (re) \
+            )
 
-#define MI_CHECK_CLOSE_COLLECTIONS(lb,le,rb,re,eps)                                     \
-    MI::TEST::is_close_collection<MI::TEST::Test_case_failure>                          \
-      ( std::string("{ ") + #lb + ", " + #le + " } == { " + #rb + ", " + #re + " }"   \
-      , MI_CURRENT_LOCATION                                                             \
-      , (lb), (le), (rb), (re), (eps)                                                   \
-      )
+#define MI_CHECK_CLOSE_COLLECTIONS(lb,le,rb,re,eps) \
+    MI::TEST::is_close_collection<MI::TEST::Test_case_failure> \
+            ( std::string("{ ") + #lb + ", " + #le + " } == { " + #rb + ", " + #re + " }" \
+            , MI_CURRENT_LOCATION \
+            , (lb), (le), (rb), (re), (eps) \
+            )
 
-#define MI_CHECK_EQUAL_CSTR_MSG(lhs,rhs,extra_scope)                                    \
-  MI_TEST_IMPL( MI::TEST::Test_case_failure                                             \
-              , strcmp(lhs, rhs) == 0                                                   \
-              , std::string(#lhs) + " == " + std::string(#rhs)                      \
-              , '"' + MI::TEST::show(lhs) + "\" != \"" + MI::TEST::show(rhs) + '"'      \
-              , extra_scope                                                             \
-              )
+#define MI_CHECK_EQUAL_CSTR_MSG(lhs,rhs,msg) \
+    MI_TEST_PREFIX_LHS_RHS(lhs,rhs) \
+    if( !(strcmp(test_eval_lhs, test_eval_rhs) == 0) ) \
+        MI::TEST::test_fail<MI::TEST::Test_case_failure> \
+            ( std::string(#lhs) + " == " + std::string(#rhs) \
+            , '"' + MI::TEST::show(test_eval_lhs) + "\" != \"" + MI::TEST::show(test_eval_rhs) + '"' \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
 
-#define MI_CHECK_NOT_EQUAL_CSTR_MSG(lhs,rhs,extra_scope)                                \
-  MI_TEST_IMPL( MI::TEST::Test_case_failure                                             \
-              , strcmp(lhs, rhs) != 0                                                   \
-              , std::string(#lhs) + " != " + std::string(#rhs)                      \
-              , '"' + MI::TEST::show(lhs) + "\" == \"" + MI::TEST::show(rhs) + '"'      \
-              , extra_scope                                                             \
-              )
+#define MI_CHECK_NOT_EQUAL_CSTR_MSG(lhs,rhs,msg) \
+    MI_TEST_PREFIX_LHS_RHS(lhs,rhs) \
+    if( !(strcmp(test_eval_lhs, test_eval_rhs) != 0) ) \
+        MI::TEST::test_fail<MI::TEST::Test_case_failure> \
+            ( std::string(#lhs) + " != " + std::string(#rhs) \
+            , '"' + MI::TEST::show(test_eval_lhs) + "\" == \"" + MI::TEST::show(test_eval_rhs) + '"' \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
 
-#define MI_CHECK_ZERO_MSG(expr,extra_scope)                                             \
-  MI_TEST_IMPL( MI::TEST::Test_case_failure                                             \
-              , (expr) == 0                                                             \
-              , std::string(#expr) + " == 0"                                            \
-              , MI::TEST::show(expr) + " != 0"                                          \
-              , extra_scope                                                             \
-              )
+#define MI_CHECK_ZERO_MSG(expr,msg) \
+    MI_TEST_PREFIX_EXPR(expr) \
+    if( !(test_eval_expr == 0) ) \
+        MI::TEST::test_fail<MI::TEST::Test_case_failure> \
+            ( std::string(#expr) + " == 0" \
+            , MI::TEST::show(test_eval_expr) + " != 0" \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
 
-#define MI_CHECK(expr)                     MI_CHECK_MSG(expr,"")
-#define MI_CHECK_EQUAL(lhs,rhs)            MI_CHECK_EQUAL_MSG(lhs,rhs,"")
-#define MI_CHECK_NOT_EQUAL(lhs,rhs)        MI_CHECK_NOT_EQUAL_MSG(lhs,rhs,"")
-#define MI_CHECK_LESS(lhs,rhs)             MI_CHECK_LESS_MSG(lhs,rhs,"")
-#define MI_CHECK_LESS_OR_EQUAL(lhs,rhs)    MI_CHECK_LESS_OR_EQUAL_MSG(lhs,rhs,"")
-#define MI_CHECK_GREATER(lhs,rhs)          MI_CHECK_GREATER_MSG(lhs,rhs,"")
-#define MI_CHECK_GREATER_OR_EQUAL(lhs,rhs) MI_CHECK_GREATER_OR_EQUAL_MSG(lhs,rhs,"")
-#define MI_CHECK_CLOSE(lhs,rhs,eps)        MI_CHECK_CLOSE_MSG(lhs,rhs,eps,"")
-#define MI_CHECK_EQUAL_CSTR(lhs,rhs)       MI_CHECK_EQUAL_CSTR_MSG(lhs,rhs,"")
-#define MI_CHECK_NOT_EQUAL_CSTR(lhs,rhs)   MI_CHECK_NOT_EQUAL_CSTR_MSG(lhs,rhs,"")
-#define MI_CHECK_ZERO(expr)                MI_CHECK_ZERO_MSG(expr,"")
-
+#define MI_CHECK(expr)                          MI_CHECK_MSG(expr,"")
+#define MI_CHECK_EQUAL(lhs,rhs)                 MI_CHECK_EQUAL_MSG(lhs,rhs,"")
+#define MI_CHECK_NOT_EQUAL(lhs,rhs)             MI_CHECK_NOT_EQUAL_MSG(lhs,rhs,"")
+#define MI_CHECK_LESS(lhs,rhs)                  MI_CHECK_LESS_MSG(lhs,rhs,"")
+#define MI_CHECK_LESS_OR_EQUAL(lhs,rhs)         MI_CHECK_LESS_OR_EQUAL_MSG(lhs,rhs,"")
+#define MI_CHECK_GREATER(lhs,rhs)               MI_CHECK_GREATER_MSG(lhs,rhs,"")
+#define MI_CHECK_GREATER_OR_EQUAL(lhs,rhs)      MI_CHECK_GREATER_OR_EQUAL_MSG(lhs,rhs,"")
+#define MI_CHECK_CLOSE(lhs,rhs,eps)             MI_CHECK_CLOSE_MSG(lhs,rhs,eps,"")
+#define MI_CHECK_EQUAL_CSTR(lhs,rhs)            MI_CHECK_EQUAL_CSTR_MSG(lhs,rhs,"")
+#define MI_CHECK_NOT_EQUAL_CSTR(lhs,rhs)        MI_CHECK_NOT_EQUAL_CSTR_MSG(lhs,rhs,"")
+#define MI_CHECK_ZERO(expr)                     MI_CHECK_ZERO_MSG(expr,"")
 
 //
 // MI_REQUIRE Macros
 //
 
-#define MI_REQUIRE_MSG(expr,extra_scope)                                                \
-  MI_TEST_IMPL( MI::TEST::Test_suite_failure                                            \
-              , (expr)                                                                  \
-              , #expr                                                                   \
-              , ""                                                                      \
-              , extra_scope                                                             \
-              )
+#define MI_REQUIRE_MSG(expr,msg) \
+    MI_TEST_PREFIX_EXPR(expr) \
+    if( !test_eval_expr ) \
+        MI::TEST::test_fail<MI::TEST::Test_suite_failure> \
+            ( #expr \
+            , "" \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
 
-#define MI_REQUIRE_EQUAL_MSG(lhs,rhs,extra_scope)                                       \
-  MI_TEST_IMPL( MI::TEST::Test_suite_failure                                            \
-              , lhs == rhs                                                              \
-              , std::string(#lhs) + " == " + std::string(#rhs)                      \
-              , MI::TEST::show(lhs) + " != " + MI::TEST::show(rhs)                      \
-              , extra_scope                                                             \
-              )
+#define MI_REQUIRE_EQUAL_MSG(lhs,rhs,msg) \
+    MI_TEST_PREFIX_LHS_RHS(lhs,rhs) \
+    if( !(test_eval_lhs == test_eval_rhs) ) \
+        MI::TEST::test_fail<MI::TEST::Test_suite_failure> \
+            ( std::string(#lhs) + " == " + std::string(#rhs) \
+            , MI::TEST::show(test_eval_lhs) + " != " + MI::TEST::show(test_eval_rhs) \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
 
-#define MI_REQUIRE_NOT_EQUAL_MSG(lhs,rhs,extra_scope)                                   \
-  MI_TEST_IMPL( MI::TEST::Test_suite_failure                                            \
-              , lhs != rhs                                                              \
-              , std::string(#lhs) + " != " + std::string(#rhs)                      \
-              , MI::TEST::show(lhs) + " == " + MI::TEST::show(rhs)                      \
-              , extra_scope                                                             \
-              )
+#define MI_REQUIRE_NOT_EQUAL_MSG(lhs,rhs,msg) \
+    MI_TEST_PREFIX_LHS_RHS(lhs,rhs) \
+    if( !(test_eval_lhs != test_eval_rhs) ) \
+        MI::TEST::test_fail<MI::TEST::Test_suite_failure> \
+            ( std::string(#lhs) + " != " + std::string(#rhs) \
+            , MI::TEST::show(test_eval_lhs) + " == " + MI::TEST::show(test_eval_rhs) \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
 
-#define MI_REQUIRE_LESS_MSG(lhs,rhs,extra_scope)                                        \
-  MI_TEST_IMPL( MI::TEST::Test_suite_failure                                            \
-              , (lhs) < (rhs)                                                           \
-              , std::string(#lhs) + " < " + std::string(#rhs)                       \
-              , MI::TEST::show(lhs) + " >= " + MI::TEST::show(rhs)                      \
-              , extra_scope                                                             \
-              )
+#define MI_REQUIRE_LESS_MSG(lhs,rhs,msg) \
+    MI_TEST_PREFIX_LHS_RHS(lhs,rhs) \
+    if( !(test_eval_lhs < test_eval_rhs) ) \
+        MI::TEST::test_fail<MI::TEST::Test_suite_failure> \
+            ( std::string(#lhs) + " < " + std::string(#rhs) \
+            , MI::TEST::show(test_eval_lhs) + " >= " + MI::TEST::show(test_eval_rhs) \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
 
-#define MI_REQUIRE_LESS_OR_EQUAL_MSG(lhs,rhs,extra_scope)                               \
-  MI_TEST_IMPL( MI::TEST::Test_suite_failure                                            \
-              , (lhs) <= (rhs)                                                          \
-              , std::string(#lhs) + " <= " + std::string(#rhs)                      \
-              , MI::TEST::show(lhs) + " > " + MI::TEST::show(rhs)                       \
-              , extra_scope                                                             \
-              )
+#define MI_REQUIRE_LESS_OR_EQUAL_MSG(lhs,rhs,msg) \
+    MI_TEST_PREFIX_LHS_RHS(lhs,rhs) \
+    if( !(test_eval_lhs <= test_eval_rhs) ) \
+        MI::TEST::test_fail<MI::TEST::Test_suite_failure> \
+            ( std::string(#lhs) + " <= " + std::string(#rhs) \
+            , MI::TEST::show(test_eval_lhs) + " > " + MI::TEST::show(test_eval_rhs) \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
 
-#define MI_REQUIRE_GREATER_MSG(lhs,rhs,extra_scope)                                     \
-  MI_TEST_IMPL( MI::TEST::Test_suite_failure                                            \
-              , (lhs) > (rhs)                                                           \
-              , std::string(#lhs) + " > " + std::string(#rhs)                       \
-              , MI::TEST::show(lhs) + " <= " + MI::TEST::show(rhs)                      \
-              , extra_scope                                                             \
-              )
+#define MI_REQUIRE_GREATER_MSG(lhs,rhs,msg) \
+    MI_TEST_PREFIX_LHS_RHS(lhs,rhs) \
+    if( !(test_eval_lhs > test_eval_rhs) ) \
+        MI::TEST::test_fail<MI::TEST::Test_suite_failure> \
+            ( std::string(#lhs) + " > " + std::string(#rhs) \
+            , MI::TEST::show(test_eval_lhs) + " <= " + MI::TEST::show(test_eval_rhs) \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
 
-#define MI_REQUIRE_GREATER_OR_EQUAL_MSG(lhs,rhs,extra_scope)                            \
-  MI_TEST_IMPL( MI::TEST::Test_suite_failure                                            \
-              , (lhs) >= (rhs)                                                          \
-              , std::string(#lhs) + " >= " + std::string(#rhs)                      \
-              , MI::TEST::show(lhs) + " < " + MI::TEST::show(rhs)                       \
-              , extra_scope                                                             \
-              )
+#define MI_REQUIRE_GREATER_OR_EQUAL_MSG(lhs,rhs,msg) \
+    MI_TEST_PREFIX_LHS_RHS(lhs,rhs) \
+    if( !(test_eval_lhs >= test_eval_rhs) ) \
+        MI::TEST::test_fail<MI::TEST::Test_suite_failure> \
+            ( std::string(#lhs) + " >= " + std::string(#rhs) \
+            , MI::TEST::show(test_eval_lhs) + " < " + MI::TEST::show(test_eval_rhs) \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
 
-#define MI_REQUIRE_CLOSE_MSG(lhs,rhs,eps,extra_scope)                                   \
-  MI_TEST_IMPL( MI::TEST::Test_suite_failure                                            \
-              , MI::TEST::abs_distance((lhs), (rhs)) < (eps)                            \
-              , std::string("abs(") + #lhs + " - " + #rhs + ") < " #eps               \
-              , std::string("abs(") + MI::TEST::show(lhs) + " - " + MI::TEST::show(rhs) + ") >= " + MI::TEST::show(eps) \
-              , extra_scope                                                             \
-              )
+#define MI_REQUIRE_CLOSE_MSG(lhs,rhs,eps,msg) \
+    MI_TEST_PREFIX_LHS_RHS(lhs,rhs) \
+    if( !(MI::TEST::abs_distance((test_eval_lhs), (test_eval_rhs)) < (eps)) ) \
+        MI::TEST::test_fail<MI::TEST::Test_suite_failure> \
+            ( std::string("abs(") + #lhs + " - " + #rhs + ") < " #eps \
+            , std::string("abs(") + MI::TEST::show(test_eval_lhs) + " - " + MI::TEST::show(test_eval_rhs) + ") >= " + MI::TEST::show(eps) \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
 
-#define MI_REQUIRE_EQUAL_COLLECTIONS(lb,le,rb,re)                                       \
-    MI::TEST::is_equal_collection<MI::TEST::Test_suite_failure>                         \
-      ( std::string("{ ") + #lb + ", " + #le + " } == { " + #rb + ", " + #re + " }"   \
-      , MI_CURRENT_LOCATION                                                             \
-      , (lb), (le), (rb), (re)                                                          \
-      )
+#define MI_REQUIRE_EQUAL_COLLECTIONS(lb,le,rb,re) \
+    MI::TEST::is_equal_collection<MI::TEST::Test_suite_failure> \
+            ( std::string("{ ") + #lb + ", " + #le + " } == { " + #rb + ", " + #re + " }" \
+            , MI_CURRENT_LOCATION \
+            , (lb), (le), (rb), (re) \
+            )
 
-#define MI_REQUIRE_CLOSE_COLLECTIONS(lb,le,rb,re,eps)                                   \
-    MI::TEST::is_close_collection<MI::TEST::Test_suite_failure>                         \
-      ( std::string("{ ") + #lb + ", " + #le + " } == { " + #rb + ", " + #re + " }"   \
-      , MI_CURRENT_LOCATION                                                             \
-      , (lb), (le), (rb), (re), (eps)                                                   \
-      )
+#define MI_REQUIRE_CLOSE_COLLECTIONS(lb,le,rb,re,eps) \
+    MI::TEST::is_close_collection<MI::TEST::Test_suite_failure> \
+            ( std::string("{ ") + #lb + ", " + #le + " } == { " + #rb + ", " + #re + " }" \
+            , MI_CURRENT_LOCATION \
+            , (lb), (le), (rb), (re), (eps) \
+            )
+
+#define MI_REQUIRE_EQUAL_CSTR_MSG(lhs,rhs,msg) \
+    MI_TEST_PREFIX_LHS_RHS(lhs,rhs) \
+    if( !(strcmp(test_eval_lhs, test_eval_rhs) == 0) ) \
+        MI::TEST::test_fail<MI::TEST::Test_suite_failure> \
+            ( std::string(#lhs) + " == " + std::string(#rhs) \
+            , '"' + MI::TEST::show(test_eval_lhs) + "\" != \"" + MI::TEST::show(test_eval_rhs) + '"' \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
+
+#define MI_REQUIRE_NOT_EQUAL_CSTR_MSG(lhs,rhs,msg) \
+    MI_TEST_PREFIX_LHS_RHS(lhs,rhs) \
+    if( !(strcmp(test_eval_lhs, test_eval_rhs) != 0) ) \
+        MI::TEST::test_fail<MI::TEST::Test_suite_failure> \
+            ( std::string(#lhs) + " != " + std::string(#rhs) \
+            , '"' + MI::TEST::show(test_eval_lhs) + "\" == \"" + MI::TEST::show(test_eval_rhs) + '"' \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
+
+#define MI_REQUIRE_ZERO_MSG(expr,msg) \
+    MI_TEST_PREFIX_EXPR(expr) \
+    if( !(test_eval_expr == 0) ) \
+        MI::TEST::test_fail<MI::TEST::Test_suite_failure> \
+            ( std::string(#expr) + " == 0" \
+            , MI::TEST::show(test_eval_expr) + " != 0" \
+            , MI_CURRENT_LOCATION \
+            , msg \
+            ); \
+    MI_TEST_SUFFIX
 
 #define MI_REQUIRE(expr)                        MI_REQUIRE_MSG(expr,"")
 #define MI_REQUIRE_EQUAL(lhs,rhs)               MI_REQUIRE_EQUAL_MSG(lhs,rhs,"")
@@ -488,6 +585,9 @@ inline void is_close_collection( std::string const &    literal
 #define MI_REQUIRE_GREATER(lhs,rhs)             MI_REQUIRE_GREATER_MSG(lhs,rhs,"")
 #define MI_REQUIRE_GREATER_OR_EQUAL(lhs,rhs)    MI_REQUIRE_GREATER_OR_EQUAL_MSG(lhs,rhs,"")
 #define MI_REQUIRE_CLOSE(lhs,rhs,eps)           MI_REQUIRE_CLOSE_MSG(lhs,rhs,eps,"")
+#define MI_REQUIRE_EQUAL_CSTR(lhs,rhs)          MI_REQUIRE_EQUAL_CSTR_MSG(lhs,rhs,"")
+#define MI_REQUIRE_NOT_EQUAL_CSTR(lhs,rhs)      MI_REQUIRE_NOT_EQUAL_CSTR_MSG(lhs,rhs,"")
+#define MI_REQUIRE_ZERO(expr)                   MI_REQUIRE_ZERO_MSG(expr,"")
 
 #endif // BASE_SYSTEM_TEST_CASE_H
 

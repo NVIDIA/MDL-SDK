@@ -33,7 +33,6 @@
 
 #include <mi/base/handle.h>
 #include <mi/base/uuid.h>
-#include <mi/mdl/mdl_generated_dag.h>
 #include <mi/neuraylib/icompiled_material.h>
 
 #include <base/data/db/i_db_tag.h>
@@ -46,7 +45,7 @@
 #include "i_mdl_elements_resource_tag_tuple.h"
 #include "i_mdl_elements_module.h"
 
-namespace mi { namespace mdl { class IGenerated_code_lambda_function; } }
+namespace mi { namespace mdl { class IMaterial_instance; } }
 
 namespace MI {
 
@@ -59,6 +58,7 @@ class IType_factory;
 class IValue;
 class IValue_factory;
 class IValue_list;
+class Mdl_dag_converter;
 
 /// The class ID for the #Mdl_compiled_material class.
 static const SERIAL::Class_id ID_MDL_COMPILED_MATERIAL = 0x5f436d69; // '_Cmi'
@@ -75,7 +75,7 @@ public:
     /// Constructor.
     ///
     /// \param transaction                 The DB transaction to use.
-    /// \param instance                    The wrapped MDL material instance.
+    /// \param core_material_instance      The core material instance.
     /// \param module_name                 The MDL module name. Optional, used by is_valid().
     /// \param mdl_meters_per_scene_unit   Conversion ratio between meters and scene units.
     /// \param mdl_wavelength_min          The smallest supported wavelength.
@@ -84,12 +84,12 @@ public:
     ///                                    DB.
     Mdl_compiled_material(
         DB::Transaction* transaction,
-        const mi::mdl::IGenerated_code_dag::IMaterial_instance* instance,
+        const mi::mdl::IMaterial_instance* core_material_instance,
         const char* module_name,
         mi::Float32 mdl_meters_per_scene_unit,
         mi::Float32 mdl_wavelength_min,
         mi::Float32 mdl_wavelength_max,
-        bool        resolve_resources);
+        bool resolve_resources);
 
     /// Copy constructor.
     Mdl_compiled_material( const Mdl_compiled_material&) = default;
@@ -98,17 +98,42 @@ public:
 
     // methods corresponding to mi::neuraylib::ICompiled_material
 
-    const IExpression_direct_call* get_body() const;
+    const IExpression_direct_call* get_body( DB::Transaction* transaction) const;
 
     mi::Size get_temporary_count() const;
 
-    const IExpression* get_temporary( mi::Size index) const;
+    const IExpression* get_temporary( DB::Transaction* transaction, mi::Size index) const;
 
-    mi::Float32 get_mdl_meters_per_scene_unit() const;
+    const IExpression* lookup_sub_expression( DB::Transaction* transaction, const char* path) const;
 
-    mi::Float32 get_mdl_wavelength_min() const;
+    bool is_valid( DB::Transaction* transaction, Execution_context* context) const;
 
-    mi::Float32 get_mdl_wavelength_max() const;
+    mi::Size get_parameter_count() const;
+
+    const char* get_parameter_name( mi::Size index) const;
+
+    const IValue* get_argument( DB::Transaction* transaction, mi::Size index) const;
+
+    DB::Tag get_connected_function_db_name(
+        DB::Transaction* transaction,
+        DB::Tag material_instance_tag,
+        mi::Size parameter_index) const;
+
+    mi::Float32 get_mdl_meters_per_scene_unit() const { return m_mdl_meters_per_scene_unit; }
+
+    mi::Float32 get_mdl_wavelength_min() const { return m_mdl_wavelength_min; }
+
+    mi::Float32 get_mdl_wavelength_max() const { return m_mdl_wavelength_max; }
+
+    mi::mdl::IMaterial_instance::Opacity get_opacity() const;
+
+    mi::mdl::IMaterial_instance::Opacity get_surface_opacity() const;
+
+    bool get_cutout_opacity( mi::Float32* cutout_opacity) const;
+
+    mi::Size get_referenced_scene_data_count() const;
+
+    const char* get_referenced_scene_data_name( mi::Size index) const;
 
     bool depends_on_state_transform() const;
 
@@ -118,51 +143,33 @@ public:
 
     bool depends_on_uniform_scene_data() const;
 
-    mi::Size get_referenced_scene_data_count() const;
-
-    const char* get_referenced_scene_data_name( mi::Size index) const;
-
-    mi::Size get_parameter_count() const;
-
-    const char* get_parameter_name( mi::Size index) const;
-
-    const IValue* get_argument( mi::Size index) const;
-
     mi::base::Uuid get_hash() const;
 
     mi::base::Uuid get_slot_hash( mi::neuraylib::Material_slot slot) const;
 
-    const IExpression* lookup_sub_expression( const char* path) const;
-
-    DB::Tag get_connected_function_db_name(
-        DB::Transaction* transaction,
-        DB::Tag material_instance_tag,
-        const std::string& path) const;
-
-    mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity get_opacity() const;
-
-    mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity get_surface_opacity() const;
-
-    bool get_cutout_opacity( mi::Float32* cutout_opacity) const;
-
-    bool is_valid( DB::Transaction* transaction, Execution_context* context) const;
+    mi::base::Uuid get_sub_expression_hash( const char* path) const;
 
     // internal methods
+
+    /// Returns the wrapped core material instance.
+    const mi::mdl::IMaterial_instance* get_core_material_instance() const;
 
     /// Returns the internal space.
     const char* get_internal_space() const;
 
-    /// Returns the temporaries.
-    const IExpression_list* get_temporaries() const;
+    /// Returns the number of resource table entries.
+    mi::Size get_resources_count() const;
 
-    /// Returns the arguments.
-    const IValue_list* get_arguments() const;
+    /// Returns the \p index -th resource table entry.
+    const Resource_tag_tuple* get_resource_tag_tuple( mi::Size index) const;
 
-    /// Get the number of resource table entries.
-    mi::Size get_resource_entries_count() const;
+    /// Returns the "resolve_resources" setting from the constructor.
+    ///
+    /// Used by the distiller to pass that setting to the distilled instance.
+    bool get_resolve_resources() const { return m_resolve_resources; }
 
-    /// Get the index'th resource table entry.
-    const Resource_tag_tuple* get_resource_entry( mi::Size index) const;
+     /// Returns all arguments as one value list.
+     const IValue_list* get_arguments( DB::Transaction* transaction) const;
 
     /// Swaps *this and \p other.
     ///
@@ -170,24 +177,13 @@ public:
     /// existing API wrapper.
     void swap( Mdl_compiled_material& other);
 
-    /// Improved version of SERIAL::Serializable::dump().
-    ///
-    /// \param transaction   The DB transaction (for name lookups and tag versions). Can be \c NULL.
-    void dump( DB::Transaction* transaction) const;
-
-    /// Returns the instance properties.
-    mi::mdl::IGenerated_code_dag::IMaterial_instance::Properties get_properties() const
-    {
-        return m_properties;
-    }
-
     // methods of SERIAL::Serializable
 
     const SERIAL::Serializable* serialize( SERIAL::Serializer* serializer) const;
 
     SERIAL::Serializable* deserialize( SERIAL::Deserializer* deserializer);
 
-    void dump() const { dump( /*transaction*/ nullptr); }
+    void dump() const;
 
     // methods of DB::Element_base
 
@@ -202,39 +198,28 @@ public:
     void get_scene_element_references( DB::Tag_set* result) const;
 
 private:
+    /// Returns an instance of Mdl_dag_converter configured in a way suitable for converting body,
+    /// temporaries and arguments of this compiled material.
+    std::unique_ptr<Mdl_dag_converter> get_dag_converter( DB::Transaction* transaction) const;
+
     mi::base::Handle<IType_factory> m_tf;             ///< The type factory.
     mi::base::Handle<IValue_factory> m_vf;            ///< The value factory.
     mi::base::Handle<IExpression_factory> m_ef;       ///< The expression factory.
 
-    mi::base::Handle<IExpression_direct_call> m_body; ///< The material body.
-    mi::base::Handle<IExpression_list> m_temporaries; ///< The temporaries.
-    mi::base::Handle<IValue_list> m_arguments;        ///< The arguments.
+    /// The wrapped core material instance.
+    mi::base::Handle<const mi::mdl::IMaterial_instance> m_core_material_instance;
 
     std::vector<Resource_tag_tuple> m_resources;      ///< The resources.
 
-    mi::base::Uuid m_hash;                            ///< The hash value.
-                                                      ///  The hash values for the slots.
-    mi::base::Uuid m_slot_hashes[mi::mdl::IGenerated_code_dag::IMaterial_instance::MS_LAST+1];
+    mi::Float32 m_mdl_meters_per_scene_unit = 1.0f;   ///< The conversion ratio.
+    mi::Float32 m_mdl_wavelength_min = 0.0f;          ///< The smallest supported wavelength.
+    mi::Float32 m_mdl_wavelength_max = 0.0f;          ///< The largest supported wavelength.
 
-    mi::Float32 m_mdl_meters_per_scene_unit;          ///< The conversion ratio.
-    mi::Float32 m_mdl_wavelength_min;                 ///< The smallest supported wavelength.
-    mi::Float32 m_mdl_wavelength_max;                 ///< The largest supported wavelength.
+    /// Indicates whether resources are supposed to be loaded into the DB.
+    bool m_resolve_resources = false;
 
-    mi::mdl::IGenerated_code_dag::IMaterial_instance::Properties
-        m_properties;                                 ///< Instance properties.
-
-    std::vector<std::string> m_referenced_scene_data; ///< Referenced scene data attribute names.
-
-    std::string m_internal_space;                     ///< Internal space.
-
-    mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity
-        m_opacity;                                    ///< Material opacity.
-
-    mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity
-        m_surface_opacity;                            ///< Material surface opacity.
-
-    mi::Float32 m_cutout_opacity;                     ///< Material cutout opacity.
-    bool m_has_cutout_opacity;                        ///< True if the cutout opacity is known.
+    /// The set of all referenced tags (function calls and resources).
+    DB::Tag_set m_tags;
 
     /// Module identifiers of all remaining call expressions plus the module given in the
     /// constructor.

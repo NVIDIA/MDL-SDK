@@ -33,16 +33,16 @@
 ///
 /// \code
 ///     int i_val = 7789;
-///     Likely<string> s_val = lexicographic_cast_s<string>(i_val);
+///     std::optional<string> s_val = lexicographic_cast_s<string>(i_val);
 ///     MI_REQUIRE(s_val.get_status());
 ///     MI_REQUIRE_EQUAL(static_cast<string>(s_val), "7789");
 /// \endcode
 ///
-/// If something goes wrong, the \c Likely<> will reflect it with a bad status. E.g.
+/// If something goes wrong, the \c std::optional<> will reflect it with a bad status. E.g.
 ///
 /// \code
 ///    string wrong_value = "ali";
-///    Likely<unsigned int> i_val = lexicographic_cast_s<unsigned int>(wrong_value);
+///    std::optional<unsigned int> i_val = lexicographic_cast_s<unsigned int>(wrong_value);
 ///    MI_REQUIRE(!i_val.get_status());
 /// \endcode
 
@@ -51,17 +51,17 @@
 
 #include <cctype>
 #include <limits>
+#include <optional>
 #include <sstream>
-#include <base/system/stlext/i_stlext_likely.h>
 
 namespace MI {
 namespace STRING {
 
 /// A completely generic lexicographic case.
 ///
-/// Due to the lack of exceptions we are using a \c Likely<> wrapper here to allow for checking for
-/// failures. The suffix _s stands for 'safe'. This is an extension of the following version in
-/// that it allows for both the acceptance or rejection of partially read inputs, eg a
+/// Due to the lack of exceptions we are using a \c std::optional<> wrapper here to allow for
+/// checking for failures. The suffix _s stands for 'safe'. This is an extension of the following
+/// version in that it allows for both the acceptance or rejection of partially read inputs, eg a
 ///
 /// \code
 ///    string value = "100ali";
@@ -86,14 +86,14 @@ namespace STRING {
 /// \param value   the source input value
 /// \return        the cast-to-target-type representation of the input
 template<typename Target, typename Source, bool SupportPartialInput>
-STLEXT::Likely<Target> lexicographic_cast_s(
+std::optional<Target> lexicographic_cast_s(
     const Source& value)
 {
     Target result = Target(); // to avoid warning about uninitialized variable
     std::stringstream s;
     s << value;
     if (s.fail())
-        return STLEXT::Likely<Target>(result, false);
+        return std::optional<Target>();
     // Note that std::stringstream::operator>>() used below does not set the fail bit for unsigned
     // integral types if s.str() represents a small negative number (see strtoul() for details).
     // Hence, we check whether the first non-whitespace character is a '-'.
@@ -103,23 +103,25 @@ STLEXT::Likely<Target> lexicographic_cast_s(
         while (isspace(str[i]))
             ++i;
         if (str[i] == '-')
-            return STLEXT::Likely<Target>(result, false);
+            return std::optional<Target>();
     }
     s >> result;
     if (s.fail())
-        return STLEXT::Likely<Target>(result, false);
-    return STLEXT::Likely<Target>(result, SupportPartialInput? true : s.eof());
+        return std::optional<Target>();
+    if (!SupportPartialInput && !s.eof())
+        return std::optional<Target>();
+    return std::make_optional<Target>(result);
 }
 
 /// A completely generic lexicographic case.
 ///
-/// Due to the lack of exceptions we are using a \c Likely<> wrapper here to allow for checking for
-/// failures. The suffix _s stands for 'safe'.
+/// Due to the lack of exceptions we are using a \c std::optional<> wrapper here to allow for
+/// checking for failures. The suffix _s stands for 'safe'.
 ///
 /// \param value   the source input value
 /// \return        the cast-to-target-type representation of the input
 template<typename Target, typename Source>
-STLEXT::Likely<Target> lexicographic_cast_s(
+std::optional<Target> lexicographic_cast_s(
     const Source& value)
 {
     return lexicographic_cast_s<Target, Source, false>(value);

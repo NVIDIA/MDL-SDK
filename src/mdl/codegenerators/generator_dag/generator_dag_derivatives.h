@@ -226,7 +226,7 @@ private:
     /// The derivative infos.
     Derivative_infos &m_deriv_infos;
 
-    typedef ptr_hash_map<IType const, IType_struct *>::Type Deriv_type_map;
+    typedef ptr_hash_map<IType const, IType_struct const *>::Type Deriv_type_map;
 
     /// Map from MDL types to their derivative type versions.
     Deriv_type_map m_deriv_type_map;

@@ -36,10 +36,6 @@
 #include <mdl/compiler/compilercore/compilercore_fatal.h>
 #include <base/system/version/i_version.h>
 
-// Used in mi_mem functions below.
-static mi::mdl::IAllocator* g_allocator = 0;
-static bool g_allocator_was_reset = false;
-
 // This ensures that the version cookies (==@@==) in version.cpp are not optimized out.
 static char const* s_pver = MI::VERSION::get_platform_version();
 
@@ -56,46 +52,15 @@ public:
 } // anonymous
 
 extern "C" MI_DLL_EXPORT
-mi::mdl::IMDL *mi_mdl_factory(mi::mdl::IAllocator *alloc)
+mi::mdl::IMDL *mi_mdl_factory(bool mat_ior_is_varying, mi::mdl::IAllocator *alloc)
 {
     if (alloc == NULL) {
-        g_allocator = new Allocator_malloc;
-        mi::mdl::IMDL *res = mi::mdl::initialize(g_allocator);
-        g_allocator->release();
+        mi::mdl::IAllocator* allocator = new Allocator_malloc;
+        mi::mdl::IMDL *res = mi::mdl::initialize(mat_ior_is_varying, allocator);
+        allocator->release();
         return res;
     } else {
-        g_allocator = alloc;
-        return mi::mdl::initialize(alloc);
-    }
-}
-
-// Implement mental ray memory allocation functions, used internally by patched STLport.
-// Does not hurt if always defined.
-// However, these functions will be called before an allocator was set (global constructors),
-// and symmetry of malloc/free will not be the case. To avoid problems, memory release
-// is disabled completely when the allocator is reset.
-
-extern "C" 
-void* mi_mem_int_allocate_sizet(const char* fname, int line, size_t size)
-{
-    if (g_allocator) {
-        return g_allocator->malloc(size);
-    }
-    else {
-        return malloc(size);
-    }
-}
-
-extern "C" 
-void mi_mem_int_release(const char* fname, int line, void* ptr)
-{
-    if (g_allocator) {
-        g_allocator->free(ptr);
-    }
-    else {
-        if (!g_allocator_was_reset) {
-            free(ptr);
-        }
+        return mi::mdl::initialize(mat_ior_is_varying, alloc);
     }
 }
 

@@ -352,7 +352,7 @@ public:
         mi::Float32 start_theta,
         mi::Float32 delta_phi,
         mi::Float32 delta_theta,
-        const std::vector<mi::Float32>& data);
+        std::vector<mi::Float32> data);
 
     /// Copy constructor.
     Lightprofile_impl( const Lightprofile_impl&) = default;

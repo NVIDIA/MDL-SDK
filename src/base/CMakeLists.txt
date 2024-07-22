@@ -26,9 +26,20 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #*****************************************************************************
 
+# modules required by the MDL Core API and MDLC
+add_subdirectory(${MDL_SRC_FOLDER}/base/lib/libzip)
+add_subdirectory(${MDL_SRC_FOLDER}/base/lib/zlib)
+add_subdirectory(${MDL_SRC_FOLDER}/base/system/version)
+
+if(NOT MDL_BUILD_SDK)
+    return()
+endif()
+
+# modules for the MDL SDK
 add_subdirectory(${MDL_SRC_FOLDER}/base/data/attr)
 add_subdirectory(${MDL_SRC_FOLDER}/base/data/db)
 add_subdirectory(${MDL_SRC_FOLDER}/base/data/dblight)
+add_subdirectory(${MDL_SRC_FOLDER}/base/data/idata)
 add_subdirectory(${MDL_SRC_FOLDER}/base/data/serial)
 add_subdirectory(${MDL_SRC_FOLDER}/base/data/thread_pool)
 add_subdirectory(${MDL_SRC_FOLDER}/base/hal/disk)
@@ -39,24 +50,22 @@ add_subdirectory(${MDL_SRC_FOLDER}/base/hal/thread)
 add_subdirectory(${MDL_SRC_FOLDER}/base/hal/time)
 add_subdirectory(${MDL_SRC_FOLDER}/base/lib/config)
 add_subdirectory(${MDL_SRC_FOLDER}/base/lib/cont)
-add_subdirectory(${MDL_SRC_FOLDER}/base/lib/libzip)
 add_subdirectory(${MDL_SRC_FOLDER}/base/lib/log)
 add_subdirectory(${MDL_SRC_FOLDER}/base/lib/mem)
 add_subdirectory(${MDL_SRC_FOLDER}/base/lib/path)
 add_subdirectory(${MDL_SRC_FOLDER}/base/lib/plug)
 add_subdirectory(${MDL_SRC_FOLDER}/base/lib/tinyxml2)
-add_subdirectory(${MDL_SRC_FOLDER}/base/lib/zlib)
 add_subdirectory(${MDL_SRC_FOLDER}/base/util/registry)
 add_subdirectory(${MDL_SRC_FOLDER}/base/util/string_utils)
 add_subdirectory(${MDL_SRC_FOLDER}/base/system/main)
 add_subdirectory(${MDL_SRC_FOLDER}/base/system/stlext)
 add_subdirectory(${MDL_SRC_FOLDER}/base/system/test)
-add_subdirectory(${MDL_SRC_FOLDER}/base/system/version)
 
 set(LINKER_DEPENDENCIES_BASE
     mdl::base-data-attr
     mdl::base-data-db
     mdl::base-data-dblight
+    mdl::base-data-idata
     mdl::base-data-serial
     mdl::base-data-thread_pool
     mdl::base-hal-disk

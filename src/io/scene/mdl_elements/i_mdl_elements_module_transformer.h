@@ -36,10 +36,12 @@
 #include <vector>
 #include <stack>
 
+#include <boost/core/noncopyable.hpp>
+
 #include <mi/base/handle.h>
 #include <mi/mdl/mdl_mdl.h>
 #include <mi/neuraylib/imodule.h> // for Mdl_version
-#include <boost/core/noncopyable.hpp>
+
 #include <base/system/main/access_module.h>
 #include <mdl/compiler/compilercore/compilercore_visitor.h>
 
@@ -203,7 +205,7 @@ protected:
     mi::mdl::IName_factory *m_nf;
 
 private:
-    typedef std::stack<mi::mdl::ISymbol const *> Symbol_stack;
+    using Symbol_stack = std::stack<const mi::mdl::ISymbol*>;
 
     /// Temporarily used symbol stack.
     Symbol_stack m_sym_stack;

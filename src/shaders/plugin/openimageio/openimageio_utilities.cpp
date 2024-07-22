@@ -48,7 +48,7 @@ mi::base::Handle<mi::base::ILogger> g_logger;
 
 void log( mi::base::Message_severity severity, const char* message)
 {
-    if( !g_logger.is_valid_interface()) {
+    if( !g_logger) {
         // Missing the info message in init() is not problematic, but flag warnings, errors, and
         // fatals if there is no logger present (should happen only in unit tests).
         assert(    severity != mi::base::MESSAGE_SEVERITY_FATAL
@@ -219,7 +219,7 @@ void associate_alpha( mi::neuraylib::ITile* tile, mi::Float32 gamma)
     const mi::Uint32 tile_height  = tile->get_resolution_y();
     const mi::Size   nr_of_pixels = tile_width * static_cast<mi::Size>( tile_height);
 
-    constexpr float inv_bound = static_cast<float>( (1.0 / get_bound( T())));
+    constexpr auto inv_bound = static_cast<float>( (1.0 / get_bound( T())));
 
     T* const __restrict data = static_cast<T*>( tile->get_data());
     for( mi::Size i = 0; i < 4*nr_of_pixels; i += 4) {
@@ -238,7 +238,7 @@ void associate_alpha( mi::neuraylib::ITile* tile)
     const mi::Uint32 tile_height  = tile->get_resolution_y();
     const mi::Size   nr_of_pixels = tile_width * static_cast<mi::Size>( tile_height);
 
-    constexpr float inv_bound = static_cast<float>( (1.0 / get_bound( T())));
+    constexpr auto inv_bound = static_cast<float>( (1.0 / get_bound( T())));
 
     T* const __restrict data = static_cast<T*>( tile->get_data());
     for( mi::Size i = 0; i < 4*nr_of_pixels; i += 4) {
@@ -257,7 +257,7 @@ void unassociate_alpha( mi::neuraylib::ITile* tile, mi::Float32 gamma)
     const mi::Uint32 tile_height  = tile->get_resolution_y();
     const mi::Size   nr_of_pixels = tile_width * static_cast<mi::Size>( tile_height);
 
-    constexpr float bound = static_cast<float>( get_bound( T()));
+    constexpr auto bound = static_cast<float>( get_bound( T()));
 
     T* const __restrict data = static_cast<T*>( tile->get_data());
     for( mi::Size i = 0; i < 4*nr_of_pixels; i += 4) {
@@ -276,7 +276,7 @@ void unassociate_alpha<mi::Float32>( mi::neuraylib::ITile* tile, mi::Float32 gam
     const mi::Uint32 tile_height  = tile->get_resolution_y();
     const mi::Size   nr_of_pixels = tile_width * static_cast<mi::Size>( tile_height);
 
-    float* const __restrict data = static_cast<float*>( tile->get_data());
+    auto* const __restrict data = static_cast<float*>( tile->get_data());
     for( mi::Size i = 0; i < 4*nr_of_pixels; i += 4) {
         float a = mi::math::fast_pow( 1.0f / data[i+3], gamma);
         data[i+0] = static_cast<float>( data[i+0] * a);
@@ -293,7 +293,7 @@ void unassociate_alpha( mi::neuraylib::ITile* tile)
     const mi::Uint32 tile_height  = tile->get_resolution_y();
     const mi::Size   nr_of_pixels = tile_width * static_cast<mi::Size>( tile_height);
 
-    constexpr float bound = static_cast<float>( get_bound( T()));
+    constexpr auto bound = static_cast<float>( get_bound( T()));
 
     T* const __restrict data = static_cast<T*>( tile->get_data());
     for( mi::Size i = 0; i < 4*nr_of_pixels; i += 4) {
@@ -312,7 +312,7 @@ void unassociate_alpha<mi::Float32>( mi::neuraylib::ITile* tile)
     const mi::Uint32 tile_height  = tile->get_resolution_y();
     const mi::Size   nr_of_pixels = tile_width * static_cast<mi::Size>( tile_height);
 
-    float* const __restrict data = static_cast<float*>( tile->get_data());
+    auto* const __restrict data = static_cast<float*>( tile->get_data());
     for( mi::Size i = 0; i < 4*nr_of_pixels; i += 4) {
         float a = 1.0f / data[i+3];
         data[i+0] = static_cast<float>( data[i+0] * a);
@@ -377,8 +377,7 @@ const mi::neuraylib::ITile* associate_alpha(
     if( pixel_type_enum == IMAGE::PT_RGBEA)
         tile2 = image_api->convert( tile, pixel_type);
 
-    tile2->retain();
-    return tile2.get();
+    return tile2.extract();
 }
 
 mi::neuraylib::ITile* unassociate_alpha(
@@ -435,8 +434,7 @@ mi::neuraylib::ITile* unassociate_alpha(
     if( pixel_type_enum == IMAGE::PT_RGBEA)
         tile2 = image_api->convert( tile, pixel_type);
 
-    tile2->retain();
-    return tile2.get();
+    return tile2.extract();
 }
 
 // Wraps IReader as IOProxy.

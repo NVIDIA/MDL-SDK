@@ -224,6 +224,8 @@ public:
         return m_pointee;
     }
 
+    /// Checks if a given neuray object is valid.
+    /// If false, the object can not be used further and object should be treated as if it was None.
     bool is_valid_interface() const
     {
         return m_pointee;

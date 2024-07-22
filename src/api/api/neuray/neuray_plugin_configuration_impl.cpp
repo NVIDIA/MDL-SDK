@@ -39,12 +39,13 @@
 #include "neuray_plugin_api_impl.h"
 
 
+#include <filesystem>
 #include <vector>
 
-#include <base/hal/disk/disk.h>
-#include <base/hal/hal/hal.h>
 #include <base/lib/plug/i_plug.h>
 
+
+namespace fs = std::filesystem;
 
 namespace MI {
 
@@ -55,7 +56,7 @@ Plugin_configuration_impl::Plugin_configuration_impl( mi::neuraylib::INeuray* ne
 {
     m_plug_module.set();
 
-    MDL::Neuray_impl* neuray_impl = static_cast<MDL::Neuray_impl*>( neuray);
+    auto* neuray_impl = static_cast<MDL::Neuray_impl*>( neuray);
     mi::base::Handle<mi::neuraylib::IPlugin_api> plugin_api(
         neuray_impl->get_plugin_api());
     m_plug_module->set_plugin_api( plugin_api.get());
@@ -90,42 +91,44 @@ mi::Sint32 Plugin_configuration_impl::load_plugins_from_directory( const char* p
     if( status != mi::neuraylib::INeuray::PRE_STARTING)
         return -1;
 
-    DISK::Directory dir;
-    if( !dir.open( path))
-        return -1;
+    try {
 
-    std::vector<std::string> filenames;
-    std::string filename = dir.read();
-    while( !filename.empty()) {
-        filenames.push_back( filename);
-        filename = dir.read();
-    }
-    std::sort( filenames.begin(), filenames.end());
+        fs::path directory( fs::u8path( path));
+        if( !fs::is_directory( directory))
+            return -1;
 
-    mi::Sint32 result = 0;
+        std::vector<fs::path> filenames;
+        for( const auto& entry: fs::directory_iterator( directory))
+            if( fs::is_regular_file( entry.path()))
+                filenames.push_back( entry.path());
+        std::sort( filenames.begin(), filenames.end());
 
-    for( mi::Size i = 0; i < filenames.size(); ++i) {
-        std::string full_path = HAL::Ospath::join_v2( path, filenames[i]);
-        if( !DISK::is_file( full_path.c_str()))
-            continue;
-        std::string extension = HAL::Ospath::get_ext( full_path);
+        mi::Sint32 result = 0;
+
+        for( const auto& filename: filenames) {
+            std::string extension = filename.extension().u8string();
 #if defined(MI_PLATFORM_WINDOWS)
-        if( extension != ".dll")
-            continue;
+            if( extension != ".dll")
+                continue;
 #elif defined(MI_PLATFORM_LINUX)
-        if( extension != ".so")
-            continue;
+            if( extension != ".so")
+                continue;
 #elif defined(MI_PLATFORM_MACOSX)
-        if( extension != ".so" && extension != ".dylib")
-            continue;
+            if( extension != ".so" && extension != ".dylib")
+                continue;
 #else
 #error Unsupported platform
 #endif
-        if( load_plugin_library( full_path.c_str()) != 0)
-            result = -1;
-    }
 
-    return result;
+            if( load_plugin_library( filename.u8string().c_str()) != 0)
+                result = -1;
+        }
+
+        return result;
+
+    } catch( ...) {
+        return -1;
+    }
 }
 
 mi::Size Plugin_configuration_impl::get_plugin_length() const

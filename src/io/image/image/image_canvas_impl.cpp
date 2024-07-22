@@ -161,7 +161,7 @@ Canvas_impl::Canvas_impl(
         plugin->open_for_reading( reader.get(), plugin_selector));
     if( !image_file) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-            "The image plugin \"%s\" failed to import \"%s\".",
+            R"(The image plugin "%s" failed to import "%s".)",
             plugin->get_name(), filename.c_str());
         *errors = -7;
         set_default_pink_dummy_canvas();
@@ -216,9 +216,9 @@ void Canvas_impl::do_init(
         m_selector = selector;
 
     m_pixel_type    = convert_pixel_type_string_to_enum( image_file->get_type());
-    m_width         = std::max( image_file->get_resolution_x() >> miplevel, 1u);
-    m_height        = std::max( image_file->get_resolution_y() >> miplevel, 1u);
-    m_nr_of_layers  = image_file->get_layers_size();
+    m_width         = std::max( image_file->get_resolution_x( 0) >> miplevel, 1u);
+    m_height        = std::max( image_file->get_resolution_y( 0) >> miplevel, 1u);
+    m_nr_of_layers  = image_file->get_layers_size( 0);
     m_miplevel      = miplevel;
     m_is_cubemap    = image_file->get_is_cubemap();
     m_gamma         = image_file->get_gamma();
@@ -239,7 +239,7 @@ void Canvas_impl::do_init(
         const Pixel_type new_pixel_type = get_pixel_type_for_channel( m_pixel_type, selector);
         if( new_pixel_type == PT_UNDEF) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-                "Failed to apply selector \"%s\" to \"%s\" with pixel type \"%s\".",
+                R"(Failed to apply selector "%s" to "%s" with pixel type "%s".)",
                 selector, m_filename.c_str(), image_file->get_type());
             *errors = -10;
             set_default_pink_dummy_canvas();
@@ -309,7 +309,7 @@ Canvas_impl::Canvas_impl(
         = image_module->find_plugin_for_import( extension.c_str(), reader);
     if( !plugin) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-            "No image plugin found to handle \"%s\" in \"%s\".",
+            R"(No image plugin found to handle "%s" in "%s".)",
             member_filename.c_str(), container_filename.c_str());
         *errors = -3;
         set_default_pink_dummy_canvas();
@@ -322,7 +322,7 @@ Canvas_impl::Canvas_impl(
         plugin->open_for_reading( reader, plugin_selector));
     if( !image_file) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-            "The image plugin \"%s\" failed to import \"%s\" in \"%s\".",
+            R"(The image plugin "%s" failed to import "%s" in "%s".)",
             plugin->get_name(), member_filename.c_str(), container_filename.c_str());
         *errors = -7;
         set_default_pink_dummy_canvas();
@@ -386,9 +386,9 @@ void Canvas_impl::do_init(
         m_selector = selector;
 
     m_pixel_type    = convert_pixel_type_string_to_enum( image_file->get_type());
-    m_width         = std::max( image_file->get_resolution_x() >> miplevel, 1u);
-    m_height        = std::max( image_file->get_resolution_y() >> miplevel, 1u);
-    m_nr_of_layers  = image_file->get_layers_size();
+    m_width         = std::max( image_file->get_resolution_x( 0) >> miplevel, 1u);
+    m_height        = std::max( image_file->get_resolution_y( 0) >> miplevel, 1u);
+    m_nr_of_layers  = image_file->get_layers_size( 0);
     m_miplevel      = miplevel;
     m_is_cubemap    = image_file->get_is_cubemap();
     m_gamma         = image_file->get_gamma();
@@ -399,7 +399,7 @@ void Canvas_impl::do_init(
         || m_nr_of_layers == 0
         || m_gamma <= 0) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-            "The image plugin failed to import \"%s\" in \"%s\".",
+            R"(The image plugin failed to import "%s" in "%s".)",
             member_filename.c_str(), container_filename.c_str());
         *errors = -7;
         set_default_pink_dummy_canvas();
@@ -410,7 +410,7 @@ void Canvas_impl::do_init(
         const Pixel_type new_pixel_type = get_pixel_type_for_channel( m_pixel_type, selector);
         if( new_pixel_type == PT_UNDEF) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-                "Failed to apply selector \"%s\" to \"%s\" in \"%s\" with pixel type \"%s\".",
+                R"(Failed to apply selector "%s" to "%s" in "%s" with pixel type "%s".)",
                 selector, member_filename.c_str(), container_filename.c_str(),
                 image_file->get_type());
             *errors = -10;
@@ -454,7 +454,7 @@ void Canvas_impl::do_init(
         m_tiles[z] = image_file->read( z, m_miplevel);
         if( !m_tiles[z]) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-                    "The image plugin failed to import \"%s\" in \"%s\".",
+                    R"(The image plugin failed to import "%s" in "%s".)",
                     member_filename.c_str(), container_filename.c_str());
             *errors = -5;
             set_default_pink_dummy_canvas();
@@ -580,9 +580,9 @@ void Canvas_impl::do_init(
         : std::string( "a memory-based image with image format \"") + image_format + '\"';
 
     m_pixel_type    = convert_pixel_type_string_to_enum( image_file->get_type());
-    m_width         = std::max( image_file->get_resolution_x() >> miplevel, 1u);
-    m_height        = std::max( image_file->get_resolution_y() >> miplevel, 1u);
-    m_nr_of_layers  = image_file->get_layers_size();
+    m_width         = std::max( image_file->get_resolution_x( 0) >> miplevel, 1u);
+    m_height        = std::max( image_file->get_resolution_y( 0) >> miplevel, 1u);
+    m_nr_of_layers  = image_file->get_layers_size( 0);
     m_miplevel      = miplevel;
     m_is_cubemap    = image_file->get_is_cubemap();
     m_gamma         = image_file->get_gamma();
@@ -603,7 +603,7 @@ void Canvas_impl::do_init(
         const Pixel_type new_pixel_type = get_pixel_type_for_channel( m_pixel_type, selector);
         if( new_pixel_type == PT_UNDEF) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-                "Failed to apply selector \"%s\" to \"%s\" with pixel type \"%s\".",
+                R"(Failed to apply selector "%s" to "%s" with pixel type "%s".)",
                 selector, log_identifier.c_str(), image_file->get_type());
             *errors = -10;
             set_default_pink_dummy_canvas();
@@ -821,7 +821,7 @@ mi::neuraylib::ITile* Canvas_impl::do_load_tile( mi::Uint32 z) const
         plugin->open_for_reading( reader.get(), plugin_selector));
     if( !image_file) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-            "The image plugin \"%s\" failed to import \"%s\".",
+            R"(The image plugin "%s" failed to import "%s".)",
             plugin->get_name(), log_identifier.c_str());
         return nullptr;
     }
@@ -829,7 +829,7 @@ mi::neuraylib::ITile* Canvas_impl::do_load_tile( mi::Uint32 z) const
     mi::base::Handle<mi::neuraylib::ITile> tile( image_file->read( z, m_miplevel));
     if( !tile) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-            "The image plugin \"%s\" failed to import \"%s\".",
+            R"(The image plugin "%s" failed to import "%s".)",
             plugin->get_name(), log_identifier.c_str());
         return nullptr;
     }
@@ -840,7 +840,7 @@ mi::neuraylib::ITile* Canvas_impl::do_load_tile( mi::Uint32 z) const
         tile = image_module->extract_channel( tile.get(), m_selector.c_str());
         if( !tile) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-                "Failed to apply selector \"%s\" to \"%s\" with pixel type \"%s\".",
+                R"(Failed to apply selector "%s" to "%s" with pixel type "%s".)",
                 m_selector.c_str(), log_identifier.c_str(), pixel_type_str.c_str());
             return nullptr;
         }
@@ -880,8 +880,7 @@ mi::neuraylib::ITile* Canvas_impl::do_load_tile( mi::Uint32 z) const
         return nullptr;
     }
 
-    tile->retain();
-    return tile.get();
+    return tile.extract();
 }
 
 mi::neuraylib::IReader* Canvas_impl::get_reader( std::string& log_identifier) const
@@ -902,8 +901,7 @@ mi::neuraylib::IReader* Canvas_impl::get_reader( std::string& log_identifier) co
             return nullptr;
         }
 
-        reader->retain();
-        return reader.get();
+        return reader.extract();
 
     }
 
@@ -923,8 +921,7 @@ mi::neuraylib::IReader* Canvas_impl::get_reader( std::string& log_identifier) co
             return nullptr;
         }
 
-        reader->retain();
-        return reader.get();
+        return reader.extract();
     }
 
     ASSERT( M_IMAGE, false);

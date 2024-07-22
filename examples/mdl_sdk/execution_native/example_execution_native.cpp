@@ -136,6 +136,7 @@ void create_material_instance(
 
 // Compiles the given material instance in the given compilation modes and stores it in the DB.
 void compile_material_instance(
+    mi::neuraylib::IMdl_factory *mdl_factory,
     mi::neuraylib::ITransaction* transaction,
     mi::neuraylib::IMdl_execution_context* context,
     const char* instance_name,
@@ -147,6 +148,14 @@ void compile_material_instance(
     mi::Uint32 flags = class_compilation
         ? mi::neuraylib::IMaterial_instance::CLASS_COMPILATION
         : mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS;
+
+    // convert to target type SID_MATERIAL
+    mi::base::Handle<mi::neuraylib::IType_factory> tf(
+        mdl_factory->create_type_factory(transaction));
+    mi::base::Handle<const mi::neuraylib::IType> standard_material_type(
+        tf->get_predefined_struct(mi::neuraylib::IType_struct::SID_MATERIAL));
+    context->set_option("target_type", standard_material_type.get());
+
     mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
         material_instance->create_compiled_material(flags, context));
     check_success(print_messages(context));
@@ -522,7 +531,8 @@ int MAIN_UTF8(int argc, char *argv[])
             std::string compilation_name
                 = std::string("compilation of ") + instance_name;
             compile_material_instance(
-                transaction.get(),
+                mdl_factory.get(),
+                 transaction.get(),
                 context.get(),
                 instance_name.c_str(),
                 compilation_name.c_str(),

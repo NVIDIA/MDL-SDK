@@ -44,10 +44,12 @@
 #include <mi/mdl/mdl_mdl.h>
 #include <mi/neuraylib/ilogging_configuration.h>
 
+#include <base/lib/config/config.h>
 #include <base/lib/log/i_log_assert.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/path/i_path.h>
 #include <base/hal/hal/i_hal_ospath.h>
+#include <base/util/registry/i_config_registry.h>
 #include <base/util/string_utils/i_string_utils.h>
 #include <mdl/integration/mdlnr/i_mdlnr.h>
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
@@ -56,23 +58,44 @@ namespace MI {
 
 namespace NEURAY {
 
+namespace {
+
+// Get an environment variable as UTF8 string
+std::string getenv_utf8(const char *env_var, const wchar_t *w_env_var)
+{
+#ifdef MI_PLATFORM_WINDOWS
+    const wchar_t *s = _wgetenv( w_env_var);
+    if( s == nullptr)
+        return std::string();
+    return STRING::wchar_to_utf8( s);
+#else
+    const char *s = getenv( env_var);
+    if( s == nullptr)
+        return std::string();
+    return std::string( s);
+#endif
+}
+
+}
+
 Mdl_configuration_impl::Mdl_configuration_impl( mi::neuraylib::INeuray* neuray)
   : m_neuray( neuray),
+    m_config_module( /*deferred=*/false),
     m_path_module( /*deferred=*/false),
     m_mdlc_module( /*deferred=*/true)
 {
     const std::string& separator = HAL::Ospath::get_path_set_separator();
 
     // set MDL system path
-    const char* env_mdl_system_path = getenv( "MDL_SYSTEM_PATH");
-    if( env_mdl_system_path)
+    std::string env_mdl_system_path = getenv_utf8( "MDL_SYSTEM_PATH", L"MDL_SYSTEM_PATH");
+    if( !env_mdl_system_path.empty())
         STRING::split( env_mdl_system_path, separator, m_mdl_system_paths);
     else
         m_mdl_system_paths.push_back( get_default_mdl_system_path());
 
     // set MDL user path
-    const char* env_mdl_user_path = getenv( "MDL_USER_PATH");
-    if( env_mdl_user_path)
+    std::string env_mdl_user_path = getenv_utf8( "MDL_USER_PATH", L"MDL_USER_PATH");
+    if( !env_mdl_user_path.empty())
         STRING::split( env_mdl_user_path, separator, m_mdl_user_paths);
     else
         m_mdl_user_paths.push_back( get_default_mdl_user_path());
@@ -80,6 +103,7 @@ Mdl_configuration_impl::Mdl_configuration_impl( mi::neuraylib::INeuray* neuray)
 
 Mdl_configuration_impl::~Mdl_configuration_impl()
 {
+    m_config_module.reset();
     m_path_module.reset();
     m_mdlc_module.reset();
 }
@@ -202,8 +226,44 @@ bool Mdl_configuration_impl::get_simple_glossy_bsdf_legacy_enabled() const
     return m_simple_glossy_bsdf_legacy_enabled;
 }
 
+mi::Sint32 Mdl_configuration_impl::set_material_ior_frequency(
+    mi::neuraylib::IType::Modifier frequency_qualifier)
+{
+    mi::neuraylib::INeuray::Status status = m_neuray->get_status();
+    if(    (status != mi::neuraylib::INeuray::PRE_STARTING)
+        && (status != mi::neuraylib::INeuray::SHUTDOWN))
+        return -1;
+
+    switch( frequency_qualifier) {
+        case mi::neuraylib::IType::MK_UNIFORM:
+            m_config_module->override( "mdl_material_ior_is_varying=0");
+            return 0;
+        case mi::neuraylib::IType::MK_VARYING:
+            m_config_module->override( "mdl_material_ior_is_varying=1");
+            return 0;
+        case mi::neuraylib::IType::MK_NONE:
+        case mi::neuraylib::IType::MK_FORCE_32_BIT:
+            break;
+    }
+
+    return -2;
+}
+
+mi::neuraylib::IType::Modifier Mdl_configuration_impl::get_material_ior_frequency() const
+{
+    const CONFIG::Config_registry& registry = m_config_module->get_configuration();
+    bool varying = true;
+    registry.get_value( "mdl_material_ior_is_varying", varying);
+    return varying ? mi::neuraylib::IType::MK_VARYING : mi::neuraylib::IType::MK_UNIFORM;
+}
+
 mi::neuraylib::IMdl_entity_resolver* Mdl_configuration_impl::get_entity_resolver() const
 {
+    mi::neuraylib::INeuray::Status status = m_neuray->get_status();
+    if(    (status == mi::neuraylib::INeuray::PRE_STARTING)
+        || (status == mi::neuraylib::INeuray::SHUTDOWN))
+        return nullptr;
+
     mi::base::Handle<mi::mdl::IMDL> mdl( m_mdlc_module->get_mdl());
 
     mi::base::Handle<mi::mdl::IEntity_resolver> mdl_resolver(

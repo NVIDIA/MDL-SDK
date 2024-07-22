@@ -92,8 +92,8 @@ namespace mdlm
         /// \param  argc    The argument count.
         /// \param  argv    The argument values.
         /// \return
-        ///		-  0: Success
-        ///		-  -?: See INeuray->start()
+        ///             -  0: Success
+        ///             -  -?: See INeuray->start()
         mi::Sint32 initialize(int argc, char *argv[]);
 
         /// Shutdown neuray

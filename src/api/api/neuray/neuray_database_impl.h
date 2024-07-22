@@ -61,9 +61,6 @@ public:
     /// \param status           The status of the interface this API component belongs to.
     Database_impl( mi::neuraylib::INeuray::Status& status);
 
-    /// Destructor of Database_impl
-    ~Database_impl();
-
     // public API methods
 
     mi::neuraylib::IScope* get_global_scope() const;
@@ -88,7 +85,7 @@ public:
     // internal methods
 
     /// Starts this API component.
-    /// 
+    ///
     /// The implementation of INeuray::start() calls the #start() method of each API component.
     /// This method performs the API component's specific part of the library start.
     ///
@@ -107,7 +104,7 @@ public:
 private:
     /// The status of the interface this API component belongs to (INeuray/ICluster).
     mi::neuraylib::INeuray::Status& m_status;
-    
+
     /// The database to be used by this API component.
     DB::Database* m_database;
 };

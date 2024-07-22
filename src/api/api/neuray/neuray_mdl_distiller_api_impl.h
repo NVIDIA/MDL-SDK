@@ -82,11 +82,11 @@ public:
         mi::neuraylib::Baker_resource resource,
         Uint32 gpu_device_id) const final;
 
-    mi::Size get_required_module_count(const char *target) const;
+    mi::Size get_required_module_count( const char* target) const;
 
-    const char* get_required_module_name(const char *target, mi::Size index) const;
+    const char* get_required_module_name( const char* target, mi::Size index) const;
 
-    const char* get_required_module_code(const char *target, mi::Size index) const;
+    const char* get_required_module_code( const char* target, mi::Size index) const;
 
     // internal methods
 
@@ -133,6 +133,11 @@ public:
     bool is_uniform() const;
 
     mi::Sint32 bake_texture( mi::neuraylib::ICanvas* texture, mi::Uint32 samples) const;
+
+    mi::Sint32 bake_texture( 
+        mi::neuraylib::ICanvas* texture, 
+        mi::Float32 min_u, mi::Float32 max_u, mi::Float32 min_v, mi::Float32 max_v,
+        mi::Uint32 samples) const;
 
     mi::Sint32 bake_constant( mi::IData* constant, mi::Uint32 samples) const;
 

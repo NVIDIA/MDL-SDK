@@ -48,7 +48,8 @@ export int fd_texture_gamma_srgb(
     uniform texture_2d t = texture_2d("./resources/test.png", tex::gamma_srgb) [[ unused() ]]
 ) { return 0; }
 
-// Test texture constructor with gamma mode linear (differs from fd_texture_success() in gamma mode).
+// Test texture constructor with gamma mode linear (differs from fd_texture_success() in gamma
+// mode).
 export int fd_texture_gamma_linear(
     uniform texture_2d t = texture_2d("./resources/test.png", tex::gamma_linear) [[ unused() ]]
 ) { return 0; }
@@ -61,5 +62,6 @@ export int fd_light_profile_success(
 
 // Test absolute resource lookup.
 export int fd_bsdf_measurement_success(
-    uniform bsdf_measurement b = bsdf_measurement("/mdl_elements/resources/test.mbsdf") [[ unused() ]]
+    uniform bsdf_measurement b
+        = bsdf_measurement("/mdl_elements/resources/test.mbsdf") [[ unused() ]]
 ) { return 0; }

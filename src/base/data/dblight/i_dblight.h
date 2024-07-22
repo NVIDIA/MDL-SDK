@@ -38,6 +38,9 @@ namespace DBLIGHT {
 // External interface.
 
 /// Creates an instance of the database.
+///
+/// The instances are independent, except for the statistics which are shared by all instances
+/// (but statistics are disabled by default, see DBLIGHT_ENABLE_STATISTICS).
 DB::Database* factory();
 
 } // namespace DBLIGHT

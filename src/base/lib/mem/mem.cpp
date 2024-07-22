@@ -197,8 +197,8 @@ extern "C" __declspec(dllexport) void neuray_free_block(void *memory)
 
 // Overwritten global new operator
 void* operator new(
-    size_t size)			// requested size
-    throw(std::bad_alloc)		// we don't throw bad_alloc
+    size_t size)                        // requested size
+    throw(std::bad_alloc)               // we don't throw bad_alloc
 {
     return MI::MEM::dbg_alloc()->malloc(size);
 }
@@ -207,8 +207,8 @@ void* operator new(
 
 // Overwritten global delete operator
 void operator delete(
-    void* memory)		 	// memory to be released
-    throw()				// avoid a warning on IRIX
+    void* memory)                       // memory to be released
+    throw()                             // avoid a warning on IRIX
 {
     return MI::MEM::dbg_alloc()->free(memory);
 }
@@ -217,8 +217,8 @@ void operator delete(
 
 // Forward 'operator new []' to 'operator new'.
 void * operator new [] (
-    size_t	n)			// number of _bytes_ to allocate
-    throw(std::bad_alloc)		// we don't throw bad_alloc
+    size_t      n)                      // number of _bytes_ to allocate
+    throw(std::bad_alloc)               // we don't throw bad_alloc
 {
     return operator new(n);
 }
@@ -227,8 +227,8 @@ void * operator new [] (
 
 // Forward 'operator delete []' to 'operator delete'.
 void operator delete [] (
-    void *	ptr)			// pointer to to-be-freed memory
-    throw()				// never throw
+    void *      ptr)                    // pointer to to-be-freed memory
+    throw()                             // never throw
 {
     operator delete(ptr);
 }
@@ -237,9 +237,9 @@ void operator delete [] (
 
 // Forward non-throwing 'operator new' to standard 'operator new'.
 void * operator new(
-    size_t	n,			// number of _bytes_ to allocate
-    const std::nothrow_t &)		// dummy argument required by standard
-    throw()				// never throw
+    size_t      n,                      // number of _bytes_ to allocate
+    const std::nothrow_t &)             // dummy argument required by standard
+    throw()                             // never throw
 {
     return operator new(n);
 }
@@ -248,9 +248,9 @@ void * operator new(
 
 // Forward non-throwing 'operator new []' to standard 'operator new'.
 void * operator new [] (
-    size_t	n,			// number of _bytes_ to allocate
-    const std::nothrow_t &)		// dummy argument required by standard
-    throw()				// never throw
+    size_t      n,                      // number of _bytes_ to allocate
+    const std::nothrow_t &)             // dummy argument required by standard
+    throw()                             // never throw
 {
     return operator new(n);
 }
@@ -259,9 +259,9 @@ void * operator new [] (
 
 // Forward non-throwing 'operator delete' to standard 'operator delete'.
 void operator delete(
-    void *	ptr, 			// pointer to to-be-freed memory
-    const std::nothrow_t &)		// dummy argument required by standard
-    throw()				// never throw
+    void *      ptr,                    // pointer to to-be-freed memory
+    const std::nothrow_t &)             // dummy argument required by standard
+    throw()                             // never throw
 {
     operator delete(ptr);
 }
@@ -270,9 +270,9 @@ void operator delete(
 
 // Forward non-throwing 'operator delete []' to standard 'operator delete'.
 void operator delete [] (
-    void *	ptr,			// pointer to to-be-freed memory
-    const std::nothrow_t &)		// dummy argument required by standard
-    throw()				// never throw
+    void *      ptr,                    // pointer to to-be-freed memory
+    const std::nothrow_t &)             // dummy argument required by standard
+    throw()                             // never throw
 {
     operator delete(ptr);
 }

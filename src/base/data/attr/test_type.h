@@ -73,11 +73,11 @@ public:
         // default constructor
         {
         const Type type;
-        MI_CHECK_EQUAL(type.get_name(), 0);
+        MI_CHECK_EQUAL(type.get_name(), nullptr);
         MI_CHECK_EQUAL(type.get_typecode(), ATTR::TYPE_UNDEF);
         MI_CHECK_EQUAL(type.get_arraysize(), 1);
-        MI_CHECK_EQUAL(type.get_next(), 0);
-        MI_CHECK_EQUAL(type.get_child(), 0);
+        MI_CHECK_EQUAL(type.get_next(), nullptr);
+        MI_CHECK_EQUAL(type.get_child(), nullptr);
         MI_CHECK_EQUAL(type.get_const(), false);
         }
     }
@@ -88,11 +88,11 @@ public:
         {
         const Type orig;
         const Type type(orig);
-        MI_CHECK_EQUAL(type.get_name(), 0);
+        MI_CHECK_EQUAL(type.get_name(), nullptr);
         MI_CHECK_EQUAL(type.get_typecode(), ATTR::TYPE_UNDEF);
         MI_CHECK_EQUAL(type.get_arraysize(), 1);
-        MI_CHECK_EQUAL(type.get_next(), 0);
-        MI_CHECK_EQUAL(type.get_child(), 0);
+        MI_CHECK_EQUAL(type.get_next(), nullptr);
+        MI_CHECK_EQUAL(type.get_child(), nullptr);
         MI_CHECK_EQUAL(type.get_const(), false);
         }
         // copy constructor of initialized object
@@ -102,8 +102,8 @@ public:
         MI_CHECK(strcmp(type.get_name(), "ali") == 0);
         MI_CHECK_EQUAL(type.get_typecode(), ATTR::TYPE_INT32);
         MI_CHECK_EQUAL(type.get_arraysize(), 0);
-        MI_CHECK_EQUAL(type.get_next(), 0);
-        MI_CHECK_EQUAL(type.get_child(), 0);
+        MI_CHECK_EQUAL(type.get_next(), nullptr);
+        MI_CHECK_EQUAL(type.get_child(), nullptr);
         MI_CHECK_EQUAL(type.get_const(), false);
         }
     }
@@ -227,12 +227,12 @@ public:
         {
         Type type;
         Uint offs;
-        MI_CHECK_EQUAL(type.lookup("dummy", &offs), 0);
+        MI_CHECK_EQUAL(type.lookup("dummy", &offs), nullptr);
         // same for array
         Type array(TYPE_ARRAY, "array", 0);
         array.set_child(type);
         array.set_arraysize(4);
-        MI_CHECK_EQUAL(array.lookup("dummy", &offs), 0);
+        MI_CHECK_EQUAL(array.lookup("dummy", &offs), nullptr);
         }
         // standard behaviour
         {
@@ -265,25 +265,25 @@ public:
         // struct Atype {struct {Rgbea rgbea[2]; Color color; char byte;} s[100]; };
 #define ATTRNAME "attr"
         Type type0(TYPE_STRUCT, ATTRNAME, 100);    // struct {
-        Type type1(TYPE_RGBEA,  "rgbea", 2);		//   Rgbea[2];
-        Type type2(TYPE_COLOR,  "color");		//   Scalar[4];
-        Type type3(TYPE_INT8,   "byte");		//   char;
+        Type type1(TYPE_RGBEA,  "rgbea", 2);            //   Rgbea[2];
+        Type type2(TYPE_COLOR,  "color");               //   Scalar[4];
+        Type type3(TYPE_INT8,   "byte");                //   char;
         type1.set_const();
         type2.set_next(type3);
         type1.set_next(type2);
-        type0.set_child(type1);			    // } [100]
+        type0.set_child(type1);                     // } [100]
         Uint offs;
-        MI_REQUIRE_EQUAL(type0, *type0.lookup(ATTRNAME,			&offs));
+        MI_REQUIRE_EQUAL(type0, *type0.lookup(ATTRNAME,                 &offs));
         MI_REQUIRE_EQUAL(offs, 0);
-        MI_REQUIRE_EQUAL(type1, *type0.lookup(ATTRNAME ".rgbea",	&offs));
+        MI_REQUIRE_EQUAL(type1, *type0.lookup(ATTRNAME ".rgbea",        &offs));
         MI_REQUIRE_EQUAL(offs, 0);
-        MI_REQUIRE_EQUAL(type1, *type0.lookup(ATTRNAME ".rgbea[0]",	&offs));
+        MI_REQUIRE_EQUAL(type1, *type0.lookup(ATTRNAME ".rgbea[0]",     &offs));
         MI_REQUIRE_EQUAL(offs, 0);
-        MI_REQUIRE_EQUAL(type1, *type0.lookup(ATTRNAME ".rgbea[1]",	&offs));
+        MI_REQUIRE_EQUAL(type1, *type0.lookup(ATTRNAME ".rgbea[1]",     &offs));
         MI_REQUIRE_EQUAL(offs, 5);
-        MI_REQUIRE_EQUAL(type2, *type0.lookup(ATTRNAME ".color",	&offs));
+        MI_REQUIRE_EQUAL(type2, *type0.lookup(ATTRNAME ".color",        &offs));
         MI_REQUIRE_EQUAL(offs, 12);
-        MI_REQUIRE_EQUAL(type3, *type0.lookup(ATTRNAME ".byte",	&offs));
+        MI_REQUIRE_EQUAL(type3, *type0.lookup(ATTRNAME ".byte", &offs));
         MI_REQUIRE_EQUAL(offs, 28);
         MI_REQUIRE(!type0.lookup(ATTRNAME ".rgbea[2]", &offs));
         MI_REQUIRE(!type0.lookup(ATTRNAME ".foo",      &offs));

@@ -122,7 +122,7 @@ private:
     /// Lock for #m_plugins.
     mi::base::Lock m_plugins_lock;
 
-    typedef std::vector<mi::base::Handle<mi::base::IPlugin_descriptor> > Plugin_vector;
+    using Plugin_vector = std::vector<mi::base::Handle<mi::base::IPlugin_descriptor>>;
 
     /// The registered API plugins. Needs #m_plugins_lock.
     Plugin_vector m_plugins;

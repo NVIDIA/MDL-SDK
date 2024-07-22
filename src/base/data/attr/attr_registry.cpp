@@ -56,7 +56,7 @@ Attribute_spec::Attribute_spec(
     const string& name,
     Type_code typecode,
     Uint array_size,
-    const STLEXT::Any& value,
+    const std::any& value,
     bool inheritable,
     DB::Journal_type journal_flags)
   : m_id(id),
@@ -96,41 +96,12 @@ Uint Attribute_registry::add_entry(
     const string& name,
     Type_code typecode,
     Uint array_size,
-    const STLEXT::Any& value,
+    const std::any& value,
     bool inheritable,
     DB::Journal_type journal_flags)
 {
     Uint id = get_new_id(name);
     return add_entry(id, name, typecode, array_size, value, inheritable, journal_flags);
-}
-
-
-//--------------------------------------------------------------------------------------------------
-
-// Add an deprecated name for the given id. Currently only one deprecated name is allowed.
-bool Attribute_registry::add_deprecated_name(
-    const std::string& dep_name,
-    Uint id)
-{
-    // update spec
-    set<Attribute_spec>::iterator it = m_registry.find( DUMMY_ID_SPEC(id) );
-    if (it == m_registry.end()) {
-        mod_log->warning(M_ATTR, Mod_log::C_DATABASE, 3,
-            "Failed to find the registered Attribute for the given id %d", id);
-        return false;
-    }
-    // if this fails we do need support for multiple deprecated names!
-    ASSERT(M_ATTR, it->m_deprecated_name.empty());
-
-    // since set<>s don't allow edit-in-place
-    Attribute_spec spec = *it;
-    m_registry.erase(it);
-    spec.m_deprecated_name = dep_name;
-    m_registry.insert(spec);
-
-    // update name map such that deprecated name maps to the very same id
-    add_name_mapping(dep_name, id);
-    return true;
 }
 
 
@@ -187,7 +158,7 @@ Uint Attribute_registry::add_entry(
     const std::string& name,
     Type_code typecode,
     Uint array_size,
-    const STLEXT::Any& value,
+    const std::any& value,
     bool inheritable,
     DB::Journal_type journal_flags)
 {

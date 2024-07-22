@@ -35,16 +35,19 @@
 #include <base/lib/log/i_log_assert.h>
 #include <base/lib/log/i_log_logger.h>
 #include <mi/base/handle.h>
+#include <mi/mdl/mdl_mdl.h>
 #include <mi/mdl/mdl_distiller_plugin.h>
 #include <mi/mdl/mdl_distiller_plugin_api.h>
+
+#include <mdl/integration/mdlnr/i_mdlnr.h>
 
 namespace MI {
 namespace DIST {
 
-const mi::mdl::IGenerated_code_dag::IMaterial_instance* Dist_module_impl::distill(
+const mi::mdl::IMaterial_instance* Dist_module_impl::distill(
     mi::mdl::ICall_name_resolver& call_resolver,
     mi::mdl::IRule_matcher_event* event_handler,
-    const mi::mdl::IGenerated_code_dag::IMaterial_instance* material_instance,
+    const mi::mdl::IMaterial_instance* material_instance,
     const char* target,
     mi::mdl::Distiller_options* options,
     mi::Sint32* p_error) const
@@ -56,7 +59,7 @@ const mi::mdl::IGenerated_code_dag::IMaterial_instance* Dist_module_impl::distil
     mi::Sint32 &error = p_error != NULL ? *p_error : dummy;
     error = 0;
     ASSERT(M_DIST, material_instance);
-    const mi::mdl::IGenerated_code_dag::IMaterial_instance* res = 0;
+    const mi::mdl::IMaterial_instance* res = 0;
     // The "none" target is the only builtin target. It always exists.
     if( strcmp( "none", target) == 0) {
         res = material_instance;
@@ -69,10 +72,11 @@ const mi::mdl::IGenerated_code_dag::IMaterial_instance* Dist_module_impl::distil
             mi::Size target_index = it->second.second;
             mi::mdl::Mdl_distiller_plugin* distiller_plugin = m_plugins[plugin_index];
 
-            mi::mdl::IDistiller_plugin_api* api = 
-                mi::mdl::IDistiller_plugin_api::get_new_distiller_plugin_api(
-                    material_instance, &call_resolver);
-            res = distiller_plugin->distill( 
+            SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
+            mi::base::Handle<mi::mdl::IMDL> mdl(mdlc_module->get_mdl());
+            mi::mdl::IDistiller_plugin_api* api =
+                mdl->create_distiller_plugin_api(material_instance, &call_resolver);
+            res = distiller_plugin->distill(
                 *api, event_handler, material_instance, target_index, options, &error);
             api->release();
             if ( ! res)

@@ -104,6 +104,9 @@ private:
     /// Print a type in MDL syntax.
     void print_mdl_type(IType const *type, bool full = false) const;
 
+    /// Print all struct categories of the code dag.
+    void print_struct_categories(IGenerated_code_dag const *code_dag) const;
+
     /// Print all types of the code dag.
     void print_types(IGenerated_code_dag const *code_dag) const;
 
@@ -149,9 +152,9 @@ private:
     /// \param node             The IR node to print.
     ///
     void print_exp(
-        int                                           depth,
-        IGenerated_code_dag::IMaterial_instance const *instance,
-        DAG_node const                                *node) const;
+        int                      depth,
+        IMaterial_instance const *instance,
+        DAG_node const           *node) const;
 
     void indent(int depth) const    { return m_printer->indent(depth); }
 

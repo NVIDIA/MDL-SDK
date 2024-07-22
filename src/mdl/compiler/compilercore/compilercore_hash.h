@@ -88,6 +88,17 @@ public:
         update(buf, 8);
     }
 
+#ifndef _MSC_VER
+    /// Update the MD5 sum by an size_t.
+    void update(size_t v) {
+        if (sizeof(size_t) == sizeof(mi::Uint32)) {
+            update(mi::Uint32(v));
+        } else {
+            update(mi::Uint64(v));
+        }
+    }
+#endif
+
     /// Update the MD5 sum by a signed 32bit.
     void update(mi::Sint32 v) {
         update(mi::Uint32(v));

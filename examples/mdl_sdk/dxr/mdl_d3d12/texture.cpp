@@ -528,6 +528,20 @@ Environment::~Environment()
 
 // ------------------------------------------------------------------------------------------------
 
+ID3D12Resource* Environment::get_resource_texture() const 
+{
+    return m_texture->get_resource();
+}
+
+// ------------------------------------------------------------------------------------------------
+
+ID3D12Resource* Environment::get_resource_sampling_buffer() const
+{
+    return m_sampling_buffer->get_resource();
+}
+
+// ------------------------------------------------------------------------------------------------
+
 void Environment::transition_to(D3DCommandList* command_list, D3D12_RESOURCE_STATES state)
 {
     if(!m_texture)

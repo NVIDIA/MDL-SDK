@@ -72,82 +72,82 @@ using namespace std;
 /// since the lookup in \c Mod_attr::get_type_code(name) is case-insensitive.
 const Type::Typeinfo Type::m_typeinfo[] = {
         //  name               comp    base (Type_code)      size
-        { "<illegal>",	  	0,	TYPE_UNDEF,	   0			},
-        { "boolean",	  	1,	TYPE_BOOLEAN,	   sizeof(bool)		},
-        { "int8",	  	1,	TYPE_INT8,	   sizeof(Sint8)	},
-        { "int16",	  	1,	TYPE_INT16,	   sizeof(Sint16)	},
-        { "int32",	  	1,	TYPE_INT32,	   sizeof(Sint32)	},
-        { "int64",	  	1,	TYPE_INT64,	   sizeof(Sint64)	},
-        { "scalar",	  	1,	TYPE_SCALAR,	   sizeof(Scalar)	},
-        { "vector2",	  	2,	TYPE_SCALAR,	   sizeof(Scalar)	},
-        { "vector3",	  	3,	TYPE_SCALAR,	   sizeof(Scalar)	},
-        { "vector4",	  	4,	TYPE_SCALAR,	   sizeof(Scalar)	},
-        { "dscalar",	  	1,	TYPE_DSCALAR,	   sizeof(Dscalar)	},
-        { "dvector2",	  	2,	TYPE_DSCALAR,	   sizeof(Dscalar)	},
-        { "dvector3",	  	3,	TYPE_DSCALAR,	   sizeof(Dscalar)	},
-        { "dvector4",	  	4,	TYPE_DSCALAR,	   sizeof(Dscalar)	},
-        { "matrix",	  	16,	TYPE_SCALAR,	   sizeof(Scalar)	},
-        { "dmatrix",	  	16,	TYPE_DSCALAR,	   sizeof(Dscalar)	},
+        { "<illegal>",          0,      TYPE_UNDEF,        0                    },
+        { "boolean",            1,      TYPE_BOOLEAN,      sizeof(bool)         },
+        { "int8",               1,      TYPE_INT8,         sizeof(Sint8)        },
+        { "int16",              1,      TYPE_INT16,        sizeof(Sint16)       },
+        { "int32",              1,      TYPE_INT32,        sizeof(Sint32)       },
+        { "int64",              1,      TYPE_INT64,        sizeof(Sint64)       },
+        { "scalar",             1,      TYPE_SCALAR,       sizeof(Scalar)       },
+        { "vector2",            2,      TYPE_SCALAR,       sizeof(Scalar)       },
+        { "vector3",            3,      TYPE_SCALAR,       sizeof(Scalar)       },
+        { "vector4",            4,      TYPE_SCALAR,       sizeof(Scalar)       },
+        { "dscalar",            1,      TYPE_DSCALAR,      sizeof(Dscalar)      },
+        { "dvector2",           2,      TYPE_DSCALAR,      sizeof(Dscalar)      },
+        { "dvector3",           3,      TYPE_DSCALAR,      sizeof(Dscalar)      },
+        { "dvector4",           4,      TYPE_DSCALAR,      sizeof(Dscalar)      },
+        { "matrix",             16,     TYPE_SCALAR,       sizeof(Scalar)       },
+        { "dmatrix",            16,     TYPE_DSCALAR,      sizeof(Dscalar)      },
         // TYPE_GMATRIX = TYPE_DMATRIX
-        { "quaternion",	  	4,	TYPE_SCALAR,	   sizeof(Scalar)	},
-        { "string",	  	1,	TYPE_STRING,	   sizeof(char *)	},
-        { "tag",	  	1,	TYPE_TAG,	   sizeof(DB::Tag)	},
-        { "color",	  	4,	TYPE_SCALAR,	   sizeof(Scalar)	},
-        { "rgb",	  	3,	TYPE_INT8,	   sizeof(Uint8)	},
-        { "rgba",	  	4,	TYPE_INT8,	   sizeof(Uint8)	},
-        { "rgbe",	  	4,	TYPE_INT8,	   sizeof(Uint8)	},
-        { "rgbea",	  	5,	TYPE_INT8,	   sizeof(Uint8)	},
-        { "rgb_16",	  	3,	TYPE_INT16,	   sizeof(Uint16)	},
-        { "rgba_16",	  	4,	TYPE_INT16,	   sizeof(Uint16)	},
-        { "rgb_fp",	  	3,	TYPE_SCALAR,	   sizeof(Scalar)	},
+        { "quaternion",         4,      TYPE_SCALAR,       sizeof(Scalar)       },
+        { "string",             1,      TYPE_STRING,       sizeof(char *)       },
+        { "tag",                1,      TYPE_TAG,          sizeof(DB::Tag)      },
+        { "color",              4,      TYPE_SCALAR,       sizeof(Scalar)       },
+        { "rgb",                3,      TYPE_INT8,         sizeof(Uint8)        },
+        { "rgba",               4,      TYPE_INT8,         sizeof(Uint8)        },
+        { "rgbe",               4,      TYPE_INT8,         sizeof(Uint8)        },
+        { "rgbea",              5,      TYPE_INT8,         sizeof(Uint8)        },
+        { "rgb_16",             3,      TYPE_INT16,        sizeof(Uint16)       },
+        { "rgba_16",            4,      TYPE_INT16,        sizeof(Uint16)       },
+        { "rgb_fp",             3,      TYPE_SCALAR,       sizeof(Scalar)       },
         // TYPE_RGBA_FP = TYPE_COLOR
-        { "struct",	  	0,	TYPE_UNDEF,	   0			},
-        { "array",	  	0,	TYPE_UNDEF,	   0			},
-        { "rle_uint_ptr", 	1,	TYPE_RLE_UINT_PTR, sizeof(RLE_PTR)	},
-        { "vector2i",	  	2,	TYPE_INT32,	   sizeof(Sint32)	},
-        { "vector3i",	  	3,	TYPE_INT32,	   sizeof(Sint32)	},
-        { "vector4i",	  	4,	TYPE_INT32,	   sizeof(Sint32)	},
-        { "vector2b",	  	2,	TYPE_BOOLEAN,	   sizeof(bool)		},
-        { "vector3b",	  	3,	TYPE_BOOLEAN,	   sizeof(bool)		},
-        { "vector4b",	  	4,	TYPE_BOOLEAN,	   sizeof(bool)		},
-        { "matrix2x2",	  	4,	TYPE_SCALAR,	   sizeof(Scalar)	},
-        { "matrix2x3",	  	6,	TYPE_SCALAR,	   sizeof(Scalar)	},
-        { "matrix3x2",	  	6,	TYPE_SCALAR,	   sizeof(Scalar)	},
-        { "matrix3x3",	  	9,	TYPE_SCALAR,	   sizeof(Scalar)	},
-        { "matrix4x3",	  	12,	TYPE_SCALAR,	   sizeof(Scalar)	},
-        { "matrix3x4",	  	12,	TYPE_SCALAR,	   sizeof(Scalar)	},
-        { "matrix4x2",	  	8, 	TYPE_SCALAR,	   sizeof(Scalar)	},
-        { "matrix2x4",	  	8, 	TYPE_SCALAR,	   sizeof(Scalar)	},
+        { "struct",             0,      TYPE_UNDEF,        0                    },
+        { "array",              0,      TYPE_UNDEF,        0                    },
+        { "rle_uint_ptr",       1,      TYPE_RLE_UINT_PTR, sizeof(RLE_PTR)      },
+        { "vector2i",           2,      TYPE_INT32,        sizeof(Sint32)       },
+        { "vector3i",           3,      TYPE_INT32,        sizeof(Sint32)       },
+        { "vector4i",           4,      TYPE_INT32,        sizeof(Sint32)       },
+        { "vector2b",           2,      TYPE_BOOLEAN,      sizeof(bool)         },
+        { "vector3b",           3,      TYPE_BOOLEAN,      sizeof(bool)         },
+        { "vector4b",           4,      TYPE_BOOLEAN,      sizeof(bool)         },
+        { "matrix2x2",          4,      TYPE_SCALAR,       sizeof(Scalar)       },
+        { "matrix2x3",          6,      TYPE_SCALAR,       sizeof(Scalar)       },
+        { "matrix3x2",          6,      TYPE_SCALAR,       sizeof(Scalar)       },
+        { "matrix3x3",          9,      TYPE_SCALAR,       sizeof(Scalar)       },
+        { "matrix4x3",          12,     TYPE_SCALAR,       sizeof(Scalar)       },
+        { "matrix3x4",          12,     TYPE_SCALAR,       sizeof(Scalar)       },
+        { "matrix4x2",          8,      TYPE_SCALAR,       sizeof(Scalar)       },
+        { "matrix2x4",          8,      TYPE_SCALAR,       sizeof(Scalar)       },
         // MetaSL-specific attribute types
-        { "texture1d",	  	1,	TYPE_TAG,	   sizeof(DB::Tag)	},
-        { "texture2d",	  	1,	TYPE_TAG,	   sizeof(DB::Tag)	},
-        { "texture3d",	  	1,	TYPE_TAG,	   sizeof(DB::Tag)	},
-        { "texture_cube", 	1,	TYPE_TAG,	   sizeof(DB::Tag)	},
-        { "brdf", 	  	1,	TYPE_TAG,	   sizeof(DB::Tag)	},
-        { "light",        	1,	TYPE_TAG,          sizeof(DB::Tag)	},
-        { "light_profile",	1,	TYPE_TAG,	   sizeof(DB::Tag)	},
-        { "shader",       	1,	TYPE_TAG,	   sizeof(DB::Tag)	},
-        { "particle_map", 	1,	TYPE_TAG,          sizeof(DB::Tag)	},
-        { "spectrum",	  	3,	TYPE_SCALAR,	   sizeof(Scalar)	},
+        { "texture1d",          1,      TYPE_TAG,          sizeof(DB::Tag)      },
+        { "texture2d",          1,      TYPE_TAG,          sizeof(DB::Tag)      },
+        { "texture3d",          1,      TYPE_TAG,          sizeof(DB::Tag)      },
+        { "texture_cube",       1,      TYPE_TAG,          sizeof(DB::Tag)      },
+        { "brdf",               1,      TYPE_TAG,          sizeof(DB::Tag)      },
+        { "light",              1,      TYPE_TAG,          sizeof(DB::Tag)      },
+        { "light_profile",      1,      TYPE_TAG,          sizeof(DB::Tag)      },
+        { "shader",             1,      TYPE_TAG,          sizeof(DB::Tag)      },
+        { "particle_map",       1,      TYPE_TAG,          sizeof(DB::Tag)      },
+        { "spectrum",           3,      TYPE_SCALAR,       sizeof(Scalar)       },
         // MDL-specific attribute types
-        { "id",           	1,	TYPE_INT32,	   sizeof(Uint32)	},
-        { "parameter",    	1,	TYPE_INT32,	   sizeof(Uint32)	},
-        { "temporary",    	1,	TYPE_INT32,	   sizeof(Uint32)	},
-        { "attachable",	  	0,	TYPE_ATTACHABLE,   0			},
+        { "id",                 1,      TYPE_INT32,        sizeof(Uint32)       },
+        { "parameter",          1,      TYPE_INT32,        sizeof(Uint32)       },
+        { "temporary",          1,      TYPE_INT32,        sizeof(Uint32)       },
+        { "attachable",         0,      TYPE_ATTACHABLE,   0                    },
         // it is actually one TYPE_TAG and one TYPE_STRING!!!
-        { "call",         	2,	TYPE_STRING,	   sizeof(char *)	},
-        { "texture",	  	1,	TYPE_TAG,	   sizeof(DB::Tag)	},
-        { "bsdf_measurement",	1,	TYPE_TAG,	   sizeof(DB::Tag)	},
-        { "enum",	        1,	TYPE_INT32,        sizeof(Sint32)       },
+        { "call",               2,      TYPE_STRING,       sizeof(char *)       },
+        { "texture",            1,      TYPE_TAG,          sizeof(DB::Tag)      },
+        { "bsdf_measurement",   1,      TYPE_TAG,          sizeof(DB::Tag)      },
+        { "enum",               1,      TYPE_INT32,        sizeof(Sint32)       },
         // general attribute types
-        { "dmatrix2x2",	  	4,	TYPE_DSCALAR,	   sizeof(Dscalar)	},
-        { "dmatrix2x3",	  	6,	TYPE_DSCALAR,	   sizeof(Dscalar)	},
-        { "dmatrix3x2",	  	6,	TYPE_DSCALAR,	   sizeof(Dscalar)	},
-        { "dmatrix3x3",	  	9,	TYPE_DSCALAR,	   sizeof(Dscalar)	},
-        { "dmatrix4x3",	  	12,	TYPE_DSCALAR,	   sizeof(Dscalar)	},
-        { "dmatrix3x4",	  	12,	TYPE_DSCALAR,	   sizeof(Dscalar)	},
-        { "dmatrix4x2",	  	8, 	TYPE_DSCALAR,	   sizeof(Dscalar)	},
-        { "dmatrix2x4",	  	8, 	TYPE_DSCALAR,	   sizeof(Dscalar)	},
+        { "dmatrix2x2",         4,      TYPE_DSCALAR,      sizeof(Dscalar)      },
+        { "dmatrix2x3",         6,      TYPE_DSCALAR,      sizeof(Dscalar)      },
+        { "dmatrix3x2",         6,      TYPE_DSCALAR,      sizeof(Dscalar)      },
+        { "dmatrix3x3",         9,      TYPE_DSCALAR,      sizeof(Dscalar)      },
+        { "dmatrix4x3",         12,     TYPE_DSCALAR,      sizeof(Dscalar)      },
+        { "dmatrix3x4",         12,     TYPE_DSCALAR,      sizeof(Dscalar)      },
+        { "dmatrix4x2",         8,      TYPE_DSCALAR,      sizeof(Dscalar)      },
+        { "dmatrix2x4",         8,      TYPE_DSCALAR,      sizeof(Dscalar)      },
 
 };
 
@@ -156,9 +156,9 @@ const Type::Typeinfo Type::m_typeinfo[] = {
 //
 
 Type::Type(
-    Type_code		type,		// primitive type: bool, int, ...
-    const char		*name,		// name of new type, 0 means none
-    Uint		arraysize)	// number of elements, 0=dynamic
+    Type_code           type,           // primitive type: bool, int, ...
+    const char          *name,          // name of new type, 0 means none
+    Uint                arraysize)      // number of elements, 0=dynamic
 {
     mi_static_assert(TYPE_NUM == (sizeof(m_typeinfo) / sizeof(Typeinfo)));
     mi_static_assert(sizeof(Type::m_typeinfo) == TYPE_NUM * sizeof(Type::Typeinfo));
@@ -167,19 +167,19 @@ Type::Type(
     type = to_valid_range(type);
     if (name)
         m_name = name;
-    m_typecode	= type;
-    m_const	= false;
-    m_spare	= false;
-    m_arraysize	= m_typecode != TYPE_ARRAY? arraysize : 0;
+    m_typecode  = type;
+    m_const     = false;
+    m_spare     = false;
+    m_arraysize = m_typecode != TYPE_ARRAY? arraysize : 0;
     // enable this check to find out where arrays are created the old way w/o using TYPE_ARRAY
     //ASSERT(M_ATTR, arraysize <= 1 || m_typecode == TYPE_ARRAY);
-    m_next	= 0;
-    m_child	= 0;
+    m_next      = 0;
+    m_child     = 0;
 }
 
 
 Type::Type(
-    const Type		&other)		// primitive type: bool, int, ...
+    const Type          &other)         // primitive type: bool, int, ...
   : m_typecode(TYPE_UNDEF), m_next(0), m_child(0)
 {
     do_the_deep_copy(other);
@@ -187,8 +187,8 @@ Type::Type(
 
 
 Type::Type(
-    const Type		&other,		// primitive type: bool, int, ...
-    Uint		array_size)	// the array size
+    const Type          &other,         // primitive type: bool, int, ...
+    Uint                array_size)     // the array size
   : m_typecode(TYPE_UNDEF), m_next(0), m_child(0)
 {
     do_the_deep_copy(other);
@@ -267,22 +267,22 @@ void Type::set_child(
 // For example, if the type tree is {a,b[3]{c,d}}, b is the same as b[0].c.
 // Dynamic arrays are not handled here because the value is a pointer.
 const Type *Type::lookup(
-    const char	*name,					// name to look up
-    Uint	*ret_offs,				// return offset in value struct
-    Uint	offs) const				// add this to returned offset
+    const char  *name,                                  // name to look up
+    Uint        *ret_offs,                              // return offset in value struct
+    Uint        offs) const                             // add this to returned offset
 {
     ASSERT(M_ATTR, name);
 
-    Uint	align;					// for ensuring alignment
-    Uint	member = null_index;			// if array, array member; else 0
-    const char	*end   = 0;				// end of word in name, at one of [.\0
-    const char	*dot   = 0;				// if there is a '.', dot points to it
+    Uint        align;                                  // for ensuring alignment
+    Uint        member = null_index;                    // if array, array member; else 0
+    const char  *end   = 0;                             // end of word in name, at one of [.\0
+    const char  *dot   = 0;                             // if there is a '.', dot points to it
 
     // cast from size_t to Uint is safe here
     align = Uint(align_all()) - 1;
     offs = (offs + align) & ~align;
-    dot = strchr(name, '.');				// split into name[member].sub
-                                                        //	     end--^  dot--^
+    dot = strchr(name, '.');                            // split into name[member].sub
+                                                        //           end--^  dot--^
     // contains name a bracket, ie an index? Then set member accordingly.
     if (const char* bracket = strchr(name, '[')) {
         // is bracket *before* any dot? Ie, is first part of the name an indexed array access?
@@ -315,10 +315,10 @@ const Type *Type::lookup(
                 return get_child()->lookup(name, ret_offs, offs);
             }
         }
-        if (member != null_index) {		// name has "[member]"
-            if (!m_arraysize)			// dynamic array: can't offset
+        if (member != null_index) {             // name has "[member]"
+            if (!m_arraysize)                   // dynamic array: can't offset
                 return 0;
-            if (member >= get_arraysize())	// static array & out of bounds
+            if (member >= get_arraysize())      // static array & out of bounds
                 return 0;
                                                 // static array: step to member
             // cast from size_t to Uint is safe here
@@ -326,13 +326,13 @@ const Type *Type::lookup(
         }
 
 
-        if (dot) {				// look up .substruct
-            if (!get_child())			// have no substruct: fail.
+        if (dot) {                              // look up .substruct
+            if (!get_child())                   // have no substruct: fail.
                 return 0;
-            else				// else recurse into substruct
+            else                                // else recurse into substruct
                 return get_child()->lookup(dot+1, ret_offs, offs);
-        } else {				// full match: return this type
-            if (ret_offs)			// (even if we have substructs)
+        } else {                                // full match: return this type
+            if (ret_offs)                       // (even if we have substructs)
                 *ret_offs = offs;
             return this;
         }
@@ -353,7 +353,7 @@ const Type *Type::lookup(
         offs = (offs + align) & ~align;
         return get_next()->lookup(name, ret_offs, offs);
     }
-    return 0;					// end of type chain: fail.
+    return 0;                                   // end of type chain: fail.
 }
 
 // Given a complete name, return the Type of the subtree, and an offset into a value structure
@@ -480,22 +480,22 @@ const Type* Type::lookup(
 //
 
 const SERIAL::Serializable *Type::serialize(
-    SERIAL::Serializer	*serializer) const // useful functions for byte streams
+    SERIAL::Serializer  *serializer) const // useful functions for byte streams
 {
     return do_serialize(serializer);
 }
 
 
 const SERIAL::Serializable *Type::do_serialize(
-    SERIAL::Serializer	*serializer) const	// useful functions for byte streams
+    SERIAL::Serializer  *serializer) const      // useful functions for byte streams
 {
-    mi_static_assert(TYPE_NUM < 256);			// type and flags
+    mi_static_assert(TYPE_NUM < 256);                   // type and flags
     SERIAL::write(serializer,m_name);
     serializer->write(m_typecode);
     serializer->write(m_const);
     serializer->write(m_spare);
     serializer->write(m_arraysize);
-    serializer->write(!!m_next);	    // write a flag indicating whether there is a m_next
+    serializer->write(!!m_next);            // write a flag indicating whether there is a m_next
     if (m_next)
         m_next->do_serialize(serializer);
     if (m_typecode != TYPE_ENUM) {
@@ -528,7 +528,7 @@ const SERIAL::Serializable *Type::do_serialize(
 //
 
 SERIAL::Serializable *Type::deserialize(
-    SERIAL::Deserializer *deser)	// useful functions for byte streams
+    SERIAL::Deserializer *deser)        // useful functions for byte streams
 {
     SERIAL::read(deser,&m_name);
     deser->read(&m_typecode);
@@ -583,7 +583,7 @@ SERIAL::Serializable *Type::deserialize(
 //
 
 Type &Type::operator=(
-    const Type		&other)		// deep-copy this type
+    const Type          &other)         // deep-copy this type
 {
     // check against self-assignment
     if (this == &other)
@@ -676,18 +676,18 @@ SERIAL::Serializable *Type::factory()
 // As soon as there was a change to std::shared_ptr the clean-up code can go away,
 // since assignment will properly free all allocated resources.
 void Type::do_the_deep_copy(
-    const Type	&other)			// deep-copy this type
+    const Type  &other)                 // deep-copy this type
 {
     Type *old_next  = m_next;
     Type *old_child = m_typecode != TYPE_ENUM? m_child : 0;
 
     // deep copy
-    m_name	= other.m_name;
-    m_typecode	= other.m_typecode;
-    m_const	= other.m_const;
-    m_spare	= other.m_spare;
-    m_arraysize	= other.m_arraysize;
-    m_next	= other.m_next  ? new Type(*other.m_next)  : 0;
+    m_name      = other.m_name;
+    m_typecode  = other.m_typecode;
+    m_const     = other.m_const;
+    m_spare     = other.m_spare;
+    m_arraysize = other.m_arraysize;
+    m_next      = other.m_next  ? new Type(*other.m_next)  : 0;
     if (other.m_typecode != TYPE_ENUM)
         m_child = other.m_child ? new Type(*other.m_child) : 0;
     else
@@ -791,7 +791,7 @@ using namespace MI::LOG;
 //
 
 void rec_print_type(
-    CONT::Array<const Type *>	*types)
+    CONT::Array<const Type *>   *types)
 {
     const Type *current = (*types)[types->size()-1];
 
@@ -816,4 +816,4 @@ void rec_print_type(
     types->remove(types->size()-1);
 }
 
-}	// namespace
+}       // namespace

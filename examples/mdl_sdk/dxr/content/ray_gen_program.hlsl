@@ -25,36 +25,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
+
 #include "content/common.hlsl"
-
-// ------------------------------------------------------------------------------------------------
-// defined in the global root signature
-// ------------------------------------------------------------------------------------------------
-
-cbuffer CameraParams : register(b0)
-{
-  float4x4 view;
-  float4x4 projection;
-  float4x4 viewI;
-  float4x4 projectionI;
-}
-
-// Ray tracing output texture, accessed as a UAV
-RWTexture2D<float4> OutputBuffer : register(u0,space0); // 32bit floating point precision
-RWTexture2D<float4> FrameBuffer  : register(u1,space0); // 8bit
-
-// for some post processing effects or for AI denoising, auxiliary outputs are required.
-// from the MDL material perspective albedo (approximation) and normals can be generated.
-#if defined(ENABLE_AUXILIARY)
-    // in order to limit the payload size, this data is written directly from the hit programs
-    RWTexture2D<float4> AlbedoDiffuseBuffer : register(u2, space0);
-    RWTexture2D<float4> AlbedoGlossyBuffer : register(u3, space0);
-    RWTexture2D<float4> NormalBuffer : register(u4, space0);
-    RWTexture2D<float4> RoughnessBuffer : register(u5, space0);
-#endif
-
-// Ray tracing acceleration structure, accessed as a SRV
-RaytracingAccelerationStructure SceneBVH : register(t0);
 
 // ------------------------------------------------------------------------------------------------
 // loop over path segments
@@ -71,10 +43,10 @@ float3 trace_path(inout RayDesc ray, inout uint seed)
     payload.flags = FLAG_FIRST_PATH_SEGMENT | FLAG_CAMERA_RAY;
 
     [loop]
-    for (uint i = 0; i < max_ray_depth; ++i)
+    for (uint i = 0; i < scene_constants.max_ray_depth; ++i)
     {
         // last path segment skips next event estimation
-        if (i == max_ray_depth - 1)
+        if (i == scene_constants.max_ray_depth - 1)
             add_flag(payload.flags, FLAG_LAST_PATH_SEGMENT);
 
         TraceRay(
@@ -101,18 +73,18 @@ float3 trace_path(inout RayDesc ray, inout uint seed)
     seed = payload.seed;
 
     // replace the background with a constant color when visible to the camera
-    if (background_color_enabled != 0 && has_flag(payload.flags, FLAG_CAMERA_RAY))
+    if (scene_constants.background_color_enabled != 0 && has_flag(payload.flags, FLAG_CAMERA_RAY))
     {
-        return background_color;
+        return scene_constants.background_color;
     }
 
     // clamp fireflies
     float3 contribution = payload.contribution;
-    if (firefly_clamp_threshold > 0.0)
+    if (scene_constants.firefly_clamp_threshold > 0.0)
     {
         float lum = dot(contribution, float3(0.212671f, 0.715160f, 0.072169f));
-        if (lum > firefly_clamp_threshold)
-            contribution *= firefly_clamp_threshold / lum;
+        if (lum > scene_constants.firefly_clamp_threshold)
+            contribution *= scene_constants.firefly_clamp_threshold / lum;
     }
 
     // check for errors and return
@@ -126,16 +98,37 @@ float3 trace_path(inout RayDesc ray, inout uint seed)
 [shader("raygeneration")]
 void RayGenProgram()
 {
+    #if (FEATURE_DYNAMIC_RESOURCES == 1)
+        // With Shader Model 6.6 we can access the heap directly
+        RWTexture2D<float4> OutputBuffer = ResourceDescriptorHeap[0]; // 32bit floating point precision
+        RWTexture2D<float4> FrameBuffer = ResourceDescriptorHeap[1]; // 8bit
+        #if defined(ENABLE_AUXILIARY)
+            RWTexture2D<float4> AlbedoDiffuseBuffer = ResourceDescriptorHeap[2];
+            RWTexture2D<float4> AlbedoGlossyBuffer = ResourceDescriptorHeap[3];
+            RWTexture2D<float4> NormalBuffer = ResourceDescriptorHeap[4];
+            RWTexture2D<float4> RoughnessBuffer = ResourceDescriptorHeap[5];
+        #endif
+    #else // FEATURE_DYNAMIC_RESOURCES
+        // Before SM 6.6 we use global descriptor table instead, the arrays are defined in common.hlsl
+        RWTexture2D<float4> OutputBuffer = Global_UAVs_Texture2D_float4[0]; // 32bit floating point precision
+        RWTexture2D<float4> FrameBuffer = Global_UAVs_Texture2D_float4[1]; // 8bit
+        #if defined(ENABLE_AUXILIARY)
+            RWTexture2D<float4> AlbedoDiffuseBuffer = Global_UAVs_Texture2D_float4[2];
+            RWTexture2D<float4> AlbedoGlossyBuffer = Global_UAVs_Texture2D_float4[3];
+            RWTexture2D<float4> NormalBuffer = Global_UAVs_Texture2D_float4[4];
+            RWTexture2D<float4> RoughnessBuffer = Global_UAVs_Texture2D_float4[5];
+        #endif
+    #endif // FEATURE_DYNAMIC_RESOURCES
+
     // Get the location within the dispatched 2D grid of work items
     // (often maps to pixels, so this could represent a pixel coordinate).
     uint3 launch_index = DispatchRaysIndex();
     uint3 launch_dim = DispatchRaysDimensions();
-    float3 camera_position = mul(viewI, float4(0, 0, 0, 1)).xyz;
 
     // Generate a ray from a perspective camera
     RayDesc ray;
     ray.TMin = 0.0f;
-    ray.TMax = far_plane_distance;
+    ray.TMax = scene_constants.far_plane_distance;
 
     #if defined(ENABLE_AUXILIARY)
         // in order to limit the payload size, this data is written directly from the hit programs
@@ -145,7 +138,7 @@ void RayGenProgram()
         float4 tmp_albedo_glossy = float4(0, 0, 0, 1);
         float4 tmp_normal = float4(0, 0, 0, 1);
         float4 tmp_roughness = float4(0, 0, 0, 1);
-        if (progressive_iteration == 0)
+        if (scene_constants.progressive_iteration == 0)
         { 
             // could be replaced by clear calls from CPU
             AlbedoDiffuseBuffer[launch_index.xy] = tmp_albedo_diffuse;
@@ -162,26 +155,25 @@ void RayGenProgram()
         }
     #endif
 
-    // when vsync is active, it is possible to compute multiple iterations per frame
-    [loop]
-    for (uint it_frame = 0; it_frame < iterations_per_frame; ++it_frame)
+    // compute one progressive iteration
     {
         // limit the progression count to 32 if we are in animation mode
-        uint it = it_frame + (enable_animiation ? min(progressive_iteration, 32) : progressive_iteration);
+        uint it = scene_constants.enable_animiation 
+            ? min(scene_constants.progressive_iteration, 32)
+            : scene_constants.progressive_iteration;
 
         // random number seed
         uint seed = tea(
             16, /*magic (see OptiX path tracing example)*/
             launch_dim.x * launch_index.y + launch_index.x,
-            it + (enable_animiation ? asint(total_time) : 0));
+            it + (scene_constants.enable_animiation ? asint(scene_constants.total_time) : 0));
 
         // pick (uniform) random position in pixel
         float2 in_pixel_pos = rnd2(seed);
         float2 d = (((launch_index.xy + in_pixel_pos) / float2(launch_dim.xy)) * 2.0f - 1.0f);
-        float4 target = mul(projectionI, float4(d.x, -d.y, 1, 1));
-
-        ray.Origin = camera_position;
-        ray.Direction = normalize(mul(viewI, float4(target.xyz, 0)).xyz);
+        float4 target = mul(camera.projectionI, float4(d.x, -d.y, 1, 1));
+        ray.Origin = mul(camera.viewI, float4(0, 0, 0, 1)).xyz;
+        ray.Direction = normalize(mul(camera.viewI, float4(target.xyz, 0)).xyz);
 
         // start tracing one path
         float3 result = trace_path(ray, seed);
@@ -204,12 +196,12 @@ void RayGenProgram()
     float3 color = OutputBuffer[launch_index.xy].xyz;
 
     // apply exposure
-    color *= pow(2.0f, exposure_compensation);
+    color *= pow(2.0f, scene_constants.exposure_compensation);
 
     // Tone-mapping
-    color.x *= (1.0f + color.x * burn_out) / (1.0f + color.x);
-    color.y *= (1.0f + color.y * burn_out) / (1.0f + color.y);
-    color.z *= (1.0f + color.z * burn_out) / (1.0f + color.z);
+    color.x *= (1.0f + color.x * scene_constants.burn_out) / (1.0f + color.x);
+    color.y *= (1.0f + color.y * scene_constants.burn_out) / (1.0f + color.y);
+    color.z *= (1.0f + color.z * scene_constants.burn_out) / (1.0f + color.z);
 
     #if defined(ENABLE_AUXILIARY)
 
@@ -221,7 +213,7 @@ void RayGenProgram()
         tmp_normal.xyz = normalize(tmp_normal.xyz);
     }
 
-    switch (display_buffer_index)
+    switch (scene_constants.display_buffer_index)
     {
         case 1: /* albedo */
         {
@@ -251,6 +243,8 @@ void RayGenProgram()
             break;
         }
 
+        case 0: /* beauty */
+        case 6: /* aov */
         default:
             break;
     }
@@ -258,7 +252,8 @@ void RayGenProgram()
     #endif
 
     // apply gamma corrections for display
-    FrameBuffer[launch_index.xy] = float4(pow(color, output_gamma_correction), 1.0f);
+    FrameBuffer[launch_index.xy] =
+        float4(pow(color, scene_constants.output_gamma_correction), 1.0f);
 
     // write auxiliary buffer
     #if defined(ENABLE_AUXILIARY)

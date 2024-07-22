@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ * Copyright 2024 NVIDIA Corporation. All rights reserved.
  *****************************************************************************/
 
 // Rules that directly map individual expressions to other mdl expressions
@@ -64,9 +64,25 @@ rules Make_simple_for_ue4 bottomup {
     //total review of mix handling necessary todo.
     bsdf_clamped_mix_2(w1,df1,w2,df2) --> bsdf_mix_2(w1,df1,w2,df2);
     bsdf_clamped_mix_3(w1,df1,w2,df2,w3,df3) --> bsdf_mix_2(w1,df1,w2+w3,bsdf_mix_2(w2/(w2+w3),df2,w3/(w2+w3),df3));
+    bsdf_clamped_mix_4(w1,df1,w2,df2,w3,df3,w4,df4) -->
+        bsdf_mix_2(w1,df1,
+                   w2+w3+w4,bsdf_mix_2(w2/(w2+w3+w4),df2,
+                                       (w3+w4)/(w2+w3+w4), bsdf_mix_2(w3/(w3+w4),df3,
+                                                                      w4/(w3+w4),df4)));
     bsdf_unbounded_mix_2(w1,df1,w2,df2) --> bsdf_mix_2(w1,df1,w2,df2);
     bsdf_unbounded_mix_3(w1,df1,w2,df2,w3,df3) --> bsdf_mix_2(w1,df1,w2+w3,bsdf_mix_2(w2/(w2+w3),df2,w3/(w2+w3),df3));
+    bsdf_unbounded_mix_4(w1,df1,w2,df2,w3,df3,w4,df4) -->
+        bsdf_mix_2(w1,df1,
+                   w2+w3+w4,bsdf_mix_2(w2/(w2+w3+w4),df2,
+                                       (w3+w4)/(w2+w3+w4), bsdf_mix_2(w3/(w3+w4),df3,
+                                                                      w4/(w3+w4),df4)));
     bsdf_mix_3(w1,df1,w2,df2,w3,df3)--> bsdf_mix_2(w1,df1,w2+w3,bsdf_mix_2(w2/(w2+w3),df2,w3/(w2+w3),df3));
+    bsdf_mix_4(w1,df1,w2,df2,w3,df3,w4,df4) -->
+        bsdf_mix_2(w1,df1,
+                   w2+w3+w4,bsdf_mix_2(w2/(w2+w3+w4),df2,
+                                       (w3 + w4)/(w2+w3+w4), bsdf_mix_2(w3/(w3+w4),df3,
+                                                                        w4/(w3+w4),df4)));
+
 
     //todo: detect custom curve layering without directional dependency and convert into mixes
 
@@ -104,21 +120,27 @@ rules Make_simple_for_ue4 bottomup {
         nonode(measured_factor) &&
         nonode(bsdf_mix_1) &&//done testing
         nonode(bsdf_mix_3) &&//done testing
+        nonode(bsdf_mix_4) &&//done testing
         nonode(bsdf_clamped_mix_1) &&//done testing
         nonode(bsdf_clamped_mix_2) &&//done testing
         nonode(bsdf_clamped_mix_3) &&
+        nonode(bsdf_clamped_mix_4) &&
         nonode(bsdf_unbounded_mix_1) &&
         nonode(bsdf_unbounded_mix_2) &&
         nonode(bsdf_unbounded_mix_3) &&
+        nonode(bsdf_unbounded_mix_4) &&
         nonode(bsdf_color_mix_1) &&
         nonode(bsdf_color_mix_2) &&
         nonode(bsdf_color_mix_3) &&
+        nonode(bsdf_color_mix_4) &&
         nonode(bsdf_color_clamped_mix_1) &&
         nonode(bsdf_color_clamped_mix_2) &&
         nonode(bsdf_color_clamped_mix_3) &&
+        nonode(bsdf_color_clamped_mix_4) &&
         nonode(bsdf_color_unbounded_mix_1) &&
         nonode(bsdf_color_unbounded_mix_2) &&
         nonode(bsdf_color_unbounded_mix_3) &&
+        nonode(bsdf_color_unbounded_mix_4) &&
 //        nonode(weighted_layer) &&//done testing
 //        nonode(color_weighted_layer) &&
         nonode(fresnel_layer) &&//done testing
@@ -135,6 +157,11 @@ rules Make_simple_for_ue4 bottomup {
 }
 
 rules Adapt_layering_for_ue4 bottomup {
+    //special rule for vMaterials where custom_curve_layer is used as a directional factor+normal modification.
+    custom_curve_layer( f0,f90,e, w, layer, bsdf_tint(_,bsdf()), n) -->
+        weighted_layer(1.0,custom_curve_layer( 0.0,1.0,e, 1.0, bsdf_tint(color(f90*w),layer),bsdf_tint(color(f0*w),layer),n),bsdf(),n)
+        ;
+    
     //high f0 does not translate into ue4 in a simple way. generate metallic component
     custom_curve_layer( f0,f90,e, w, layer, base, n) -->
         weighted_layer((f0 - 0.08)*w,layer,custom_curve_layer( 0.08,f90,e, w, layer,base,n),n)
@@ -510,11 +537,14 @@ rules Fix_common_tint_for_UE4 topdown {
             bf,ior,vol,material_geometry(d,cutout,ng)) -->
         material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,color(0.0),t4),bsdf_mix_2(
             w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,nvidia::distilling_support::average(w1,tint1,w2,tint2),color(0.0),t1),
-            w2,custom_curve_layer(f0,f90,e,w,layer,diffuse_reflection_bsdf(nvidia::distilling_support::average(w1,tint1,w2,tint2),r2),n)),n3),em),
+            w2,custom_curve_layer(f0,f90,e,w,
+                layer,
+                diffuse_reflection_bsdf(nvidia::distilling_support::average(w1,tint1,w2,tint2),r2),n)),n3),em),
                 bf,ior,vol,material_geometry(d,cutout,ng)) skip_recursion maybe tint1 != tint2
         deadrule; //solved by sorting in the distilling
 
 //align color if there are  metallic and dielectric
+
 //if dielectric is purely diffuse,
     material(tw,material_surface(bsdf_mix_2(
         w2,custom_curve_layer(f0,f90,e,w,layer,diffuse_reflection_bsdf(tint2,r2),n),
@@ -531,7 +561,7 @@ rules Fix_common_tint_for_UE4 topdown {
         where
         c4 = tint1*w1+tint2*w2
         w2b = 1.0-w1b //use the fact that w1+w2 must be 1.0 here
-        w1b = math::saturate(w1a/(w1a+w2a)) //safe because one weight is always >0
+        w1b = w1a > 0.0 ? math::saturate(w1a/(w1a+w2a)):0.0 
         w2a = w2*math::max_value(tint2)
         w1a = w1*math::max_value(tint1);
 
@@ -563,7 +593,7 @@ rules Fix_common_tint_for_UE4 topdown {
         where
         c4 = tint1*w1+tint2*w2
         w2b = 1.0-w1b //use the fact that w1+w2 must be 1.0 here
-        w1b = math::saturate(w1a/(w1a+w2a)) //safe because one weight is always >0
+        w1b = w1a > 0.0 ? math::saturate(w1a/(w1a+w2a)):0.0 
         w2a = w2*math::max_value(tint2)
         w1a = w1*math::max_value(tint1);
 
@@ -794,11 +824,12 @@ rules Make_for_ue4 bottomup {
         w1, microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
         w2, microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,_))
         -->
-microfacet_ggx_vcavities_bsdf(
+        microfacet_ggx_vcavities_bsdf(
             nvidia::distilling_support::average(w1,ru1,w2,ru2),
             nvidia::distilling_support::average(w1,rv1,w2,rv2), w1*c1+w2*c2,color(0.0),t1 )
         if rv2 == ru2;
 
+    //this might be premature!!
     bsdf_mix_2(
         w1, microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,_),
         w2, microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2))
@@ -854,13 +885,12 @@ microfacet_ggx_vcavities_bsdf(
             microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
             microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),n)
         )
-        --> custom_curve_layer(f0,f90,e,nvidia::distilling_support::part_normalized(w1*w,w1,w2),
+        --> custom_curve_layer(f0,f90,e,w1*w,
             microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
-//            microfacet_ggx_vcavities_bsdf(
-//                nvidia::distilling_support::average(w1,ru2,w2,1.),
-//                nvidia::distilling_support::average(w1,rv2,w2,1.),w1*c2+w2*c3,color(0.0),t2),n);
             bsdf_mix_2(
-                w2, custom_curve_layer(0.0,1.0,5.0,0.0, microfacet_ggx_vcavities_bsdf(ru1,rv1,color(1.0),color(0.0),t1), diffuse_reflection_bsdf(c3,r3)),
+                w2, custom_curve_layer(0.0,1.0,5.0,0.0, 
+                    microfacet_ggx_vcavities_bsdf(ru1,rv1,c2,color(0.0),t1), 
+                    diffuse_reflection_bsdf(c3,r3)),
                 w1, microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,color(0.0),t2)),n);
     //-mix(lay(glo,glo),glo) mixing uncoated and a coated metal t3 is lost
     bsdf_mix_2(
@@ -1634,10 +1664,10 @@ microfacet_ggx_vcavities_bsdf(
         --> custom_curve_layer(f0a,f90a,ea,wa * w1,
                 microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
                 bsdf_mix_2(
-                    w3*w1+w2, custom_curve_layer(f0b,f90b,eb,wb,
+                    w3*w1+w2, custom_curve_layer(f0b,f90b,eb,wb*w2,
                         microfacet_ggx_vcavities_bsdf(
-                            nvidia::distilling_support::average(w3*w1,ru2,w2,1.),
-                            nvidia::distilling_support::average(w3*w1,rv2,w2,1.),
+                            ru2,
+                            rv2,
                             nvidia::distilling_support::average(w3*w1,c2,w2,c5),
                             color(0.0),
                             t2),

@@ -177,9 +177,11 @@ public:
 
     /// Convert a definition to a name.
     ///
-    /// \param def  The definition to convert.
-    /// \returns    The name for the definition (using the original owner module).
-    string def_to_name(IDefinition const *def) const;
+    /// \param def                     The definition to convert.
+    /// \param with_signature_suffix   Indicates whether to include the signature suffix
+    /// \returns                       The name for the definition (using the original owner
+    ///                                module).
+    string def_to_name(IDefinition const *def, bool with_signature_suffix = true) const;
 
     /// Convert a type to a name (not using the mangler).
     ///
@@ -236,6 +238,25 @@ public:
     ///
     DAG_node const *stmt_to_dag(
         IStatement const  *stmt);
+
+    /// Insert a decl_cast to the destination type.
+    ///
+    /// \param dst_type     The type to cast to.
+    /// \param expr         Expression to cast.
+    /// \returns            The DAG IR node representing the cast operation.
+    DAG_node const *insert_decl_cast(
+        IType const *dst_type,
+        DAG_node const *expr);
+
+    /// Insert a decl_cast to the destination type, if needed. For non-decl-struct
+    /// expressions, this is the identity.
+    ///
+    /// \param dst_type     The type to cast to.
+    /// \param expr         Expression to cast.
+    /// \returns            The DAG IR node representing the cast operation.
+    DAG_node const *maybe_insert_decl_cast(
+        IType const    *dst_type,
+        DAG_node const *expr);
 
     /// Convert an MDL expression to a DAG IR node.
     ///
@@ -330,6 +351,25 @@ public:
         m_error_detected = false;
         return res;
     }
+
+    /// Convert a constant into an elemental constructor call representing
+    /// the same value.
+    /// 
+    /// \param cnst  The constant DAG node to convert.
+    /// 
+    /// \returns     The equivalent call expression.
+    DAG_call const *constant_to_call(
+        DAG_constant const *cnst);
+
+    /// Create a struct field select.
+    ///
+    /// \param compound  the compound value
+    /// \param field     the name of the field
+    /// \param f_type    the type of the field
+    DAG_node const *create_field_select(
+        DAG_node const *compound,
+        char const     *field,
+        IType const    *f_type);
 
 private:
     /// Get the allocator.

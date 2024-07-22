@@ -60,12 +60,12 @@ class Scene_element_base : public DB::Element_base
     //@{
     /// Subclasses should not override this, but get_scene_element_references().
     void get_references(
-        DB::Tag_set	*result) const;	// return all referenced tags
+        DB::Tag_set     *result) const; // return all referenced tags
     size_t get_size() const;
-    const SERIAL::Serializable	*serialize(
+    const SERIAL::Serializable  *serialize(
         SERIAL::Serializer   *ser) const;// useful functions for byte streams
-    SERIAL::Serializable	*deserialize(
-        SERIAL::Deserializer *deser);	// useful functions for byte streams
+    SERIAL::Serializable        *deserialize(
+        SERIAL::Deserializer *deser);   // useful functions for byte streams
     //@}
 
     /// Return a human readable version of the class id.
@@ -76,7 +76,7 @@ class Scene_element_base : public DB::Element_base
     /// Fast exchange of two Scene_element_base.
     /// \param other the other
     void swap(
-        Scene_element_base	&other);
+        Scene_element_base      &other);
 
     /// Enforce subclass implementation of get_references() by this pure virtual method.
     /// Subclasses should not overwrite get_references(), but this method instead,

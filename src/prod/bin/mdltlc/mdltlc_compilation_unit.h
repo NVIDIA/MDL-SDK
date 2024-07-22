@@ -33,7 +33,6 @@
 
 #include <mdl/compiler/compilercore/compilercore_memory_arena.h>
 
-#define MI_MDLTLC_NODE_TYPES
 #include <mi/mdl/mdl_distiller_node_types.h>
 
 #include "mdltlc_message.h"
@@ -136,6 +135,7 @@ private:
         mi::mdl::IAllocator *alloc,
         mi::mdl::Memory_arena *global_arena,
         mi::mdl::IMDL *imdl,
+        mi::mdl::Node_types *node_types,
         Symbol_table *symbol_table,
         char const *file_name,
         Compiler_options const *comp_options,
@@ -380,6 +380,11 @@ private:
     /// used in generated code.
     char const *find_selector(Expr const *expr);
 
+    /// Return the semantic for the given expression. This is a
+    /// variant of mi::mdl::IDefition::Semantics as a string, to be
+    /// used in generated code.
+    int find_semantics(Expr const* expr);
+
     /// Helper to output a list of where bindings in reverse.
     void output_reversed(pp::Pretty_print &p,
                          Argument_list::const_iterator it,
@@ -453,6 +458,10 @@ private:
 
     /// The MDL implementation to use for access to intrinsics.
     mi::mdl::IMDL *m_imdl;
+
+    /// Pointer to node type information. This is the information the distiller
+    /// uses for matching and constructing nodes.
+    mi::mdl::Node_types *m_node_types;
 
     /// The name of the file from which the module was loaded.
     char const *m_filename;

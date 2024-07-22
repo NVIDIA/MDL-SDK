@@ -68,22 +68,7 @@ class Attr_module_impl : public Attr_module
         const Type_code tc,
         const DB::Journal_type flags,
         bool inh,
-        const STLEXT::Any& def=STLEXT::Any());
-
-    /// Some attributes have deprecated names that should also work, and map to
-    /// the same IDs. For example, "sample_max" is now "samples".
-    /// \param id give this ID an alternate name
-    /// \param name new attr name, literal, not copied
-    void set_deprecated_attr_name(
-        Attribute_id id,
-        const char* name);
-
-    /// Return deprecated name, or 0 if there is none.
-    /// \param id return alternate name of this ID
-    /// \return deprecated name, or 0 if there is none.
-    const char* get_deprecated_attr_name(
-        Attribute_id id);
-
+        const std::any& def=std::any());
 
     /// Register journal-flags for all user attributes.
     /// For now, all user attributes have the same journal flags
@@ -91,7 +76,6 @@ class Attr_module_impl : public Attr_module
     /// \param flags if attr changes, put journal flags
     void set_user_attr_journal_flags(
         const DB::Journal_type flags);
-
 
     /// Return previously set names of the reserved flag attributes.
     /// \param id return name of this attribute ID
@@ -129,9 +113,9 @@ class Attr_module_impl : public Attr_module
     const std::wregex& get_custom_attr_filter() const;
 
   private:
-    static Attr_module_impl* s_attr_module;	///< internal pointer to the module
-    Attribute_registry m_registry;		///< internal registry for "built-in" types
-    DB::Journal_type m_user_attr_journal_flags;	///< the default journal-flags for all user attrs
+    static Attr_module_impl* s_attr_module;     ///< internal pointer to the module
+    Attribute_registry m_registry;              ///< internal registry for "built-in" types
+    DB::Journal_type m_user_attr_journal_flags; ///< the default journal-flags for all user attrs
 
     /// Mapping from type name to type code, used in \c get_type_code.
     typedef robin_hood::unordered_map<std::string, ATTR::Type_code> Map_name_to_code;

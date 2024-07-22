@@ -89,12 +89,12 @@ void create_textured_material(Material_compiler &mc, bool use_class_compilation)
 
     // Initialize the material instance with the DAG node we created as "tint" material argument.
     // Note: As we don't specify the "roughness" argument, the default value will be used
-    mi::mdl::IGenerated_code_dag::Error_code err =
+    mi::mdl::Dag_error_code err =
         mc.initialize_material_instance(
             mat_instance,
             { Call_argument(tex_ret_tint_call, "tint") },
-            use_class_compilation);
-    check_success(err == mi::mdl::IGenerated_code_dag::EC_NONE);
+            use_class_compilation, 0);
+    check_success(err == mi::mdl::EC_NONE);
 
     // Dump the DAG of the material instance together with the material instance arguments.
     // Note, that they are usually different from the material arguments we specified above.

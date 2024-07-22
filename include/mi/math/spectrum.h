@@ -113,13 +113,10 @@ public:
     /// The default constructor leaves the spectrum elements uninitialized.
     inline Spectrum()
     {
-#if defined(DEBUG) || (defined(_MSC_VER) && _MSC_VER <= 1310)
+#ifndef NDEBUG
         // In debug mode, default-constructed spectra are initialized with signaling NaNs or, if not
         // applicable, with a maximum value to increase the chances of diagnosing incorrect use of
         // an uninitialized spectrum.
-        //
-        // When compiling with Visual C++ 7.1 or earlier, this code is enabled in all variants to
-        // work around a very obscure compiler bug that causes the compiler to crash.
         typedef mi::base::numeric_traits<Float32> Traits;
         Float32 v = (Traits::has_signaling_NaN)
             ? Traits::signaling_NaN() : Traits::max MI_PREVENT_MACRO_EXPAND ();

@@ -30,20 +30,21 @@
 #define MDL_INTERGRATION_I_MDLNR_H 1
 
 #include <base/system/main/i_module.h>
+#include <mi/mdl/mdl_generated_dag.h>
 
 namespace mi {
     namespace mdl {
         class ICode_cache;
         class IMDL;
         class IModule;
-        class IGenerated_code_dag;
+//        class IGenerated_code_dag;
         class ILambda_function;
     }
 }
 
 namespace MI {
 
-namespace MDL { class IType; class Mdl_module_wait_queue; }
+namespace MDL { class Mdl_module_wait_queue; }
 namespace SYSTEM { class Module_registration_entry; }
 namespace SERIAL { class Deserializer; class Serializer; }
 
@@ -79,6 +80,13 @@ public:
     virtual const mi::mdl::IGenerated_code_dag *deserialize_code_dag(
         SERIAL::Deserializer *deserializer) = 0;
 
+    /// Serializes the material instance to the given serializer.
+    virtual void serialize_material_instance(
+        SERIAL::Serializer *serializer, const mi::mdl::IMaterial_instance *instance) = 0;
+
+    /// Deserializes the material instance from the given deserializer.
+    virtual const mi::mdl::IMaterial_instance *deserialize_material_instance(SERIAL::Deserializer *deserializer) = 0;
+
     /// Serializes the lambda function to the given serializer.
     virtual void serialize_lambda_function(
         SERIAL::Serializer *serializer, const mi::mdl::ILambda_function *lambda) = 0;
@@ -86,9 +94,6 @@ public:
     /// Deserializes the lambda function from the given deserializer.
     virtual mi::mdl::ILambda_function *deserialize_lambda_function(
         SERIAL::Deserializer *deserializer) = 0;
-
-    /// The type of the callback used to register MDL types with the API.
-    typedef void Register_mdl_type_with_api(const MDL::IType*);
 
     /// Get the MDL code cache.
     virtual mi::mdl::ICode_cache *get_code_cache() const = 0;

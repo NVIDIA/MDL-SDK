@@ -30,12 +30,17 @@
 #include "application.h"
 #include "search_path.h"
 #include "errors.h"
-#include "version.h"
+#include "version_helper.h"
 #include "command.h"
+
+#include <filesystem>
+
 #include <boost/algorithm/string/replace.hpp>
-#include <base/hal/disk/disk.h>
 #include <base/hal/hal/i_hal_ospath.h>
 #include <base/lib/path/i_path.h>
+
+namespace fs = std::filesystem;
+
 using namespace mdlm;
 using std::string;
 using std::vector;
@@ -75,7 +80,7 @@ string Archive::with_extension(const string & input)
     {
         static const size_t len = Archive::extension.size();
         const size_t len_output = output.size();
-        bool add_extension = len_output < len; // to small string, add 
+        bool add_extension = len_output < len; // to small string, add
         if (!add_extension)
         {
             // string longer than extension, test if extension is present
@@ -117,7 +122,8 @@ bool Archive::is_valid() const
         return false;
     }
 
-    if (!Util::File(m_archive_file).is_file())
+    std::error_code ec;
+    if (!fs::is_regular_file(fs::u8path(m_archive_file), ec))
     {
         Util::log_debug(m_archive_file + ": is not a file");
         return false;
@@ -211,15 +217,15 @@ string Archive::stem() const
 
 mi::Sint32 Archive::extract_to_directory(const string & directory) const
 {
-    mi::base::Handle<mi::neuraylib::IMdl_archive_api> 
+    mi::base::Handle<mi::neuraylib::IMdl_archive_api>
         archive_api(
             Application::theApp().neuray()->get_api_component<mi::neuraylib::IMdl_archive_api>());
     mi::Sint32 result = archive_api->extract_archive(m_archive_file.c_str(), directory.c_str());
     if (result < 0)
     {
-        Util::log_error("Archive : " 
-            + full_name() 
-            + " Extraction failed with error code: " 
+        Util::log_error("Archive : "
+            + full_name()
+            + " Extraction failed with error code: "
             + to_string(result));
     }
     else
@@ -278,7 +284,7 @@ bool Archive::all_dependencies_are_installed() const
                 if (archive.get_version() < required_version
                     || archive.get_version().major() != required_version.major())
                 {
-                    Util::log_warning("Missing archive dependency: " 
+                    Util::log_warning("Missing archive dependency: "
                         + archive_name + " " + mdlm::to_string(required_version)
                         + " ("
                         + archive.stem() + " " + mdlm::to_string(archive.get_version())
@@ -343,7 +349,9 @@ bool validate_archive(
 
     // Check file system
     std::string resolved_path = MI::HAL::Ospath::join(path, dot_to_slash(a));
-    if (MI::DISK::is_directory(resolved_path.c_str()))
+    fs::path fs_resolved_path(fs::u8path(resolved_path));
+    std::error_code ec;
+    if (fs::is_directory(fs_resolved_path, ec))
     {
         invalid_directories.push_back(resolved_path);
         archive.second = false;
@@ -351,7 +359,7 @@ bool validate_archive(
     else
     {
         std::string mdl = resolved_path.append(".mdl");
-        if (MI::DISK::is_file(mdl.c_str()))
+        if (fs::is_regular_file(fs_resolved_path, ec))
         {
             invalid_directories.push_back(resolved_path);
             archive.second = false;
@@ -400,27 +408,26 @@ bool validate_archive(
 {
     // Find all archive files in the given directory
     std::map<std::string, bool> archives;
-    MI::DISK::Directory dir;
-    if (!dir.open(path.c_str()))
+    std::error_code ec;
+    fs::path fs_path(fs::u8path(path));
+    try
     {
-        return false;
-    }
-    while (true)
-    {
-        std::string fn = dir.read(true/*nodot*/);
-        if (fn.empty())
+        for(const auto& entry: fs::directory_iterator(fs_path))
         {
-            break;
-        }
-        Util::File file(Util::path_appends(path, fn));
-        if (file.is_file())
-        {
-            if (Util::extension(fn) == Archive::extension)
+            std::string fn = entry.path().filename().u8string();
+            if(fs::is_regular_file(entry.path()))
             {
-                // BEWARE archive should be without .mdr extension
-                archives[Util::stem(fn)] = true;
+                if (Util::extension(fn) == Archive::extension)
+                {
+                    // BEWARE archive should be without .mdr extension
+                    archives[Util::stem(fn)] = true;
+                }
             }
         }
+    }
+    catch(...)
+    {
+        return false;
     }
 
     std::pair<const std::string, bool> archivePair(archive, true);

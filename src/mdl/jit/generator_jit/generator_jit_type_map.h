@@ -345,6 +345,11 @@ public:
     /// \param type  the type to check
     bool is_floating_point_based_type(IType const *type) const;
 
+    /// Checks if the given MDL type is or contains a floating point type.
+    ///
+    /// \param type  the type to check
+    bool contains_floating_point_type(IType const *type) const;
+
     /// Get the base value type of a derivative type.
     ///
     /// \param type  the MDL type

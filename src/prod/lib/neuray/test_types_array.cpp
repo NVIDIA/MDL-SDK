@@ -106,8 +106,8 @@ bool check_element_property( const mi::IRef* element, mi::Size i)
     return true;
 }
 
-// Does not work if T is derived from mi::IVoid or mi::neuraylib::IGroup because these are hard-coded
-// interfaces to test some expected failures.
+// Does not work if T is derived from mi::IVoid or mi::neuraylib::IGroup because these are
+// hard-coded interfaces to test some expected failures.
 template<class T>
 void test_interface_IData_collection(
     mi::neuraylib::ITransaction* transaction,
@@ -140,7 +140,7 @@ void test_interface_IData_collection(
     s = data_collection->get_key( N);
     MI_CHECK( !s);
     MI_CHECK( !data_collection->has_key( N_string.c_str()));
-    MI_CHECK( !data_collection->has_key( 0));
+    MI_CHECK( !data_collection->has_key( nullptr));
     MI_CHECK( !data_collection->has_key( "no_number"));
 
     if( N == 0) {
@@ -201,7 +201,7 @@ void test_interface_IData_collection(
     mi::base::Handle<mi::base::IInterface> tmp;
     tmp = data_collection->get_value<mi::base::IInterface>( N-1);
     MI_CHECK_EQUAL(  0, data_collection->set_value( N-1, tmp.get()));
-    MI_CHECK_EQUAL( -1, data_collection->set_value( N-1, 0));
+    MI_CHECK_EQUAL( -1, data_collection->set_value( N-1, nullptr));
     MI_CHECK_EQUAL( -2, data_collection->set_value( N, void_.get()));
     if( untyped) {
         MI_CHECK_EQUAL( 0, data_collection->set_value( N-1, void_.get()));
@@ -214,7 +214,7 @@ void test_interface_IData_collection(
     // check set_value() via key
     tmp = data_collection->get_value<mi::base::IInterface>( N-1);
     MI_CHECK_EQUAL(  0, data_collection->set_value( N_minus_1_string.c_str(), tmp.get()));
-    MI_CHECK_EQUAL( -1, data_collection->set_value( N_minus_1_string.c_str(), 0));
+    MI_CHECK_EQUAL( -1, data_collection->set_value( N_minus_1_string.c_str(), nullptr));
     MI_CHECK_EQUAL( -2, data_collection->set_value( N_string.c_str(), void_.get()));
     if( untyped) {
         MI_CHECK_EQUAL( 0, data_collection->set_value( N_minus_1_string.c_str(), void_.get()));
@@ -225,8 +225,8 @@ void test_interface_IData_collection(
     }
 }
 
-// Does not work if T is derived from mi::IVoid or mi::neuraylib::IGroup because these are hard-coded
-// interfaces to test some expected failures.
+// Does not work if T is derived from mi::IVoid or mi::neuraylib::IGroup because these are
+// hard-coded interfaces to test some expected failures.
 template<class T>
 void test_interface_IArray(
     mi::neuraylib::ITransaction* transaction,
@@ -253,8 +253,8 @@ void test_interface_IArray(
     }
 
     // check that out-of-bound read access returns 0
-    MI_CHECK_EQUAL( 0, array->get_element( N));
-    MI_CHECK_EQUAL( 0, array->get_element( 1u << 31));
+    MI_CHECK_EQUAL( nullptr, array->get_element( N));
+    MI_CHECK_EQUAL( nullptr, array->get_element( 1u << 31));
 
     // prepare array contents
     std::vector<mi::base::Handle<T> > vector;
@@ -262,7 +262,7 @@ void test_interface_IArray(
         mi::base::Handle<T> element( transaction->create<T>( element_type_name));
         set_element_property( element.get(), i);
         vector.push_back( element);
-        element = 0;
+        element = nullptr;
         MI_CHECK_EQUAL( 1, GET_REFCOUNT( vector[i].get()));
     }
 
@@ -280,10 +280,10 @@ void test_interface_IArray(
     for( mi::Size i=0; i < N; ++i) {
         mi::base::IInterface* iinterface = array->get_element( i);
         T* element = array->get_element<T>( i);
-        mi::IVoid* void_ = array->get_element<mi::IVoid>( i);
+        auto* void_ = array->get_element<mi::IVoid>( i);
         MI_CHECK( attribute || (iinterface == vector[i].get()));
         MI_CHECK( attribute || (element == vector[i].get()));
-        MI_CHECK_EQUAL( 0, void_);
+        MI_CHECK_EQUAL( nullptr, void_);
         MI_CHECK( check_element_property( element, i));
         element->release();
         iinterface->release();
@@ -294,10 +294,10 @@ void test_interface_IArray(
     for( mi::Size i=0; i < N; ++i) {
         const mi::base::IInterface* iinterface = const_array->get_element( i);
         const T* element = const_array->get_element<T>( i);
-        const mi::IVoid* void_ = const_array->get_element<mi::IVoid>( i);
+        const auto* void_ = const_array->get_element<mi::IVoid>( i);
         MI_CHECK( attribute || (iinterface == vector[i].get()));
         MI_CHECK( attribute || (element == vector[i].get()));
-        MI_CHECK_EQUAL( 0, void_);
+        MI_CHECK_EQUAL( nullptr, void_);
         MI_CHECK( check_element_property( element, i));
         element->release();
         iinterface->release();
@@ -323,8 +323,8 @@ void test_interface_IArray(
     }
 }
 
-// Does not work if T is derived from mi::IVoid or mi::neuraylib::IGroup because these are hard-coded
-// interfaces to test some expected failures.
+// Does not work if T is derived from mi::IVoid or mi::neuraylib::IGroup because these are
+// hard-coded interfaces to test some expected failures.
 template<class T>
 void test_interface_IDynamic_array(
     mi::neuraylib::ITransaction* transaction,
@@ -377,11 +377,11 @@ void test_interface_IDynamic_array(
         mi::base::IInterface* interface1 = array->back();
         mi::base::IInterface* interface2 = array->get_element( array->get_length()-1);
         T* ielement = array->back<T>();
-        mi::IVoid* void_ = array->back<mi::IVoid>();
+        auto* void_ = array->back<mi::IVoid>();
         MI_CHECK( attribute || (interface1 == element.get()));
         MI_CHECK( attribute || (interface2 == element.get()));
         MI_CHECK( attribute || (ielement == element.get()));
-        MI_CHECK_EQUAL( 0, void_);
+        MI_CHECK_EQUAL( nullptr, void_);
         MI_CHECK( check_element_property( ielement, 42));
         ielement->release();
         interface2->release();
@@ -393,11 +393,11 @@ void test_interface_IDynamic_array(
         const mi::base::IInterface* interface1 = const_array->back();
         const mi::base::IInterface* interface2 = const_array->get_element( array->get_length()-1);
         const T* ielement = const_array->back<T>();
-        const mi::IVoid* void_ = const_array->back<mi::IVoid>();
+        const auto* void_ = const_array->back<mi::IVoid>();
         MI_CHECK( attribute || (interface1 == element.get()));
         MI_CHECK( attribute || (interface2 == element.get()));
         MI_CHECK( attribute || (ielement == element.get()));
-        MI_CHECK_EQUAL( 0, void_);
+        MI_CHECK_EQUAL( nullptr, void_);
         MI_CHECK( check_element_property( ielement, 42));
         ielement->release();
         interface2->release();
@@ -426,11 +426,11 @@ void test_interface_IDynamic_array(
         mi::base::IInterface* interface1 = array->front();
         mi::base::IInterface* interface2 = array->get_element( 0);
         T* ielement = array->front<T>();
-        mi::IVoid* void_ = array->front<mi::IVoid>();
+        auto* void_ = array->front<mi::IVoid>();
         MI_CHECK( attribute || (interface1 == element.get()));
         MI_CHECK( attribute || (interface2 == element.get()));
         MI_CHECK( attribute || (ielement == element.get()));
-        MI_CHECK_EQUAL( 0, void_);
+        MI_CHECK_EQUAL( nullptr, void_);
         MI_CHECK( check_element_property( ielement, 42));
         ielement->release();
         interface2->release();
@@ -442,11 +442,11 @@ void test_interface_IDynamic_array(
         const mi::base::IInterface* interface1 = const_array->front();
         const mi::base::IInterface* interface2 = const_array->get_element( 0);
         const T* ielement = const_array->front<T>();
-        const mi::IVoid* void_ = const_array->front<mi::IVoid>();
+        const auto* void_ = const_array->front<mi::IVoid>();
         MI_CHECK( attribute || (interface1 == element.get()));
         MI_CHECK( attribute || (interface2 == element.get()));
         MI_CHECK( attribute || (ielement == element.get()));
-        MI_CHECK_EQUAL( 0, void_);
+        MI_CHECK_EQUAL( nullptr, void_);
         MI_CHECK( check_element_property( ielement, 42));
         ielement->release();
         interface2->release();
@@ -517,8 +517,8 @@ void test_interface_IDynamic_array(
     }
 }
 
-// Does not work if T is derived from mi::IVoid or mi::neuraylib::IGroup because these are hard-coded
-// interfaces to test some expected failures.
+// Does not work if T is derived from mi::IVoid or mi::neuraylib::IGroup because these are
+// hard-coded interfaces to test some expected failures.
 template<class T>
 void test(
     mi::neuraylib::ITransaction* transaction,
@@ -533,20 +533,27 @@ void test(
     std::ostringstream s1;
     s1 << type_name_prefix << "[" << N << "]";
     std::string type_name1 = s1.str();
-    mi::base::Handle<mi::IArray> array( transaction->create<mi::IArray>( type_name1.c_str()));
+    mi::base::Handle<mi::IArray> array(
+        transaction->create<mi::IArray>( type_name1.c_str()));
     MI_CHECK( array.is_valid_interface());
-    test_interface_IData_collection<T>( transaction, array.get(), N, type_name1.c_str(), element_type_name, untyped, false);
-    test_interface_IArray<T>( transaction, array.get(), N, type_name1.c_str(), element_type_name, untyped, false);
+    test_interface_IData_collection<T>(
+        transaction, array.get(), N, type_name1.c_str(), element_type_name, untyped, false);
+    test_interface_IArray<T>(
+        transaction, array.get(), N, type_name1.c_str(), element_type_name, untyped, false);
 
     // test dynamic array
     std::string type_name2 = type_name_prefix;
     type_name2 += "[]";
-    mi::base::Handle<mi::IDynamic_array> dynamic_array( transaction->create<mi::IDynamic_array>( type_name2.c_str()));
+    mi::base::Handle<mi::IDynamic_array> dynamic_array(
+        transaction->create<mi::IDynamic_array>( type_name2.c_str()));
     MI_CHECK( dynamic_array.is_valid_interface());
     dynamic_array->set_length( N);
-    test_interface_IData_collection<T>( transaction, dynamic_array.get(), N, type_name2.c_str(), element_type_name, untyped, false);
-    test_interface_IArray<T>( transaction, dynamic_array.get(), N, type_name2.c_str(), element_type_name, untyped, false);
-    test_interface_IDynamic_array<T>( transaction, dynamic_array.get(), N, type_name2.c_str(), element_type_name, untyped, false);
+    test_interface_IData_collection<T>(
+        transaction, dynamic_array.get(), N, type_name2.c_str(), element_type_name, untyped, false);
+    test_interface_IArray<T>(
+        transaction, dynamic_array.get(), N, type_name2.c_str(), element_type_name, untyped, false);
+    test_interface_IDynamic_array<T>(
+        transaction, dynamic_array.get(), N, type_name2.c_str(), element_type_name, untyped, false);
 
     // static arrays of negative size are not allowed
     std::string type_name4 = type_name_prefix;
@@ -596,7 +603,7 @@ MI_TEST_AUTO_FUNCTION( test_types_array )
         run_tests( neuray.get());
     }
 
-    neuray = 0;
+    neuray = nullptr;
     MI_CHECK( unload());
 }
 

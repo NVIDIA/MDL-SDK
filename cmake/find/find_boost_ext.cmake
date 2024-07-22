@@ -38,7 +38,13 @@ function(FIND_BOOST_EXT)
     set(Boost_NO_WARN_NEW_VERSIONS ON CACHE INTERNAL "")
     #set(Boost_DEBUG ON)
 
-    find_package(Boost COMPONENTS filesystem thread)
+    if(MDL_BUILD_OPENIMAGEIO_PLUGIN OR MDL_BUILD_CORE_EXAMPLES)
+        # OpenImageIO needs Boost::filesystem and Boost::thread.
+        find_package(Boost COMPONENTS filesystem thread)
+    else()
+        # Otherwise the Boost headers are sufficient.
+        find_package(Boost)
+    endif()
 
     set(Boost_FOUND ${Boost_FOUND} CACHE INTERNAL "Dependency boost has been resolved.")
 

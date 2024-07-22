@@ -31,13 +31,13 @@
 /// Provide a serializer/deserializer pair which serializes to and deserializes from memory.
 /// This can be used for different purposes including implementing tests for correct serialization.
 /// The following example explains how to use it:
-/// 	Some_serializable serializable(...);
-/// 	Buffer_serializer serializer;
-/// 	serializable.serialize(serializer);
-/// 	Buffer_deserializer deserializer;
-/// 	Some_serializable deserialized;
-/// 	deserializer.deserialize(&deserialized, serializer->get_buffer(),
-///	    serializer->get_buffer_size());
+///     Some_serializable serializable(...);
+///     Buffer_serializer serializer;
+///     serializable.serialize(serializer);
+///     Buffer_deserializer deserializer;
+///     Some_serializable deserialized;
+///     deserializer.deserialize(&deserialized, serializer->get_buffer(),
+///         serializer->get_buffer_size());
 
 #include "pch.h"
 
@@ -90,7 +90,7 @@ size_t Buffer_serializer::get_buffer_size()
 
 // ensure that the buffer has the needed number of bytes free
 void Buffer_serializer::ensure_size(
-    size_t needed_size)					// the needed size
+    size_t needed_size)                                 // the needed size
 {
     size_t buffer_size = m_buffer.size();
     if (buffer_size - m_written_size < needed_size)
@@ -105,8 +105,8 @@ void Buffer_serializer::ensure_size(
 
 // Write out various value types
 void Buffer_serializer::write_impl(
-    const char* buffer,					// read data from here
-    size_t size)					// write this amount of data
+    const char* buffer,                                 // read data from here
+    size_t size)                                        // write this amount of data
 {
     ensure_size(size);
     memcpy(m_buffer.data() + m_written_size, buffer, size);
@@ -126,7 +126,7 @@ void Buffer_serializer::reserve(
 // but the deserialize() method does not because it needs to look up the class's constructor
 // function.
 Buffer_deserializer::Buffer_deserializer(
-    Deserialization_manager*	manager) 		// the deserialization manager
+    Deserialization_manager*    manager)                // the deserialization manager
     : Deserializer_impl(manager),
       m_buffer(NULL),
       m_read_pointer(NULL),
@@ -149,15 +149,15 @@ void Buffer_deserializer::reset(
 
 // ensure that the buffer has the needed number of bytes free
 bool Buffer_deserializer::ensure_size(
-    size_t needed_size)					// the needed size
+    size_t needed_size)                                 // the needed size
 {
     return needed_size <= (m_buffer_size - (m_read_pointer - m_buffer));
 }
 
 // Deserialize from a buffer of known size
 Serializable* Buffer_deserializer::deserialize(
-    const Uint8* buffer,				// buffer storing the serialized data
-    size_t buffer_size)					// size of the given buffer
+    const Uint8* buffer,                                // buffer storing the serialized data
+    size_t buffer_size)                                 // size of the given buffer
 {
     m_buffer = buffer;
     m_buffer_size = buffer_size;
@@ -183,9 +183,9 @@ Serializable* Buffer_deserializer::deserialize(
 
 // Deserialize a given object from a buffer of known size
 void Buffer_deserializer::deserialize(
-    Serializable* serializable,				// deserialize to here
-    const Uint8* buffer,				// buffer storing the serialized data
-    size_t buffer_size)					// size of the given buffer
+    Serializable* serializable,                         // deserialize to here
+    const Uint8* buffer,                                // buffer storing the serialized data
+    size_t buffer_size)                                 // size of the given buffer
 {
     m_buffer = buffer;
     m_buffer_size = buffer_size;
@@ -209,8 +209,8 @@ void Buffer_deserializer::deserialize(
 
 // Read back various value types
 void Buffer_deserializer::read_impl(
-    char* buffer,					// destination for writing data
-    size_t size)					// number of bytes to read
+    char* buffer,                                       // destination for writing data
+    size_t size)                                        // number of bytes to read
 {
     m_valid = ensure_size(size);
     if (!m_valid)

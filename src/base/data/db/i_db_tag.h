@@ -31,6 +31,7 @@
 
 #include <mi/base/types.h>
 
+#include <functional>
 #include <set>
 
 #include "i_db_transaction_id.h"
@@ -73,7 +74,7 @@ private:
     mi::Uint32 m_tag;
 };
 
-/// Comparison operators
+/// Comparison operators for Tag
 //@{
 
 inline bool operator==( const Tag& lhs, const Tag& rhs) { return lhs.get_uint() == rhs.get_uint(); }
@@ -84,6 +85,18 @@ inline bool operator> ( const Tag& lhs, const Tag& rhs) { return lhs.get_uint() 
 inline bool operator>=( const Tag& lhs, const Tag& rhs) { return lhs.get_uint() >= rhs.get_uint(); }
 
 //@}
+
+} }
+
+/// Hash functor for Tag
+template<>
+struct std::hash<class MI::DB::Tag>
+{
+    size_t operator()( const MI::DB::Tag& tag) const noexcept
+    { return std::hash<mi::Uint32>()( tag.get_uint()); }
+};
+
+namespace MI { namespace DB {
 
 /// See base/lib/mem/i_mem_consumption.h
 inline bool has_dynamic_memory_consumption( const Tag&) { return false; }
@@ -135,7 +148,7 @@ private:
     Tag m_tag;
 };
 
-/// Comparison operators
+/// Comparison operators for Typed_tag
 //@{
 
 template <class T> inline bool operator==( const Typed_tag<T>& lhs, const Typed_tag<T>& rhs)
@@ -165,11 +178,24 @@ template <class T> inline bool operator>=( const Typed_tag<T>& lhs, const Typed_
 
 //@}
 
+} }
+
+/// Hash functor for Typed_tag
+template <class T>
+struct std::hash<class MI::DB::Typed_tag<T>>
+{
+    size_t operator()( const MI::DB::Typed_tag<T>& tag) const noexcept
+    { return std::hash<mi::Uint32>()( tag.get_uint()); }
+};
+
+namespace MI { namespace DB {
+
 /// See base/lib/mem/i_mem_consumption.h
 template <class T>
 inline bool has_dynamic_memory_consumption( const Typed_tag<T>&) { return false; }
 template <class T>
 inline size_t dynamic_memory_consumption( const Typed_tag<T>&) { return 0; }
+
 
 /// Set of tags. Used for reference counting.
 using Tag_set = std::set<Tag>;

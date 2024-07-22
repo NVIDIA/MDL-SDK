@@ -71,7 +71,7 @@ std::string g_key;
 const char* get_key( mi::Size key_id)
 {
     if( key_id >= N)
-        return 0;
+        return nullptr;
     std::ostringstream s;
     s << "key_" << key_id;
     g_key = s.str();
@@ -110,8 +110,8 @@ bool check_value_property( const mi::ISint32* value, mi::Size i)
     return tmp == static_cast<mi::Sint32>( i);
 }
 
-// Does not work if T is derived from mi::IVoid or mi::neuraylib::IGroup because these are hard-coded
-// interfaces to test some expected failures.
+// Does not work if T is derived from mi::IVoid or mi::neuraylib::IGroup because these are
+// hard-coded interfaces to test some expected failures.
 //
 // This test modifies that the map such that it contains exactly the keys ...
 template<class T>
@@ -137,7 +137,7 @@ void test_interface_IMap(
         mi::base::Handle<T> value( transaction->create<T>( value_type_name));
         set_value_property( value.get(), i);
         stl_map[ get_key( i)] = value;
-        value = 0;
+        value = nullptr;
         MI_CHECK_EQUAL( 1, GET_REFCOUNT( stl_map[ get_key( i)].get()));
     }
     mi::base::Handle<mi::IVoid> void_( transaction->create<mi::IVoid>( "Void"));
@@ -162,7 +162,7 @@ void test_interface_IMap(
         key.resize( 4);
         MI_CHECK_EQUAL_CSTR( key.c_str(), "key_");
     }
-    MI_CHECK( !map->has_key( 0));
+    MI_CHECK( !map->has_key( nullptr));
     MI_CHECK( !map->has_key( ""));
     MI_CHECK( !map->has_key( "foo"));
     MI_CHECK( !map->get_key( N));
@@ -171,10 +171,10 @@ void test_interface_IMap(
     for( mi::Size i=0; i < N; ++i) {
         mi::base::IInterface* iinterface = map->get_value( get_key( i));
         T* value = map->get_value<T>( get_key( i));
-        mi::IVoid* void_ = map->get_value<mi::IVoid>( get_key( i));
+        auto* void_ = map->get_value<mi::IVoid>( get_key( i));
         MI_CHECK( skip_identity_checks || (iinterface == stl_map[ get_key( i)].get()));
         MI_CHECK( skip_identity_checks || (value == stl_map[ get_key( i)].get()));
-        MI_CHECK_EQUAL( 0, void_);
+        MI_CHECK_EQUAL( nullptr, void_);
         MI_CHECK( check_value_property( value, i));
         value->release();
         iinterface->release();
@@ -185,10 +185,10 @@ void test_interface_IMap(
     for( mi::Size i=N; i > 0; --i) {
         const mi::base::IInterface* iinterface = const_map->get_value( get_key( i-1));
         const T* value = const_map->get_value<T>( get_key( i-1));
-        const mi::IVoid* void_ = const_map->get_value<mi::IVoid>( get_key( i-1));
+        const auto* void_ = const_map->get_value<mi::IVoid>( get_key( i-1));
         MI_CHECK( skip_identity_checks || (iinterface == stl_map[ get_key( i-1)].get()));
         MI_CHECK( skip_identity_checks || (value == stl_map[ get_key( i-1)].get()));
-        MI_CHECK_EQUAL( 0, void_);
+        MI_CHECK_EQUAL( nullptr, void_);
         MI_CHECK( check_value_property( value, i-1));
         value->release();
         iinterface->release();
@@ -207,10 +207,10 @@ void test_interface_IMap(
     for( mi::Size i=0; i < N; ++i) {
         mi::base::IInterface* iinterface = map->get_value( i);
         T* value = map->get_value<T>( i);
-        mi::IVoid* void_ = map->get_value<mi::IVoid>( i);
+        auto* void_ = map->get_value<mi::IVoid>( i);
         MI_CHECK( skip_identity_checks || (iinterface == stl_map[ get_key( i)].get()));
         MI_CHECK( skip_identity_checks || (value == stl_map[ get_key( i)].get()));
-        MI_CHECK_EQUAL( 0, void_);
+        MI_CHECK_EQUAL( nullptr, void_);
         MI_CHECK( check_value_property( value, i));
         value->release();
         iinterface->release();
@@ -221,10 +221,10 @@ void test_interface_IMap(
     for( mi::Size i=N; i > 0; --i) {
         const mi::base::IInterface* iinterface = const_map->get_value( i-1);
         const T* value = const_map->get_value<T>( i-1);
-        const mi::IVoid* void_ = const_map->get_value<mi::IVoid>( i-1);
+        const auto* void_ = const_map->get_value<mi::IVoid>( i-1);
         MI_CHECK( skip_identity_checks || (iinterface == stl_map[ get_key( i-1)].get()));
         MI_CHECK( skip_identity_checks || (value == stl_map[ get_key( i-1)].get()));
-        MI_CHECK_EQUAL( 0, void_);
+        MI_CHECK_EQUAL( nullptr, void_);
         MI_CHECK( check_value_property( value, i-1));
         value->release();
         iinterface->release();
@@ -237,14 +237,14 @@ void test_interface_IMap(
     MI_CHECK_EQUAL( -2, map->set_value( "foo", stl_map[ get_key( 0)].get()));
     MI_CHECK_EQUAL( -2, map->set_value( N, stl_map[ get_key( 0)].get()));
     MI_CHECK_EQUAL( -2, map->set_value( 1u << 31, stl_map[ get_key( 0)].get()));
-    MI_CHECK_EQUAL( -1, map->set_value( "key_0", 0));
+    MI_CHECK_EQUAL( -1, map->set_value( "key_0", nullptr));
 
     // check that get_value() fails with invalid key/index
-    MI_CHECK_EQUAL( 0, map->get_value( zero_string));
-    MI_CHECK_EQUAL( 0, map->get_value( ""));
-    MI_CHECK_EQUAL( 0, map->get_value( "foo"));
-    MI_CHECK_EQUAL( 0, map->get_value( N));
-    MI_CHECK_EQUAL( 0, map->get_value( 1u << 31));
+    MI_CHECK_EQUAL( nullptr, map->get_value( zero_string));
+    MI_CHECK_EQUAL( nullptr, map->get_value( ""));
+    MI_CHECK_EQUAL( nullptr, map->get_value( "foo"));
+    MI_CHECK_EQUAL( nullptr, map->get_value( N));
+    MI_CHECK_EQUAL( nullptr, map->get_value( 1u << 31));
 
     // check that set_value()/insert() fail with values of wrong type (for typed maps)
     if( untyped) {
@@ -297,8 +297,8 @@ void test_interface_IMap(
     }
 }
 
-// Does not work if T is derived from mi::IVoid or mi::neuraylib::IGroup because these are hard-coded
-// interfaces to test some expected failures.
+// Does not work if T is derived from mi::IVoid or mi::neuraylib::IGroup because these are
+// hard-coded interfaces to test some expected failures.
 template<class T>
 void test(
     mi::neuraylib::ITransaction* transaction,
@@ -353,7 +353,7 @@ MI_TEST_AUTO_FUNCTION( test_types_map )
         run_tests( neuray.get());
     }
 
-    neuray = 0;
+    neuray = nullptr;
     MI_CHECK( unload());
 }
 

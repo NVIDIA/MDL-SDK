@@ -113,6 +113,9 @@ public:
     /// Indicates whether the material or function definition is exported by its module.
     bool is_exported() const;
 
+    /// Indicates whether the material or function definition is declarative.
+    bool is_declarative() const;
+
     /// Indicates whether the definition represents a material.
     bool is_material() const;
 
@@ -251,17 +254,15 @@ public:
     ///                    mi_neuray_mdl_template_like_function_definitions.
     /// \param[out] errors An optional pointer to an #mi::Sint32 to which an error code will be
     ///                    written. The error codes have the following meaning:
-    ///                    -  0: Success. If \p arguments is \c NULL, then the method always
-    ///                          succeeds.
-    ///                    - -1: An argument for a non-existing parameter was provided in
-    ///                          \p arguments.
-    ///                    - -2: The type of an argument in \p arguments does not have the correct
-    ///                          type, see #get_parameter_types().
-    ///                    - -3: A parameter that has no default was not provided with an argument
-    ///                          value.
+    ///                    -  0: Success. The method always succeeds if \p arguments is \c NULL and
+    ///                          the function definition is none of
+    ///                          \ref mi_neuray_mdl_template_like_function_definitions.
     ///                    - -4: The function definition is one of
     ///                          \ref mi_neuray_mdl_template_like_function_definitions and
     ///                          \p arguments is \c NULL.
+    ///                    .
+    ///                    See #mi::neuraylib::IFunction_definition::create_function_call() for
+    ///                    other possible error codes.
     /// \return            The constructed material instance or function call, or \c NULL in case
     ///                    of errors.
     IFunction_call* create_instance(
@@ -368,6 +369,14 @@ inline bool Definition_wrapper::is_exported() const
         return false;
 
     return m_access->is_exported();
+}
+
+inline bool Definition_wrapper::is_declarative() const
+{
+    if( !is_valid())
+        return false;
+
+    return m_access->is_declarative();
 }
 
 inline bool Definition_wrapper::is_material() const
@@ -534,7 +543,8 @@ inline IFunction_call* Definition_wrapper::create_instance(
         || semantic == IFunction_definition::DS_INTRINSIC_DAG_ARRAY_LENGTH
         || semantic == IFunction_definition::DS_ARRAY_INDEX
         || semantic == IFunction_definition::DS_TERNARY
-        || semantic == IFunction_definition::DS_CAST) {
+        || semantic == IFunction_definition::DS_CAST
+        || semantic == IFunction_definition::DS_INTRINSIC_DAG_DECL_CAST) {
         if( errors)
             *errors = -4;
         return 0;

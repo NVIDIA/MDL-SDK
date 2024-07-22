@@ -208,6 +208,12 @@ private:
         m_hasher.update(v);
     }
 
+    /// Hash a size_t value.
+    void hash(size_t v) {
+        DOUT(("size_t %u\n", unsigned(v)));
+        m_hasher.update(v);
+    }
+
     /// Hash an integer value.
     void hash(int v) {
         DOUT(("int %d\n", v));
@@ -694,17 +700,14 @@ void Function_hasher::hash(IType const *tp)
     case IType::TK_ENUM:
         {
             IType_enum const *e_tp = cast<IType_enum>(tp);
-            int              n     = e_tp->get_value_count();
+            size_t           n     = e_tp->get_value_count();
 
             hash(kind);
             hash(n);
 
             // do NOT hash the names, just the values
-            for (int i = 0; i < n; ++i) {
-                ISymbol const *v_name;
-                int code;
-
-                e_tp->get_value(i, v_name, code);
+            for (size_t i = 0; i < n; ++i) {
+                int code = e_tp->get_value(i)->get_code();
                 hash(code);
             }
         }
@@ -779,11 +782,8 @@ void Function_hasher::hash(IType const *tp)
 
             hash(kind);
             hash(s_tp->get_field_count());
-            for (int i = 0, n = s_tp->get_field_count(); i < n; ++i) {
-                ISymbol const *f_sym = NULL;
-                IType const   *f_tp  = NULL;
-
-                s_tp->get_field(i, f_tp, f_sym);
+            for (size_t i = 0, n = s_tp->get_field_count(); i < n; ++i) {
+                IType const *f_tp  = s_tp->get_field(i)->get_type();
                 hash(f_tp);
             }
         }
@@ -918,6 +918,9 @@ void Function_hasher::hash(IDefinition const *def)
     case IDefinition::DK_ANNOTATION:
         MDL_ASSERT(!"unexpected annotation definition inside a hashed value");
         return;
+    case IDefinition::DK_STRUCT_CATEGORY:
+        MDL_ASSERT(!"unexpected struct category definition inside a hashed value");
+        return;
     case IDefinition::DK_TYPE:
         {
             IType const *type = def->get_type();
@@ -1036,7 +1039,7 @@ void Sema_hasher::compute_hashes()
     }
 
     // first step: recompute the call graph
-    for (int i = 0, n = m_mod.get_exported_definition_count(); i < n; ++i) {
+    for (size_t i = 0, n = m_mod.get_exported_definition_count(); i < n; ++i) {
         Definition const *def = m_mod.get_exported_definition(i);
 
         if (def->has_flag(Definition::DEF_IS_IMPORTED)) {

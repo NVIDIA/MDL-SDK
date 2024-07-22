@@ -33,13 +33,18 @@
 #include "neuray_factory.h"
 #include "options.h"
 #include "search_path.h"
+
 #include <cassert>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <iostream>
 #include <iomanip>
 #include <set>
+
 #include <mi/neuraylib/imdl_i18n_configuration.h>
+
+namespace fs = std::filesystem;
 
 using mi::base::Handle;
 using mi::base::ILogger;
@@ -68,7 +73,8 @@ void add_system_path(IMdl_configuration* mdl_config, vector<string>& directories
     for (mi::Size i(0); i < mdl_config->get_mdl_system_paths_length(); i++)
     {
         std::string dir(mdl_config->get_mdl_system_path(i));
-        if (Util::File(dir).exist())
+        std::error_code ec;
+        if (fs::is_directory(fs::u8path(dir), ec))
         {
             directories.push_back(dir);
         }
@@ -81,7 +87,8 @@ void add_user_path(IMdl_configuration* mdl_config, vector<string> & directories)
     for (mi::Size i(0); i < mdl_config->get_mdl_user_paths_length(); i++)
     {
         std::string dir(mdl_config->get_mdl_user_path(i));
-        if (Util::File(dir).exist())
+        std::error_code ec;
+        if (fs::is_directory(fs::u8path(dir), ec))
         {
             directories.push_back(dir);
         }
@@ -119,7 +126,8 @@ void configuration(INeuray* neuray, Application::Options* options)
         }
         else
         {
-            if (Util::File(path).exist())
+            std::error_code ec;
+            if (fs::is_directory(fs::u8path(path), ec))
             {
                 directories.push_back(path);
             }

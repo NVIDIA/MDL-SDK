@@ -55,11 +55,13 @@ if(NOT __TARGET_ADD_DEPENDENCY_NO_RUNTIME_COPY)
             target_add_vs_debugger_env_path(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
                 PATHS
                     ${CMAKE_BINARY_DIR}/src/prod/lib/mdl_core/$(Configuration)
+                    ${CMAKE_BINARY_DIR}/src/shaders/plugin/mdl_distiller/$(Configuration)
                 )
 
     else()
 
             # instead of copying, we set the rpath for the MDL core in the executables
+            # the rpath for plugins is set in the MDL core library itself
             target_add_rpath(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
                 RPATHS
                     ${CMAKE_BINARY_DIR}/src/prod/lib/mdl_core/${CMAKE_BUILD_TYPE}

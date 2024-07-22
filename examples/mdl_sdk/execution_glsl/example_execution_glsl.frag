@@ -346,7 +346,7 @@ void main() {
 
     // Set up texture access for the chosen material
     tex_start = material_texture_starts[material_index];
-    
+
     // Set MDL material state for state functions in "field" mode
     State state = State(
         /*normal=*/                 vec3(0.0, 0.0, 1.0),
@@ -368,5 +368,5 @@ void main() {
     vec3 res = mdl_mat_subexpr(material_index, state);
 
     // Apply gamma correction and write to output variable
-    FragColor = pow(vec4(res, 1.0), vec4(1.0 / 2.2));
+    FragColor = vec4(pow(res, vec3(1.0 / 2.2)), 1.0);
 }

@@ -37,10 +37,8 @@ endif()
 
 # collect sources
 set(PROJECT_HEADERS
-    "i_stlext_any.h"
     "i_stlext_binary_cast.h"
     "i_stlext_concepts.h"
-    "i_stlext_likely.h"
     "i_stlext_no_unused_variable_warning.h"
     "i_stlext_restore.h"
     "i_stlext_safe_cast.h"

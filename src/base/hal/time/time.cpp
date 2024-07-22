@@ -44,7 +44,7 @@
 #ifndef WIN_NT
 #include <sys/time.h>
 #include <time.h>
-#include <unistd.h>		// for usleep()
+#include <unistd.h>             // for usleep()
 #include <cerrno> // EINVAL
 #else
 #include <mi/base/miwindows.h>
@@ -61,7 +61,7 @@ namespace TIME
 
 // Create time.
 Time Time::mktime(
-    struct tm *tm)	// the time struct
+    struct tm *tm)      // the time struct
 {
     time_t t = ::mktime(tm);
     return Time(static_cast<double>(t));
@@ -69,7 +69,7 @@ Time Time::mktime(
 
 // Report local time.
 int Time::localtime(
-    struct tm *now)	// time descriptor
+    struct tm *now)     // time descriptor
 {
     Time sys_time = get_wallclock_time();
     time_t sys_time_sec = static_cast<time_t>(sys_time.get_seconds());
@@ -130,13 +130,13 @@ std::string Time::interval_to_string() const
     Uint const days = seconds / 86400u;
     Uint const hours = (seconds % 86400u) / 3600u;
     Uint const minutes= (seconds % 3600u) / 60u;
-    Uint const fraction	= static_cast<Uint>(m_seconds * 100u) % 100u;
+    Uint const fraction = static_cast<Uint>(m_seconds * 100u) % 100u;
     seconds %= 60u;
 
     char buffer[256];
-    int	 len = 0;
+    int  len = 0;
     if (days > 0) {
-	len = snprintf(buffer, sizeof(buffer), "%u days, ", days);
+        len = snprintf(buffer, sizeof(buffer), "%u days, ", days);
     }
     snprintf( buffer + len, sizeof(buffer) - len, "%02u:%02u:%02u.%02u", hours, minutes, seconds, fraction);
     return buffer;
@@ -151,24 +151,24 @@ Time get_cached_system_time(const bool call_update_first)
     if (call_update_first)
     {
 #ifndef WIN_NT
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	cached_time = (double)tv.tv_sec + (double)tv.tv_usec * 1.0e-6;
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        cached_time = (double)tv.tv_sec + (double)tv.tv_usec * 1.0e-6;
 #else
-	static bool init = false;
-	static double inv_frequency;
-	if (!init)
-	{
-	    _tzset();
+        static bool init = false;
+        static double inv_frequency;
+        if (!init)
+        {
+            _tzset();
             static LARGE_INTEGER freq={0};
             if (freq.QuadPart == 0)
                 QueryPerformanceFrequency(&freq);
-	    inv_frequency = 1.0/(double)freq.QuadPart;
-	    init = true;
-	}
-	LARGE_INTEGER counter;
-	QueryPerformanceCounter(&counter);
-	cached_time = (double)counter.QuadPart * inv_frequency;
+            inv_frequency = 1.0/(double)freq.QuadPart;
+            init = true;
+        }
+        LARGE_INTEGER counter;
+        QueryPerformanceCounter(&counter);
+        cached_time = (double)counter.QuadPart * inv_frequency;
 #endif
     }
 
@@ -206,7 +206,7 @@ void sleep(
     // The windows version expects milliseconds here.
     Uint millis = (Uint)(time.get_seconds() * 1000. /*+ 0.5*/); // no rounding on windows as Sleep on the average sleeps too long anyway
     if (millis == 0) // 0 is usually similar to a yield, but not really defined, so avoid
-	millis = 1;
+        millis = 1;
     ::Sleep(millis); // note also that the lowest possible 1ms is usually waiting 2ms 
 #else
     useconds_t micros = (useconds_t)(time.get_seconds() * 1000000. + 0.5);

@@ -1641,7 +1641,9 @@ case en: return NULL;
         EXTERNAL_CMATH(RT_TANF,     tanf, FF_FF);
         EXTERNAL_CMATH(RT_TAN,      tan,  DD_DD);
         EXTERNAL_CMATH(RT_TANHF,    tanhf, FF_FF);
-        EXTERNAL_CMATH(RT_TANH,     tanh, DD_DD);
+        EXTERNAL_CMATH(RT_TANH,     tanh,  DD_DD);
+        EXTERNAL_CMATH(RT_TRUNCF,   truncf, FF_FF);
+        EXTERNAL_CMATH(RT_TRUNC,    trunc,  DD_DD);
         LLVM_INTRINSIC(RT_COPYSIGN, copysign);
         UNSUPPORTED(RT_STEPFF);
         UNSUPPORTED(RT_STEPF2);
@@ -1701,6 +1703,8 @@ case en: return NULL;
         EXTERNAL_LIBDEVICE(RT_TAN,               tan,               DD_DD);
         EXTERNAL_LIBDEVICE(RT_TANHF,             tanhf,             FF_FF);
         EXTERNAL_LIBDEVICE(RT_TANH,              tanh,              DD_DD);
+        EXTERNAL_LIBDEVICE(RT_TRUNCF,            truncf,            FF_FF);
+        EXTERNAL_LIBDEVICE(RT_TRUNC,             trunc,             DD_DD);
         EXTERNAL_LIBDEVICE(RT_COPYSIGNF,         copysignf,         FF_FFFF);
         EXTERNAL_LIBDEVICE(RT_COPYSIGN,          copysign,          DD_DDDD);
         EXTERNAL_LIBDEVICE(RT_SINCOSF,           sincosf,           VV_FFffff);
@@ -1755,6 +1759,8 @@ case en: return NULL;
         HLSL_INTRINSIC(RT_FMOD,              fmod,      DD_DDDD);
         HLSL_INTRINSIC(RT_FRACF,             frac,      FF_FF);
         HLSL_INTRINSIC(RT_FRAC,              frac,      DD_DD);
+        HLSL_INTRINSIC(RT_TRUNCF,            trunc,     FF_FF);
+        HLSL_INTRINSIC(RT_TRUNC,             trunc,     DD_DD);
         LLVM_INTRINSIC(RT_LOG,               log);
         LLVM_INTRINSIC(RT_LOG2,              log2);
         LLVM_INTRINSIC(RT_LOG10,             log10);
@@ -1821,6 +1827,8 @@ case en: return NULL;
         GLSL_INTRINSIC(RT_FMOD,              mod,            DD_DDDD);
         GLSL_INTRINSIC(RT_FRACF,             fract,          FF_FF);
         GLSL_INTRINSIC(RT_FRAC,              fract,          DD_DD);
+        GLSL_INTRINSIC(RT_TRUNCF,            trunc,          FF_FF);
+        GLSL_INTRINSIC(RT_TRUNC,             trunc,          DD_DD);
         LLVM_INTRINSIC(RT_LOG,               log);
         LLVM_INTRINSIC(RT_LOG2,              log2);
         UNSUPPORTED(   RT_LOG10F);
@@ -2462,6 +2470,10 @@ llvm::Function *MDL_runtime_creator::find_in_c_runtime(
             return get_c_runtime_func(RT_FRACF, signature);
         }
         return NULL;
+    case RT_MDL_TRUNC:
+        return get_c_runtime_func(RT_TRUNC, signature);
+    case RT_MDL_TRUNCF:
+        return get_c_runtime_func(RT_TRUNCF, signature);
     case RT_MDL_INT_BITS_TO_FLOATI:
         if (m_target_lang == ICode_generator::TL_PTX ||
             m_target_lang == ICode_generator::TL_HLSL ||
@@ -3295,27 +3307,19 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_FRAC:
     case RT_MDL_FRACF:
-        // frac(x) = modf(x, _) + (x < 0.0f ? 1.0 : 0.0)
+        // frac(x) = x - floor(x)
         {
             llvm::Value    *x       = arg_it;
             bool           is_float = code == RT_MDL_FRACF;
-            llvm::Value    *z, *o;
-            llvm::Function *modf_func;
+            llvm::Function *floor_func;
 
             if (is_float) {
-                z = ctx.get_constant(0.0f);
-                o = ctx.get_constant(1.0f);
-                modf_func = get_runtime_func(RT_MODFF);
+                floor_func = get_runtime_func(RT_FLOORF);
             } else {
-                z = ctx.get_constant(0.0);
-                o = ctx.get_constant(1.0);
-                modf_func = get_runtime_func(RT_MODF);
+                floor_func = get_runtime_func(RT_FLOOR);
             }
-            llvm::Value *cmp = ctx->CreateFCmpOLT(x, z);
-            llvm::Value *c   = ctx->CreateSelect(cmp, o, z);
-            llvm::Value *tmp = ctx.create_local(x->getType(), "tmp");
 
-            llvm::Value *res = ctx->CreateFAdd(ctx->CreateCall(modf_func, { x, tmp }), c);
+            llvm::Value *res = ctx->CreateFSub(x, ctx->CreateCall(floor_func, { x }));
             ctx.create_return(res);
         }
         if (m_always_inline_rt) {
@@ -3387,6 +3391,32 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
                 floor_func = get_runtime_func(RT_FLOOR);
             }
             ctx.create_return(ctx->CreateCall(floor_func, ctx->CreateFAdd(x, c)));
+        }
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
+        break;
+    case RT_MDL_ROUND_AWAY_FROM_ZERO:
+    case RT_MDL_ROUND_AWAY_FROM_ZEROF:
+        // round(x) = floor(x + 0.5)
+        {
+            llvm::Value    *x       = arg_it;
+            bool           is_float = code == RT_MDL_ROUND_AWAY_FROM_ZEROF;
+            llvm::Value    *c;
+            llvm::Function *trunc_func;
+            llvm::Function *sign_func;
+
+            if (is_float) {
+                c = ctx.get_constant(0.5f);
+                trunc_func = get_runtime_func(RT_TRUNCF);
+                sign_func  = get_runtime_func(RT_MDL_SIGNF);
+            } else {
+                c = ctx.get_constant(0.5);
+                trunc_func = get_runtime_func(RT_TRUNC);
+                sign_func  = get_runtime_func(RT_MDL_SIGN);
+            }
+            c = ctx->CreateFMul(c, ctx->CreateCall(sign_func, x));
+            ctx.create_return(ctx->CreateCall(trunc_func, ctx->CreateFAdd(x, c)));
         }
         if (m_always_inline_rt) {
             func->addFnAttr(llvm::Attribute::AlwaysInline);
@@ -5085,29 +5115,34 @@ Expression_result LLVM_code_generator::translate_call_intrinsic_function(
             ctx->SetInsertPoint(ok_bb);
         }
     }
+
     // call it
-    llvm::Value *res = ctx->CreateCall(callee, args);
+    llvm::Value *call = ctx->CreateCall(callee, args);
+    Expression_result res;
 
     if (sret_res != NULL) {
         // the result was passed on the stack
-        res = ctx->CreateLoad(sret_res);
+        res = Expression_result::ptr(sret_res);
+    } else {
+        // the result was returned by the call
+        res = Expression_result::value(call);
     }
 
     // derivative result was requested, but not delivered by intrinsic?
     if (m_type_mapper.is_deriv_type(call_expr->get_type()) &&
-            !m_type_mapper.is_deriv_type(res->getType())) {
+            !m_type_mapper.is_deriv_type(res.get_value_type())) {
         // convert to derivative
-        llvm::Value *zero = llvm::Constant::getNullValue(res->getType());
+        llvm::Value *zero = llvm::Constant::getNullValue(res.get_value_type());
         llvm::Value *agg = llvm::ConstantAggregateZero::get(
             m_type_mapper.lookup_deriv_type(call_expr->get_type()));
-        agg = ctx->CreateInsertValue(agg, res,  {0});
+        agg = ctx->CreateInsertValue(agg, res.as_value(ctx), {0});
         agg = ctx->CreateInsertValue(agg, zero, {1});
         agg = ctx->CreateInsertValue(agg, zero, {2});
-        res = agg;
+        res = Expression_result::value(agg);
     }
 
     if (end_bb != NULL) {
-        ctx->CreateStore(res, tmp);
+        ctx->CreateStore(res.as_value(ctx), tmp);
 
         ctx->CreateBr(end_bb);
         ctx->SetInsertPoint(end_bb);
@@ -5115,7 +5150,7 @@ Expression_result LLVM_code_generator::translate_call_intrinsic_function(
         return Expression_result::ptr(tmp);
     }
 
-    return Expression_result::value(res);
+    return res;
 }
 
 // Create a runtime.

@@ -34,15 +34,15 @@
 
 #include "i_attr_types.h"
 
-#include <base/data/db/i_db_journal_type.h>
-#include <base/system/stlext/i_stlext_any.h>
-
+#include <any>
 #include <cstddef>
-#include <base/lib/robin_hood/robin_hood.h>
 #include <set>
 #include <string>
 #include <utility>
 #include <atomic>
+
+#include <base/data/db/i_db_journal_type.h>
+#include <base/lib/robin_hood/robin_hood.h>
 
 namespace MI {
 namespace ATTR {
@@ -61,17 +61,15 @@ class Attribute_spec
   public:
     /// Data retrieval
     //@{
-    Uint get_id() const					{ return m_id; }
-    const std::string& get_name() const		{ return m_name; }
-    Type_code get_typecode() const			{ return m_type; }
-    Uint get_array_size() const				{ return m_array_size; }
-    STLEXT::Any get_default() const			{ return m_default; }
+    Uint get_id() const                                 { return m_id; }
+    const std::string& get_name() const         { return m_name; }
+    Type_code get_typecode() const                      { return m_type; }
+    Uint get_array_size() const                         { return m_array_size; }
+    std::any get_default() const                        { return m_default; }
     // These two values are here for reserved attributes only, since there former storage had this
     // information attached to it.
-    bool is_inheritable() const				{ return m_inheritable; }
-    DB::Journal_type get_journal_flags() const		{ return m_journalflags; }
-    // Support for deprecated names - for backward compatability.
-    const std::string& get_deprecated_name() const	{ return m_deprecated_name; }
+    bool is_inheritable() const                         { return m_inheritable; }
+    DB::Journal_type get_journal_flags() const          { return m_journalflags; }
     //@}
 
   private:
@@ -81,20 +79,19 @@ class Attribute_spec
         const std::string& name,
         Type_code typecode,
         Uint array_size=null_index,
-        const STLEXT::Any& value=STLEXT::Any(),
+        const std::any& value=std::any(),
         bool inheritable=true,
         DB::Journal_type journal_flags=DB::JOURNAL_NONE);
 
-    Uint m_id;						///< id of attribute
-    std::string m_name;				///< name of attribute
-    std::string m_deprecated_name;			///< deprecated name
-    Type_code m_type;					///< required type of sttribute
-    Uint m_array_size;					///< the arraysize
-    STLEXT::Any m_default;				///< its default
+    Uint m_id;                                          ///< id of attribute
+    std::string m_name;                         ///< name of attribute
+    Type_code m_type;                                   ///< required type of sttribute
+    Uint m_array_size;                                  ///< the arraysize
+    std::any m_default;                         ///< its default
     // These two values are here only for reserved attributes, since there former storage had this
     // information attached to it.
-    bool m_inheritable;					///< may have GLOBAL flag set
-    DB::Journal_type m_journalflags;			///< what to do if value changes
+    bool m_inheritable;                                 ///< may have GLOBAL flag set
+    DB::Journal_type m_journalflags;                    ///< what to do if value changes
 
     friend class Attribute_registry;
     friend bool operator<(const Attribute_spec&, const Attribute_spec&);
@@ -124,14 +121,9 @@ class Attribute_registry
         const std::string& name,
         Type_code typecode,
         Uint array_size=null_index,
-        const STLEXT::Any& value=STLEXT::Any(),
+        const std::any& value=std::any(),
         bool inheritable=true,
         DB::Journal_type journal_flags=DB::JOURNAL_NONE);
-    /// Add an deprecated name for the given id. Currently only one deprecated name is allowed.
-    /// \return success
-    bool add_deprecated_name(
-        const std::string& dep_name,
-        Uint id);
 
     /// Retrieve the \c Attribute_spec of the given \p name.
     /// \return found Attribute_spec or 0 else
@@ -148,8 +140,8 @@ class Attribute_registry
         const std::string& name);
 
   private:
-    std::set<Attribute_spec> m_registry;		///< the actual collection
-    robin_hood::unordered_map<std::string, Uint> m_name_mapping;	///< mapping name to id
+    std::set<Attribute_spec> m_registry;                ///< the actual collection
+    robin_hood::unordered_map<std::string, Uint> m_name_mapping;        ///< mapping name to id
     std::atomic<int32_t> m_counter;
 
     /// Find a new unique id for a new registry entry.
@@ -164,7 +156,7 @@ class Attribute_registry
         const std::string& name,
         Type_code typecode,
         Uint array_size=null_index,
-        const STLEXT::Any& value=STLEXT::Any(),
+        const std::any& value=std::any(),
         bool inheritable=true,
         DB::Journal_type journal_flags=DB::JOURNAL_NONE);
 

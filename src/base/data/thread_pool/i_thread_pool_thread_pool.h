@@ -437,19 +437,19 @@ private:
     bool m_thread_affinity;
 
     /// The type of the vector of all worker threads.
-    typedef std::vector<Worker_thread*> All_threads;
+    using All_threads = std::vector<Worker_thread*>;
     /// The vector of all worker threads. Protected by m_lock.
     All_threads m_all_threads;
 
     /// The type of the set of sleeping worker threads.
-    typedef std::set<Worker_thread*> Sleeping_threads;
+    using Sleeping_threads = std::set<Worker_thread*>;
     /// The set of sleeping worker threads. Protected by m_lock.
     Sleeping_threads m_sleeping_threads;
 
     /// The type of the job list. One job list is used for each priority.
-    typedef std::list<mi::base::Handle<IJob> > Job_list;
+    using Job_list = std::list<mi::base::Handle<IJob>>;
     /// The type of the job queue. Maps priorities to job lists.
-    typedef std::map<mi::Sint32, Job_list> Job_queue;
+    using Job_queue = std::map<mi::Sint32, Job_list>;
     /// The job queue. Protected by m_lock.
     ///
     /// Actually, this is a map of lists instead of a queue such that we can efficiently insert and
@@ -461,7 +461,7 @@ private:
     Job_queue m_job_queue;
 
     /// The type of the maps below.
-    typedef std::map<mi::Uint64, IJob*> Job_map;
+    using Job_map = std::map<mi::Uint64, IJob*>;
     /// The map that holds for each running worker thread the job that it is executing.
     /// Protected by m_lock.
     Job_map m_running_jobs;

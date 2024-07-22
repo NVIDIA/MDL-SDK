@@ -113,7 +113,13 @@ static void print_messages(Messages const &msgs, IPrinter *printer)
 
 Mdlc::Mdlc(char const *program_name)
 : m_program(program_name)
+, m_opt_level('2')
+, m_mat_ior_is_varying(true)
 , m_dump_dag(false)
+, m_dump_dg(false)
+, m_dump_cg(false)
+, m_strict(true)
+, m_resolve_resources(true)
 , m_verbose(false)
 , m_syntax_coloring(false)
 , m_show_positions(false)
@@ -245,6 +251,8 @@ int Mdlc::run(int argc, char *argv[])
         /*18*/ { "experimental-features",  mi::getopt::NO_ARGUMENT,       NULL, 'e' },
         /*19*/ { "inline",                 mi::getopt::NO_ARGUMENT,       NULL, 'i' },
         /*20*/ { "plugin",                 mi::getopt::REQUIRED_ARGUMENT, NULL, 'l' },
+        /*21*/ { "varying-ior",            mi::getopt::NO_ARGUMENT,       NULL, 0 },
+        /*22*/ { "uniform-ior",            mi::getopt::NO_ARGUMENT,       NULL, 0 },
         /*22*/ { "help",                   mi::getopt::NO_ARGUMENT,       NULL, '?' },
         /*23*/ { NULL,                     0,                             NULL, 0 }
     };
@@ -257,12 +265,6 @@ int Mdlc::run(int argc, char *argv[])
     std::string warn_options;
 
     MDL_search_path *search_path(new MDL_search_path);
-
-    m_imdl = mi::mdl::initialize();
-
-
-    mi::mdl::Options &comp_options = m_imdl->access_options();
-
 
     std::vector<std::string> plugin_filenames;
 
@@ -279,7 +281,7 @@ int Mdlc::run(int argc, char *argv[])
                 if (level == '0' || level == '1' || level == '2' || level == '3') {
                     if (s[1] == '\0') {
                         valid = true;
-                        comp_options.set_option(MDL_OPTION_OPT_LEVEL, mi::getopt::optarg);
+                        m_opt_level = level;
                     }
                 }
                 if (!valid) {
@@ -361,9 +363,9 @@ int Mdlc::run(int argc, char *argv[])
             break;
         case 'd':
             if (strcasecmp(mi::getopt::optarg, "dg") == 0) {
-                comp_options.set_option(MDL_OPTION_DUMP_DEPENDENCE_GRAPH, "true");
+                m_dump_dg = true;
             } else if (strcasecmp(mi::getopt::optarg, "cg") == 0) {
-                comp_options.set_option(MDL_OPTION_DUMP_CALL_GRAPH, "true");
+                m_dump_cg = true;
             } else if (strcasecmp(mi::getopt::optarg, "dag") == 0) {
                 m_dump_dag = true;
             } else {
@@ -396,16 +398,16 @@ int Mdlc::run(int argc, char *argv[])
         case '\0':
             switch (longidx) {
             case 2:
-                comp_options.set_option(MDL_OPTION_STRICT, "true");
+                m_strict = true;
                 break;
             case 3:
-                comp_options.set_option(MDL_OPTION_STRICT, "false");
+                m_strict = false;
                 break;
             case 4:
-                comp_options.set_option(MDL_OPTION_RESOLVE_RESOURCES, "true");
+                m_resolve_resources = true;
                 break;
             case 5:
-                comp_options.set_option(MDL_OPTION_RESOLVE_RESOURCES, "false");
+                m_resolve_resources = false;
                 break;
             case 10:
                 m_check_root = mi::getopt::optarg;
@@ -436,6 +438,12 @@ int Mdlc::run(int argc, char *argv[])
             case 20:
                 plugin_filenames.push_back(mi::getopt::optarg);
                 break;
+            case 21:
+                m_mat_ior_is_varying = true;
+                break;
+            case 22:
+                m_mat_ior_is_varying = false;
+                break;
             default:
                 fprintf(
                     stderr,
@@ -452,6 +460,26 @@ int Mdlc::run(int argc, char *argv[])
     if (opt_error) {
         return EXIT_FAILURE;
     }
+
+    m_imdl = mi::mdl::initialize(m_mat_ior_is_varying);
+
+
+    mi::mdl::Options &comp_options = m_imdl->access_options();
+
+
+    char ol[2] = { m_opt_level, '\0' };
+    comp_options.set_option(
+        MDL_OPTION_OPT_LEVEL, ol);
+
+    comp_options.set_option(
+        MDL_OPTION_STRICT, m_strict ? "true" : "false");
+    comp_options.set_option(
+        MDL_OPTION_RESOLVE_RESOURCES, m_resolve_resources ? "true" : "false");
+
+    comp_options.set_option(
+        MDL_OPTION_DUMP_DEPENDENCE_GRAPH, m_dump_dg ? "true" : "false");
+    comp_options.set_option(
+        MDL_OPTION_DUMP_CALL_GRAPH, m_dump_cg ? "true" : "false");
 
     comp_options.set_option(
         MDL_OPTION_MDL_NEXT, mdl_next ? "true" : "false");
@@ -943,7 +971,7 @@ bool Directory::open(
     // if we find a '*', just leave things as they are
     // note that this will likely not work for a 'c:/users/*/log' call
     if (strchr(new_path.c_str(), '*') == NULL) {
-        size_t len = strlen(path);
+        size_t len = new_path.size();
 
         // need this as m_path is const char *
         std::string temp_path(new_path);
@@ -1003,8 +1031,8 @@ bool Directory::read_next_file()
     bool success = false;
     if (m_dir->m_first_file) {
         m_dir->m_first_handle = ::FindFirstFile(
-            m_path.c_str(),			// our path
-            &m_dir->m_find_data);	// where windows puts the results
+            m_path.c_str(),                     // our path
+            &m_dir->m_find_data);       // where windows puts the results
 
         if (m_dir->m_first_handle != INVALID_HANDLE_VALUE) {
             success = true;
@@ -1065,7 +1093,7 @@ bool Directory::exists(
     // minimum spec?
     HANDLE hDir = ::CreateFile(
         newpath.c_str(),    // what are we opening
-        0,			        // access, we can use 0 for existence test
+        0,                              // access, we can use 0 for existence test
         FILE_SHARE_READ,    // share mode
         NULL,               // security attributes
         OPEN_EXISTING,      // creation disposition
@@ -1095,7 +1123,7 @@ bool Directory::isdir(char const *name) const
 // Wrapper for the Unix DIR structure.
 struct Directory::Hal_dir
 {
-    DIR *m_dp;			// open directory, 0 if not open
+    DIR *m_dp;                  // open directory, 0 if not open
 };
 
 Directory::Directory()

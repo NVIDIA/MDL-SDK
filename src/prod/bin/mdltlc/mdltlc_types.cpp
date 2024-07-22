@@ -1147,11 +1147,11 @@ Type *Type_factory::import_type(mi::mdl::IType const *mdl_type) {
         Symbol *name = m_symtab.get_symbol(te->get_symbol()->get_name());
 
         Type_enum *enum_t = create_enum(name);
-        for (int i = 0; i < te->get_value_count(); i++) {
-            mi::mdl::ISymbol const *param_name;
-            int param_code;
+        for (size_t i = 0; i < te->get_value_count(); i++) {
+            mi::mdl::IType_enum::Value const *e_value = te->get_value(i);
+            mi::mdl::ISymbol const *param_name = e_value->get_symbol();
+            int param_code = e_value->get_code();
 
-            te->get_value(i, param_name, param_code);
             Symbol *n = m_symtab.get_symbol(param_name->get_name());
             Enum_variant_list_elem *field = m_builder.create<Enum_variant_list_elem>(n, param_code);
             enum_t->add_variant(field);
@@ -1238,11 +1238,11 @@ Type *Type_factory::import_type(mi::mdl::IType const *mdl_type) {
             return get_material();
 
         Type_struct *struct_t = create_struct(name);
-        for (int i = 0; i < ts->get_field_count(); i++) {
-            mi::mdl::IType const *param_type;
-            mi::mdl::ISymbol const *param_name;
+        for (size_t i = 0; i < ts->get_field_count(); i++) {
+            mi::mdl::IType_struct::Field const *s_field = ts->get_field(i);
+            mi::mdl::IType const *param_type = s_field->get_type();
+            mi::mdl::ISymbol const *param_name = s_field->get_symbol();
 
-            ts->get_field(i, param_type, param_name);
             Symbol *n = m_symtab.get_symbol(param_name->get_name());
             Type *t = import_type(param_type);
             Named_type_list_elem *field = m_builder.create<Named_type_list_elem>(n, t);

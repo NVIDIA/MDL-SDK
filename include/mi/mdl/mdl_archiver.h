@@ -116,6 +116,7 @@ public:
         EK_ENUM,            ///< MDL enums.
         EK_CONST,           ///< MDL constants.
         EK_ANNOTATION,      ///< MDL annotations.
+        EK_STRUCT_CATEGORY, ///< MDL struct categories.
         EK_LAST = EK_ANNOTATION
     };
 

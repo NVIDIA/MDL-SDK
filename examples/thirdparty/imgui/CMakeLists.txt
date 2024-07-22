@@ -60,9 +60,9 @@ if(WINDOWS)
             "imgui_impl_dx12.cpp"
             "imgui_impl_dx12.h"
         )
-		include_directories(
-			AFTER ${MDL_DEPENDENCY_D3D12_INCLUDE} ${MDL_DEPENDENCY_DXGI_INCLUDE}
-		)
+        include_directories(
+            AFTER ${MDL_DEPENDENCY_D3D12_INCLUDE} ${MDL_DEPENDENCY_DXGI_INCLUDE}
+        )
     endif()
 endif()
 
