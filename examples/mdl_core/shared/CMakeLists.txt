@@ -39,6 +39,7 @@ endif()
 set(PROJECT_SOURCES
     "example_cuda_shared.h"
     "example_shared.h"
+    "example_shared.cpp"
     "example_shared_backends.h"
     "texture_support_cuda.h"
     ${DUMMY_CPP}
@@ -51,25 +52,26 @@ create_from_base_preset(
     OUTPUT_NAME "shared"
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
+    STATIC_MSVC_RUNTIME
 )
 add_library(mdl_core::shared ALIAS ${PROJECT_NAME})
 
 # inject the MDL_SAMPLES_ROOT path
-target_compile_definitions(${PROJECT_NAME} 
-    PUBLIC
+target_compile_definitions(${PROJECT_NAME}
+    PRIVATE
         "MDL_SAMPLES_ROOT=\"${CMAKE_CURRENT_SOURCE_DIR}/../..\""
     )
 
 # add dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME} 
-    DEPENDS 
-        mdl::mdl_core    
-    NO_RUNTIME_COPY     # header only -> the consumer will also add this dependency
+target_add_dependencies(TARGET ${PROJECT_NAME}
+    DEPENDS
+        mdl::mdl_core
+    NO_RUNTIME_COPY
     )
 
 # add include directories
 target_include_directories(${PROJECT_NAME}
     INTERFACE
         # the template makes non public headers private by default
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> 
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     )

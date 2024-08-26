@@ -77,12 +77,14 @@ namespace MI { namespace STLEXT {
 class Non_copyable
 {
 private:
-    Non_copyable(Non_copyable const &);
-    Non_copyable& operator= (Non_copyable const &);
+    Non_copyable(Non_copyable const &) = delete;
+    Non_copyable(Non_copyable&&) = delete;
+    Non_copyable& operator= (Non_copyable const &) = delete;
+    Non_copyable& operator= (Non_copyable&&) = delete;
 
 protected:
-    Non_copyable()  { }
-    ~Non_copyable() { }
+    Non_copyable() = default;
+    ~Non_copyable() = default;
 };
 
 
@@ -99,7 +101,7 @@ protected:
 
 struct Abstract_interface : private Non_copyable
 {
-    virtual ~Abstract_interface() { }
+    virtual ~Abstract_interface() = default;
 };
 
 

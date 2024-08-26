@@ -460,19 +460,19 @@ are transformed into calls to one of the functions:
 - `bsdf_unbounded_mix_1, bsdf_unbounded_mix_2, bsdf_unbounded_mix_3, bsdf_unbounded_mix_4`
 - `bsdf_color_mix_1, bsdf_color_mix_2, bsdf_color_mix_3, bsdf_color_mix_4`
 - `bsdf_color_clamped_mix_1, bsdf_color_clamped_mix_2, bsdf_color_clamped_mix_3, bsdf_color_clamped_mix_4`
-- `bsdf_color_unboudned_mix_1, bsdf_color_unbounded_mix_2, bsdf_color_unbounded_mix_3, bsdf_color_unbounded_mix_4`
+- `bsdf_color_unbounded_mix_1, bsdf_color_unbounded_mix_2, bsdf_color_unbounded_mix_3, bsdf_color_unbounded_mix_4`
 - `edf_mix_1, edf_mix_2, edf_mix_3, edf_mix_4`
 - `edf_clamped_mix_1, edf_clamped_mix2, edf_clamped_mix_3, edf_clamped_mix_4`
 - `edf_unbounded_mix_1, edf_unbounded_mix_2, edf_unbounded_mix_3, edf_unbounded_mix_4`
 - `edf_color_mix_1, edf_color_mix_2, edf_color_mix_3, edf_color_mix_4`
 - `edf_color_clamped_mix_1, edf_color_clamped_mix_2, edf_color_clamped_mix_3, edf_color_clamped_mix_4`
-- `edf_color_unboudned_mix_1, edf_color_unbounded_mix_2, edf_color_unbounded_mix_3, edf_color_unbounded_mix_4`
+- `edf_color_unbounded_mix_1, edf_color_unbounded_mix_2, edf_color_unbounded_mix_3, edf_color_unbounded_mix_4`
 - `vdf_mix_1, vdf_mix_2, vdf_mix_3, vdf_mix_4`
 - `df_clamped_mix_1, vdf_clamped_mix2, vdf_clamped_mix_3, vdf_clamped_mix_4`
 - `vdf_unbounded_mix_1, vdf_unbounded_mix_2, vdf_unbounded_mix_3, vdf_unbounded_mix_4`
 - `vdf_color_mix_1, vdf_color_mix_2, vdf_color_mix_3, vdf_color_mix_4`
 - `vdf_color_clamped_mix_1, vdf_color_clamped_mix_2, vdf_color_clamped_mix_3, vdf_color_clamped_mix_4`
-- `vdf_color_unboudned_mix_1, vdf_color_unbounded_mix_2, vdf_color_unbounded_mix_3, vdf_color_unbounded_mix_4`
+- `vdf_color_unbounded_mix_1, vdf_color_unbounded_mix_2, vdf_color_unbounded_mix_3, vdf_color_unbounded_mix_4`
 
 depending of their number and types of parameters before rule
 application and back afterwards. That means that rules can only match
@@ -491,7 +491,7 @@ The mixer call transformation in the rule engine also applies some
 normalization to the calls. Since the order of parameters for these
 functions does not matter, the pairs of weights and DFs are sorted by
 the semantics of the argument DFs.  DF semantics are represented by
-the `mi::mdl::IDefinition::Semantics` enumeration in the MDL-SDK and
+the `mi::mdl::IDefinition::Semantics` enumeration in the MDL SDK and
 the calls in mixer calls are ordered according to the the numerical
 values of the C++ enum variants.
 

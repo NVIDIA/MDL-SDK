@@ -566,7 +566,7 @@ SERIAL::Serializable *Type::deserialize(
                 SERIAL::read(deser,&i_val);
                 string s_val;
                 SERIAL::read(deser,&s_val);
-                m_enum->push_back(std::make_pair(i_val, s_val));
+                m_enum->emplace_back(i_val, s_val);
             }
         }
         else

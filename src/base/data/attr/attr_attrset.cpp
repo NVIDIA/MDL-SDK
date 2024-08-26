@@ -151,8 +151,8 @@ void set_bool_attrib(
     Attribute* flag = attr_set.lookup(id);
 
     if (!flag && create) {
-        const char* name = 0;
-        Uint array_size = 1;
+        const char* name = nullptr;
+        constexpr Uint array_size = 1;
         // m_flag_value
         Type type(TYPE_BOOLEAN, name, array_size);
         auto attr_ptr = std::make_shared<Attribute>(id, type);
@@ -186,9 +186,9 @@ const Attribute *Attribute_set::lookup(
 {
     Const_iter it = m_attrs.find(id);
     if (it == m_attrs.end())
-        return 0;
+        return nullptr;
     else
-        return (*it).second.get();
+        return it->second.get();
 }
 
 const Attribute *Attribute_set::lookup(
@@ -211,7 +211,7 @@ std::shared_ptr<Attribute> Attribute_set::lookup_shared_ptr(
     if (it == m_attrs.end())
         return std::shared_ptr<Attribute>();
     else
-        return (*it).second;
+        return it->second;
 }
 
 
@@ -244,8 +244,7 @@ bool Attribute_set::attach(
     }
 
     // the actual attachment happens here (won't accept const here)
-    bool result = m_attrs.insert(
-        std::make_pair(attr->get_id(), attr)).second;
+    bool result = m_attrs.emplace(attr->get_id(), attr).second;
     ASSERT(M_ATTR, result || other);
 
     // return success
@@ -264,7 +263,7 @@ std::shared_ptr<Attribute> Attribute_set::detach(
     std::shared_ptr<Attribute> attr;
     Iter it = m_attrs.find(id);
     if (it != m_attrs.end()) {
-        attr = (*it).second;
+        attr = it->second;
         m_attrs.erase(it);
     }
 
@@ -302,13 +301,13 @@ void Attribute_set::deep_copy(
 
     Const_iter it, end = other.m_attrs.end();
     for (it=other.m_attrs.begin(); it != end; ++it) {
-        const Attribute *attr = (*it).second.get();
+        const Attribute *attr = it->second.get();
         if (attr) {
             std::shared_ptr<Attribute> new_attr(attr->copy());
 
             // I do not use attach() here to avoid the useless error checking.
             // It is useless here since we start with an empty m_attrs.
-            m_attrs.insert(std::make_pair(new_attr->get_id(), new_attr));
+            m_attrs.emplace(new_attr->get_id(), new_attr);
         }
     }
 }
@@ -350,11 +349,11 @@ void collect_tags_rec(Type_iterator& iter, DB::Tag_set& result)
     // Please note that the client's code takes care of the listsize.
     for (; !iter.at_end(); iter.to_next()) {
         char* value = iter.get_value();
-        int arraysize = iter->get_arraysize();
+        Uint arraysize = iter->get_arraysize();
 
         // a dynamic array - hence create out_array and reset the value pointers accordingly
         if (!arraysize && iter->get_typecode() != TYPE_ARRAY) {
-            Dynamic_array* array = (Dynamic_array*)value;
+            const Dynamic_array* const array = (Dynamic_array*)value;
             arraysize = array->m_count;
 
             // no alignment required here
@@ -389,7 +388,7 @@ void collect_tags_rec(Type_iterator& iter, DB::Tag_set& result)
             || iter->get_typecode() == TYPE_CALL)
         {
             size_t size = iter->sizeof_elem();
-            for (int a=0; a < arraysize; ++a) {
+            for (Uint a=0; a < arraysize; ++a) {
                 // in case of TYPE_CALL, the value points right to the function's tag
                 if (iter->get_typecode() == TYPE_CALL) {
                     DB::Tag tag(*reinterpret_cast<DB::Tag*>(value));
@@ -397,8 +396,7 @@ void collect_tags_rec(Type_iterator& iter, DB::Tag_set& result)
                         result.insert(tag);
                     // need to reset the value pointer such that following Type_iterator sub is
                     // correct
-                    value += Type::sizeof_one(TYPE_STRING);
-                    value += Type::sizeof_one(TYPE_STRING);
+                    value += 2*Type::sizeof_one(TYPE_STRING);
                 }
                 Type_iterator sub(&iter, value);
                 collect_tags_rec(sub, result);
@@ -414,7 +412,7 @@ void collect_tags_rec(Type_iterator& iter, DB::Tag_set& result)
             // only interested in Tag-typed data
             if (type == 't') {
                 ASSERT(M_ATTR, count == 1);
-                for (int a=0; a < arraysize; ++a) {
+                for (Uint a=0; a < arraysize; ++a) {
                     DB::Tag tag (*reinterpret_cast<DB::Tag*>(value));
                     if (tag.is_valid())
                         result.insert(tag);
@@ -475,8 +473,8 @@ const SERIAL::Serializable *Attribute_set::serialize(
 
     Const_iter it, end = m_attrs.end();
     for (it=m_attrs.begin(); it != end; ++it) {
-        ASSERT(M_ATTR, (*it).second);           // no NULL pointers supported
-        serializer->serialize(const_cast<Attribute*>((*it).second.get()));
+        ASSERT(M_ATTR, it->second);           // no NULL pointers supported
+        serializer->serialize(const_cast<Attribute*>(it->second.get()));
     }
 
     return this+1;
@@ -520,7 +518,7 @@ void Attribute_set::dump() const
 {
     Const_iter it, end = m_attrs.end();
     for (it=m_attrs.begin(); it != end; ++it)
-        (*it).second->dump();
+        it->second->dump();
 }
 
 
@@ -546,7 +544,7 @@ void Attribute_set::print(
 
     Const_iter it, end = m_attrs.end();
     for (it=m_attrs.begin(); it != end; ++it) {
-        std::shared_ptr<Attribute> attr = (*it).second;
+        std::shared_ptr<Attribute> attr = it->second;
         print_attribute(attr.get(), transaction);
     }
 }

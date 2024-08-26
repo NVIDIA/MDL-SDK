@@ -463,11 +463,18 @@ export material md_parameters_uniform_auto_varying(
 ) = material();
 
 
-// A function with uniform/auto/varying parameters.
+// A function with uniform/auto/varying int parameters.
 export int fd_parameters_uniform_auto_varying(
     uniform int param0_uniform = 42 [[ unused() ]],
             int param1_auto    = 42 [[ unused() ]],
     varying int param2_varying = 42 [[ unused() ]]
+) { return 42; }
+
+// A function with uniform/auto/varying color parameters.
+export int fd_parameters_uniform_auto_varying_color(
+    uniform color param0_uniform = color() [[ unused() ]],
+            color param1_auto    = color() [[ unused() ]],
+    varying color param2_varying = color() [[ unused() ]]
 ) { return 42; }
 
 // A uniform function.

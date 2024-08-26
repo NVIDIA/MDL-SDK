@@ -51,22 +51,18 @@
 #include <mach-o/dyld.h>   // _NSGetExecutablePath
 #endif
 
-#ifndef MDL_SAMPLES_ROOT
-#define MDL_SAMPLES_ROOT "."
-#endif
-
 typedef mi::mdl::IMDL *(IMDL_factory)(bool, mi::base::IAllocator *);
 
 
 /// Pointer to the DSO handle. Cached here for unload().
-void* g_dso_handle = 0;
+extern void* g_dso_handle;
 
 /// Returns the value of the given environment variable.
 ///
 /// \param env_var   environment variable name
 /// \return          the value of the environment variable or an empty string
 ///                  if that variable does not exist or does not have a value.
-std::string get_environment(const char* env_var)
+inline std::string get_environment(const char* env_var)
 {
     std::string value;
 #ifdef MI_PLATFORM_WINDOWS
@@ -88,7 +84,7 @@ std::string get_environment(const char* env_var)
 //
 // \param  directory path to check
 // \return true, of the path points to a directory, false if not
-bool dir_exists(const char* path)
+inline bool dir_exists(const char* path)
 {
 #ifdef MI_PLATFORM_WINDOWS
     DWORD attrib = GetFileAttributesA(path);
@@ -105,28 +101,25 @@ bool dir_exists(const char* path)
 
 /// Returns a string pointing to the directory relative to which the MDL-Core examples
 /// expect their resources, e. g. materials or textures.
-std::string get_samples_root()
-{
-    std::string samples_root = get_environment("MDL_SAMPLES_ROOT");
-    if (samples_root.empty()) {
-        samples_root = MDL_SAMPLES_ROOT;
-    }
-    if (dir_exists(samples_root.c_str()))
-        return samples_root;
-
-    return ".";
-}
+std::string get_samples_root();
 
 /// Returns a string pointing to the MDL search root for the MDL-Core examples
-std::string get_samples_mdl_root()
+inline std::string get_samples_mdl_root()
 {
     return get_samples_root() + "/mdl";
 }
 
+/// Returns a directory that contains ::nvidia::core_definitions and ::nvida::axf_to_mdl.
+///
+/// Might also return "." if that directory is the "mdl" subdirectory of #get_samples_root()
+/// and no extra handling is required.
+std::string get_src_shaders_mdl();
+
 /// Ensures that the console with the log messages does not close immediately. On Windows, the user
 /// is asked to press enter. On other platforms, nothing is done as the examples are most likely
 /// started from the console anyway.
-void keep_console_open() {
+inline void keep_console_open()
+{
 #ifdef MI_PLATFORM_WINDOWS
     if (IsDebuggerPresent()) {
         fprintf(stderr, "Press enter to continue . . . \n");
@@ -164,7 +157,7 @@ void keep_console_open() {
 /// \param filename    The file name of the DSO. It is feasible to pass \c nullptr, which uses a
 ///                    built-in default value.
 /// \return            A pointer to an instance of the main #mi::mdl::IMDL interface
-mi::mdl::IMDL* load_mdl_compiler(const char* filename = 0)
+inline mi::mdl::IMDL* load_mdl_compiler(const char* filename = 0)
 {
     if (!filename)
         filename = "libmdl_core" MI_BASE_DLL_FILE_EXT;
@@ -215,7 +208,7 @@ mi::mdl::IMDL* load_mdl_compiler(const char* filename = 0)
 }
 
 /// Unloads the mdl_core lib.
-bool unload()
+inline bool unload()
 {
 #ifdef MI_PLATFORM_WINDOWS
     int result = FreeLibrary((HMODULE)g_dso_handle);
@@ -244,7 +237,7 @@ bool unload()
 }
 
 /// Sleep the indicated number of seconds.
-void sleep_seconds(mi::Float32 seconds)
+inline void sleep_seconds(mi::Float32 seconds)
 {
 #ifdef MI_PLATFORM_WINDOWS
     Sleep(static_cast<DWORD>(seconds * 1000));
@@ -259,7 +252,7 @@ void sleep_seconds(mi::Float32 seconds)
 #endif
 
 /// Returns the folder path of the current executable.
-std::string get_executable_folder()
+inline std::string get_executable_folder()
 {
 #ifdef MI_PLATFORM_WINDOWS
     char path[MAX_PATH];
@@ -351,7 +344,7 @@ public:
         m_out = filename == nullptr ?
             mdl_compiler->create_std_stream(mi::mdl::IMDL::OS_STDOUT) :
             mdl_compiler->create_file_output_stream(filename);
-            
+
         m_printer = mi::base::make_handle(mdl_compiler->create_printer(m_out.get()));
         m_printer->enable_color(true);
         m_ctx = mdl_compiler->create_thread_context();
@@ -442,7 +435,7 @@ public:
                 mi::base::Handle<mi::mdl::IModule const> imported_module(module->get_import(i));
                 add_module(imported_module.get());
             }
-            
+
             mi::base::Handle<mi::mdl::IGenerated_code_dag const> dag(m_dag_be->compile(module));
             m_dags[module->get_name()] = dag;
 
@@ -468,7 +461,7 @@ public:
         it->second->retain();
         return it->second.get();
     }
-    
+
     /// Find the owner module of a given entity name.
     /// If the entity name does not contain a colon, you should return the builtins module,
     /// which you can identify by IModule::is_builtins().

@@ -1,5 +1,33 @@
 Change Log
 ==========
+MDL SDK 2024.0.2 (377400.2626): 07 Aug 2024
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2024.0.2 (377400.2626) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+    - MDL Arnold: Added support for Arnold SDK version 7.3.2.1.
+
+**Fixed Bugs**
+
+- General
+    - Fixed missing leading "::" for qualified names reported by `IMdl_discovery_api`,
+      if search paths had a trailing OS separator.
+    - Improved error message that can be triggered when calling non-const methods
+      on const objects. This can e.g. be triggered via the Python binding by accessing
+      (not editing) database elements.
+    - Improved coverage tests for the Python binding.
+
+- MDL Compiler and Backends
+    - Fixed crash in some cases when derivatives were calculated for a struct also containing
+      non-floating point fields.
+    - Fixed wrong digit that can be added to `tex::texture_isvalid()` calls for
+      HLSL and GLSL backends, if more than one texture type (for instance `texture_2d` and
+      `texture_3d`) are used together in one module.
+
 MDL SDK 2024.0.1 (377400.2109): 18 Jul 2024
 -----------------------------------------------
 

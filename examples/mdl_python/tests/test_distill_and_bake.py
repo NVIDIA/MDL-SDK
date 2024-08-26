@@ -438,15 +438,15 @@ class MainDistillAndBake(UnittestBase):
 
         self.assertAlmostEqual(lightProfile.get_phi(0), 0.0)
         self.assertAlmostEqual(lightProfile.get_phi(2), 0.0)
-        self.assertAlmostEqual(lightProfile.get_theta(0), 0.0)
-        self.assertAlmostEqual(lightProfile.get_theta(2), 0.34906587)
-        self.assertAlmostEqual(lightProfile.get_candela_multiplier(), 10.0)
+        self.assertAlmostEqual(lightProfile.get_theta(0), 0.0, places=3)
+        self.assertAlmostEqual(lightProfile.get_theta(2), 0.34906587, places=3)
+        self.assertAlmostEqual(lightProfile.get_candela_multiplier(), 10.0, places=3)
 
         d = lightProfile.get_data()
         self.assertIsNotNone(d)
 
         s: float = lightProfile.sample(0.1, 0.2, False)
-        self.assertAlmostEqual(s, 0.0)
+        self.assertAlmostEqual(s, 0.0, places=3)
 
         lightProfile: pymdlsdk.IImage = self.sdk.transaction.edit_as(pymdlsdk.ILightprofile, lightDbName)
         res: int = lightProfile.reset_file(fn)

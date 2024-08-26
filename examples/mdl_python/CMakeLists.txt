@@ -26,21 +26,12 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #*****************************************************************************
 
-# create Visual Studio code launch.json
+# Get values for template files
 get_property(BINDING_MODULE_PATH TARGET "mdl::mdl_python" PROPERTY BINARY_DIR)
 
-# Depending on the product and it's distribution we need set paths and environment variables slightly different
-if("MDL_BINARY_RELEASE" IN_LIST MDL_ADDITIONAL_COMPILER_DEFINES)
-    if(MDL_INTERNAL_BUILD)
-        set(_VS_CODE_FILE_IN ${CMAKE_CURRENT_SOURCE_DIR}/cmake_templates/mdl_python_examples.examples_internal.code-workspace)
-        set(_SETUP_ENV_FILE_IN_SH ${CMAKE_CURRENT_SOURCE_DIR}/cmake_templates/setup_env.examples_internal.sh)
-        set(_SETUP_ENV_FILE_IN_BAT ${CMAKE_CURRENT_SOURCE_DIR}/cmake_templates/setup_env.examples_internal.bat)
-    else()
-        set(_VS_CODE_FILE_IN ${CMAKE_CURRENT_SOURCE_DIR}/cmake_templates/mdl_python_examples.binary_release.code-workspace)
-        set(_SETUP_ENV_FILE_IN_SH ${CMAKE_CURRENT_SOURCE_DIR}/cmake_templates/setup_env.binary_release.sh)
-        set(_SETUP_ENV_FILE_IN_BAT ${CMAKE_CURRENT_SOURCE_DIR}/cmake_templates/setup_env.binary_release.bat)
-    endif()
-elseif ("MDL_SOURCE_RELEASE" IN_LIST MDL_ADDITIONAL_COMPILER_DEFINES)
+if(NOT "MDL_BINARY_RELEASE" IN_LIST MDL_ADDITIONAL_COMPILER_DEFINES)
+
+    # Get values for template files
     get_property(MDL_SDK_PATH TARGET "mdl::mdl_sdk" PROPERTY BINARY_DIR)
     if(TARGET "mdl::nv_openimageio")
         get_property(OPENIMAGEIO_PATH TARGET "mdl::nv_openimageio" PROPERTY BINARY_DIR)
@@ -51,17 +42,17 @@ elseif ("MDL_SOURCE_RELEASE" IN_LIST MDL_ADDITIONAL_COMPILER_DEFINES)
     if(TARGET "mdl::mdl_distiller")
         get_property(MDLDISTILLER_PATH TARGET "mdl::mdl_distiller" PROPERTY BINARY_DIR)
     endif()
-    set(ENV_MDL_SDK_PATH ${MDL_SDK_PATH})
-    set(ENV_OPENIMAGEIO_PATH ${OPENIMAGEIO_PATH})
-    set(ENV_DDS_PATH ${DDS_PATH})
-    set(ENV_MDLDISTILLER_PATH ${MDLDISTILLER_PATH})
+
     if(WINDOWS)
+
+        # Set variables with suffix _BAT directly as is.
         set(ENV_MDL_SDK_PATH_BAT ${MDL_SDK_PATH})
         set(ENV_OPENIMAGEIO_PATH_BAT ${OPENIMAGEIO_PATH})
         set(ENV_DDS_PATH_BAT ${DDS_PATH})
         set(ENV_MDLDISTILLER_PATH_BAT ${MDLDISTILLER_PATH})
-        # for running the shell scripts on windows (e.g. using git bash or mingw)
-        # we need to adjust the strings that go into the PATH to use a unix-like format
+
+        # For running the shell scripts on windows (e.g. using git bash or mingw) we need to adjust
+        # the strings that go into the variable without _BAT suffix to use a unix-like format
         if(MDL_SDK_PATH)
             string(SUBSTRING ${MDL_SDK_PATH} 1 1 _CHAR_AT_1)
             if(_CHAR_AT_1 STREQUAL ":")
@@ -94,7 +85,30 @@ elseif ("MDL_SOURCE_RELEASE" IN_LIST MDL_ADDITIONAL_COMPILER_DEFINES)
                 set(ENV_MDLDISTILLER_PATH "/${_CHAR_AT_0}${ENV_MDLDISTILLER_PATH}")
             endif()
         endif()
+
+    else()
+
+        set(ENV_MDL_SDK_PATH ${MDL_SDK_PATH})
+        set(ENV_OPENIMAGEIO_PATH ${OPENIMAGEIO_PATH})
+        set(ENV_DDS_PATH ${DDS_PATH})
+        set(ENV_MDLDISTILLER_PATH ${MDLDISTILLER_PATH})
+
     endif()
+
+endif()
+
+# Depending on the product and it's distribution we need to use different templates
+if("MDL_BINARY_RELEASE" IN_LIST MDL_ADDITIONAL_COMPILER_DEFINES)
+    if(MDL_INTERNAL_BUILD)
+        set(_VS_CODE_FILE_IN ${CMAKE_CURRENT_SOURCE_DIR}/cmake_templates/mdl_python_examples.examples_internal.code-workspace)
+        set(_SETUP_ENV_FILE_IN_SH ${CMAKE_CURRENT_SOURCE_DIR}/cmake_templates/setup_env.examples_internal.sh)
+        set(_SETUP_ENV_FILE_IN_BAT ${CMAKE_CURRENT_SOURCE_DIR}/cmake_templates/setup_env.examples_internal.bat)
+    else()
+        set(_VS_CODE_FILE_IN ${CMAKE_CURRENT_SOURCE_DIR}/cmake_templates/mdl_python_examples.binary_release.code-workspace)
+        set(_SETUP_ENV_FILE_IN_SH ${CMAKE_CURRENT_SOURCE_DIR}/cmake_templates/setup_env.binary_release.sh)
+        set(_SETUP_ENV_FILE_IN_BAT ${CMAKE_CURRENT_SOURCE_DIR}/cmake_templates/setup_env.binary_release.bat)
+    endif()
+else()
     set(_VS_CODE_FILE_IN ${CMAKE_CURRENT_SOURCE_DIR}/cmake_templates/mdl_python_examples.open_source.code-workspace)
     set(_SETUP_ENV_FILE_IN_SH ${CMAKE_CURRENT_SOURCE_DIR}/cmake_templates/setup_env.open_source.sh)
     set(_SETUP_ENV_FILE_IN_BAT ${CMAKE_CURRENT_SOURCE_DIR}/cmake_templates/setup_env.open_source.bat)

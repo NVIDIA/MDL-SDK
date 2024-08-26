@@ -42,6 +42,10 @@ export PYTHONPATH
 MDL_SAMPLES_ROOT=@CMAKE_CURRENT_SOURCE_DIR@/../
 export MDL_SAMPLES_ROOT
 
+# Path of the examples to access the common modules
+MDL_SRC_SHADERS_MDL=@MDL_SRC_FOLDER@/shaders/mdl/
+export MDL_SRC_SHADERS_MDL
+
 # Path of the python binary matching the version used for building the bindings
 PYTHON_BINARY=@MDL_DEPENDENCY_PYTHON_DEV_EXE@
 export PYTHON_BINARY

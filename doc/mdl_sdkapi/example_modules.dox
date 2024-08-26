@@ -91,7 +91,7 @@ This example loads an MDL module and inspects it contents.
     <dd><br>
         MDL materials and functions (as found in a \c .mdl file) are represented in the
         \neurayApiName by the interface #mi::neuraylib::IFunction_definition. Similar to the module
-        interface thi interface offers various methods related to metadata, like the name of the
+        interface this interface offers various methods related to metadata, like the name of the
         definition, or the name of the containing module. Important methods are those that provide
         details about the parameters, like their names, types, and the values of defaults (if
         present).

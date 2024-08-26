@@ -347,7 +347,7 @@ void check_imodule_part1( mi::neuraylib::ITransaction* transaction, mi::neurayli
     mi::Size index_ior = std_mat->find_field( "ior");
     mi::base::Handle<const mi::neuraylib::IType> std_mat_ior(
         std_mat->get_field_type( index_ior));
-    // TODO MI_CHECK_EQUAL( std_mat_ior->get_all_type_modifiers(), mi::neuraylib::IType::MK_VARYING);
+    MI_CHECK_EQUAL( std_mat_ior->get_all_type_modifiers(), mi::neuraylib::IType::MK_NONE);
 
     // standard structure types
     const char* struct_types[] = {
@@ -511,6 +511,7 @@ void check_imodule_part1( mi::neuraylib::ITransaction* transaction, mi::neurayli
             "mdl::" TEST_MDL "::fd_return_auto()",
             "mdl::" TEST_MDL "::fd_return_varying()",
             "mdl::" TEST_MDL "::fd_parameters_uniform_auto_varying(int,int,int)",
+            "mdl::" TEST_MDL "::fd_parameters_uniform_auto_varying_color(color,color,color)",
             "mdl::" TEST_MDL "::fd_uniform()",
             "mdl::" TEST_MDL "::fd_varying()",
             "mdl::" TEST_MDL "::fd_auto_uniform()",

@@ -112,7 +112,7 @@ inline bool Attribute::get_value_bool(
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_BOOLEAN));
     ASSERT(M_ATTR, n < m_type.get_arraysize());
-    return n >= m_type.get_arraysize() ? 0 : reinterpret_cast<const bool*>(m_values)[n];
+    return n >= m_type.get_arraysize() ? false : reinterpret_cast<const bool*>(m_values)[n];
 }
 
 

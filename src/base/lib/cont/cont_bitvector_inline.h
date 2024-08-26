@@ -82,7 +82,7 @@ inline size_t Bitvector::capacity() const
     return size_t(m_nb8 * 8);
 }
 
-// assignement operator
+// assignment operator
 inline Bitvector &Bitvector::operator=(
     const Bitvector &other)                     // assign this to other
 {

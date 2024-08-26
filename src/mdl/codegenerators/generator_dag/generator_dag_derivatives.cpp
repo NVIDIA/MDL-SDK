@@ -114,6 +114,48 @@ bool is_floating_point_based_type(IType const *type)
 }
 
 
+// Checks if the given MDL type is or contains a floating point type.
+bool contains_floating_point_type(IType const *type)
+{
+    type = type->skip_type_alias();
+    switch (type->get_kind()) {
+    case IType::TK_FLOAT:
+    case IType::TK_DOUBLE:
+    case IType::TK_COLOR:
+    case IType::TK_MATRIX:  // there are only float and double matrix types
+        return true;
+
+    case IType::TK_VECTOR:
+        {
+            IType_vector const *vec_type = as<IType_vector>(type);
+            IType_atomic const *elem_type = vec_type->get_element_type();
+            IType::Kind elem_kind = elem_type->get_kind();
+            return elem_kind == IType::TK_FLOAT || elem_kind == IType::TK_DOUBLE;
+        }
+
+    case IType::TK_ARRAY:
+        {
+            IType_array const *array_type = as<IType_array>(type);
+            IType const *elem_type = array_type->get_element_type();
+            return contains_floating_point_type(elem_type);
+        }
+
+    case IType::TK_STRUCT:
+        {
+            IType_struct const *struct_type = as<IType_struct>(type);
+            for (int i = 0, n = struct_type->get_compound_size(); i < n; ++i) {
+                if (contains_floating_point_type(struct_type->get_compound_type(i)))
+                    return true;
+            }
+            return false;
+        }
+
+    default:
+        return false;
+    }
+}
+
+
 /// Helper class analyzing derivative information for functions.
 class Function_processor : public Module_visitor
 {
@@ -411,8 +453,21 @@ public:
                 // all arguments already visited
                 return false;
 
-            case IDefinition::DS_COPY_CONSTRUCTOR:
             case IDefinition::DS_ELEM_CONSTRUCTOR:
+                // want-derivatives only applies to floating point based or containing arguments
+                for (int i = 0, n = call->get_argument_count(); i < n; ++i) {
+                    bool supports_derivatives = contains_floating_point_type(
+                        call->get_argument(i)->get_argument_expr()->get_type());
+
+                    Flag_scope flag_scope(
+                        m_want_derivatives, m_want_derivatives && supports_derivatives);
+                    visit(call->get_argument(i));
+                }
+
+                // all arguments already visited
+                return false;
+
+            case IDefinition::DS_COPY_CONSTRUCTOR:
             case IDefinition::DS_COLOR_SPECTRUM_CONSTRUCTOR:
             case IDefinition::DS_MATRIX_ELEM_CONSTRUCTOR:
             case IDefinition::DS_MATRIX_DIAG_CONSTRUCTOR:
@@ -698,8 +753,8 @@ void set_known_function_argument_derivs(
 
     // special handling of operators
     if (semantic_is_operator(sema)) {
-        // for float or double based operators, return_derivs also applies to arguments
-        if (is_floating_point_based_type(ret_tp)) {
+        // for operators involving floating point types, return_derivs also applies to arguments
+        if (contains_floating_point_type(ret_tp)) {
             switch (semantic_to_operator(sema)) {
             case IExpression::OK_SEQUENCE:
                 // return_derivs only applies to the last argument

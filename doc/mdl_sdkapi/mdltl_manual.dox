@@ -76,7 +76,7 @@ rule engine to repeatedly apply transformation rules to nodes in the
 material graph. Transformation rules are implemented as subclasses of
 the class `mi::mdl::IRule_matcher`. These classes for rule-matching can
 be written by hand, but a more convenient and less error-prone option
-is to write rules in the <i>MDL Transforamtion Language (MDLTL)</i>. MDLTL is a
+is to write rules in the <i>MDL Transformation Language (MDLTL)</i>. MDLTL is a
 domain-specific language for describing transformations on MDL
 materials. These transformations are expressed as a set of rules which
 are compiled to C++ code and are then linked into Distiller plugins.

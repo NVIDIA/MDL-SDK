@@ -36,6 +36,15 @@ class SDK():
 
         return os.path.abspath(example_sp)
 
+    def get_src_shaders_mdl_search_path(self):  # pragma: no cover
+        """Try to get the search path for modules like ::nvidia::core_definitions or
+        ::nvidia::axf_to_mdl. Returns the empty string if that directory is the sames as
+        get_examples_search_path(), or in case of failure."""
+        shader_sp = os.getenv('MDL_SRC_SHADERS_MDL')
+        if shader_sp is None or not os.path.exists(shader_sp):
+            return ""
+        return os.path.abspath(shader_sp)
+
     def load(self, addExampleSearchPath: bool = True, addExampleResourcePath: bool = True, loadImagePlugins: bool = True, loadDistillerPlugin: bool = False,
         enableTemporaryNames: bool = False, locale: str = ""):
         """Initialize the SDK and get some common interface for basic testing"""
@@ -56,10 +65,15 @@ class SDK():
             # get the example search path that is used for all MDL SDK examples
             # falls back to `mdl` in the current working directory
             example_sp: str = self.get_examples_search_path()
+            src_shader_mdl_sp: str = self.get_src_shaders_mdl_search_path()
             if addExampleSearchPath:
                 cfg.add_mdl_path(example_sp)
+                if src_shader_mdl_sp:  # pragma: no cover
+                    cfg.add_mdl_path(src_shader_mdl_sp)
             if addExampleResourcePath:
                 cfg.add_resource_path(example_sp)
+                if src_shader_mdl_sp:  # pragma: no cover
+                    cfg.add_resource_path(src_shader_mdl_sp)
 
         # Load plugins
         if loadImagePlugins:

@@ -104,7 +104,7 @@ polymesh
 {
   name left
   nsides 1 1 BYTE 4
-  vidxs 4 1 LONG 0 1 2 3
+  vidxs 4 1 LONG 3 2 1 0
   nidxs 4 1 LONG 0 0 0 0
   vlist 12 1 FLOAT -2.0 -2.0 8.0   -2.0 2.0 8.0   -2.0 2.0 -2.0  -2.0 -2.0 -2.0
   nlist 3 1 FLOAT 1.0 0 0 
@@ -126,7 +126,7 @@ polymesh
 {
   name top
   nsides 1 1 BYTE 4
-  vidxs 4 1 LONG 0 1 2 3
+  vidxs 4 1 LONG 3 2 1 0
   nidxs 4 1 LONG 0 0 0 0
   vlist 12 1 FLOAT -2.0 2.0 8.0   2.0 2.0 8.0   2.0 2.0 -2.0  -2.0 2.0 -2.0
   nlist 3 1 FLOAT 0.0 -1 0 

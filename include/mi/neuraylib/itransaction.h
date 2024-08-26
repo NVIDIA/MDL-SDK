@@ -67,9 +67,7 @@ class IScope;
 ///
 /// Access to database elements is provided by #access() (read-only) and #edit() (for modification).
 /// The interface pointers returned by these methods must be released when you are done, in
-/// particular before the transaction is committed or aborted. Releasing the last interface pointer
-/// obtained from #edit() makes the changes also visible to later #edit() calls for the same
-/// database element.
+/// particular before the transaction is committed or aborted.
 /// \par
 /// Note that it is possible to access the same database element concurrently in the same
 /// transaction. Concurrently means that the interface pointer obtained from an earlier #access()

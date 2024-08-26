@@ -86,22 +86,10 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
 # on Linux/MacOS set rpath for plugins
 if(NOT WINDOWS)
 
-### INTERNAL MDL_SOURCE_RELEASE START
-    if(false)
-### INTERNAL MDL_SOURCE_RELEASE END
         target_add_rpath(TARGET ${PROJECT_NAME}
             RPATHS
                 ${CMAKE_BINARY_DIR}/src/shaders/plugin/mdl_distiller/${CMAKE_BUILD_TYPE}
             )
-### INTERNAL MDL_SOURCE_RELEASE START
-    else()
-        target_add_rpath(TARGET ${PROJECT_NAME}
-            RPATHS
-                ${CMAKE_BINARY_DIR}/shaders/plugin/mdl_distiller/${CMAKE_BUILD_TYPE}
-                ${CMAKE_BINARY_DIR}/shaders/plugin/mdl_lod_distiller/${CMAKE_BUILD_TYPE}
-            )
-    endif()
-### INTERNAL MDL_SOURCE_RELEASE END
 
 endif()
 

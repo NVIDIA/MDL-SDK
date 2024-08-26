@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,20 +26,50 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-/*! \page mi_neuray_mdltl MDLTL - MDL Transformation Language
+// examples/mdl_sdk/shared/utils/mdl.cpp
+//
+// Code shared by all examples
 
-The MDL Transformation Language (MDLTL) and its use in Distiller
-plugins is documented in three parts:
+#include "mdl.h"
 
-- \subpage mi_neuray_mdltl_manual <br>
-  Documentation on using MDLTL, the MDLTL compiler and how to use the
-  compiled rules created by the MDLTL compiler in a Distiller plugin.
+namespace mi { namespace examples { namespace mdl {
 
-- \subpage mi_neuray_mdltl_spec <br>
-  Specification of MDLTL, including a detailed description of the
-  language.
+// Intentionally not implemented inline which would require callers to define MDL_SAMPLES_ROOT.
+std::string get_examples_root()
+{
+    std::string path = mi::examples::os::get_environment("MDL_SAMPLES_ROOT");
+    if (path.empty())
+    {
+#ifdef MDL_SAMPLES_ROOT
+        path = MDL_SAMPLES_ROOT;
+#else
+        path = ".";
+#endif
+    }
+    if (!mi::examples::io::directory_exists(path))
+        return ".";
 
-- \subpage mi_neuray_mdltl_grammar <br>
-  EBNF grammar of MDLTL.
+    // normalize the paths
+    return mi::examples::io::normalize(path);
+}
 
-*/
+// Intentionally not implemented inline which would require callers to define MDL_SRC_SHADERS_MDL.
+std::string get_src_shaders_mdl()
+{
+    std::string path = mi::examples::os::get_environment("MDL_SRC_SHADERS_MDL");
+    if (path.empty())
+    {
+#ifdef MDL_SRC_SHADERS_MDL
+        path = MDL_SRC_SHADERS_MDL;
+#else
+        path = ".";
+#endif
+    }
+    if (!mi::examples::io::directory_exists(path))
+        return ".";
+
+    // normalize the paths
+    return mi::examples::io::normalize(path);
+}
+
+}}}

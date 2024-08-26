@@ -1941,8 +1941,10 @@ public:
     /// \param return_derivs  if true, derivatives will be generated for the return value
     ///
     /// \returns the requested function or NULL if no special handling for HLSL is required
+    ///
+    /// \note def might be replaced by another overload
     llvm::Function *get_sl_intrinsic_function(
-        IDefinition const *def,
+        IDefinition const *&def,
         bool              return_derivs);
 
     /// Compile the given module into LLVM-IR code.

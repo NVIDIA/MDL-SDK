@@ -259,6 +259,14 @@ import ::anno::soft_range;
 struct_category cat [[ ::anno::soft_range(1, 9) ]];
 )";
 
+char const *warning_empty_struct_mdl = R"(
+// WARNING test case: struct without fields
+mdl 1.9;
+
+struct Empty {
+};
+)";
+
 char const *error_redeclaration1_mdl = R"(
 // ERROR test case: redeclaration
 mdl 1.9;
@@ -358,6 +366,7 @@ Test_module module_sources[] = {
     { "::warning::bad_annotation1",       warning_bad_annotation1_mdl,        {0, 0, 3}, {} },
     { "::warning::bad_annotation2",       warning_bad_annotation2_mdl,        {0, 0, 5}, {} },
     { "::warning::bad_annotation3",       warning_bad_annotation3_mdl,        {0, 0, 3}, {} },
+    { "::warning::empty_struct",          warning_empty_struct_mdl,           {0, 0, 1}, {} },
     { "::error::redeclaration1",          error_redeclaration1_mdl,          {-2, 1, 2},
         {{"C107 redeclaration of 'cat' as a different kind of symbol"}} },
     { "::error::redeclaration3",          error_redeclaration3_mdl,          {-2, 1, 2},

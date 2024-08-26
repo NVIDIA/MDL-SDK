@@ -817,8 +817,8 @@ struct Exreimp_data
 
     // MDL module name of the exported module.
     //
-    // The suffix "_export" is used for added for file-based exports.
-    // The suffix "_export_string" is used for for string-based exports.
+    // The suffix "_export" is added for file-based exports.
+    // The suffix "_export_string" is added for for string-based exports.
     std::string export_mdl_name;
 
     mi::Sint32 error_number_file = 0;

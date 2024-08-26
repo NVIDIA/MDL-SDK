@@ -370,7 +370,7 @@ int MAIN_UTF8(int argc, char* argv[])
         options.print_usage(std::cout);
         exit(EXIT_FAILURE);
     }
-    
+
     // Print description of command line options
     if (options.m_help)
     {
@@ -440,6 +440,9 @@ options:
 bool Options::parse(int argc, char* argv[])
 {
     m_mdl_paths.push_back(get_samples_mdl_root());
+    const auto& path = get_src_shaders_mdl();
+    if (path != ".")
+        m_mdl_paths.push_back(path);
 
     for (int i = 1; i < argc; ++i)
     {

@@ -26,9 +26,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_sdk/shared/utils/mdl.h
- //
- // Code shared by all examples
+// examples/mdl_sdk/shared/utils/mdl.h
+//
+// Code shared by all examples
 
 #ifndef EXAMPLE_SHARED_UTILS_MDL_H
 #define EXAMPLE_SHARED_UTILS_MDL_H
@@ -89,7 +89,6 @@ namespace mi { namespace examples { namespace mdl
     /// In general this is simple and does not require a lot of logic, but since these examples
     /// are used with different kinds of build setups and binary packaging, it makes sense to wrap
     /// the handing of special cases to support the different packagings in one function.
-    /// </summary>
     mi::Sint32 load_plugin(mi::neuraylib::INeuray* neuray, const char* path);
 
     /// Get the path specified in the MDL_SAMPLES_ROOT environment variable or if not defined,
@@ -97,6 +96,12 @@ namespace mi { namespace examples { namespace mdl
     /// the latter is the example content folder in the source code directory while building the
     /// example, or if that is not valid, the current working directory.
     std::string get_examples_root();
+
+    /// Returns a directory that contains ::nvidia::core_definitions and ::nvida::axf_to_mdl.
+    ///
+    /// Might also return "." if that directory is the "mdl" subdirectory of #get_examples_root()
+    /// and no extra handling is required.
+    std::string get_src_shaders_mdl();
 
     /// Input to the \c configure function. Allows to control the search path setup for the examples
     /// as well as to control the loaded plugins.
@@ -409,14 +414,18 @@ namespace mi { namespace examples { namespace mdl
 
         if (options.add_example_search_path)
         {
-            const std::string example_search_path = mi::examples::mdl::get_examples_root() + "/mdl";
-            if (example_search_path == "./mdl")
+            const std::string example_search_path1 = mi::examples::mdl::get_examples_root() + "/mdl";
+            if (example_search_path1 == "./mdl")
             {
                 fprintf(stderr,
                     "MDL Examples path was not found, "
                     "consider setting the environment variable MDL_SAMPLES_ROOT.");
             }
-            mdl_paths.push_back(example_search_path);
+            mdl_paths.push_back(example_search_path1);
+
+            const std::string example_search_path2 = mi::examples::mdl::get_src_shaders_mdl();
+            if (example_search_path2 != ".")
+                mdl_paths.push_back(example_search_path2);
         }
 
         // add the search paths for MDL module and resource resolution outside of MDL modules
@@ -456,26 +465,6 @@ namespace mi { namespace examples { namespace mdl
         }
 
         return true;
-    }
-
-    // --------------------------------------------------------------------------------------------
-
-    inline std::string get_examples_root()
-    {
-        std::string samples_root = mi::examples::os::get_environment("MDL_SAMPLES_ROOT");
-        if (samples_root.empty())
-        {
-            #ifdef MDL_SAMPLES_ROOT
-                samples_root = MDL_SAMPLES_ROOT;
-            #else
-                samples_root = ".";
-            #endif
-        }
-        if (!mi::examples::io::directory_exists(samples_root))
-            return ".";
-
-        // normalize the paths
-        return mi::examples::io::normalize(samples_root);
     }
 
     // --------------------------------------------------------------------------------------------

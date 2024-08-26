@@ -199,9 +199,12 @@ template <typename I, typename D>
 const D* Db_element_impl<I,D>::get_db_element() const
 {
     const DB::Element_base* pointer = this->get_db_element_base();
-    if( !pointer)
+    if( !pointer) {
+        ASSERT( M_NEURAY_API,  this->get_state() == STATE_INVALID);
         LOG::mod_log->error( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
             "Invalid use of DB element after ITransaction::store().");
+    }
+
     return static_cast<const D*>( pointer);
 }
 
@@ -209,9 +212,17 @@ template <typename I, typename D>
 D* Db_element_impl<I,D>::get_db_element()
 {
     DB::Element_base* pointer = this->get_db_element_base();
-    if( !pointer)
-        LOG::mod_log->error( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
-            "Invalid use of DB element after ITransaction::store() (or invalid const_cast).");
+    if( !pointer) {
+        if( this->get_state() == STATE_ACCESS)
+            LOG::mod_log->error( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
+                "Invalid use of DB element after const_cast (possibly via the Python binding).");
+        else {
+            ASSERT( M_NEURAY_API,  this->get_state() == STATE_INVALID);
+            LOG::mod_log->error( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
+                "Invalid use of DB element after ITransaction::store().");
+        }
+    }
+
     return static_cast<D*>( pointer);
 }
 

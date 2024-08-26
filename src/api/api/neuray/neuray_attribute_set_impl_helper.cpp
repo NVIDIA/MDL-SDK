@@ -661,6 +661,7 @@ ATTR::Type Attribute_set_impl_helper::get_attribute_type(
         enum_type.set_type_name( type_name);
         mi::Size n = decl->get_length();
         auto* enum_collection = new Enum_collection();
+        enum_collection->reserve(n);
         for( mi::Size i = 0; i < n; ++i)
             enum_collection->push_back( std::make_pair( decl->get_value( i), decl->get_name( i)));
         *enum_type.set_enum() = enum_collection;

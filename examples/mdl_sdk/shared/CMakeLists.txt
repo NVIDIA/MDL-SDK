@@ -43,6 +43,7 @@ set(PROJECT_SOURCES
     "utils/enums.h"
     "utils/io.h"
     "utils/mdl.h"
+    "utils/mdl.cpp"
     "utils/os.h"
     "utils/strings.h"
     )
@@ -118,7 +119,7 @@ add_library(mdl_sdk::shared ALIAS ${PROJECT_NAME})
 
 # inject the MDL_SAMPLES_ROOT path
 target_compile_definitions(${PROJECT_NAME}
-    PUBLIC
+    PRIVATE
         "MDL_SAMPLES_ROOT=\"${CMAKE_CURRENT_SOURCE_DIR}/../..\""
     )
 
@@ -135,7 +136,7 @@ endif()
 target_add_dependencies(TARGET ${PROJECT_NAME}
     DEPENDS
         mdl::mdl_sdk
-    NO_RUNTIME_COPY     # header only -> the consumer will also add this dependency
+    NO_RUNTIME_COPY
     )
 
 if (MDL_BUILD_SDK_EXAMPLES OR MDL_BUILD_CORE_EXAMPLES)
@@ -143,7 +144,7 @@ if (MDL_BUILD_SDK_EXAMPLES OR MDL_BUILD_CORE_EXAMPLES)
         target_add_dependencies(TARGET ${PROJECT_NAME}
             DEPENDS
                 imgui
-            NO_RUNTIME_COPY     # header only -> the consumer will also add this dependency
+            NO_RUNTIME_COPY
             )
         target_compile_definitions(${PROJECT_NAME}
             PUBLIC
@@ -185,5 +186,5 @@ endif()
 target_include_directories(${PROJECT_NAME}
     INTERFACE
         # the template makes non public headers private by default
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> 
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     )
