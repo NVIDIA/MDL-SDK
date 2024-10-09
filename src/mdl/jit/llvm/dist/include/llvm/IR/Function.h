@@ -367,7 +367,7 @@ public:
       return 0;
     if (const auto MA =
             AttributeSets.getStackAlignment(AttributeList::FunctionIndex))
-      return MA->value();
+      return unsigned(MA->value());
     return 0;
   }
 
@@ -471,7 +471,7 @@ public:
   /// Use getParamAlign() instead.
   unsigned getParamAlignment(unsigned ArgNo) const {
     if (const auto MA = getParamAlign(ArgNo))
-      return MA->value();
+      return unsigned(MA->value());
     return 0;
   }
 

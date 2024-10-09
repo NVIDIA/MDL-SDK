@@ -82,6 +82,9 @@ struct Options
     std::string hdr_file = "nvidia/sdk_examples/resources/environment.hdr";
     float hdr_intensity = 1.0f;
     bool use_class_compilation = true;
+    bool enable_ro_segment = false;
+    bool disable_ssbo = false;
+    uint32_t max_const_data = 1024;
     std::string material_name = "::nvidia::sdk_examples::tutorials::example_df";
     bool enable_validation_layers = false;
     bool dump_glsl = false;
@@ -1131,10 +1134,15 @@ VkShaderModule Df_vulkan_app::create_path_trace_shader_module()
     defines.push_back("SET_MATERIAL_TEXTURES_2D=" + std::to_string(g_set_material_textures));
     defines.push_back("SET_MATERIAL_TEXTURES_3D=" + std::to_string(g_set_material_textures));
     defines.push_back("SET_MATERIAL_ARGUMENT_BLOCK=" + std::to_string(g_set_argument_block_buffer));
+    defines.push_back("SET_MATERIAL_RO_DATA_SEGMENT=" + std::to_string(g_set_ro_data_buffer));
     defines.push_back("BINDING_MATERIAL_TEXTURES_INDICES=" + std::to_string(g_binding_material_textures_indices));
     defines.push_back("BINDING_MATERIAL_TEXTURES_2D=" + std::to_string(g_binding_material_textures_2d));
     defines.push_back("BINDING_MATERIAL_TEXTURES_3D=" + std::to_string(g_binding_material_textures_3d));
     defines.push_back("BINDING_MATERIAL_ARGUMENT_BLOCK=" + std::to_string(g_binding_argument_block_buffer));
+    defines.push_back("BINDING_MATERIAL_RO_DATA_SEGMENT=" + std::to_string(g_binding_ro_data_buffer));
+
+    if (m_options.enable_ro_segment)
+        defines.push_back("USE_RO_DATA_SEGMENT");
 
     // Check if functions for backface were generated
     for (mi::Size i = 0; i < m_target_code->get_callable_function_count(); i++)
@@ -2039,7 +2047,7 @@ const mi::neuraylib::ITarget_code* generate_glsl_code(
     mi::neuraylib::IMdl_backend_api* mdl_backend_api,
     mi::neuraylib::ITransaction* transaction,
     mi::neuraylib::IMdl_execution_context* context,
-    bool enable_bsdf_flags,
+    const Options& options,
     mi::Size& argument_block_index)
 {
     // Add compiled material to link unit
@@ -2047,18 +2055,28 @@ const mi::neuraylib::ITarget_code* generate_glsl_code(
         mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_GLSL));
 
     check_success(be_glsl->set_option("glsl_version", "450") == 0);
-    check_success(be_glsl->set_option("glsl_place_uniforms_into_ssbo", "on") == 0);
-    check_success(be_glsl->set_option("glsl_max_const_data", "0") == 0);
-    check_success(be_glsl->set_option("glsl_uniform_ssbo_binding",
-        std::to_string(g_binding_ro_data_buffer).c_str()) == 0);
-    check_success(be_glsl->set_option("glsl_uniform_ssbo_set",
-        std::to_string(g_set_ro_data_buffer).c_str()) == 0);
+    if (!options.disable_ssbo && !options.enable_ro_segment)
+    {
+        check_success(be_glsl->set_option("glsl_place_uniforms_into_ssbo", "on") == 0);
+        check_success(be_glsl->set_option("glsl_max_const_data",
+            std::to_string(options.max_const_data).c_str()) == 0);
+        check_success(be_glsl->set_option("glsl_uniform_ssbo_binding",
+            std::to_string(g_binding_ro_data_buffer).c_str()) == 0);
+        check_success(be_glsl->set_option("glsl_uniform_ssbo_set",
+            std::to_string(g_set_ro_data_buffer).c_str()) == 0);
+    }
+    if (options.enable_ro_segment)
+    {
+        check_success(be_glsl->set_option("enable_ro_segment", "on") == 0);
+        check_success(be_glsl->set_option("max_const_data",
+            std::to_string(options.max_const_data).c_str()) == 0);
+    }
     check_success(be_glsl->set_option("num_texture_spaces", "1") == 0);
     check_success(be_glsl->set_option("num_texture_results", "16") == 0);
     check_success(be_glsl->set_option("enable_auxiliary", "on") == 0);
     check_success(be_glsl->set_option("df_handle_slot_mode", "none") == 0);
     check_success(be_glsl->set_option("libbsdf_flags_in_bsdf_data",
-        enable_bsdf_flags ? "on" : "off") == 0);
+        options.enable_bsdf_flags ? "on" : "off") == 0);
 
     mi::base::Handle<mi::neuraylib::ILink_unit> link_unit(
         be_glsl->create_link_unit(transaction, context));
@@ -2195,6 +2213,11 @@ void print_usage(char const* prog_name)
         << "                              (default: nvidia/sdk_examples/resources/environment.hdr)\n"
         << "  --hdr_intensity <value>     intensity of the environment map (default: 1.0)\n"
         << "  --nocc                      don't compile the material using class compilation\n"
+        << "  --enable_ro_segment         enable the read-only data segment\n"
+        << "  --disable_ssbo              disable use of an ssbo for constants\n"
+        << "  --max_const_data <size>     set the maximum size of constants in bytes in the\n"
+        << "                              generated code (requires read-only data segment or\n"
+        << "                              ssbo, default 1024)\n"
         << "  -p|--mdl_path <path>        additional MDL search path, can occur multiple times\n"
         << "  --vkdebug                   enable the Vulkan validation layers\n"
         << "  --dump_glsl                 outputs the generated GLSL target code to a file\n"
@@ -2258,6 +2281,12 @@ void parse_command_line(int argc, char* argv[], Options& options,
                 mdl_configure_options.additional_mdl_paths.push_back(argv[++i]);
             else if (arg == "--nocc")
                 options.use_class_compilation = false;
+            else if (arg == "--enable_ro_segment")
+                options.enable_ro_segment = true;
+            else if (arg == "--disable_ssbo")
+                options.disable_ssbo = true;
+            else if (arg == "--max_const_data")
+                options.max_const_data = uint32_t(std::atoi(argv[++i]));
             else if (arg == "--vkdebug")
                 options.enable_validation_layers = true;
             else if (arg == "--dump_glsl")
@@ -2374,8 +2403,7 @@ int MAIN_UTF8(int argc, char* argv[])
             mi::Size argument_block_index;
             mi::base::Handle<const mi::neuraylib::ITarget_code> target_code(
                 generate_glsl_code(compiled_material.get(), mdl_backend_api.get(),
-                    transaction.get(), context.get(), options.enable_bsdf_flags,
-                    argument_block_index));
+                    transaction.get(), context.get(), options, argument_block_index));
 
             if (options.dump_glsl)
             {

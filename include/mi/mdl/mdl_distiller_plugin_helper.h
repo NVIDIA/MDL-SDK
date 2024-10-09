@@ -344,7 +344,7 @@ struct Args_wrapper {
 template <size_t DIM>
 class Nodes_wrapper {
 private:
-    Nodes_wrapper<DIM>() /*MDL_DELETED_FUNCTION*/ = delete;
+    Nodes_wrapper() /*MDL_DELETED_FUNCTION*/ = delete;
 };
 
 template <>

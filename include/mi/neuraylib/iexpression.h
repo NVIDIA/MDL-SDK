@@ -989,9 +989,9 @@ public:
     ///                       call expression.
     /// \param errors         An optional pointer to an #mi::Sint32 to which an error code will be
     ///                       written. The error codes have the following meaning:
-    ///                       - 0: Success.
-    ///                       - 1: Invalid parameters (\c NULL pointer).
-    ///                       - 2: The type of \p src_expr cannot be cast to \p target_type.
+    ///                       -  0: Success.
+    ///                       - -1: Invalid parameters (\c NULL pointer).
+    ///                       - -2: The type of \p src_expr cannot be cast to \p target_type.
     /// \return               The resulting expression or \c NULL in case of failure.
     virtual IExpression* create_cast(
         IExpression* src_expr,
@@ -1040,9 +1040,9 @@ public:
     ///                       call expression.
     /// \param errors         An optional pointer to an #mi::Sint32 to which an error code will be
     ///                       written. The error codes have the following meaning:
-    ///                       - 0: Success.
-    ///                       - 1: Invalid parameters (\c NULL pointer).
-    ///                       - 2: The type of \p src_expr cannot be cast to \p target_type.
+    ///                       -  0: Success.
+    ///                       - -1: Invalid parameters (\c NULL pointer).
+    ///                       - -2: The type of \p src_expr cannot be cast to \p target_type.
     /// \return               The resulting expression or \c NULL in case of failure.
     virtual IExpression* create_decl_cast(
         IExpression* src_expr,

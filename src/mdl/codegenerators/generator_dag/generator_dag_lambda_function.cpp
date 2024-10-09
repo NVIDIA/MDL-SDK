@@ -198,7 +198,7 @@ Lambda_function::Lambda_function(
 , m_params(alloc)
 , m_index_map(Index_map::key_compare(), alloc)
 , m_serial_number(0u)
-, m_uses_render_state(false)
+, m_uses_varying_state(false)
 , m_has_dead_code(false)
 , m_is_modified(false)
 , m_uses_lambda_results(false)
@@ -279,8 +279,7 @@ DAG_node const *Lambda_function::create_call(
     IType const                   *ret_type)
 {
     if (is_varying_state_semantic(sema)) {
-        // varying state functions require a render state
-        m_uses_render_state = true;
+        m_uses_varying_state = true;
     } else if (sema == IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA) {
         // expression lambda calls require an available lambda_results parameter
         m_uses_lambda_results = true;
@@ -2689,7 +2688,7 @@ void Lambda_function::serialize(ISerializer *is) const
     }
 
     dag_serializer.write_bool(m_has_resource_attributes);
-    dag_serializer.write_bool(m_uses_render_state);
+    dag_serializer.write_bool(m_uses_varying_state);
     dag_serializer.write_bool(m_has_dead_code);
     dag_serializer.write_bool(m_uses_lambda_results);
 
@@ -2833,7 +2832,7 @@ Lambda_function *Lambda_function::deserialize(
     }
 
     res->m_has_resource_attributes = dag_deserializer.read_bool();
-    res->m_uses_render_state       = dag_deserializer.read_bool();
+    res->m_uses_varying_state      = dag_deserializer.read_bool();
     res->m_has_dead_code           = dag_deserializer.read_bool();
     res->m_uses_lambda_results     = dag_deserializer.read_bool();
 
@@ -4582,8 +4581,8 @@ Distribution_function::Distribution_function(
 {
     Lambda_function *root_lambda = impl_cast<Lambda_function>(m_root_lambda.get());
 
-    // force always using render state
-    root_lambda->set_uses_render_state(true);
+    // force always using varying state
+    root_lambda->set_uses_varying_state(true);
 
     for (size_t i = 0, n = dimension_of(m_special_lambdas); i < n; ++i) {
         m_special_lambdas[i] = ~0;

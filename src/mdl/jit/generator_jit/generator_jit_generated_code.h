@@ -614,10 +614,16 @@ public:
         size_t get_string_index(IValue_string const *string) MDL_FINAL;
 
         /// Registers all resources in the given resource map in the order of the associated
-        /// indices.
+        /// indices. If a resource map was given to the resource manager constructor, the exact
+        /// indices from the resource map given as parameter to this function will be registered.
         ///
         /// \param resource_map  The resource attribute map to import.
         void import_from_resource_attribute_map(Resource_attr_map const *resource_map);
+
+    private:
+        /// Register all resources in the compiled lambda function using the exact indices
+        /// from the resource map.
+        void register_resources(Resource_attr_map const *resource_map);
 
     private:
         /// The compiled lambda function.
@@ -984,6 +990,16 @@ private:
         unsigned                   tag,
         IType_texture::Shape       tex_shape,
         IValue_texture::gamma_mode gamma_mode);
+
+    /// Register a resource for a given index.
+    /// Used when the integration already provided a resource map.
+    /// Any resource already registered for this index will be overwritten.
+    ///
+    /// \param index  the index for this resource
+    /// \param entry  the resource entry to register for this index
+    void register_resource_for_index(
+        size_t index,
+        Resource_entry const &entry);
 
     /// Register a new string.
     ///

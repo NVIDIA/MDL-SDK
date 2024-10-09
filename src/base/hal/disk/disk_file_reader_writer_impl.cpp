@@ -48,7 +48,7 @@ namespace MI {
 namespace DISK {
 
 template <typename T>
-File_reader_writer_base_impl<T>::~File_reader_writer_base_impl<T>()
+File_reader_writer_base_impl<T>::~File_reader_writer_base_impl()
 {
     close();
 }

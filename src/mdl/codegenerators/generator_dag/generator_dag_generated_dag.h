@@ -1379,16 +1379,25 @@ public:
             /// Check if we support instantiate_dag_arguments on this node.
             bool supported_arguments(DAG_node const *n);
 
-            /// Create a constructor call that converts the expression \c call to the 
-            /// \c target_type by inserting a constructor call of the target type and 
-            /// selecting matching fields from \c call.
-            DAG_node const *translate_decl_cast(
+            /// Create an elemental constructor call for the given target_type.
+            ///
+            /// If \c call is non-NULL converts it to the \c target_type by inserting
+            /// an elemental constructor call of the target type and
+            /// selecting matching fields from \c call (decl_cast).
+            /// If \c call is NULL, creates a default constructor call translated into
+            /// an elemental one (default constructor to elemental constructor conversion).
+            ///
+            /// \param call         if non-NULL an expression representing a compatible expression
+            /// \param target_type  the target type
+            DAG_node const *insert_elemental_constructor(
                 DAG_node const *call,
-                IType const *target_type);
+                IType const    *target_type);
 
-            /// Translate a decl_cast expression into a combination of a constructor call 
-            /// of the target type, field selections and default initiliazers, converting 
+            /// Translate a decl_cast expression into a combination of a constructor call
+            /// of the target type, field selections and default initializers, converting
             /// the expression between two compatible struct types.
+            ///
+            /// \param call  the decl_cast call
             DAG_node const *translate_decl_cast_call(DAG_call const *call);
 
             /// Instantiate a DAG IR node.

@@ -796,7 +796,9 @@ enum Backend_options
     BACKEND_OPTIONS_ADAPT_NORMAL = 1 << 4,
     // enable using a renderer provided function to adapt microfacet
     // roughness.
-    BACKEND_OPTIONS_ADAPT_MICROFACET_ROUGHNESS = 1 << 5
+    BACKEND_OPTIONS_ADAPT_MICROFACET_ROUGHNESS = 1 << 5,
+    // if true, it enables the creation of the read-only data segments for bigger constants
+    BACKEND_OPTIONS_ENABLE_RO_SEGMENT = 1 << 6,
 };
 
 class Material_backend_compiler : public Material_compiler {
@@ -804,36 +806,40 @@ public:
     /// Constructor.
     ///
     /// \param mdl_compiler         the MDL compiler interface
-    /// \params target_backend      The target backend for the generated code (PTX, HSLS, GSLS, LLVM_IR)
+    /// \param target_backend       the target backend for the generated code
+    ///                             (PTX, HLSL, GLSL, LLVM_IR)
     /// \param num_texture_results  the size of a renderer provided array for texture results
     ///                             in the MDL shading state in number of float4 elements
     ///                             processed by the init() function of distribution functions
-    /// \param backend_options      Material backend compiler flag options.
+    /// \param backend_options      material backend compiler flag options
     /// \param df_handle_mode       controls how the handles of distribution functions can be used
     /// \param lambda_return_mode   selects how results are returned by lambda functions
     Material_backend_compiler(
         mi::mdl::IMDL* mdl_compiler,
-        mi::mdl::ICode_generator::Target_language    target_backend,
-        unsigned                                     num_texture_results,
-        mi::Uint32                                   backend_options,
-        const std::string&                           df_handle_mode,
-        const std::string&                           lambda_return_mode)
+        mi::mdl::ICode_generator::Target_language           target_backend,
+        unsigned                                            num_texture_results,
+        mi::Uint32                                          backend_options,
+        const std::string&                                  df_handle_mode,
+        const std::string&                                  lambda_return_mode,
+        const std::unordered_map<std::string, std::string>& additional_be_options = {})
         : Material_compiler(mdl_compiler)
         , m_target_backend(target_backend)
         , m_jit_be(mi::base::make_handle(mdl_compiler->load_code_generator("jit"))
             .get_interface<mi::mdl::ICode_generator_jit>())
         , m_link_unit()
         , m_res_col(mdl_compiler, m_jit_be.get(), m_module_manager)
-        , m_enable_derivatives(backend_options& BACKEND_OPTIONS_ENABLE_DERIVATIVES)
+        , m_enable_derivatives(backend_options & BACKEND_OPTIONS_ENABLE_DERIVATIVES)
         , m_gen_base_name_suffix_counter(0)
     {
-        // Set the JIT backend options: e, we use a private code generator here, so it is safe to
+        // Set the JIT backend options: we use a private code generator here, so it is safe to
         // modify the backend options and ignore thread contexts
         mi::mdl::Options& options = m_jit_be->access_options();
 
-        // Option "enable_ro_segment": Default is disabled.
-        // If you have a lot of big arrays, enabling this might speed up compilation.
-        options.set_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT, "true");
+        if (backend_options & BACKEND_OPTIONS_ENABLE_RO_SEGMENT) {
+            // Option "enable_ro_segment": Default is disabled.
+            // If you have a lot of big arrays, enabling this might speed up compilation.
+            options.set_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT, "true");
+        }
 
         if (backend_options & BACKEND_OPTIONS_ENABLE_DERIVATIVES) {
             // Option "jit_tex_runtime_with_derivs": Default is disabled.
@@ -886,6 +892,9 @@ public:
         // first argument. In "value" mode, base types and vector types are directly returned
         // by the functions, other types are returned as for the "sret" mode.
         options.set_option(MDL_JIT_OPTION_LAMBDA_RETURN_MODE, lambda_return_mode.c_str());
+
+        for (const auto& option : additional_be_options)
+            options.set_option(option.first.c_str(), option.second.c_str());
 
         // After we set the options, we can create a link unit
         m_link_unit = mi::base::make_handle(m_jit_be->create_link_unit(
@@ -977,6 +986,11 @@ private:
 
         return mat_inst.get_material_instance();
     }
+
+    bool add_material_single_init(
+        mi::mdl::IMaterial_instance* material_instance,
+        Target_function_description* function_descriptions,
+        size_t                       description_count);
 
     /// Collect the resources in the arguments of a material instance and registers them with
     /// a lambda function.
@@ -1084,7 +1098,7 @@ bool Material_backend_compiler::add_material_subexpr(
     const std::string& material_name,
     char const* path,
     const char* fname,
-    bool                           class_compilation)
+    bool        class_compilation)
 {
     Target_function_description desc;
     desc.path = path;
@@ -1098,7 +1112,7 @@ bool Material_backend_compiler::add_material_df(
     std::string const& material_name,
     char const* path,
     char const* base_fname,
-    bool                           class_compilation)
+    bool        class_compilation)
 {
     Target_function_description desc;
     desc.path = path;
@@ -1106,6 +1120,7 @@ bool Material_backend_compiler::add_material_df(
     add_material(material_name, &desc, 1, class_compilation);
     return desc.return_code == 0;
 }
+
 
 namespace
 {
@@ -1133,6 +1148,142 @@ namespace
 
 }
 
+bool Material_backend_compiler::add_material_single_init(
+    mi::mdl::IMaterial_instance* material_instance,
+    Target_function_description* function_descriptions,
+    size_t                       description_count)
+{
+    // increment once for each add_material invocation
+    m_gen_base_name_suffix_counter++;
+
+    // generate all function names to be able to take pointers afterswards
+    std::vector<std::string> base_fname_list;
+    for (size_t i = 0; i < description_count; i++)
+    {
+        // use the provided base name or generate one
+        std::string base_fname;
+        if (function_descriptions[i].base_fname)
+            base_fname = function_descriptions[i].base_fname;
+        else
+        {
+            std::stringstream sstr;
+            sstr << "lambda_" << m_gen_base_name_suffix_counter
+                 << "__" << function_descriptions[i].path;
+            base_fname = sstr.str();
+        }
+
+        std::replace(base_fname.begin(), base_fname.end(), '.', '_');
+        base_fname_list.push_back(std::move(base_fname));
+    }
+
+    std::vector<mi::mdl::IDistribution_function::Requested_function> func_list;
+    for (size_t i = 1; i < description_count; i++)
+        func_list.emplace_back(function_descriptions[i].path, base_fname_list[i].c_str());
+
+    mi::base::Handle<mi::mdl::IDistribution_function> dist_func(
+        m_mdl_compiler->create_distribution_function());
+
+    // copy resource map?
+
+    // set init function name
+    mi::base::Handle<mi::mdl::ILambda_function> root_lambda(dist_func->get_root_lambda());
+    root_lambda->set_name(base_fname_list[0].c_str());
+
+    // add all material parameters to the lambda function
+    for (size_t i = 0, n = material_instance->get_parameter_count(); i < n; ++i)
+    {
+        const mi::mdl::IValue* value = material_instance->get_parameter_default(i);
+
+        size_t idx = root_lambda->add_parameter(
+            value->get_type(),
+            material_instance->get_parameter_name(i));
+
+        // map the i'th material parameter to this new parameter
+        root_lambda->set_parameter_mapping(i, idx);
+    }
+    
+    // disable optimizations to ensure, that the expression paths will stay valid
+    bool old_opt = root_lambda->enable_opt(false);
+
+    // import full material into the main lambda
+    const mi::mdl::DAG_node* material_constructor =
+        root_lambda->import_expr(material_instance->get_constructor());
+   
+    if (dist_func->initialize(
+        material_constructor,
+        func_list.data(),
+        func_list.size(),
+        /*include_geometry_normal=*/ true,
+        /*calc_derivatives=*/ m_enable_derivatives,
+        /*allow_double_expr_lambdas=*/ false,
+        &m_module_manager) != mi::mdl::IDistribution_function::EC_NONE)
+        return false;
+
+    // restore optimizations after expression paths have been processed
+    root_lambda->enable_opt(old_opt);
+
+    // collect the resources of the distribution function and the material arguments
+    m_res_col.collect(dist_func.get());
+    collect_material_argument_resources(material_instance, root_lambda.get());
+
+    // argument block index for the entire material
+    size_t arg_block_index = size_t(~0);
+
+    std::vector<size_t> main_func_indices(func_list.size() + 1); // +1 for init function
+    if (!m_link_unit->add(
+        dist_func.get(),
+        nullptr,
+        &m_module_manager,
+        &arg_block_index,
+        main_func_indices.data(),
+        main_func_indices.size()))
+    {
+        for (size_t i = 0; i < description_count; ++i)
+            function_descriptions[i].return_code = -1;
+        return false;
+    }
+    
+    m_arg_block_indexes.push_back(arg_block_index);
+
+    // fill output field for the init function, which is always added first
+    function_descriptions[0].function_index = main_func_indices[0];
+    function_descriptions[0].distribution_kind = mi::mdl::IGenerated_code_executable::DK_NONE;
+    function_descriptions[0].argument_block_index = arg_block_index;
+    function_descriptions[0].return_code = 0;
+
+    // fill output fields for the other main functions
+    for (mi::Size i = 1; i < description_count; ++i)
+    {
+        function_descriptions[i].function_index = main_func_indices[i];
+        function_descriptions[i].argument_block_index = arg_block_index;
+        function_descriptions[i].return_code = 0;
+
+        mi::base::Handle<mi::mdl::ILambda_function> main_func(dist_func->get_main_function(i - 1));
+        mi::mdl::DAG_node const* main_node = main_func->get_body();
+        mi::mdl::IType const* main_type = main_node->get_type()->skip_type_alias();
+        switch (main_type->get_kind())
+        {
+        case mi::mdl::IType::TK_BSDF:
+            function_descriptions[i].distribution_kind = mi::mdl::IGenerated_code_executable::DK_BSDF;
+            break;
+        case mi::mdl::IType::TK_HAIR_BSDF:
+            function_descriptions[i].distribution_kind = mi::mdl::IGenerated_code_executable::DK_HAIR_BSDF;
+            break;
+        case mi::mdl::IType::TK_EDF:
+            function_descriptions[i].distribution_kind = mi::mdl::IGenerated_code_executable::DK_EDF;
+            break;
+        case mi::mdl::IType::TK_VDF:
+            function_descriptions[i].distribution_kind = mi::mdl::IGenerated_code_executable::DK_INVALID;
+            break;
+        default:
+            function_descriptions[i].distribution_kind = mi::mdl::IGenerated_code_executable::DK_NONE;
+            break;
+        }
+    }
+
+    return true;
+}
+
 // Add (multiple) MDL distribution function and expressions of a material to this link unit.
 bool Material_backend_compiler::add_material(
     const std::string&           material_name,
@@ -1146,6 +1297,14 @@ bool Material_backend_compiler::add_material(
         create_and_init_material_instance(material_name.c_str(), class_compilation, flags));
     if (!mat_instance)
         return false;
+
+    if (description_count > 0
+        && function_descriptions[0].path
+        && strcmp(function_descriptions[0].path, "init") == 0)
+    {
+        return add_material_single_init(
+            mat_instance.get(), function_descriptions, description_count);
+    }
 
     // argument block index for the entire material
     // (initialized by the first function that requires material arguments)
@@ -1164,8 +1323,8 @@ bool Material_backend_compiler::add_material(
             tokens_c.push_back(t.c_str());
 
         // Access the requested material expression node
-        const mi::mdl::DAG_node* expr_node = get_dag_arg(mat_instance->get_constructor(),
-            tokens_c, mat_instance.get());
+        const mi::mdl::DAG_node* expr_node = get_dag_arg(
+            mat_instance->get_constructor(), tokens_c, mat_instance.get());
         if (!expr_node)
         {
             function_descriptions[i].return_code = -1;
@@ -1179,8 +1338,8 @@ bool Material_backend_compiler::add_material(
         else
         {
             sstr << "lambda_" << m_gen_base_name_suffix_counter;
+            sstr << "__" << function_descriptions[i].path;
         }
-        sstr << "__" << function_descriptions[i].path;
 
         std::string function_name = sstr.str();
         std::replace(function_name.begin(), function_name.end(), '.', '_');

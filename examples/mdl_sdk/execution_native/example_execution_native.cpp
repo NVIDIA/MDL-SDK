@@ -426,14 +426,14 @@ void usage(char const *prog_name)
     std::cout
         << "Usage: " << prog_name << " [options] [<material_name>]\n"
         << "Options:\n"
-        << "  --res <x> <y>       resolution (default: 700x520)\n"
-        << "  --cc                use class compilation\n"
-        << "  --cr                use custom texture runtime\n"
-        << "  -d                  enable use of derivatives\n"
-        << "                      (not supported in combination with --cr by this example)\n"
-        << "  -o <outputfile>     image file to write result to\n"
-        << "                      (default: example_native.png)\n"
-        << "  --mdl_path <path>   mdl search path, can occur multiple times."
+        << "  --res <x> <y>          resolution (default: 700x520)\n"
+        << "  --cc                   use class compilation\n"
+        << "  --cr                   use custom texture runtime\n"
+        << "  -d                     enable use of derivatives\n"
+        << "                         (not supported in combination with --cr by this example)\n"
+        << "  -o <outputfile>        image file to write result to\n"
+        << "                         (default: example_native.png)\n"
+        << "  -p|--mdl_path <path>   mdl search path, can occur multiple times\n"
         << std::endl;
     exit_failure();
 }
@@ -465,7 +465,8 @@ int MAIN_UTF8(int argc, char *argv[])
                 options.use_custom_tex_runtime = true;
             } else if (strcmp(opt, "-d") == 0) {
                 options.enable_derivatives = true;
-            } else if (strcmp(opt, "--mdl_path") == 0 && i < argc - 1) {
+            } else if ((strcmp(opt, "--mdl_path") == 0 || strcmp(opt, "-p") == 0)
+                && i < argc - 1) {
                 configure_options.additional_mdl_paths.push_back(argv[++i]);
             } else {
                 std::cout << "Unknown option: \"" << opt << "\"" << std::endl;

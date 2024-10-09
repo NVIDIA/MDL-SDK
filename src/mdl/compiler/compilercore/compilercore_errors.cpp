@@ -678,7 +678,9 @@ char const *get_error_template(
             return "struct '$0' may not contain a field in the same struct category";
         case DECLARATIVE_INDEX_NOT_UNIFORM:
             return "index expression for declarative array must be uniform";
-        
+        case WEAK_RELATIVE_IMPORT_FROM_SEARCH_PATH_ROOT:
+            return "weak relative imports of standard modules are not allowed in MDL $0.$1";
+
         // ------------------------------------------------------------- //
         case EXTERNAL_APPLICATION_ERROR:
             return "external application error: $.";

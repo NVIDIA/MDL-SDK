@@ -366,16 +366,21 @@ bool DAG_node_factory_impl::Equal_dag_node::operator()(
         return false;
     }
 
-    auto it_a = m_temp_name_map.find(a);
-    auto it_b = m_temp_name_map.find(b);
-    bool has_name_a = it_a != m_temp_name_map.end();
-    bool has_name_b = it_b != m_temp_name_map.end();
-    if (has_name_a != has_name_b) {
-        return false;
-    }
 
-    if (has_name_a && strcmp(it_a->second, it_b->second) != 0) {
-        return false;
+    // This is ugly: To preserve "temporary names" we do not merge nodes if they have
+    // different names.
+    {
+        auto it_a = m_temp_name_map.find(a);
+        auto it_b = m_temp_name_map.find(b);
+        bool has_name_a = it_a != m_temp_name_map.end();
+        bool has_name_b = it_b != m_temp_name_map.end();
+        if (has_name_a != has_name_b) {
+            return false;
+        }
+
+        if (has_name_a && strcmp(it_a->second, it_b->second) != 0) {
+            return false;
+        }
     }
 
     switch (kind) {
@@ -2761,13 +2766,42 @@ DAG_node const *DAG_node_factory_impl::create_call(
             break;
         case IDefinition::DS_INTRINSIC_DF_LIGHT_PROFILE_ISVALID:
         case IDefinition::DS_INTRINSIC_DF_BSDF_MEASUREMENT_ISVALID:
+        case IDefinition::DS_INTRINSIC_TEX_WIDTH:
+        case IDefinition::DS_INTRINSIC_TEX_HEIGHT:
+        case IDefinition::DS_INTRINSIC_TEX_DEPTH:
+        case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT:
+        case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT2:
+        case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT3:
+        case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT4:
+        case IDefinition::DS_INTRINSIC_TEX_LOOKUP_COLOR:
+        case IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT:
+        case IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT2:
+        case IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT3:
+        case IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT4:
+        case IDefinition::DS_INTRINSIC_TEX_TEXEL_COLOR:
         case IDefinition::DS_INTRINSIC_TEX_TEXTURE_ISVALID:
-            if (num_call_args == 1 && is<DAG_constant>(call_args[0].arg)) {
+        case IDefinition::DS_INTRINSIC_TEX_WIDTH_OFFSET:
+        case IDefinition::DS_INTRINSIC_TEX_HEIGHT_OFFSET:
+        case IDefinition::DS_INTRINSIC_TEX_DEPTH_OFFSET:
+        case IDefinition::DS_INTRINSIC_TEX_FIRST_FRAME:
+        case IDefinition::DS_INTRINSIC_TEX_LAST_FRAME:
+            if (num_call_args > 0 && is<DAG_constant>(call_args[0].arg)) {
                 // Note: we fold here only invalid textures and let others to be folded
                 // by the integration. This allows "missing" resources to be flagged as invalid.
                 IValue const *r = cast<DAG_constant>(call_args[0].arg)->get_value();
                 if (is<IValue_invalid_ref>(r)) {
-                    IValue const *v = m_value_factory.create_bool(false);
+                    IValue const *v = m_value_factory.create_zero(ret_type);
+                    return create_constant(v);
+                }
+            }
+            break;
+        case IDefinition::DS_INTRINSIC_TEX_GRID_TO_OBJECT_SPACE:
+            if (num_call_args > 0 && is<DAG_constant>(call_args[0].arg)) {
+                // Note: we fold here only invalid textures and let others to be folded
+                // by the integration. This allows "missing" resources to be flagged as invalid.
+                IValue const *r = cast<DAG_constant>(call_args[0].arg)->get_value();
+                if (is<IValue_invalid_ref>(r)) {
+                    IValue const *v = create_identity_matrix(m_value_factory);
                     return create_constant(v);
                 }
             }
@@ -3501,9 +3535,12 @@ bool DAG_node_factory_impl::all_args_without_name(
     return true;
 }
 
+// Return a shallow copy of the top-level node with CSE disabled.
 DAG_node const *DAG_node_factory_impl::shallow_copy(DAG_node const *node)
 {
     No_CSE_scope scope(*this);
+
+    MDL_ASSERT(is_owner(node) && "Cannot shallow_copy() from another owner");
 
     switch (node->get_kind()) {
     case DAG_node::EK_CONSTANT:
@@ -4579,14 +4616,16 @@ DAG_node const *DAG_node_factory_impl::remove_clamped_components(
 DAG_node *DAG_node_factory_impl::identify_remember(
     DAG_node *node)
 {
-    if (!m_cse_enabled)
+    if (!m_cse_enabled) {
         return node;
+    }
 
     Value_table::iterator it = m_value_table.find(node);
     if (it == m_value_table.end()) {
         m_value_table.insert(node);
         return node;
     }
+
     // already known, drop this and return the other
     size_t id = node->get_id();
     if (id + 1 == m_next_id) {

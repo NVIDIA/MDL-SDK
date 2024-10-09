@@ -1,5 +1,79 @@
 Change Log
 ==========
+MDL SDK 2024.0.4 (377400.3959): 07 Oct 2024
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2024.0.4 (377400.3959) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- MDL 1.9 Language Specification
+    - Updated to document version 1.9.2.
+
+- General
+    - The default value for the backend option `enable_exceptions` is now `off`,
+      as this is the behavior described by the MDL specification.
+      
+- MDL Compiler and Backends
+    - Implemented folding of `::tex` function calls with invalid textures on the DAG.
+    - Added “`max_const_data`” backend option to limit the size of global constants in the
+      generated code when the “`enable_ro_segment`” option is enabled. Larger constants are put
+      into read-only data segment. The default is “`1024`” bytes, which corresponds to
+      the old behavior.
+
+- MDL SDK examples
+    - MDL Core code_gen example:
+        - Added support for single-init mode.
+    - MDL SDK df_vulkan example:
+        - Added support for read-only data segments and `max_const_data` backend option.
+    - MDL Example Execution Native:
+        - It now supports the `-p` abbreviation for `–mdl_path` as in all other examples.
+    - MDL Example df_native:
+        - Added support for argument blocks in Class Compilation mode.
+        - Added OpenGL GUI for editing material parameters and displaying stats during rendering.
+        - Changed default compilation mode to Class Compilation.
+        - Removed command line option `--cc` which is now replaced
+          by `--nocc` (or disable Class Compilation mode).
+
+**Fixed Bugs**
+
+- General
+    - libbsdf: Fixed issues for `df::thin_film` over `df::custom_curve_layer` and
+      `df::directional_factor` with normal reflectivity approaching zero.
+    - Fixed a build error if image plugins are disabled.
+    - Fixed a build error caused by picking up LLVM header files from a different location.
+    - Fixed documented return codes for `IExpression_factory::create_cast()` and
+      `create_decl_cast()` (error codes are negative as usual, not positive).
+    - Fixed missing build dependencies for the distiller plugins and the distiller example plugin.    
+
+- MDL Compiler and Backends
+    - Allow material sub structs to be used inside a declarative struct and declarative functions.
+    - Improved error message in case a select operator cannot be executed because of the
+      left-hand-side type was not imported.
+    - Fixed wrong HLSL/GLSL read functions used for shadow copies of function parameters.
+    - Fixed crash when compiling a function which receives a material parameter but doesn't
+      use the state (GLSL backend with rodata segment disabled).
+    - Avoid undefined behavior with "%" operator for negative values for GLSL
+      by implementing “`a % b`” as “`a - (a / b) * b`”.
+    - Report when a standard library module is imported with a weak relative import names from
+      a module in a search path root. This is needed because standard library modules are
+      loaded from a high-priority search path and would shadow any relative import. This will
+      trigger a warning for MDL versions between 1.6 and 1.9, and an error for MDL versions
+      greater than 1.9.
+    - Fixed the documentation of the backend option "`hlsl_use_resource_data`" and
+      "`glsl_use_resource_data`". These are recognized but not supported at the moment.
+    - Fixed compilation of calls to non-inlined functions which receive material parameters as
+      arguments for GLSL/HLSL.
+    - Return identity matrix instead of zero for unimplemented `tex::grid_to_object_space()`.
+    - Fixed crash when compiling an expression as `const` which only becomes `const` after
+      optimization (e.g. by getting rid of state access).
+    - libbsdf: Fixed wrong shadow mask in microfacet BSDFs.
+    - libbsdf: Avoid `NaNs` due to out-of-range roundings during random number updates.
+    - MDL Core: Fixed resource indices for native code if a custom texture runtime is used.
+    - Fixed crashes if a non-constant default constructor occurred during code generation
+      in various backends.
+
 MDL SDK 2024.0.2 (377400.2626): 07 Aug 2024
 -----------------------------------------------
 

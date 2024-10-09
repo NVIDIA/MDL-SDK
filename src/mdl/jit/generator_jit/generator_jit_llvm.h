@@ -3975,6 +3975,10 @@ private:
     /// If true, the read-only segment generation is enabled.
     bool m_enable_ro_segment;
 
+    /// Maximum size of a constant to be put into the generated code, if the read-only data segment
+    /// is enabled. Bigger constants will be put into the read-only data segment.
+    size_t m_max_const_size;
+
     /// If true, generated functions should get an AlwaysInline attribute.
     bool m_always_inline;
 

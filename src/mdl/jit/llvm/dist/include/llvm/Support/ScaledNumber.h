@@ -82,11 +82,11 @@ inline std::pair<DigitsT, int16_t> getAdjusted(uint64_t Digits,
 
   const int Width = getWidth<DigitsT>();
   if (Width == 64 || Digits <= std::numeric_limits<DigitsT>::max())
-    return std::make_pair(Digits, Scale);
+    return std::make_pair(static_cast<DigitsT>(Digits), Scale);
 
   // Shift right and round.
   int Shift = 64 - Width - countLeadingZeros(Digits);
-  return getRounded<DigitsT>(Digits >> Shift, Scale + Shift,
+  return getRounded<DigitsT>(static_cast<DigitsT>(Digits >> Shift), Scale + Shift,
                              Digits & (UINT64_C(1) << (Shift - 1)));
 }
 
@@ -117,7 +117,8 @@ inline std::pair<DigitsT, int16_t> getProduct(DigitsT LHS, DigitsT RHS) {
   if (getWidth<DigitsT>() <= 32 || (LHS <= UINT32_MAX && RHS <= UINT32_MAX))
     return getAdjusted<DigitsT>(uint64_t(LHS) * RHS);
 
-  return multiply64(LHS, RHS);
+  std::pair<uint64_t, int16_t> res64 = multiply64(LHS, RHS);
+  return getAdjusted<DigitsT>(res64.first, res64.second);
 }
 
 /// Convenience helper for 32-bit product.
@@ -161,9 +162,11 @@ std::pair<DigitsT, int16_t> getQuotient(DigitsT Dividend, DigitsT Divisor) {
   if (!Divisor)
     return std::make_pair(std::numeric_limits<DigitsT>::max(), MaxScale);
 
-  if (getWidth<DigitsT>() == 64)
-    return divide64(Dividend, Divisor);
-  return divide32(Dividend, Divisor);
+  if (getWidth<DigitsT>() == 64) {
+    std::pair<uint64_t, int16_t> res64 = divide64(Dividend, Divisor);
+    return getAdjusted<DigitsT>(res64.first, res64.second);
+  }
+  return divide32(uint32_t(Dividend), uint32_t(Divisor));
 }
 
 /// Convenience helper for 32-bit quotient.
@@ -688,8 +691,8 @@ private:
     if (Width == 64)
       return countLeadingZeros64(Digits);
     if (Width == 32)
-      return countLeadingZeros32(Digits);
-    return countLeadingZeros32(Digits) + Width - 32;
+      return countLeadingZeros32(uint32_t(Digits));
+    return countLeadingZeros32(uint32_t(Digits)) + Width - 32;
   }
 
   /// Adjust a number to width, rounding up if necessary.

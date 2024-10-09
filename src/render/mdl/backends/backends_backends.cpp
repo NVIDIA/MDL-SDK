@@ -3156,13 +3156,16 @@ Mdl_llvm_backend::Mdl_llvm_backend(
     // by default wavelength_max is 780
     options.set_option(MDL_CG_OPTION_WAVELENGTH_MAX, "780");
 
-    // by default we support exceptions
-    options.set_option(MDL_JIT_OPTION_DISABLE_EXCEPTIONS, "false");
+    // by default we disable exceptions to comply with MDL 1.8 spec
+    options.set_option(MDL_JIT_OPTION_DISABLE_EXCEPTIONS, "true");
 
     // by default the read-only segment is disabled for all BE except HLSL
     // "for historical reasons"
     options.set_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT,
         kind == mi::neuraylib::IMdl_backend_api::MB_HLSL ? "true" :"false");
+
+    // by default the maximum size of a constant in the code with enabled read-only segment is 1024
+    options.set_option(MDL_JIT_OPTION_MAX_CONST_DATA, "1024");
 
     // by default we generate LLVM IR
     options.set_option(MDL_JIT_OPTION_WRITE_BITCODE, "false");
@@ -3409,6 +3412,10 @@ mi::Sint32 Mdl_llvm_backend::set_option(
             return -2;
         }
         jit_options.set_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT, value);
+        return 0;
+    }
+    if (strcmp(name, "max_const_data") == 0) {
+        jit_options.set_option(MDL_JIT_OPTION_MAX_CONST_DATA, value);
         return 0;
     }
     if (strcmp(name, "num_texture_results") == 0) {

@@ -4037,7 +4037,7 @@ Df_flags LLVM_code_generator::get_bsdf_scatter_components(
         return it->second;
     }
 
-    Df_flags res;
+    Df_flags res = DF_FLAGS_NONE;
     int scatter_arg_index = -1;
 
     switch (unsigned(dag_call->get_semantic())) {

@@ -100,7 +100,7 @@ public:
     /// - \c "use_builtin_resource_handler": Enables/disables the built-in texture runtime.
     ///   Possible values: \c "on", \c "off". Default: \c "on".
     ///
-    /// The following options are supported by the PTX, LLVM-IR, native and HLSL backend:
+    /// The following options are supported by the PTX, LLVM-IR, native, GLSL and HLSL backend:
     ///
     /// - \c "inline_aggressively": Enables/disables aggressive inlining. Possible values:
     ///   \c "on", \c "off". Default: \c "off".
@@ -108,11 +108,15 @@ public:
     ///   on the DAG. Possible values:
     ///   \c "on", \c "off". Default: \c "on".
     /// - \c "enable_exceptions": Enables/disables support for exceptions through runtime function
-    ///   calls. For PTX, this options is always treated as disabled. Possible values:
-    ///   \c "on", \c "off". Default: \c "on".
+    ///   calls on CPU. For GPU, this options is always treated as disabled. Possible values:
+    ///   \c "on", \c "off". Default: \c "off".
     /// - \c "enable_ro_segment": Enables/disables the creation of the read-only data segment
     ///   calls. Possible values:
     ///   \c "on", \c "off". Default: \c "off".
+    /// - \c "max_const_data": Specifies the maximum size of a constant in bytes to be put into
+    ///   the generated code, if the \c "enable_ro_segment" option is enabled. Bigger constants will
+    ///   be moved into the read-only data segment. If the \c "glsl_max_const_data" option is also
+    ///   used, the read-only data segment has priority.
     /// - \c "num_texture_results": Set the size of the text_results array in the MDL SDK
     ///   state in number of float4 elements. The array has to be provided by the renderer and
     ///   must be provided per thread (for example as an array on the stack) and will be filled
@@ -178,8 +182,8 @@ public:
     ///   * \c "optix_cp": generate calls through OptiX bindless callable programs
     ///
     /// The following options are supported by the HLSL backend only:
-    /// - \c "hlsl_use_resource_data": If enabled, an extra user define resource data struct is
-    ///   passed to all resource callbacks.
+    /// - \c "hlsl_use_resource_data": If enabled, an extra user defined resource data struct is
+    ///   passed to all resource callbacks. This option is currently not supported.
     ///   Possible values:
     ///   \c "on", \c "off". Default: \c "off".
     /// - \c "hlsl_remap_functions": Specifies a comma separated remap list of MDL functions. The
@@ -211,9 +215,11 @@ public:
     /// - \c "glsl_include_uniform_state": If \c true, object_id will be included in the state
     ///                                    according to the \c "glsl_state_object_id_mode" option.
     ///   Possible values: \c "on", \c "off". Default: \c "off"
-    /// - \c "glsl_max_const_data": Specifies the maximum allowed amount in bytes of constant data
-    ///                             for a generated shader by the GLSL backend. If bigger data are
-    ///                             necessary, the backend will move it to uniform inputs.
+    /// - \c "glsl_max_const_data": Specifies the maximum size of a constant in bytes to be put into
+    ///                             the generated GLSL code, if the "glsl_place_uniforms_into_ssbo"
+    ///                             option is enabled. Bigger constants will be moved into the SSBO.
+    ///                             If the \c "max_const_data" option is also used, the read-only
+    ///                             data segment has priority.
     ///   Default: \c "1024".
     /// - \c "glsl_place_uniforms_into_ssbo": If \c true, all generated uniform inputs will be
     ///                                       placed into a shader storage buffer object.
@@ -232,6 +238,10 @@ public:
     ///  - \c "glsl_uniform_ssbo_set": A GLSL set attribute expression for the SSBO buffer.
     ///   Possible values: Currently limited to unsigned literals.
     ///   Default: \c "" (Means no "set" attribute)
+    /// - \c "glsl_use_resource_data": If enabled, an extra user defined resource data struct is
+    ///   passed to all resource callbacks. This option is currently not supported.
+    ///   Possible values:
+    ///   \c "on", \c "off". Default: \c "off".
     /// - \c "glsl_remap_functions": Specifies a comma separated remap list of MDL functions. The
     ///                              entries must be specified as &lt;old_name&gt;=&lt;new_name&gt;.
     ///                              Both names have to be in mangled form.

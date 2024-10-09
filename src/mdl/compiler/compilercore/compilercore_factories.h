@@ -1578,6 +1578,16 @@ public:
 
     // Non interface methods
 public:
+    /// Create a new value of type array.
+    ///
+    /// \param type    The type of the array.
+    /// \param value   The value for all elements of the array.
+    /// \param size    The number of values, must match the array size.
+    IValue_array const *create_array(
+        IType_array const *type,
+        IValue const      *value,
+        size_t            size);
+
     /// Dump all values owned by this Value table.
     void dump() const;
 

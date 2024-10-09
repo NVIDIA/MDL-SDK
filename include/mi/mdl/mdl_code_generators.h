@@ -1092,6 +1092,10 @@ class ICode_generator_jit : public
     /// constant segment.
     #define MDL_JIT_OPTION_ENABLE_RO_SEGMENT "jit_enable_ro_segment"
 
+    /// The name of the option that limits the maximum size of constants in a
+    /// compiled module in the JIT code generator.
+    #define MDL_JIT_OPTION_MAX_CONST_DATA "jit_max_const_data"
+
     /// The name of the option to set the fast-math optimization of the JIT code generator.
     #define MDL_JIT_OPTION_FAST_MATH "jit_fast_math"
 
@@ -1271,7 +1275,7 @@ class ICode_generator_jit : public
     /// compiled module in the GLSL backend.
     #define MDL_JIT_OPTION_GLSL_REQUIRED_EXTENSIONS "jit_glsl_required_extensions"
 
-    /// The name of the option that limits the maximum size of constant data in a
+    /// The name of the option that limits the maximum size of constants in a
     /// compiled module in the GLSL backend.
     #define MDL_JIT_OPTION_GLSL_MAX_CONST_DATA "jit_glsl_max_const_data"
 
@@ -1644,6 +1648,7 @@ These options are specific to the MDL JIT code generator:
 
 - \ref mdl_option_jit_disable_exceptions         "jit_disable_exceptions"
 - \ref mdl_option_jit_enable_ro_segment          "jit_enable_ro_segment"
+- \ref mdl_option_jit_max_const_data             "jit_max_const_data"
 - \ref mdl_option_jit_fast_math                  "jit_fast_math"
 - \ref mdl_option_jit_include_uniform_state      "jit_include_uniform_state"
 - \ref mdl_option_jit_inline_aggressively        "jit_inline_aggressively"
@@ -1718,6 +1723,13 @@ These options are specific to the MDL JIT code generator:
 - <b>jit_enable_ro_segment</b>: If set to \c "true", a read-only constant data segment may be
   created to reduce the amount of constant data in source code output.
   Default: \c "false"
+
+\anchor mdl_option_jit_max_const_data
+- <b>max_const_data:</b> Specifies the maximum size of a constant in bytes to be put into
+                         the generated code, if the \c "jit_enable_ro_segment" option
+                         is enabled. Bigger constants will be moved into the read-only data segment.
+                         If the \c "glsl_max_const_data" option is also used, the read-only data
+                         segment has priority.
 
 \anchor mdl_option_jit_fast_math
 - <b>jit_fast_math</b>: If set to \c "true", the JIT code generator enables unsafe

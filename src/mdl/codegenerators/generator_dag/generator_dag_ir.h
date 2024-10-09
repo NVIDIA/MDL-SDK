@@ -322,6 +322,10 @@ public:
     size_t get_next_id() const { return m_next_id; }
 
     /// Return a shallow copy of the top-level node with CSE disabled.
+    ///
+    /// \param node  the node to copy
+    ///
+    /// \note node must be owner by the same owner
     DAG_node const *shallow_copy(DAG_node const *node);
 
     /// Get the allocator of this factory.
@@ -586,10 +590,14 @@ private:
 
     /// An Equal functor for DAG IR nodes.
     struct Equal_dag_node {
-        Equal_dag_node(const Definition_temporary_name_map& temp_name_map)
-        : m_temp_name_map(temp_name_map) { }
+        Equal_dag_node(Definition_temporary_name_map const &temp_name_map)
+        : m_temp_name_map(temp_name_map)
+        {
+        }
+
         bool operator()(DAG_node const *a, DAG_node const *b) const;
-        const Definition_temporary_name_map& m_temp_name_map;
+
+        Definition_temporary_name_map const &m_temp_name_map;
     };
 
     typedef hash_set<

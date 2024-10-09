@@ -563,7 +563,7 @@ public:
   }
 
   uint32_t getElementSizeInBytes() const {
-    return getElementSizeInBytesCst()->getZExtValue();
+    return uint32_t(getElementSizeInBytesCst()->getZExtValue());
   }
 
   void setElementSizeInBytes(Constant *V) {

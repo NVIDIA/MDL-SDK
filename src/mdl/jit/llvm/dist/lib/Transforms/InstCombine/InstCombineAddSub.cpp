@@ -1352,6 +1352,8 @@ Instruction *InstCombinerImpl::visitAdd(BinaryOperator &I) {
   // X % C0 + (( X / C0 ) % C1) * C0 => X % (C0 * C1)
   if (Value *V = SimplifyAddWithRemainder(I)) return replaceInstUsesWith(I, V);
 
+  // MDL: Disable instcombine to modulo instruction, as it is undefined for negative values in GLSL
+#if 0
   // ((X s/ C1) << C2) + X => X s% -C1 where -C1 is 1 << C2
   const APInt *C1, *C2;
   if (match(LHS, m_Shl(m_SDiv(m_Specific(RHS), m_APInt(C1)), m_APInt(C2)))) {
@@ -1362,6 +1364,7 @@ Instruction *InstCombinerImpl::visitAdd(BinaryOperator &I) {
       return BinaryOperator::CreateSRem(RHS, NewRHS);
     }
   }
+#endif
 
   // A+B --> A|B iff A and B have no bits set in common.
   if (haveNoCommonBitsSet(LHS, RHS, DL, &AC, &I, &DT))

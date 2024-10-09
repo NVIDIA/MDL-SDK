@@ -1836,7 +1836,7 @@ public:
     // get 0. If VAL is 0, we get WORDTYPE_MAX which gets truncated to
     // UINT32_MAX.
     if (BitWidth == 1)
-      return U.VAL - 1;
+      return unsigned(U.VAL - 1);
 
     // Handle the zero case.
     if (isNullValue())

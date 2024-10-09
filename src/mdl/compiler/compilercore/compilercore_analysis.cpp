@@ -3052,6 +3052,8 @@ restart:
          c_def = m_module.get_next_constructor(c_def))
     {
         if (c_def->has_flag(Definition::DEF_IS_CONST_CONSTRUCTOR)) {
+            // note: this might be true for the default constructor OR
+            // the elemental constructor acting as the default constructor
             return true;
         }
     }
@@ -3214,6 +3216,8 @@ void NT_analysis::create_default_members(
                         is_const_constructor = false;
                     }
                 } else {
+                    // the elemental constructor requires an argument, hence we need an extra
+                    // default constructor
                     need_default_constructor = true;
 
                     if (!has_const_default_constructor(f_type)) {
@@ -3547,6 +3551,8 @@ Module const *NT_analysis::load_module_to_import(
         import_name += sym->get_name();
     }
 
+    string user_import_name(import_name.c_str(), m_builder.get_allocator());
+
     bool is_weak    = false;
     bool is_weak_16 = false;
 
@@ -3645,6 +3651,11 @@ Module const *NT_analysis::load_module_to_import(
     if (imp_mod != NULL) {
         // reference count is not increased by find_imported_mode(), do it here
         imp_mod->retain();
+
+        // Emit warning/error if standard module is imported with weak relative
+        // name from search path root.
+        check_weak_stdlib_import(rel_name->access_position(), user_import_name.c_str(), imp_mod);
+
         if (!direct) {
             bool first_import = false;
 
@@ -3735,6 +3746,10 @@ Module const *NT_analysis::load_module_to_import(
     }
     check_imported_module_dependencies(imp_mod, rel_name->access_position());
 
+    // Emit warning/error if standard module is imported with weak relative
+    // name from search path root.
+    check_weak_stdlib_import(rel_name->access_position(), user_import_name.c_str(), imp_mod);
+
     return imp_mod;
 }
 
@@ -3820,6 +3835,7 @@ void NT_analysis::import_qualified(
             // errors already reported
             return;
         }
+
         // import it under the relative name
         import_all_definitions(imp_mod.get(), rel_name, skip_dots, err_pos);
     } else {
@@ -3959,6 +3975,10 @@ void NT_analysis::import_type_scope(
     IType const *orig_type = imported->get_type();
     if (is<IType_alias>(orig_type)) {
         // do nothing, as the alias type has no type scope
+        return;
+    }
+    if (is<IType_error>(orig_type)) {
+        // ignore previous errors
         return;
     }
 
@@ -4670,7 +4690,7 @@ restart:
     case IType::TK_STRUCT:
         {
             IType_struct const *s_type = cast<IType_struct>(type);
-            if (s_type->get_predefined_id() != IType_struct::SID_USER) {
+            if (!allow_declarative && s_type->get_predefined_id() != IType_struct::SID_USER) {
                 // materials and its parts are forbidden
                 return s_type;
             }
@@ -9352,8 +9372,10 @@ Definition const *NT_analysis::find_overload(
 
             // All fine, found only ONE possible overload.
             if (def->get_semantics() == IDefinition::DS_DEFAULT_STRUCT_CONSTRUCTOR) {
-                // reformat to elemental struct constructor
-                def = reformat_default_struct_constructor(def, call);
+                // reformat to elemental struct constructor if possible
+                if (def->has_flag(Definition::DEF_IS_CONST_CONSTRUCTOR)) {
+                    def = reformat_const_default_struct_constructor(def, call);
+                }
             } else {
                 // Otherwise add argument conversions if needed and reorder the arguments.
                 reformat_arguments(
@@ -10574,23 +10596,27 @@ void NT_analysis::check_argument_range(
     }
 }
 
-// replace default struct constructors by elemental constructors
-Definition const *NT_analysis::reformat_default_struct_constructor(
+// Replace default const struct constructors by elemental constructors.
+Definition const *NT_analysis::reformat_const_default_struct_constructor(
     Definition const *callee_def,
     IExpression_call *call)
 {
+    // if the callee is not a const constructor, we cannot fold the field initializers
+    MDL_ASSERT(
+        callee_def->has_flag(Definition::DEF_IS_CONST_CONSTRUCTOR) && "not const constructor");
+
     IType_function const *f_type = cast<IType_function>(callee_def->get_type());
     IType_struct const   *s_type = cast<IType_struct>(f_type->get_return_type());
 
     // first step: find the elementary constructor inside THIS module
-    Definition const *c_def = m_module.get_elemental_constructor(s_type);
-    MDL_ASSERT(c_def != NULL && "could not find default constructor");
+    Definition const *elem_c_def = m_module.get_elemental_constructor(s_type);
+    MDL_ASSERT(elem_c_def != NULL && "could not find elemental constructor");
 
     // lookup the original definition to get default arguments
     Module const *origin = NULL;
-    Definition const *orig_c_def = m_module.get_original_definition(callee_def, origin);
+    Definition const *orig_elem_c_def = m_module.get_original_definition(elem_c_def, origin);
 
-    f_type = cast<IType_function>(c_def->get_type());
+    f_type = cast<IType_function>(elem_c_def->get_type());
     size_t param_count = f_type->get_parameter_count();
 
     // Use origin to rewrite resource URLs
@@ -10600,7 +10626,7 @@ Definition const *NT_analysis::reformat_default_struct_constructor(
     for (size_t i = 0; i < param_count; ++i) {
         IExpression const *expr = NULL;
 
-        if ((expr = orig_c_def->get_default_param_initializer(i))) {
+        if ((expr = orig_elem_c_def->get_default_param_initializer(i))) {
             // this struct field has an initializer, clone it
             expr = m_module.clone_expr(expr, &def_modifier);
         } else {
@@ -10652,7 +10678,7 @@ Definition const *NT_analysis::reformat_default_struct_constructor(
                 // might fail) ...
                 IValue const *pval = ptype_mod->create_default_value(
                     ptype_mod->get_value_factory(), ptype);
-                /// ... and import it into out module if necessary
+                // ... and import it into out module if necessary
                 if (ptype_mod.get() != &m_module) {
                     pval = m_module.import_value(pval);
                 }
@@ -10664,7 +10690,7 @@ Definition const *NT_analysis::reformat_default_struct_constructor(
         IArgument_positional const *new_arg = fact->create_positional_argument(expr);
         call->add_argument(new_arg);
     }
-    return c_def;
+    return elem_c_def;
 }
 
 // Reformat and reorder the arguments of a call.
@@ -11078,6 +11104,60 @@ bool NT_analysis::convert_array_cons_argument(
         }
     }
     return true;
+}
+
+void NT_analysis::check_weak_stdlib_import(
+    Position const &pos,
+    char const *import_name,
+    Module const *import_module
+) {
+    // Only check if importing module is MDL 1.6 or greater.
+    if (m_module.get_mdl_version() < IMDL::MDL_VERSION_1_6) {
+        return;
+    }
+
+    // Only warn if imported module is a standard library module.
+    if (!import_module->is_stdlib()) {
+        return;
+    }
+
+    // Only warn if importing module is in a search path root.
+    bool is_weak_relative_name = false;
+    if (import_name[0] != ':') {
+        if (import_name[0] != '.') {
+            is_weak_relative_name = true;
+        }
+    }
+    if (!is_weak_relative_name) {
+        return;
+    }
+
+    IQualified_name const *importing_name = m_module.get_qualified_name();
+
+    // Only warn if importing module is in a search path root.
+    bool in_search_path_root = false;
+    if (importing_name->get_component_count() == 1) {
+        in_search_path_root = true;
+    }
+    if (!in_search_path_root) {
+        return;
+    }
+
+    int major = 1, minor = 0;
+    m_module.get_version(major, minor);
+
+    // Emit warning for MDL version <= 1.9, error otherwise.
+    if (m_module.get_mdl_version() <= IMDL::MDL_VERSION_1_9) {
+        warning(
+            WEAK_RELATIVE_IMPORT_FROM_SEARCH_PATH_ROOT,
+            pos,
+            Error_params(*this).add(major).add(minor));
+    } else {
+        error(
+            WEAK_RELATIVE_IMPORT_FROM_SEARCH_PATH_ROOT,
+            pos,
+            Error_params(*this).add(major).add(minor));
+    }
 }
 
 // Start an import declaration.

@@ -95,8 +95,7 @@ GLSLWriterBasePass::GLSLWriterBasePass(
 , m_messages(messages)
 , m_api_decls(0, Decl_set::hasher(), Decl_set::key_equal(), alloc)
 , m_uniform_inits(alloc)
-, m_max_const_segment_size(1024u)
-, m_curr_const_segment_size(0)
+, m_max_const_size(1024u)
 , m_glslang_version(glsl::GLSL_VERSION_4_50)
 , m_glslang_profile(glsl::GLSL_PROFILE_CORE)
 , m_glsl_enabled_extentions(nullptr)
@@ -129,7 +128,7 @@ GLSLWriterBasePass::GLSLWriterBasePass(
     m_glsl_required_extentions =
         options.get_string_option(MDL_JIT_OPTION_GLSL_REQUIRED_EXTENSIONS);
 
-    m_max_const_segment_size =
+    m_max_const_size =
         options.get_unsigned_option(MDL_JIT_OPTION_GLSL_MAX_CONST_DATA);
 #if 0
     m_lambda_enforce_vec3_return =
@@ -2347,13 +2346,12 @@ void GLSLWriterBasePass::finalize(
     }
 }
 
-// Check if the constant data is too big for the code itself and should be moved to
-// an uniform buffer.
+// Check if the constant is too big for the code itself and should be moved to the SSBO.
 bool GLSLWriterBasePass::move_to_uniform(glsl::Value *v)
 {
     size_t ts = m_tc.get_type_size(v->get_type());
 
-    return m_curr_const_segment_size + ts > m_max_const_segment_size;
+    return ts > m_max_const_size;
 }
 
 // Add an uniform initializer.

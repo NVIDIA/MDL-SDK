@@ -457,11 +457,13 @@ public:
     /// Returns true if this lambda function is an entry point.
     bool is_entry_point() const { return true; }
 
-    /// Returns true if this lambda function uses the render state.
-    bool uses_render_state() const { return m_uses_render_state; }
+    /// Returns true if this lambda function uses the varying state.
+    bool uses_varying_state() const { return m_uses_varying_state; }
 
-    /// Sets whether this lambda function uses the render state.
-    void set_uses_render_state(bool uses_render_state) { m_uses_render_state = uses_render_state; }
+    /// Sets whether this lambda function uses the varying state.
+    void set_uses_varying_state(bool uses_varying_state) const {
+        m_uses_varying_state = uses_varying_state;
+    }
 
     /// Returns true if this lambda function uses lambda_results.
     bool uses_lambda_results() const { return m_uses_lambda_results; }
@@ -686,8 +688,8 @@ private:
     /// The next serial number
     static mi::base::Atom32 g_next_serial;
 
-    /// If true, this function uses the (render) state.
-    unsigned m_uses_render_state:1;
+    /// If true, this function uses the varying state.
+    mutable unsigned m_uses_varying_state:1;
 
     /// If true, garbage collection must run.
     unsigned m_has_dead_code:1;

@@ -91,12 +91,17 @@ static void fill_default_cg_options(
         "Enable strict evaluation of the ternary operator on the DAG");
     options.add_option(
         MDL_JIT_OPTION_DISABLE_EXCEPTIONS,
-        "false",
+        "true",
         "Disable exception handling in the generated code");
     options.add_option(
         MDL_JIT_OPTION_ENABLE_RO_SEGMENT,
         "false",
         "Enable the creation of a read-only data segment");
+    options.add_option(
+        MDL_JIT_OPTION_MAX_CONST_DATA,
+        "1024",
+        "Maximum allowed size of a constant in the generated code if the read-only data segment "
+        "is enabled");
     options.add_option(
         MDL_JIT_OPTION_WRITE_BITCODE,
         "false",
@@ -318,7 +323,8 @@ static void fill_default_cg_options(
     options.add_option(
         MDL_JIT_OPTION_GLSL_MAX_CONST_DATA,
         "1024",
-        "GLSL: Maximum allowed constant data in shader");
+        "GLSL: Maximum allowed size of a constant in a shader if the SSBO for uniform initializers "
+        "is enabled");
 
     options.add_option(
         MDL_JIT_OPTION_GLSL_PLACE_UNIFORMS_INTO_SSBO,
@@ -815,17 +821,21 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_const_function
         return NULL;
     }
 
-    if (lambda->may_use_varying_state(resolver, body)) {
-        // currently we do not support any state access in const functions
-        return NULL;
-    }
-
     if (lambda->get_parameter_count() != 0) {
         // FIXME: Add support for class-compilation for const functions
         //    (const functions are not available via Neuray API, only material converter uses them)
         MDL_ASSERT(!"Class-compilation is not supported for const functions, yet");
         return NULL;
     }
+
+    if (lambda->may_use_varying_state(resolver, body)) {
+        // currently we do not support any varying state access in const functions
+        return NULL;
+    }
+
+    // we have checked, that the varying state is not used after optimization,
+    // hence record it in the lambda
+    lambda->set_uses_varying_state(false);
 
     // FIXME: ugly, but ok for now: request all resource meta data through the attr interface
     // a better solution would be to do this outside this compile call
@@ -1081,20 +1091,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
         // the key
         hasher.update(lambda->get_execution_context() == ILambda_function::LEC_ENVIRONMENT ?
             Type_mapper::SSM_ENVIRONMENT : Type_mapper::SSM_CORE);
-        hasher.update(options.get_string_option(MDL_CG_OPTION_INTERNAL_SPACE));
-        hasher.update(options.get_bool_option(MDL_CG_OPTION_FOLD_METERS_PER_SCENE_UNIT));
-        hasher.update(options.get_float_option(MDL_CG_OPTION_METERS_PER_SCENE_UNIT));
-        hasher.update(options.get_float_option(MDL_CG_OPTION_WAVELENGTH_MIN));
-        hasher.update(options.get_float_option(MDL_CG_OPTION_WAVELENGTH_MAX));
-        hasher.update(options.get_int_option(MDL_JIT_OPTION_OPT_LEVEL));
-        hasher.update(options.get_bool_option(MDL_JIT_OPTION_FAST_MATH));
-        hasher.update(options.get_bool_option(MDL_JIT_OPTION_INLINE_AGGRESSIVELY));
-        hasher.update(options.get_bool_option(MDL_JIT_OPTION_EVAL_DAG_TERNARY_STRICTLY));
-        hasher.update(options.get_bool_option(MDL_JIT_OPTION_DISABLE_EXCEPTIONS));
-        hasher.update(options.get_bool_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT));
-        hasher.update(options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE));
-        hasher.update(options.get_string_option(MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE));
-        hasher.update(options.get_bool_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS));
+        hash_options(hasher, options);
 
         hasher.final(cache_key);
 
@@ -1793,6 +1790,37 @@ void Code_generator_jit::enter_code_into_cache(
     code_cache->enter(cache_key, entry);
 }
 
+// Update the hasher with all options.
+void Code_generator_jit::hash_options(
+    MD5_hasher &hasher,
+    Options &options_interface)
+{
+    Options_impl &options = impl_cast<Options_impl>(options_interface);
+    for (int i = 0, n = options.get_option_count(); i < n; ++i) {
+        Options_impl::Option const &option = options.get_option(i);
+        if (option.is_binary()) {
+            BinaryOptionData bin_data = option.get_binary_data();
+            if (bin_data.data) {
+                hasher.update(
+                    reinterpret_cast<unsigned char const *>(bin_data.data), bin_data.size);
+            } else {
+                hasher.update(char(0));
+            }
+        } else if (option.is_interface()) {
+            // hashing not supported
+        } else {
+            char const *val = option.get_value();
+            if (val == nullptr) {
+                val = option.get_default_value();
+                if (val == nullptr) {
+                    val = "";
+                }
+            }
+            hasher.update(val);
+        }
+    }
+}
+
 // Compile a lambda function into PTX or HLSL using the JIT.
 IGenerated_code_executable *Code_generator_jit::compile_into_source(
     ICode_cache                    *code_cache,
@@ -1824,6 +1852,10 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
     }
 
     Options_impl &options = impl_cast<Options_impl>(ctx->access_options());
+
+    // automatically activate deactivate the option if the state is set
+    options.set_option(
+        MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE, lambda->is_uniform_state_set() ? "false" : "true");
 
     IAllocator        *alloc = get_allocator();
     Allocator_builder builder(alloc);
@@ -1881,26 +1913,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
             Type_mapper::SSM_ENVIRONMENT : Type_mapper::SSM_CORE);
         hasher.update(num_texture_spaces);
         hasher.update(num_texture_results);
-        hasher.update(options.get_string_option(MDL_CG_OPTION_INTERNAL_SPACE));
-        hasher.update(options.get_bool_option(MDL_CG_OPTION_FOLD_METERS_PER_SCENE_UNIT));
-        hasher.update(options.get_float_option(MDL_CG_OPTION_METERS_PER_SCENE_UNIT));
-        hasher.update(options.get_float_option(MDL_CG_OPTION_WAVELENGTH_MIN));
-        hasher.update(options.get_float_option(MDL_CG_OPTION_WAVELENGTH_MAX));
-        hasher.update(options.get_int_option(MDL_JIT_OPTION_OPT_LEVEL));
-        hasher.update(options.get_bool_option(MDL_JIT_OPTION_FAST_MATH));
-        hasher.update(options.get_bool_option(MDL_JIT_OPTION_INLINE_AGGRESSIVELY));
-        hasher.update(options.get_bool_option(MDL_JIT_OPTION_EVAL_DAG_TERNARY_STRICTLY));
-        hasher.update(options.get_bool_option(MDL_JIT_OPTION_DISABLE_EXCEPTIONS));
-        hasher.update(options.get_bool_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT));
-        hasher.update(options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE));
-        hasher.update(options.get_string_option(MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE));
-        hasher.update(options.get_bool_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS));
-
-        if (code_kind == IGenerated_code_executable::CK_GLSL ||
-            code_kind == IGenerated_code_executable::CK_HLSL)
-        {
-            hasher.update(options.get_bool_option(MDL_JIT_OPTION_SL_USE_RESOURCE_DATA));
-        }
+        hash_options(hasher, options);
 
         hasher.final(cache_key);
 
@@ -1912,10 +1925,6 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
             return code;
         }
     }
-
-    // automatically activate deactivate the option if the state is set
-    options.set_option(
-        MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE, lambda->is_uniform_state_set() ? "false" : "true");
 
     Generated_code_source::Source_res_manag res_manag(alloc, &lambda->get_resource_attribute_map());
 

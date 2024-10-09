@@ -1114,8 +1114,8 @@ static void add_boundary(
     }
 
     // Add boundary columns in both horizontal directions
-    grid.insert(grid.begin(), std::vector<Scalar>(nb_vertical_angles+2, -1));
-    grid.emplace_back(nb_vertical_angles+2, -1);
+    grid.insert(grid.begin(), std::vector<Scalar>(nb_vertical_angles+2, -1.0f));
+    grid.emplace_back(nb_vertical_angles+2, -1.0f);
 
     std::vector<Scalar>& col_left             = grid[0];
     std::vector<Scalar>& col_left_plus_two    = grid[2];

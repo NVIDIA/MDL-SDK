@@ -1441,12 +1441,14 @@ IDefinition const *skip_presets(
     MDL_ASSERT(
         !func_def->get_property(IDefinition::DP_IS_IMPORTED) &&
         "skip_presets() called on imported entity");
-    if (func_def->get_kind() != IDefinition::DK_FUNCTION)
+    if (func_def->get_kind() != IDefinition::DK_FUNCTION) {
         return func_def;
+    }
 
     IDeclaration const *decl = func_def->get_declaration();
-    if (decl == NULL)
+    if (decl == NULL) {
         return func_def;
+    }
 
     IDeclaration_function const *f_decl = cast<IDeclaration_function>(decl);
     f_decl = skip_presets(f_decl, owner_mod);

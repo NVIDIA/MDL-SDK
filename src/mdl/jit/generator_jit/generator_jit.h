@@ -44,6 +44,7 @@ namespace mdl {
 class MDL;
 class IModule;
 class Jitted_code;
+class MD5_hasher;
 
 ///
 /// Implementation of the Link unit for the JIT code generator
@@ -634,6 +635,14 @@ public:
         Generated_code_source *code,
         ICode_cache           *code_cache,
         unsigned char const   cache_key[16]);
+
+    /// Update the hasher with all options.
+    ///
+    /// \param hasher     the hasher to be updated
+    /// \param options    the options object
+    void hash_options(
+        MD5_hasher &hasher,
+        Options &options);
 
     /// Compile a lambda function into PTX or HLSL using the JIT.
     ///

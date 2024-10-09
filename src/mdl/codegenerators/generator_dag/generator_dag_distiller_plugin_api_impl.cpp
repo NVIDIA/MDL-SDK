@@ -1022,7 +1022,7 @@ DAG_node const *Distiller_plugin_api_impl::create_function_call(
     // FIXME: do type binding, uniform propagation
     sema = def->get_semantics();
 
-    VLA<DAG_call::Call_argument> args(m_alloc, num_call_args);
+    Small_VLA<DAG_call::Call_argument, 8> args(m_alloc, num_call_args);
     for (size_t i = 0; i < num_call_args; ++i) {
         IType const   *p_tp;
         ISymbol const *p_sym;
@@ -1710,7 +1710,7 @@ DAG_node const *Distiller_plugin_api_impl::create_array(
     }
 
     Memory_arena arena(m_alloc);
-    VLA<DAG_call::Call_argument> args(m_alloc, n_values);
+    Small_VLA<DAG_call::Call_argument, 8> args(m_alloc, n_values);
 
     for (size_t i = 0; i < n_values; ++i) {
         m_printer.print("value");
@@ -2863,7 +2863,7 @@ restart:
             char const             *name    = call->get_name();
             IType const            *type    = m_type_factory->import(call->get_type());
 
-            VLA<DAG_call::Call_argument> args(m_alloc, n_params);
+            Small_VLA<DAG_call::Call_argument, 8> args(m_alloc, n_params);
 
             for (int i = 0; i < n_params; ++i) {
                 args[i].param_name = call->get_parameter_name(i);
@@ -3445,7 +3445,7 @@ DAG_node const *Distiller_plugin_api_impl::replace(
         DAG_call const *c = cast<DAG_call>(node);
         int n = c->get_argument_count();
 
-        VLA<DAG_call::Call_argument> n_args(m_alloc, n);
+        Small_VLA<DAG_call::Call_argument, 8> n_args(m_alloc, n);
 
         for (int i = 0; i < n; ++i) {
             DAG_node const *arg = c->get_argument(i);
@@ -3511,7 +3511,7 @@ DAG_node const *Distiller_plugin_api_impl::replace(
         if (result_code != RULE_SKIP_RECURSION) {
             int n = n_c->get_argument_count();
 
-            VLA<DAG_call::Call_argument> n_args(m_alloc, n);
+            Small_VLA<DAG_call::Call_argument, 8> n_args(m_alloc, n);
 
             for (int i = 0; i < n; ++i) {
                 DAG_node const *arg = n_c->get_argument(i);

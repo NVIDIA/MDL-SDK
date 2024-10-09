@@ -125,7 +125,7 @@ public:
   }
 
   // FIXME: Remove this one transition to Align is over.
-  unsigned getAlignment() const { return getAlign().value(); }
+  unsigned getAlignment() const { return unsigned(getAlign().value()); }
 
   /// Return true if this alloca is in the entry block of the function and is a
   /// constant size. If so, the code generator will fold it into the
@@ -216,7 +216,7 @@ public:
   /// Return the alignment of the access that is being performed.
   /// FIXME: Remove this function once transition to Align is over.
   /// Use getAlign() instead.
-  unsigned getAlignment() const { return getAlign().value(); }
+  unsigned getAlignment() const { return unsigned(getAlign().value()); }
 
   /// Return the alignment of the access that is being performed.
   Align getAlign() const {
@@ -347,7 +347,7 @@ public:
   /// Return the alignment of the access that is being performed
   /// FIXME: Remove this function once transition to Align is over.
   /// Use getAlign() instead.
-  unsigned getAlignment() const { return getAlign().value(); }
+  unsigned getAlignment() const { return unsigned(getAlign().value()); }
 
   Align getAlign() const {
     return Align(1ULL << (getSubclassData<AlignmentField>()));
@@ -3221,7 +3221,7 @@ public:
     ConstantIntT *getCaseValue() const {
       assert((unsigned)Index < SI->getNumCases() &&
              "Index out the number of cases.");
-      return reinterpret_cast<ConstantIntT *>(SI->getOperand(2 + Index * 2));
+      return reinterpret_cast<ConstantIntT *>(SI->getOperand(unsigned(2 + Index * 2)));
     }
 
     /// Resolves successor for current case.
@@ -3240,7 +3240,7 @@ public:
       assert(((unsigned)Index == DefaultPseudoIndex ||
               (unsigned)Index < SI->getNumCases()) &&
              "Index out the number of cases.");
-      return (unsigned)Index != DefaultPseudoIndex ? Index + 1 : 0;
+      return (unsigned)Index != DefaultPseudoIndex ? unsigned(Index + 1) : 0;
     }
 
     bool operator==(const CaseHandleImpl &RHS) const {
@@ -3263,7 +3263,7 @@ public:
     void setValue(ConstantInt *V) {
       assert((unsigned)Index < SI->getNumCases() &&
              "Index out the number of cases.");
-      SI->setOperand(2 + Index*2, reinterpret_cast<Value*>(V));
+      SI->setOperand(unsigned(2 + Index*2), reinterpret_cast<Value*>(V));
     }
 
     /// Sets the new successor for current case.

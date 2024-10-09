@@ -64,6 +64,10 @@ public:
     bool m_ignore_noinline = true;
     bool m_disable_pdf = false;
     bool m_enable_aux = false;
+    bool m_enable_bsdf_flags = false;
+    bool m_glsl_place_uniforms_into_ssbo = false;
+    bool m_enable_ro_segment = false;
+    std::string m_max_const_data = "1024";
     std::string m_lambda_return_mode;
     bool m_warn_spectrum_conv = false;
     std::string m_backend = "hlsl";
@@ -239,6 +243,23 @@ void code_generation(mi::mdl::IMDL* mdl_compiler, Options& options)
             backend_options |= BACKEND_OPTIONS_ADAPT_NORMAL;
         if (options.m_adapt_microfacet_roughness)
             backend_options |= BACKEND_OPTIONS_ADAPT_MICROFACET_ROUGHNESS;
+        if (options.m_enable_ro_segment)
+            backend_options |= BACKEND_OPTIONS_ENABLE_RO_SEGMENT;
+
+        std::unordered_map<std::string, std::string> additional_backend_options;
+        if (options.m_enable_bsdf_flags)
+            additional_backend_options.emplace(
+                MDL_JIT_OPTION_LIBBSDF_FLAGS_IN_BSDF_DATA, "true");
+        if (options.m_enable_ro_segment)
+            additional_backend_options.emplace(
+                MDL_JIT_OPTION_MAX_CONST_DATA, options.m_max_const_data);
+        if (options.m_glsl_place_uniforms_into_ssbo)
+        {
+            additional_backend_options.emplace(
+                MDL_JIT_OPTION_GLSL_PLACE_UNIFORMS_INTO_SSBO, "true");
+            additional_backend_options.emplace(
+                MDL_JIT_OPTION_GLSL_MAX_CONST_DATA, options.m_max_const_data);
+        }
 
         // Initialize the material compiler
         Material_backend_compiler mc(
@@ -247,8 +268,9 @@ void code_generation(mi::mdl::IMDL* mdl_compiler, Options& options)
             /*num_texture_results=*/ options.m_num_texture_results,
             backend_options,
             /*df_handle_mode=*/ "none",
-            /*handle_return_mode=*/ options.m_lambda_return_mode.empty() ?
-                "default" : options.m_lambda_return_mode);
+            /*lambda_return_mode=*/ options.m_lambda_return_mode.empty() ?
+                "default" : options.m_lambda_return_mode,
+            additional_backend_options);
 
         bool success = true;
 
@@ -411,7 +433,7 @@ options:
   -o|--output <file>            Export the module to this file. Default: stdout
   -b|--backend <backend>        Select the back-end to generate code for. One of
                                 {DAG, GLSL, HLSL, PTX, LLVM}. Default: HLSL
-  -e|--expr_path <path>         Add an MDL expression path to generate, like \"surface.scattering\".
+  -e|--expr_path <path>         Add an MDL expression path to generate, like "surface.scattering".
                                 Defaults to a set of expression paths.
   -d|--derivatives              Generate code with derivative support.
   -i|--instance_compilation     Use instance compilation instead of class compilation.
@@ -424,6 +446,11 @@ options:
   --dian                        Disable ignoring anno::noinline() annotations.
   --disable_pdf                 Disable generation of separate PDF function.
   --enable_aux                  Enable generation of auxiliary function.
+  --enable_bsdf_flags           Enable "flags" field in BSDF data structures in generated code.
+  --glsl_place_uniforms_into_ssbo    Enable placing constants into a shader storage buffer object.
+  --enable_ro_segment           Enable storing bigger constants in a read-only data segment
+  --max_const_data <size>       Set the maximum size of constants in bytes in the generated code
+                                (requires read-only data segment or ssbo, default 1024).
   --lambda_return_mode <mode>   Set how base types and vector types are returned for PTX and LLVM
                                 backends. One of {default, sret, value}.
   --adapt_normal                Enable renderer callback to adapt the normal.
@@ -468,7 +495,23 @@ bool Options::parse(int argc, char* argv[])
                 m_disable_pdf = true;
             else if (arg == "--enable_aux")
                 m_enable_aux = true;
-            else if (arg == "--lambda_return_mode") {
+            else if (arg == "--enable_bsdf_flags")
+                m_enable_bsdf_flags = true;
+            else if (arg == "--glsl_place_uniforms_into_ssbo")
+                m_glsl_place_uniforms_into_ssbo = true;
+            else if (arg == "--enable_ro_segment")
+                m_enable_ro_segment = true;
+            else if (arg == "--max_const_data")
+            {
+                if (i == argc - 1)
+                {
+                    std::cerr << "error: Argument for --max_const_data missing." << std::endl;
+                    return false;
+                }
+                m_max_const_data = argv[++i];
+            }
+            else if (arg == "--lambda_return_mode")
+            {
                 if (i == argc - 1)
                 {
                     std::cerr << "error: Argument for --lambda_return_mode missing." << std::endl;

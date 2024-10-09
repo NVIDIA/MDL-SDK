@@ -287,7 +287,7 @@ endif()
 
 write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/mdl-config-version.cmake"
     VERSION ${neuraylib_product_version}
-    COMPATIBILITY SameMajorVersion
+    COMPATIBILITY SameMinorVersion
 )
 
 # Install

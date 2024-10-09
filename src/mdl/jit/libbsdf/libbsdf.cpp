@@ -188,7 +188,7 @@ BSDF_INLINE void diffuse_sample(
     if (flip)
         data->xi.x /= prob_flip;
     else
-        data->xi.x = (data->xi.x - prob_flip) / (1.0f - prob_flip);
+        data->xi.x = saturate_below_one((data->xi.x - prob_flip) / (1.0f - prob_flip));
 
     float3 local_dir = cosine_hemisphere_sample(make_float2(data->xi.x, data->xi.y));
 
@@ -988,7 +988,7 @@ BSDF_INLINE void microfacet_sample(
             data->k2 = refract(data->k1, h, ior.x / ior.y, kh, tir);
         }
         data->event_type = tir ? BSDF_EVENT_GLOSSY_REFLECTION : BSDF_EVENT_GLOSSY_TRANSMISSION;
-        data->xi.z = (data->xi.z - f_refl) / prob;
+        data->xi.z = saturate_below_one((data->xi.z - f_refl) / prob);
 
         data->bsdf_over_pdf = (make<float3>(1.0f) - f_refl_c) / prob;
     }
@@ -1010,7 +1010,7 @@ BSDF_INLINE void microfacet_sample(
     const float G12 = ph.shadow_mask(
         G1, G2, h0.y,
         k10, kh,
-        make_float3(math::dot(data->k2, g.x_axis), nk2, math::dot(data->k1, g.z_axis)), k2h,
+        make_float3(math::dot(data->k2, g.x_axis), nk2, math::dot(data->k2, g.z_axis)), k2h,
         refraction);
 
     if (G12 <= 0.0f) {
@@ -1054,8 +1054,8 @@ BSDF_INLINE float3 microfacet_evaluate(
     const bool backside_eval = math::dot(data->k2, g.n.geometry_normal) < 0.0f;
 
     // nothing to evaluate for given directions?
-    if (( backside_eval && (mode == scatter_reflect  || !is_allowed_transmit(data) )) ||
-        (!backside_eval && (mode == scatter_transmit || !is_allowed_reflect(data)  )))
+    if (( backside_eval && (!is_allowed_transmit(data) || (mode == scatter_reflect))) ||
+        (!backside_eval && (!is_allowed_reflect(data)  || (mode == scatter_transmit) && (ior.x < ior.y))))
     {
         absorb(data);
         return make<float3>(0.0f);
@@ -1076,6 +1076,7 @@ BSDF_INLINE float3 microfacet_evaluate(
 
     float f_refl;
     float3 f_refl_c;
+    bool tir = false;
     switch (mode) {
         case scatter_reflect:
             f_refl_c = make<float3>(1.0f);
@@ -1084,7 +1085,8 @@ BSDF_INLINE float3 microfacet_evaluate(
         case scatter_transmit:
             if (!backside_eval) {
                 // for scatter_transmit: only allow TIR with BRDF eval
-                if (!is_tir(ior, k1h)) {
+                tir = is_tir(ior, k1h); 
+                if (!tir) {
                     absorb(data);
                     return make<float3>(0.0f);
                 } else {
@@ -1106,7 +1108,7 @@ BSDF_INLINE float3 microfacet_evaluate(
     }
 
     // handle allowed mode
-    if (!adapt_reflect_prob_for_allowed_mode(data, mode, &f_refl)) {
+    if (!adapt_reflect_prob_for_allowed_mode(data, mode, &f_refl, tir)) {
         absorb(data);
         return make<float3>(0.0f);
     }
@@ -1220,7 +1222,7 @@ BSDF_INLINE void microfacet_sample(
 
             // Only update random number, if microfacet and multiscatter are allowed
             if (microfacet_allowed) {
-                data->xi.z = (data->xi.z - rho1) / (1.0f - rho1);
+                data->xi.z = saturate_below_one((data->xi.z - rho1) / (1.0f - rho1));
             }
 
             multiscatter->sample(data, state, multiscatter_normal);
@@ -1524,7 +1526,7 @@ public:
             xi /= p_flip;
             return make_float3(-h.x, h.y, -h.z);
         } else {
-            xi = (xi - p_flip) / (1.0f - p_flip);
+            xi = saturate_below_one((xi - p_flip) / (1.0f - p_flip));
             return h;
         }
     }
@@ -2168,6 +2170,11 @@ BSDF_API void backscattering_glossy_reflection_bsdf_evaluate(
     float nk1, nk2;
     const float glossy_contrib = backscattering_glossy_evaluate(
         data, state, g, adapted_roughness.x, adapted_roughness.y, nk1, nk2);
+    if (nk2 <= 0.0f || math::dot(g.n.geometry_normal, data->k2) <= 0.0f)
+    {
+        absorb(data);
+        return;
+    }
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -2185,13 +2192,7 @@ BSDF_API void backscattering_glossy_reflection_bsdf_evaluate(
             adapted_roughness.x, adapted_roughness.y,
             nk1, nk2, -1.0f, multiscatter_texture_id);
 
-        data->pdf *= multiscatter_contrib.x; // * rho1
-        if (math::dot(g.n.geometry_normal, data->k2) >= 0.0f)
-        {
-            data->pdf += (1.0f - multiscatter_contrib.x) * (float)(1.0 / M_PI);
-        }
-        else
-            multiscatter_contrib.y = 0.0f; // backside eval
+        data->pdf = data->pdf * multiscatter_contrib.x + (1.0f - multiscatter_contrib.x) * (float)(1.0 / M_PI) * nk2;
     }
 
     add_elemental_bsdf_evaluate_contribution(
@@ -3579,7 +3580,7 @@ BSDF_INLINE void ward_geisler_moroder_sample(
         kh = kh_f;
         w = w_f;
 
-        data->xi.z = (data->xi.z - q) / (1.0f - q);
+        data->xi.z = saturate_below_one((data->xi.z - q) / (1.0f - q));
         prob_total = q_f + (1.0f - q);
     } else {
         data->xi.z /= q;
@@ -3878,7 +3879,7 @@ BSDF_INLINE void measured_sample(
     } else {
         data->event_type = BSDF_EVENT_GLOSSY_TRANSMISSION;
         selected_part = Mbsdf_part::mbsdf_data_transmission;
-        data->xi.z = (data->xi.z - prob) / (1.0f - prob);
+        data->xi.z = saturate_below_one((data->xi.z - prob) / (1.0f - prob));
         prob = (1.0f - prob);
     }
 
@@ -7709,7 +7710,7 @@ BSDF_INLINE void mix_df_sample(
         p = math::max(components[sampled_idx].weight, 0.0f) * inv_w_sum;
         const float cdf = prev_cdf + p;
         if (data->xi.z < cdf || sampled_idx == num_components - 1) {
-            data->xi.z = (data->xi.z - prev_cdf) / p;
+            data->xi.z = saturate_below_one((data->xi.z - prev_cdf) / p);
             break;
         }
         prev_cdf = cdf;
@@ -7976,7 +7977,7 @@ BSDF_INLINE void clamped_mix_df_sample(
              math::saturate(components[sampled_idx].weight)) * inv_w_sum;
         const float cdf = prev_cdf + p;
         if (data->xi.z < cdf || (int)sampled_idx == last_allowed) {
-            data->xi.z = (data->xi.z - prev_cdf) / p;
+            data->xi.z = saturate_below_one((data->xi.z - prev_cdf) / p);
             break;
         }
         prev_cdf = cdf;
@@ -8270,7 +8271,7 @@ BSDF_INLINE void color_mix_df_sample(
             components[sampled_idx].weight, make_float3(0.0f, 0.0f, 0.0f))) * inv_w_sum;
         const float cdf = prev_cdf + p;
         if (data->xi.z < cdf || sampled_idx == num_components - 1) {
-            data->xi.z = (data->xi.z - prev_cdf) / (cdf - prev_cdf);
+            data->xi.z = saturate_below_one((data->xi.z - prev_cdf) / (cdf - prev_cdf));
             break;
         }
         prev_cdf = cdf;
@@ -8589,7 +8590,7 @@ BSDF_INLINE void color_clamped_mix_df_sample(
 
         const float cdf = prev_cdf + p;
         if (data->xi.z < cdf || (int)sampled_idx == last_allowed) {
-            data->xi.z = (data->xi.z - prev_cdf) / p;
+            data->xi.z = saturate_below_one((data->xi.z - prev_cdf) / p);
             break;
         }
         prev_cdf = cdf;

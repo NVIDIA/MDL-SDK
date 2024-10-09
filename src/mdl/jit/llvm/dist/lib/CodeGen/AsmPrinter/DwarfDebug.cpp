@@ -866,6 +866,11 @@ void DwarfDebug::constructCallSiteEntryDIEs(const DISubprogram &SP,
   if (!SP.areAllCallsDescribed() || !SP.isDefinition())
     return;
 
+  // For NVPTX, the CallUniPrintCall* instructions are marked as call but don't have a callee
+  // operand, which is following in the next instruction.
+  if (MF.getSubtarget().getTargetTriple().isNVPTX())
+      return;
+
   // Use DW_AT_call_all_calls to express that call site entries are present
   // for both tail and non-tail calls. Don't use DW_AT_call_all_source_calls
   // because one of its requirements is not met: call site entries for
@@ -1909,7 +1914,10 @@ void DwarfDebug::beginInstruction(const MachineInstr *MI) {
   };
 
   // When describing calls, we need a label for the call instruction.
+  // Does not work for NVPTX, as the call is split into multiple instructions
+  // and the label would be inserted between the call and the callee name.
   if (!NoDebug && SP->areAllCallsDescribed() &&
+      !MF.getSubtarget().getTargetTriple().isNVPTX() &&
       MI->isCandidateForCallSiteEntry(MachineInstr::AnyInBundle) &&
       (!MI->hasDelaySlot() || delaySlotSupported(*MI))) {
     const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();

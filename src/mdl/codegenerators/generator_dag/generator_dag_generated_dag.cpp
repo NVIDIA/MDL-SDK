@@ -6134,10 +6134,12 @@ Generated_code_dag::Material_instance::Instantiate_helper::compile(
 
     DAG_node const *root = m_code_dag.get_material_value(m_material_index);
 
-    // Perform decl_cast transformation if a target type is given.
-    target_type = target_type ? 
-        const_cast<Type_factory *>(m_code_dag.get_type_factory())->import(target_type) : NULL;
-    root = target_type ? translate_decl_cast(root, target_type) : root;
+    // Perform decl_cast transformation on the root if a target type is given.
+    if (target_type != NULL) {
+        target_type =
+            const_cast<Type_factory *>(m_code_dag.get_type_factory())->import(target_type);
+        root = insert_elemental_constructor(root, target_type);
+    }
 
     DAG_node const *node = instantiate_dag(root);
 
@@ -6814,14 +6816,16 @@ static bool same_type(
     return dst_type == owner_tf.import(src_field_type);
 }
 
+// Create an elemental constructor call for the given target_type.
 DAG_node const *
-Generated_code_dag::Material_instance::Instantiate_helper::translate_decl_cast(
-    DAG_node const *node, IType const *target_type) 
+Generated_code_dag::Material_instance::Instantiate_helper::insert_elemental_constructor(
+    DAG_node const *node,
+    IType const    *target_type)
 {
     DAG_node const *res = NULL;
 
     IType_struct const *src_type =
-        cast<IType_struct>(node->get_type()->skip_type_alias());
+        node != NULL ? cast<IType_struct>(node->get_type()->skip_type_alias()) : NULL;
     IType_struct const *dst_type =
         cast<IType_struct>(target_type->skip_type_alias());
 
@@ -6860,7 +6864,9 @@ Generated_code_dag::Material_instance::Instantiate_helper::translate_decl_cast(
             // cannot search by symbol
             char const *f_name = field->get_symbol()->get_name();
             IType const *f_type = tf.import(field->get_type());
-            size_t     src_index = src_type->find_field_index(f_name);
+
+            size_t src_index = src_type != NULL ?
+                src_type->find_field_index(f_name) : ~size_t(0);
 
             DAG_node const *f_node = NULL;
             if (src_index != ~size_t(0) && same_type(f_type, tf, src_type, src_index)) {
@@ -6875,9 +6881,16 @@ Generated_code_dag::Material_instance::Instantiate_helper::translate_decl_cast(
                     f_node = m_dag_builder.expr_to_dag(init);
                 } else {
                     // default construct
-                    IValue const *v = m_value_factory.create_zero(f_type);
+                    if (is<IType_struct>(f_type)) {
+                        // for structs, just insert the default constructor (as elemental one)
+                        f_node = insert_elemental_constructor(NULL, f_type);
+                    } else {
+                        // in all other cases, insert the zero value
+                        IValue const *v = m_value_factory.create_zero(f_type);
 
-                    f_node = m_node_factory.create_constant(v);
+                        MDL_ASSERT(!is<IValue_bad>(v) && "cannot create zero value for type");
+                        f_node = m_node_factory.create_constant(v);
+                    }
                 }
             }
             args[i].param_name = field->get_symbol()->get_name();
@@ -6886,15 +6899,12 @@ Generated_code_dag::Material_instance::Instantiate_helper::translate_decl_cast(
 
         string signature(m_dag_builder.def_to_name(elem_constr, owner.get()));
 
-        IType const *res_type = tf.import(dst_type);
-        res_type = tf.create_alias(res_type, /*name=*/NULL, IType::MK_UNIFORM);
-
         res = m_node_factory.create_call(
             signature.c_str(),
             IDefinition::DS_ELEM_CONSTRUCTOR,
             args.data(),
             args.size(),
-            res_type);
+            target_type);
     }
     return res;
 }
@@ -6908,7 +6918,7 @@ Generated_code_dag::Material_instance::Instantiate_helper::translate_decl_cast_c
     IType_struct const *dst_type =
         cast<IType_struct>(call->get_type()->skip_type_alias());
 
-    return translate_decl_cast(arg, dst_type);
+    return insert_elemental_constructor(arg, dst_type);
 }
 
 // Instantiate a DAG expression.
@@ -6966,6 +6976,16 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag(
             if (sema == IDefinition::DS_INTRINSIC_DAG_DECL_CAST) {
                 // ALWAYS optimize decl_cast node away
                 res = translate_decl_cast_call(call);
+
+                if (res != NULL) {
+                    m_visit_map[node] = res;
+                    return res;
+                }
+            } else if (sema == IDefinition::DS_DEFAULT_STRUCT_CONSTRUCTOR) {
+                // ALWAYS convert default struct constructor to elemental constructor.
+                // We use the same implementation as for the decl_cast but convert from nothing
+                // to the struct type
+                res = insert_elemental_constructor(NULL, call->get_type());
 
                 if (res != NULL) {
                     m_visit_map[node] = res;
@@ -7275,7 +7295,7 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag_argum
             DAG_call const *call  = cast<DAG_call>(node);
 
             int n_args = call->get_argument_count();
-            VLA<DAG_call::Call_argument> args(get_allocator(), n_args);
+            Small_VLA<DAG_call::Call_argument, 8> args(get_allocator(), n_args);
             for (int i = 0; i < n_args; ++i) {
                 char const *param_name = call->get_parameter_name(i);
 

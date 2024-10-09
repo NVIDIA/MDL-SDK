@@ -406,7 +406,7 @@ public:
 
     BitWord PrefixMask = ~BitWord(0) << (I % BITWORD_SIZE);
     Bits[I / BITWORD_SIZE] |= PrefixMask;
-    I = alignTo(I, BITWORD_SIZE);
+    I = unsigned(alignTo(I, BITWORD_SIZE));
 
     for (; I + BITWORD_SIZE <= E; I += BITWORD_SIZE)
       Bits[I / BITWORD_SIZE] = ~BitWord(0);
@@ -445,7 +445,7 @@ public:
 
     BitWord PrefixMask = ~BitWord(0) << (I % BITWORD_SIZE);
     Bits[I / BITWORD_SIZE] &= ~PrefixMask;
-    I = alignTo(I, BITWORD_SIZE);
+    I = unsigned(alignTo(I, BITWORD_SIZE));
 
     for (; I + BITWORD_SIZE <= E; I += BITWORD_SIZE)
       Bits[I / BITWORD_SIZE] = BitWord(0);

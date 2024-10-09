@@ -61,6 +61,7 @@
 
 #include "baker.h"
 
+
 #ifndef M_PI
 #define M_PI            3.14159265358979323846
 #endif
@@ -79,12 +80,25 @@ inline mi::Float32_3 from_polar(float theta, float phi) // polar coordinates
         -sin_theta * sinf(phi));
 }
 
-MI_FORCE_INLINE float radinv2(const unsigned int i/*, const unsigned int scramble = 0*/);
+inline float radinv2(unsigned int i)
+{
+    i = (i << 16) | (i >> 16);
+    i = ((i & 0x00ff00ff) << 8) | ((i & 0xff00ff00) >> 8);
+    i = ((i & 0x0f0f0f0f) << 4) | ((i & 0xf0f0f0f0) >> 4);
+    i = ((i & 0x33333333) << 2) | ((i & 0xcccccccc) >> 2);
+    i = ((i & 0x55555555) << 1) | ((i & 0xaaaaaaaa) >> 1);
+    return (float)(i >> 8) * 0x1p-24f;
+}
+
+inline float fractf(const float x)
+{
+    return x - floorf(x);
+}
 
 // ----------------------------------------------------------------------------
 // Baker_fragmented_job
 
-class Baker_fragmented_job : public DB::Fragmented_job
+class Baker_fragmented_job final : public DB::Fragmented_job
 {
 public:
     Baker_fragmented_job(
@@ -106,7 +120,7 @@ public:
 
     bool successful() const { return m_failure == 0; }
 
-    mi::Size get_fragment_count() { return m_num_fragments; }
+    mi::Size get_fragment_count() const { return m_num_fragments; }
 
 protected:
     mi::base::Handle<const mi::neuraylib::ITarget_code> m_target_code;
@@ -162,7 +176,7 @@ Baker_fragmented_job::Baker_fragmented_job(
     m_num_frags_with_extra_row = m_tex_height - m_num_rows_per_frag * m_num_fragments;
 }
 
-static mi::Float32_4_4 s_unity(1.0f);
+static const mi::Float32_4_4 s_unity(1.0f);
 
 static void prepare_cpu_state(
     mi::neuraylib::Shading_state_environment &state_env,
@@ -212,27 +226,22 @@ static void prepare_cpu_state(
     }
 }
 
-MI_FORCE_INLINE float fractf(const float x)
-{
-    return x - floorf(x);
-}
-
 void Baker_fragmented_job::execute_fragment(
     DB::Transaction* transaction,
     size_t           index,
     size_t           count,
     const mi::neuraylib::IJob_execution_context* context)
 {
-    mi::Uint32 start_row = mi::Uint32(
+    const mi::Uint32 start_row = mi::Uint32(
         index * m_num_rows_per_frag +
         ((index < m_num_frags_with_extra_row) ? index : m_num_frags_with_extra_row));
 
-    mi::Uint32 end_row = mi::Uint32(
+    const mi::Uint32 end_row = mi::Uint32(
         start_row + m_num_rows_per_frag - 1 +
         ((index < m_num_frags_with_extra_row) ? 1 : 0));
 
-    mi::Uint32 start_col = 0;
-    mi::Uint32 end_col   = m_tex_width - 1;
+    const mi::Uint32 start_col = 0;
+    const mi::Uint32 end_col   = m_tex_width - 1;
 
     union {
         mi::neuraylib::Shading_state_environment state_env;
@@ -440,7 +449,7 @@ const mi::neuraylib::ITarget_code* Baker_code_impl::get_gpu_target_code() const
         m_gpu_code->retain();
         return m_gpu_code.get();
     }
-    return NULL;
+    return nullptr;
 }
 
 const mi::neuraylib::ITarget_code* Baker_code_impl::get_cpu_target_code() const
@@ -449,7 +458,7 @@ const mi::neuraylib::ITarget_code* Baker_code_impl::get_cpu_target_code() const
         m_cpu_code->retain();
         return m_cpu_code.get();
     }
-    return NULL;
+    return nullptr;
 }
 
 void Baker_code_impl::gpu_failed() const
@@ -482,8 +491,8 @@ bool Baker_module_impl::init()
 void Baker_module_impl::exit()
 {
 
-    m_code_generator_jit = 0;
-    m_compiler = 0;
+    m_code_generator_jit = nullptr;
+    m_compiler = nullptr;
     m_mdlc_module.reset();
 }
 
@@ -583,7 +592,7 @@ const IBaker_code* Baker_module_impl::create_baker_code_internal(
 
             default:
                 // unsupported type
-                return 0;
+                return nullptr;
         }
     }
 
@@ -610,7 +619,7 @@ const IBaker_code* Baker_module_impl::create_baker_code_internal(
 
     if (!use_gpu && !use_cpu) {
         // no resource available
-        return 0;
+        return nullptr;
     }
     MDL::Execution_context context;
 
@@ -650,7 +659,7 @@ const IBaker_code* Baker_module_impl::create_baker_code_internal(
 
         if (!gpu_code && !use_cpu) {
             // we are enforced to use the GPU, but it failed
-            return 0;
+            return nullptr;
         }
     }
 
@@ -689,7 +698,7 @@ const IBaker_code* Baker_module_impl::create_baker_code_internal(
         ASSERT(M_BAKER, context.get_result() == 0 || context.get_result() == -2);
         if (!cpu_code) {
             // compilation failed, CPU must succeed
-            return 0;
+            return nullptr;
         }
     }
 
@@ -815,21 +824,6 @@ static SYSTEM::Module_registration<Baker_module_impl> s_module( SYSTEM::M_BAKER,
 SYSTEM::Module_registration_entry* Baker_module::get_instance()
 {
     return s_module.init_module( s_module.get_name());
-}
-
-
-MI_FORCE_INLINE unsigned int __brev(unsigned int i)
-{
-    i =     (i << 16) | (i >> 16);
-    i =    ((i & 0x00ff00ff) << 8) | ((i & 0xff00ff00) >> 8);
-    i =    ((i & 0x0f0f0f0f) << 4) | ((i & 0xf0f0f0f0) >> 4);
-    i =    ((i & 0x33333333) << 2) | ((i & 0xcccccccc) >> 2);
-    return ((i & 0x55555555) << 1) | ((i & 0xaaaaaaaa) >> 1);
-}
-
-MI_FORCE_INLINE float radinv2(const unsigned int i/*, const unsigned int scramble = 0*/)
-{
-    return (float)((__brev(i) /*^ scramble*/)>>8) * 0x1p-24f;
 }
 
 } // namespace BAKER

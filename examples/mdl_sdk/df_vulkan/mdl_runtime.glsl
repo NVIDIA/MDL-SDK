@@ -35,10 +35,13 @@
 //   SET_MATERIAL_TEXTURES_2D          : The set index for the array of material 2D textures
 //   SET_MATERIAL_TEXTURES_3D          : The set index for the array of material 3D textures
 //   SET_MATERIAL_ARGUMENT_BLOCK       : The set index for the material argument block buffer
+//   SET_MATERIAL_RO_DATA_SEGMENT      : The set index for the material read-only data segment buffer
 //   BINDING_MATERIAL_TEXTURES_INDICES : The binding index for the array of material texture array indices
 //   BINDING_MATERIAL_TEXTURES_2D      : The binding index for the array of material 2D textures
 //   BINDING_MATERIAL_TEXTURES_3D      : The binding index for the array of material 3D textures
 //   BINDING_MATERIAL_ARGUMENT_BLOCK   : The binding index for the material argument block buffer
+//   BINDING_MATERIAL_RO_DATA_SEGMENT  : The binding index for the material read-only data segment buffer
+//   USE_RO_DATA_SEGMENT               : Defined if the read-only data segment is enabled
 
 #ifndef MDL_RUNTIME_GLSL
 #define MDL_RUNTIME_GLSL
@@ -80,6 +83,15 @@ readonly restrict buffer ArgumentBlockBuffer
 {
     uint uMaterialArgumentBlock[];
 };
+
+#ifdef USE_RO_DATA_SEGMENT
+// The read-only data segment
+layout(std430, set = SET_MATERIAL_RO_DATA_SEGMENT, binding = BINDING_MATERIAL_RO_DATA_SEGMENT)
+readonly restrict buffer RODataSegmentBuffer
+{
+    uint uMaterialRODataSegment[];
+};
+#endif
 
 
 //-----------------------------------------------------------------------------
@@ -257,6 +269,42 @@ bool mdl_read_argblock_as_bool(int offs)
     uint val = uMaterialArgumentBlock[offs >> 2];
     return (val & (0xff << (8 * (offs & 3)))) != 0;
 }
+
+
+// ------------------------------------------------------------------------------------------------
+// Read-only data access via read functions
+// ------------------------------------------------------------------------------------------------
+
+#ifdef USE_RO_DATA_SEGMENT
+
+float mdl_read_rodata_as_float(int offs)
+{
+    return uintBitsToFloat(uMaterialRODataSegment[offs >> 2]);
+}
+
+double mdl_read_rodata_as_double(int offs)
+{
+    return packDouble2x32(
+        uvec2(uMaterialRODataSegment[offs >> 2], uMaterialRODataSegment[(offs >> 2) + 1]));
+}
+
+int mdl_read_rodata_as_int(int offs)
+{
+    return int(uMaterialRODataSegment[offs >> 2]);
+}
+
+uint mdl_read_rodata_as_uint(int offs)
+{
+    return uMaterialRODataSegment[offs >> 2];
+}
+
+bool mdl_read_rodata_as_bool(int offs)
+{
+    uint val = uMaterialRODataSegment[offs >> 2];
+    return (val & (0xff << (8 * (offs & 3)))) != 0;
+}
+
+#endif // USE_RO_DATA_SEGMENT
 
 
 //-----------------------------------------------------------------------------

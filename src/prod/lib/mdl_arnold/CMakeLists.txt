@@ -118,7 +118,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 )
 
 # create a list of files to copy
-list(APPEND _COMANDS
+list(APPEND _COMMANDS
     COMMAND ${CMAKE_COMMAND} -E make_directory ${_OUTPUT_DIRECTORY}/../ae
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/aiMDLTemplate.py ${_OUTPUT_DIRECTORY}/../ae
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/readme.md ${_OUTPUT_DIRECTORY}/..
@@ -131,16 +131,28 @@ list(APPEND _DEPENDS
 # add renamed SDK libraries and plugins
 # in case this example is used with the open source release of the MDL SDK
 if(TARGET mdl::mdl_sdk)
-    list(APPEND _COMANDS
+    list(APPEND _COMMANDS
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:mdl::mdl_sdk> ${_OUTPUT_DIRECTORY}/libmdl_sdk_ai${_SHARED_SUFFIX}
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:mdl::nv_openimageio> ${_OUTPUT_DIRECTORY}/nv_openimageio_ai${_SHARED_SUFFIX}
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:mdl::dds> ${_OUTPUT_DIRECTORY}/dds_ai${_SHARED_SUFFIX}
     )
     list(APPEND _DEPENDS
         mdl::mdl_sdk
-        mdl::nv_openimageio
-        mdl::dds
     )
+    if(TARGET mdl::nv_openimageio)
+        list(APPEND _COMMANDS
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:mdl::nv_openimageio> ${_OUTPUT_DIRECTORY}/nv_openimageio_ai${_SHARED_SUFFIX}
+        )
+        list(APPEND _DEPENDS
+            mdl::nv_openimageio
+        )
+    endif()
+    if(TARGET mdl::dds)
+        list(APPEND _COMMANDS
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:mdl::dds> ${_OUTPUT_DIRECTORY}/dds_ai${_SHARED_SUFFIX}
+        )
+        list(APPEND _DEPENDS
+            mdl::dds
+        )
+    endif()
 # in case this example is used with the binary release of the MDL SDK
 else()
     # TODO remove this from the binary release
@@ -169,7 +181,7 @@ else()
         set(_SDK_BINARY_DIR ${MDL_BASE_FOLDER}/${MI_PLATFORM_NAME}/lib/)
     endif()
 
-    list(APPEND _COMANDS
+    list(APPEND _COMMANDS
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_SDK_BINARY_DIR}/libmdl_sdk${_SHARED_SUFFIX} ${_OUTPUT_DIRECTORY}/libmdl_sdk_ai${_SHARED_SUFFIX}
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_OPENIMAGEIO_BINARY_DIR}/nv_openimageio${_SHARED_SUFFIX} ${_OUTPUT_DIRECTORY}/nv_openimageio_ai${_SHARED_SUFFIX}
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_DDS_BINARY_DIR}/dds${_SHARED_SUFFIX} ${_OUTPUT_DIRECTORY}/dds_ai${_SHARED_SUFFIX}
@@ -187,7 +199,7 @@ if(NOT DEFINED MDL_BUILD_ARNOLD_COPY_ADDITIONAL_FILES OR MDL_BUILD_ARNOLD_COPY_A
         OUTPUT copied_files.d
         DEPENDS ${_DEPENDS}
         COMMAND ${CMAKE_COMMAND} -E echo "Copy SDK libraries and additional files to the binary folder..."
-        ${_COMANDS}
+        ${_COMMANDS}
         COMMAND ${CMAKE_COMMAND} -E touch copied_files.d
     )
 else()

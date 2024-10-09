@@ -1559,7 +1559,7 @@ BSDF_INLINE float3 apply_coating_color_shift(
     const float3 &coated_fresnel,
     const float3 &uncoated_fresnel)
 {
-    const float3 result = input * (coated_fresnel / uncoated_fresnel);
+    const float3 result = input + (coated_fresnel - uncoated_fresnel);
     return math::saturate(result);
 }
 

@@ -102,6 +102,7 @@ function(TARGET_BUILD_SETUP)
                 "_MSC_VER=${MSVC_VERSION}"
                 "_CRT_SECURE_NO_WARNINGS"
                 "_SCL_SECURE_NO_WARNINGS"
+                "_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING"  # std::iterator is used by LLVM 12 as base classes
             )
 
         # set static or dynamic runtime

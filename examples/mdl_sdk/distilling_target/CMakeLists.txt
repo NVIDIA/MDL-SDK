@@ -162,6 +162,9 @@ else()
     endif()
 endif()
 
+file(GLOB _MDL_CORE_HEADERS ${MDL_INCLUDE_FOLDER}/mi/mdl/*)
+list(SORT _MDL_CORE_HEADERS)
+
 add_custom_command(
     OUTPUT
         ${_GENERATED_DIR}/distilling_target_plugin_rules.h
@@ -171,6 +174,7 @@ add_custom_command(
     COMMAND ${mdltlc_PATH} --generate --output-dir ${_GENERATED_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/distilling_target_plugin_rules.mdltl
     DEPENDS
         ${CMAKE_CURRENT_SOURCE_DIR}/distilling_target_plugin_rules.mdltl
+        ${_MDL_CORE_HEADERS}
     VERBATIM
     )
 

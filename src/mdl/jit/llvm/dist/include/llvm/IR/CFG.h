@@ -120,7 +120,7 @@ inline bool pred_empty(const BasicBlock *BB) {
 /// Get the number of predecessors of \p BB. This is a linear time operation.
 /// Use \ref BasicBlock::hasNPredecessors() or hasNPredecessorsOrMore if able.
 inline unsigned pred_size(const BasicBlock *BB) {
-  return std::distance(pred_begin(BB), pred_end(BB));
+  return unsigned(std::distance(pred_begin(BB), pred_end(BB)));
 }
 inline pred_range predecessors(BasicBlock *BB) {
   return pred_range(pred_begin(BB), pred_end(BB));

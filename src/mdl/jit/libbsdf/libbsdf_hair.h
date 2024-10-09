@@ -225,7 +225,8 @@ BSDF_API void chiang_hair_bsdf_sample(
     else
     {
         // continue sample hair bsdf, xi_z will be used again, so rescale
-        xi_z = math::saturate((xi_z - diffuse_reflection_weight) / (1.0f - diffuse_reflection_weight));
+        xi_z = saturate_below_one(
+            (xi_z - diffuse_reflection_weight) / (1.0f - diffuse_reflection_weight));
     }
 
     const float sin_theta_o = math::dot(data->k1, tangent_u);
@@ -299,7 +300,7 @@ BSDF_API void chiang_hair_bsdf_sample(
                 
                 data->bsdf_over_pdf = weight * sum / weight_s;
                 
-                xi_z = (xi_z * sum - prev_cdf) / weight_s;
+                xi_z = saturate_below_one((xi_z * sum - prev_cdf) / weight_s);
                 break;
             }
             

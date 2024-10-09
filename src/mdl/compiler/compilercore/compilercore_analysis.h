@@ -1679,13 +1679,13 @@ private:
         IExpression const  *expr,
         int                idx);
 
-    /// Replace default struct constructors by elemental constructors.
+    /// Replace default const struct constructors by elemental constructors.
     ///
     /// \param callee_def        the definition of the called function
     /// \param call              the call, might be modified
     ///
     /// \return the new callee definition
-    Definition const *reformat_default_struct_constructor(
+    Definition const *reformat_const_default_struct_constructor(
         Definition const *callee_def,
         IExpression_call *call);
 
@@ -2005,7 +2005,19 @@ private:
     bool has_member_in_category(
         IType const *ty,
         IStruct_category const *cat);
-        
+    
+    /// Check whether the importing module is in a search path root and is attempting 
+    /// to import a standard library module with a weak relative name. Emit a warning 
+    /// beween MDL 1.6 and 1.9, and an error for MDL 1.10.
+    /// 
+    /// \param position       position to use in diagnostic messages
+    /// \param import_name    name of imported module in import declaration
+    /// \param import_module  imported module
+    void check_weak_stdlib_import(
+        Position const &pos,
+        char const *import_name,
+        Module const *import_module);
+
     bool pre_visit(IDeclaration_import *import_decl) MDL_OVERRIDE;
 
     bool pre_visit(IDeclaration_constant *con_decl) MDL_OVERRIDE;

@@ -1326,6 +1326,8 @@ LLVM_code_generator::LLVM_code_generator(
 , m_fast_math(get_math_options_from_options(options, &m_finite_math, &m_reciprocal_math))
 , m_enable_ro_segment(
     options.get_bool_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT))
+, m_max_const_size(
+    size_t(options.get_int_option(MDL_JIT_OPTION_MAX_CONST_DATA)))
 , m_always_inline(options.get_bool_option(MDL_JIT_OPTION_INLINE_AGGRESSIVELY))
 , m_eval_dag_ternary_strictly(options.get_bool_option(MDL_JIT_OPTION_EVAL_DAG_TERNARY_STRICTLY))
 , m_sl_use_resource_data(options.get_bool_option(MDL_JIT_OPTION_SL_USE_RESOURCE_DATA))
@@ -3059,6 +3061,17 @@ LLVM_context_data *LLVM_code_generator::declare_function(
         }
     }
 
+    // check if any parameter uses a storage mode which needs state access
+    size_t n_params = func_type->get_parameter_count();
+    if (target_supports_storage_spaces()) {
+        for (size_t i = 0; i < n_params; ++i) {
+            if (inst.get_parameter_storage_modifier(i) != SM_NORMAL) {
+                need_render_state_param = true;
+                break;
+            }
+        }
+    }
+
     // always pass the render state to native functions
     if (def->get_property(mi::mdl::IDefinition::DP_IS_NATIVE)) {
         need_render_state_param = true;
@@ -3144,8 +3157,6 @@ LLVM_context_data *LLVM_code_generator::declare_function(
     if (m_deriv_infos != nullptr) {
         func_deriv_info = m_deriv_infos->get_function_derivative_infos(inst);
     }
-
-    size_t n_params = func_type->get_parameter_count();
 
     for (size_t i = 0; i < n_params; ++i) {
         mi::mdl::IType const   *p_type;
@@ -3335,7 +3346,7 @@ LLVM_context_data *LLVM_code_generator::declare_lambda(
     bool is_entry_point = lambda->is_entry_point();
 
     // we support function entries with and without state
-    if (m_lambda_force_render_state || lambda->uses_render_state()) {
+    if (m_lambda_force_render_state || lambda->uses_varying_state()) {
         // add a hidden state parameter
         arg_types.push_back(m_type_mapper.get_state_ptr_type(m_state_mode));
 
@@ -3821,14 +3832,16 @@ void LLVM_code_generator::compile_function_instance(
     llvm::Function::arg_iterator arg_it = get_first_parameter(func, ctx_data);
 
     for (size_t i = 0, n = func_decl->get_parameter_count(); i < n; ++i, ++arg_it) {
-        mi::mdl::IParameter const  *param   = func_decl->get_parameter(i);
-        mi::mdl::IDefinition const *p_def   = param->get_name()->get_definition();
-        mi::mdl::IType const       *p_type  = p_def->get_type();
-        int                        arr_size = inst.instantiate_type_size(p_type);
-        bool                       by_ref   = is_passed_by_reference(p_type, arr_size) ||
+        mi::mdl::IParameter const  *param      = func_decl->get_parameter(i);
+        mi::mdl::IDefinition const *p_def      = param->get_name()->get_definition();
+        mi::mdl::IType const       *p_type     = p_def->get_type();
+        int                        arr_size    = inst.instantiate_type_size(p_type);
+        Storage_modifier           storage_mod = inst.get_parameter_storage_modifier(i);
+        bool                       by_ref   = storage_mod == SM_NORMAL && (
+            is_passed_by_reference(p_type, arr_size) ||
             (target_supports_pointers() &&
                 m_cur_func_deriv_info != NULL &&
-                m_cur_func_deriv_info->args_want_derivatives.test_bit(i + 1));
+                m_cur_func_deriv_info->args_want_derivatives.test_bit(i + 1)));
         LLVM_context_data          *p_data;
 
         if (need_storage_for_var(p_def)) {
@@ -3837,7 +3850,7 @@ void LLVM_code_generator::compile_function_instance(
             p_data = context.get_context_data(p_def);
 
             llvm::Value *init = NULL;
-            switch (inst.get_parameter_storage_modifier(i)) {
+            switch (storage_mod) {
             case SM_NORMAL:
                 // copy value into shadow copy
                 init = by_ref ?
@@ -3847,14 +3860,14 @@ void LLVM_code_generator::compile_function_instance(
             case SM_PARAMETER:
                 init = Expression_result::offset(
                     arg_it,
-                    Expression_result::OK_RO_DATA_SEGMENT,
+                    Expression_result::OK_ARG_BLOCK,
                     lookup_type(p_type, arr_size),
                     p_type).as_value(context);
                 break;
             case SM_RODATA:
                 init = Expression_result::offset(
                     arg_it,
-                    Expression_result::OK_ARG_BLOCK,
+                    Expression_result::OK_RO_DATA_SEGMENT,
                     lookup_type(p_type, arr_size),
                     p_type).as_value(context);
                 break;
@@ -3863,7 +3876,7 @@ void LLVM_code_generator::compile_function_instance(
         } else {
             // this parameter will never be written
             p_data = context.create_context_data(
-                p_def, arg_it, by_ref, inst.get_parameter_storage_modifier(i));
+                p_def, arg_it, by_ref, storage_mod);
         }
         context.make_accessible(param);
     }
@@ -4834,6 +4847,9 @@ llvm::Value *LLVM_code_generator::translate_lval_expression(
             case mi::mdl::IDefinition::DK_PARAMETER:
             case mi::mdl::IDefinition::DK_VARIABLE:
                 if (LLVM_context_data *data = ctx.lookup_context_data(def)) {
+                    // l-values cannot be in argblock or read-only data
+                    MDL_ASSERT(data->get_var_storage_modifier() == SM_NORMAL);
+
                     return data->get_var_address();
                 }
                 break;
@@ -4911,6 +4927,9 @@ void LLVM_code_generator::translate_lval_expression_dual(
             case mi::mdl::IDefinition::DK_PARAMETER:
             case mi::mdl::IDefinition::DK_VARIABLE:
                 if (LLVM_context_data *data = ctx.lookup_context_data(def)) {
+                    // l-values cannot be in argblock or read-only data
+                    MDL_ASSERT(data->get_var_storage_modifier() == SM_NORMAL);
+
                     llvm::Value *var_addr = data->get_var_address();
                     adr_val = ctx.create_simple_gep_in_bounds(var_addr, 0u);
                     adr_dx  = ctx.create_simple_gep_in_bounds(var_addr, 1u);
@@ -5017,32 +5036,31 @@ Expression_result LLVM_code_generator::translate_expression(
             case mi::mdl::IDefinition::DK_PARAMETER:
             case mi::mdl::IDefinition::DK_VARIABLE:
                 if (LLVM_context_data *data = ctx.lookup_context_data(def)) {
-                    if (llvm::Value *v = data->get_var_address()) {
-                        switch (data->get_var_storage_modifier()) {
-                        case SM_NORMAL:
+                    switch (data->get_var_storage_modifier()) {
+                    case SM_NORMAL:
+                        if (llvm::Value *v = data->get_var_address()) {
                             res = Expression_result::ptr(v);
-                            break;
-                        case SM_PARAMETER:
-                        case SM_RODATA:
-                            {
-                                IType const *mdl_type = def->get_type();
-                                llvm::Type *llvm_type =
-                                    lookup_type(mdl_type, ctx.instantiate_type_size(mdl_type));
-
-                                res = Expression_result::offset(
-                                    v,
-                                    data->get_var_storage_modifier() == SM_PARAMETER
-                                        ? Expression_result::OK_ARG_BLOCK
-                                        : Expression_result::OK_RO_DATA_SEGMENT,
-                                    llvm_type,
-                                    mdl_type);
-                            }
-                            break;
+                        } else {
+                            // variable is never changed, only a value
+                            res = Expression_result::value(data->get_var_value());
                         }
-                    } else {
-                        // variable is never changed, only a value
+                        break;
+                    case SM_PARAMETER:
+                    case SM_RODATA:
+                        {
+                            IType const *mdl_type = def->get_type();
+                            llvm::Type *llvm_type =
+                                lookup_type(mdl_type, ctx.instantiate_type_size(mdl_type));
 
-                        res = Expression_result::value(data->get_var_value());
+                            res = Expression_result::offset(
+                                data->get_var_value(),
+                                data->get_var_storage_modifier() == SM_PARAMETER
+                                    ? Expression_result::OK_ARG_BLOCK
+                                    : Expression_result::OK_RO_DATA_SEGMENT,
+                                llvm_type,
+                                mdl_type);
+                        }
+                        break;
                     }
                 }
                 break;
@@ -5272,13 +5290,13 @@ bool LLVM_code_generator::is_stored_in_ro_data_segment(mi::mdl::IType const *typ
 {
     // Big data arrays slow down PTXAS and the JIT linker. Move them into a read-only
     // segment that we manage ourself.
-    return size > 1024 && can_be_stored_in_ro_segment(type);
+    return size > m_max_const_size && can_be_stored_in_ro_segment(type);
 }
 
 // Returns true, if the given value will be stored in the RO data segment.
 bool LLVM_code_generator::is_stored_in_ro_data_segment(mi::mdl::IValue const *v)
 {
-    if (!m_use_ro_data_segment || !is<mi::mdl::IValue_compound>(v))
+    if (!m_use_ro_data_segment || (!is<mi::mdl::IValue_array>(v) && !is<mi::mdl::IValue_struct>(v)))
         return false;
 
     mi::mdl::IType const *v_type = v->get_type();
@@ -6341,35 +6359,49 @@ llvm::Value *LLVM_code_generator::translate_binary_basic(
 
     case mi::mdl::IExpression_binary::OK_MODULO:
     case mi::mdl::IExpression_binary::OK_MODULO_ASSIGN:
-        // only on integer and integer vectors
-        if (!maybe_zero(r)) {
-            // no exception possible
-            res = ctx->CreateSRem(l, r);
-        } else if (m_divzero_check_exception_disabled) {
-            llvm::BasicBlock *ok_bb   = ctx.create_bb("mod_by_non_zero");
-            llvm::BasicBlock *fail_bb = ctx.create_bb("mod_by_zerol");
-            llvm::BasicBlock *end_bb  = ctx.create_bb("mod_end");
-            llvm::Value      *tmp     = ctx.create_local(l_type, "res");
+        {
+            auto create_modulo = [&](llvm::Value *l, llvm::Value *r) {
+                // Modulo is undefined for negative values in GLSL, so implement as l - (l / r) * r
+                if (m_target_lang == ICode_generator::TL_GLSL) {
+                    return ctx->CreateSub(l,
+                        ctx->CreateMul(
+                            ctx->CreateSDiv(l, r),
+                            r));
+                } else {
+                    return ctx->CreateSRem(l, r);
+                }
+            };
 
-            ctx.create_non_zero_check_cmp(rhs, ok_bb, fail_bb);
-            ctx->SetInsertPoint(ok_bb);
-            {
-                res = ctx->CreateSRem(l, r);
-                ctx->CreateStore(res, tmp);
-                ctx->CreateBr(end_bb);
+            // only on integer and integer vectors
+            if (!maybe_zero(r)) {
+                // no exception possible
+                res = create_modulo(l, r);
+            } else if (m_divzero_check_exception_disabled) {
+                llvm::BasicBlock *ok_bb   = ctx.create_bb("mod_by_non_zero");
+                llvm::BasicBlock *fail_bb = ctx.create_bb("mod_by_zerol");
+                llvm::BasicBlock *end_bb  = ctx.create_bb("mod_end");
+                llvm::Value      *tmp     = ctx.create_local(l_type, "res");
+
+                ctx.create_non_zero_check_cmp(rhs, ok_bb, fail_bb);
+                ctx->SetInsertPoint(ok_bb);
+                {
+                    res = create_modulo(l, r);
+                    ctx->CreateStore(res, tmp);
+                    ctx->CreateBr(end_bb);
+                }
+                ctx->SetInsertPoint(fail_bb);
+                {
+                    ctx->CreateStore(llvm::Constant::getNullValue(l_type), tmp);
+                    ctx->CreateBr(end_bb);
+                }
+                ctx->SetInsertPoint(end_bb);
+                {
+                    res = ctx->CreateLoad(tmp);
+                }
+            } else {
+                ctx.create_div_check_with_exception(rhs, Exc_location(*this, expr_pos));
+                res = create_modulo(l, r);
             }
-            ctx->SetInsertPoint(fail_bb);
-            {
-                ctx->CreateStore(llvm::Constant::getNullValue(l_type), tmp);
-                ctx->CreateBr(end_bb);
-            }
-            ctx->SetInsertPoint(end_bb);
-            {
-                res = ctx->CreateLoad(tmp);
-            }
-        } else {
-            ctx.create_div_check_with_exception(rhs, Exc_location(*this, expr_pos));
-            res = ctx->CreateSRem(l, r);
         }
         break;
 
@@ -7481,8 +7513,8 @@ Expression_result LLVM_code_generator::translate_call(
         return Expression_result::value(ctx.get_constant(int(0)));
 
     case IDefinition::DS_INTRINSIC_TEX_GRID_TO_OBJECT_SPACE:
-        return Expression_result::value(
-            llvm::ConstantAggregateZero::get(lookup_type(call_expr->get_type())));
+        // TODO: for now, just return the identity matrix
+        return Expression_result::value(create_identity_matrix(ctx));
 
     default:
         // try compiler known intrinsic function
