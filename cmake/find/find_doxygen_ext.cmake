@@ -75,8 +75,8 @@ function(FIND_DOXYGEN_EXT)
     endif()
 
     if(MDL_LOG_DEPENDENCIES)
-        message(STATUS "[INFO] MDL_DEPENDENCY_DOXYGEN_PATH:          ${MDL_DEPENDENCY_DOXYGEN_PATH}")
-        message(STATUS "[INFO] MDL_DEPENDENCY_DOT_PATH:              ${MDL_DEPENDENCY_DOT_PATH}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_DOXYGEN_PATH:              ${MDL_DEPENDENCY_DOXYGEN_PATH}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_DOT_PATH:                  ${MDL_DEPENDENCY_DOT_PATH}")
     endif()
 
 endfunction()

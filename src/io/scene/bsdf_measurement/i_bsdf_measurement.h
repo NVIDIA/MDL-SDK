@@ -195,11 +195,11 @@ public:
     bool is_memory_based() const { return !is_file_based() && !is_container_based(); }
 
     /// Returns the container file name for container-based BSDF measurements,
-    /// and \c NULL otherwise.
+    /// and \c nullptr otherwise.
     const std::string& get_container_filename() const { return m_resolved_container_filename; }
 
     /// Returns the container member name for container-based BSDF measurements,
-    /// and \c NULL otherwise.
+    /// and \c nullptr otherwise.
     const std::string& get_container_membername() const { return m_resolved_container_membername; }
 
     /// Returns the tag of the implementation class.
@@ -362,7 +362,7 @@ public:
     /// Indicates whether this BSDF measurement contains valid reflection or transmission data.
     bool is_valid() const
     {
-        return m_reflection.is_valid_interface() || m_transmission.is_valid_interface();
+        return m_reflection || m_transmission;
     }
 
 
@@ -387,10 +387,10 @@ private:
 /// Imports BSDF data from a file.
 ///
 /// \param filename             The file to import (already resolved against search paths).
-/// \param[out] reflection      The imported BSDF data for the reflection (or \c NULL if there is no
-///                             BSDF data for the reflection.
-/// \param[out] transmission    The imported BSDF data for the reflection (or \c NULL if there is no
-///                             BSDF data for the transmission.
+/// \param[out] reflection      The imported BSDF data for the reflection (or \c nullptr if there
+///                             is no BSDF data for the reflection.
+/// \param[out] transmission    The imported BSDF data for the reflection (or \c nullptr if there
+///                             is no BSDF data for the transmission.
 /// \return
 ///                              -  0: Success.
 ///                              - -3: Invalid filename extension (only \c .mbsdf is supported).
@@ -404,10 +404,10 @@ mi::Sint32 import_from_file(
 /// Imports BSDF data from a reader.
 ///
 /// \param reader               The reader to import from.
-/// \param[out] reflection      The imported BSDF data for the reflection (or \c NULL if there is no
-///                             BSDF data for the reflection.
-/// \param[out] transmission    The imported BSDF data for the reflection (or \c NULL if there is no
-///                             BSDF data for the transmission.
+/// \param[out] reflection      The imported BSDF data for the reflection (or \c nullptr if there
+///                             is no BSDF data for the reflection.
+/// \param[out] transmission    The imported BSDF data for the reflection (or \c nullptr if there
+///                             is no BSDF data for the transmission.
 /// \return
 ///                              -  0: Success.
 ///                              - -7: Invalid file format.
@@ -418,8 +418,8 @@ mi::Sint32 import_from_reader(
 
 /// Exports the BSDF data to a file.
 ///
-/// \param reflection     The BSDF data to export for the reflection. Can be \p NULL.
-/// \param transmission   The BSDF data to export for the transmission. Can be \p NULL.
+/// \param reflection     The BSDF data to export for the reflection. Can be \c nullptr.
+/// \param transmission   The BSDF data to export for the transmission. Can be \c nullptr.
 /// \param filename       The filename to use.
 /// \return               \c true in case of success, \c false otherwise.
 bool export_to_file(
@@ -429,9 +429,9 @@ bool export_to_file(
 
 /// Exports the BSDF data to a buffer.
 ///
-/// \param reflection     The BSDF data to export for the reflection. Can be \p NULL.
-/// \param transmission   The BSDF data to export for the transmission. Can be \p NULL.
-/// \return               The buffer in case of success, NULL otherwise.
+/// \param reflection     The BSDF data to export for the reflection. Can be \c nullptr.
+/// \param transmission   The BSDF data to export for the transmission. Can be \c nullptr.
+/// \return               The buffer in case of success, \c nullptr otherwise.
 mi::neuraylib::IBuffer* create_buffer_from_bsdf_measurement(
     const mi::neuraylib::IBsdf_isotropic_data* reflection,
     const mi::neuraylib::IBsdf_isotropic_data* transmission);
@@ -462,7 +462,7 @@ mi::neuraylib::IBuffer* create_buffer_from_bsdf_measurement(
 ///                              has already been loaded.
 /// \param[out] result
 ///                              -  0: Success.
-///                              - -1: Invalid parameters (\c NULL pointer).
+///                              - -1: Invalid parameters (\c nullptr pointer).
 ///                              - -7: Invalid file format.
 /// \return                      The tag of that BSDF measurement (invalid in case of failures).
 DB::Tag load_mdl_bsdf_measurement(

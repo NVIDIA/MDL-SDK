@@ -116,12 +116,12 @@ public:
 
     /// Returns the name of the scope.
     ///
-    /// \return   The name of the scope, or \c NULL if the scope has no name.
+    /// \return   The name of the scope, or \c nullptr if the scope has no name.
     virtual const char* get_name() const = 0;
 
     /// Returns the parent scope.
     ///
-    /// \return   The parent scope or \c NULL if the scope is the global scope.
+    /// \return   The parent scope or \c nullptr if the scope is the global scope.
     virtual IScope* get_parent() const = 0;
 };
 

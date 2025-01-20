@@ -607,3 +607,71 @@ export int example_let_expressions(int x) =
     int x_plus_1 = x + 1;
     int x_minus_1 = x - 1;
   } in x_plus_1 + x_minus_1;
+
+
+export color procedural_colored_rings(
+    float2 tex_coords,
+    float thickness,
+    float power,
+    float time,
+    int iterations,
+    float offset
+)
+{
+    // uv with origin in the center
+    float2 uv = math::frac(tex_coords) * 2.0 - 1.0;
+
+    // accumulate rings of different size
+    color tint_sum(0.0);
+    for (int i = 0; i < iterations; ++i)
+    {
+        // signed distance function for the color selection
+        float d = math::length(uv);
+
+        // cosine based coloring
+        float phi = d + i * 0.33;
+        color tint_contrib = math::cos(math::TWO_PI * (float3(0.0, 0.1, 0.2) + phi)) * 0.5 + 0.5;
+
+        // signed distance function for a ring + add some contrast
+        d = math::abs(math::sin(d * 16 + time) * 0.0625);
+        d = math::pow(0.005 * thickness / math::max(d, 0.0001), power);
+
+        // add contribution
+        tint_sum += tint_contrib * d;
+        // offset the coordinate for the next iteration
+        uv = math::frac(uv * offset) - 0.5;
+    }
+    return tint_sum;
+}
+
+export material example_procedural(
+    float thickness = 1.0    [[ anno::hard_range(0.1, 5.0) ]],
+    float power = 1.1        [[ anno::hard_range(0.1, 3.0) ]],
+    float offset = 1.85      [[ anno::hard_range(0.0, math::PI) ]],
+    int iterations = 5       [[ anno::hard_range(1, 10) ]],
+    uniform bool animated = true,
+    uniform bool emission = false,
+    float glossy_roughness = 0.8
+) = let {
+    float3 tex_coord = state::texture_coordinate(0);
+    color procedural_tint = procedural_colored_rings(
+        tex_coords: float2(tex_coord.x, tex_coord.y),
+        thickness: thickness,
+        power: power,
+        time: animated ? state::animation_time() : 1.0,
+        iterations: iterations,
+        offset: offset
+    );
+}
+in material(
+    surface: material_surface(
+        scattering: df::simple_glossy_bsdf(
+            roughness_u: glossy_roughness * (1.0 - math::saturate(math::luminance(procedural_tint))),
+            tint: emission ? color(0.0) : procedural_tint
+        ),
+        emission:  material_emission (
+            emission: df::diffuse_edf(),
+            intensity: emission ? procedural_tint : color(0.0)
+        )
+    )
+);

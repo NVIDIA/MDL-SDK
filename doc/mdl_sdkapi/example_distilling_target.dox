@@ -52,12 +52,12 @@ distilled.
     </b></dt>
     <dd><br>
         A custom Distiller plugin is a shared library that is loaded
-        into the MDL-SDK and provides one or more custom distilling
+        into the MDL SDK and provides one or more custom distilling
         target(s) to the an application. The application is
         responsible for loading the plugin and can then use the
         target(s) through the Distiller API, just as for the targets
         from the <tt>mdl_distiller</tt> plugin which is part of the
-        MDL-SDK.
+        MDL SDK.
 
         The \ref example_distilling_target "example program" described
         below loads an example plugin and distills a material to the
@@ -91,7 +91,7 @@ distilled.
         Note that the example plugin implements one target.  The
         plugin interface is general enough so that plugins could
         implement more than one in the same plugin. The distiller
-        plugin <tt>mdl_distilller</tt> that comes with the MDL-SDK
+        plugin <tt>mdl_distiller</tt> that comes with the MDL SDK
         does exactly that and implements multiple targets.
 
         <!-- Workaround to prevent a layout problem after dd tags. -->
@@ -109,7 +109,7 @@ distilled.
         which rule sets are applied to a material graph, and in which
         order.
 
-        Each rule consists of a left- and a right-hadn side. The
+        Each rule consists of a left- and a right-hand side. The
         left-hand side is a pattern that matches a graph node and
         binds variables, and the right-hand side specifies the
         replacement for the matched rule.
@@ -117,7 +117,7 @@ distilled.
         When a rule set is applied to a material, the Distiller will
         attempt to match all rules of a rule set, in order, to each
         node in the material graph. When it matches, the variables in
-        the lefthand pattern of the rule are bound to subexpressions
+        the left-hand pattern of the rule are bound to subexpressions
         of the current node, and the node on the right-hand side is
         constructed, possibly including expressions bound by the
         left-hand pattern. After a successful match, the Distiller

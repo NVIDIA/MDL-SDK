@@ -378,7 +378,7 @@ public:
 
     /// Returns the key corresponding to \p index.
     ///
-    /// \return    The key, or \c NULL in case of failure.
+    /// \return    The key, or \c nullptr in case of failure.
     virtual const char* get_key( Size index) const = 0;
 
     /// Indicates whether the key \p key exists or not.
@@ -509,7 +509,7 @@ public:
     ///
     /// \return
     ///           -  0: Success.
-    ///           - -1: Invalid parameters (\c NULL pointer).
+    ///           - -1: Invalid parameters (\c nullptr).
     ///           - -2: Invalid key.
     ///           - -3: \p value has the wrong type.
     virtual Sint32 set_value( const char* key, base::IInterface* value) = 0;
@@ -523,7 +523,7 @@ public:
     ///
     /// \return
     ///           -  0: Success.
-    ///           - -1: Invalid parameters (\c NULL pointer).
+    ///           - -1: Invalid parameters (\c nullptr).
     ///           - -2: Invalid index.
     ///           - -3: \p value has the wrong type.
     virtual Sint32 set_value( Size index, base::IInterface* value) = 0;

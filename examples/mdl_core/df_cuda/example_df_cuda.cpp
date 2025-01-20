@@ -504,10 +504,11 @@ static void save_result(
     const unsigned int height,
     const std::string &filename)
 {
-    float3 *data = static_cast<float3 *>(malloc(width * height * sizeof(float3)));
+    mi::mdl::tct_float3* data =
+        static_cast<mi::mdl::tct_float3 *>(malloc(width * height * sizeof(mi::mdl::tct_float3)));
     if (data == nullptr) return;
 
-    check_cuda_success(cuMemcpyDtoH(data, accum_buffer, width * height * sizeof(float3)));
+    check_cuda_success(cuMemcpyDtoH(data, accum_buffer, width * height * sizeof(mi::mdl::tct_float3)));
 
     export_image_rgbf(filename.c_str(), width, height, data);
 
@@ -1403,12 +1404,6 @@ static void render_scene(
         glfwDestroyWindow(window);
         glfwTerminate();
     }
-}
-
-// Returns true, if the string str starts with the given prefix, false otherwise.
-bool starts_with(std::string const &str, std::string const &prefix)
-{
-    return str.size() >= prefix.size() && str.compare(0, prefix.size(), prefix) == 0;
 }
 
 // Create application material representation for use in our CUDA kernel

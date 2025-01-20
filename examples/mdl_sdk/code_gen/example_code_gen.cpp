@@ -68,6 +68,10 @@ public:
     bool m_disable_pdf = false;
     bool m_enable_aux = false;
     bool m_enable_bsdf_flags = false;
+    bool m_glsl_place_uniforms_into_ssbo = false;
+    bool m_enable_ro_segment = false;
+    bool m_disable_ro_segment = false;
+    std::string m_max_const_data = "";
     std::string m_lambda_return_mode;
     bool m_warn_spectrum_conv = false;
     std::string m_backend = "hlsl";
@@ -76,6 +80,7 @@ public:
     bool m_dump_metadata = false;
     bool m_adapt_normal = false;
     bool m_adapt_microfacet_roughness = false;
+    bool m_mdl_next = false;
     bool m_experimental = false;
     bool m_run_material_analysis = false;
 
@@ -174,6 +179,41 @@ void dump_metadata(mi::base::Handle<const mi::neuraylib::ITarget_code> code, std
         out << "   " << i << ": \"" << c << "\" " << b << "\n";
     }
     out << "*/\n\n";
+
+    std::cout << "/* State usages:\n";
+
+    for (mi::Size i = 0, n = code->get_callable_function_count(); i < n; ++i) {
+        mi::neuraylib::ITarget_code::State_usage state_usage =
+            code->get_callable_function_render_state_usage(i);
+        if (state_usage == 0) {
+            continue;
+        }
+
+        char const *func_name = code->get_callable_function(i);
+        std::cout << "   Function \"" << func_name << "\"\n";
+
+        #define check_state_usage(x) \
+            if ((state_usage & mi::neuraylib::ITarget_code::SU_ ## x) != 0) \
+                std::cout << "     - " #x << "\n"
+
+        check_state_usage(POSITION             );
+        check_state_usage(NORMAL               );
+        check_state_usage(GEOMETRY_NORMAL      );
+        check_state_usage(MOTION               );
+        check_state_usage(TEXTURE_COORDINATE   );
+        check_state_usage(TEXTURE_TANGENTS     );
+        check_state_usage(TANGENT_SPACE        );
+        check_state_usage(GEOMETRY_TANGENTS    );
+        check_state_usage(DIRECTION            );
+        check_state_usage(ANIMATION_TIME       );
+        check_state_usage(ROUNDED_CORNER_NORMAL);
+        check_state_usage(TRANSFORMS           );
+        check_state_usage(OBJECT_ID            );
+
+        #undef check_state_usage
+    }
+
+    std::cout << "*/\n\n";
 }
 
 static char const *opacity(mi::neuraylib::Material_opacity o)
@@ -210,6 +250,10 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
         // It also carries errors, warnings, and warnings produces by the operations.
         mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
             mdl_factory->create_execution_context());
+
+        // Enable (incomplete) features from the next MDL version
+        if (options.m_mdl_next)
+            context->set_option("mdl_next", true);
 
         // Enable experimental features if requested
         if (options.m_experimental)
@@ -402,6 +446,20 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
                 options.m_enable_aux ? "on" : "off");
             backend->set_option("libbsdf_flags_in_bsdf_data",
                 options.m_enable_bsdf_flags ? "on" : "off");
+            if (options.m_glsl_place_uniforms_into_ssbo) {
+                backend->set_option("glsl_place_uniforms_into_ssbo", "on");
+                backend->set_option("glsl_max_const_data", options.m_max_const_data.c_str());
+            }
+            if (options.m_enable_ro_segment) {
+                backend->set_option("enable_ro_segment", "on");
+            }
+            if (!options.m_max_const_data.empty()) {
+                backend->set_option("max_const_data", options.m_max_const_data.c_str());
+            }
+            if (options.m_disable_ro_segment) {
+                // ugly but better supports default values for different backends
+                backend->set_option("enable_ro_segment", "off");
+            }
             if (!options.m_lambda_return_mode.empty()) {
                 if (backend->set_option(
                        "lambda_return_mode", options.m_lambda_return_mode.c_str()) != 0) {
@@ -480,8 +538,7 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
                         dump_metadata(target_code, file_stream);
                     file_stream.close();
                 }
-            }
-            else {
+            } else {
                 std::cout << "\n\n\n" << target_code->get_code() << "\n\n\n";
                 if (options.m_dump_metadata)
                     dump_metadata(target_code, std::cout);
@@ -625,12 +682,12 @@ options:
   -o|--output <file>            Export the module to this file. Default: stdout
   -b|--backend <backend>        Select the back-end to generate code for. One of
                                 {DAG, GLSL, HLSL, PTX, LLVM}. Default: HLSL
-  -e|--expr_path <path>         Add an MDL expression path to generate, like \"surface.scattering\".
+  -e|--expr_path <path>         Add an MDL expression path to generate, like "surface.scattering".
                                 Defaults to a set of expression paths.
   -d|--derivatives              Generate code with derivative support.
   -i|--instance_compilation     Use instance compilation instead of class compilation.
   -t|--text_results <num>       Number of float4 texture result slots in the state. Default: 16
-  -M|--dump-meta-data           Print all generated meta data tables.
+  -M|--dump-meta-data           Print all generated meta data tables and state usages.
   --ft                          Fold ternary operators when used on distribution functions.
   --fb                          Fold boolean parameters.
   --fe                          Fold enum parameters.
@@ -638,12 +695,20 @@ options:
   --dian                        Disable ignoring anno::noinline() annotations.
   --disable_pdf                 Disable generation of separate PDF function.
   --enable_aux                  Enable generation of auxiliary function.
-  --enable_bsdf_flags           Enable "flags" field in BSDF data structures in generated code
+  --enable_bsdf_flags           Enable "flags" field in BSDF data structures in generated code.
+  --glsl_place_uniforms_into_ssbo    Enable placing constants into a shader storage buffer object.
+  --enable_ro_segment           Enable storing bigger constants in a read-only data segment
+                                (enabled by default for HLSL backend).
+  --disable_ro_segment          Disable storing bigger constants in a read-only data segment
+                                (only needed for HLSL backend).
+  --max_const_data <size>       Set the maximum size of constants in bytes in the generated code
+                                (requires read-only data segment or ssbo, default 1024).
   --lambda_return_mode <mode>   Set how base types and vector types are returned for PTX and LLVM
                                 backends. One of {default, sret, value}.
   --adapt_normal                Enable renderer callback to adapt the normal.
   --adapt_microfacet_roughness  Enable renderer callback to adapt the roughness for
                                 microfacet BSDFs.
+  --mdl_next                    Enable (incomplete) features from the next MDL version.
   --experimental                Enable experimental compiler features (for internal testing).
   --warn-spectrum-conv          Warn if a spectrum constructor is converted into RGB.
   --analyze                     Run backend analysis
@@ -684,7 +749,23 @@ bool Options::parse(int argc, char* argv[])
                 m_enable_aux = true;
             else if (arg == "--enable_bsdf_flags")
                 m_enable_bsdf_flags = true;
-            else if (arg == "--lambda_return_mode") {
+            else if (arg == "--glsl_place_uniforms_into_ssbo")
+                m_glsl_place_uniforms_into_ssbo = true;
+            else if (arg == "--enable_ro_segment")
+                m_enable_ro_segment = true;
+            else if (arg == "--disable_ro_segment")
+                m_disable_ro_segment = true;
+            else if (arg == "--max_const_data")
+            {
+                if (i == argc - 1)
+                {
+                    std::cerr << "error: Argument for --max_const_data missing." << std::endl;
+                    return false;
+                }
+                m_max_const_data = argv[++i];
+            }
+            else if (arg == "--lambda_return_mode")
+            {
                 if (i == argc - 1)
                 {
                     std::cerr << "error: Argument for --lambda_return_mode missing." << std::endl;
@@ -698,6 +779,8 @@ bool Options::parse(int argc, char* argv[])
                 m_adapt_microfacet_roughness = true;
             else if (arg == "--analyze")
                 m_run_material_analysis = true;
+            else if (arg == "--mdl_next")
+                m_mdl_next = true;
             else if (arg == "--experimental")
                 m_experimental = true;
             else if (arg == "--warn-spectrum-conv")
@@ -797,6 +880,13 @@ bool Options::parse(int argc, char* argv[])
             m_backend != "ptx" && m_backend != "llvm")
         {
             std::cerr << "error: Back-end is missing or invalid." << std::endl;
+            return false;
+        }
+
+        if (m_glsl_place_uniforms_into_ssbo && m_backend != "glsl")
+        {
+            std::cerr << "error: Option \"glsl_place_uniforms_into_ssbo\" is only available for "
+                "GLSL backend." << std::endl;
             return false;
         }
     }

@@ -41,18 +41,18 @@ is managed using the GUID of the main interface #mi::neuraylib::INeuray.
 Whenever an incompatible change is made to the API a new GUID is generated.
 Typically, this only happens with major releases.
 
-In your application you ask the shared library for a pointer to a 
+In your application you ask the shared library for a pointer to a
 compatible #mi::neuraylib::INeuray interface by passing its GUID
 #mi::neuraylib::INeuray::IID() to the global function #mi_factory
 (the main entry point to the DSO).
 If the shared library does not contain a #mi::neuraylib::INeuray interface with a matching GUID
-\c NULL is returned.
-In this case it is possible to use the #mi_factory function to obtain a pointer to 
+\c nullptr is returned.
+In this case it is possible to use the #mi_factory function to obtain a pointer to
 an #mi::neuraylib::IVersion interface. This interface provided detailed version information
 like build number, build date, the product version name and the GUID of the
 #mi::neuraylib::INeuray interface compiled into the library.
 
-\see 
+\see
   - \subpage mi_base_intro_versioning
   - \subpage mi_math_intro_versioning
 

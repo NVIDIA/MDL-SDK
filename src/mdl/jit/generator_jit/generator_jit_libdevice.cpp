@@ -29,6 +29,8 @@
 #include "pch.h"
 
 
+#include <algorithm>
+
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/MemoryBuffer.h>
@@ -83,7 +85,7 @@ unsigned char const *LLVM_code_generator::get_libdevice(
     // unified since CUDA 9.0
     size            = dimension_of(glue_bitcode);
     // the CUDA 9.0 libdevice contains inline asm that requires PTX 4.0
-    min_ptx_version = 40;
+    min_ptx_version = std::max(min_ptx_version, 40u);
     return glue_bitcode;
 #endif
 }

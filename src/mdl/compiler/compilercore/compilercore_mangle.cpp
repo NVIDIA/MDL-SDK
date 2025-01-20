@@ -1461,8 +1461,9 @@ string DAG_mangler::mangle(
     // if this entity is removed at some version, add a marker
     unsigned version_flags = def->get_version_flags();
     unsigned removed_ver = mdl_removed_version(version_flags);
-    if (removed_ver != 0xFFFFFFFF) {
-        // was removed at some version, we report the version *until* it exists
+    if (removed_ver != 0xFFFFFFFF && def->has_flag(Definition::DEF_IS_VERSIONED)) {
+        // was removed at some version and has version depended overloads, we report the version
+        // *until* the entity exists
         switch (IMDL::MDL_version(removed_ver)) {
         case IMDL::MDL_VERSION_1_0:
             m_printer.print("$0.9");
@@ -1493,6 +1494,9 @@ string DAG_mangler::mangle(
             break;
         case IMDL::MDL_VERSION_1_9:
             m_printer.print("$1.8");
+            break;
+        case IMDL::MDL_VERSION_1_10:
+            m_printer.print("$1.9");
             break;
         case IMDL::MDL_VERSION_EXP:
             m_printer.print("$99.99");

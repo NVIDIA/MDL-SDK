@@ -127,10 +127,7 @@ target_add_dependencies(TARGET ${PROJECT_LIB_NAME}
         mdl::mdl-codegenerators-generator_code
         mdl::mdl-runtime
         mdl::mdl-no_jit-generator_stub
-        mdl::base-lib-libzip
-        mdl::base-lib-zlib
-        mdl::base-lib-log
-        mdl::base-system-version
+        ${LINKER_DEPENDENCIES_BASE_WITHOUT_BASE_DATA}
         ${LINKER_END_GROUP}
     )
 
@@ -204,9 +201,7 @@ add_custom_command(
         ${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_definitions.h
     VERBATIM
     )
-# -------------------------------------------------------------------------------------------------
-# Create installation rules to copy the build directory
-# -------------------------------------------------------------------------------------------------
+# create installation rules
 add_target_install(
     TARGET ${PROJECT_BIN_NAME}
     )

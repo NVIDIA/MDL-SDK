@@ -673,7 +673,7 @@ public:
     /// Returns an instance of a given struct category.
     ///
     /// If the symbol is already registered, its definition is compared with \p id. In case of a
-    /// match the registered struct category is returned, otherwise \c NULL. If the symbol is not
+    /// match the registered struct category is returned, otherwise \c nullptr. If the symbol is not
     /// yet registered, it will be registered with a struct category constructed from \p id and
     /// \p annotations, and the just registered struct category is returned.
     ///
@@ -692,9 +692,9 @@ public:
 
     /// Returns an instance of a given enum type.
     ///
-    /// If the symbol is already registered, its definition is compared with \p id and \p values. In
-    /// case of a match the registered type is returned, otherwise \c NULL. If the symbol is not yet
-    /// registered, it will be registered with a type constructed from \p id, \p values,
+    /// If the symbol is already registered, its definition is compared with \p id and \p values.
+    /// In case of a match the registered type is returned, otherwise \c nullptr. If the symbol is
+    /// not yet registered, it will be registered with a type constructed from \p id, \p values,
     /// \p annotations, and \p value_annotations, and the just registered type is returned.
     ///
     /// \return
@@ -717,7 +717,7 @@ public:
     ///
     /// If the symbol is already registered, its definition is compared with \p id, \p fields,
     /// \p is_declarative, and the symbol of \p struct_category. In case of a match the registered
-    /// type is returned, otherwise \c NULL. If  the symbol is not yet registered, it will be
+    /// type is returned, otherwise \c nullptr. If  the symbol is not yet registered, it will be
     /// registered with a type constructed from \p id, \p fields, \p annotations,
     /// \p field_annotations, \p is_declarative, and \p struct_category, and the just registered
     /// type is returned.

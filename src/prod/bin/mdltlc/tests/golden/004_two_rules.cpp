@@ -65,39 +65,56 @@ DAG_node const* Two_rules::matcher(
     IDistiller_plugin_api &e,
     DAG_node const *node,
     const mi::mdl::Distiller_options *options,
-    Rule_result_code &result_code)const
+    Rule_result_code &result_code) const
 {
-    switch (e.get_selector(node)) {
-    case mi::mdl::DS_DIST_DEFAULT_BSDF: // match for bsdf()
-// 004_two_rules.mdltl:7
-//RUID 953865
-        if (true) {
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 0);
-            return e.create_call("::df::diffuse_reflection_bsdf(color,float,string)",
-                IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<3>::mk_args(
-                    e,m_node_types, diffuse_reflection_bsdf, e.create_color_constant(0,0,0),
-                    e.create_float_constant(3.1f), e.create_string_constant("\"hlp\"")).args,
-                3, e.get_type_factory()->create_bsdf());
-        }
-        break;
-    case mi::mdl::IDefinition::DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF: // match for diffuse_transmission_bsdf(tint)
+    auto match_rule2 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+
 // 004_two_rules.mdltl:8
 //RUID 855930
-        if (true) {
-            const DAG_node* v_tint = e.get_compound_argument(node, 0);
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 1);
-            return e.create_call("::df::diffuse_reflection_bsdf(color,float,string)",
-                IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<3>::mk_args(
-                    e,m_node_types, diffuse_reflection_bsdf, v_tint).args, 3, e.get_type_factory()->create_bsdf());
-        }
-        break;
-    default:
-        break;
-    }
+    auto match_rule1 = [&] (DAG_node const *node1, IDistiller_plugin_api::Match_properties &node_props1) -> const DAG_node * {
 
-    return node;
+        // match for diffuse_transmission_bsdf(tint)
+        if (node_props1.sema != IDefinition::DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF) {
+            return match_rule2(node1, node_props1);
+        }
+        DAG_node const *node3 = e.get_compound_argument(node1, 0);
+        DAG_node const *v_tint = node3; (void)v_tint;
+        DAG_DbgInfo root_dbg_info = node1->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 1);
+        return e.create_call("::df::diffuse_reflection_bsdf(color,float,color,string)",
+            IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<4>::mk_args(
+                e, m_node_types, diffuse_reflection_bsdf, v_tint).args, 4, e.get_type_factory()->create_bsdf(), root_dbg_info);
+    };
+    (void)match_rule1;
+
+// 004_two_rules.mdltl:7
+//RUID 953865
+    auto match_rule0 = [&] (DAG_node const *node0, IDistiller_plugin_api::Match_properties &node_props0) -> const DAG_node * {
+
+        // match for bsdf()
+        if (node_props0.sema != IDefinition::DS_INVALID_REF_CONSTRUCTOR || node_props0.type_kind != IType::TK_BSDF) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 0);
+        return e.create_call("::df::diffuse_reflection_bsdf(color,float,color,string)",
+            IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<4>::mk_args(
+                e, m_node_types, diffuse_reflection_bsdf, e.create_color_constant(0,0,0),
+                e.create_float_constant(3.1f), e.create_color_constant(0,0,0), e.create_string_constant("\"hlp\"")).args,
+            4, e.get_type_factory()->create_bsdf(), root_dbg_info);
+    };
+    (void)match_rule0;
+
+    IDistiller_plugin_api::Match_properties node_props;
+    e.get_match_properties(node, node_props);
+    return match_rule0(node, node_props);
+
 }
 
 bool Two_rules::postcond(

@@ -123,7 +123,7 @@ public:
         DB::Tag_set result;
         attr_set.get_references(&result);
         MI_CHECK(result.size() == 2);
-        std::set<DB::Tag>::const_iterator it=result.begin();
+        auto it=result.begin();
         MI_CHECK(it->get_uint() == 12);
         ++it;
         MI_CHECK(it->get_uint() == 27);

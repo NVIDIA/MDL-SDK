@@ -132,7 +132,7 @@ public:
     /// Returns a temporary.
     ///
     /// \param index   The index of the temporary.
-    /// \return        The expression of the temporary, or \c NULL if \p index is out of range.
+    /// \return        The expression of the temporary, or \c nullptr if \p index is out of range.
     virtual const IExpression* get_temporary( Size index) const = 0;
 
     /// Returns the expression of a temporary.
@@ -145,7 +145,7 @@ public:
     ///
     /// \tparam T      The interface type of the requested temporary.
     /// \param index   The index of the temporary.
-    /// \return        The expression of the temporary, or \c NULL if \p index is out of range.
+    /// \return        The expression of the temporary, or \c nullptr if \p index is out of range.
     template<class T>
     const T* get_temporary( Size index) const
     {
@@ -161,7 +161,7 @@ public:
     ///
     /// \param path    The path from the material root to the expression that should be returned,
     ///                e.g., \c "surface.scattering.tint".
-    /// \return        A sub-expression for \p expr according to \p path, or \c NULL in case of
+    /// \return        A sub-expression for \p expr according to \p path, or \c nullptr in case of
     ///                errors.
     virtual const IExpression* lookup_sub_expression( const char* path) const = 0;
 
@@ -171,7 +171,7 @@ public:
     /// has been reloaded.
     ///
     /// \param context     In case of failure, the execution context can be checked for error
-    ///                    messages. Can be \c NULL.
+    ///                    messages. Can be \c nullptr.
     virtual bool is_valid( IMdl_execution_context* context) const = 0;
 
     //@}
@@ -197,13 +197,13 @@ public:
     /// is the case for #lookup_sub_expression() or #get_sub_expression_hash().
     ///
     /// \param index   The index of the parameter.
-    /// \return        The name of the parameter, or \c NULL if \p index is out of range.
+    /// \return        The name of the parameter, or \c nullptr if \p index is out of range.
     virtual const char* get_parameter_name( Size index) const = 0;
 
     /// Returns the value of an argument.
     ///
     /// \param index   The index of the argument.
-    /// \return        The value of the argument, or \c NULL if \p index is out of range.
+    /// \return        The value of the argument, or \c nullptr if \p index is out of range.
     virtual const IValue* get_argument( Size index) const = 0;
 
     /// Returns the value of an argument.
@@ -216,7 +216,7 @@ public:
     ///
     /// \tparam T      The interface type of the requested element
     /// \param index   The index of the argument.
-    /// \return        The value of the argument, or \c NULL if \p index is out of range.
+    /// \return        The value of the argument, or \c nullptr if \p index is out of range.
     template<class T>
     const T* get_argument( Size index) const
     {
@@ -241,7 +241,7 @@ public:
     ///                                 code will be written. The error codes have the following
     ///                                 meaning:
     ///                                 -  0: Success.
-    ///                                 - -1: \p material_instance_name is \c NULL,
+    ///                                 - -1: \p material_instance_name is \c nullptr,
     ///                                       or there is no material instance of that name.
     ///                                 - -2: \p parameter_index is out of bounds.
     ///                                 - -3: The corresponding function call could not be found in
@@ -249,12 +249,12 @@ public:
     ///                                       given parameter is not connected to a function or the
     ///                                       material instance has been changed after the creation
     ///                                       of this compiled material.
-    /// \return                         The DB name of the connected function call, or \c NULL in
+    /// \return                         The DB name of the connected function call, or \c nullptr in
     ///                                 case of errors.
     virtual const IString* get_connected_function_db_name(
         const char* material_instance_name,
         Size parameter_index,
-        Sint32* errors = 0) const = 0;
+        Sint32* errors = nullptr) const = 0;
 
     //@}
     /// \name Properties of the compiled material

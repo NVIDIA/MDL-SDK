@@ -897,8 +897,11 @@ public:
     /// If possible, convert into an AST expression.
     virtual mi::mdl::IExpression_call const *as_expr_call() const = 0;
 
-    /// Get the source position of this call itself.
+    /// Get the AST source position of this call itself if exists.
     virtual mi::mdl::Position const *get_position() const = 0;
+
+    /// Get the DAG source position of this call itself if exists.
+    virtual bool get_dag_dbg_info(DAG_DbgInfo &dbg_info) const = 0;
 
     /// Returns true, if the call should return derivatives.
     ///
@@ -972,6 +975,16 @@ public:
     /// \param func  the LLVM function
     void register_function(
         llvm::Function *func);
+
+    /// Register a function to take part in the analysis, which has been cloned from an
+    /// already registered function. The state usage is initialized with the usage of the
+    /// original function.
+    ///
+    /// \param cloned_func  the cloned LLVM function which shall be registered
+    /// \param orig_func    the original LLVM function
+    void register_cloned_function(
+        llvm::Function *cloned_func,
+        llvm::Function *orig_func);
 
     /// Register a mapped function to set the "expected" usage.
     ///
@@ -1313,7 +1326,7 @@ public:
     class MDL_module_scope {
     public:
         /// Constructor.
-        MDL_module_scope(LLVM_code_generator &generator, mi::mdl::IModule const *mod)
+        MDL_module_scope(LLVM_code_generator &generator, mi::mdl::Module const *mod)
         : m_generator(generator)
         {
             generator.push_module(mod);
@@ -1483,7 +1496,7 @@ public:
     ///
     /// \return the created LLVM module or NULL on compilation errors
     llvm::Module *compile_module(
-        mi::mdl::IModule const *module);
+        mi::mdl::Module const *module);
 
     /// Compile a distribution function into an LLVM Module and return the LLVM module.
     ///
@@ -1783,7 +1796,7 @@ public:
     /// \param module_name   the name of the owner module if owner is NULL
     /// \param is_prototype  true if this should just declare a prototype
     LLVM_context_data *get_or_create_context_data(
-        mi::mdl::IModule const  *owner,
+        mi::mdl::Module const   *owner,
         Function_instance const &inst,
         char const              *module_name = NULL,
         bool                    is_prototype = false);
@@ -1831,7 +1844,7 @@ public:
     ///
     /// \note Does NOT increase the reference count of the returned
     ///       module, do NOT decrease it just because of this call.
-    mi::mdl::IModule const *tos_module() const;
+    mi::mdl::Module const *tos_module() const;
 
     /// Retrieve the out-of-bounds reporting routine.
     llvm::Function *get_out_of_bounds() const;
@@ -1941,8 +1954,10 @@ public:
     /// \param return_derivs  if true, derivatives will be generated for the return value
     ///
     /// \returns the requested function or NULL if no special handling for HLSL is required
+    ///
+    /// \note def might be replaced by another overload
     llvm::Function *get_sl_intrinsic_function(
-        IDefinition const *def,
+        IDefinition const *&def,
         bool              return_derivs);
 
     /// Compile the given module into LLVM-IR code.
@@ -2284,10 +2299,10 @@ private:
     /// \param name_prefix   the name prefix for this function
     /// \param is_prototype  true if this should just declare a prototype
     LLVM_context_data *declare_function(
-        mi::mdl::IModule const  *owner,
+        mi::mdl::Module const   *owner,
         Function_instance const &inst,
         char const              *name_prefix,
-        bool                     is_prototype);
+        bool                    is_prototype);
 
     /// Declares an LLVM function from a internal function instance.
     ///
@@ -2317,7 +2332,7 @@ private:
         mi::mdl::IDeclaration_function const *func_decl);
 
     /// Push a module on the stack.
-    void push_module(mi::mdl::IModule const *module);
+    void push_module(mi::mdl::Module const *module);
 
     /// Pop a module from the stack.
     void pop_module();
@@ -2941,7 +2956,8 @@ private:
         DAG_node const                             *arg,
         llvm::SmallVector<llvm::Instruction *, 16> &delete_list);
 
-    /// Returns true, if the given DAG node is a call to diffuse_reflection_bsdf(color(1), 0).
+    /// Returns true, if the given DAG node is a call to
+    /// diffuse_reflection_bsdf(color(1), 0, color(0)).
     bool is_default_diffuse_reflection(DAG_node const *node);
 
     /// Returns the scatter components the given DAG node can return.
@@ -3849,6 +3865,11 @@ private:
     /// \param s  the string value object
     mi::mdl::IValue_string const *get_internalized_string(mi::mdl::IValue_string const *s);
 
+    /// Returns true if full debug information should be enabled.
+    ///
+    /// \param enable_debug  Whether to enable full debug info. Can be overwritten.
+    static bool get_enable_full_debug(bool enable_debug);
+
     /// Get the optimization level from the options and environment.
     static unsigned get_opt_level_from_options(
         Target_language target_lang,
@@ -3973,6 +3994,10 @@ private:
     /// If true, the read-only segment generation is enabled.
     bool m_enable_ro_segment;
 
+    /// Maximum size of a constant to be put into the generated code, if the read-only data segment
+    /// is enabled. Bigger constants will be put into the read-only data segment.
+    size_t m_max_const_size;
+
     /// If true, generated functions should get an AlwaysInline attribute.
     bool m_always_inline;
 
@@ -4050,6 +4075,12 @@ private:
     /// Optimization level.
     unsigned m_opt_level;
 
+    /// If true, generate full debug info.
+    bool m_enable_full_debug;
+
+    /// If true, generate debug info for types only.
+    bool m_enable_type_debug;
+
     /// If PTX mode is enabled, the SM_version we compile for.
     unsigned m_sm_version;
 
@@ -4066,29 +4097,29 @@ private:
     Type_mapper m_type_mapper;
 
     /// The MDL module stack.
-    mi::mdl::vector<mi::mdl::IModule const *>::Type m_module_stack;
+    mi::mdl::vector<mi::mdl::Module const *>::Type m_module_stack;
 
     /// Value class to handle waiting functions.
     class Wait_entry {
     public:
         /// Constructor.
-        Wait_entry(mi::mdl::IModule const *owner, Function_instance const &inst)
+        Wait_entry(mi::mdl::Module const *owner, Function_instance const &inst)
         : m_owner(owner)
         , m_inst(inst)
         {
         }
 
         /// Get the owner module.
-        mi::mdl::IModule const *get_owner() const { return m_owner; }
+        mi::mdl::Module const *get_owner() const { return m_owner; }
 
         /// The function instance.
         Function_instance const &get_instance() const { return m_inst; }
 
     private:
         /// The owner module.
-        mi::mdl::IModule const  *m_owner;
+        mi::mdl::Module const  *m_owner;
         /// The function instance.
-        Function_instance       m_inst;
+        Function_instance      m_inst;
     };
 
     typedef mi::mdl::queue<Wait_entry>::Type Function_wait_queue;
@@ -4208,12 +4239,6 @@ private:
 
     /// Analysis object storing state usage information per function and updating
     State_usage_analysis m_state_usage_analysis;
-
-    /// If true, generate full debug info.
-    bool m_enable_full_debug;
-
-    /// If true, generate debug info for types only.
-    bool m_enable_type_debug;
 
     /// Mark some generated functions as noinline.
     bool m_enable_noinline;

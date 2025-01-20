@@ -50,10 +50,10 @@
 
 // in order to get new D3D features that do not ship with older windows version
 // or to work with experimental features the DirectX 12 Agility SDK can used.
-// An easy way to do that is via nuget in Viusal Studio. Seach for `DirectX 12 Agility`
+// An easy way to do that is via nuget in Visual Studio. Search for `DirectX 12 Agility`
 // Note, the version number specified in `D3D12SDKVersion` might need adjustment.
 // (see https://devblogs.microsoft.com/directx/gettingstarted-dx12agility)
-// The Cmake scripts also allows to integrate the agility SDK by extracing a nuget package.
+// The CMake scripts also allows to integrate the agility SDK by extracting a nuget package.
 // The latter approach also allows to use preview versions of the agility SDK.
 #if defined(AGILITY_SDK_ENABLED) && defined(D3D12_PREVIEW_SDK_VERSION)
     extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = D3D12_PREVIEW_SDK_VERSION; }
@@ -263,10 +263,12 @@ bool Example_dxr::load()
 
     // load the module that contains the material type
     mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(sdk.create_context());
+    mi::base::Handle<const mi::IString> readable_material_type_module(
+        sdk.get_factory().decode_name(options->material_type_module.c_str()));
     sdk.get_impexp_api().load_module(
         sdk.get_transaction().get(), options->material_type_module.c_str(), context.get());
     if (!sdk.log_messages("Loading module for the selected material_type failed: " +
-        options->material_type_module, context.get()))
+        std::string(readable_material_type_module->get_c_str()), context.get()))
         return false;
 
     // get the predfined material type and check if it's supported
@@ -1496,8 +1498,8 @@ void Example_dxr::update(const Update_args& args)
 
     // get the GUI instance of the main window
     mi::examples::gui::Root* gui = get_options()->no_gui ? nullptr : get_window()->get_gui();
-    if (gui)
-        gui->new_frame(); // required even when the main GUI is not rendered
+    if (gui && m_gui_mode != Example_dxr_gui_mode::None)
+        gui->new_frame();
 
     // skip updates and rendering if the scene changing (geometry, materials, ...)
     if (args.scene_is_updating)

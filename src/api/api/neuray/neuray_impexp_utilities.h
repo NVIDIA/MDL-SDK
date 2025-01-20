@@ -140,9 +140,9 @@ public:
     /// Convenience function used by Impexp_utilities, Import_api_impl, and Mdl_impexp_api_impl.
     ///
     /// \param path            The path to be handled by the reader.
-    /// \return                A reader for the URI, or \c NULL in case of errors, e.g., the URI is
-    ///                        invalid, or the URI is valid, but the file denoted by the URI could
-    ///                        not be opened.
+    /// \return                A reader for the URI, or \c nullptr in case of errors, e.g., the URI
+    ///                        is invalid, or the URI is valid, but the file denoted by the URI
+    ///                        could not be opened.
     static mi::neuraylib::IReader* create_reader( const std::string& path);
 
     /// Creates random-access reader for the given URI.
@@ -152,9 +152,9 @@ public:
     /// \param uri             The URI to be handled by the reader.
     /// \param path            The method returns the path that was considered for the URI \p uri.
     ///                        The empty string is returned for invalid URIs.
-    /// \return                A reader for the URI, or \c NULL in case of errors, e.g., the URI is
-    ///                        invalid, or the URI is valid, but the file denoted by the URI could
-    ///                        not be opened.
+    /// \return                A reader for the URI, or \c nullptr in case of errors, e.g., the URI
+    ///                        is invalid, or the URI is valid, but the file denoted by the URI
+    ///                        could not be opened.
     static mi::neuraylib::IReader* create_reader( const std::string& uri, std::string& path);
 
     /// Creates random-access reader for the given data.
@@ -172,9 +172,9 @@ public:
     /// Convenience function used by Impexp_utilities, Export_api_impl, and Mdl_impexp_api_impl.
     ///
     /// \param path            The path to be handled by the writer.
-    /// \return                A writer for the URI, or \c NULL in case of errors, e.g., the URI is
-    ///                        invalid, or the URI is valid, but the file denoted by the URI could
-    ///                        not be opened.
+    /// \return                A writer for the URI, or \c nullptr in case of errors, e.g., the URI
+    ///                        is invalid, or the URI is valid, but the file denoted by the URI
+    ///                        could not be opened.
     static mi::neuraylib::IWriter* create_writer( const std::string& path);
 
     /// Creates random-access writer for the given URI.
@@ -184,9 +184,9 @@ public:
     /// \param uri             The URI to be handled by the writer.
     /// \param path            The method returns the path that was considered for the URI \p uri.
     ///                        The empty string is returned for invalid URIs.
-    /// \return                A writer for the URI, or \c NULL in case of errors, e.g., the URI is
-    ///                        invalid, or the URI is valid, but the file denoted by the URI could
-    ///                        not be opened.
+    /// \return                A writer for the URI, or \c nullptr in case of errors, e.g., the URI
+    ///                        is invalid, or the URI is valid, but the file denoted by the URI
+    ///                        could not be opened.
     static mi::neuraylib::IWriter* create_writer( const std::string& uri, std::string& path);
 
     /// Creates an instance of #mi::neuraylib::IImport_result_ext from an instance of
@@ -237,7 +237,7 @@ public:
     ///
     /// If the URI of \p parent_state is absolute and the URI \p child is relative, then the
     /// returned URI is constructed as set forth in RFC 2396. Otherwise, (incl. \p parent_state
-    /// being \c NULL), \p child is returned.
+    /// being \c nullptr), \p child is returned.
     ///
     /// Note that in this context \p child is consider as relative URI if it starts with
     /// "${shader}" (even though it would be considered as relative URI in a strict
@@ -382,7 +382,7 @@ public:
     /// \param tags             The elements to be exported.
     /// \param recurse          Indicates whether dependencies are to be included.
     /// \param time_stamp       Only elements that have been changed since the time stamp are
-    ///                         included (or \c NULL to include all elements).
+    ///                         included (or \c nullptr to include all elements).
     /// \param shortcuts_mdl    If \c true, some MDL dependencies are skipped/simplified, e.g.,
     ///                         dependencies of MDL modules are skipped, and definitions are
     ///                         replaced by their module.
@@ -405,7 +405,7 @@ private:
     /// \param tag              The element to be exported.
     /// \param recurse          Indicates whether dependencies are to be included.
     /// \param time_stamp       Only elements that have been changed since the time stamp are
-    ///                         included (or \c NULL to include all elements).
+    ///                         included (or \c nullptr to include all elements).
     /// \param shortcuts_mdl    If \c true, some MDL dependencies are skipped/simplified, e.g.,
     ///                         dependencies of MDL modules are skipped, and definitions are
     ///                         replaced by their module.

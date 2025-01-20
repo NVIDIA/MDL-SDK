@@ -189,10 +189,10 @@ bool VM_sel_proxy_model::filterAcceptsRow(int sourceRow, const QModelIndex& sour
         ? FFilter_level::FL_HIDDEN : FFilter_level::FL_NONE;
 
     // combine
-    const FFilter_level accepted = static_cast<const FFilter_level>(
+    const FFilter_level accepted = static_cast<FFilter_level>(
           static_cast<size_t>(accepted_first) 
-        + static_cast<const size_t>(accepted_second)
-        + static_cast<const size_t>(accepted_thrid));
+        + static_cast<size_t>(accepted_second)
+        + static_cast<size_t>(accepted_thrid));
 
     emit filtered_element(element, accepted);
 

@@ -177,7 +177,7 @@ template <typename Bitfield, typename StorageType> struct Impl {
   /// an`IntegerType`.
   static IntegerType extract(StorageType Packed) {
     const StorageType StorageValue = (Packed & Mask) >> Bitfield::Shift;
-    return C::unpack(StorageValue);
+    return C::unpack(static_cast<IntegerType>(StorageValue));
   }
 
   /// Interprets bits between `FirstBit` and `LastBit` of `Packed` as

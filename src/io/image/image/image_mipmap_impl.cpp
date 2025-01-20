@@ -32,6 +32,8 @@
 #include "image_canvas_impl.h"
 #include "image_mipmap_impl.h"
 
+#include <filesystem>
+
 #include <mi/base/handle.h>
 #include <mi/math/color.h>
 #include <mi/base/types.h>
@@ -44,8 +46,9 @@
 #include <base/lib/log/i_log_logger.h>
 #include <base/hal/disk/disk_file_reader_writer_impl.h>
 #include <base/hal/disk/disk_memory_reader_writer_impl.h>
-#include <base/hal/hal/i_hal_ospath.h>
 
+
+namespace fs = std::filesystem;
 
 namespace MI {
 
@@ -118,8 +121,8 @@ Mipmap_impl::Mipmap_impl(
         return;
     }
 
-    std::string extension = HAL::Ospath::get_ext( filename);
-    if( !extension.empty() && extension[0] == '.' )
+    std::string extension = fs::u8path( filename).extension().u8string();
+    if( !extension.empty())
         extension = extension.substr( 1);
 
     SYSTEM::Access_module<Image_module> image_module( false);
@@ -208,7 +211,7 @@ Mipmap_impl::Mipmap_impl(
         return;
     }
 
-    std::string extension = HAL::Ospath::get_ext( member_filename);
+    std::string extension = fs::u8path( member_filename).extension().u8string();
     if( !extension.empty() && extension[0] == '.' )
         extension = extension.substr( 1);
 

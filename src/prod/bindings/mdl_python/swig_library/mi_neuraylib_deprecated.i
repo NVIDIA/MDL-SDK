@@ -13,7 +13,7 @@
 //   here try to handle as many parameters directly at the beginning of the signature
 
 %pythoncode %{
-    def isIInterfaceOfOrNone(value: "IInterface", type) -> bool:
+    def _isIInterfaceOfOrNone(value: "IInterface", type) -> bool:
         """Improves readability by combining the two checks."""
         if value == None:  # None could be a default and is okay
             return True
@@ -27,23 +27,24 @@
 // MI_NEURAYLIB_DEPRECATED_15_1
 // ----------------------------------------------------------------------------
 %ignore mi::neuraylib::IBaker::bake_texture;
-%rename(_bake_texture) mi::neuraylib::IBaker::bake_texture(ICanvas*,Float32,Float32,Float32,Float32,Uint32) const;
+%rename(_bake_texture) mi::neuraylib::IBaker::bake_texture(ICanvas*,Float32,Float32,Float32,Float32,Float32,Uint32) const;
 %extend SmartPtr<mi::neuraylib::IBaker> {
     %pythoncode %{
 
-        def _deprecated_bake_texture(self, canvas: "ICanvas", min_u: float = 0.0, max_u: float = 1.0, min_v: float = 0.0, max_v: float = 1.0, samples: int = 1) -> int:
-            if isIInterfaceOfOrNone(canvas, ICanvas) and \
+        def _deprecated_bake_texture(self, canvas: "ICanvas", min_u: float = 0.0, max_u: float = 1.0, min_v: float = 0.0, max_v: float = 1.0, animation_time: float = 0.0, samples: int = 1) -> int:
+            if _isIInterfaceOfOrNone(canvas, ICanvas) and \
                 isinstance(min_u, float) and \
                 isinstance(max_u, float) and \
                 isinstance(min_v, float) and \
                 isinstance(max_v, float) and \
+                isinstance(animation_time, float) and \
                 isinstance(samples, int):
                 warnings.warn("Breaking change in `IBaker.bake_texture`. Add all parameters explicitly.", DeprecationWarning)
-                return self._bake_texture(canvas, min_u, max_u, min_v, max_v, samples)
+                return self._bake_texture(canvas, min_u, max_u, min_v, max_v, animation_time, samples)
             raise TypeError("Wrong argument types passed to `IBaker.bake_texture`.")
 
-        @post_swig_move_to_end_of_class
-        @copy_docs_from(_bake_texture)
+        @_post_swig_move_to_end_of_class
+        @_copy_docs_from(_bake_texture)
         def bake_texture(self, canvas: "ICanvas", *args, **kwargs) -> int:
             try:
                 return self._bake_texture(canvas, *args, **kwargs)
@@ -68,15 +69,15 @@
 
     %pythoncode %{
 
-        @post_swig_move_to_end_of_class
-        @copy_docs_from(_create)
+        @_post_swig_move_to_end_of_class
+        @_copy_docs_from(_create)
         def create(self, type_name: str, *args, **kwargs):
             if len(args) > 0 or len(kwargs) > 0:
                 warnings.warn("Breaking change in `ITransaction.create`. Optional arguments can not be passed anymore.", DeprecationWarning)
             return self._create(type_name)
 
-        @post_swig_move_to_end_of_class
-        @copy_docs_from(_create_as)
+        @_post_swig_move_to_end_of_class
+        @_copy_docs_from(_create_as)
         def create_as(self, type, type_name: str, *args, **kwargs):
             if len(args) > 0 or len(kwargs) > 0:
                 warnings.warn("Breaking change in `ITransaction.create_as`, Optional arguments can not be passed anymore.", DeprecationWarning)
@@ -93,21 +94,21 @@
 
         def _deprecated_add_function(self, name: str, body: "IExpression", parameters: "IType_list", defaults: "IExpression_list", parameter_annotations: "IAnnotation_list", annotations: "IAnnotation_block", return_annotations: "IAnnotation_block", is_exported: bool, frequency_qualifier: "IType.Modifier", context: "IMdl_execution_context") -> int:
             if isinstance(name, str) and \
-                isIInterfaceOfOrNone(body, IExpression) and \
-                isIInterfaceOfOrNone(parameters, IType_list) and \
-                isIInterfaceOfOrNone(defaults, IExpression_list) and \
-                isIInterfaceOfOrNone(parameter_annotations, IAnnotation_list) and \
-                isIInterfaceOfOrNone(annotations, IAnnotation_block) and \
-                isIInterfaceOfOrNone(return_annotations, IAnnotation_block) and \
+                _isIInterfaceOfOrNone(body, IExpression) and \
+                _isIInterfaceOfOrNone(parameters, IType_list) and \
+                _isIInterfaceOfOrNone(defaults, IExpression_list) and \
+                _isIInterfaceOfOrNone(parameter_annotations, IAnnotation_list) and \
+                _isIInterfaceOfOrNone(annotations, IAnnotation_block) and \
+                _isIInterfaceOfOrNone(return_annotations, IAnnotation_block) and \
                 isinstance(is_exported, bool) and \
                 isinstance(frequency_qualifier, IType.Modifier) and \
-                isIInterfaceOfOrNone(context, IMdl_execution_context):
+                _isIInterfaceOfOrNone(context, IMdl_execution_context):
                 warnings.warn("Breaking change in `IMdl_module_builder.add_function`. Add the two new parameters: `temporaries` and `is_declarative`.", DeprecationWarning)
                 return self._add_function(name, body, None, parameters, defaults, parameter_annotations, annotations, return_annotations, is_exported, False, frequency_qualifier, context)
             raise TypeError("Wrong argument types passed to `IMdl_module_builder.add_function`.")
 
-        @post_swig_move_to_end_of_class
-        @copy_docs_from(_add_function)
+        @_post_swig_move_to_end_of_class
+        @_copy_docs_from(_add_function)
         def add_function(self, name: str, body: "IExpression", *args, **kwargs) -> int:
             try:
                 return self._add_function(name, body, *args, **kwargs)
@@ -117,18 +118,18 @@
 
         def _deprecated_add_struct_type(self, name: str, fields: "IType_list", field_defaults: "IExpression_list", field_annotations: "IAnnotation_list", annotations: "IAnnotation_block", is_exported: bool, context: "IMdl_execution_context") -> int:
             if isinstance(name, str) and \
-                isIInterfaceOfOrNone(fields, IType_list) and \
-                isIInterfaceOfOrNone(field_defaults, IExpression_list) and \
-                isIInterfaceOfOrNone(field_annotations, IAnnotation_list) and \
-                isIInterfaceOfOrNone(annotations, IAnnotation_block) and \
+                _isIInterfaceOfOrNone(fields, IType_list) and \
+                _isIInterfaceOfOrNone(field_defaults, IExpression_list) and \
+                _isIInterfaceOfOrNone(field_annotations, IAnnotation_list) and \
+                _isIInterfaceOfOrNone(annotations, IAnnotation_block) and \
                 isinstance(is_exported, bool) and \
-                isIInterfaceOfOrNone(context, IMdl_execution_context):
+                _isIInterfaceOfOrNone(context, IMdl_execution_context):
                 warnings.warn("Breaking change in `IMdl_module_builder.add_struct_type`. Add the two new parameters: `is_declarative` and `struct_category`.", DeprecationWarning)
                 return self._add_struct_type(name, fields, field_defaults, field_annotations, annotations, is_exported, False, None, context)
             raise TypeError("Wrong argument types passed to `IMdl_module_builder.add_struct_type`.")
 
-        @post_swig_move_to_end_of_class
-        @copy_docs_from(_add_struct_type)
+        @_post_swig_move_to_end_of_class
+        @_copy_docs_from(_add_struct_type)
         def add_struct_type(self, name: str, fields: "IType_list", field_defaults: "IExpression_list", field_annotations: "IAnnotation_list", annotations: "IAnnotation_block", is_exported: bool, *args, **kwargs) -> int:
             try:
                 return self._add_struct_type(name, fields, field_defaults, field_annotations, annotations, is_exported, *args, **kwargs)
@@ -140,17 +141,17 @@
         def _deprecated_add_variant(self, name: str, prototype_name: str, defaults: "IExpression_list", annotations: "IAnnotation_block", return_annotations: "IAnnotation_block", is_exported: bool, context: "IMdl_execution_context") -> int:
             if isinstance(name, str) and \
                 isinstance(prototype_name, str) and \
-                isIInterfaceOfOrNone(defaults, IExpression_list) and \
-                isIInterfaceOfOrNone(annotations, IAnnotation_block) and \
-                isIInterfaceOfOrNone(return_annotations, IAnnotation_block) and \
+                _isIInterfaceOfOrNone(defaults, IExpression_list) and \
+                _isIInterfaceOfOrNone(annotations, IAnnotation_block) and \
+                _isIInterfaceOfOrNone(return_annotations, IAnnotation_block) and \
                 isinstance(is_exported, bool) and \
-                isIInterfaceOfOrNone(context, IMdl_execution_context):
+                _isIInterfaceOfOrNone(context, IMdl_execution_context):
                 warnings.warn("Breaking change in `IMdl_module_builder.add_variant`. Add the new parameter: `is_declarative`.", DeprecationWarning)
                 return self._add_variant(name, prototype_name, defaults, annotations, return_annotations, is_exported, False, context)
             raise TypeError("Wrong argument types passed to `IMdl_module_builder.add_variant`.")
 
-        @post_swig_move_to_end_of_class
-        @copy_docs_from(_add_variant)
+        @_post_swig_move_to_end_of_class
+        @_copy_docs_from(_add_variant)
         def add_variant(self, name: str, prototype_name: str, defaults: "IExpression_list", annotations: "IAnnotation_block", return_annotations: "IAnnotation_block", is_exported: bool, *args, **kwargs) -> int:
             try:
                 return self._add_variant(name, prototype_name, defaults, annotations, return_annotations, is_exported, *args, **kwargs)
@@ -184,8 +185,8 @@
     }
 
     %pythoncode{
-        @post_swig_move_to_end_of_class
-        @copy_docs_from(_export_canvas)
+        @_post_swig_move_to_end_of_class
+        @_copy_docs_from(_export_canvas)
         def export_canvas(self, filename: str, canvas: "ICanvas", *args, **kwargs) -> bool:
             try:
                 return self._export_canvas(filename, canvas, *args, **kwargs)

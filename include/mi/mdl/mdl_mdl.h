@@ -128,8 +128,9 @@ public:
         MDL_VERSION_1_7,                        ///< compile MDL 1.7
         MDL_VERSION_1_8,                        ///< compile MDL 1.8
         MDL_VERSION_1_9,                        ///< compile MDL 1.9
+        MDL_VERSION_1_10,                       ///< compile MDL 1.10
         MDL_VERSION_EXP,                        ///< experimental features
-        MDL_LATEST_VERSION = MDL_VERSION_1_9,   ///< always the latest fully supported version
+        MDL_LATEST_VERSION = MDL_VERSION_1_10,  ///< always the latest fully supported version
         MDL_DEFAULT_VERSION = MDL_VERSION_1_0,  ///< The default compiler version.
     };
 

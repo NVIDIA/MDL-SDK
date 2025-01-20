@@ -73,15 +73,15 @@ void test_generic( mi::neuraylib::ITransaction* transaction, const char* class_n
     // test create()
 
     mi::base::Handle<I> class_( transaction->create<I>( class_name));
-    if( !class_.is_valid_interface())
+    if( !class_)
         std::cerr << "Failed to create instance of class " << class_name << std::endl;
-    MI_CHECK( class_.is_valid_interface());
+    MI_CHECK( class_);
 
     // test store(), access() and edit() if it is a scene element and the name does not start with "__"
 
     mi::base::Handle<mi::neuraylib::IScene_element> scene_element(
         class_.template get_interface<mi::neuraylib::IScene_element>());
-    if( scene_element.is_valid_interface() && class_name[0] != '_' && class_name[1] != '_') {
+    if( scene_element && (class_name[0] != '_') && (class_name[1] != '_')) {
 
         std::string db_element_name = "instance_of_";
         db_element_name += class_name;
@@ -89,10 +89,10 @@ void test_generic( mi::neuraylib::ITransaction* transaction, const char* class_n
         MI_CHECK_EQUAL( 0, transaction->store( scene_element.get(), db_element_name.c_str()));
 
         mi::base::Handle<const I> access( transaction->access<I>( db_element_name.c_str()));
-        MI_CHECK( access.is_valid_interface());
+        MI_CHECK( access);
 
         mi::base::Handle<I> edit( transaction->edit<I>( db_element_name.c_str()));
-        MI_CHECK( edit.is_valid_interface());
+        MI_CHECK( edit);
     }
 }
 
@@ -103,11 +103,11 @@ void run_tests( mi::neuraylib::INeuray* neuray)
     {
         mi::base::Handle<mi::neuraylib::IDatabase> database(
             neuray->get_api_component<mi::neuraylib::IDatabase>());
-        MI_CHECK( database.is_valid_interface());
+        MI_CHECK( database);
 
         mi::base::Handle<mi::neuraylib::IScope> global_scope(
             database->get_global_scope());
-        MI_CHECK( global_scope.is_valid_interface());
+        MI_CHECK( global_scope);
         MI_CHECK_EQUAL( 0, global_scope->get_privacy_level());
 
         mi::base::Handle<mi::neuraylib::ITransaction> transaction( global_scope->create_transaction());
@@ -132,7 +132,7 @@ void run_tests( mi::neuraylib::INeuray* neuray)
 MI_TEST_AUTO_FUNCTION( test_class_factory )
 {
     mi::base::Handle<mi::neuraylib::INeuray> neuray( load_and_get_ineuray());
-    MI_CHECK( neuray.is_valid_interface());
+    MI_CHECK( neuray);
 
     {
         mi::base::Handle<mi::neuraylib::IDebug_configuration> debug_configuration(

@@ -72,14 +72,14 @@ Index 0: name = "foo1", count = 1
     Index 0: scope ID = 1, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 10, removal = 0, references = { }
 Index 1: name = "foo2", count = 2
     Index 0: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, references = { 1 }
-    Index 1: scope ID = 0, transaction ID = 0 (set), version = 3, pin count = 1, tag = 2, privacy level = 0, removal = 0, references = { 1 }
+    Index 1: scope ID = 0, transaction ID = 0 (set), version = 3, pin count = 1, tag = 2, privacy level = 0, removal = 0, references = { }
 
 Count of infos by distinct tags: 3
-Index 0: tag = 1, count = 1, pin count = 4, removed = 0
+Index 0: tag = 1, count = 1, pin count = 3, removed = 0
     Index 0: scope ID = 1, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 10, removal = 0, name = "foo1", references = { }
 Index 1: tag = 2, count = 2, pin count = 1, removed = 0
     Index 0: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, name = "foo2", references = { 1 }
-    Index 1: scope ID = 0, transaction ID = 0 (set), version = 3, pin count = 1, tag = 2, privacy level = 0, removal = 0, name = "foo2", references = { 1 }
+    Index 1: scope ID = 0, transaction ID = 0 (set), version = 3, pin count = 1, tag = 2, privacy level = 0, removal = 0, name = "foo2", references = { }
 Index 2: tag = 3, count = 1, pin count = 1, removed = 0
     Index 0: scope ID = 0, transaction ID = 0 (set), version = 2, pin count = 0, tag = 3, privacy level = 0, removal = 0, name = (null), references = { 1 }
 
@@ -100,13 +100,13 @@ Index 1: name = "foo2", count = 2
     Index 1: scope ID = 0, transaction ID = 0 (set), version = 3, pin count = 0, tag = 2, privacy level = 0, removal = 0, references = { 1 }
 
 Count of infos by distinct tags: 3
-Index 0: tag = 1, count = 1, pin count = 5, removed = 0
+Index 0: tag = 1, count = 1, pin count = 4, removed = 0
     Index 0: scope ID = 1, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 10, removal = 0, name = "foo1", references = { }
 Index 1: tag = 2, count = 2, pin count = 1, removed = 0
     Index 0: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, name = "foo2", references = { 1 }
     Index 1: scope ID = 0, transaction ID = 0 (set), version = 3, pin count = 0, tag = 2, privacy level = 0, removal = 0, name = "foo2", references = { 1 }
 Index 2: tag = 3, count = 2, pin count = 1, removed = 0
     Index 0: scope ID = 0, transaction ID = 0 (set), version = 2, pin count = 0, tag = 3, privacy level = 0, removal = 0, name = (null), references = { 1 }
-    Index 1: scope ID = 0, transaction ID = 0 (set), version = 4, pin count = 1, tag = 3, privacy level = 0, removal = 0, name = (null), references = { 1 }
+    Index 1: scope ID = 0, transaction ID = 0 (set), version = 4, pin count = 1, tag = 3, privacy level = 0, removal = 0, name = (null), references = { }
 
 

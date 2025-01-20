@@ -119,23 +119,34 @@ public:
     /// Clone a qualified name.
     IQualified_name *clone_name(IQualified_name const *qname) MDL_FINAL;
 
-    /// Promote a call from a MDL version to the target MDL version.
+    /// Compute the promotions rules when a call (represented by a definition) will be
+    /// promoted from one MDL version to a target version.
     ///
-    /// \param[in]  mod       the target module
-    /// \param[in]  major     the major version of the source module (that owns the call)
-    /// \param[in]  minor     the major version of the source module (that owns the call)
-    /// \param[in]  ref       the callee reference
-    /// \param[in]  modifier  a clone modifier for cloning expressions
-    /// \param[out] rules     output: necessary rules to modify the arguments of the call
+    /// \param[in] dst_version  the target version
+    /// \param[in] src_version  the version of the source module (that owns the call)
+    /// \param[in] def          the call definition
+    ///
+    /// \return necessary rules to modify the arguments of the call
+    static unsigned get_promotion_rules(
+        IMDL::MDL_version dst_version,
+        IMDL::MDL_version src_version,
+        IDefinition const *def);
+
+    /// Promote a call reference from a given MDL version to the target MDL version.
+    ///
+    /// \param[in]  dst_mod      the target module
+    /// \param[in]  src_version  the version of the source module (that owns the call)
+    /// \param[in]  ref          the callee reference
+    /// \param[in]  modifier     a clone modifier for cloning expressions
+    /// \param[out] rules        output: necessary rules to modify the arguments of the call
     ///
     /// \return the (potentially modified) callee reference
     static IExpression_reference const *promote_call_reference(
-        Module                      &mod,
-        int                         major,
-        int                         minor,
+        Module                      &dst_mod,
+        IMDL::MDL_version           src_version,
         IExpression_reference const *ref,
         IClone_modifier             *modifier,
-        unsigned                     &rules);
+        unsigned                    &rules);
 
 protected:
 

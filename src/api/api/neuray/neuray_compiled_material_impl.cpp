@@ -42,7 +42,7 @@
 #include "neuray_string_impl.h"
 
 #include <io/scene/mdl_elements/i_mdl_elements_compiled_material.h>
-#include <io/scene/mdl_elements/mdl_elements_utilities.h>
+#include <io/scene/mdl_elements/mdl_elements_utilities.h> // core_opacity_to_ext_opacity()
 #include <io/scene/scene/i_scene_journal_types.h>
 
 namespace MI {

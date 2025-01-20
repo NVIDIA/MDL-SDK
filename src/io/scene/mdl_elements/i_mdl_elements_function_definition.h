@@ -291,7 +291,16 @@ public:
     /// Returns the core semantic of this definition.
     mi::mdl::IDefinition::Semantics get_core_semantic() const;
 
+    /// Returns the core DAG and the index of this definition.
+    ///
+    /// \note This function returns a pointer that is owned by the DB element for the corresponding
+    ///        module. Therefore, DB elements of type MDL module are not flushable.
+    const mi::mdl::IGenerated_code_dag* get_core_code_dag(
+        DB::Transaction* transaction, mi::Size& definition_index) const;
+
     /// Returns the core type of an parameter.
+    ///
+    /// \note Does not support template-like functions.
     ///
     /// \note The return type is an owned interface, not a \em reference-counted interface.
     ///
@@ -301,10 +310,14 @@ public:
 
     /// Returns the core return type.
     ///
+    /// \note Does not support template-like functions.
+    ///
     /// \note The return type is an owned interface, not a \em reference-counted interface.
     ///
     /// \note This function returns a pointer that is owned by the DB element for the corresponding
-    ///        module. Therefore, DB elements of type MDL module are not flushable.
+    ///       module. Therefore, DB elements of type MDL module are not flushable.
+    ///
+    /// \note Prefer #get_core_dag() to avoid repeated lookups for all parameter indices.
     const mi::mdl::IType* get_core_parameter_type(
         DB::Transaction* transaction, mi::Size index) const;
 
@@ -312,7 +325,7 @@ public:
     /// simple name.
     std::string get_mdl_name_without_parameter_types() const;
 
-    /// Returns the original function name (or \c NULL if this definition is not re-exported).
+    /// Returns the original function name (or \c nullptr if this definition is not re-exported).
     const char* get_mdl_original_name() const;
 
     /// Returns the database name of the module this definition belongs to.
@@ -344,7 +357,9 @@ public:
 
     /// Improved version of SERIAL::Serializable::dump().
     ///
-    /// \param transaction   The DB transaction (for name lookups and tag versions). Can be \c NULL.
+
+    /// \param transaction   The DB transaction (for name lookups and tag versions). Can be
+    ///                      \c nullptr.
     void dump( DB::Transaction* transaction) const;
 
     // methods of SERIAL::Serializable
@@ -383,7 +398,7 @@ private:
         DB::Transaction* transaction,
         const IExpression_list* arguments,
         bool allow_ek_parameter,
-        bool allow_ek_direct_call,
+        bool allow_ek_direct_call_and_temporaries,
         bool create_direct_calls,
         bool copy_immutable_calls,
         mi::Sint32* errors) const;
@@ -394,7 +409,7 @@ private:
         DB::Transaction* transaction,
         const IExpression_list* arguments,
         bool allow_ek_parameter,
-        bool allow_ek_direct_call,
+        bool allow_ek_direct_call_and_temporaries,
         bool create_direct_calls,
         bool copy_immutable_calls,
         mi::Sint32* errors) const;
@@ -475,6 +490,9 @@ private:
     std::vector<std::vector<mi::Size>> m_enable_if_users;
 
     mi::base::Uuid m_function_hash;               ///< The function hash if any.
+
+    /// Indicates whether resources are supposed to be loaded into the DB.
+    bool m_resolve_resources;
 };
 
 } // namespace MDL

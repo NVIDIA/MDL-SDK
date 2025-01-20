@@ -590,7 +590,7 @@ public:
     // --------------------------------------------------------------------------------------------
 
     /// allows to override the display name. E.g., for array elements or struct fields
-    const void set_display_name(const std::string& value)
+    void set_display_name(const std::string& value)
     {
         m_display_name = value;
     }

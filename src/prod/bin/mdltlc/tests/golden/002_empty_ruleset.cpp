@@ -65,14 +65,14 @@ DAG_node const* Empty_ruleset::matcher(
     IDistiller_plugin_api &e,
     DAG_node const *node,
     const mi::mdl::Distiller_options *options,
-    Rule_result_code &result_code)const
+    Rule_result_code &result_code) const
 {
-    switch (e.get_selector(node)) {
-    default:
-        break;
-    }
+    auto match_rule0 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
 
-    return node;
+    IDistiller_plugin_api::Match_properties node_props;
+    e.get_match_properties(node, node_props);
+    return match_rule0(node, node_props);
+
 }
 
 bool Empty_ruleset::postcond(

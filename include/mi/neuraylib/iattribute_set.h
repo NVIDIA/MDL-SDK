@@ -318,9 +318,11 @@ mi_static_assert( sizeof( Propagation_type) == sizeof( Uint32));
 ///   attribute influences the world-to-object transformation of the projector. This attribute is
 ///   inherited as usual with the exception that the propagation type
 ///   #mi::neuraylib::PROPAGATION_OVERRIDE is not supported.
-/// - #mi::IRef \b active_projector \n
-///   Specifies the active projector. Defaults to the (inherited) first element of the \c projector
-///   attribute. This attribute allows to specify a projector different from the inherited default,
+/// - #mi::IRef \b active_projector or #mi::IArray \b active_projector \n
+///   Specifies the active projector(s). If more than one projector is given, the renderer may
+///   choose one projector per uv-space (up to four) from this list.
+///   The attribute defaults to the (inherited) elements of the \c projector
+///   attribute. It allows to specify projectors different from the inherited default,
 ///   or to disable the inherited default. Only projectors that appear in \c projectors attributes
 ///   on the path from this node to the root are feasible.
 ///
@@ -402,7 +404,7 @@ public:
     ///                     \c "."
     /// \param type         The type of the attribute. See \ref mi_neuray_types for a list of
     ///                     supported attribute types.
-    /// \return             A pointer to the created attribute, or \c NULL in case of failure.
+    /// \return             A pointer to the created attribute, or \c nullptr in case of failure.
     ///                     Reasons for failure are:
     ///                     - \p name or \p type is invalid,
     ///                     - there is already an attribute with the name \p name, or
@@ -435,7 +437,7 @@ public:
     ///                     \c "."
     /// \param type         The type of the attribute. See \ref mi_neuray_types for a list of
     ///                     supported attribute types.
-    /// \return             A pointer to the created attribute, or \c NULL in case of failure.
+    /// \return             A pointer to the created attribute, or \c nullptr in case of failure.
     ///                     Reasons for failure are:
     ///                     - \p name or \p type is invalid,
     ///                     - there is already an attribute with the name \p name,
@@ -476,7 +478,7 @@ public:
     /// \tparam T           The interface type of the attribute.
     /// \param name         The name of the attribute. The name must not contain \c "[", \c "]", or
     ///                     \c "."
-    /// \return             A pointer to the created attribute, or \c NULL in case of failure.
+    /// \return             A pointer to the created attribute, or \c nullptr in case of failure.
     ///                     Reasons for failure are:
     ///                     - \p name or \p type is invalid,
     ///                     - there is already an attribute with the name \p name, or
@@ -502,7 +504,7 @@ public:
     ///                     the index in square brackets to the attribute name. For a structure
     ///                     member add a dot and the name of the structure member to the attribute
     ///                     name.
-    /// \return             A pointer to the attribute, or \c NULL if there is no attribute with
+    /// \return             A pointer to the attribute, or \c nullptr if there is no attribute with
     ///                     the name \p name.
     virtual const IData* access_attribute( const char* name) const = 0;
 
@@ -520,7 +522,7 @@ public:
     ///                     the index in square brackets to the attribute name. For a structure
     ///                     member add a dot and the name of the structure member to the attribute
     ///                     name.
-    /// \return             A pointer to the attribute, or \c NULL if there is no attribute with
+    /// \return             A pointer to the attribute, or \c nullptr if there is no attribute with
     ///                     the name \p name or if \p T does not match the attribute's type.
     template<class T>
     const T* access_attribute( const char* name) const
@@ -540,7 +542,7 @@ public:
     ///                     the index in square brackets to the attribute name. For a structure
     ///                     member add a dot and the name of the structure member to the attribute
     ///                     name.
-    /// \return             A pointer to the attribute, or \c NULL if there is no attribute with
+    /// \return             A pointer to the attribute, or \c nullptr if there is no attribute with
     ///                     the name \p name.
     virtual IData* edit_attribute( const char* name) = 0;
 
@@ -558,7 +560,7 @@ public:
     ///                     the index in square brackets to the attribute name. For a structure
     ///                     member add a dot and the name of the structure member to the attribute
     ///                     name.
-    /// \return             A pointer to the attribute, or \c NULL if there is no attribute with
+    /// \return             A pointer to the attribute, or \c nullptr if there is no attribute with
     ///                     the name \p name or if \p T does not match the attribute's type.
     template<class T>
     T* edit_attribute( const char* name)
@@ -592,7 +594,7 @@ public:
     ///                     the index in square brackets to the attribute name. For a structure
     ///                     member add a dot and the name of the structure member to the attribute
     ///                     name.
-    /// \return             The type name of the attribute (or part thereof), or \c NULL if there
+    /// \return             The type name of the attribute (or part thereof), or \c nullptr if there
     ///                     is no attribute with the name \p name.
     ///
     /// \note The return value of this method is only valid until the next call of this method
@@ -603,7 +605,7 @@ public:
     ///
     /// \return
     ///                     -  0: Success.
-    ///                     - -1: Invalid parameters (\c NULL pointer or invalid enum value).
+    ///                     - -1: Invalid parameters (\c nullptr or invalid enum value).
     ///                     - -2: There is no attribute with name \p name.
     virtual Sint32 set_attribute_propagation( const char* name, Propagation_type value) = 0;
 
@@ -615,8 +617,8 @@ public:
     /// Returns the name of the attribute indicated by \p index.
     ///
     /// \param index        The index of the attribute.
-    /// \return             The name of the attribute indicated by \p index, or \c NULL if \p index
-    ///                     is out of bounds.
+    /// \return             The name of the attribute indicated by \p index, or \c nullptr if \p
+    ///                     index is out of bounds.
     virtual const char* enumerate_attributes( Sint32 index) const = 0;
 };
 

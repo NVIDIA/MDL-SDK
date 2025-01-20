@@ -87,7 +87,7 @@ public:
     ///
     /// \param size          The size of the desired lookahead.
     /// \param[out] buffer   The address of a pointer to the buffer with the lookahead data. The
-    ///                      address might be \c NULL if no lookahead is available, in which case
+    ///                      address might be \c nullptr if no lookahead is available, in which case
     ///                      the return value is either 0 or -1. The buffer is owned by the reader
     ///                      and must not be changed or deleted.
     /// \return              The number of bytes made available in the buffer, which may larger

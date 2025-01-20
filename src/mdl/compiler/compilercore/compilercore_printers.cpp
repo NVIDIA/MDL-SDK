@@ -52,6 +52,7 @@
 #include <cstdarg>
 #include <cassert>
 #include <cmath>
+#include <inttypes.h>
 
 #include "compilercore_cc_conf.h"
 #include "compilercore_mangle.h"
@@ -746,10 +747,22 @@ void Printer::print(bool b)
     m_type_printer.write(b ? "true" : "false");
 }
 
-// Print long.
-void Printer::print(long n)
+// Print unsigned.
+void Printer::print(unsigned n)
 {
-    printf("%ld", n);
+    printf("%u", n);
+}
+
+// Print signed.
+void Printer::print(int n)
+{
+    printf("%d", n);
+}
+
+// Print size_t.
+void Printer::print(size_t n)
+{
+    printf("%" PRIuPTR, n);
 }
 
 // Print double.
@@ -1046,7 +1059,7 @@ void Printer::print(IValue const *value)
         {
             IValue_int const *v = cast<IValue_int>(value);
 
-            print(long(v->get_value()));
+            print(v->get_value());
             break;
         }
     case IValue::VK_ENUM:
@@ -1064,7 +1077,7 @@ void Printer::print(IValue const *value)
                 MDL_ASSERT(!"could not find enum value name");
                 print(e_type);
                 print('(');
-                print(long(idx));
+                print(idx);
                 print(')');
             }
             break;
@@ -1562,7 +1575,7 @@ void Printer::print(IExpression const *expr, int priority)
 
             int arg_priority = get_priority(IExpression::OK_TERNARY);
             int count = c->get_argument_count();
-            bool vertical = (1 < count) && is<IArgument_named>(c->get_argument(0));
+            bool vertical = (2 < count) || (1 < count && is<IArgument_named>(c->get_argument(0)));
             if (vertical) {
                 ++m_indent;
             }
@@ -2667,9 +2680,9 @@ void Printer::print_message(IMessage const *message, IMessage::Severity sev)
     int column = pos->get_start_column();
     if (line > 0) {
         print('(');
-        print(long(line));
+        print(line);
         print(',');
-        print(long(column));
+        print(column);
         print(')');
         has_prefix = true;
     }
@@ -2770,13 +2783,13 @@ void Printer::print_position(IStatement const *stmt)
     if (m_show_positions && !is<IStatement_declaration>(stmt)) {
         Position const &pos = stmt->access_position();
         print("// ");
-        print(long(pos.get_start_line()));
+        print(pos.get_start_line());
         print('(');
-        print(long(pos.get_start_column()));
+        print(pos.get_start_column());
         print(") - ");
-        print(long(pos.get_end_line()));
+        print(pos.get_end_line());
         print('(');
-        print(long(pos.get_end_column()));
+        print(pos.get_end_column());
         print(')');
         nl();
     }
@@ -2787,13 +2800,13 @@ void Printer::print_position(IDeclaration const *decl)
     if (m_show_positions) {
         Position const &pos = decl->access_position();
         print("// ");
-        print(long(pos.get_start_line()));
+        print(pos.get_start_line());
         print('(');
-        print(long(pos.get_start_column()));
+        print(pos.get_start_column());
         print(") - ");
-        print(long(pos.get_end_line()));
+        print(pos.get_end_line());
         print('(');
-        print(long(pos.get_end_column()));
+        print(pos.get_end_column());
         print(')');
         nl();
     }
@@ -2840,6 +2853,9 @@ void Printer::print_mdl_versions(IDefinition const *idef, bool insert)
             case IMDL::MDL_VERSION_1_9:
                 print(" Since MDL 1.9");
                 break;
+            case IMDL::MDL_VERSION_1_10:
+                print(" Since MDL 1.10");
+                break;
             case IMDL::MDL_VERSION_EXP:
                 print(" Since MDL experimental");
                 break;
@@ -2873,6 +2889,9 @@ void Printer::print_mdl_versions(IDefinition const *idef, bool insert)
                 break;
             case IMDL::MDL_VERSION_1_9:
                 print(" Removed in MDL 1.9");
+                break;
+            case IMDL::MDL_VERSION_1_10:
+                print(" Removed in MDL 1.10");
                 break;
             case IMDL::MDL_VERSION_EXP:
                 print(" Removed in MDL experimental");

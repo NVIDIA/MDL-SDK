@@ -71,7 +71,8 @@ public:
         mi::neuraylib::Df_data_kind kind,
         mi::Size &rx,
         mi::Size &ry,
-        mi::Size &rz) const final;
+        mi::Size &rz,
+        const char *&pixel_type) const final;
 
     // internal methods
 

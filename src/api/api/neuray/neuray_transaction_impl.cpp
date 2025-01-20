@@ -47,8 +47,9 @@
 #include <mi/neuraylib/istring.h>
 #include <mi/neuraylib/iuser_class.h>
 
-#include <sstream>
 #include <cstring>
+#include <set>
+#include <sstream>
 
 #include <base/data/db/i_db_access.h>
 #include <base/data/db/i_db_tag.h>
@@ -187,7 +188,7 @@ mi::Sint32 Transaction_impl::store(
 
     // handle built-in classes
     mi::base::Handle<IDb_element> db_element( interface->get_interface<IDb_element>());
-    if( db_element.is_valid_interface()) {
+    if( db_element) {
 #ifdef VERBOSE_TX
         LOG::mod_log->info( SYSTEM::M_NEURAY_API, LOG::Mod_log::C_DATABASE,
             "TX %u storing \"%s\" ...", m_id_as_uint, name);
@@ -359,7 +360,7 @@ const char* Transaction_impl::name_of(
 
 
     mi::base::Handle<const IDb_element> db_element( api_class->get_interface<IDb_element>());
-    if( !db_element.is_valid_interface())
+    if( !db_element)
         return nullptr;
 
     DB::Tag tag = db_element->get_tag();
@@ -455,7 +456,7 @@ mi::IArray* Transaction_impl::list_elements(
     for( size_t i = 0; type_names && i < type_names->get_length(); ++i) {
         mi::base::Handle<const mi::IString> type_name_istring(
             type_names->get_element<mi::IString>( i));
-        if( !type_name_istring.is_valid_interface()) {
+        if( !type_name_istring) {
             const char* s = "  type_names[%" FMT_SIZE_T "]: (invalid interface type)";
             LOG::mod_log->vdebug( M_NEURAY_API, LOG::Mod_log::C_MISC, s, i);
             continue;
@@ -685,9 +686,11 @@ void Transaction_impl::list_elements_internal(
     DB::Access<DB::Element_base> element( tag, m_db_transaction);
     DB::Tag_set references;
     element->get_references( &references);
+    std::set<DB::Tag> ordered_references;
+    ordered_references.insert( references.begin(), references.end());
 
     // call recursively for all references not yet in tags_seen
-    for( auto reference : references)
+    for( auto reference : ordered_references)
         if( tags_seen.find( reference) == tags_seen.end()) {
             tags_seen.insert( reference);
             list_elements_internal( reference, name_regex, class_ids, result, tags_seen);

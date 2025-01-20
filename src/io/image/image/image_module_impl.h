@@ -278,7 +278,7 @@ private:
     /// \param pixel_type   The pixel type of the given canvas or mipmap.
     /// \param plugin       The plugin that will be used for export.
     /// \return             The pixel type that should be used for export. It is one of the pixel
-    ///                     types supported by the plugin (or \c NULL in case of failure).
+    ///                     types supported by the plugin (or \c nullptr in case of failure).
     static const char* find_best_pixel_type_for_export(
         const char* pixel_type,
         mi::neuraylib::IImage_plugin* plugin);

@@ -58,6 +58,8 @@ public:
     virtual const mi::neuraylib::ITarget_code* get_gpu_target_code() const = 0;
 
     virtual const mi::neuraylib::ITarget_code* get_cpu_target_code() const = 0;
+
+    virtual bool is_uniform() const = 0;
 };
 
 enum Baker_state_flags {
@@ -73,7 +75,7 @@ public:
     union Constant_result {
         bool                    b;
         mi::Float32             f;
-        mi::Float32_3::Pod_type v;
+        mi::Float32_4::Pod_type v;
         mi::Spectrum_struct     s;
     };
 
@@ -120,7 +122,23 @@ public:
         mi::Float32 max_u,
         mi::Float32 min_v,
         mi::Float32 max_v,
+        mi::Float32 animation_time,
         mi::Uint32 samples,
+        mi::Uint32 state_flags = 0) const = 0;
+
+    virtual mi::Sint32 bake_texture_with_constant_detection(
+        DB::Transaction* transaction,
+        const IBaker_code* baker_code,
+        mi::neuraylib::ICanvas* texture,
+        Constant_result& constant,
+        bool& is_constant,
+        mi::Float32 min_u,
+        mi::Float32 max_u,
+        mi::Float32 min_v,
+        mi::Float32 max_v,
+        mi::Float32 animation_time,
+        mi::Uint32 samples,
+        const char* pixel_type,
         mi::Uint32 state_flags = 0) const = 0;
 
     /// Bake a constant (aka constant texture).

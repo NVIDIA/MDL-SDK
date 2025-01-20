@@ -342,6 +342,8 @@ public:
         DS_INTRINSIC_DF_MEASURED_FACTOR,
         DS_INTRINSIC_DF_CHIANG_HAIR_BSDF,
         DS_INTRINSIC_DF_SHEEN_BSDF,
+        DS_INTRINSIC_DF_MICROFLAKE_SHEEN_BSDF,
+        DS_INTRINSIC_DF_COAT_ABSORPTION_FACTOR,
         DS_INTRINSIC_DF_UNBOUNDED_MIX,
         DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX,
         DS_INTRINSIC_DF_LAST = DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX,
@@ -394,7 +396,6 @@ public:
         DS_INTRINSIC_DAG_SET_OBJECT_ID,     ///< Specifies the used object id.
         DS_INTRINSIC_DAG_SET_TRANSFORMS,    ///< Specifies the transform (w2o and o2w) matrices.
         DS_INTRINSIC_DAG_CALL_LAMBDA,       ///< Calls the lambda function specified by the name.
-        DS_INTRINSIC_DAG_GET_DERIV_VALUE,   ///< Extract value part of derivative value.
         DS_INTRINSIC_DAG_MAKE_DERIV,        ///< Create a derivative value from a non-derivative
                                             ///< value, setting dx and dy to zero.
         DS_INTRINSIC_DAG_LAST = DS_INTRINSIC_DAG_MAKE_DERIV,
@@ -661,6 +662,7 @@ inline bool is_elemental_df_semantics(IDefinition::Semantics sema)
     case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
     case IDefinition::DS_INTRINSIC_DF_CHIANG_HAIR_BSDF:
     case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_MICROFLAKE_SHEEN_BSDF:
         return true;
 
     case IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX:
@@ -680,6 +682,8 @@ inline bool is_elemental_df_semantics(IDefinition::Semantics sema)
     case IDefinition::DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER:
     case IDefinition::DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER:
     case IDefinition::DS_INTRINSIC_DF_FRESNEL_FACTOR:
+    case IDefinition::DS_INTRINSIC_DF_MEASURED_FACTOR:
+    case IDefinition::DS_INTRINSIC_DF_COAT_ABSORPTION_FACTOR:
 
     case IDefinition::DS_INTRINSIC_DF_LIGHT_PROFILE_POWER:
     case IDefinition::DS_INTRINSIC_DF_LIGHT_PROFILE_MAXIMUM:

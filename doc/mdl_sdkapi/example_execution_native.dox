@@ -89,9 +89,9 @@ For the native (CPU) backend, filling this structure is actually already enough 
 prepare the execution of the generated code. Calling #mi::neuraylib::ITarget_code::execute()
 with the material state and a sufficiently large result buffer will fill the buffer
 with the requested result.
-In this example, we will provide a \c NULL pointer as a target argument block.
+In this example, we will provide a \c nullptr pointer as a target argument block.
 For instance compilation, the target argument block parameter is not used, and for class
-compilation, providing a \c NULL pointer will result in the default target argument block
+compilation, providing a \c nullptr pointer will result in the default target argument block
 for the used material instance.
 See \ref mi_neuray_compilation_modes for more details about compilation modes.
 
@@ -106,7 +106,7 @@ At the end, we write the texture to disk.
 <dd><br>
 Per default, the \neurayAdjectiveName provides a built-in runtime which handles texture access functions
 (texture lookups etc.). In some situations, you may however want to provide your own implementation. This
-requires you to disable the built-in texture handler by setting the #mi::neuraylib::IMdl_backend option 
+requires you to disable the built-in texture handler by setting the #mi::neuraylib::IMdl_backend option
 \c use_builtin_resource_handler to \c "off" (via #mi::neuraylib::IMdl_backend::set_option()).
 It also requires you to implement the following functions:
 

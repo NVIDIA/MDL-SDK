@@ -37,7 +37,7 @@
 
 namespace MI {
 
-namespace SCHED { class Job; }
+namespace SCHED { class Job_base; }
 
 namespace DB {
 
@@ -103,20 +103,20 @@ public:
     /// Returns the referenced tag.
     Tag get_tag() const { return m_tag; }
 
-    /// Returns the corresponding transaction. Can be \c NULL after construction. RCS:NEU
+    /// Returns the corresponding transaction. Can be \c nullptr after construction. RCS:NEU
     Transaction* get_transaction() const { return m_transaction; }
 
     /// Returns the referenced tag version.
     Tag_version get_tag_version() const;
 
-    /// Returns the referenced DB element (or DB job result). Can be \c NULL. RCS:NEU
+    /// Returns the referenced DB element (or DB job result). Can be \c nullptr. RCS:NEU
     const Element_base* get_base_ptr() const { return m_element; }
 
-    /// Returns the referenced DB element (or DB job result). Can be \c NULL. RCS:NEU
+    /// Returns the referenced DB element (or DB job result). Can be \c nullptr. RCS:NEU
     Element_base* get_base_ptr() { return m_is_edit ? m_element : nullptr; }
 
-    /// Returns the referenced DB job, or \c NULL if this does not reference a DB job. RCS:NEU
-    const SCHED::Job* get_job() const;
+    /// Returns the referenced DB job, or \c nullptr if this does not reference a DB job. RCS:NEU
+    const SCHED::Job_base* get_job() const;
 
     /// Returns the journal flags accumulated so far.
     ///
@@ -130,12 +130,12 @@ public:
     /// Sets an access to a given tag, possibly within a new transaction.
     ///
     /// Note that this method does not allow to restore the state after construction. A
-    /// default-constructed value for \p tag is valid, but a \c NULL value for \p transaction keeps
-    /// the current transaction. Use the copy constructor or assignment operator to reset the
+    /// default-constructed value for \p tag is valid, but a \c nullptr value for \p transaction
+    /// keeps the current transaction. Use the copy constructor or assignment operator to reset the
     /// state. (Access has a reset() method, but not Edit.)
     ///
     /// \param tag           The new tag.
-    /// \param transaction   The new transaction. Pass \c NULL to keep the current transaction.
+    /// \param transaction   The new transaction. Pass \c nullptr to keep the current transaction.
     ///                      RCS:NEU
     /// \param id            The expected class ID of the new tag. Used for assertions.
     /// \return              The referenced database element. RCS:NEU
@@ -145,7 +145,7 @@ public:
     /// Sets an edit to a given tag, possibly within a new transaction.
     ///
     /// \param tag           The new tag.
-    /// \param transaction   The new transaction. Pass \c NULL to keep the current transaction.
+    /// \param transaction   The new transaction. Pass \c nullptr to keep the current transaction.
     ///                      RCS:NEU
     /// \param id            The expected class ID of the new tag. Used for assertions.
     /// \param journal_type  The initial journal flags of this edit.
@@ -261,11 +261,11 @@ public:
     /// Sets an access to a given tag, possibly within a new transaction.
     ///
     /// Note that this method does not allow to restore the state after construction. A
-    /// default-constructed value for \p tag is valid, but a \c NULL value for \p transaction keeps
-    /// the current transaction. Use #reset() for that.
+    /// default-constructed value for \p tag is valid, but a \c nullptr value for \p transaction
+    /// keeps the current transaction. Use #reset() for that.
     ///
     /// \param tag           The new tag to access.
-    /// \param transaction   The new transaction. Pass \c NULL to keep the current transaction.
+    /// \param transaction   The new transaction. Pass \c nullptr to keep the current transaction.
     ///                      RCS:NEU
     /// \param id            The expected class ID of the new tag. Used for assertions.
     void set( Tag tag = Tag(), Transaction* transaction = nullptr)
@@ -362,12 +362,12 @@ public:
     /// Sets an edit to a given tag, possibly within a new transaction.
     ///
     /// Note that this method does not allow to restore the state after construction. A
-    /// default-constructed value for \p tag is valid, but a \c NULL value for \p transaction keeps
-    /// the current transaction. Use the copy constructor or assignment operator to reset the
+    /// default-constructed value for \p tag is valid, but a \c nullptr value for \p transaction
+    /// keeps the current transaction. Use the copy constructor or assignment operator to reset the
     /// state.
     ///
     /// \param tag           The new tag to edit.
-    /// \param transaction   The new transaction. Pass \c NULL to keep the current transaction.
+    /// \param transaction   The new transaction. Pass \c nullptr to keep the current transaction.
     ///                      RCS:NEU
     /// \param journal_type  The initial journal flags of this edit.
     void set(

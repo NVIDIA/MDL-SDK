@@ -56,24 +56,24 @@ void run_tests( mi::neuraylib::INeuray* neuray)
     {
         mi::base::Handle<mi::neuraylib::IDatabase> database(
             neuray->get_api_component<mi::neuraylib::IDatabase>());
-        MI_CHECK( database.is_valid_interface());
+        MI_CHECK( database);
 
         // test scope creation / privacy levels
 
         mi::base::Handle<mi::neuraylib::IScope> global_scope( database->get_global_scope());
-        MI_CHECK( global_scope.is_valid_interface());
+        MI_CHECK( global_scope);
 
         mi::base::Handle<mi::neuraylib::IScope> child_scope(
             database->create_scope( global_scope.get()));
-        MI_CHECK( child_scope.is_valid_interface());
+        MI_CHECK( child_scope);
 
         mi::base::Handle<mi::neuraylib::IScope> grandchild_scope(
             database->create_scope( child_scope.get()));
-        MI_CHECK( grandchild_scope.is_valid_interface());
+        MI_CHECK( grandchild_scope);
 
         mi::base::Handle<mi::neuraylib::IScope> grandgrandchild_scope(
             database->create_scope( grandchild_scope.get(), 100));
-        MI_CHECK( grandgrandchild_scope.is_valid_interface());
+        MI_CHECK( grandgrandchild_scope);
 
         MI_CHECK_EQUAL( 0, global_scope->get_privacy_level());
         MI_CHECK_EQUAL( 1, child_scope->get_privacy_level());
@@ -88,39 +88,39 @@ void run_tests( mi::neuraylib::INeuray* neuray)
 
         // check that a named scope which does not exist is not found
         mi::base::Handle<mi::neuraylib::IScope> named_scope(database->get_named_scope( "test_scope"));
-        MI_CHECK( !named_scope.is_valid_interface());
+        MI_CHECK( !named_scope);
 
         // create a named scope and check for success and check that it can be retrieved
         named_scope = database->create_or_get_named_scope("test_scope");
-        MI_CHECK( named_scope.is_valid_interface());
+        MI_CHECK( named_scope);
         std::string scope_id = named_scope->get_id();
         named_scope = database->get_named_scope( "test_scope");
-        MI_CHECK( named_scope.is_valid_interface());
+        MI_CHECK( named_scope);
 
         // check that it is not possible to generate a second named scope with the same name but
         // different properties
         named_scope = database->create_or_get_named_scope("test_scope", named_scope.get(), 3);
-        MI_CHECK( !named_scope.is_valid_interface());
+        MI_CHECK( !named_scope);
 
         // check that it is possible to generate a second named scope with the same name but
         // same properties. This must return the original scope
         named_scope = database->create_or_get_named_scope("test_scope");
-        MI_CHECK( named_scope.is_valid_interface());
+        MI_CHECK( named_scope);
         MI_CHECK_EQUAL_CSTR( named_scope->get_id(), scope_id.c_str());
         MI_CHECK_EQUAL_CSTR( named_scope->get_name(), "test_scope");
 
         // check that it is possible to create a descendant of the named scope
         named_scope = database->create_or_get_named_scope("test_scope2", named_scope.get(), 3);
-        MI_CHECK( named_scope.is_valid_interface());
+        MI_CHECK( named_scope);
         named_scope = database->get_named_scope( "test_scope2");
-        MI_CHECK( named_scope.is_valid_interface());
+        MI_CHECK( named_scope);
         MI_CHECK( named_scope->get_privacy_level() == 3);
         MI_CHECK_EQUAL_CSTR( named_scope->get_name(), "test_scope2");
 
         // check that the original named scope is not affected by creating a second one with a
         // different name
         named_scope = database->get_named_scope( "test_scope");
-        MI_CHECK( named_scope.is_valid_interface());
+        MI_CHECK( named_scope);
         MI_CHECK( named_scope->get_privacy_level() == 1);
         named_scope = database->get_named_scope( "test_scope");
 
@@ -132,7 +132,7 @@ void run_tests( mi::neuraylib::INeuray* neuray)
 MI_TEST_AUTO_FUNCTION( test_iscope )
 {
     mi::base::Handle<mi::neuraylib::INeuray> neuray( load_and_get_ineuray());
-    MI_CHECK( neuray.is_valid_interface());
+    MI_CHECK( neuray);
 
     run_tests( neuray.get());
     run_tests( neuray.get());

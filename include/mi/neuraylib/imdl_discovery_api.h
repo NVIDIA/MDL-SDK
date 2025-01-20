@@ -28,8 +28,8 @@
 /// \file
 /// \brief  API component to discover MDL content in archives and file systems.
 
-#ifndef MI_NEURAYLIB_IMDL_DISCOVERY_API_H 
-#define MI_NEURAYLIB_IMDL_DISCOVERY_API_H 
+#ifndef MI_NEURAYLIB_IMDL_DISCOVERY_API_H
+#define MI_NEURAYLIB_IMDL_DISCOVERY_API_H
 
 #include <mi/base/interface_declare.h>
 
@@ -42,13 +42,13 @@ namespace neuraylib {
 
 /// Abstract interface for a discovery graph node.
 /// It provides the common functionality of all different discovery graph node interfaces.
-class IMdl_info : public 
+class IMdl_info : public
     base::Interface_declare<0xd2f50312,0xe76c,0x4d64,0xa5,0x91,0xcb,0x70,0x38,0x2c,0xa9,0x9f>
 {
 public:
 
     /// The kinds of the graph nodes.
-    enum Kind {  
+    enum Kind {
         DK_PACKAGE = 0,
         DK_MODULE = 1,
         DK_XLIFF = 2,
@@ -63,19 +63,20 @@ public:
     /// Returns the kind of the graph node.
     virtual Kind                    get_kind() const = 0;
 
-    /// Returns the qualified name of the graph node. 
+    /// Returns the qualified name of the graph node.
     virtual const char*             get_qualified_name() const = 0;
 
     /// Returns the simple_name (tail of the qualified_name) of the graph node.
-    virtual const char*             get_simple_name() const = 0;   
+    virtual const char*             get_simple_name() const = 0;
 };
 
 mi_static_assert(sizeof(IMdl_info::Kind) == sizeof(Uint32));
 
 /// Interface for a graph node representing an MDL module.
 class IMdl_module_info : public
-    base::Interface_declare<0x22,0x1204,0x46,0xb1,0x5b,0xbf,0xa8,0x11,0xc7,0xe7,0xe1,IMdl_info>
-        
+    base::Interface_declare<0x22,0x1204,0x46,0xb1,0x5b,0xbf,0xa8,0x11,0xc7,0xe7,0xe1,
+                            neuraylib::IMdl_info>
+
 {
 public:
 
@@ -89,7 +90,7 @@ public:
     virtual const IString*          get_resolved_path() const = 0;
 
     /// Returns the number of shadows of this module.
-    virtual Size                    get_shadows_count() const = 0; 
+    virtual Size                    get_shadows_count() const = 0;
 
     /// Returns one of the shadows this module has.
     /// \param index     Index in the shadow list of this module.
@@ -101,7 +102,8 @@ public:
 
 /// Interface for xliff files.
 class IMdl_xliff_info : public
-    base::Interface_declare<0x3a,0xdf,0x8a,0x42,0x94,0x09,0x59,0xe6,0xf9,0x25,0x67,IMdl_info>
+    base::Interface_declare<0x3a,0xdf,0x8a,0x42,0x94,0x09,0x59,0xe6,0xf9,0x25,0x67,
+                            neuraylib::IMdl_info>
 {
 public:
 
@@ -120,7 +122,8 @@ public:
 
 /// Interface for resources.
 class IMdl_resource_info : public
-    base::Interface_declare<0x28,0x54,0x6b,0xcd,0x14,0x59,0xfd,0x42,0x9d,0xfa,0xd5,IMdl_info>
+    base::Interface_declare<0x28,0x54,0x6b,0xcd,0x14,0x59,0xfd,0x42,0x9d,0xfa,0xd5,
+                            neuraylib::IMdl_info>
 {
 public:
 
@@ -151,27 +154,28 @@ public:
 /// Interface for texture files.
 class IMdl_texture_info : public
     base::Interface_declare<0x62,0x71,0xac,0x50,0xde,0xa9,0x40,0x92,0x8b,0xf0,0x1d,
-                            IMdl_resource_info>
+                            neuraylib::IMdl_resource_info>
 {
 };
 
 /// Interface for lightprofile files.
 class IMdl_lightprofile_info : public
     base::Interface_declare<0x17,0x23,0x61,0xf4,0xcb,0x64,0xb3,0x40,0xb4,0x45,0x07,
-                            IMdl_resource_info>
+                            neuraylib::IMdl_resource_info>
 {
 };
 
 /// Interface for measured bsdf files.
 class IMdl_measured_bsdf_info : public
     base::Interface_declare<0xce,0x45,0xe6,0xef,0xdc,0x74,0x00,0x4f,0xac,0xae,0x34,
-                            IMdl_resource_info>
+                            neuraylib::IMdl_resource_info>
 {
 };
 
 /// Interface for a graph node representing an MDL package.
 class IMdl_package_info : public
-    base::Interface_declare<0x94d,0x66,0x47a,0xb0,0xc3,0x7b,0x68,0xba,0x40,0xde,0x06,IMdl_info>
+    base::Interface_declare<0x94d,0x66,0x47a,0xb0,0xc3,0x7b,0x68,0xba,0x40,0xde,0x06,
+                            neuraylib::IMdl_info>
 {
 public:
 
@@ -179,8 +183,8 @@ public:
     virtual Size                    get_child_count() const = 0;
 
     /// Returns a child of this package.
-    /// \param index     Index in the child list of this package. 
-    virtual const IMdl_info*        get_child(Size index) const = 0;    
+    /// \param index     Index in the child list of this package.
+    virtual const IMdl_info*        get_child(Size index) const = 0;
 
     /// Returns the number of search paths of this package.
     virtual Size                    get_search_path_index_count() const = 0;
@@ -228,19 +232,19 @@ public:
 /// #mi::neuraylib::IMdl_configuration::add_mdl_path() in advance. The ordering of the search
 /// paths results from the ordering of the registration and is taken into account during the
 /// discovery process.
-/// 
-/// The MDL modules and packages found inside a search path are assembled into a graph structure
-/// consisting of package and module nodes. The discovery results of multiple search paths are 
-/// merged to one result graph. If a module is found, but there exists already a 
-/// module with the same qualified name in a previously discovered graph, the additional
-/// module will be handled as a shadow of the existing module. Multiple packages with the same 
-/// qualified name will be merged into one package. 
 ///
-/// The discovery API works for both MDL files (.mdl) and MDL archive files (.mdr). Archives have 
+/// The MDL modules and packages found inside a search path are assembled into a graph structure
+/// consisting of package and module nodes. The discovery results of multiple search paths are
+/// merged to one result graph. If a module is found, but there exists already a
+/// module with the same qualified name in a previously discovered graph, the additional
+/// module will be handled as a shadow of the existing module. Multiple packages with the same
+/// qualified name will be merged into one package.
+///
+/// The discovery API works for both MDL files (.mdl) and MDL archive files (.mdr). Archives have
 /// to be installed in the top level of the search paths, but material files can be placed anywhere
 /// across the sub-folders of a search path.
-/// 
-/// The result of a discovery process is provided as an mi::neuraylib::IMdl_discovery_result. This 
+///
+/// The result of a discovery process is provided as an mi::neuraylib::IMdl_discovery_result. This
 /// data structure provides information about the discovered search paths as well as access to the
 /// result graph structure.
 class IMdl_discovery_api : public
@@ -249,8 +253,8 @@ class IMdl_discovery_api : public
 public:
 
     /// Returns the file system and archive discovery result.
-    /// \param filter   Bitmask, that can be used to specify which discovery kinds to include in 
-    ///                 the result (see #mi::neuraylib::IMdl_info::Kind). 
+    /// \param filter   Bitmask, that can be used to specify which discovery kinds to include in
+    ///                 the result (see #mi::neuraylib::IMdl_info::Kind).
     ///                 By default, all kinds are included.
     virtual const IMdl_discovery_result*  discover(
         Uint32 filter = static_cast<Uint32>(IMdl_info::DK_ALL)) const = 0;

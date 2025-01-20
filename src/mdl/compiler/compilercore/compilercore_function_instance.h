@@ -114,7 +114,6 @@ public:
     /// \param alloc               the allocator
     /// \param def                 the function definition
     /// \param return_derivs       if true, derivatives will be generated for the return value
-    ///                            regardless of what the derivable flag of the definition states
     /// \param has_storage_spaces  if true, target supports storage spaces
     explicit Function_instance(
         IAllocator        *alloc,

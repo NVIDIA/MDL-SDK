@@ -59,7 +59,7 @@ Scope_impl::Scope_impl( DB::Scope* scope, const Class_factory* class_factory)
     // The string cannot be empty at this point. If it still is, then this indicates a misbehaving
     // libstdc++ runtime. This was seen on Linux with devsl builds (non-static libstdc++ runtime)
     // when Python/Java bindings are used. The symbol binding/static initialization seems to be
-    // affected and therefore the behavior of ostream<< (locale facet for num_put is NULL).
+    // affected and therefore the behavior of ostream<< (locale facet for num_put is nullptr).
     // Workaround: Use a static build.
     if (m_id.empty())
     {

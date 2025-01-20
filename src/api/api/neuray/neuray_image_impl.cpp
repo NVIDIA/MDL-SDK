@@ -307,8 +307,12 @@ mi::Sint32 Image_impl::reset_file( const char* filename, const char* selector)
     if( !filename)
         return -1;
 
+    auto* db_element = get_db_element();
+    if( !db_element)
+        return -255;
+
     mi::base::Uuid impl_hash{0,0,0,0};
-    mi::Sint32 result = get_db_element()->reset_file(
+    mi::Sint32 result = db_element->reset_file(
         get_db_transaction(), filename, selector, impl_hash);
     if( result == 0)
         add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);

@@ -65,37 +65,66 @@ DAG_node const* Attr_Binding::matcher(
     IDistiller_plugin_api &e,
     DAG_node const *node,
     const mi::mdl::Distiller_options *options,
-    Rule_result_code &result_code)const
+    Rule_result_code &result_code) const
 {
-    switch (e.get_selector(node)) {
-    case mi::mdl::IDefinition::Semantics::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER: // match for custom_curve_layer(w1, _, _, _w, bsdf() [[ diffuse_color ~ diffuse_color_layer ]], bsdf() [[ diffuse_color ~ diffuse_color_base ]], _normal)
+    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+
 // 031_attr_binding.mdltl:10
 //RUID 658088
-        if (true
-        && (e.get_selector(e.get_compound_argument(node, 4)) == mi::mdl::DS_DIST_DEFAULT_BSDF)
-        && (e.attribute_exists(e.get_compound_argument(node, 4), "diffuse_color"))
-        && (e.get_selector(e.get_compound_argument(node, 5)) == mi::mdl::DS_DIST_DEFAULT_BSDF)
-        && (e.attribute_exists(e.get_compound_argument(node, 5), "diffuse_color"))) {
-            const DAG_node* v_w1 = e.get_compound_argument(node, 0);
-            const DAG_node *vv_0_diffuse_color = e.get_attribute(e.get_compound_argument(node, 4), "diffuse_color");
-            const DAG_node* v_diffuse_color_layer = vv_0_diffuse_color;
-            const DAG_node *vv_1_diffuse_color = e.get_attribute(e.get_compound_argument(node, 5), "diffuse_color");
-            const DAG_node* v_diffuse_color_base = vv_1_diffuse_color;
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 0);
-            DAG_node const *node_result_2 = e.create_bsdf_constant();
-            DAG_node const *node_result_2_diffuse_color = e.create_function_call("::math::lerp",
-                    Nodes_wrapper<3>(v_diffuse_color_base, v_diffuse_color_layer,
-                        v_w1).data(), 3);
-            e.set_attribute(node_result_2, "diffuse_color",node_result_2_diffuse_color);
-            return node_result_2;
-        }
-        break;
-    default:
-        break;
-    }
+    auto match_rule0 = [&] (DAG_node const *node0, IDistiller_plugin_api::Match_properties &node_props0) -> const DAG_node * {
 
-    return node;
+        // match for custom_curve_layer(w1, _, _, _w, bsdf() [[ diffuse_color ~ diffuse_color_layer ]], bsdf() [[ diffuse_color ~ diffuse_color_base ]], _normal)
+        if (node_props0.sema != IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node2 = e.get_compound_argument(node0, 0);
+        DAG_node const *v_w1 = node2; (void)v_w1;
+        DAG_node const *node4 = e.get_compound_argument(node0, 3);
+        DAG_node const *v__w = node4; (void)v__w;
+        DAG_node const *node6 = e.get_compound_argument(node0, 4);
+        IDistiller_plugin_api::Match_properties node_props6;
+        e.get_match_properties(node6, node_props6); 
+        // match for bsdf()
+        if (node_props6.sema != IDefinition::DS_INVALID_REF_CONSTRUCTOR || node_props6.type_kind != IType::TK_BSDF) {
+            return match_rule1(node0, node_props0);
+        }
+        if (!e.attribute_exists(node6, "diffuse_color")) {
+            return match_rule1(node0, node_props0);
+        }
+        const DAG_node *node7 = e.get_attribute(node6, "diffuse_color"); (void)node7;
+        DAG_node const *v_diffuse_color_layer = node7; (void)v_diffuse_color_layer;
+        DAG_node const *node10 = e.get_compound_argument(node0, 5);
+        IDistiller_plugin_api::Match_properties node_props10;
+        e.get_match_properties(node10, node_props10); 
+        // match for bsdf()
+        if (node_props10.sema != IDefinition::DS_INVALID_REF_CONSTRUCTOR || node_props10.type_kind != IType::TK_BSDF) {
+            return match_rule1(node0, node_props0);
+        }
+        if (!e.attribute_exists(node10, "diffuse_color")) {
+            return match_rule1(node0, node_props0);
+        }
+        const DAG_node *node11 = e.get_attribute(node10, "diffuse_color"); (void)node11;
+        DAG_node const *v_diffuse_color_base = node11; (void)v_diffuse_color_base;
+        DAG_node const *node14 = e.get_compound_argument(node0, 6);
+        DAG_node const *v__normal = node14; (void)v__normal;
+        DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 0);
+        DAG_node const *node_result_2 = e.create_bsdf_constant();
+        DAG_node const *node_result_2_diffuse_color = e.create_function_call("::math::lerp",
+                Nodes_wrapper<3>(v_diffuse_color_base, v_diffuse_color_layer, v_w1).data(),
+                3, root_dbg_info);
+        e.set_attribute(node_result_2, "diffuse_color",node_result_2_diffuse_color);
+        return node_result_2;
+    };
+    (void)match_rule0;
+
+    IDistiller_plugin_api::Match_properties node_props;
+    e.get_match_properties(node, node_props);
+    return match_rule0(node, node_props);
+
 }
 
 bool Attr_Binding::postcond(

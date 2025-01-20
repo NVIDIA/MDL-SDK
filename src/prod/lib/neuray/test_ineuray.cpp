@@ -88,7 +88,7 @@ template<class T>
 void check( mi::neuraylib::INeuray* neuray, bool result)
 {
     mi::base::Handle<T> iinterface( neuray->get_api_component<T>());
-    MI_CHECK_EQUAL( result, iinterface.is_valid_interface());
+    MI_CHECK_EQUAL( result, !!iinterface);
 }
 
 void test_always_available( mi::neuraylib::INeuray* neuray)
@@ -147,7 +147,7 @@ void run_tests( mi::neuraylib::INeuray* neuray)
 MI_TEST_AUTO_FUNCTION( test_neuray )
 {
     mi::base::Handle<mi::neuraylib::INeuray> neuray( load_and_get_ineuray());
-    MI_CHECK( neuray.is_valid_interface());
+    MI_CHECK( neuray);
 
     MI_CHECK_EQUAL( MI_NEURAYLIB_API_VERSION, neuray->get_interface_version());
     MI_CHECK( neuray->get_version());

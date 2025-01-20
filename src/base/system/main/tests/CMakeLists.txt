@@ -32,7 +32,7 @@ set(PROJECT_NAME base-system-main)
 # add unit tests
 create_unit_test(
     NAME
-        test
+        test_main
     SOURCES
         ../test.cpp
         ../test_module_api.cpp

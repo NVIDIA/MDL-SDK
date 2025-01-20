@@ -549,7 +549,6 @@ public:
 
     /// Set the language version if possible.
     ///
-    /// \param compiler             the MDL compiler
     /// \param major                desired major version
     /// \param minor                desired minor version
     /// \param enable_mdl_next      if true, allow features from next MDL version
@@ -557,7 +556,6 @@ public:
     ///
     /// \return true on success, false on error
     bool set_version(
-        MDL  *compiler,
         int  major,
         int  minor,
         bool enable_mdl_next,
@@ -971,29 +969,78 @@ public:
 
     /// Possible MDL version promotion rules.
     enum Promotion_rules {
-        PR_NO_CHANGE                    = 0x00000,
-        PR_SPOT_EDF_ADD_SPREAD_PARAM    = 0x00001, ///< add a spread param to spot_edf()
-        PC_MEASURED_EDF_ADD_MULTIPLIER  = 0x00002, ///< add a multiplier param to measured_edf()
-        PR_MEASURED_EDF_ADD_TANGENT_U   = 0x00004, ///< add a tangent_u param to measured_edf()
-        PR_FRESNEL_LAYER_TO_COLOR       = 0x00008, ///< convert fresnel_layer() to color_*()
-        PR_WIDTH_HEIGHT_ADD_UV_TILE     = 0x00010, ///< add an uv_tile param to width()/height()
-        PR_TEXEL_ADD_UV_TILE            = 0x00020, ///< add an uv_tile param to texel_*()
-        PR_ROUNDED_CORNER_ADD_ROUNDNESS = 0x00040, ///< add roundness param to rounded_corner_normal
-        PR_MATERIAL_ADD_HAIR            = 0x00080, ///< add hair bsdf to material constructor
-        PR_GLOSSY_ADD_MULTISCATTER      = 0x00100, ///< add a multiscatter_tint param to
-                                                   ///  all glossy bsdfs()
+        PR_NO_CHANGE                    = 0x000000,
+        PR_SPOT_EDF_ADD_SPREAD_PARAM    = 0x000001, ///< add a spread param to spot_edf()
+        PC_MEASURED_EDF_ADD_MULTIPLIER  = 0x000002, ///< add a multiplier param to measured_edf()
+        PR_MEASURED_EDF_ADD_TANGENT_U   = 0x000004, ///< add a tangent_u param to measured_edf()
+        PR_FRESNEL_LAYER_TO_COLOR       = 0x000008, ///< convert fresnel_layer() to color_*()
+        PR_WIDTH_HEIGHT_ADD_UV_TILE     = 0x000010, ///< add an uv_tile param to width()/height()
+        PR_TEXEL_ADD_UV_TILE            = 0x000020, ///< add an uv_tile param to texel_*()
+        PR_ROUNDED_CORNER_ADD_ROUNDNESS = 0x000040, ///< add roundness param to
+                                                    ///< rounded_corner_normal
+        PR_MATERIAL_ADD_HAIR            = 0x000080, ///< add hair bsdf to material constructor
+        PR_INSERT_COLOR_0_AFTER_3       = 0x000100, ///< insert a color(0) after third param
         PR_MATERIAL_VOLUME_ADD_EMISSION_INTENSITY
-                                        = 0x00200, ///< add emission_intenbsity to material_volume
-                                                   ///  constructor
-        PR_SHEEN_ADD_MULTISCATTER       = 0x00400, ///< add multiscatter to sheen_bsdf()
-        PR_WIDTH_HEIGHT_2D_ADD_FRAME    = 0x00800, ///< add a frame param to width()/height() on tex2d
-        PR_WIDTH_HEIGHT_3D_ADD_FRAME    = 0x01000, ///< add a frame param to width()/height() on tex3d
-        PR_LOOKUP_2D_ADD_FRAME          = 0x02000, ///< add a frame param to texel_() on tex2d
-        PR_LOOKUP_3D_ADD_FRAME          = 0x04000, ///< add a frame param to texel_() on tex3d
-        PR_TEXEL_2D_ADD_FRAME           = 0x08000, ///< add a frame param to texel_() on tex2d
-        PR_TEXEL_3D_ADD_FRAME           = 0x10000, ///< add a frame param to texel_() on tex3d
-        PR_TEXTURE_ADD_SELECTOR         = 0x20000, ///< add a selector param to tex constructor
-        PR_IN_GROUP_ADD_COLAPSED        = 0x40000, ///< add a collapted param to in_group() anno
+                                        = 0x000200, ///< add emission_intenbsity to material_volume
+                                                    ///< constructor
+        PR_INSERT_DIFF_REFL_BSDF_AFTER_3= 0x000400, ///< insert diffuse_reflection_bsdf() after
+                                                    ///< third param, pre MDL 1.10 variant
+        PR_INSERT_DIFF_REFL_BSDF_10_AFTER_3
+                                        = 0x000800, ///< insert diffuse_reflection_bsdf() after
+                                                    ///< third param, MDL 1.10+ variant
+        PR_INSERT_FLOAT_0_AFTER_1       = 0x001000, ///< insert a 0.0f after first param
+        PR_INSERT_FLOAT_0_AFTER_2       = 0x002000, ///< insert a 0.0f after second param
+        PR_INSERT_FLOAT_0_AFTER_3       = 0x004000, ///< insert a 0.0f after third param
+        PR_INSERT_FLOAT_0_AFTER_6       = 0x008000, ///< insert a 0.0f after sixth param
+        PR_INSERT_FLOAT_0_AFTER_8       = 0x010000, ///< insert a 0.0f after eighths param
+        PR_INSERT_EMPTY_STRING_AFTER_2  = 0x020000, ///< insert an empty string after second param
+        PR_ADD_FALSE_AS_LAST            = 0x040000, ///< add a false as last param
+        PR_INSERT_COLOR_0_AFTER_2       = 0x080000, ///< insert a color(0) after second param
+        PR_INSERT_COLOR_1_AFTER_2       = 0x100000, ///< insert a color(1) after second param
+        PR_CNG_TO_COLOR_FRESNEL_LAYER   = 0x200000, ///< change name to "color_fresnel_layer"
+        PR_ADD_INTENSITY_RADIANT_EXTNCE = 0x400000, ///< add intensity_radiant_exitance as third
+    };
+
+    /// Helper Interface to handle different needs when creating a call to a stdlib
+    /// function.
+    class IStdlib_call_creator {
+    public:
+        /// Create a parameterless stdlib call to <name1> or <name1>::<name2>.
+        ///
+        /// \param args    call arguments
+        /// \param n_args  number of call arguments that will be added
+        /// \param name1   an MDL identifier
+        /// \param name2   an MDL identifier or NULL
+        virtual IExpression_call *create_stdlib_call(
+            IExpression const *args[],
+            size_t            n_args,
+            char const *name1,
+            char const *name2 = NULL) = 0;
+    };
+
+    /// Simple implementation of the stdlib call creator, creates syntactical calls only, no types,
+    /// no definitions.
+    class Syntactical_stdlib_call_creator : public IStdlib_call_creator {
+    public:
+        /// Create a parameterless stdlib call to <name1> or <name1>::<name2>.
+        ///
+        /// \param args    call arguments
+        /// \param n_args  number of call arguments that will be added
+        /// \param name1   an MDL identifier
+        /// \param name2   an MDL identifier or NULL
+        IExpression_call *create_stdlib_call(
+            IExpression const *args[],
+            size_t            n_args,
+            char const        *name1,
+            char const        *name2 = NULL) MDL_FINAL;
+
+        /// Constructor.
+        ///
+        /// \param mod  the module on which calls are created
+        Syntactical_stdlib_call_creator(Module &mod) : m_module(mod) {}
+
+    private:
+        Module &m_module;
     };
 
     /// Alters one call argument according to the given promotion rules.
@@ -1002,13 +1049,15 @@ public:
     /// \param arg          the argument at current parameter index
     /// \param param_index  index of the current parameter
     /// \param rules        the set of transformation rules to be applied
+    /// \param creator      if non-NULL, a stdlib creator interface to be used
     /// 
     /// \return The index of the parameter that was modified, e.g. inserted.
     int promote_call_arguments(
-        IExpression_call *call,
-        IArgument const  *arg,
-        int              param_index,
-        unsigned         rules);
+        IExpression_call     *call,
+        IArgument const      *arg,
+        int                  param_index,
+        unsigned             rules,
+        IStdlib_call_creator *creator);
 
     /// Clear all function hashes.
     void clear_function_hashes() { m_func_hashes.clear(); }
@@ -1228,6 +1277,31 @@ private:
         File_resolver                 &res_resolver,
         IResource_restriction_handler &rrh);
 
+    /// Create an integer literal.
+    ///
+    /// \param v  the integer value
+    IExpression_literal const *create_int_literal(int v);
+
+    /// Create an int2 literal.
+    ///
+    /// \param v  the integer value for both components, i.e. returns int2(v, v)
+    IExpression_literal const *create_int2_literal(int v);
+
+    /// Create a float literal.
+    ///
+    /// \param v  the float value
+    IExpression_literal const *create_float_literal(float v);
+
+    /// Create an (RGB) color(v) literal.
+    ///
+    /// \param v  the value, set to all RGB channels
+    IExpression_literal const *create_color_literal(float v);
+
+    // Create a string literal.
+    ///
+    /// \param v  the value
+    IExpression_literal const *create_string_literal(char const *v);
+
 private:
     /// Constructor.
     ///
@@ -1386,6 +1460,9 @@ private:
 
     /// Cache for the find_signature function (not-serialized).
     mutable Definition_map m_find_signature_cache;
+
+    /// The syntactical stdlib call creator.
+    Syntactical_stdlib_call_creator m_syn_creator;
 };
 
 /// Construct a Type_name AST element for an MDL type.

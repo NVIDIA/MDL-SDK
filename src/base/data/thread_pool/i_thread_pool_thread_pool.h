@@ -262,8 +262,8 @@ public:
 
     /// Returns the next job to be executed by \p thread.
     ///
-    /// Returns \c NULL if there is no job to be executed, or no job whose load requirements fit the
-    /// gap between load limits and current load values.
+    /// Returns \c nullptr if there is no job to be executed, or no job whose load requirements fit
+    /// the gap between load limits and current load values.
     ///
     /// Otherwise, the job is returned and removed from the job queue, the current load values are
     /// increased according to the job's requirements, and the worker thread is removed from the set

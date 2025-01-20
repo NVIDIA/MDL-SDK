@@ -65,78 +65,79 @@ public:
 
     // methods of Log_module
 
-    void configure();
+    void configure() override;
 
-    void set_severity_limit( unsigned int sev) { m_sev_limit = sev; }
+    void set_severity_limit( unsigned int sev) override { m_sev_limit = sev; }
 
-    unsigned int get_severity_limit() const { return m_sev_limit; }
+    unsigned int get_severity_limit() const override { return m_sev_limit; }
 
-    void set_severity_by_category( Category cat, unsigned int sev);
+    void set_severity_by_category( Category cat, unsigned int sev) override;
 
-    unsigned int get_severity_by_category( Category cat) const;
+    unsigned int get_severity_by_category( Category cat) const override;
 
-    void set_prefix( unsigned int prefix) { m_prefix = prefix; }
+    void set_prefix( unsigned int prefix) override { m_prefix = prefix; }
 
-    unsigned int get_prefix() const { return m_prefix; }
+    unsigned int get_prefix() const override { return m_prefix; }
 
-    void add_log_target( ILog_target* target);
+    void add_log_target( ILog_target* target) override;
 
-    void add_log_target_front( ILog_target* target);
+    void add_log_target_front( ILog_target* target) override;
 
-    void remove_log_target( ILog_target* target);
+    void remove_log_target( ILog_target* target) override;
 
-    void delay_log_messages( bool delay);
+    void delay_log_messages( bool delay) override;
 
-    void emit_delayed_log_messages();
+    void emit_delayed_log_messages() override;
 
-    void set_host_id( unsigned int host_id) { m_host_id = host_id; }
+    void set_host_id( unsigned int host_id) override { m_host_id = host_id; }
 
     void set_host_name( const char* host_name);
 
     void insert_message(
             const char* mod, Category cat, Severity sev, const mi::base::Message_details&,
-            const char* pfx, const char* msg);
+            const char* pfx, const char* msg) override;
 
     // methods of ILogger
 
+    [[noreturn]]
     void fatal(
         const char* mod, Category cat, const mi::base::Message_details&,
-        const char* fmt, va_list args);
+        const char* fmt, va_list args) override;
 
     void error(
         const char* mod, Category cat, const mi::base::Message_details&,
-        const char* fmt, va_list args);
+        const char* fmt, va_list args) override;
 
     void warning(
         const char* mod, Category cat, const mi::base::Message_details&,
-        const char* fmt, va_list args);
+        const char* fmt, va_list args) override;
 
     void stat(
         const char* mod, Category cat, const mi::base::Message_details&,
-        const char* fmt, va_list args);
+        const char* fmt, va_list args) override;
 
     void vstat(
         const char* mod, Category cat, const mi::base::Message_details&,
-        const char* fmt, va_list args);
+        const char* fmt, va_list args) override;
 
     void progress(
         const char* mod, Category cat, const mi::base::Message_details&,
-        const char* fmt, va_list args);
+        const char* fmt, va_list args) override;
 
     void info(
         const char* mod, Category cat, const mi::base::Message_details&,
-        const char* fmt, va_list args);
+        const char* fmt, va_list args) override;
 
     void debug(
         const char* mod, Category cat, const mi::base::Message_details&,
-        const char* fmt, va_list args);
+        const char* fmt, va_list args) override;
 
     void vdebug(
         const char* mod, Category cat, const mi::base::Message_details&,
-        const char* fmt, va_list args);
+        const char* fmt, va_list args) override;
 
     void assertfailed(
-        const char* mod, const char* fmt, const char* file, int line);
+        const char* mod, const char* fmt, const char* file, int line) override;
 
 private:
     /// Inserts the arguments \p args into the format string \p fmt and calls #text_message().

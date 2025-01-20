@@ -118,7 +118,7 @@ void keep_console_open() {
 // function. It returns an instance of the main #mi::neuraylib::INeuray interface.
 // The function may be called only once.
 //
-// \param filename    The file name of the DSO. It is feasible to pass \c NULL, which uses a
+// \param filename    The file name of the DSO. It is feasible to pass \c nullptr, which uses a
 //                    built-in default value.
 // \return            A pointer to an instance of the main #mi::neuraylib::INeuray interface
 mi::neuraylib::INeuray* load_and_get_ineuray( const char* filename = 0, bool authenticate = true)
@@ -216,7 +216,7 @@ void sleep_seconds( mi::Float32 seconds)
 #endif
 }
 
-// Type constants to avoid overload ambiguities with 0 and NULL.
+// Type constants to avoid overload ambiguities with 0 and nullptr.
 const char* zero_string = 0;
 const mi::Size zero_size = 0;
 

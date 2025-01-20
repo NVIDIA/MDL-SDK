@@ -1200,6 +1200,246 @@ llvm::DISubroutineType *Type_mapper::get_debug_info_type(
     return diBuilder->createSubroutineType(signature_types_array);
 }
 
+// Get the debug info type for an LLVM type.
+llvm::DIType *Type_mapper::get_debug_info_type(
+    llvm::DIBuilder  *diBuilder,
+    llvm::DIFile     *file,
+    llvm::DIScope    *scope,
+    llvm::Type       *type) const
+{
+    if (type == m_type_bool) {
+        return diBuilder->createBasicType(
+            "bool",
+            /*SizeInBits=*/m_type_bool->getBitWidth(),
+            llvm::dwarf::DW_ATE_unsigned);
+    } else if (type == m_type_int) {
+        return diBuilder->createBasicType(
+            "int",
+            /*SizeInBits=*/m_type_int->getBitWidth(),
+            llvm::dwarf::DW_ATE_signed);
+    } else if (type == m_type_float) {
+        return diBuilder->createBasicType(
+            "float",
+            /*SizeInBits=*/m_type_float->getPrimitiveSizeInBits(),
+            llvm::dwarf::DW_ATE_float);
+    } else if (type == m_type_double) {
+        return diBuilder->createBasicType(
+            "double",
+            /*SizeInBits=*/m_type_double->getPrimitiveSizeInBits(),
+            llvm::dwarf::DW_ATE_float);
+    } else if (type == m_type_cstring) {
+        return diBuilder->createBasicType(
+            "string",
+            /*SizeInBits=*/ m_type_tag->getPrimitiveSizeInBits(),
+            llvm::dwarf::DW_ATE_unsigned);
+    } else if (type == m_type_tag) {
+        return diBuilder->createBasicType(
+            "tag",
+            /*SizeInBits=*/m_type_tag->getBitWidth(),
+            llvm::dwarf::DW_ATE_unsigned);
+    } else if (type == m_type_bool2 ||
+            type == m_type_bool3 ||
+            type == m_type_bool4 ||
+            type == m_type_int2 ||
+            type == m_type_int3 ||
+            type == m_type_int4 ||
+            type == m_type_float2 ||
+            type == m_type_float3 ||
+            type == m_type_float4 ||
+            type == m_type_double2 ||
+            type == m_type_double3 ||
+            type == m_type_double4) {
+        // can be FixedVectorType or ArrayType
+        uint64_t size;
+        if (llvm::FixedVectorType* vt = llvm::dyn_cast<llvm::FixedVectorType>(type)) {
+            size = vt->getNumElements();
+        } else {  // ArrayType
+            size = type->getArrayNumElements();
+        }
+        llvm::Type *e_tp = type->getContainedType(0);
+
+        llvm::DIType      *eltType  = get_debug_info_type(diBuilder, file, scope, e_tp);
+        llvm::Metadata    *sub      = diBuilder->getOrCreateSubrange(0, (int64_t)size - 1);
+        llvm::DINodeArray  subArray = diBuilder->getOrCreateArray(sub);
+
+        uint64_t sizeBits = eltType->getSizeInBits() * size;
+        uint32_t align    = eltType->getAlignInBits();
+
+        return diBuilder->createVectorType(sizeBits, align, eltType, subArray);
+    } else if (type == m_type_float2x2 ||
+            type == m_type_float3x2 ||
+            type == m_type_float4x2 ||
+            type == m_type_float2x3 ||
+            type == m_type_float3x3 ||
+            type == m_type_float4x3 ||
+            type == m_type_float2x4 ||
+            type == m_type_float3x4 ||
+            type == m_type_float4x4 ||
+            type == m_type_double2x2 ||
+            type == m_type_double3x2 ||
+            type == m_type_double4x2 ||
+            type == m_type_double2x3 ||
+            type == m_type_double3x3 ||
+            type == m_type_double4x3 ||
+            type == m_type_double2x4 ||
+            type == m_type_double3x4 ||
+            type == m_type_double4x4) {
+        // in all scalar mode, some matrices cannot be correctly recognized by the type.
+        // for all modes, thes could also be arrays
+        llvm::Type *e_tp;
+        int64_t cols;
+        if ((m_tm_mode & TM_VECTOR_MASK) == TM_ALL_SCALAR) {
+            // array of elements
+            e_tp = type->getContainedType(0);
+
+            // guess number of columns from number of elements
+            switch (type->getArrayNumElements()) {
+            case 4:  // 2 * 2
+            case 6:  // 2 * 3 or 3 * 2
+            case 8:  // 2 * 4 or 4 * 2
+                cols = 2;
+                break;
+            case 9:  // 3 * 3
+            case 12: // 3 * 4 or 4 * 3
+                cols = 3;
+                break;
+            case 16: // 4 * 4
+                cols = 4;
+                break;
+
+            default:
+                MDL_ASSERT(!"Unexpected number of elements for a matrix type");
+                cols = 4;
+                break;
+            }
+        } else {
+            // array of vectors
+            e_tp = type->getContainedType(0)->getContainedType(0);
+            cols = (int64_t)type->getArrayNumElements();
+        }
+
+        llvm::DIType      *eltType  = get_debug_info_type(diBuilder, file, scope, e_tp);
+        llvm::Metadata    *sub      = diBuilder->getOrCreateSubrange(0, cols - 1);
+        llvm::DINodeArray  subArray = diBuilder->getOrCreateArray(sub);
+
+        uint64_t sizeBits = eltType->getSizeInBits() * cols;
+        uint32_t align    = eltType->getAlignInBits();
+
+        return diBuilder->createVectorType(sizeBits, align, eltType, subArray);
+    }
+    else if (type->isArrayTy()) {
+        llvm::Type *e_tp = type->getArrayElementType();
+        llvm::DIType *eltType = get_debug_info_type(diBuilder, file, scope, e_tp);
+        uint64_t num_elems = type->getArrayNumElements();
+
+        llvm::Metadata    *sub      = diBuilder->getOrCreateSubrange(0, (int64_t)num_elems);
+        llvm::DINodeArray  subArray = diBuilder->getOrCreateArray(sub);
+
+        uint64_t size  = eltType->getSizeInBits() * num_elems;
+        uint32_t align = eltType->getAlignInBits();
+
+        return diBuilder->createArrayType(size, align, eltType, subArray);
+    }
+    else if (llvm::StructType *s_tp = llvm::dyn_cast<llvm::StructType>(type)) {
+        // field names are lost
+
+        std::vector<llvm::Metadata *> field_types;
+        uint64_t currentSize = 0;
+        uint32_t align = 0;
+
+        for (unsigned i = 0, n = s_tp->getNumElements(); i < n; ++i) {
+            llvm::Type *field_tp = s_tp->getElementType(i);
+
+            llvm::DIType *eltType = get_debug_info_type(diBuilder, file, scope, field_tp);
+            uint32_t eltAlign = eltType->getAlignInBits();
+            uint64_t eltSize  = eltType->getSizeInBits();
+
+            // FIXME: should be retrieved from the DataLayout
+            if (eltAlign == 0)
+                eltAlign = uint32_t(eltSize);
+
+            MDL_ASSERT((eltAlign != 0 || eltSize == 0) && "align of non void type is zero");
+
+            // The alignment for the entire structure is the maximum of the
+            // required alignments of its elements
+            align = std::max(align, eltAlign);
+
+            // Move the current size forward if needed so that the current
+            // element starts at an offset that's the correct alignment.
+            if (currentSize > 0 && (currentSize % eltAlign) != 0)
+                currentSize += eltAlign - (currentSize % eltAlign);
+            MDL_ASSERT((currentSize == 0) || (currentSize % eltAlign) == 0);
+
+            // FIXME: position of the fields
+            int line = 0;
+
+            std::string field_name = "field_" + std::to_string(i);
+
+            llvm::DIType *fieldType = diBuilder->createMemberType(
+                scope,
+                field_name,
+                file,
+                line,
+                eltSize,
+                eltAlign,
+                currentSize,
+                llvm::DINode::FlagZero,
+                eltType);
+            field_types.push_back(fieldType);
+
+            currentSize += eltSize;
+        }
+        // Round up the struct's entire size so that it's a multiple of the
+        // required alignment that we figured out along the way...
+        if (currentSize > 0 && (currentSize % align) != 0)
+            currentSize += align - (currentSize % align);
+
+        llvm::DINodeArray elements = diBuilder->getOrCreateArray(field_types);
+
+        // FIXME: position of the struct
+        int start_pos = 0;
+
+        std::string struct_name;
+        if (s_tp->hasName()) {
+            struct_name = s_tp->getName().str();
+        } else {
+            struct_name = "unnamed_struct_type";   // TODO: not unique...
+        }
+
+        return diBuilder->createStructType(
+            scope,
+            struct_name,
+            file,
+            start_pos,
+            currentSize,
+            align,
+            llvm::DINode::FlagZero,
+            /*DerivedFrom=*/ nullptr,
+            elements);
+    }
+
+    return diBuilder->createUnspecifiedType("error");
+}
+
+// Get the debug info type for an LLVM function type.
+llvm::DISubroutineType *Type_mapper::get_debug_info_type(
+    llvm::DIBuilder     *diBuilder,
+    llvm::DIFile        *file,
+    llvm::FunctionType  *func_tp) const
+{
+    std::vector<llvm::Metadata *> signature_types;
+
+    signature_types.push_back(
+        get_debug_info_type(diBuilder, file, file, func_tp->getReturnType()));
+    for (int i = 0, n = func_tp->getNumParams(); i < n; ++i) {
+        signature_types.push_back(
+            get_debug_info_type(diBuilder, file, file, func_tp->getParamType(i)));
+    }
+
+    llvm::DITypeRefArray signature_types_array = diBuilder->getOrCreateTypeArray(signature_types);
+    return diBuilder->createSubroutineType(signature_types_array);
+}
+
 // Construct the State type for the environment context.
 llvm::StructType *Type_mapper::construct_state_environment_type(
     llvm::LLVMContext      &context,

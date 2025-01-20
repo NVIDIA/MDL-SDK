@@ -50,6 +50,7 @@ create_from_base_preset(
     OUTPUT_NAME "execution_glsl_vk"
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
+    STATIC_MSVC_RUNTIME
 )
 
 # add dependencies
@@ -58,7 +59,7 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         vulkan
         glfw
         mdl::mdl_sdk
-        mdl_sdk::shared
+        mdl_sdk::shared_static
     )
 
 # copy additional resources
@@ -75,9 +76,7 @@ source_group("glsl" FILES ${PROJECT_RESOURCES})
 # creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)
 target_create_vs_user_settings(TARGET ${PROJECT_NAME})
 
-# -------------------------------------------------------------------------------------------------
-# Create installation rules to copy the build directory
-# -------------------------------------------------------------------------------------------------
+# create installation rules
 add_target_install(
     TARGET ${PROJECT_NAME}
     DESTINATION "examples/mdl_sdk/execution_glsl_vk"

@@ -88,12 +88,12 @@ namespace multiscatter
 
     BSDF_INLINE float compute_lookup_coordinate_y(
         const BSDF_type type,
-        const float roughness_u, // between min_roughness and 1.0
-        const float roughness_v) // between min_roughness and 1.0
+        const float roughness_u,
+        const float roughness_v)
     {
         const float res = float(get_lookup_resolution_roughness(type));
 
-        const float r = math::saturate(math::sqrt(roughness_u * roughness_v));
+        const float r = math::saturate(math::sqrt(math::saturate(roughness_u) * math::saturate(roughness_v)));
         return (r * (res - 1.0f) + 0.5f) / res;
     }
 
@@ -182,7 +182,7 @@ namespace multiscatter
         } else {
 
             // sample diffuse direction
-            const float xi4 = math::saturate((data->xi.w - accept_prob) / (1.0f - accept_prob));
+            const float xi4 = saturate_below_one((data->xi.w - accept_prob) / (1.0f - accept_prob));
             const float phi = data->xi.z * (float)(2.0 * M_PI);
             float sin_phi, cos_phi;
             math::sincos(phi, &sin_phi, &cos_phi);
@@ -206,7 +206,7 @@ namespace multiscatter
             const float nrm =
                 state->tex_lookup_float3_3d(texture_id, coord, 0, 0, 0, clamp, clamp, clamp, 0.0f).x;
 
-            w = (1.0f - rho2) / nrm * (float)M_PI * nk2;
+            w = (1.0f - rho2) / nrm * (float)M_PI;
 
             data->bsdf_over_pdf = multiscatter_tint * make<float3>(w);
             return rho1; // for updating the pdf after recomputing the single scatter probability

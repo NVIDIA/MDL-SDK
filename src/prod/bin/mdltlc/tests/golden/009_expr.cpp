@@ -65,121 +65,162 @@ DAG_node const* Two_rules::matcher(
     IDistiller_plugin_api &e,
     DAG_node const *node,
     const mi::mdl::Distiller_options *options,
-    Rule_result_code &result_code)const
+    Rule_result_code &result_code) const
 {
-    switch (e.get_selector(node)) {
-    case mi::mdl::IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF: // match for diffuse_reflection_bsdf(_, c)
-// 009_expr.mdltl:6
-//RUID 391841
-        if (true) {
-            const DAG_node* v_c = e.get_compound_argument(node, 1);
-            if (e.eval_if(e.create_binary(
-                IDistiller_plugin_api::OK_EQUAL,
-                    v_c,
-                    e.create_float_constant(1.0f)))) {
-                if (event_handler != nullptr)
-                    fire_match_event(*event_handler, 0);
-                return e.create_call("::df::diffuse_reflection_bsdf(color,float,string)",
-                    IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<3>::mk_args(
-                        e,m_node_types, diffuse_reflection_bsdf, e.create_color_constant(23.23,23.23,23.23),
-                        e.create_float_constant(24.24f), e.create_string_constant("\"blub\"")).args,
-                    3, e.get_type_factory()->create_bsdf());
-            }
-        }
-// 009_expr.mdltl:7
-//RUID 436382
-        if (true) {
-            const DAG_node* v_c = e.get_compound_argument(node, 1);
-            if (e.eval_if(e.create_binary(
-                IDistiller_plugin_api::OK_EQUAL,
-                    v_c,
-                    e.create_float_constant(2.0f)))) {
-                if (event_handler != nullptr)
-                    fire_match_event(*event_handler, 1);
-                return e.create_call("::df::diffuse_reflection_bsdf(color,float,string)",
-                    IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<3>::mk_args(
-                        e,m_node_types, diffuse_reflection_bsdf, e.create_color_constant(12,12,12),
-                        e.create_binary(
-                        IDistiller_plugin_api::OK_PLUS,
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_PLUS,
-                                e.create_float_constant(1.0f),
-                                e.create_float_constant(2.0f)),
-                            e.create_float_constant(3.0f))).args, 3, e.get_type_factory()->create_bsdf());
-            }
-        }
-// 009_expr.mdltl:8
-//RUID 682879
-        if (true) {
-            const DAG_node* v_c = e.get_compound_argument(node, 1);
-            if (e.eval_if(e.create_binary(
-                IDistiller_plugin_api::OK_EQUAL,
-                    v_c,
-                    e.create_float_constant(3.0f)))) {
-                if (event_handler != nullptr)
-                    fire_match_event(*event_handler, 2);
-                return e.create_call("::df::diffuse_reflection_bsdf(color,float,string)",
-                    IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<3>::mk_args(
-                        e,m_node_types, diffuse_reflection_bsdf, e.create_color_constant(12,12,12),
-                        e.create_binary(
-                        IDistiller_plugin_api::OK_PLUS,
-                            e.create_float_constant(1.0f),
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_PLUS,
-                                e.create_float_constant(2.0f),
-                                e.create_float_constant(3.0f)))).args, 3, e.get_type_factory()->create_bsdf());
-            }
-        }
-// 009_expr.mdltl:9
-//RUID 162354
-        if (true) {
-            const DAG_node* v_c = e.get_compound_argument(node, 1);
-            if (e.eval_if(e.create_binary(
-                IDistiller_plugin_api::OK_EQUAL,
-                    v_c,
-                    e.create_float_constant(4.0f)))) {
-                if (event_handler != nullptr)
-                    fire_match_event(*event_handler, 3);
-                return e.create_call("::df::diffuse_reflection_bsdf(color,float,string)",
-                    IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<3>::mk_args(
-                        e,m_node_types, diffuse_reflection_bsdf, e.create_color_constant(12,12,12),
-                        e.create_binary(
-                        IDistiller_plugin_api::OK_PLUS,
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                e.create_float_constant(1.0f),
-                                e.create_float_constant(2.0f)),
-                            e.create_float_constant(3.0f))).args, 3, e.get_type_factory()->create_bsdf());
-            }
-        }
+    auto match_rule5 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+
 // 009_expr.mdltl:10
 //RUID 77970
-        if (true) {
-            const DAG_node* v_c = e.get_compound_argument(node, 1);
-            if (e.eval_if(e.create_binary(
-                IDistiller_plugin_api::OK_EQUAL,
-                    v_c,
-                    e.create_float_constant(5.0f)))) {
-                if (event_handler != nullptr)
-                    fire_match_event(*event_handler, 4);
-                return e.create_call("::df::diffuse_reflection_bsdf(color,float,string)",
-                    IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<3>::mk_args(
-                        e,m_node_types, diffuse_reflection_bsdf, e.create_color_constant(12,12,12),
-                        e.create_binary(
-                        IDistiller_plugin_api::OK_PLUS,
-                            e.create_float_constant(1.0f),
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                e.create_float_constant(2.0f),
-                                e.create_float_constant(3.0f)))).args, 3, e.get_type_factory()->create_bsdf());
-            }
-        }
-        break;
-    default:
-        break;
-    }
+    auto match_rule4 = [&] (DAG_node const *node4, IDistiller_plugin_api::Match_properties &node_props4) -> const DAG_node * {
 
-    return node;
+        // continued match for diffuse_reflection_bsdf(_, c)
+        DAG_node const *node6 = e.get_compound_argument(node4, 1);
+        DAG_node const *v_c = node6; (void)v_c;
+        DAG_DbgInfo root_dbg_info = node4->get_dbg_info();
+        (void) root_dbg_info;
+        if (!e.eval_if(e.create_binary(
+            IDistiller_plugin_api::OK_EQUAL,
+                v_c,
+                e.create_float_constant(5.0f)))) {
+            return match_rule5(node4, node_props4);
+        }
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 4);
+        return e.create_call("::df::diffuse_reflection_bsdf(color,float,color,string)",
+            IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<4>::mk_args(
+                e, m_node_types, diffuse_reflection_bsdf, e.create_color_constant(12,12,12),
+                e.create_binary(
+                IDistiller_plugin_api::OK_PLUS,
+                    e.create_float_constant(1.0f),
+                    e.create_binary(
+                    IDistiller_plugin_api::OK_MULTIPLY,
+                        e.create_float_constant(2.0f),
+                        e.create_float_constant(3.0f)))).args, 4, e.get_type_factory()->create_bsdf(), root_dbg_info);
+    };
+    (void)match_rule4;
+
+// 009_expr.mdltl:9
+//RUID 162354
+    auto match_rule3 = [&] (DAG_node const *node3, IDistiller_plugin_api::Match_properties &node_props3) -> const DAG_node * {
+
+        // continued match for diffuse_reflection_bsdf(_, c)
+        DAG_node const *node5 = e.get_compound_argument(node3, 1);
+        DAG_node const *v_c = node5; (void)v_c;
+        DAG_DbgInfo root_dbg_info = node3->get_dbg_info();
+        (void) root_dbg_info;
+        if (!e.eval_if(e.create_binary(
+            IDistiller_plugin_api::OK_EQUAL,
+                v_c,
+                e.create_float_constant(4.0f)))) {
+            return match_rule4(node3, node_props3);
+        }
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 3);
+        return e.create_call("::df::diffuse_reflection_bsdf(color,float,color,string)",
+            IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<4>::mk_args(
+                e, m_node_types, diffuse_reflection_bsdf, e.create_color_constant(12,12,12),
+                e.create_binary(
+                IDistiller_plugin_api::OK_PLUS,
+                    e.create_binary(
+                    IDistiller_plugin_api::OK_MULTIPLY,
+                        e.create_float_constant(1.0f),
+                        e.create_float_constant(2.0f)),
+                    e.create_float_constant(3.0f))).args, 4, e.get_type_factory()->create_bsdf(), root_dbg_info);
+    };
+    (void)match_rule3;
+
+// 009_expr.mdltl:8
+//RUID 682879
+    auto match_rule2 = [&] (DAG_node const *node2, IDistiller_plugin_api::Match_properties &node_props2) -> const DAG_node * {
+
+        // continued match for diffuse_reflection_bsdf(_, c)
+        DAG_node const *node4 = e.get_compound_argument(node2, 1);
+        DAG_node const *v_c = node4; (void)v_c;
+        DAG_DbgInfo root_dbg_info = node2->get_dbg_info();
+        (void) root_dbg_info;
+        if (!e.eval_if(e.create_binary(
+            IDistiller_plugin_api::OK_EQUAL,
+                v_c,
+                e.create_float_constant(3.0f)))) {
+            return match_rule3(node2, node_props2);
+        }
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 2);
+        return e.create_call("::df::diffuse_reflection_bsdf(color,float,color,string)",
+            IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<4>::mk_args(
+                e, m_node_types, diffuse_reflection_bsdf, e.create_color_constant(12,12,12),
+                e.create_binary(
+                IDistiller_plugin_api::OK_PLUS,
+                    e.create_float_constant(1.0f),
+                    e.create_binary(
+                    IDistiller_plugin_api::OK_PLUS,
+                        e.create_float_constant(2.0f),
+                        e.create_float_constant(3.0f)))).args, 4, e.get_type_factory()->create_bsdf(), root_dbg_info);
+    };
+    (void)match_rule2;
+
+// 009_expr.mdltl:7
+//RUID 436382
+    auto match_rule1 = [&] (DAG_node const *node1, IDistiller_plugin_api::Match_properties &node_props1) -> const DAG_node * {
+
+        // continued match for diffuse_reflection_bsdf(_, c)
+        DAG_node const *node3 = e.get_compound_argument(node1, 1);
+        DAG_node const *v_c = node3; (void)v_c;
+        DAG_DbgInfo root_dbg_info = node1->get_dbg_info();
+        (void) root_dbg_info;
+        if (!e.eval_if(e.create_binary(
+            IDistiller_plugin_api::OK_EQUAL,
+                v_c,
+                e.create_float_constant(2.0f)))) {
+            return match_rule2(node1, node_props1);
+        }
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 1);
+        return e.create_call("::df::diffuse_reflection_bsdf(color,float,color,string)",
+            IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<4>::mk_args(
+                e, m_node_types, diffuse_reflection_bsdf, e.create_color_constant(12,12,12),
+                e.create_binary(
+                IDistiller_plugin_api::OK_PLUS,
+                    e.create_binary(
+                    IDistiller_plugin_api::OK_PLUS,
+                        e.create_float_constant(1.0f),
+                        e.create_float_constant(2.0f)),
+                    e.create_float_constant(3.0f))).args, 4, e.get_type_factory()->create_bsdf(), root_dbg_info);
+    };
+    (void)match_rule1;
+
+// 009_expr.mdltl:6
+//RUID 391841
+    auto match_rule0 = [&] (DAG_node const *node0, IDistiller_plugin_api::Match_properties &node_props0) -> const DAG_node * {
+
+        // match for diffuse_reflection_bsdf(_, c)
+        if (node_props0.sema != IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF) {
+            return match_rule5(node0, node_props0);
+        }
+        DAG_node const *node2 = e.get_compound_argument(node0, 1);
+        DAG_node const *v_c = node2; (void)v_c;
+        DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
+        (void) root_dbg_info;
+        if (!e.eval_if(e.create_binary(
+            IDistiller_plugin_api::OK_EQUAL,
+                v_c,
+                e.create_float_constant(1.0f)))) {
+            return match_rule1(node0, node_props0);
+        }
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 0);
+        return e.create_call("::df::diffuse_reflection_bsdf(color,float,color,string)",
+            IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<4>::mk_args(
+                e, m_node_types, diffuse_reflection_bsdf, e.create_color_constant(23.23,23.23,23.23),
+                e.create_float_constant(24.24f), e.create_color_constant(0,0,0),
+                e.create_string_constant("\"blub\"")).args, 4, e.get_type_factory()->create_bsdf(), root_dbg_info);
+    };
+    (void)match_rule0;
+
+    IDistiller_plugin_api::Match_properties node_props;
+    e.get_match_properties(node, node_props);
+    return match_rule0(node, node_props);
+
 }
 
 bool Two_rules::postcond(

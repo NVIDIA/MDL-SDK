@@ -227,7 +227,8 @@ mi::Sint32 Neuray_impl::start( bool blocking)
     m_status = STARTING;
     mi::Sint32 result = 0;
 
-    m_database = DBLIGHT::factory();
+    m_database = DBLIGHT::factory(
+        /*thread_pool*/ nullptr, /*deserialization_manager*/ nullptr, /*enable_journal*/ false);
     NEURAY::Class_registration::register_classes_part2( m_class_factory, m_database);
 
     SYSTEM::Access_module<SCENE::Scene_module> scene_module( false);

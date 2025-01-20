@@ -154,7 +154,7 @@ public:
     /// Returns the element with tag \p tag in the database.
     ///
     /// \param tag    The tag of the element to return.
-    /// \return       The element in the database or \c NULL if no such element exists or
+    /// \return       The element in the database or \c nullptr if no such element exists or
     ///               the transaction is already closed.
     mi::base::IInterface* edit( DB::Tag tag);
 
@@ -172,7 +172,7 @@ public:
     /// Returns the element with tag \p tag in the database.
     ///
     /// \param name   The tag of the element to return.
-    /// \return       The element in the database or \c NULL if no such element exists or
+    /// \return       The element in the database or \c nullptr if no such element exists or
     ///               the transaction is already closed.
     const mi::base::IInterface* access( DB::Tag tag);
 
@@ -249,8 +249,8 @@ private:
     /// order needed e.g. for exporters.
     ///
     /// \param tag          The graph traversal starts here.
-    /// \param name_regex   Only elements with matching name are reported (unless \c NULL).
-    /// \param class_ids    Only elements with matching class ID are reported (unless \c NULL).
+    /// \param name_regex   Only elements with matching name are reported (unless \c nullptr).
+    /// \param class_ids    Only elements with matching class ID are reported (unless \c nullptr).
     /// \param[out] result  The found elements.
     /// \param tags_seen    Used to skip already handled graph nodes.
     void list_elements_internal(

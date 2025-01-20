@@ -124,7 +124,7 @@ public:
     ///                           see #mi::neuraylib::Lightprofile_flags for details.
     /// \return
     ///                           -   0: Success.
-    ///                           -  -1: Invalid parameters (\c NULL pointer).
+    ///                           -  -1: Invalid parameters (\c nullptr).
     ///                           -  -3: Invalid filename extension (only \c .ies is supported).
     ///                           -  -4: Failure to resolve the given filename, e.g., the file does
     ///                                  not exist.
@@ -177,7 +177,7 @@ public:
     ///                           see #mi::neuraylib::Lightprofile_flags for details.
     /// \return
     ///                           -   0: Success.
-    ///                           -  -1: Invalid parameters (\c NULL pointer).
+    ///                           -  -1: Invalid parameters (\c nullptr).
     ///                           -  -7: File format error.
     ///                           - -13: \p flags is invalid (exactly one of
     ///                                  #mi::neuraylib::LIGHTPROFILE_CLOCKWISE or
@@ -196,7 +196,7 @@ public:
 
     /// Returns the resolved file name of the file containing the light profile.
     ///
-    /// The method returns \c NULL if there is no file associated with the light profile, e.g.,
+    /// The method returns \c nullptr if there is no file associated with the light profile, e.g.,
     /// after default construction or failures to resolve the file name passed to #reset_file().
     ///
     /// \see #get_original_filename()
@@ -204,7 +204,7 @@ public:
 
     /// Returns the unresolved file name as passed to #reset_file().
     ///
-    /// The method returns \c NULL after default construction.
+    /// The method returns \c nullptr after default construction.
     ///
     /// \see #get_filename()
     virtual const char* get_original_filename() const = 0;
@@ -243,7 +243,7 @@ public:
     ///
     /// \return   A pointer to the normalized data for all vertices of the grid. The data values are
     ///           stored as array in column-major order (where all elements of a column have the
-    ///           same phi value). Returns \c NULL after default construction.
+    ///           same phi value). Returns \c nullptr after default construction.
     ///
     /// \see #get_candela_multiplier()
     virtual const Float32* get_data() const = 0;

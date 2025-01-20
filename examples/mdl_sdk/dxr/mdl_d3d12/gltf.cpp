@@ -462,8 +462,8 @@ IScene_loader::Material::Texture_info get_texture(
             return IScene_loader::Material::Texture_info::WrapMode::Repeat;
         };
 
-        info.wrap_s = convertWrapMode(doc.samplers[sampler_index].wrap_s);
-        info.wrap_t = convertWrapMode(doc.samplers[sampler_index].wrap_t);
+        info.wrap_s = convertWrapMode(doc.samplers[sampler_index].wrapS);
+        info.wrap_t = convertWrapMode(doc.samplers[sampler_index].wrapT);
     }
 
     return info;
@@ -754,6 +754,22 @@ void add_iridescence(
     material_iridescene.iridescence_thickness_minimum = gltf_iridescene.iridescenceThicknessMinimum;
     material_iridescene.iridescence_thickness_maximum = gltf_iridescene.iridescenceThicknessMaximum;
     material_iridescene.iridescence_thickness_texture = get_texture(doc, gltf_iridescene.iridescenceThicknessTexture, scene);
+}
+
+// ------------------------------------------------------------------------------------------------
+
+void add_anisotropy(
+    const fx::gltf::Document& doc,
+    IScene_loader::Material::Model_data_materials_anisotropy& material_anisotropy,
+    const fx::gltf::Material::KHR_MaterialsAnisotropy& gltf_anisotropy,
+    const IScene_loader::Scene& scene)
+{
+    if (gltf_anisotropy.empty())
+        return;
+
+    material_anisotropy.anisotropy_strength = gltf_anisotropy.anisotropyStrength;
+    material_anisotropy.anisotropy_rotation = gltf_anisotropy.anisotropyRotation;
+    material_anisotropy.anisotropy_texture = get_texture(doc, gltf_anisotropy.anisotropyTexture, scene);
 }
 
 
@@ -1283,6 +1299,7 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
                 get_texture(doc, m.pbrMetallicRoughness.metallicRoughnessTexture, *m_scene);
             mat.metallic_roughness.metallic_factor = m.pbrMetallicRoughness.metallicFactor;
             mat.metallic_roughness.roughness_factor = m.pbrMetallicRoughness.roughnessFactor;
+            add_anisotropy(doc, mat.metallic_roughness.anisotropy, m.materialsAnisotropy, *m_scene);
 
             add_transmission(
                 doc, mat.metallic_roughness.transmission, m.materialsTransmission, *m_scene);

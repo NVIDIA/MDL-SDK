@@ -1578,6 +1578,16 @@ public:
 
     // Non interface methods
 public:
+    /// Create a new value of type array.
+    ///
+    /// \param type    The type of the array.
+    /// \param value   The value for all elements of the array.
+    /// \param size    The number of values, must match the array size.
+    IValue_array const *create_array(
+        IType_array const *type,
+        IValue const      *value,
+        size_t            size);
+
     /// Dump all values owned by this Value table.
     void dump() const;
 
@@ -1639,26 +1649,6 @@ private:
     /// The false value.
     IValue_bool const *const m_false_value;
 };
-
-/// Skip all presets returning the original function declaration.
-///
-/// \param[in]    func_decl  a function declaration
-/// \param[inout] owner_mod  the owner module of a function declaration
-///
-/// \return func_decl itself if this is not a preset, the original definition otherwise
-IDeclaration_function const *skip_presets(
-    IDeclaration_function const     *func_decl,
-    mi::base::Handle<IModule const> &owner_mod);
-
-/// Skip all presets returning the original function definition.
-///
-/// \param[in]    func_def   a function definition
-/// \param[inout] owner_mod  the owner module of a function definition
-///
-/// \return func_decl itself if this is not a preset, the original definition otherwise
-IDefinition const *skip_presets(
-    IDefinition const               *func_def,
-    mi::base::Handle<IModule const> &owner_mod);
 
 }  // mdl
 }  // mi

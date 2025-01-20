@@ -128,10 +128,20 @@ public:
     /// \param b          The boolean to print.
     virtual void print(bool b) = 0;
 
-    /// Print a long integer.
+    /// Print an unsigned integer.
     ///
-    /// \param n          The long integer to print.
-    virtual void print(long n) = 0;
+    /// \param n          The unsigned integer to print.
+    virtual void print(unsigned n) = 0;
+
+    /// Print a signed integer.
+    ///
+    /// \param n          The signed integer to print.
+    virtual void print(int n) = 0;
+
+    /// Print a size_t.
+    ///
+    /// \param n          The unsigned integer to print.
+    virtual void print(size_t n) = 0;
 
     /// Print a double.
     ///

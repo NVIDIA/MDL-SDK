@@ -100,7 +100,7 @@ public:
     /// - \c "use_builtin_resource_handler": Enables/disables the built-in texture runtime.
     ///   Possible values: \c "on", \c "off". Default: \c "on".
     ///
-    /// The following options are supported by the PTX, LLVM-IR, native and HLSL backend:
+    /// The following options are supported by the PTX, LLVM-IR, native, GLSL and HLSL backend:
     ///
     /// - \c "inline_aggressively": Enables/disables aggressive inlining. Possible values:
     ///   \c "on", \c "off". Default: \c "off".
@@ -108,11 +108,16 @@ public:
     ///   on the DAG. Possible values:
     ///   \c "on", \c "off". Default: \c "on".
     /// - \c "enable_exceptions": Enables/disables support for exceptions through runtime function
-    ///   calls. For PTX, this options is always treated as disabled. Possible values:
-    ///   \c "on", \c "off". Default: \c "on".
+    ///   calls on CPU. For GPU, this options is always treated as disabled. Possible values:
+    ///   \c "on", \c "off". Default: \c "off".
     /// - \c "enable_ro_segment": Enables/disables the creation of the read-only data segment
     ///   calls. Possible values:
     ///   \c "on", \c "off". Default: \c "off".
+    /// - \c "max_const_data": Specifies the maximum size of a constant in bytes to be put into
+    ///   the generated code, if the \c "enable_ro_segment" option is enabled. Bigger constants will
+    ///   be moved into the read-only data segment. If the \c "glsl_max_const_data" option is also
+    ///   used, the read-only data segment has priority.
+    ///   Default: \c "1024"
     /// - \c "num_texture_results": Set the size of the text_results array in the MDL SDK
     ///   state in number of float4 elements. The array has to be provided by the renderer and
     ///   must be provided per thread (for example as an array on the stack) and will be filled
@@ -178,8 +183,8 @@ public:
     ///   * \c "optix_cp": generate calls through OptiX bindless callable programs
     ///
     /// The following options are supported by the HLSL backend only:
-    /// - \c "hlsl_use_resource_data": If enabled, an extra user define resource data struct is
-    ///   passed to all resource callbacks.
+    /// - \c "hlsl_use_resource_data": If enabled, an extra user defined resource data struct is
+    ///   passed to all resource callbacks. This option is currently not supported.
     ///   Possible values:
     ///   \c "on", \c "off". Default: \c "off".
     /// - \c "hlsl_remap_functions": Specifies a comma separated remap list of MDL functions. The
@@ -211,9 +216,11 @@ public:
     /// - \c "glsl_include_uniform_state": If \c true, object_id will be included in the state
     ///                                    according to the \c "glsl_state_object_id_mode" option.
     ///   Possible values: \c "on", \c "off". Default: \c "off"
-    /// - \c "glsl_max_const_data": Specifies the maximum allowed amount in bytes of constant data
-    ///                             for a generated shader by the GLSL backend. If bigger data are
-    ///                             necessary, the backend will move it to uniform inputs.
+    /// - \c "glsl_max_const_data": Specifies the maximum size of a constant in bytes to be put into
+    ///                             the generated GLSL code, if the "glsl_place_uniforms_into_ssbo"
+    ///                             option is enabled. Bigger constants will be moved into the SSBO.
+    ///                             If the \c "max_const_data" option is also used, the read-only
+    ///                             data segment has priority.
     ///   Default: \c "1024".
     /// - \c "glsl_place_uniforms_into_ssbo": If \c true, all generated uniform inputs will be
     ///                                       placed into a shader storage buffer object.
@@ -232,6 +239,10 @@ public:
     ///  - \c "glsl_uniform_ssbo_set": A GLSL set attribute expression for the SSBO buffer.
     ///   Possible values: Currently limited to unsigned literals.
     ///   Default: \c "" (Means no "set" attribute)
+    /// - \c "glsl_use_resource_data": If enabled, an extra user defined resource data struct is
+    ///   passed to all resource callbacks. This option is currently not supported.
+    ///   Possible values:
+    ///   \c "on", \c "off". Default: \c "off".
     /// - \c "glsl_remap_functions": Specifies a comma separated remap list of MDL functions. The
     ///                              entries must be specified as &lt;old_name&gt;=&lt;new_name&gt;.
     ///                              Both names have to be in mangled form.
@@ -365,7 +376,7 @@ public:
     ///   and optimized together with the generated code.
     ///
     /// \param name       The name of the option.
-    /// \param data       The data for the option. If \c NULL is passed, the option is cleared.
+    /// \param data       The data for the option. If \c nullptr is passed, the option is cleared.
     /// \param size       The size of the data.
     /// \return
     ///                   -  0: Success.
@@ -379,7 +390,7 @@ public:
     /// Returns the representation of a device library for this backend if one exists.
     ///
     /// \param[out] size  The size of the library.
-    /// \return           The device library or \c NULL if no library exists for this backend.
+    /// \return           The device library or \c nullptr if no library exists for this backend.
     virtual const Uint8* get_device_library( Size &size) const = 0;
 
     /// Transforms an MDL environment function call into target code.
@@ -398,8 +409,8 @@ public:
     ///
     /// \param transaction                 The transaction to be used.
     /// \param call                        The MDL function call for the environment.
-    /// \param fname                       The name of the generated function. If \c NULL is passed,
-    ///                                    \c "lambda" will be used.
+    /// \param fname                       The name of the generated function. If \c nullptr is
+    ///                                    passed, \c "lambda" will be used.
     /// \param[inout] context              An execution context which can be used
     ///                                    to pass compilation options to the MDL compiler. The
     ///                                    following options are supported by this operation:
@@ -413,13 +424,14 @@ public:
     ///                                    .
     ///                                    During material translation, messages like errors and
     ///                                    warnings will be passed to the context for
-    ///                                    later evaluation by the caller. Can be \c NULL.
+    ///                                    later evaluation by the caller. Can be \c nullptr.
     ///                                    Possible error conditions:
-    ///                                    - Invalid parameters (\c NULL pointer).
+    ///                                    - Invalid parameters (\c nullptr).
     ///                                    - Invalid expression.
     ///                                    - The backend failed to generate target code for the
     ///                                      function.
-    /// \return                            The generated target code, or \c NULL in case of failure.
+    /// \return                            The generated target code, or \c nullptr in case of
+    ///                                    failure.
     virtual const ITarget_code* translate_environment(
         ITransaction* transaction,
         const IFunction_call* call,
@@ -445,16 +457,16 @@ public:
     /// \param material        The compiled MDL material.
     /// \param path            The path from the material root to the expression that should be
     ///                        translated, e.g., \c "geometry.displacement".
-    /// \param fname           The name of the generated function. If \c NULL is passed, \c "lambda"
-    ///                        will be used.
+    /// \param fname           The name of the generated function. If \c nullptr is passed,
+    ///                        \c "lambda" will be used.
     /// \param[inout] context  An execution context which can be used
     ///                        to pass compilation options to the MDL compiler. Currently, no
     ///                        options are supported by this operation.
     ///                        During material translation, messages like errors and
     ///                        warnings will be passed to the context for
-    ///                        later evaluation by the caller. Can be \c NULL.
+    ///                        later evaluation by the caller. Can be \c nullptr.
     ///                        Possible error conditions:
-    ///                        - Invalid parameters (\c NULL pointer).
+    ///                        - Invalid parameters (\c nullptr).
     ///                        - Invalid path (non-existing).
     ///                        - The backend failed to generate target code for the expression.
     ///                        - The requested expression is a constant.
@@ -462,7 +474,7 @@ public:
     ///                          be handled.
     ///                        - The backend does not support compiled MDL materials obtained
     ///                              from class compilation mode.
-    /// \return                The generated target code, or \c NULL in case of failure.
+    /// \return                The generated target code, or \c nullptr in case of failure.
     virtual const ITarget_code* translate_material_expression(
         ITransaction* transaction,
         const ICompiled_material* material,
@@ -479,7 +491,7 @@ public:
     /// \param path           The path from the material root to the expression that
     ///                       should be translated, e.g., \c "surface.scattering".
     /// \param base_fname     The base name of the generated functions.
-    ///                       If \c NULL is passed, \c "lambda" will be used.
+    ///                       If \c nullptr is passed, \c "lambda" will be used.
     /// \param[inout] context An execution context which can be used
     ///                       to pass compilation options to the MDL compiler. The
     ///                       following options are supported by this operation:
@@ -489,9 +501,9 @@ public:
     ///                       .
     ///                       During material translation, messages like errors and
     ///                       warnings will be passed to the context for
-    ///                       later evaluation by the caller. Can be \c NULL.
+    ///                       later evaluation by the caller. Can be \c nullptr.
     ///                       Possible error conditions:
-    ///                       -  Invalid parameters (\c NULL pointer).
+    ///                       -  Invalid parameters (\c nullptr).
     ///                       -  Invalid path (non-existing).
     ///                       -  The backend failed to generate target code for the material.
     ///                       -  The requested expression is a constant.
@@ -501,7 +513,7 @@ public:
     ///                       -  The backend does not implement this function, yet.
     ///                       -  VDFs are not supported.
     ///                       -  The requested BSDF is not supported, yet.
-    /// \return               The generated target code, or \c NULL in case of failure.
+    /// \return               The generated target code, or \c nullptr in case of failure.
     virtual const ITarget_code* translate_material_df(
         ITransaction* transaction,
         const ICompiled_material* material,
@@ -531,8 +543,8 @@ public:
     ///                                 .
     ///                                 During material compilation messages like errors and
     ///                                 warnings will be passed to the context for
-    ///                                 later evaluation by the caller. Can be \c NULL.
-    /// \return              The generated target code, or \c NULL in case of failure.
+    ///                                 later evaluation by the caller. Can be \c nullptr.
+    /// \return              The generated target code, or \c nullptr in case of failure.
     ///                      In the latter case, the return code in the failing description is
     ///                      set to -1 and the context, if provided, contains an error message.
     virtual const ITarget_code* translate_material(
@@ -556,10 +568,10 @@ public:
     ///                        During material translation, messages like errors and
     ///                        warnings will be passed to the context for
     ///                        later evaluation by the caller.
-    ///                        Can be \c NULL.
+    ///                        Can be \c nullptr.
     ///                        Possible error conditions:
     ///                        - The JIT backend is not available.
-    /// \return                The generated link unit, or \c NULL in case of failure.
+    /// \return                The generated link unit, or \c nullptr in case of failure.
     virtual ILink_unit* create_link_unit(
         ITransaction* transaction,
         IMdl_execution_context* context) = 0;
@@ -573,11 +585,11 @@ public:
     ///                       warnings will be passed to the context for
     ///                       later evaluation by the caller.
     ///                       There are currently no options
-    ///                       supported by this operation. Can be \c NULL.
+    ///                       supported by this operation. Can be \c nullptr.
     ///                       Possible error conditions:
     ///                       - Invalid link unit.
     ///                       - The JIT backend failed to compile the unit.
-    /// \return               The generated link unit, or \c NULL in case of failure.
+    /// \return               The generated link unit, or \c nullptr in case of failure.
     virtual const ITarget_code* translate_link_unit(
         const ILink_unit* lu, IMdl_execution_context* context) = 0;
 
@@ -592,14 +604,14 @@ public:
     ///                       supported for this operation.
     ///                       During the serialization messages like errors and warnings will be
     ///                       passed to the context for later evaluation by the caller.
-    ///                       Can be \c NULL.
+    ///                       Can be \c nullptr.
     ///                       Possible error conditions:
     ///                         - Serialization is not supported for this kind of back-end.
     ///                         - Corrupt input data, invalid header.
     ///                       Expected failure conditions that raise an info message:
     ///                         - Protocol version mismatch, deserialization invalid.
     ///                         - MDL SDK version mismatch, deserialization invalid.
-    /// \return               The restored object in case of success or \c NULL otherwise.
+    /// \return               The restored object in case of success or \c nullptr otherwise.
     virtual const ITarget_code* deserialize_target_code(
         ITransaction* transaction,
         const IBuffer* buffer,
@@ -617,14 +629,14 @@ public:
     ///                       supported for this operation.
     ///                       During the serialization messages like errors and warnings will be
     ///                       passed to the context for later evaluation by the caller.
-    ///                       Can be \c NULL.
+    ///                       Can be \c nullptr.
     ///                       Possible error conditions:
     ///                         - Serialization is not supported for this kind of back-end.
     ///                         - Corrupt input data, invalid header.
     ///                       Expected failure conditions that raise an info message:
     ///                         - Protocol version mismatch, deserialization invalid.
     ///                         - MDL SDK version mismatch, deserialization invalid.
-    /// \return               The restored object in case of success or \c NULL otherwise.
+    /// \return               The restored object in case of success or \c nullptr otherwise.
     virtual const ITarget_code* deserialize_target_code(
         ITransaction* transaction,
         const Uint8* buffer_data,
@@ -768,7 +780,7 @@ public:
     ///
     /// \return
     ///                      -  0: Success.
-    ///                      - -1: Invalid parameters, block or value is a \c NULL pointer.
+    ///                      - -1: Invalid parameters, block or value is a \c nullptr.
     ///                      - -2: Invalid state provided.
     ///                      - -3: Value kind does not match expected kind.
     ///                      - -4: Size of compound value does not match expected size.
@@ -809,7 +821,7 @@ public:
         SU_FORCE_32_BIT = 0xFFFFFFFFu //   Undocumented, for alignment only
     }; // can be or'ed
 
-    typedef Uint32 State_usage;
+    using State_usage = Uint32;
 
     enum Texture_shape {
         Texture_shape_invalid      = 0, ///< Invalid texture.
@@ -886,7 +898,7 @@ public:
     /// #mi::neuraylib::IMdl_backend::translate_material_expression().
     ///
     /// \param index      The index of the callable function.
-    /// \return           The name of the \p index -th callable function, or \c NULL if \p index
+    /// \return           The name of the \p index -th callable function, or \c nullptr if \p index
     ///                   is out of bounds.
     virtual const char* get_callable_function( Size index) const = 0;
 
@@ -900,7 +912,7 @@ public:
     ///
     /// \param index      The index of the texture resource.
     /// \return           The name of the DB element associated the texture resource of the given
-    ///                   index, or \c NULL if \p index is out of range or the texture does not
+    ///                   index, or \c nullptr if \p index is out of range or the texture does not
     ///                   exist in the database.
     virtual const char* get_texture( Size index) const = 0;
 
@@ -909,7 +921,7 @@ public:
     ///
     /// \param index      The index of the texture resource.
     /// \return           The MDL file path of the texture resource of the given
-    ///                   index, or \c NULL if \p index is out of range or the texture
+    ///                   index, or \c nullptr if \p index is out of range or the texture
     ///                   exists in the database.
     virtual const char* get_texture_url( Size index) const = 0;
 
@@ -917,7 +929,7 @@ public:
     ///
     /// \param index      The index of the texture resource.
     /// \return           The owner module name of the texture resource of the given
-    ///                   index, or \c NULL if \p index is out of range or the owner
+    ///                   index, or \c nullptr if \p index is out of range or the owner
     ///                   module is not provided.
     virtual const char* get_texture_owner_module( Size index) const = 0;
 
@@ -939,9 +951,9 @@ public:
     /// Returns the selector mode of a texture resource used by the target code.
     ///
     /// \param index      The index of the texture resource.
-    /// \return           The selector of the texture resource of the given
-    ///                   index, or \c NULL if \p index is out of range or there is no selector for
-    ///                   that texture resource.
+    /// \return           The selector of the texture resource of the given index, or \c nullptr if
+    ///                   \p index is out of range or there is no selector for that texture
+    ///                   resource.
     virtual const char* get_texture_selector( Size index) const = 0;
 
     /// Returns the texture shape of a given texture resource used by the target code.
@@ -964,17 +976,19 @@ public:
     /// \note Calling this function is only meaningful in case #get_texture_shape() returns
     /// #mi::neuraylib::ITarget_code::Texture_shape_bsdf_data.
     ///
-    /// \param index      The index of the texture resource.
-    /// \param [out] rx   The resolution of the texture in x.
-    /// \param [out] ry   The resolution of the texture in y.
-    /// \param [out] rz   The resolution of the texture in z.
-    /// \return           A pointer to the texture data, if the texture is a distribution function
-    ///                   data texture, \c NULL otherwise.
+    /// \param index            The index of the texture resource.
+    /// \param [out] rx         The resolution of the texture in x.
+    /// \param [out] ry         The resolution of the texture in y.
+    /// \param [out] rz         The resolution of the texture in z.
+    /// \param [out] pixel_type The type of the data elements.
+    /// \return                 A pointer to the texture data, if the texture is a distribution
+    ///                         function data texture, \c nullptr otherwise.
     virtual const Float32* get_texture_df_data(
         Size index,
         Size &rx,
         Size &ry,
-        Size &rz) const = 0;
+        Size &rz,
+        const char *&pixel_type) const = 0;
 
     //@}
     /// \name Light profiles
@@ -987,7 +1001,7 @@ public:
     ///
     /// \param index      The index of the texture resource.
     /// \return           The name of the DB element associated the light profile resource of the
-    ///                   given index, or \c NULL if \p index is out of range.
+    ///                   given index, or \c nullptr if \p index is out of range.
     virtual const char* get_light_profile( Size index) const = 0;
 
     /// Returns the MDL file path of a light profile resource used by the target code if no database
@@ -995,7 +1009,7 @@ public:
     ///
     /// \param index      The index of the light profile resource.
     /// \return           The MDL file path of the light profile resource of the given
-    ///                   index, or \c NULL if \p index is out of range or the light profile
+    ///                   index, or \c nullptr if \p index is out of range or the light profile
     ///                   exists in the database.
     virtual const char* get_light_profile_url( Size index) const = 0;
 
@@ -1003,7 +1017,7 @@ public:
     ///
     /// \param index      The index of the light profile resource.
     /// \return           The owner module name of the light profile resource of the given
-    ///                   index, or \c NULL if \p index is out of range or the owner
+    ///                   index, or \c nullptr if \p index is out of range or the owner
     ///                   module is not provided.
     virtual const char* get_light_profile_owner_module( Size index) const = 0;
 
@@ -1026,7 +1040,7 @@ public:
     ///
     /// \param index      The index of the BSDF measurement resource.
     /// \return           The name of the DB element associated the bsdf measurement resource of
-    ///                   the given index, or \c NULL if \p index is out of range.
+    ///                   the given index, or \c nullptr if \p index is out of range.
     virtual const char* get_bsdf_measurement(Size index) const = 0;
 
     /// Returns the MDL file path of a BSDF measurement resource used by the target code if no
@@ -1034,7 +1048,7 @@ public:
     ///
     /// \param index      The index of the BSDF measurement resource.
     /// \return           The MDL file path of the BSDF measurement resource of the given
-    ///                   index, or \c NULL if \p index is out of range or the BSDF measurement
+    ///                   index, or \c nullptr if \p index is out of range or the BSDF measurement
     ///                   exists in the database.
     virtual const char* get_bsdf_measurement_url( Size index) const = 0;
 
@@ -1042,7 +1056,7 @@ public:
     ///
     /// \param index      The index of the BSDF measurement resource.
     /// \return           The owner module name of the BSDF measurement resource of the given
-    ///                   index, or \c NULL if \p index is out of range or the owner
+    ///                   index, or \c nullptr if \p index is out of range or the owner
     ///                   module is not provided.
     virtual const char* get_bsdf_measurement_owner_module( Size index) const = 0;
 
@@ -1063,7 +1077,7 @@ public:
     /// Returns the name of the constant data segment at the given index.
     ///
     /// \param index   The index of the data segment.
-    /// \return        The name of the constant data segment or \c NULL if the index is out of
+    /// \return        The name of the constant data segment or \c nullptr if the index is out of
     ///                bounds.
     virtual const char* get_ro_data_segment_name( Size index) const = 0;
 
@@ -1076,7 +1090,7 @@ public:
     /// Returns the data of the constant data segment at the given index.
     ///
     /// \param index   The index of the data segment.
-    /// \return        The data of the constant data segment or \c NULL if the index is out of
+    /// \return        The data of the constant data segment or \c nullptr if the index is out of
     ///                bounds.
     virtual const char* get_ro_data_segment_data( Size index) const = 0;
 
@@ -1086,7 +1100,7 @@ public:
     /// Returns the represented target code segment in ASCII representation.
     ///
     /// \param index   The index of the code segment.
-    /// \return        The code segment or \c NULL if the index is out of bounds.
+    /// \return        The code segment or \c nullptr if the index is out of bounds.
     virtual const char* get_code_segment( Size index) const = 0;
 
     /// Returns the length of the represented target code segment.
@@ -1098,7 +1112,7 @@ public:
     /// Returns the description of the target code segment.
     ///
     /// \param index   The index of the code segment.
-    /// \return        The code segment description or \c NULL if the index is out of bounds.
+    /// \return        The code segment description or \c nullptr if the index is out of bounds.
     virtual const char* get_code_segment_description( Size index) const = 0;
 
     /// Returns the potential render state usage of the target code.
@@ -1114,7 +1128,7 @@ public:
     ///
     /// \param index   The index of the target argument block.
     ///
-    /// \return  the captured argument block or \c NULL if no arguments were captured or the
+    /// \return  the captured argument block or \c nullptr if no arguments were captured or the
     ///          index was invalid.
     virtual const ITarget_argument_block *get_argument_block(Size index) const = 0;
 
@@ -1126,7 +1140,7 @@ public:
     ///                           identical to the one used to generate this \c ITarget_code.
     /// \param resource_callback  Callback for retrieving resource indices for resource values.
     ///
-    /// \return  the generated target argument block or \c NULL if no arguments were captured
+    /// \return  the generated target argument block or \c nullptr if no arguments were captured
     ///          or the index was invalid.
     virtual ITarget_argument_block *create_argument_block(
         Size index,
@@ -1140,7 +1154,7 @@ public:
     ///
     /// \param index   The index of the target argument block.
     ///
-    /// \return  the layout or \c NULL if no arguments were captured or the index was invalid.
+    /// \return  the layout or \c nullptr if no arguments were captured or the index was invalid.
     virtual const ITarget_value_layout *get_argument_block_layout(Size index) const = 0;
 
     /// Returns the number of string constants used by the target code.
@@ -1149,7 +1163,7 @@ public:
     /// Returns the string constant used by the target code.
     ///
     /// \param index    The index of the string constant.
-    /// \return         The string constant that is represented by the given index, or \c NULL
+    /// \return         The string constant that is represented by the given index, or \c nullptr
     ///                 if \p index is out of range.
     virtual const char* get_string_constant(Size index) const = 0;
 
@@ -1167,7 +1181,7 @@ public:
     /// \param index   The index of the callable function.
     /// \param lang    The language to use for the prototype.
     ///
-    /// \return The prototype or \c NULL if \p index is out of bounds or \p lang cannot be used
+    /// \return The prototype or \c nullptr if \p index is out of bounds or \p lang cannot be used
     ///         for this target code.
     virtual const char* get_callable_function_prototype( Size index, Prototype_language lang)
         const = 0;
@@ -1200,7 +1214,7 @@ public:
     /// \param[in]  index       The index of the callable function.
     /// \param[in]  state       The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be \c NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c nullptr if the built-in resource
     ///                         handler is used.
     /// \param[out] result      The result will be written to.
     ///
@@ -1222,10 +1236,10 @@ public:
     /// \param[in]  index       The index of the callable function.
     /// \param[in]  state       The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be \c NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c nullptr if the built-in resource
     ///                         handler is used.
     /// \param[in]  cap_args    The captured arguments to use for the execution.
-    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         If \p cap_args is \c nullptr, the captured arguments of this
     ///                         \c ITarget_code object will be used, if any.
     /// \param[out] result      The result will be written to.
     ///
@@ -1253,10 +1267,10 @@ public:
     /// \param[in]  index       The index of the callable function.
     /// \param[in]  state       The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be \c NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c nullptr if the built-in resource
     ///                         handler is used.
     /// \param[in]  cap_args    The captured arguments to use for the execution.
-    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         If \p cap_args is \c nullptr, the captured arguments of this
     ///                         \c ITarget_code object for the given callable function will be used,
     ///                         if any.
     ///
@@ -1276,10 +1290,10 @@ public:
     /// \param[inout] data      The input and output fields for the BSDF sampling.
     /// \param[in]    state     The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be \c NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c nullptr if the built-in resource
     ///                         handler is used.
     /// \param[in]    cap_args  The captured arguments to use for the execution.
-    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         If \p cap_args is \c nullptr, the captured arguments of this
     ///                         \c ITarget_code object for the given callable function will be used,
     ///                         if any.
     ///
@@ -1300,10 +1314,10 @@ public:
     /// \param[inout] data      The input and output fields for the BSDF evaluation.
     /// \param[in]    state     The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be \c NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c nullptr if the built-in resource
     ///                         handler is used.
     /// \param[in]    cap_args  The captured arguments to use for the execution.
-    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         If \p cap_args is \c nullptr, the captured arguments of this
     ///                         \c ITarget_code object for the given callable function will be used,
     ///                         if any.
     ///
@@ -1325,10 +1339,10 @@ public:
     /// \param[inout] data      The input and output fields for the BSDF PDF calculation.
     /// \param[in]    state     The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be \c NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c nullptr if the built-in resource
     ///                         handler is used.
     /// \param[in]    cap_args  The captured arguments to use for the execution.
-    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         If \p cap_args is \c nullptr, the captured arguments of this
     ///                         \c ITarget_code object for the given callable function will be used,
     ///                         if any.
     ///
@@ -1351,10 +1365,10 @@ public:
     /// \param[inout] data      The input and output fields for the BSDF auxiliary calculation.
     /// \param[in]    state     The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be \c NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c nullptr if the built-in resource
     ///                         handler is used.
     /// \param[in]    cap_args  The captured arguments to use for the execution.
-    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         If \p cap_args is \c nullptr, the captured arguments of this
     ///                         \c ITarget_code object for the given callable function will be used,
     ///                         if any.
     ///
@@ -1380,10 +1394,10 @@ public:
     /// \param[in]  index       The index of the callable function.
     /// \param[in]  state       The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be \c NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c nullptr if the built-in resource
     ///                         handler is used.
     /// \param[in]  cap_args    The captured arguments to use for the execution.
-    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         If \p cap_args is \c nullptr, the captured arguments of this
     ///                         \c ITarget_code object for the given callable function will be used,
     ///                         if any.
     ///
@@ -1403,10 +1417,10 @@ public:
     /// \param[inout] data      The input and output fields for the EDF sampling.
     /// \param[in]    state     The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be \c NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c nullptr if the built-in resource
     ///                         handler is used.
     /// \param[in]    cap_args  The captured arguments to use for the execution.
-    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         If \p cap_args is \c nullptr, the captured arguments of this
     ///                         \c ITarget_code object for the given callable function will be used,
     ///                         if any.
     ///
@@ -1427,10 +1441,10 @@ public:
     /// \param[inout] data      The input and output fields for the EDF evaluation.
     /// \param[in]    state     The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be \c NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c nullptr if the built-in resource
     ///                         handler is used.
     /// \param[in]    cap_args  The captured arguments to use for the execution.
-    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         If \p cap_args is \c nullptr, the captured arguments of this
     ///                         \c ITarget_code object for the given callable function will be used,
     ///                         if any.
     ///
@@ -1452,10 +1466,10 @@ public:
     /// \param[inout] data      The input and output fields for the EDF PDF calculation.
     /// \param[in]    state     The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be \c NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c nullptr if the built-in resource
     ///                         handler is used.
     /// \param[in]    cap_args  The captured arguments to use for the execution.
-    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         If \p cap_args is \c nullptr, the captured arguments of this
     ///                         \c ITarget_code object for the given callable function will be used,
     ///                         if any.
     ///
@@ -1478,10 +1492,10 @@ public:
     /// \param[inout] data      The input and output fields for the EDF auxiliary calculation.
     /// \param[in]    state     The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be \c NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c nullptr if the built-in resource
     ///                         handler is used.
     /// \param[in]    cap_args  The captured arguments to use for the execution.
-    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         If \p cap_args is \c nullptr, the captured arguments of this
     ///                         \c ITarget_code object for the given callable function will be used,
     ///                         if any.
     ///
@@ -1510,7 +1524,7 @@ public:
     /// \param func_index     The index of the callable function.
     /// \param handle_index   The index of the handle.
     ///
-    /// \return The name of the distribution function handle or \c NULL, if the callable
+    /// \return The name of the distribution function handle or \c nullptr, if the callable
     ///         function is not a distribution function or \p index is invalid.
     virtual const char* get_callable_function_df_handle( Size func_index, Size handle_index)
         const = 0;
@@ -1532,10 +1546,10 @@ public:
     ///                          class. Default: \c true.
     ///                       During the serialization messages like errors and warnings will be
     ///                       passed to the context for later evaluation by the caller.
-    ///                       Can be \c NULL.
+    ///                       Can be \c nullptr.
     ///                       Possible error conditions:
     ///                         - Serialization is not supported for this kind of back-end.
-    /// \return               The buffer in case of success and \c NULL otherwise.
+    /// \return               The buffer in case of success and \c nullptr otherwise.
     virtual const IBuffer* serialize( IMdl_execution_context* context) const = 0;
 
     /// Returns the potential render state usage of callable function in the target code.
@@ -1556,10 +1570,10 @@ public:
     /// \param[in]  index       The index of the callable function.
     /// \param[in]  state       The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be \c NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c nullptr if the built-in resource
     ///                         handler is used.
     /// \param[in]  cap_args    The captured arguments to use for the execution.
-    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         If \p cap_args is \c nullptr, the captured arguments of this
     ///                         \c ITarget_code object for the given callable function will be used,
     ///                         if any.
     ///
@@ -1598,7 +1612,7 @@ public:
     ///                        Currently, no options are supported by this operation.
     ///                        During material compilation messages like errors and
     ///                        warnings will be passed to the context for
-    ///                        later evaluation by the caller. Can be \c NULL.
+    ///                        later evaluation by the caller. Can be \c nullptr.
     ///                        Possible error conditions:
     ///                        - The JIT backend is not available.
     ///                        - Invalid field name (non-existing).
@@ -1626,7 +1640,7 @@ public:
     /// \param path             The path from the material root to the expression that
     ///                         should be translated, e.g., \c "surface.scattering".
     /// \param base_fname       The base name of the generated functions.
-    ///                         If \c NULL is passed, \c "lambda" will be used.
+    ///                         If \c nullptr is passed, \c "lambda" will be used.
     /// \param[inout] context   An execution context which can be used
     ///                         to pass compilation options to the MDL compiler. The
     ///                         following options are supported for this operation:
@@ -1636,9 +1650,9 @@ public:
     ///                         .
     ///                         During material compilation messages like errors and
     ///                         warnings will be passed to the context for
-    ///                         later evaluation by the caller. Can be \c NULL.
+    ///                         later evaluation by the caller. Can be \c nullptr.
     ///                         Possible error conditions:
-    ///                         - Invalid parameters (\c NULL pointer).
+    ///                         - Invalid parameters (\c nullptr).
     ///                         - Invalid path (non-existing).
     ///                         - The backend failed to generate target code for the material.
     ///                         - The requested expression is a constant.
@@ -1683,7 +1697,7 @@ public:
     ///                                 .
     ///                                 During material compilation messages like errors and
     ///                                 warnings will be passed to the context for
-    ///                                 later evaluation by the caller. Can be \c NULL.
+    ///                                 later evaluation by the caller. Can be \c nullptr.
     /// \return              A return code. The error codes have the following meaning:
     ///                      -  0: Success.
     ///                      - -1: An error occurred while processing the entries in the list.
@@ -1716,9 +1730,9 @@ public:
     ///                                   Currently, no options are supported by this operation.
     ///                                   During material compilation messages like errors and
     ///                                   warnings will be passed to the context for
-    ///                                   later evaluation by the caller. Can be \c NULL.
+    ///                                   later evaluation by the caller. Can be \c nullptr.
     ///                                   Possible error conditions:
-    ///                                    - Invalid parameters (\c NULL pointer).
+    ///                                    - Invalid parameters (\c nullptr).
     ///                                    - Invalid expression.
     ///                                    - The backend failed to compile the function.
     /// \return           A return code. The return codes have the following meaning:
@@ -1729,7 +1743,7 @@ public:
         const IFunction_call       *call,
         Function_execution_context fexc,
         const char                 *fname,
-        IMdl_execution_context     *context = 0) = 0;
+        IMdl_execution_context     *context = nullptr) = 0;
 
     /// Add an MDL function definition as a function to this link unit.
     ///
@@ -1741,9 +1755,9 @@ public:
     ///                                   Currently, no options are supported by this operation.
     ///                                   During material compilation messages like errors and
     ///                                   warnings will be passed to the context for
-    ///                                   later evaluation by the caller. Can be \c NULL.
+    ///                                   later evaluation by the caller. Can be \c nullptr.
     ///                                   Possible error conditions:
-    ///                                    - Invalid parameters (\c NULL pointer).
+    ///                                    - Invalid parameters (\c nullptr).
     ///                                    - Invalid expression.
     ///                                    - The backend failed to compile the function.
     /// \return           A return code. The return codes have the following meaning:
@@ -1759,21 +1773,21 @@ public:
     virtual Sint32 MI_NEURAYLIB_DEPRECATED_METHOD_14_0(add_environment)(
         const IFunction_call    *call,
         const char              *fname,
-        IMdl_execution_context  *context = 0) = 0;
+        IMdl_execution_context  *context = nullptr) = 0;
 };
 
 /// Description of target function
 struct Target_function_description
 {
     Target_function_description(
-        const char* expression_path = 0,
-        const char* base_function_name = 0)
+        const char* expression_path = nullptr,
+        const char* base_function_name = nullptr)
         : path(expression_path)
         , base_fname(base_function_name)
         , argument_block_index(~Size(0))
         , function_index(~Size(0))
-        , distribution_kind(ITarget_code::DK_INVALID)
-        , return_code(~Sint32(0)) // not processed
+        ,
+         return_code(~Sint32(0)) // not processed
     {
     }
 
@@ -1782,7 +1796,7 @@ struct Target_function_description
     const char* path;
 
     /// The base name of the generated functions.
-    /// If \c NULL is passed, the function name will be 'lambda' followed by an increasing
+    /// If \c nullptr is passed, the function name will be 'lambda' followed by an increasing
     /// counter. Note, that this counter is tracked per link unit. That means, you need to provide
     /// functions names when using multiple link units in order to avoid collisions.
     const char* base_fname;
@@ -1805,7 +1819,7 @@ struct Target_function_description
 
     /// Return the distribution kind of this function (or NONE in case expressions). This is
     /// an output parameter which is available after adding the function to the link unit.
-    ITarget_code::Distribution_kind distribution_kind;
+    ITarget_code::Distribution_kind distribution_kind{ITarget_code::DK_INVALID};
 
     /// A return code.
     ///
@@ -1814,7 +1828,7 @@ struct Target_function_description
     /// #mi::neuraylib::ILink_unit::add_material_df (multiplied by 100).
     ///  -     0:  Success.
     ///  -    ~0:  The function has not yet been processed
-    ///  -    -1:  Invalid parameters (\c NULL pointer).
+    ///  -    -1:  Invalid parameters (\c nullptr).
     ///  -    -2:  Invalid path (non-existing).
     ///  -    -7:  The backend does not implement this function, yet.
     ///
@@ -1827,7 +1841,7 @@ struct Target_function_description
     ///  -   -60:  Neither BSDFs, EDFs, VDFs, nor resource type expressions can be compiled.
     ///
     ///  Codes for distribution functions, i.e., distribution_kind == DK_BSDF, DK_EDF, ...
-    ///  -  -100:  Invalid parameters (\c NULL pointer).
+    ///  -  -100:  Invalid parameters (\c nullptr).
     ///  -  -200:  Invalid path (non-existing).
     ///  -  -300:  The backend failed to generate target code for the material.
     ///  -  -400:  The requested expression is a constant.

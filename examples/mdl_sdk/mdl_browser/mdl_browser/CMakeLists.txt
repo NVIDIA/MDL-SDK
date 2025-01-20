@@ -105,9 +105,7 @@ target_sources(${PROJECT_NAME}
         ${EMBEDDED_RESOUCES}
     )
 
-# -------------------------------------------------------------------------------------------------
-# Create installation rules to copy the build directory
-# -------------------------------------------------------------------------------------------------
+# create installation rules
 add_target_install(
     TARGET ${PROJECT_NAME}
     DESTINATION "examples/mdl_sdk/mdl_browser"

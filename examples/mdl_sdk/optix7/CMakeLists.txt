@@ -150,9 +150,7 @@ target_add_cuda_ptx_rule(TARGET ${PROJECT_NAME}
     FAST_MATH
     )
 
-# -------------------------------------------------------------------------------------------------
-# Create installation rules to copy the build directory
-# -------------------------------------------------------------------------------------------------
+# create installation rules
 add_target_install(
     TARGET ${PROJECT_NAME}
     DESTINATION "examples/mdl_sdk/optix7"

@@ -660,7 +660,7 @@ public:
     /// Returns the name of the MDL source file from which this module was created.
     ///
     /// \return         The full pathname of the source file from which this MDL module was created,
-    ///                 or \c NULL if no such file exists.
+    ///                 or \c nullptr if no such file exists.
     virtual const char* get_filename() const = 0;
 
     /// Returns the MDL name of the module.
@@ -676,7 +676,7 @@ public:
 
     /// Returns the name of a package component in the MDL name.
     ///
-    /// \return         The \p index -th package component name, or \c NULL if \p index is out of
+    /// \return         The \p index -th package component name, or \c nullptr if \p index is out of
     ///                 bounds.
     virtual const char* get_mdl_package_component_name( Size index) const = 0;
 
@@ -715,7 +715,7 @@ public:
     /// Returns the DB name of the function definition at \p index.
     ///
     /// \param index    The index of the function definition.
-    /// \return         The DB name of the function definition. The method may return \c NULL for
+    /// \return         The DB name of the function definition. The method may return \c nullptr for
     ///                 valid indices if the corresponding function definition has already been
     ///                 removed from the DB.
     virtual const char* get_function( Size index) const = 0;
@@ -726,7 +726,7 @@ public:
     /// Returns the DB name of the material definition at \p index.
     ///
     /// \param index    The index of the material definition.
-    /// \return         The DB name of the material definition. The method may return \c NULL for
+    /// \return         The DB name of the material definition. The method may return \c nullptr for
     ///                 valid indices if the corresponding material definition has already been
     ///                 removed from the DB.
     virtual const char* get_material( Size index) const = 0;
@@ -747,17 +747,17 @@ public:
     /// Returns the annotation definition at \p index.
     ///
     /// \param index    The index of the annotation definition.
-    /// \return         The annotation definition or \c NULL if
+    /// \return         The annotation definition or \c nullptr if
     ///                 \p index is out of range.
     virtual const IAnnotation_definition* get_annotation_definition( Size index) const = 0;
 
     /// Returns the annotation definition of the given \p name.
     ///
     /// \param name     The name of the annotation definition.
-    /// \return         The annotation definition or \c NULL if there is no such definition.
+    /// \return         The annotation definition or \c nullptr if there is no such definition.
     virtual const IAnnotation_definition* get_annotation_definition( const char* name) const = 0;
 
-    /// Returns the annotations of the module, or \c NULL if there are no such annotations.
+    /// Returns the annotations of the module, or \c nullptr if there are no such annotations.
     virtual const IAnnotation_block* get_annotations() const = 0;
 
     /// Indicates whether this module is a standard module.
@@ -782,9 +782,9 @@ public:
     ///                         #mi::neuraylib::IFunction_definition::create_function_call() with
     ///                         these arguments would succeed.
     /// \return                 The DB names of overloads of the given function or material
-    ///                         definition, or \c NULL if \p name is invalid.
+    ///                         definition, or \c nullptr if \p name is invalid.
     virtual const IArray* get_function_overloads(
-        const char* name, const IExpression_list* arguments = 0) const = 0;
+        const char* name, const IExpression_list* arguments = nullptr) const = 0;
 
     /// Returns overloads of a function or material definition.
     ///
@@ -812,14 +812,14 @@ public:
     ///                         representing positional parameter type names as returned by
     ///                         #mi::neuraylib::IFunction_definition::get_mdl_parameter_type_name().
     /// \return                 The DB names of overloads of the given function or material
-    ///                         definition, or \c NULL if \p name is invalid.
+    ///                         definition, or \c nullptr if \p name is invalid.
     virtual const IArray* get_function_overloads(
         const char* name, const IArray* parameter_types) const = 0;
 
     /// Returns \c true if all imports of the module are valid.
     ///
     /// \param context     In case of failure, the execution context can be checked for error
-    ///                    messages. Can be \c NULL.
+    ///                    messages. Can be \c nullptr.
     virtual bool is_valid( IMdl_execution_context* context) const = 0;
 
     /// Reload the module from disk.
@@ -827,7 +827,7 @@ public:
     /// \note This function works for file-based modules, only.
     ///
     /// \param context     In case of failure, the execution context can be checked for error
-    ///                    messages. Can be \c NULL.
+    ///                    messages. Can be \c nullptr.
     /// \param recursive   If \c true, all imported file-based modules are reloaded
     ///                    prior to this one.
     /// \return
@@ -844,7 +844,7 @@ public:
     /// \param recursive     If \c true, all imported file-based modules are reloaded
     ///                      prior to this one.
     /// \param context       In case of failure, the execution context can be checked for error
-    ///                      messages. Can be \c NULL.
+    ///                      messages. Can be \c nullptr.
     /// \return
     ///               -     0: Success
     ///               -    -1: Reloading failed, check the context for details.

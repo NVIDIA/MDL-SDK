@@ -97,7 +97,7 @@ public:
 
     /// Returns the attribute set being worked on.
     ///
-    /// Might return \c NULL if a const non-default attribute set was selected.
+    /// Might return \c nullptr if a const non-default attribute set was selected.
     ATTR::Attribute_set* get_attribute_set();
 
     /// Returns the attribute set being worked on.
@@ -140,12 +140,13 @@ private:
 
     /// Stores the attribute set being worked on.
     ///
-    /// Might be \c NULL if not yet initialized or a const non-default attribute set was selected.
+    /// Might be \c nullptr if not yet initialized or a const non-default attribute set was
+    /// selected.
     mutable ATTR::Attribute_set* m_attribute_set;
 
     /// Stores the attribute set being worked on.
     ///
-    /// Might be \c NULL if not yet initialized.
+    /// Might be \c nullptr if not yet initialized.
     mutable const ATTR::Attribute_set* m_const_attribute_set;
 
     /// Used for reference counting to ensure that pointers to non-default attribute sets remain
@@ -253,7 +254,7 @@ template <typename T>
 ATTR::Attribute_set* Attribute_set_impl<T>::get_attribute_set()
 {
     // The magic constant 0x1 indicates that the underlying attribute set is constant (in contrast
-    // to NULL which means that the default attribute set of scene elements should be used).
+    // to nullptr which means that the default attribute set of scene elements should be used).
     if( m_attribute_set == (ATTR::Attribute_set*) 0x1) //-V566 PVS
         return nullptr;
     if( m_attribute_set == nullptr)
@@ -288,7 +289,7 @@ void Attribute_set_impl<T>::set_attribute_set(
     ASSERT( M_NEURAY_API, !m_attribute_set && !m_const_attribute_set && !m_owner);
     ASSERT( M_NEURAY_API, attribute_set && owner);
     // Use the magic constant 0x1 to indicate that the underlying attribute set is constant.
-    // Using NULL instead would cause get_attribute_set() to use the default attribute set of
+    // Using nullptr instead would cause get_attribute_set() to use the default attribute set of
     // scene elements instead and m_attribute_set and m_const_attribute_set would point to
     // different attribute sets.
     m_attribute_set = (ATTR::Attribute_set*) 0x1; //-V566 PVS

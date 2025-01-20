@@ -35,6 +35,8 @@
 
 #include <mi/neuraylib/ibsdf_measurement.h>
 
+#include <string>
+
 #include "neuray_db_element_impl.h"
 #include "neuray_attribute_set_impl.h"
 
@@ -79,6 +81,9 @@ public:
     mi::Sint32 set_transmission( const mi::neuraylib::IBsdf_isotropic_data* bsdf_data);
 
     const mi::base::IInterface* get_transmission() const;
+
+private:
+    mutable std::string m_cached_filename;
 };
 
 } // namespace NEURAY

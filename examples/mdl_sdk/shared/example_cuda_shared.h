@@ -1368,6 +1368,7 @@ public:
         bool enable_pdf,
         bool use_adapt_normal,
         bool enable_bsdf_flags,
+        bool enable_mdl_next,
         const std::string& df_handle_mode,
         const std::string& lambda_return_mode);
 
@@ -1483,6 +1484,7 @@ Material_compiler::Material_compiler(
         bool enable_pdf,
         bool use_adapt_normal,
         bool enable_bsdf_flags,
+        bool enable_mdl_next,
         const std::string& df_handle_mode,
         const std::string& lambda_return_mode)
     : m_mdl_impexp_api(mdl_impexp_api, mi::base::DUP_INTERFACE)
@@ -1561,6 +1563,10 @@ Material_compiler::Material_compiler(
         // If enabled, the generated code will use the optional "flags" field
         // in the BSDF data structures.
         check_success(m_be_cuda_ptx->set_option("libbsdf_flags_in_bsdf_data", "on") == 0);
+    }
+
+    if (enable_mdl_next) {
+        m_context->set_option("mdl_next", true);
     }
 
     // force experimental to true for now

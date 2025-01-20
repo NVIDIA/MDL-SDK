@@ -130,28 +130,39 @@ extern bool unload();
     import warnings
     import gc
     import sys
+    import ctypes
     from typing import Callable, TypeVar
     if sys.version_info >= (3, 10):
         from typing import ParamSpec  # pragma: no cover
     else:
         from typing_extensions import ParamSpec  # pragma: no cover
 
+    try:
+        import numpy
+        _numpyAvailable: bool = True
+    except:  # pragma: no cover 
+        _numpyAvailable: bool = False
+
     P = ParamSpec("P")
     T = TypeVar("T")
-    def copy_docs_from(wrapped: Callable[P, T]):  # pragma: no cover
+    def _copy_docs_from(wrapped: Callable[P, T], replacements: dict[str, str] = {}):  # pragma: no cover
         """Helper to copy documentation to a different function."""
         def decorator(func: Callable) -> Callable[P, T]:
-            func.__doc__ = wrapped.__doc__
+            docString: str = wrapped.__doc__
+            for repl, by in replacements.items():
+                docString = docString.replace(repl, by)
+            func.__doc__ = docString
             return func
         return decorator
 
-    def post_swig_move_to_end_of_class():  # pragma: no cover
+
+    def _post_swig_move_to_end_of_class():  # pragma: no cover
         """Helper to move a function definition to the end of the class"""
         def decorator(func):
             return func
         return decorator
 
-    def post_swig_add_type_hint_mapping(map_from: str, map_to: str): # pragma: no cover
+    def _post_swig_add_type_hint_mapping(map_from: str, map_to: str): # pragma: no cover
         """Helper to apply type hints which are not supported by swig yet"""
         def decorator(func):
             return func
@@ -213,8 +224,10 @@ extern bool unload();
 // To handle out-parameters in combination with context managers we make the out value an object
 // that can be modified from the wrapper code and read afterwards similar to the C++c syntax.
 %pythoncode {
-    class ReturnCode() :
+    class ReturnCode():
         value: int = 0
+    class OutBoolean():
+        value: bool = False
 }
 
 // Workaround for some issues with template arguments that contain 'enum' or 'struct' in their names
@@ -1299,8 +1312,8 @@ EXTEND_FUNCTION_AS(mi::neuraylib::IExpression_list, get_expression)
 %rename(_create_cast) mi::neuraylib::IExpression_factory::create_cast(IExpression*, IType const*, char const*, bool, bool, Sint32*) const;
 %extend SmartPtr<mi::neuraylib::IExpression_factory> {
     %pythoncode {
-        @post_swig_move_to_end_of_class
-        @copy_docs_from(_create_cast)
+        @_post_swig_move_to_end_of_class
+        @_copy_docs_from(_create_cast)
         def create_cast(self, src_expr, target_type, cast_db_name, force_cast, direct_call, errors: ReturnCode = None):
             iinterface, ret = self._create_cast(src_expr, target_type, cast_db_name, force_cast, direct_call)
             if errors != None:
@@ -1315,8 +1328,8 @@ EXTEND_FUNCTION_AS(mi::neuraylib::IExpression_list, get_expression)
 %rename(_create_decl_cast) mi::neuraylib::IExpression_factory::create_decl_cast(IExpression*, IType_struct const*, char const*, bool, bool, Sint32*) const;
 %extend SmartPtr<mi::neuraylib::IExpression_factory> {
     %pythoncode {
-        @post_swig_move_to_end_of_class
-        @copy_docs_from(_create_decl_cast)
+        @_post_swig_move_to_end_of_class
+        @_copy_docs_from(_create_decl_cast)
         def create_decl_cast(self, src_expr, target_type, cast_db_name, force_cast, direct_call, errors: ReturnCode = None):
             iinterface, ret = self._create_decl_cast(src_expr, target_type, cast_db_name, force_cast, direct_call)
             if errors != None:
@@ -1330,8 +1343,8 @@ EXTEND_FUNCTION_AS(mi::neuraylib::IExpression_list, get_expression)
 %rename(_create_direct_call) mi::neuraylib::IExpression_factory::create_direct_call(const char*, IExpression_list*, Sint32*) const;
 %extend SmartPtr<mi::neuraylib::IExpression_factory> {
     %pythoncode {
-        @post_swig_move_to_end_of_class
-        @copy_docs_from(_create_direct_call)
+        @_post_swig_move_to_end_of_class
+        @_copy_docs_from(_create_direct_call)
         def create_direct_call(self, name, arguments, errors: ReturnCode = None):
             iinterface, ret = self._create_direct_call(name, arguments)
             if errors != None:
@@ -1351,8 +1364,8 @@ EXTEND_FUNCTION_AS(mi::neuraylib::IExpression_list, get_expression)
 %rename(_create_function_call) mi::neuraylib::IFunction_definition::create_function_call(IExpression_list const*, Sint32*) const;
 %extend SmartPtr<mi::neuraylib::IFunction_definition> {
     %pythoncode {
-        @post_swig_move_to_end_of_class
-        @copy_docs_from(_create_function_call)
+        @_post_swig_move_to_end_of_class
+        @_copy_docs_from(_create_function_call)
         def create_function_call(self, arguments, errors: ReturnCode = None):
             iinterface, ret = self._create_function_call(arguments)
             if errors != None:
@@ -1370,8 +1383,8 @@ EXTEND_FUNCTION_AS(mi::neuraylib::IExpression_list, get_expression)
 %rename(_distill_material) mi::neuraylib::IMdl_distiller_api::distill_material(ICompiled_material const*, char const*, IMap const*, Sint32*) const;
 %extend SmartPtr<mi::neuraylib::IMdl_distiller_api> {
     %pythoncode {
-        @post_swig_move_to_end_of_class
-        @copy_docs_from(_distill_material)
+        @_post_swig_move_to_end_of_class
+        @_copy_docs_from(_distill_material)
         def distill_material(self, material, target, distiller_options = None, errors: ReturnCode = None):
             iinterface, ret = self._distill_material(material, target, distiller_options)
             if errors != None:
@@ -1381,14 +1394,33 @@ EXTEND_FUNCTION_AS(mi::neuraylib::IExpression_list, get_expression)
     }
 }
 
+// special handling for: mi::neuraylib::IBaker
+// ----------------------------------------------------------------------------
+
+// map "bool& is_contant" to an INPUT parameter meaning we keep the input for a correct docstring to be used by the stub
+// and we apply a typemap in mdl_python_swig.i to return the is_constant value in a tuple return
+%ignore mi::neuraylib::IBaker::bake_texture_with_constant_detection;
+%rename(_bake_texture_with_constant_detection) mi::neuraylib::IBaker::bake_texture_with_constant_detection(ICanvas*, IData*, bool&, Float32, Float32, Float32, Float32, Float32, Uint32) const;
+%extend SmartPtr<mi::neuraylib::IBaker> {
+    %pythoncode {
+        @_post_swig_move_to_end_of_class
+        @_copy_docs_from(_bake_texture_with_constant_detection, { ':type is_constant: boolean': ':type is_constant: "OutBoolean"' })
+        def bake_texture_with_constant_detection(self, texture: "ICanvas", constant: "IData", is_constant: OutBoolean = None, min_u: float = 0, max_u: float = 1, min_v: float = 0, max_v: float = 1, animation_time: float = 0.0, samples: int = 1) -> int:
+            _returnCode, _is_constant = self._bake_texture_with_constant_detection(texture, constant, False, min_u, max_u, min_v, max_v, animation_time, samples)
+            if is_constant != None:
+                is_constant.value = _is_constant
+            return _returnCode
+    }
+}
+
 // special handling for: mi::neuraylib::ICompiled_material
 // ----------------------------------------------------------------------------
 %ignore mi::neuraylib::ICompiled_material::get_connected_function_db_name(char const*, Size) const;
 %rename(_get_connected_function_db_name) mi::neuraylib::ICompiled_material::get_connected_function_db_name(char const*, Size, Sint32*) const;
 %extend SmartPtr<mi::neuraylib::ICompiled_material> {
     %pythoncode {
-        @post_swig_move_to_end_of_class
-        @copy_docs_from(_get_connected_function_db_name)
+        @_post_swig_move_to_end_of_class
+        @_copy_docs_from(_get_connected_function_db_name)
         def get_connected_function_db_name(self, material_instance_name, parameter_index, errors: ReturnCode = None):
             iinterface, ret = self._get_connected_function_db_name(material_instance_name, parameter_index)
             if errors != None:
@@ -1404,8 +1436,8 @@ EXTEND_FUNCTION_AS(mi::neuraylib::IExpression_list, get_expression)
 %rename(_is_function_parameter_enabled) mi::neuraylib::IMdl_evaluator_api::is_function_parameter_enabled(ITransaction*, IValue_factory*, IFunction_call const*, Size, Sint32*) const;
 %extend SmartPtr<mi::neuraylib::IMdl_evaluator_api> {
     %pythoncode {
-        @post_swig_move_to_end_of_class
-        @copy_docs_from(_is_function_parameter_enabled)
+        @_post_swig_move_to_end_of_class
+        @_copy_docs_from(_is_function_parameter_enabled)
         def is_function_parameter_enabled(self, trans, fact, call, index, errors: ReturnCode = None) -> "IValue_bool":
             iinterface, ret = self._is_function_parameter_enabled(trans, fact, call, index)
             if errors != None:
@@ -1444,8 +1476,8 @@ EXTEND_FUNCTION_AS(mi::neuraylib::IExpression_list, get_expression)
 %extend SmartPtr<mi::neuraylib::IMdl_impexp_api> {
     %pythoncode {
 
-        @post_swig_move_to_end_of_class
-        @copy_docs_from(_serialize_function_name)
+        @_post_swig_move_to_end_of_class
+        @_copy_docs_from(_serialize_function_name)
         def serialize_function_name(self, definition_name, argument_types, return_type, context) -> "ISerialized_function_name":
             r"""Actually this method lacks the mdle_serialization_callback parameter."""
             iinterface = self._serialize_function_name(
@@ -1453,9 +1485,9 @@ EXTEND_FUNCTION_AS(mi::neuraylib::IExpression_list, get_expression)
             iinterface.thisown = True
             return iinterface
 
-        @post_swig_move_to_end_of_class
-        @copy_docs_from(_deserialize_function_name4)
-        @copy_docs_from(_deserialize_function_name5)
+        @_post_swig_move_to_end_of_class
+        @_copy_docs_from(_deserialize_function_name4)
+        @_copy_docs_from(_deserialize_function_name5)
         def deserialize_function_name(self, *args) -> "IDeserialized_function_name":
             r"""Actually this method lacks the mdle_deserialization_callback parameter."""
             argc: int = len(args)
@@ -1472,8 +1504,8 @@ EXTEND_FUNCTION_AS(mi::neuraylib::IExpression_list, get_expression)
             else:
                 raise TypeError("Wrong number of arguments passed to `IMdl_impexp_api.deserialize_function_name`.")
 
-        @post_swig_move_to_end_of_class
-        @copy_docs_from(_deserialize_module_name)
+        @_post_swig_move_to_end_of_class
+        @_copy_docs_from(_deserialize_module_name)
         def deserialize_module_name(self, module_name, context) -> "IDeserialized_module_name":
             r"""Actually this method lacks the mdle_deserialization_callback parameter."""
             iinterface = self._deserialize_module_name(module_name, None, context)
@@ -1489,8 +1521,8 @@ EXTEND_FUNCTION_AS(mi::neuraylib::IExpression_list, get_expression)
 %rename(_get_value_code) mi::neuraylib::IType_enumeration::get_value_code(Size, Sint32*) const;
 %extend SmartPtr<mi::neuraylib::IType_enumeration> {
     %pythoncode {
-        @post_swig_move_to_end_of_class
-        @copy_docs_from(_get_value_code)
+        @_post_swig_move_to_end_of_class
+        @_copy_docs_from(_get_value_code)
         def get_value_code(self, index: int, errors: ReturnCode = None):
             code, ret = self._get_value_code(index)
             if errors != None:
@@ -1712,9 +1744,125 @@ EXTEND_FUNCTION_AS(mi::neuraylib::ITransaction, edit)
 // ----------------------------------------------------------------------------
 %ignore mi::neuraylib::ITile::get_pixel const;
 %ignore mi::neuraylib::ITile::set_pixel;
-%ignore mi::neuraylib::ITile::get_data const;   // Not supported at this point, TODO involve numpy here
-%ignore mi::neuraylib::ITile::get_data;         // Not supported at this point, TODO involve numpy here
+%ignore mi::neuraylib::ITile::get_data const;
+%ignore mi::neuraylib::ITile::get_data;
 %extend SmartPtr<mi::neuraylib::ITile> {
+
+    uint64_t _get_data()
+    {
+        return reinterpret_cast<uint64_t>($self->get()->get_data());
+    }
+
+    %pythoncode %{
+        def get_data(self) -> int:
+            r"""
+            Returns a pointer to the raw tile data according to the pixel type of the tile.
+
+            This methods is used for fast, direct write access to the raw tile data. It is expected that
+            the data is stored in row - major layout without any padding.In case of Color, the
+            components are expected to be stored in RGBA order.
+
+            The total size of the buffer in bytes is : 'x * y * bpp' where 'x' is the result
+            of 'get_resolution_x()', 'y' is the result of 'get_resolution_y()', and 'bpp' is the number
+            of bytes per pixel. The number of bytes per pixel is the product of
+            'pymdlsdk.IImage_api.get_components_per_pixel()' and
+            'pymdlsdk.IImage_api.get_bytes_per_component()' when passing the result of 'get_type()'
+            as pixel type.
+            """
+            return self._get_data()
+
+        def get_data_numpy(self) -> "numpy.ndarray":
+            r"""
+            Returns a 3D numpy array to the raw tile data with an element type according to the pixel type of the tile.
+
+            This is method is based on 'get_data()' and only adds the mapping to a numpy structure.
+            Note, for most efficient operations use in-place operators:
+
+                imageData += 1.0
+
+                imageData *= 0.5
+
+            in contrast to out-place synthax:
+
+                imageData[:] = (imageData + 1.0) * 0.5
+            """
+
+            if not _numpyAvailable:
+                warnings.warn("The numpy package required by this function was not found. Returning None.", RuntimeWarning)
+                return None
+
+            channels : int = 0
+            bytesPerChannel : int = 0
+            pixelType: str = self.get_type()
+            numpyElementType = None
+            if pixelType == "Sint8":  # pragma: no cover
+                channels = 1
+                bytesPerChannel = 1
+                numpyElementType = numpy.int8
+            elif pixelType == "Sint32":  # pragma: no cover
+                channels = 1
+                bytesPerChannel = 4
+                numpyElementType = numpy.int32
+            elif pixelType == "Float32":  # pragma: no cover
+                channels = 1
+                bytesPerChannel = 4
+                numpyElementType = numpy.float32
+            elif pixelType == "Float32<2>":  # pragma: no cover
+                channels = 2
+                bytesPerChannel = 4
+                numpyElementType = numpy.float32
+            elif pixelType == "Float32<3>":
+                channels = 3
+                bytesPerChannel = 4
+                numpyElementType = numpy.float32
+            elif pixelType == "Float32<4>":  # pragma: no cover
+                channels = 4
+                bytesPerChannel = 4
+                numpyElementType = numpy.float32
+            elif pixelType == "Rgb":  # pragma: no cover
+                channels = 3
+                bytesPerChannel = 1
+                numpyElementType = numpy.uint8
+            elif pixelType == "Rgba":  # pragma: no cover
+                channels = 4
+                bytesPerChannel = 1
+                numpyElementType = numpy.uint8
+            elif pixelType == "Rgbe":  # pragma: no cover
+                channels = 4
+                bytesPerChannel = 1
+                numpyElementType = numpy.uint8
+            elif pixelType == "Rgbea":  # pragma: no cover
+                channels = 5
+                bytesPerChannel = 1
+                numpyElementType = numpy.uint8
+            elif pixelType == "Rgb_16":  # pragma: no cover
+                channels = 3
+                bytesPerChannel = 2
+                numpyElementType = numpy.uint16
+            elif pixelType == "Rgba_16":  # pragma: no cover
+                channels = 4
+                bytesPerChannel = 3
+                numpyElementType = numpy.uint16
+            elif pixelType == "Rgb_fp":  # pragma: no cover
+                channels = 3
+                bytesPerChannel = 4
+                numpyElementType = numpy.float32
+            elif pixelType == "Color":  # pragma: no cover
+                channels = 4
+                bytesPerChannel = 4
+                numpyElementType = numpy.float32
+            else:  # pragma: no cover
+                return None
+
+            width: int = self.get_resolution_x()
+            height: int = self.get_resolution_y()
+            byteBufferSize: int = width * height * channels * bytesPerChannel
+            byteBuffer = ctypes.cast(self._get_data(), ctypes.POINTER(ctypes.c_uint8 * byteBufferSize))
+            typedBufferSize: int = width * height * channels
+            typedBuffer = numpy.frombuffer(byteBuffer.contents, dtype=numpyElementType, count=typedBufferSize)
+
+            return typedBuffer.reshape(height, width, channels)
+    %}
 
     mi::math::Color_struct get_pixel(mi::Uint32 x_offset, mi::Uint32 y_offset) const
     {
@@ -1966,7 +2114,8 @@ EXTEND_FUNCTION_AS(mi::neuraylib::ITransaction, edit)
 // ----------------------------------------------------------------------------
 
 // from now on we handle mi::Sint32* as out parameter (this could be changed or later)
-%apply mi::Sint32* OUTPUT{ int* errors };
+%apply mi::Sint32* OUTPUT { int* errors };
+%apply bool & INOUT{ bool & is_constant }; // simlar for output references
 
 // Note, the order of the includes is important here !
 #ifdef IRAY_SDK

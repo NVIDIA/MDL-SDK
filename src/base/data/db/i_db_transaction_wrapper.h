@@ -126,7 +126,7 @@ public:
     }
 
     Tag store(
-        SCHED::Job* job,
+        SCHED::Job_base* job,
         const char* name = nullptr,
         Privacy_level privacy_level = 0,
         Privacy_level store_level = 255)
@@ -136,7 +136,7 @@ public:
 
     void store(
         Tag tag,
-        SCHED::Job* job,
+        SCHED::Job_base* job,
         const char* name = nullptr,
         Privacy_level privacy_level = 0,
         Journal_type journal_type = JOURNAL_NONE,
@@ -146,7 +146,7 @@ public:
     }
 
     Tag store_for_reference_counting(
-        SCHED::Job* job,
+        SCHED::Job_base* job,
         const char* name = nullptr,
         Privacy_level privacy_level = 0,
         Privacy_level store_level = 255)
@@ -157,7 +157,7 @@ public:
 
     void store_for_reference_counting(
         Tag tag,
-        SCHED::Job* job,
+        SCHED::Job_base* job,
         const char* name = nullptr,
         Privacy_level privacy_level = 0,
         Journal_type journal_type = JOURNAL_NONE,

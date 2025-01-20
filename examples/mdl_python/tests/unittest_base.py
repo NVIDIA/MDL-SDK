@@ -69,19 +69,19 @@ class UnittestBase(UnittestFrameworkBase):
             kind: pymdlsdk.IMessage.Kind = message.get_kind()
             self.assertNotEqual(kind, pymdlsdk.IMessage.Kind.MSG_FORCE_32_BIT)
             level: str = ""
-            if message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_FATAL:
+            if message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_FATAL:  # pragma: no cover
                 level = "fatal:"
                 hasErrors = True
-            elif message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_ERROR:
+            elif message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_ERROR:  # pragma: no cover
                 level = "error:"
                 hasErrors = True
-            elif message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_WARNING:
+            elif message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_WARNING:  # pragma: no cover
                 level = "warning:"
-            elif message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_INFO:
+            elif message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_INFO:  # pragma: no cover
                 level = "info:"
-            elif message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_VERBOSE:
+            elif message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_VERBOSE:  # pragma: no cover
                 level = "verbose:"
-            elif message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_DEBUG:
+            elif message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_DEBUG:  # pragma: no cover
                 level = "debug:"
             print(f"{level} {message.get_string()}")
         return not hasErrors
@@ -124,12 +124,7 @@ class UnittestBase(UnittestFrameworkBase):
             return func()
         
     def assertException(self, expectedException, func):
-        if expectedException == None:  # allow to pass none when testing
-            return func()
+        if expectedException == None:  # pragma: no cover
+            return func()  # allow to pass none when testing 
         with self.assertRaises(expectedException):
             func()  # no return needed
-
-    def assertNoWarning(self, func):
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-            return func()

@@ -35,6 +35,7 @@
 #include <mi/mdl/mdl_mdl.h>
 #include <mi/mdl/mdl_symbols.h>
 #include <mi/mdl/mdl_types.h>
+
 #include <base/data/db/i_db_access.h>
 #include <io/scene/mdl_elements/mdl_elements_detail.h> // DETAIL::Type_binder
 #include <io/scene/mdl_elements/i_mdl_elements_compiled_material.h>
@@ -55,21 +56,23 @@ namespace MI {
 
 namespace NEURAY {
 
-static DB::Transaction *unwrap(mi::neuraylib::ITransaction *transaction)
+namespace {
+
+DB::Transaction *unwrap(mi::neuraylib::ITransaction *transaction)
 {
     Transaction_impl *transaction_impl =
         static_cast<Transaction_impl *>(transaction);
     return transaction_impl->get_db_transaction();
 }
 
-static MDL::Mdl_function_call const *unwrap(mi::neuraylib::IFunction_call const *function_call)
+MDL::Mdl_function_call const *unwrap(mi::neuraylib::IFunction_call const *function_call)
 {
     Function_call_impl const *function_call_impl =
         static_cast<Function_call_impl const *>(function_call);
      return function_call_impl->get_db_element();
 }
 
-static MDL::Mdl_compiled_material const *unwrap(
+MDL::Mdl_compiled_material const *unwrap(
     mi::neuraylib::ICompiled_material const *compiled_material)
 {
     Compiled_material_impl const *compiled_material_impl =
@@ -77,7 +80,7 @@ static MDL::Mdl_compiled_material const *unwrap(
      return compiled_material_impl->get_db_element();
 }
 
-static MDL::Mdl_function_definition const *unwrap(
+MDL::Mdl_function_definition const *unwrap(
     mi::neuraylib::IFunction_definition const *function_definition)
 {
     Function_definition_impl const *function_definition_impl =
@@ -85,32 +88,21 @@ static MDL::Mdl_function_definition const *unwrap(
     return function_definition_impl->get_db_element();
 }
 
-static BACKENDS::Link_unit const *unwrap(mi::neuraylib::ILink_unit const *lu)
+BACKENDS::Link_unit const *unwrap(mi::neuraylib::ILink_unit const *lu)
 {
     Link_unit const *lu_impl =
         static_cast<Link_unit const *>(lu);
     return lu_impl->get_link_unit();
 }
 
-static MDL::Execution_context *unwrap_and_clear(mi::neuraylib::IMdl_execution_context *context)
-{
-    Mdl_execution_context_impl *context_impl =
-        static_cast<Mdl_execution_context_impl *>(context);
-    if (context_impl) {
-        MDL::Execution_context& wrapped_context = context_impl->get_context();
-        wrapped_context.clear_messages();
-        return &wrapped_context;
-    }
-
-    return nullptr;
-}
+} // namespace
 
 // Constructor from an LLVM backend.
 Link_unit::Link_unit(
     BACKENDS::Mdl_llvm_backend  &be,
     mi::neuraylib::ITransaction *transaction,
-    mi::neuraylib::IMdl_execution_context* context)
-: m_link_unit(be, unwrap(transaction), unwrap_and_clear(context))
+    MDL::Execution_context* context)
+: m_link_unit(be, unwrap(transaction), context)
 {
 }
 
@@ -130,11 +122,14 @@ mi::Sint32 Link_unit::add_material_expression(
     char const                              *fname,
     mi::neuraylib::IMdl_execution_context   *context)
 {
+    MDL::Execution_context default_context;
+    MDL::Execution_context* context_impl = unwrap_and_clear_context(context, default_context);
+
     return m_link_unit.add_material_expression(
         unwrap(material),
         path,
         fname,
-        unwrap_and_clear(context));
+        context_impl);
 }
 
 // Add an MDL distribution function to this link unit.
@@ -144,11 +139,14 @@ mi::Sint32 Link_unit::add_material_df(
     char const                              *base_fname,
     mi::neuraylib::IMdl_execution_context   *context)
 {
+    MDL::Execution_context default_context;
+    MDL::Execution_context* context_impl = unwrap_and_clear_context(context, default_context);
+
     return m_link_unit.add_material_df(
         unwrap(material),
         path,
         base_fname,
-        unwrap_and_clear(context));
+        context_impl);
 }
 
 mi::Sint32 Link_unit::add_material(
@@ -157,11 +155,14 @@ mi::Sint32 Link_unit::add_material(
     mi::Size                                    description_count,
     mi::neuraylib::IMdl_execution_context      *context)
 {
+    MDL::Execution_context default_context;
+    MDL::Execution_context* context_impl = unwrap_and_clear_context(context, default_context);
+
     return m_link_unit.add_material(
         unwrap(material),
         function_descriptions,
         static_cast<size_t>(description_count),
-        unwrap_and_clear(context));
+        context_impl);
 }
 
 // Add an MDL function call as a function to this link unit.
@@ -171,6 +172,9 @@ mi::Sint32 Link_unit::add_function(
     char const                                            *fname,
     mi::neuraylib::IMdl_execution_context                 *context)
 {
+    MDL::Execution_context default_context;
+    MDL::Execution_context* context_impl = unwrap_and_clear_context(context, default_context);
+
     BACKENDS::Link_unit::Function_execution_context bfexc = BACKENDS::Link_unit::FEC_CORE;
     switch (fexc) {
     case mi::neuraylib::ILink_unit::FEC_ENVIRONMENT:
@@ -183,13 +187,13 @@ mi::Sint32 Link_unit::add_function(
         bfexc = BACKENDS::Link_unit::FEC_DISPLACEMENT;
         break;
     case mi::neuraylib::ILink_unit::FEC_FORCE_32_BIT:
-        return MDL::add_error_message(unwrap_and_clear(context), "Invalid parameters.", -1);
+        return MDL::add_error_message(context_impl, "Invalid parameters.", -1);
     }
     return m_link_unit.add_function(
         unwrap(call),
         bfexc,
         fname,
-        unwrap_and_clear(context));
+        context_impl);
 }
 
 Sint32 Link_unit::add_function(
@@ -198,6 +202,9 @@ Sint32 Link_unit::add_function(
     char const                                            *fname,
     mi::neuraylib::IMdl_execution_context                 *context)
 {
+    MDL::Execution_context default_context;
+    MDL::Execution_context* context_impl = unwrap_and_clear_context(context, default_context);
+
     BACKENDS::Link_unit::Function_execution_context bfexc = BACKENDS::Link_unit::FEC_CORE;
     switch (fexc) {
     case mi::neuraylib::ILink_unit::FEC_ENVIRONMENT:
@@ -210,13 +217,13 @@ Sint32 Link_unit::add_function(
         bfexc = BACKENDS::Link_unit::FEC_DISPLACEMENT;
         break;
     case mi::neuraylib::ILink_unit::FEC_FORCE_32_BIT:
-        return MDL::add_error_message(unwrap_and_clear(context), "Invalid parameters.", -1);
+        return MDL::add_error_message(context_impl, "Invalid parameters.", -1);
     }
     return m_link_unit.add_function(
         unwrap(function),
         bfexc,
         fname,
-        unwrap_and_clear(context));
+        context_impl);
 }
 
 Mdl_llvm_backend::Mdl_llvm_backend(
@@ -245,10 +252,11 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
     char const                            *fname,
     mi::neuraylib::IMdl_execution_context *context)
 {
-    MDL::Execution_context* context_impl = unwrap_and_clear(context);
+    MDL::Execution_context default_context;
+    MDL::Execution_context* context_impl = unwrap_and_clear_context(context, default_context);
 
     if (transaction == nullptr || function_call == nullptr) {
-        add_error_message(context_impl, "Invalid parameters (NULL pointer).", -1);
+        add_error_message(context_impl, "Invalid parameters (nullptr).", -1);
         return nullptr;
     }
 
@@ -270,10 +278,11 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
     mi::neuraylib::IMdl_execution_context   *context)
 {
 
-    MDL::Execution_context* context_impl = unwrap_and_clear(context);
+    MDL::Execution_context default_context;
+    MDL::Execution_context* context_impl = unwrap_and_clear_context(context, default_context);
 
     if (transaction == nullptr || compiled_material == nullptr) {
-        add_error_message(context_impl, "Invalid parameters (NULL pointer).", -1);
+        add_error_message(context_impl, "Invalid parameters (nullptr).", -1);
         return nullptr;
     }
 
@@ -288,10 +297,11 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
     const char* base_fname,
     mi::neuraylib::IMdl_execution_context* context)
 {
-    MDL::Execution_context* context_impl = unwrap_and_clear(context);
+    MDL::Execution_context default_context;
+    MDL::Execution_context* context_impl = unwrap_and_clear_context(context, default_context);
 
     if (!transaction || !compiled_material || !path) {
-        add_error_message(context_impl, "Invalid parameters (NULL pointer).", -1);
+        add_error_message(context_impl, "Invalid parameters (nullptr).", -1);
         return nullptr;
     }
 
@@ -306,7 +316,8 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material(
     mi::Size description_count,
     mi::neuraylib::IMdl_execution_context* context)
 {
-    MDL::Execution_context* context_impl = unwrap_and_clear(context);
+    MDL::Execution_context default_context;
+    MDL::Execution_context* context_impl = unwrap_and_clear_context(context, default_context);
 
     // reuse link unit based implementation
     BACKENDS::Link_unit link_unit(m_backend, unwrap(transaction), context_impl);
@@ -332,17 +343,20 @@ mi::neuraylib::ILink_unit* Mdl_llvm_backend::create_link_unit(
     mi::neuraylib::ITransaction* transaction,
     mi::neuraylib::IMdl_execution_context* context)
 {
-    if (context)
-        context->clear_messages();
+    MDL::Execution_context default_context;
+    MDL::Execution_context* context_impl = unwrap_and_clear_context(context, default_context);
 
-    return new Link_unit(m_backend, transaction, context);
+    return new Link_unit(m_backend, transaction, context_impl);
 }
 
 mi::neuraylib::ITarget_code const* Mdl_llvm_backend::translate_link_unit(
     mi::neuraylib::ILink_unit const* lu,
     mi::neuraylib::IMdl_execution_context* context)
 {
-    return m_backend.translate_link_unit(unwrap(lu), unwrap_and_clear(context));
+    MDL::Execution_context default_context;
+    MDL::Execution_context* context_impl = unwrap_and_clear_context(context, default_context);
+
+    return m_backend.translate_link_unit(unwrap(lu), context_impl);
 }
 
 

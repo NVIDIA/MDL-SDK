@@ -1164,16 +1164,17 @@ bool AT_analysis::pre_visit(IDeclaration_function *decl)
 
         check_auto_types(decl);
     } else {
-        mi::base::Handle<IModule const> owner = mi::base::make_handle_dup(&m_module);
-        IDeclaration_function const *o_decl = skip_presets(decl, owner);
-        Definition const            *odef   = impl_cast<Definition>(o_decl->get_definition());
+        mi::base::Handle<Module const> owner(mi::base::make_handle_dup(&m_module));
+        Definition const *odef = impl_cast<Definition>(skip_presets(decl->get_definition(), owner));
 
-        // only set this in the def, presets do not allow frequency modifiers in syntax
-        if (odef->has_flag(Definition::DEF_IS_UNIFORM)) {
-            const_cast<Definition *>(fkt_def)->set_flag(Definition::DEF_IS_UNIFORM);
-        }
-        if (odef->has_flag(Definition::DEF_IS_VARYING)) {
-            const_cast<Definition *>(fkt_def)->set_flag(Definition::DEF_IS_VARYING);
+        if (!is_error(odef)) {
+            // only set this in the def, presets do not allow frequency modifiers in syntax
+            if (odef->has_flag(Definition::DEF_IS_UNIFORM)) {
+                const_cast<Definition *>(fkt_def)->set_flag(Definition::DEF_IS_UNIFORM);
+            }
+            if (odef->has_flag(Definition::DEF_IS_VARYING)) {
+                const_cast<Definition *>(fkt_def)->set_flag(Definition::DEF_IS_VARYING);
+            }
         }
     }
 

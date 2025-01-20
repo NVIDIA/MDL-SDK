@@ -92,8 +92,8 @@ public:
     ///     - a string following ISO 639-1 standard (See https://en.wikipedia.org/wiki/ISO_639-1),
     ///     - the system keyword (this will fallback to use system defined locale).
     ///       See #mi::neuraylib::IMdl_i18n_configuration::get_system_keyword().
-    ///     - a \c NULL value (this will disable any translation),
-    ///                            
+    ///     - a \c nullptr value (this will disable any translation),
+    ///
     /// \return
     ///     -  0: Success.
     ///     - -1: Failure.
@@ -110,14 +110,14 @@ public:
     /// \return
     ///     - the string passed to #mi::neuraylib::IMdl_i18n_configuration::set_locale() or,
     ///     - the system keyword #mi::neuraylib::IMdl_i18n_configuration::get_system_keyword() or,
-    ///     - a \c NULL value if translation is disabled
+    ///     - a \c nullptr value if translation is disabled
     ///
     virtual const char* get_locale() const = 0;
 
     /// Returns the system locale.
     ///
     /// \return
-    ///     The name of the locale set by the system or \c NULL if locale is not set.
+    ///     The name of the locale set by the system or \c nullptr if locale is not set.
     ///
     virtual const char* get_system_locale() const = 0;
 

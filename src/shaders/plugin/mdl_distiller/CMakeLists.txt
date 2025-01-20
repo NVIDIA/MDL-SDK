@@ -85,6 +85,9 @@ create_from_base_preset(
 # get and run mdltlc
 target_add_tool_dependency(TARGET ${PROJECT_NAME} TOOL mdltlc)
 
+file(GLOB _MDL_CORE_HEADERS ${MDL_INCLUDE_FOLDER}/mi/mdl/*)
+list(SORT _MDL_CORE_HEADERS)
+
 add_custom_command(
     OUTPUT
         ${_GENERATED_SOURCES}
@@ -96,6 +99,7 @@ add_custom_command(
     COMMAND ${mdltlc_PATH} --generate --all-errors --output-dir ${_GENERATED_DIR} ${_GENERATOR_FILES}
     DEPENDS
         ${_GENERATOR_FILES_ORIGINAL}
+        ${_MDL_CORE_HEADERS}
     VERBATIM
     )
 
@@ -122,9 +126,7 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
 add_library(mdl_distiller ALIAS ${PROJECT_NAME})
 add_library(mdl::mdl_distiller ALIAS ${PROJECT_NAME})
 
-# -------------------------------------------------------------------------------------------------
-# Create installation rules to copy the build directory
-# -------------------------------------------------------------------------------------------------
+# create installation rules
 add_target_install(
     TARGET ${PROJECT_NAME}
     )

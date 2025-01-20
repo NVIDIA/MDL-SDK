@@ -63,7 +63,7 @@ Tag_version Access_base::get_tag_version() const
     return { m_tag, m_info->get_transaction_id(), m_info->get_version()};
 }
 
-const SCHED::Job* Access_base::get_job() const
+const SCHED::Job_base* Access_base::get_job() const
 {
     return m_info && m_info->get_is_job() ? m_info->get_job() : nullptr;
 }
@@ -93,9 +93,10 @@ Element_base* Access_base::set_access( Tag tag, Transaction* transaction, SERIAL
         return m_element;
     }
 
-    // Unclear whether this location can be reached.
-    MI_ASSERT( !"Unexpected creation of dummy element");
-    LOG::mod_log->debug( M_DB, LOG::Mod_log::C_DATABASE, "Access will return an empty element.");
+    // This location can be reached when results of DB jobs are accessed, but the jobs are no longer
+    // executed since the transaction is in the process of being committed or aborted.
+    LOG::mod_log->debug(
+        M_DB, LOG::Mod_log::C_DATABASE, "Access of tag %u will return an empty element.", tag());
     m_element = m_transaction->construct_empty_element( id);
     return m_element;
 }
@@ -131,9 +132,11 @@ Element_base* Access_base::set_edit(
         return m_element;
     }
 
-    // Unclear whether this location can be reached.
+    // This location can probably be reached when results of DB jobs are attempted to be edited
+    // (which is forbidden).
     MI_ASSERT( !"Unexpected creation of dummy element");
-    LOG::mod_log->debug( M_DB, LOG::Mod_log::C_DATABASE, "Edit will return an empty element.");
+    LOG::mod_log->debug(
+        M_DB, LOG::Mod_log::C_DATABASE, "Edit of tag %u will return an empty element.", tag());
     m_element = m_transaction->construct_empty_element( id);
     return m_element;
 }

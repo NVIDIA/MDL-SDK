@@ -65,6 +65,16 @@
 
 namespace mi { namespace examples { namespace io
 {
+    /// Returns the native path separator.
+    inline char sep()
+    {
+#ifdef MI_PLATFORM_WINDOWS
+        return '\\';
+#else
+        return '/';
+#endif
+    }
+
     /// Normalize a path.
     /// On windows, this turns backslashes into forward slashes. No changes on Linux and Mac.
     inline std::string normalize(std::string path, bool remove_dir_ups = false)
@@ -271,7 +281,7 @@ namespace mi { namespace examples { namespace io
 
     // --------------------------------------------------------------------------------------------
 
-    /// Get filename (with extension if selected) of a given path without its parent folders or 
+    /// Get filename (with extension if selected) of a given path without its parent folders or
     /// \c path (with or without extension) if there is no parent directory in \c path.
     inline std::string basename(const std::string& path, bool with_extension = true)
     {

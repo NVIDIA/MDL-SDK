@@ -36,6 +36,8 @@
 #include "i_neuray_db_element.h"
 
 #include <mi/base/lock.h>
+
+#include <set>
 #include <string>
 
 

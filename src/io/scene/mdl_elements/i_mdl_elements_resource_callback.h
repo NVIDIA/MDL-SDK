@@ -174,9 +174,9 @@ private:
     ///
     /// Does not support images with uvtiles or non-trivial frames.
     ///
-    /// If \p old_filename is not \p NULL and the filename derived from it does not already exist,
-    /// return it. Otherwise, generate a generic filename with the new or original extension that
-    /// does not already exist.
+    /// If \p old_filename is not \c nullptr and the filename derived from it does not already
+    /// exist, return it. Otherwise, generate a generic filename with the new or original extension
+    /// that does not already exist.
     ///
     /// Returns m_path_prefix + "_" + stem(old_filename) + "." + extension or
     /// m_path_prefix + _resource_" + counter + extension .
@@ -188,9 +188,9 @@ private:
     /// Invokes #get_new_resource_filename() if \p add_sequence_marker and \p add_uvtile_marker
     /// are \c false.
     ///
-    /// Otherwise, if \p old_filename is not \p NULL, returns a filename with markers derived from
-    /// it (no existence check). Otherwise, generate a generic filename with the new or original
-    /// extension and markers (no existence check).
+    /// Otherwise, if \p old_filename is not \c nullptr, returns a filename with markers derived
+    /// from it (no existence check). Otherwise, generate a generic filename with the new or
+    /// original extension and markers (no existence check).
     std::string get_new_resource_filename_marker(
         const char* new_extension,
         const char* old_filename,
@@ -285,7 +285,7 @@ private:
     /// New filename of the MDL module to be exported (or empty for string-based exports).
     std::string m_module_filename;
 
-    /// New filename of the MDL module to be exported (or NULL for string-based exports).
+    /// New filename of the MDL module to be exported (or \c nullptr for string-based exports).
     const char* m_module_filename_c_str;
 
     /// Path prefix for resource names.

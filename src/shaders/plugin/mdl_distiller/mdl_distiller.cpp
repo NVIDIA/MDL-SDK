@@ -171,14 +171,7 @@ const mi::mdl::IMaterial_instance* Mdl_distiller::distill(
 
         if ( options->layer_normal) {
             Make_normal_rules make_normal;
-#if 0
-            mi::base::Handle<mi::mdl::IMaterial_instance const> lnorm(
-                api.apply_rules( res.get(), make_normal, event_handler, options, error));
-            res = api.merge_materials( res.get(), lnorm.get(),
-                                     mi::mdl::IDistiller_plugin_api::FS_MATERIAL_GEOMETRY_NORMAL);
-#else
             res = api.apply_rules( res.get(), make_normal, event_handler, options, error);
-#endif
             CHECK_RESULT
         }
 
@@ -209,7 +202,6 @@ const mi::mdl::IMaterial_instance* Mdl_distiller::distill(
         res = api.apply_rules( res.get(), make_simple, event_handler, options, error);
         CHECK_RESULT;
 
-//        mi::base::Handle<mi::mdl::IMaterial_instance const> clone;
         if ( options->layer_normal) {
             Make_normal_for_sg make_normal_sg;
             res = api.apply_rules( res.get(), make_normal_sg, event_handler, options, error);

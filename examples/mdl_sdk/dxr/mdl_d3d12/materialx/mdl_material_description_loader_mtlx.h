@@ -44,6 +44,8 @@ namespace mi {namespace examples { namespace mdl_d3d12 { namespace materialx
         explicit Mdl_material_description_loader_mtlx(const Base_options& options);
         ~Mdl_material_description_loader_mtlx() = default;
 
+        const Base_options& get_options() const final { return m_options; }
+
         bool match_gltf_name(const std::string& gltf_name) const final;
 
         bool generate_mdl_source_code(
@@ -62,6 +64,7 @@ namespace mi {namespace examples { namespace mdl_d3d12 { namespace materialx
         std::string get_file_type_description(size_t index) const final;
 
     private:
+        const Base_options& m_options;
         std::vector<std::string> m_paths;
         std::vector<std::string> m_libraries;
         std::string m_generated_mdl_path;

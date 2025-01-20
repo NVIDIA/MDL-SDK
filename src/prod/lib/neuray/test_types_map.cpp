@@ -141,7 +141,7 @@ void test_interface_IMap(
         MI_CHECK_EQUAL( 1, GET_REFCOUNT( stl_map[ get_key( i)].get()));
     }
     mi::base::Handle<mi::IVoid> void_( transaction->create<mi::IVoid>( "Void"));
-    MI_CHECK( void_.is_valid_interface());
+    MI_CHECK( void_);
     MI_CHECK_EQUAL( 1, GET_REFCOUNT( void_.get()));
 
     // insert map contents (via key)
@@ -305,13 +305,13 @@ void test(
     const char* value_type_name)
 {
     mi::base::Handle<mi::IData> data( transaction->create<mi::IData>( value_type_name));
-    bool untyped = !data.is_valid_interface();
+    bool untyped = !data;
 
     std::string type_name = "Map<";
     type_name += untyped ? "Interface" : value_type_name;
     type_name += ">";
     mi::base::Handle<mi::IMap> map( transaction->create<mi::IMap>( type_name.c_str()));
-    MI_CHECK( map.is_valid_interface());
+    MI_CHECK( map);
     test_interface_IMap<T>( transaction, map.get(), type_name.c_str(), value_type_name, untyped);
 
 }
@@ -341,7 +341,7 @@ void run_tests( mi::neuraylib::INeuray* neuray)
 MI_TEST_AUTO_FUNCTION( test_types_map )
 {
     mi::base::Handle<mi::neuraylib::INeuray> neuray( load_and_get_ineuray());
-    MI_CHECK( neuray.is_valid_interface());
+    MI_CHECK( neuray);
 
     {
         mi::base::Handle<mi::neuraylib::IDebug_configuration> debug_configuration(

@@ -152,6 +152,7 @@ set(Python3_EXECUTABLE ${python_PATH})
 
 set(LLVM_CMAKE_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dist CACHE PATH "LLVM source root.")
 set(LLVM_NATIVE_BUILD ${CMAKE_CURRENT_BINARY_DIR}/dist/NATIVE CACHE PATH "Binary root dir for LLVM tablegen.")
+set(BUILD_SHARED_LIBS OFF)
 
 # speed up build is not working properly on all platforms and configurations
 if(WINDOWS)
@@ -266,7 +267,6 @@ function(LLVM_TARGET_SETUP)
                 "-fPIC"
                 "-m64"
                 "-stdlib=libc++"
-                "$<$<COMPILE_LANGUAGE:CXX>:-std=c++11>"
                 "-fvisibility-inlines-hidden"
                 "-Wno-deprecated-declarations"
                 "-Wno-inconsistent-missing-override"

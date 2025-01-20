@@ -30,38 +30,40 @@
 mdl 1.3;
 
 using ::anno import *;
+import ::base::*;
 import ::tex::*;
 
-// Test resource lookup relative to module.
-export int fd_texture_success(
+// Texture, defaults, weak relative.
+export int fd_texture(
     uniform texture_2d t = texture_2d("resources/test.png") [[ unused() ]]
 ) { return 0; }
 
-// Test udim texture resource lookup.
-export int fd_texture_udim_success(
+// Texture, defaults, weak relative, udim, gamma_default.
+export int fd_texture_udim(
     uniform texture_2d t = texture_2d("resources/test<UDIM>.png", tex::gamma_default) [[ unused() ]]
 ) { return 0; }
 
-
-// Test texture constructor with gamma mode srgb (differs from fd_texture_success() in gamma mode).
+// Texture, defaults, strict relative, gamma_srgb.
 export int fd_texture_gamma_srgb(
     uniform texture_2d t = texture_2d("./resources/test.png", tex::gamma_srgb) [[ unused() ]]
 ) { return 0; }
 
-// Test texture constructor with gamma mode linear (differs from fd_texture_success() in gamma
-// mode).
+// Texture, defaults, strict relative, gamma_linear.
 export int fd_texture_gamma_linear(
     uniform texture_2d t = texture_2d("./resources/test.png", tex::gamma_linear) [[ unused() ]]
 ) { return 0; }
 
+// Texture, body, strict relative.
+export color fd_texture_body()
+{ return base::file_texture(texture_2d("./resources/test.png")).tint; }
 
-// Test resource lookup relative to module.
-export int fd_light_profile_success(
+// Light profile, defaults, strict relative.
+export int fd_light_profile(
     uniform light_profile l = light_profile("../mdl_elements/resources/test.ies") [[ unused() ]]
 ) { return 0; }
 
-// Test absolute resource lookup.
-export int fd_bsdf_measurement_success(
+// BSDF measurement, defaults, absolute.
+export int fd_bsdf_measurement(
     uniform bsdf_measurement b
         = bsdf_measurement("/mdl_elements/resources/test.mbsdf") [[ unused() ]]
 ) { return 0; }

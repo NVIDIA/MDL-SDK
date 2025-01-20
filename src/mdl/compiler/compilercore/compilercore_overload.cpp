@@ -570,7 +570,7 @@ Overload_solver::Definition_list Overload_solver::find_positional_overload(
             Signature_entry entry(
                 (IType const *const *)Arena_memdup(
                 arena, signature.data(), signature.size() * sizeof(signature[0])),
-                (bool const *const)Arena_memdup(
+                (bool const *)Arena_memdup(
                 arena, bounds.data(), bounds.size() * sizeof(bounds[0])),
                 signature.size(),
                 candidate);
@@ -580,7 +580,7 @@ Overload_solver::Definition_list Overload_solver::find_positional_overload(
             Signature_entry entry(
                 (IType const *const *)Arena_memdup(
                 arena, signature.data(), signature.size() * sizeof(signature[0])),
-                (bool const *const)Arena_memdup(
+                (bool const *)Arena_memdup(
                 arena, bounds.data(), bounds.size() * sizeof(bounds[0])),
                 signature.size(),
                 candidate);

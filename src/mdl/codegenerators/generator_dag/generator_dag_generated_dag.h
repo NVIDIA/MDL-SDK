@@ -50,6 +50,7 @@
 #include "mdl/compiler/compilercore/compilercore_array_ref.h"
 
 #include "generator_dag_ir.h"
+#include "generator_dag_unit.h"
 
 //namespace MI { namespace MDL {  class Mdl_material_instance_builder; } }
 
@@ -131,6 +132,8 @@ public:
         EXPOSE_NAMES_OF_LET_EXPRESSIONS = 0x0010,
         /// If set, target material model compilation mode is used.
         TARGET_MATERIAL_MODEL_MODE      = 0x0020,
+        /// Disable debug info on DAG representation
+        DISABLE_DBG_INFO                = 0x0040,
     };
 
     /// Bit set of compile options.
@@ -836,21 +839,27 @@ public:
         /// \param call_args       The call arguments of the called function.
         /// \param num_call_args   The number of call arguments.
         /// \param ret_type        The return type of the called function.
+        /// \param dbg_info        The debug info for this call if any.
+        ///
         /// \returns               The created call.
         DAG_node const *create_call(
             char const                    *name,
             IDefinition::Semantics        sema,
             DAG_call::Call_argument const call_args[],
             int                           num_call_args,
-            IType const                   *ret_type) MDL_FINAL;
+            IType const                   *ret_type,
+            DAG_DbgInfo                   dbg_info) MDL_FINAL;
 
         /// Create a parameter reference.
         /// \param  type        The type of the parameter
         /// \param  index       The index of the parameter.
+        /// \param dbg_info     The debug info for this parameter if any.
+        ///
         /// \returns            The created parameter reference.
         DAG_parameter const *create_parameter(
             IType const *type,
-            int         index) MDL_FINAL;
+            int         index,
+            DAG_DbgInfo dbg_info) MDL_FINAL;
 
         /// Enable common subexpression elimination.
         ///
@@ -940,24 +949,24 @@ public:
 
         /// Return the node determined by the path, starting from the root expression of the
         /// material instance.
-        /// 
+        ///
         /// If the path is invalid, both result parameters will contain NULL on return.
-        /// 
+        ///
         /// \param path         Path of the sub expression to return.
-        /// \param node_result  If the node named at the path is a non-constant, it is stored 
+        /// \param node_result  If the node named at the path is a non-constant, it is stored
         ///                     here on return. Otherwise, NULL is stored.
         /// \param value_result If the node named at the path is a constant, its value is stored
         ///                     here on return. Otherwise, NULL is stored.
         void lookup_sub_expression(
-            char const *path, 
-            DAG_node const *&node_result, 
-            IValue const *&value_result) const MDL_FINAL;
+            char const     *path,
+            DAG_node const *&node_result,
+            IValue const   *&value_result) const MDL_FINAL;
 
-        /// Calculate the hash for the node determined by the path, starting from the root 
+        /// Calculate the hash for the node determined by the path, starting from the root
         /// expression of the material instance.
-        /// 
+        ///
         /// \param path    Path of the sub expression to calculate the hash for.
-        /// 
+        ///
         /// \return the hash of the subexpression, or the null hash if the path is invalid.
         DAG_hash get_sub_expression_hash(char const *path) const MDL_FINAL;
 
@@ -1040,6 +1049,12 @@ public:
 
         // ------------------- non-interface methods -------------------
 
+        /// Get the DAG_unit of this instance.
+        DAG_unit const &get_dag_unit() const { return m_dag_unit; }
+
+        /// Get the DAG_unit of this instance.
+        DAG_unit &get_dag_unit() { return m_dag_unit; }
+
         /// Get the node factory of this instance.
         DAG_node_factory_impl *get_node_factory() { return &m_node_factory; }
 
@@ -1059,10 +1074,10 @@ public:
         int get_material_index() const { return m_material_index; }
 
         /// Get the type factory of this instance.
-        Type_factory const &get_type_factory() const { return m_type_factory; }
+        Type_factory const &get_type_factory() const { return m_dag_unit.get_type_factory(); }
 
         /// Get the value factory of this instance.
-        Value_factory const &get_value_factory() const { return m_value_factory; }
+        Value_factory const &get_value_factory() const { return m_dag_unit.get_value_factory(); }
 
         /// Set the material constructor.
         void set_constructor(DAG_call const *call) { m_constructor = call; }
@@ -1137,14 +1152,23 @@ public:
         /// \param name  the name of this instance
         void dump_instance_dag(char const *name) const;
 
+        /// Serialize this material instance.
+        ///
+        /// \param serializer       the low level serializer
+        /// \param bin_serializer   the MDL binary serializer
         void serialize(
-            ISerializer *serializer,
+            ISerializer           *serializer,
             MDL_binary_serializer *bin_serializer) const;
 
+        /// Deserialize a material instance.
+        ///
+        /// \param deserializer      the deserializer used to read the low level data
+        /// \param bin_deserializer  the serializer used for deserializing "the binary"
+        /// \param compiler          the IMDL compiler interface
         static Generated_code_dag::Material_instance const *deserialize(
-            IDeserializer *deserializer,
+            IDeserializer           *deserializer,
             MDL_binary_deserializer *bin_deserializer,
-            MDL *compiler);
+            MDL                     *compiler);
 
     private:
         /// Constructor.
@@ -1154,12 +1178,14 @@ public:
         /// \param material_index             The index of the material that creates this instance.
         /// \param internal_space             The internal space for which to compile.
         /// \param unsafe_math_optimizations  If true, allow unsafe math optimizations.
+        /// \param enable_debug_info          If true, debug info will be copied from code DAG.
         Material_instance(
             IMDL        *mdl,
             IAllocator  *alloc,
             size_t      material_index,
             char const  *internal_space,
-            bool        unsafe_math_optimizations);
+            bool        unsafe_math_optimizations,
+            bool        enable_debug_info);
 
     private:
         /// Serialize all DAGs of this material instance.
@@ -1240,7 +1266,7 @@ public:
         void warning(int code, Err_location const &loc, char const *msg);
 
         friend class Transparent_layers;
-        
+
     private:
         friend class Instantiate_helper;
 
@@ -1266,8 +1292,9 @@ public:
                 , m_old_name(helper.m_curr_param_name)
                 {
                     helper.enter_param(name, index);
-                    if (!helper.m_curr_param_name.empty())
+                    if (!helper.m_curr_param_name.empty()) {
                         helper.m_curr_param_name += '.';
+                    }
                     helper.m_curr_param_name += name;
                 }
 
@@ -1377,19 +1404,32 @@ public:
             void leave_param() {/*empty for now*/}
 
             /// Check if we support instantiate_dag_arguments on this node.
-            bool supported_arguments(DAG_node const *n);
+            bool supported_arguments(
+                DAG_node const *n);
 
-            /// Create a constructor call that converts the expression \c call to the 
-            /// \c target_type by inserting a constructor call of the target type and 
-            /// selecting matching fields from \c call.
-            DAG_node const *translate_decl_cast(
+            /// Create an elemental constructor call for the given target_type.
+            ///
+            /// If \c call is non-NULL converts it to the \c target_type by inserting
+            /// an elemental constructor call of the target type and
+            /// selecting matching fields from \c call (decl_cast).
+            /// If \c call is NULL, creates a default constructor call translated into
+            /// an elemental one (default constructor to elemental constructor conversion).
+            ///
+            /// \param call         if non-NULL an expression representing a compatible expression
+            /// \param target_type  the target type
+            /// \param dbg_info     the debug info of the constructor if any
+            DAG_node const *insert_elemental_constructor(
                 DAG_node const *call,
-                IType const *target_type);
+                IType const    *target_type,
+                DAG_DbgInfo    dbg_info);
 
-            /// Translate a decl_cast expression into a combination of a constructor call 
-            /// of the target type, field selections and default initiliazers, converting 
+            /// Translate a decl_cast expression into a combination of a constructor call
+            /// of the target type, field selections and default initializers, converting
             /// the expression between two compatible struct types.
-            DAG_node const *translate_decl_cast_call(DAG_call const *call);
+            ///
+            /// \param call  the decl_cast call
+            DAG_node const *translate_decl_cast_call(
+                DAG_call const *call);
 
             /// Instantiate a DAG IR node.
             ///
@@ -1434,19 +1474,22 @@ public:
             /// Analyze a created call for dependencies.
             ///
             /// \param call  the call to analyze
-            void analyze_call(DAG_call const *call);
+            void analyze_call(
+                DAG_call const *call);
 
             /// Analyze a function AST for dependencies.
             ///
             /// \param owner  the owner module of the function to analyze
             /// \param def    the definition of the function to analyze
             void analyze_function_ast(
-                Module const *owner, IDefinition const *def);
+                Module const      *owner,
+                IDefinition const *def);
 
             /// Set property if enable is true.
             void add_property(Property prop, bool enable) {
-                if (enable)
+                if (enable) {
                     m_properties |= prop;
+                }
             }
 
             /// Skip temporaries.
@@ -1460,13 +1503,17 @@ public:
             ///
             /// \param value  a value
             /// \param path   the path
-            DAG_node const *get_value(IValue const *value, Array_ref<char const *> const &path);
+            DAG_node const *get_value(
+                IValue const                  *value,
+                Array_ref<char const *> const &path);
 
             /// Get a DAG node from an expression by absolute path.
             ///
             /// \param expr  a DAG expression
             /// \param path  the path
-            DAG_node const *get_value(DAG_node const *expr, Array_ref<char const *> const &path);
+            DAG_node const *get_value(
+                DAG_node const                *expr,
+                Array_ref<char const *> const &path);
 
             /// Fold geometry.cutout_opacity if in class-compilation mode, requested via flags,
             /// and evaluates to 0.0f or 1.0f.
@@ -1491,7 +1538,8 @@ public:
             ///
             /// Elimination is done by putting the replacement node in m_replacement_map. Parameters
             /// that affect the decision are put into m_visits_map.
-            void handle_transparent_layers(DAG_call const *call);
+            void handle_transparent_layers(
+                DAG_call const *call);
 
             /// Return whether the expression qualifies for elimination by
             /// #handle_transparent_layers().
@@ -1504,7 +1552,8 @@ public:
             ///
             /// In addition, the ternary operators is qualified if both true and false expression are
             /// qualified.
-            bool is_layer_qualified(DAG_node const *expr);
+            bool is_layer_qualified(
+                DAG_node const *expr);
 
             /// Process string constants.
             ///
@@ -1512,7 +1561,14 @@ public:
             ///
             /// Process all string constants that are part of the value v and v itself if v
             /// is a string constant.
-            void process_string_constants(IValue const *v);
+            void process_string_constants(
+                IValue const *v);
+
+            /// Copy the debug info.
+            ///
+            /// \param dbg_info  the debug info of a node that is instantiated
+            DAG_DbgInfo copy_dbg_info(
+                DAG_DbgInfo dbg_info);
 
         private:
             /// The call name resolver to be used.
@@ -1608,17 +1664,8 @@ public:
         /// The MDL compiler interface.
         mi::base::Handle<MDL> m_mdl;
 
-        /// The memory arena that holds all types, symbols and IR nodes of this instance.
-        Memory_arena m_arena;
-
-        /// The symbol table;
-        Symbol_table m_sym_tab;
-
-        /// The type factory.
-        Type_factory m_type_factory;
-
-        /// The value factory.
-        Value_factory m_value_factory;
+        /// The DAG unit that holds all types, symbols and IR nodes of this instance.
+        DAG_unit m_dag_unit;
 
         /// The node factory.
         DAG_node_factory_impl m_node_factory;
@@ -1672,7 +1719,7 @@ private:
     explicit Generated_code_dag(
         IAllocator      *alloc,
         MDL             *compiler,
-        IModule const   *module,
+        Module const    *module,
         char const      *internal_space,
         Compile_options options,
         char const      *renderer_context_name);
@@ -2538,17 +2585,23 @@ public:
 
     // --------------------------- non interface methods ---------------------------
 
-    /// Get the type factory of this generated code.
-    Type_factory *get_type_factory() { return &m_type_factory; }
+    /// Get the DAG unit of this code DAG.
+    DAG_unit &get_dag_unit() { return m_dag_unit; }
+
+    /// Get the DAG unit of this code DAG.
+    DAG_unit const &get_dag_unit() const { return m_dag_unit; }
 
     /// Get the type factory of this generated code.
-    Type_factory const *get_type_factory() const { return &m_type_factory; }
+    Type_factory *get_type_factory() { return &m_dag_unit.get_type_factory(); }
+
+    /// Get the type factory of this generated code.
+    Type_factory const *get_type_factory() const { return &m_dag_unit.get_type_factory(); }
 
     /// Get the value factory of this code.
-    Value_factory *get_value_factory() { return &m_value_factory; }
+    Value_factory *get_value_factory() { return &m_dag_unit.get_value_factory(); }
 
     /// Get the value factory of this code.
-    Value_factory const *get_value_factory() const { return &m_value_factory; }
+    Value_factory const *get_value_factory() const { return &m_dag_unit.get_value_factory(); }
 
     /// Find the tag for a given resource.
     ///
@@ -2727,7 +2780,7 @@ private:
     /// Compile a user defined struct category.
     ///
     /// \param dag_builder  the DAG builder to be used
-    /// \param def          the definition of the tystruct categorype.
+    /// \param def          the definition of the struct category
     /// \param is_exported  true, if this struct category is exported
     void compile_struct_category(
         DAG_builder       &dag_builder,
@@ -2801,7 +2854,7 @@ private:
         DAG_builder        &dag_builder,
         Parameter_info     &param,
         IDefinition const  *f_def,
-        IModule const      *owner_module,
+        Module const       *owner_module,
         IDeclaration const *decl,
         int                k);
 
@@ -2810,14 +2863,12 @@ private:
     /// \param dag_builder   the DAG builder to be used
     /// \param param         the parameter
     /// \param f_def         the definition of the annotation
-    /// \param owner_module  the owner module of the annotation definition
     /// \param decl          its declaration
     /// \param k             the parameter index
     void gen_annotation_parameter_annotations(
         DAG_builder                   &dag_builder,
         Parameter_info                &param,
         IDefinition const             *f_def,
-        IModule const                 *owner_module,
         IDeclaration_annotation const *decl,
         int                           k);
 
@@ -2834,7 +2885,7 @@ private:
     /// \param module   The owner module of the annotation to compile.
     /// \param a_node   The dependence graph node of the annotation.
     void compile_annotation(
-        IModule const         *module,
+        Module const          *module,
         Dependence_node const *a_node);
 
     /// Compile a local annotation (declaration).
@@ -2843,16 +2894,16 @@ private:
     /// \param dag_builder  the DAG builder to be used
     /// \param a_node       the dependence graph node of the annotation
     void compile_local_annotation(
-        IModule const         *module,
+        Module const          *module,
         DAG_builder           &dag_builder,
         Dependence_node const *a_node);
 
     /// Compile a function.
     ///
-    /// \param module   The owner module of the function to compile.
+    /// \param owner    The owner module of the function to compile.
     /// \param f_node   The dependence graph node of the function.
     void compile_function(
-        IModule const         *module,
+        Module const          *owner,
         Dependence_node const *f_node);
 
     /// Compile a local function.
@@ -2861,7 +2912,7 @@ private:
     /// \param dag_builder  the DAG builder to be used
     /// \param f_node       the dependence graph node of the function
     void compile_local_function(
-        IModule const         *module,
+        Module const          *module,
         DAG_builder           &dag_builder,
         Dependence_node const *f_node);
 
@@ -2890,7 +2941,7 @@ private:
     /// Compile a module.
     ///
     /// \param module  The module to compile.
-    void compile(IModule const *module);
+    void compile(Module const *module);
 
     /// Returns true if error were detected (and clear the flag).
     bool error_state()
@@ -3138,9 +3189,6 @@ private:
     void deserialize_constants(DAG_deserializer &dag_deserializer);
 
 private:
-    /// The memory arena.
-    Memory_arena m_arena;
-
     /// The absolute name of this module.
     string m_module_name;
 
@@ -3153,14 +3201,8 @@ private:
     /// The printer for names.
     Name_printer &m_printer;
 
-    /// The symbol table of the code generator.
-    Symbol_table m_sym_tab;
-
-    /// The type factory of the code generator.
-    Type_factory m_type_factory;
-
-    /// The value factory of the code generator.
-    Value_factory m_value_factory;
+    /// The DAG unit of this code DAG.
+    DAG_unit m_dag_unit;
 
     /// The list of generated messages while this module was translated by the code generator.
     Messages_impl m_messages;

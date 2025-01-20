@@ -201,7 +201,7 @@ class DAG_ir_serializer : public Abstract_dag_ir_walker {
 public:
     /// Constructor.
     ///
-    /// \param alloc  an allocator for temporary memory
+    /// \param serializer  the DAG IR serializer to be used
     explicit DAG_ir_serializer(
         DAG_serializer &serializer)
     : Base(serializer.get_allocator())
@@ -219,6 +219,8 @@ public:
 
         IValue const *value = cnst->get_value();
         encode(value);
+
+        encode(cnst->get_dbg_info());
     }
 
     /// Post-visit a Temporary.
@@ -233,6 +235,8 @@ public:
         encode(idx);
         DAG_node const *expr = tmp->get_expr();
         encode(expr);
+
+        encode(tmp->get_dbg_info());
     }
 
     /// Post-visit a call.
@@ -262,6 +266,7 @@ public:
             DAG_node const *arg = call->get_argument(i);
             encode(arg);
         }
+        encode(call->get_dbg_info());
     }
 
     /// Post-visit a Parameter.
@@ -277,6 +282,8 @@ public:
 
         unsigned idx = param->get_index();
         encode(idx);
+
+        encode(param->get_dbg_info());
     }
 
 private:
@@ -319,6 +326,13 @@ private:
     /// Encode (and write) an DAG IR node kind.
     void encode(DAG_node::Kind kind) {
         m_serializer.write_encoded(kind);
+    }
+
+    /// Encode a DAG debug info.
+    void encode(DAG_DbgInfo info) {
+        m_serializer.write_encoded(info.get_file_id());
+        m_serializer.write_encoded(info.get_line());
+        m_serializer.write_encoded(info.get_column());
     }
 
 private:
@@ -397,11 +411,11 @@ void DAG_serializer::write_dags(Dag_vector const * const roots[], size_t n)
 
 // Creates a new (empty) code DAG for deserialization.
 Generated_code_dag *DAG_deserializer::create_code_dag(
-    IAllocator    *alloc,
-    MDL           *mdl,
-    IModule const *module,
-    char const    *internal_space,
-    char const    *context_name)
+    IAllocator   *alloc,
+    MDL          *mdl,
+    Module const *module,
+    char const   *internal_space,
+    char const   *context_name)
 {
     Generated_code_dag *result = m_builder.create<Generated_code_dag>(
         m_builder.get_allocator(),
@@ -409,11 +423,7 @@ Generated_code_dag *DAG_deserializer::create_code_dag(
         module,
         internal_space,
         /*options=*/0,
-        // FIXME: we do not serialize the context name here because we do not want to break
-        // compatibility with the beta release.
-        // However, this IS safe, because only compiled entities are serialized/deserialized
-        // which are error free, so the context name is not needed.
-        "renderer");
+        context_name);
     return result;
 }
 
@@ -424,7 +434,7 @@ Generated_code_dag::Material_instance *DAG_deserializer::create_material_instanc
     size_t      material_index,
     char const *internal_space,
     bool        unsafe_math_optimizations,
-    char const *context_name)
+    bool        enable_debug_info)
 {
     Generated_code_dag::Material_instance *result =
         m_builder.create<Generated_code_dag::Material_instance>(
@@ -432,7 +442,8 @@ Generated_code_dag::Material_instance *DAG_deserializer::create_material_instanc
             m_builder.get_allocator(),
             material_index,
             internal_space,
-            unsafe_math_optimizations);
+            unsafe_math_optimizations,
+            /*enable_debug_info=*/false);  // FIXME: missing serialization
     return result;
 }
 
@@ -473,17 +484,22 @@ void DAG_deserializer::read_dags(DAG_node_factory_impl &node_factory)
         switch (kind) {
         case DAG_node::EK_CONSTANT:
             {
-                IValue const *value = read_encoded<IValue const *>();
+                IValue const *value   = read_encoded<IValue const *>();
+                DAG_DbgInfo  dbg_info = read_encoded<DAG_DbgInfo>();
 
+                (void)dbg_info; // unused yet
                 DAG_node const *n = node_factory.create_constant(value);
+
                 register_ir_node(t, n);
             }
             break;
         case DAG_node::EK_TEMPORARY:
             {
-                unsigned       idx   = read_encoded<unsigned>();
-                DAG_node const *expr = read_encoded<DAG_node const *>();
+                unsigned       idx      = read_encoded<unsigned>();
+                DAG_node const *expr    = read_encoded<DAG_node const *>();
+                DAG_DbgInfo    dbg_info = read_encoded<DAG_DbgInfo>();
 
+                (void)dbg_info; // unused yet
                 DAG_node const *n = node_factory.create_temporary(expr, idx);
                 register_ir_node(t, n);
             }
@@ -509,17 +525,20 @@ void DAG_deserializer::read_dags(DAG_node_factory_impl &node_factory)
                     args[i].param_name = param_names[i].c_str();
                 }
 
+                DAG_DbgInfo dbg_info = read_encoded<DAG_DbgInfo>();
+
                 DAG_node const *n = node_factory.create_call(
-                    name.c_str(), sema, args.data(), n_args, type);
+                    name.c_str(), sema, args.data(), n_args, type, dbg_info);
                 register_ir_node(t, n);
             }
             break;
         case DAG_node::EK_PARAMETER:
             {
-                IType const *type = read_encoded<IType const *>();
-                unsigned    idx   = read_encoded<unsigned>();
+                IType const *type    = read_encoded<IType const *>();
+                unsigned    idx      = read_encoded<unsigned>();
+                DAG_DbgInfo dbg_info = read_encoded<DAG_DbgInfo>();
 
-                DAG_node const *n = node_factory.create_parameter(type, idx);
+                DAG_node const *n = node_factory.create_parameter(type, idx, dbg_info);
                 register_ir_node(t, n);
             }
             break;

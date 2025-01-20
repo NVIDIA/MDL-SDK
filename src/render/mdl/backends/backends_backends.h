@@ -261,7 +261,7 @@ private:
 };
 
 /// Internal version of the #mi::neuraylib::ITarget_resource_callback callback interface
-/// operating on MI::MDL::IValue_resource objects.
+/// operating on MDL::IValue_resource objects.
 class ITarget_resource_callback_internal
 {
 public:
@@ -282,14 +282,14 @@ public:
     /// \param resource  the resource value
     ///
     /// \returns a resource index or 0 if no resource index can be returned
-    virtual mi::Uint32 get_resource_index(MI::MDL::IValue_resource const *resource) = 0;
+    virtual mi::Uint32 get_resource_index(MDL::IValue_resource const *resource) = 0;
 
     /// Returns a string identifier for the given string value usable by the target code.
     ///
     /// The value 0 is always the "not known string".
     ///
     /// \param s  the string value
-    virtual mi::Uint32 get_string_index(MI::MDL::IValue_string const *s) = 0;
+    virtual mi::Uint32 get_string_index(MDL::IValue_string const *s) = 0;
 };
 
 /// Implementation of #mi::neuraylib::ITarget_value_layout.
@@ -390,7 +390,7 @@ public:
     ///                      - -5: Unsupported value type.
     mi::Sint32 set_value(
         char *block,
-        MI::MDL::IValue const *value,
+        MDL::IValue const *value,
         ITarget_resource_callback_internal *resource_callback,
         mi::neuraylib::Target_value_layout_state state =
             mi::neuraylib::Target_value_layout_state()) const;
@@ -440,10 +440,17 @@ private:
     public:
 
         /// Constructor
-        Df_data_tile(mi::Uint32 rx, mi::Uint32 ry, const float* data)
+        Df_data_tile(
+            mi::Uint32 rx,
+            mi::Uint32 ry,
+            const float* data,
+            const char* pixel_type,
+            mi::Uint32 channels)
             : m_resolution_x(rx)
             , m_resolution_y(ry)
             , m_data(data)
+            , m_pixel_type(pixel_type)
+            , m_channels(channels)
         {
         }
 
@@ -474,6 +481,8 @@ private:
         mi::Uint32 m_resolution_y;      ///< resolution in y
 
         const float* m_data;            ///< data
+        const char* m_pixel_type;       ///< pixel type used for the image
+        const mi::Uint32 m_channels;    ///< number of (color) channels of the pixel type
     };
 
     DB::Tag store_texture(
@@ -481,6 +490,7 @@ private:
         mi::Uint32 ry,
         mi::Uint32 rz,
         const float *data,
+        const char *pixel_type,
         const std::string& tex_name);
 
 private:

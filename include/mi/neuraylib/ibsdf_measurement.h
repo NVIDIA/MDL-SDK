@@ -66,7 +66,7 @@ public:
     ///
     /// \return
     ///                   -  0: Success.
-    ///                   - -1: Invalid parameters (\c NULL pointer).
+    ///                   - -1: Invalid parameters (\c nullptr).
     ///                   - -3: Invalid filename extension (only \c .mbsdf is supported).
     ///                   - -4: Failure to resolve the given filename, e.g., the file does not
     ///                         exist.
@@ -83,22 +83,22 @@ public:
     ///                    format.
     /// \return
     ///                    -  0: Success.
-    ///                    - -1: Invalid parameters (\c NULL pointer).
+    ///                    - -1: Invalid parameters (\c nullptr).
     ///                    - -7: Invalid file format.
     virtual Sint32 reset_reader( IReader* reader) = 0;
 
     /// Returns the resolved file name of the file containing the BSDF measurement.
     ///
-    /// The method returns \c NULL if there is no file associated with the BSDF measurement, e.g.,
-    /// after default construction, calls to #set_reflection() or #set_transmission(), or failures
-    /// to resolves the file name passed to #reset_file().
+    /// The method returns \c nullptr if there is no file associated with the BSDF measurement,
+    /// e.g., after default construction, calls to #set_reflection() or #set_transmission(), or
+    /// failures to resolves the file name passed to #reset_file().
     ///
     /// \see #get_original_filename()
     virtual const char* get_filename() const = 0;
 
     /// Returns the unresolved file name as passed to #reset_file().
     ///
-    /// The method returns \c NULL after default construction or calls to #set_reflection() or
+    /// The method returns \c nullptr after default construction or calls to #set_reflection() or
     /// #set_transmission().
     ///
     /// \see #get_filename()
@@ -106,7 +106,7 @@ public:
 
     /// Sets the BSDF data for the reflection.
     ///
-    /// \param bsdf_data   The BSDF data to be used by this BSDF measurement. The value \c NULL
+    /// \param bsdf_data   The BSDF data to be used by this BSDF measurement. The value \c nullptr
     ///                    can be used to remove the BSDF data for reflection.
     /// \return
     ///                    -  0: Success.
@@ -117,7 +117,7 @@ public:
     ///
     /// Note that it is not possible to manipulate the BSDF data.
     ///
-    /// \return            The BSDF data for reflection, or \c NULL if there is none.
+    /// \return            The BSDF data for reflection, or \c nullptr if there is none.
     virtual const base::IInterface* get_reflection() const = 0;
 
     /// Returns the BSDF data for reflection.
@@ -131,7 +131,7 @@ public:
     /// specified as template parameter.
     ///
     /// \tparam T           The interface type of the requested element.
-    /// \return             The BSDF data for reflection, or \c NULL on failure (no BSDF data
+    /// \return             The BSDF data for reflection, or \c nullptr on failure (no BSDF data
     ///                     available or if \p T does not match the element's  type).
     template<class T>
     const T* get_reflection() const
@@ -146,7 +146,7 @@ public:
 
     /// Sets the BSDF data for transmission.
     ///
-    /// \param bsdf_data   The BSDF data to be used by this BSDF measurement. The value \c NULL
+    /// \param bsdf_data   The BSDF data to be used by this BSDF measurement. The value \c nullptr
     ///                    can be used to remove the BSDF data for transmission.
     /// \return
     ///                    -  0: Success.
@@ -157,7 +157,7 @@ public:
     ///
     /// Note that it is not possible to manipulate the BSDF data.
     ///
-    /// \return            The BSDF data for transmission, or \c NULL if there is none.
+    /// \return            The BSDF data for transmission, or \c nullptr if there is none.
     virtual const base::IInterface* get_transmission() const = 0;
 
     /// Returns the BSDF data for transmission.
@@ -171,7 +171,7 @@ public:
     /// specified as template parameter.
     ///
     /// \tparam T          The interface type of the requested element.
-    /// \return            The BSDF data for transmission, or \c NULL on failure (no BSDF data
+    /// \return            The BSDF data for transmission, or \c nullptr on failure (no BSDF data
     ///                    available or if \p T does not match the element's  type).
     template<class T>
     const T* get_transmission() const

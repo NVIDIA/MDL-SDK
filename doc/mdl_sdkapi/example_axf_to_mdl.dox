@@ -46,7 +46,7 @@ This example loads an X-Rite AxF(Appearance Exchange Format) file and converts i
         AxF to MDL material format conversion
     </b></dt>
     <dd><br>
-        The example first loads an AxF file and parses it using the AxF Decoding SDK (not distributed with MDL-SDK,
+        The example first loads an AxF file and parses it using the AxF Decoding SDK (not distributed with MDL SDK,
         please check \link mi_neuray_getting_started Getting started \endlink for further information) in order to decode AxF material representations, its parameters,
         its resources such a texture bitmaps, measurements, and metadata.
         
@@ -60,7 +60,7 @@ This example loads an X-Rite AxF(Appearance Exchange Format) file and converts i
         
         This means The MDL representations will have a close visual appearance to its AxF equivalents and will expose the same input parameters.
       
-        This way, by using MDL-SDK, the example will load this module and use it as template to create material variations to map parameters,
+        This way, by using MDL SDK, the example will load this module and use it as template to create material variations to map parameters,
         textures and measurements between MDL and AxF representations and so achieving the conversion.
         
         Finally, the example will write a output MDL file with the resulting variation(s) along its resources (bitmaps).

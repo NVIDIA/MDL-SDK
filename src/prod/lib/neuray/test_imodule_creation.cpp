@@ -208,6 +208,51 @@ bool compare_files( const std::string& filename1, const std::string& filename2)
     return ! (file1.eof() ^ file2.eof());
 }
 
+// Check that the ::anno::origin annotation on the main material/function of the MDLE file has the
+// expected value.
+void check_anno_origin_on_mdle(
+    mi::neuraylib::ITransaction* transaction,
+    mi::neuraylib::INeuray* neuray,
+    const char* mdle_path,
+    const char* expected)
+{
+    import_mdl_module( transaction, neuray, mdle_path, 0);
+
+    mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
+        neuray->get_api_component<mi::neuraylib::IMdl_factory>());
+    mi::base::Handle<const mi::IString> module_db_name(
+        mdl_factory->get_db_module_name( mdle_path));
+    mi::base::Handle module(
+        transaction->access<mi::neuraylib::IModule>( module_db_name->get_c_str()));
+
+    mi::base::Handle<const mi::IArray> overloads( module->get_function_overloads( "main"));
+    MI_CHECK_EQUAL( 1, overloads->get_length());
+    mi::base::Handle<const mi::IString> overload(  overloads->get_element<mi::IString>( 0));
+    mi::base::Handle material(
+        transaction->access<mi::neuraylib::IFunction_definition>( overload->get_c_str()));
+    MI_CHECK( material);
+
+    mi::base::Handle<const mi::neuraylib::IAnnotation_block> anno_block(
+        material->get_annotations());
+    bool found = false;
+    for( mi::Size i = 0, n = anno_block->get_size(); i < n; ++i) {
+        mi::base::Handle<const mi::neuraylib::IAnnotation> anno(
+            anno_block->get_annotation( i));
+        if( strcmp( anno->get_name(), "::anno::origin(string)") != 0)
+            continue;
+        found = true;
+        mi::base::Handle<const mi::neuraylib::IExpression_list> args(
+            anno->get_arguments());
+        mi::base::Handle name(
+            args->get_expression<mi::neuraylib::IExpression_constant>( "name"));
+        mi::base::Handle name_value(
+            name->get_value<mi::neuraylib::IValue_string>());
+        MI_CHECK_EQUAL_CSTR( name_value->get_value(), expected);
+    }
+
+    MI_CHECK( found);
+}
+
 // === Tests =======================================================================================
 
 void check_module_builder_variants(
@@ -310,11 +355,11 @@ void check_module_builder_variants(
     {
         // create md_enum_one with a new default for "param0" and new annotation block
 
-        // create a "two" "param0" argument
+        // create a "one" "param0" argument
         mi::base::Handle<const mi::neuraylib::IType_enum> param0_type(
             tf->create_enum( "::" TEST_MDL "::Enum"));
         mi::base::Handle<mi::neuraylib::IValue_enum> m_param0_value(
-            vf->create_enum( param0_type.get(), 1));
+            vf->create_enum( param0_type.get(), 0));
         mi::base::Handle<mi::neuraylib::IExpression_constant> m_param0_expr(
             ef->create_constant( m_param0_value.get()));
         mi::base::Handle<mi::neuraylib::IExpression_list> defaults(
@@ -894,6 +939,70 @@ void check_module_builder_resources(
     MI_CHECK_EQUAL( 3, module->get_function_count());
 }
 
+/// A client-side expression cloner to test that given expressions can actually be created by the
+/// user.
+///
+/// Constant expressions are cloned via the expression factory as base case. Indirect calls are
+/// not yet supported.
+class Test_cloner
+{
+public:
+    Test_cloner( mi::neuraylib::IExpression_factory* ef) : m_ef( ef) { }
+
+    mi::neuraylib::IExpression* clone( const mi::neuraylib::IExpression* expr);
+
+private:
+    mi::neuraylib::IExpression_factory* m_ef;
+};
+
+mi::neuraylib::IExpression* Test_cloner::clone( const mi::neuraylib::IExpression* expr)
+{
+    switch( expr->get_kind()) {
+        case mi::neuraylib::IExpression::EK_CONSTANT: {
+            mi::base::Handle constant(
+                expr->get_interface<mi::neuraylib::IExpression_constant>());
+            return m_ef->clone( constant.get());
+        }
+        case mi::neuraylib::IExpression::EK_CALL: {
+            MI_CHECK( false);
+            return nullptr;
+        }
+        case mi::neuraylib::IExpression::EK_DIRECT_CALL: {
+            mi::base::Handle direct_call(
+                expr->get_interface<mi::neuraylib::IExpression_direct_call>());
+            mi::base::Handle<const mi::neuraylib::IExpression_list> args(
+                direct_call->get_arguments());
+            mi::base::Handle<mi::neuraylib::IExpression_list> cloned_args(
+                m_ef->create_expression_list());
+            for( mi::Size i = 0, n = args->get_size(); i < n; ++i) {
+                mi::base::Handle<const mi::neuraylib::IExpression> arg( args->get_expression( i));
+                mi::base::Handle<mi::neuraylib::IExpression> cloned_arg( clone( arg.get()));
+                cloned_args->add_expression( args->get_name( i), cloned_arg.get());;
+            }
+            return m_ef->create_direct_call( direct_call->get_definition(), cloned_args.get());
+        }
+        case mi::neuraylib::IExpression::EK_PARAMETER: {
+            mi::base::Handle parameter(
+                expr->get_interface<mi::neuraylib::IExpression_parameter>());
+            mi::base::Handle<const mi::neuraylib::IType> type( expr->get_type());
+            return m_ef->create_parameter( type.get(), parameter->get_index());
+        }
+        case mi::neuraylib::IExpression::EK_TEMPORARY: {
+            mi::base::Handle temporary(
+                expr->get_interface<mi::neuraylib::IExpression_temporary>());
+            mi::base::Handle<const mi::neuraylib::IType> type( expr->get_type());
+            return m_ef->create_temporary( type.get(), temporary->get_index());
+        }
+        case mi::neuraylib::IExpression::EK_FORCE_32_BIT: {
+            MI_CHECK( false);
+            return nullptr;
+        }
+    }
+
+    MI_CHECK( false);
+    return nullptr;
+}
+
 void check_module_builder_misc(
     mi::neuraylib::ITransaction* transaction, mi::neuraylib::IMdl_factory* mdl_factory)
 {
@@ -1209,11 +1318,12 @@ void check_module_builder_misc(
         mi::Size n = fd->get_temporary_count();
         // Check that this material actually uses temporaries.
         MI_CHECK( n >= 11);
+        Test_cloner cloner( ef.get());
         for( mi::Size i = 0; i < n; ++i) {
             mi::base::Handle<const mi::neuraylib::IExpression> expr( fd->get_temporary( i));
             std::string name = "unused but unique name " + std::to_string( i);;
             mi::base::Handle<mi::neuraylib::IExpression> expr_clone(
-                ef->clone( expr.get()));
+                cloner.clone( expr.get()));
             temporaries->add_expression( name.c_str(), expr_clone.get());
         }
 
@@ -2039,9 +2149,9 @@ void check_module_builder_utf8(
         mi::base::Handle<mi::neuraylib::IExpression_list> body_args(
             ef->create_expression_list());
         body_args->add_expression( "a", a_expr.get());
+        std::string body_def_name = std::string( "mdl::") + name_rus + "::1_module::fd_test(float)";
         mi::base::Handle<const mi::neuraylib::IExpression> body(
-            ef->create_direct_call( "mdl::" TEST_NO_1_RUS "::1_module::fd_test(float)",
-                body_args.get()));
+            ef->create_direct_call( body_def_name.c_str(), body_args.get()));
 
         // add the function
 
@@ -2072,9 +2182,11 @@ void check_module_builder_utf8(
                 mi::neuraylib::MDL_VERSION_1_0,
                 mi::neuraylib::MDL_VERSION_LATEST,
                 context.get()));
+        std::string prototype_name
+            = std::string( "mdl::") + name_rus + "::1_module::md_test(float)";
         result = module_builder->add_variant(
             "md_1_white",
-            "mdl::" TEST_NO_1_RUS "::1_module::md_test(float)",
+            prototype_name.c_str(),
             /*defaults*/ nullptr,
             /*annotations*/ nullptr,
             /*return_annotations*/ nullptr,
@@ -2433,16 +2545,17 @@ void check_module_transformer(
     // check upgrade_mdl_version() w.r.t. updated function signatures
 
     struct Data { const char* from; const char* to; mi::neuraylib::Mdl_version to_enum; };
-    Data data[] = { { "1_0", "1_3", mi::neuraylib::MDL_VERSION_1_3 },
-                    { "1_0", "1_4", mi::neuraylib::MDL_VERSION_1_4 },
-                    { "1_0", "1_5", mi::neuraylib::MDL_VERSION_1_5 },
-                    { "1_0", "1_6", mi::neuraylib::MDL_VERSION_1_6 },
-                    { "1_3", "1_4", mi::neuraylib::MDL_VERSION_1_4 },
-                    { "1_3", "1_5", mi::neuraylib::MDL_VERSION_1_5 },
-                    { "1_3", "1_6", mi::neuraylib::MDL_VERSION_1_6 },
-                    { "1_4", "1_5", mi::neuraylib::MDL_VERSION_1_5 },
-                    { "1_4", "1_6", mi::neuraylib::MDL_VERSION_1_6 },
-                    { "1_5", "1_6", mi::neuraylib::MDL_VERSION_1_6 }
+    Data data[] = { { "1_0", "1_3",  mi::neuraylib::MDL_VERSION_1_3 },
+                    { "1_0", "1_4",  mi::neuraylib::MDL_VERSION_1_4 },
+                    { "1_0", "1_5",  mi::neuraylib::MDL_VERSION_1_5 },
+                    { "1_0", "1_6",  mi::neuraylib::MDL_VERSION_1_6 },
+                    { "1_3", "1_4",  mi::neuraylib::MDL_VERSION_1_4 },
+                    { "1_3", "1_5",  mi::neuraylib::MDL_VERSION_1_5 },
+                    { "1_3", "1_6",  mi::neuraylib::MDL_VERSION_1_6 },
+                    { "1_4", "1_5",  mi::neuraylib::MDL_VERSION_1_5 },
+                    { "1_4", "1_6",  mi::neuraylib::MDL_VERSION_1_6 },
+                    { "1_5", "1_6",  mi::neuraylib::MDL_VERSION_1_6 },
+                    { "1_9", "1_10", mi::neuraylib::MDL_VERSION_1_10 }
                 };
 
     for( const auto& d: data) {
@@ -2469,7 +2582,6 @@ void check_module_transformer(
         // Import again to check for correctness.
         MI_CHECK_CTX( context);
         mdl_impexp_api->load_module( transaction, output_mdl_name.c_str(), context.get());
-        MI_CHECK_CTX( context);
         MI_CHECK_CTX( context);
         // No file comparison (too much code whose serialization in text form changes too often in
         // tiny details)
@@ -2539,8 +2651,84 @@ void check_mdle(
     mi::base::Handle<mi::neuraylib::IExpression_factory> ef(
         mdl_factory->create_expression_factory( transaction));
 
-    mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
-        mdl_factory->create_execution_context());
+    {
+        // test MDLE creation with a simple material
+        mi::base::Handle<mi::IStructure> mdle_data(
+            transaction->create<mi::IStructure>( "Mdle_data"));
+        mi::base::Handle<mi::IString> prototype_name(
+            mdle_data->get_value<mi::IString>( "prototype_name"));
+        prototype_name->set_c_str( "mdl::" TEST_MDL "::md_1(color)");
+        const char* filename = DIR_PREFIX "/md_1.mdle";
+
+        mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
+            mdl_factory->create_execution_context());
+        result = mdle_api->export_mdle(
+            transaction, filename, mdle_data.get(), context.get());
+        MI_CHECK_CTX( context);
+        MI_CHECK_EQUAL( result, 0);
+
+        check_anno_origin_on_mdle( transaction, neuray, filename, "::test_mdl%24::md_1");
+    }
+    {
+        // test MDLE creation with a simple material (explicit annotation via API)
+        mi::base::Handle<mi::IStructure> mdle_data(
+            transaction->create<mi::IStructure>( "Mdle_data"));
+        mi::base::Handle<mi::IString> prototype_name(
+            mdle_data->get_value<mi::IString>( "prototype_name"));
+        prototype_name->set_c_str( "mdl::" TEST_MDL "::md_1(color)");
+        mi::base::Handle<mi::neuraylib::IAnnotation> anno( create_string_annotation(
+            vf.get(), ef.get(), "::anno::origin(string)", "name", "explicit_origin"));
+        mi::base::Handle<mi::neuraylib::IAnnotation_block> anno_block(
+            ef->create_annotation_block());
+        anno_block->add_annotation( anno.get());
+        mdle_data->set_value( "annotations", anno_block.get());
+        const char* filename = DIR_PREFIX "/md_1_explicit.mdle";
+
+        mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
+            mdl_factory->create_execution_context());
+        result = mdle_api->export_mdle(
+            transaction, filename, mdle_data.get(), context.get());
+        MI_CHECK_CTX( context);
+        MI_CHECK_EQUAL( result, 0);
+
+        check_anno_origin_on_mdle( transaction, neuray, filename, "explicit_origin");
+    }
+    {
+        // test MDLE creation with a simple material variant
+        mi::base::Handle<mi::IStructure> mdle_data(
+            transaction->create<mi::IStructure>( "Mdle_data"));
+        mi::base::Handle<mi::IString> prototype_name(
+            mdle_data->get_value<mi::IString>( "prototype_name"));
+        prototype_name->set_c_str( "mdl::" TEST_MDL "::md_1_green(color)");
+        const char* filename = DIR_PREFIX "/md_1_green.mdle";
+
+        mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
+            mdl_factory->create_execution_context());
+        result = mdle_api->export_mdle(
+            transaction, filename, mdle_data.get(), context.get());
+        MI_CHECK_CTX( context);
+        MI_CHECK_EQUAL( result, 0);
+
+        check_anno_origin_on_mdle( transaction, neuray, filename, "::test_mdl%24::md_1_green");
+    }
+    {
+        // test MDLE creation with a simple material variant with existing origin annotation
+        mi::base::Handle<mi::IStructure> mdle_data(
+            transaction->create<mi::IStructure>( "Mdle_data"));
+        mi::base::Handle<mi::IString> prototype_name(
+            mdle_data->get_value<mi::IString>( "prototype_name"));
+        prototype_name->set_c_str( "mdl::" TEST_MDL "::md_1_blue(color)");
+        const char* filename = DIR_PREFIX "/md_1_blue.mdle";
+
+        mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
+            mdl_factory->create_execution_context());
+        result = mdle_api->export_mdle(
+            transaction, filename, mdle_data.get(), context.get());
+        MI_CHECK_CTX( context);
+        MI_CHECK_EQUAL( result, 0);
+
+        check_anno_origin_on_mdle( transaction, neuray, filename, "existing_origin");
+    }
 
     // create struct constant struct_two_expr of type ...::struct_two
     mi::base::Handle<const mi::neuraylib::IType_struct> struct_two_type(
@@ -2554,40 +2742,47 @@ void check_mdle(
         // test MDLE creation with a function with implicit cast
         mi::base::Handle<mi::IStructure> mdle_data(
             transaction->create<mi::IStructure>( "Mdle_data"));
-        mi::base::Handle<mi::IString> prototype_name0(
+        mi::base::Handle<mi::IString> prototype_name(
             mdle_data->get_value<mi::IString>( "prototype_name"));
-        prototype_name0->set_c_str(
+        prototype_name->set_c_str(
             "mdl::test_compatibility::structure_test(::test_compatibility::struct_one)");
         mi::base::Handle<mi::neuraylib::IExpression_list> args( ef->create_expression_list());
         args->add_expression( "v", struct_two_expr.get());
         MI_CHECK_EQUAL( 0, mdle_data->set_value( "defaults", args.get()));
+        const char* filename = DIR_PREFIX "/compatibility_func_test.mdle";
 
         mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
             mdl_factory->create_execution_context());
         result = mdle_api->export_mdle(
-            transaction,
-            DIR_PREFIX "/compatibility_func_test.mdle",
-            mdle_data.get(),
-            context.get());
+            transaction, filename, mdle_data.get(), context.get());
+        MI_CHECK_CTX( context);
         MI_CHECK_EQUAL( result, 0);
+
+        check_anno_origin_on_mdle(
+            transaction, neuray, filename, "::test_compatibility::structure_test");
     }
     {
         // test MDLE creation with a material with implicit cast
         mi::base::Handle<mi::IStructure> mdle_data(
             transaction->create<mi::IStructure>( "Mdle_data"));
-        mi::base::Handle<mi::IString> prototype_name0(
+        mi::base::Handle<mi::IString> prototype_name(
             mdle_data->get_value<mi::IString>( "prototype_name"));
-        prototype_name0->set_c_str(
+        prototype_name->set_c_str(
             "mdl::test_compatibility::structure_test_mat(::test_compatibility::struct_one)");
         mi::base::Handle<mi::neuraylib::IExpression_list> args( ef->create_expression_list());
         MI_CHECK_EQUAL( 0, args->add_expression( "v", struct_two_expr.get()));
         MI_CHECK_EQUAL( 0, mdle_data->set_value( "defaults", args.get()));
+        const char* filename = DIR_PREFIX "/compatibility_mat_test.mdle";
 
         mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
             mdl_factory->create_execution_context());
         result = mdle_api->export_mdle(
-            transaction, DIR_PREFIX "/compatibility_mat_test.mdle", mdle_data.get(), context.get());
+            transaction, filename, mdle_data.get(), context.get());
+        MI_CHECK_CTX( context);
         MI_CHECK_EQUAL( result, 0);
+
+        check_anno_origin_on_mdle(
+            transaction, neuray, filename, "::test_compatibility::structure_test_mat");
     }
     {
         // test MDLE creation with a material from a module created by the module builder
@@ -2597,19 +2792,20 @@ void check_mdle(
 
         mi::base::Handle<mi::IStructure> mdle_data(
             transaction->create<mi::IStructure>( "Mdle_data"));
-        mi::base::Handle<mi::IString> prototype_name0(
+        mi::base::Handle<mi::IString> prototype_name(
             mdle_data->get_value<mi::IString>( "prototype_name"));
-        prototype_name0->set_c_str( "mdl::compatibility_new_material::my_new_material(bool)");
+        prototype_name->set_c_str( "mdl::compatibility_new_material::my_new_material(bool)");
+        const char* filename = DIR_PREFIX "/compatibility_new_material.mdle";
 
         mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
             mdl_factory->create_execution_context());
         result = mdle_api->export_mdle(
-            transaction,
-            DIR_PREFIX "/compatibility_new_material.mdle",
-            mdle_data.get(),
-            context.get());
+            transaction, filename, mdle_data.get(), context.get());
         MI_CHECK_CTX( context);
         MI_CHECK_EQUAL( result, 0);
+
+        check_anno_origin_on_mdle(
+            transaction, neuray, filename, "::compatibility_new_material::my_new_material");
 
         install_external_resolver( neuray);
     }
@@ -2617,18 +2813,22 @@ void check_mdle(
         // test MDLE creation with a material from a UTF8 module (created by the module builder)
         mi::base::Handle<mi::IStructure> mdle_data(
             transaction->create<mi::IStructure>( "Mdle_data"));
-        mi::base::Handle<mi::IString> prototype_name0(
+        mi::base::Handle<mi::IString> prototype_name(
             mdle_data->get_value<mi::IString>( "prototype_name"));
-        prototype_name0->set_c_str(
-            "mdl::" TEST_NO_1_RUS "::1_module::md_test(float)");
+        std::string prototype_str
+            = std::string( "mdl::") + name_rus + "::1_module::md_test(float)";
+        prototype_name->set_c_str( prototype_str.c_str());
+        const char* filename = DIR_PREFIX "/123_check_unicode_create_mdle_with_unicode_€.mdle";
 
         mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
             mdl_factory->create_execution_context());
         result = mdle_api->export_mdle(
-            transaction,
-            DIR_PREFIX "/123_check_unicode_create_mdle_with_unicode_€.mdle",
-            mdle_data.get(), context.get());
+            transaction, filename, mdle_data.get(), context.get());
+        MI_CHECK_CTX( context);
         MI_CHECK_EQUAL( result, 0);
+
+        std::string expected = std::string( "::") + name_rus + "::1_module::md_test";
+        check_anno_origin_on_mdle( transaction, neuray, filename, expected.c_str());
     }
     {
         // test MDLE creation with a material from an MDLE UTF8 module
@@ -2641,7 +2841,7 @@ void check_mdle(
             transaction,
             DIR_PREFIX "/123_check_unicode_create_mdle_with_unicode_€.mdle",
             context.get());
-        MI_CHECK_EQUAL( result, 0);
+        MI_CHECK( result >= 0); // check_anno_origin_on_mdle() already loaded the module
 
         mi::base::Handle<const mi::IString> db_name( mdl_factory->get_db_module_name(
             DIR_PREFIX "/123_check_unicode_create_mdle_with_unicode_€.mdle"));
@@ -2649,18 +2849,21 @@ void check_mdle(
 
         mi::base::Handle<mi::IStructure> mdle_data(
             transaction->create<mi::IStructure>( "Mdle_data"));
-        mi::base::Handle<mi::IString> prototype_name0(
+        mi::base::Handle<mi::IString> prototype_name(
             mdle_data->get_value<mi::IString>( "prototype_name"));
-        prototype_name0->set_c_str( (module_db_name + "::main(float)").c_str());
+        prototype_name->set_c_str( (module_db_name + "::main(float)").c_str());
 
 #ifndef MI_PLATFORM_WINDOWS
+        const char *filename = DIR_PREFIX "/123_check_unicode_create_mdle.mdle";
+
         // TODO Reported not to work on Windows. Unclear why.
         result = mdle_api->export_mdle(
-            transaction,
-            DIR_PREFIX "/123_check_unicode_create_mdle.mdle",
-            mdle_data.get(),
-            context.get());
+            transaction, filename, mdle_data.get(), context.get());
+        MI_CHECK_CTX( context);
         MI_CHECK_EQUAL( result, 0);
+
+        std::string expected = std::string( "::") + name_rus + "::1_module::md_test";
+        check_anno_origin_on_mdle( transaction, neuray, filename, expected.c_str());
 #endif
 
         mdl_configuration->remove_mdl_path( DIR_PREFIX);

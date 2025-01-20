@@ -543,39 +543,39 @@ void Compilation_unit::output_cpp_mixer_call(
     if (is_color_mixer(m_node_types, callee_type))
         p.string("color_");
     p.string("mixer_call");
-    p.with_parens([&] (pp::Pretty_print &p) {
-            p.with_indent([&] (pp::Pretty_print p) {
-                    p.string("Args_wrapper<");
-                    p.integer(2 * n_ary_mixer);
-                    p.string(">::mk_args");
-                    p.with_parens([&] (pp::Pretty_print &p) {
-                            p.with_indent([&] (pp::Pretty_print p) {
-                                    p.string("e,m_node_types,");
-                                    p.space();
-                                    p.string("node_null,");
-                                    p.space();
+    p.with_parens([&](pp::Pretty_print &p) {
+        p.with_indent([&](pp::Pretty_print p) {
+                p.string("Args_wrapper<");
+                p.integer(2 * n_ary_mixer);
+                p.string(">::mk_args");
+                p.with_parens([&](pp::Pretty_print &p) {
+                    p.with_indent([&](pp::Pretty_print p) {
+                        p.string("e, m_node_types,");
+                        p.space();
+                        p.string("node_null,");
+                        p.space();
 
-                                    // Create n argument pairs (weight,component).
+                        // Create n argument pairs (weight,component).
 
-                                    for ( int k = 0; k < n_ary_mixer; ++k) {
-                                        Expr const *arg_k = call->get_argument(2 * k);
-                                        Expr const *arg_k_1 = call->get_argument(2 * k + 1);
+                        for (int k = 0; k < n_ary_mixer; ++k) {
+                            Expr const *arg_k = call->get_argument(2 * k);
+                            Expr const *arg_k_1 = call->get_argument(2 * k + 1);
 
-                                        output_cpp_expr(p, arg_k);
-                                        p.string(",");
-                                        p.space();
-                                        output_cpp_expr(p, arg_k_1);
-                                        if ( k + 1 < n_ary_mixer) {
-                                            p.comma();
-                                            p.space();
-                                        }
-                                    }
-                                });
+                            output_cpp_expr(p, arg_k);
+                            p.string(",");
+                            p.space();
+                            output_cpp_expr(p, arg_k_1);
+                            if (k + 1 < n_ary_mixer) {
+                                p.comma();
+                                p.space();
+                            }
+                        }
                         });
-                    p.string(".args,");
-                    p.space();
-                    p.integer(2*n_ary_mixer);
-                });
+                    });
+                p.string(".args,");
+            p.space();
+            p.integer(2 * n_ary_mixer);
+            });
         });
 }
 
@@ -616,6 +616,7 @@ void Compilation_unit::output_cpp_function_call(
                     p.space();
                     // Re-use the formatted `n`.
                     p.integer(n);
+                    p.string(", root_dbg_info");
                 });
         });
 }
@@ -634,11 +635,14 @@ void Compilation_unit::output_cpp_bsdf_call(
 
     snprintf(param_b, sizeof(param_b), "%d", param_n);
 
+    char const *ref_sig = callee_ref->get_signature();
+    MDL_ASSERT(ref_sig && "signature required");
+    MDL_ASSERT(node_type->get_signature() == ref_sig && "signatures must match");
     p.string("e.create_call");
     p.with_parens([&] (pp::Pretty_print &p) {
             p.with_indent([&] (pp::Pretty_print &p) {
                     p.string("\"");
-                    p.string(node_type->get_signature().c_str());
+                    p.string(ref_sig);
                     p.string("\",");
                     p.space();
                     char const *mdl_semantics_name =
@@ -662,7 +666,7 @@ void Compilation_unit::output_cpp_bsdf_call(
                             p.string_with_nl(">::mk_args");
                             p.with_parens([&] (pp::Pretty_print &p) {
                                     p.softbreak();
-                                    p.string("e,m_node_types,");
+                                    p.string("e, m_node_types,");
                                     p.space();
                                     p.string(callee_ref->get_name()->get_name());
                                     for (int i = 0; i < arg_n; ++i) {
@@ -733,6 +737,7 @@ void Compilation_unit::output_cpp_bsdf_call(
                         }
                         p.string("()");
                     }
+                    p.string(", root_dbg_info");
                 });
         });
 }
@@ -741,7 +746,7 @@ void Compilation_unit::output_cpp_bsdf_call(
 /// expression. Depending on the kind of called entity, this may
 /// result in the creation of constants, in function calls or BSDF
 /// calls.
-void Compilation_unit::output_cpp_call(pp::Pretty_print &p,Expr_call const *call) {
+void Compilation_unit::output_cpp_call(pp::Pretty_print &p, Expr_call const *call) {
     Expr const *callee = call->get_callee();
     Expr_ref const *callee_ref = cast<Expr_ref>(callee);
     Type_function const *callee_type = cast<Type_function>(callee_ref->get_type());
@@ -1252,62 +1257,49 @@ void Compilation_unit::output_reversed(pp::Pretty_print &p,
     }
 }
 
-void Compilation_unit::output_cpp_matcher_body(pp::Pretty_print &p,
-                                               Rule const &rule,
-                                               size_t rule_index,
-                                               mi::mdl::string &pfx)
+void Compilation_unit::output_cpp_matcher_rhs(
+    pp::Pretty_print &p,
+    Rule const &rule,
+    size_t rule_index,
+    size_t node_index,
+    size_t cont_index)
 {
 
-    // Reset attribute and node counters (used to generate
-    // variable names) so that the output is predictable. Variable
-    // names need to be unique per switch case, not globally.
-    reset_attr_counter();
+    auto emit_call_cont = [&] () {
+        p.with_braces([&] (pp::Pretty_print &p) {
+            p.with_indent([&](pp::Pretty_print &p) {
+                p.nl();
+                p.string("return match_rule");
+                p.integer(cont_index);
+                p.string("(node");
+                p.integer(node_index);
+                p.string(", node_props");
+                p.integer(rule_index);
+                p.string(");");
+            });
+            p.nl();
+        });
+    };
 
-    // Bind all sub-expressions of the top-level expression.
+    p.string("DAG_DbgInfo root_dbg_info = node");
+    p.integer(node_index);
+    p.string("->get_dbg_info();");
+    p.nl();
+    p.string("(void) root_dbg_info;");
+    p.nl();
 
-    Var_set used(m_arena.get_allocator());
-    used_vars(rule.get_rhs(), used);
-    Expr const *g_expr = rule.get_guard();
-    if (g_expr) {
-        MDL_ASSERT(g_expr->get_kind() == Expr::Kind::EK_UNARY);
-        Expr_unary const *u = cast<Expr_unary>(g_expr);
-
-        MDL_ASSERT((u->get_operator() == Expr_unary::Operator::OK_IF_GUARD) ||
-                   (u->get_operator() == Expr_unary::Operator::OK_MAYBE_GUARD));
-       used_vars(u->get_argument(), used);
-    }
+    // Generate code for creating where bindings (where expressions
+    // can refere to these).
     Argument_list const &bindings = rule.get_bindings();
-    for (Argument_list::const_iterator ait(bindings.begin()), aend(bindings.end());
-         ait != aend; ++ait) {
-
-        Expr const *assign_expr = ait->get_expr();
-        MDL_ASSERT(assign_expr->get_kind() == Expr::Kind::EK_BINARY);
-        Expr_binary const *assign = cast<Expr_binary>(assign_expr);
-        MDL_ASSERT(assign->get_operator() == Expr_binary::Operator::OK_ASSIGN);
-
-        used_vars(assign->get_right_argument(), used);
-    }
-
-    Debug_out_list const &deb_outs = rule.get_debug_out();
-    for (Debug_out_list::const_iterator ait(deb_outs.begin()), aend(deb_outs.end());
-         ait != aend; ++ait) {
-        used.insert(ait->get_symbol());
-    }
-
-    output_cpp_match_variables(p, rule.get_lhs(), pfx, used);
-
-    // Generate code for creating where bindings.
-
     if (!bindings.empty()) {
         output_reversed(p, bindings.begin(), bindings.end());
     }
 
     // Generate code for the rule guard (if given).
-
     if (Expr const *guard = rule.get_guard()) {
         Expr_unary const *g = cast<Expr_unary>(guard);
         Expr const *arg = g->get_argument();
-        p.string("if (");
+        p.string("if (!");
 
         if (g->get_operator() == Expr_unary::OK_MAYBE_GUARD) {
             p.string("e.eval_maybe_if(");
@@ -1317,13 +1309,12 @@ void Compilation_unit::output_cpp_matcher_body(pp::Pretty_print &p,
         p.with_indent([&] (pp::Pretty_print &p) {
                 output_cpp_expr(p, arg);
             });
-        p.string(")) {");
-        ++p;
-        p.nl();
+        p.string(")) ");
+        emit_call_cont();
     }
 
     // Generate code for debug output.
-
+    Debug_out_list const &deb_outs = rule.get_debug_out();
     if (!deb_outs.empty()) {
         p.nl();
         p.string("if (event_handler != nullptr && options != nullptr && options->debug_print)");
@@ -1350,11 +1341,10 @@ void Compilation_unit::output_cpp_matcher_body(pp::Pretty_print &p,
             });
             p.nl();
         });
-        p.nl();
     }
 
     // Generate tracer code.
-
+    p.nl();
     p.string("if (event_handler != nullptr)");
     p.with_indent([&] (pp::Pretty_print &p) {
             p.nl();
@@ -1381,15 +1371,561 @@ void Compilation_unit::output_cpp_matcher_body(pp::Pretty_print &p,
     p.string("return ");
     output_cpp_expr(p, rule.get_rhs());
     p.semicolon();
+}
 
-    if (rule.get_guard()) {
-        --p;
-        p.string_with_nl("\n}");
+void Compilation_unit::output_cpp_rule_match1(
+    pp::Pretty_print &p,
+    Rule const &rule,
+    bool first_matcher,
+    size_t skip_tl,
+    size_t rule_index,
+    size_t node_index,
+    size_t fail_node_index,
+    size_t cont_index,
+    Expr const *node,
+    size_t &tmp_index)
+{
+    tmp_index += 1;
+
+    // Destructure LHS into
+    // 1. Name of top-level node (if any)
+    // 2. Call expression for top-level node
+    // 3. Attribute expression (if any).
+    Expr const *node_expr = nullptr;
+    Expr_attribute const *attr_expr = nullptr;
+    Expr_ref const *name_expr = nullptr;
+    {
+        Expr const *e = node;
+        while (true) {
+            if (Expr_attribute const* a = as<Expr_attribute>(e)) {
+                attr_expr = a;
+                e = a->get_argument();
+            } else if (Expr_binary const* b = as<Expr_binary>(e)) {
+                if (b->get_operator() == Expr_binary::Operator::OK_TILDE) {
+                    name_expr = cast<Expr_ref>(b->get_left_argument());
+                    e = b->get_right_argument();
+                } else {
+                    break;
+                }
+            } else if (Expr_call const* c = as<Expr_call>(e)) {
+                node_expr = c;
+                break;
+            } else if (Expr_type_annotation const* a = as<Expr_type_annotation>(e)) {
+                e = a->get_argument();
+            } else if (Expr_ref const* r = as<Expr_ref>(e)) {
+                node_expr = r;
+                break;
+            } else {
+                printf("kind: %d\n", e->get_kind());
+                MDL_ASSERT(!"call, attr or alias expression expected");
+            }
+        }
+        MDL_ASSERT(node_expr && "no call or reference expression found");
+    }
+
+    auto emit_call_cont = [&] (size_t to_skip = 0) {
+        p.with_braces([&] (pp::Pretty_print &p) {
+            p.with_indent([&] (pp::Pretty_print&p) {
+                p.nl();
+                p.string("return match_rule");
+                p.integer(cont_index + to_skip);
+                p.string("(node");
+                p.integer(fail_node_index);
+                p.string(", node_props");
+                p.integer(fail_node_index);
+                p.string(");");
+            });
+            p.nl();
+        });
+    };
+
+    if (name_expr != nullptr) {
+        p.string("DAG_node const *v_");
+        p.string(name_expr->get_name()->get_name());
+        p.string(" = node");
+        p.integer(node_index);
+        p.string(";");
+    }
+
+    switch (node_expr->get_kind()) {
+    case Expr::EK_CALL:
+    {
+        Expr_call const *call = cast<Expr_call>(node_expr);
+        Type const *ret_type = call->get_type();
+        Expr const *callee = call->get_callee();
+        Type_function const *callee_type = cast<Type_function>(callee->get_type());
+
+        p.nl();
+        p.string("// ");
+        if (!first_matcher) {
+            p.string("continued ");
+        }
+        p.string("match for ");
+        {
+            std::stringstream s_out;
+            pp::Pretty_print p1(m_arena, s_out, pp::Pretty_print::LARGE_LINE_WIDTH);
+            node_expr->pp(p1);
+            p.string(s_out.str().c_str());
+        }
+
+        if (first_matcher) {
+            // First, check a node's semantics.
+            mi::mdl::IDefinition::Semantics sema =
+                mi::mdl::IDefinition::Semantics(find_semantics(call));
+            bool is_ternary = sema >= mi::mdl::IDefinition::DS_OP_BASE && sema <= mi::mdl::IDefinition::DS_OP_END;
+
+
+            char const *mdl_semantics_name = get_semantics_name(sema);
+            p.nl();
+            p.string("if (node_props"); 
+            p.integer(node_index); 
+            p.string(".sema != ");
+            if (mdl_semantics_name) {
+                p.string("IDefinition::");
+                p.string(mdl_semantics_name);
+            } else if (is_ternary) {
+                mi::mdl::IExpression::Operator op = mi::mdl::IExpression::Operator(sema - mi::mdl::IDefinition::DS_OP_BASE);
+                switch (op) {
+                case mi::mdl::IExpression::OK_TERNARY:
+                    p.string("(IDefinition::DS_OP_BASE + IExpression::OK_TERNARY)");
+                    break;
+                default:
+                    p.integer(sema);
+                    p.string("/* unhandled */");
+                    break;
+                }
+            } else {
+
+//                MDL_ASSERT(!"unhandled semantics in sema->string conversion");
+                p.integer(sema);
+                p.string("/* unhandled */");
+            }
+
+            // Check the node's type if needed:
+            if (sema == mi::mdl::IDefinition::DS_INVALID_REF_CONSTRUCTOR) {
+                p.softbreak();
+                p.string(" || node_props"); p.integer(node_index); p.string(".type_kind != ");
+                switch (ret_type->get_kind()) {
+                case Type::TK_BSDF:
+                    p.string("IType::TK_BSDF");
+                    break;
+                case Type::TK_EDF:
+                    p.string("IType::TK_EDF");
+                    break;
+                case Type::TK_VDF:
+                    p.string("IType::TK_VDF");
+                    break;
+                case Type::TK_HAIR_BSDF:
+                    p.string("IType::TK_HAIR_BSDF");
+                    break;
+                case Type::TK_STRUCT:
+                    p.string("IType::TK_STRUCT");
+                    break;
+                default:
+                    p.integer(int(ret_type->get_kind()));
+                    break;
+                }
+            } else if (sema == mi::mdl::IDefinition::DS_ELEM_CONSTRUCTOR) {
+                p.softbreak();
+                p.string(" || node_props"); p.integer(node_index); p.string(".type_kind != ");
+                switch (ret_type->get_kind()) {
+                case Type::TK_STRUCT:
+                    p.string("IType::TK_STRUCT");
+                    break;
+                case Type::TK_MATERIAL:
+                    p.string("IType::TK_STRUCT || node_props"); p.integer(node_index); p.string(".struct_id != IType_struct::SID_MATERIAL");
+                    break;
+                case Type::TK_MATERIAL_SURFACE:
+                    p.string("IType::TK_STRUCT || node_props"); p.integer(node_index); p.string(".struct_id != IType_struct::SID_MATERIAL_SURFACE");
+                    break;
+                case Type::TK_MATERIAL_VOLUME:
+                    p.string("IType::TK_STRUCT || node_props"); p.integer(node_index); p.string(".struct_id != IType_struct::SID_MATERIAL_VOLUME");
+                    break;
+                case Type::TK_MATERIAL_GEOMETRY:
+                    p.string("IType::TK_STRUCT || node_props"); p.integer(node_index); p.string(".struct_id != IType_struct::SID_MATERIAL_GEOMETRY");
+                    break;
+                case Type::TK_MATERIAL_EMISSION:
+                    p.string("IType::TK_STRUCT || node_props"); p.integer(node_index); p.string(".struct_id != IType_struct::SID_MATERIAL_EMISSION");
+                    break;
+                default:
+                    MDL_ASSERT(!"unexpected type");
+                    p.integer(int(ret_type->get_kind()));
+                    break;
+                }
+            } else if ((sema == mi::mdl::IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX)
+                || (sema == mi::mdl::IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX)
+                || (sema == mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX)
+                || (sema == mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX)
+                || (sema == mi::mdl::IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX)
+                || (sema == mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX)) {
+                p.softbreak();
+                p.string(" || node_props"); p.integer(node_index); p.string(".arity != ");
+                p.integer(call->get_argument_count() / 2);
+                p.softbreak();
+                p.string(" || node_props"); p.integer(node_index); p.string(".type_kind != ");
+                switch (ret_type->get_kind()) {
+                case Type::TK_BSDF:
+                    p.string("IType::TK_BSDF");
+                    break;
+                case Type::TK_EDF:
+                    p.string("IType::TK_EDF");
+                    break;
+                case Type::TK_VDF:
+                    p.string("IType::TK_VDF");
+                    break;
+                default:
+                    MDL_ASSERT(!"unhandled type kind in mixer");
+                    break;
+                }
+            } else if ((sema == mi::mdl::IDefinition::DS_INTRINSIC_DF_TINT)
+                || (sema == mi::mdl::IDefinition::DS_INTRINSIC_DF_DIRECTIONAL_FACTOR)) {
+                p.string(" || node_props"); p.integer(node_index); p.string(".arity != ");
+                p.integer(call->get_argument_count());
+                p.string(" || node_props"); p.integer(node_index); p.string(".type_kind != ");
+                switch (ret_type->get_kind()) {
+                case Type::TK_BSDF:
+                    p.string("IType::TK_BSDF");
+                    break;
+                case Type::TK_EDF:
+                    p.string("IType::TK_EDF");
+                    break;
+                case Type::TK_VDF:
+                    p.string("IType::TK_VDF");
+                    break;
+                default:
+                    MDL_ASSERT(!"unhandled type kind in tint/directional_factor");
+                    break;
+                }
+            } else if (is_ternary) {
+                p.softbreak();
+                p.string(" || node_props"); p.integer(node_index); p.string(".type_kind != ");
+                switch (ret_type->get_kind()) {
+                case Type::TK_BSDF:
+                    p.string("IType::TK_BSDF");
+                    break;
+                case Type::TK_EDF:
+                    p.string("IType::TK_EDF");
+                    break;
+                case Type::TK_VDF:
+                    p.string("IType::TK_VDF");
+                    break;
+                case Type::TK_HAIR_BSDF:
+                    p.string("IType::TK_HAIR_BSDF");
+                    break;
+                case Type::TK_MATERIAL: // For material structs.
+                    p.string("IType::TK_STRUCT || node_props"); p.integer(node_index); p.string(".struct_id != IType_struct::SID_MATERIAL");
+                    break;
+                default:
+                    MDL_ASSERT(!"unhandled type kind in ternary");
+                    break;
+                }
+            }
+            p.string(") ");
+            emit_call_cont(skip_tl);
+        }
+
+        for (int i = 0; i < call->get_argument_count(); i++) {
+            Expr const *arg = call->get_argument(i);
+            if (Expr_ref const *ref = as<Expr_ref>(arg)) {
+                if (strcmp(ref->get_name()->get_name(), "_") == 0) {
+                    continue;
+                }
+            }
+            p.nl();
+            p.string("DAG_node const *node");
+            p.integer(tmp_index);
+            p.string(" = ");
+            if (get_n_ary_mixer(m_node_types, callee_type) > 0) {
+                p.string("e.get_remapped_argument(");
+            } else {
+                p.string("e.get_compound_argument(");
+            }
+            p.string("node");
+            p.integer(node_index);
+            p.string(", ");
+            p.integer(i);
+            p.string(");");
+            if (arg->get_kind() != Expr::EK_REFERENCE) {
+                p.string_with_nl("\nIDistiller_plugin_api::Match_properties node_props");
+                p.integer(tmp_index);
+                p.string_with_nl(";\n");
+                p.string("e.get_match_properties(node");
+                p.integer(tmp_index);
+                p.string(", node_props");
+                p.integer(tmp_index);
+                p.string("); ");
+            }
+            output_cpp_rule_match1(p, rule, true, 0, rule_index, tmp_index,
+                                   fail_node_index,
+                                   cont_index, arg,
+                                   tmp_index);
+            tmp_index++;
+        }
+        break;
+    }
+
+    case Expr::EK_REFERENCE:
+    {
+        Expr_ref const *ref = cast<Expr_ref>(node_expr);
+        if (strcmp(ref->get_name()->get_name(), "_") != 0) {
+            p.nl();
+            p.string("DAG_node const *v_");
+            p.escaped_string(ref->get_name()->get_name());
+            p.string(" = node");
+            p.integer(node_index);
+            p.semicolon();
+            p.string(" (void)v_");
+            p.escaped_string(ref->get_name()->get_name());
+            p.semicolon();
+        }
+        break;
+    }
+    default:
+        MDL_ASSERT(false && "unexpected expression kind");
+    }
+
+    // Match all attributes and bind their values to variables.
+    if (attr_expr != nullptr) {
+        Expr_attribute::Expr_attribute_vector const &attrs = attr_expr->get_attributes();
+        for (Expr_attribute::Expr_attribute_entry const &ap : attrs) {
+            p.nl();
+            p.string("if (!e.attribute_exists(");
+            p.string("node");
+            p.integer(node_index);
+            p.string(", \"");
+            p.string(ap.name->get_name());
+            p.string("\")) ");
+            emit_call_cont();
+
+            if (ap.expr) {
+                p.nl();
+                p.string("const DAG_node *node");
+                p.integer(tmp_index);
+                p.string(" = e.get_attribute(node");
+                p.integer(node_index);
+                p.string(", \"");
+                p.escaped_string(ap.name->get_name());
+                p.string("\");");
+                p.string(" (void)node");
+                p.integer(tmp_index);
+                p.semicolon();
+                size_t ti = tmp_index;
+                tmp_index++;
+                output_cpp_rule_match1(p, rule, true, 0, rule_index, ti,
+                                       fail_node_index,
+                                       cont_index,
+                                       ap.expr,
+                                       tmp_index);
+            }
+        }
+    }
+
+}
+
+void Compilation_unit::output_cpp_rule_matcher(
+    pp::Pretty_print &p,
+    Rule const &rule,
+    bool first_matcher,
+    size_t skip_tl,
+    size_t rule_index,
+    size_t cont_index)
+{
+    Expr const *lhs = rule.get_lhs();
+    size_t tmp_index = rule_index + 1;
+
+    p.without_indent([&] (pp::Pretty_print &p) {
+        p.string("// ");
+        p.string(m_filename_only);
+        p.string(":");
+
+        p.integer(rule.get_location().get_line());
+        p.nl();
+        p.string("//");
+        if (rule.get_dead_rule() == Rule::Dead_rule::DR_DEAD)
+            p.string(" deadrule ");
+        p.string("RUID ");
+        p.integer(rule.get_uid());
+    });
+    p.nl();
+    p.string("auto match_rule");
+    p.integer(rule_index);
+    p.string(" = [&] (DAG_node const *node");
+    p.integer(rule_index);
+    p.string(", IDistiller_plugin_api::Match_properties &node_props");
+    p.integer(rule_index);
+    p.string(") -> const DAG_node * ");
+    p.with_braces([&] (pp::Pretty_print &p) {
+        p.with_indent([&] (pp::Pretty_print &p) {
+            p.nl();
+            output_cpp_rule_match1(p, rule, first_matcher, skip_tl,
+                                   /*rule_index=*/rule_index,
+                                   /*node_index=*/rule_index,
+                                   /*fail_node_index=*/rule_index,
+                                   /*cont_index=*/cont_index,
+                                   lhs,
+                                   tmp_index);
+            p.nl();
+            mi::mdl::string s(m_arena.get_allocator());
+            output_cpp_matcher_rhs(p, rule, rule_index, rule_index, cont_index);
+        });
+        p.nl();
+    });
+    p.semicolon();
+    p.nl();
+    p.string("(void)match_rule");
+    p.integer(rule_index);
+    p.semicolon();
+    p.nl();
+}
+
+static mi::mdl::IType::Kind map_kind(Type::Kind k) {
+    switch (k) {
+    case Type::TK_ERROR:
+        return mi::mdl::IType::TK_ERROR;
+    case Type::TK_BOOL:
+        return mi::mdl::IType::TK_BOOL;
+    case Type::TK_INT:
+        return mi::mdl::IType::TK_INT;
+    case Type::TK_ENUM:
+        return mi::mdl::IType::TK_ENUM;
+    case Type::TK_FLOAT:
+        return mi::mdl::IType::TK_FLOAT;
+    case Type::TK_DOUBLE:
+        return mi::mdl::IType::TK_DOUBLE;
+    case Type::TK_STRING:
+        return mi::mdl::IType::TK_STRING;
+    case Type::TK_LIGHT_PROFILE:
+        return mi::mdl::IType::TK_LIGHT_PROFILE;
+    case Type::TK_BSDF:
+        return mi::mdl::IType::TK_BSDF;
+    case Type::TK_HAIR_BSDF:
+        return mi::mdl::IType::TK_HAIR_BSDF;
+    case Type::TK_EDF:
+        return mi::mdl::IType::TK_EDF;
+    case Type::TK_VDF:
+        return mi::mdl::IType::TK_VDF;
+    case Type::TK_VECTOR:
+        return mi::mdl::IType::TK_VECTOR;
+    case Type::TK_MATRIX:
+        return mi::mdl::IType::TK_MATRIX;
+    case Type::TK_ARRAY:
+        return mi::mdl::IType::TK_ARRAY;
+    case Type::TK_COLOR:
+        return mi::mdl::IType::TK_COLOR;
+    case Type::TK_FUNCTION:
+        return mi::mdl::IType::TK_FUNCTION;
+    case Type::TK_STRUCT:
+        return mi::mdl::IType::TK_STRUCT;
+    case Type::TK_TEXTURE:
+        return mi::mdl::IType::TK_TEXTURE;
+    case Type::TK_BSDF_MEASUREMENT:
+        return mi::mdl::IType::TK_BSDF_MEASUREMENT;
+    case Type::TK_MATERIAL_EMISSION:
+        return mi::mdl::IType::TK_STRUCT;
+    case Type::TK_MATERIAL_SURFACE:
+        return mi::mdl::IType::TK_STRUCT;
+    case Type::TK_MATERIAL_VOLUME:
+        return mi::mdl::IType::TK_STRUCT;
+    case Type::TK_MATERIAL_GEOMETRY:
+        return mi::mdl::IType::TK_STRUCT;
+    case Type::TK_MATERIAL:
+        return mi::mdl::IType::TK_STRUCT;
+    default:
+        return mi::mdl::IType::TK_ERROR;
     }
 }
 
-void Compilation_unit::output_cpp_matcher(pp::Pretty_print &p,Ruleset &ruleset, mi::mdl::vector<Rule const *>::Type &rules) {
+// Calculate the matching properties of the top-level call node of `rule`.
+// They are returned in the given out parameters.
+static void get_node_properties(Rule const &rule,
+                            mi::mdl::IDefinition::Semantics &sema,
+                            mi::mdl::IType::Kind &tkind,
+                            mi::mdl::IType_struct::Predefined_id &struct_id,
+                            size_t &arity)
+{
+    Expr const *expr = rule.get_lhs();
 
+    sema = mi::mdl::IDefinition::DS_UNKNOWN;
+    tkind = mi::mdl::IType::TK_ERROR;
+    struct_id = mi::mdl::IType_struct::SID_USER;
+    arity = 0;
+
+    // Skip all attributes, node aliases and type annotations.
+    for (;;) {
+        if (Expr_attribute const* call = as<Expr_attribute>(expr)) {
+            expr = call->get_argument();
+        } else if (Expr_binary const* eb = as<Expr_binary>(expr)) {
+            if (eb->get_operator() == Expr_binary::Operator::OK_TILDE) {
+                expr = eb->get_right_argument();
+            }
+            else {
+                break;
+            }
+        } else if (Expr_type_annotation const* a = as<Expr_type_annotation>(expr)) {
+            expr = a->get_argument();
+        } else {
+            break;
+        }
+    }
+
+    if (Expr_call const* call = as<Expr_call>(expr)) {
+        expr = call->get_callee();
+    } else {
+        return;
+    }
+
+    if (is<Expr_ref>(expr)) {
+        Type* expr_t = expr->get_type();
+        if (Type_function* tf = as<Type_function>(expr_t)) {
+            arity = tf->get_parameter_count();
+            char const* sel = tf->get_selector();
+            if (sel) {
+                sema = tf->get_semantics();
+                Type::Kind k = tf->get_return_type()->get_kind();
+                switch (k) {
+                case Type::TK_MATERIAL:
+                    tkind = mi::mdl::IType::TK_STRUCT;
+                    struct_id = mi::mdl::IType_struct::SID_MATERIAL;
+                    break;
+                case Type::TK_MATERIAL_SURFACE:
+                    tkind = mi::mdl::IType::TK_STRUCT;
+                    struct_id = mi::mdl::IType_struct::SID_MATERIAL_SURFACE;
+                    break;
+                case Type::TK_MATERIAL_GEOMETRY:
+                    tkind = mi::mdl::IType::TK_STRUCT;
+                    struct_id = mi::mdl::IType_struct::SID_MATERIAL_GEOMETRY;
+                    break;
+                case Type::TK_MATERIAL_VOLUME:
+                    tkind = mi::mdl::IType::TK_STRUCT;
+                    struct_id = mi::mdl::IType_struct::SID_MATERIAL_VOLUME;
+                    break;
+                case Type::TK_MATERIAL_EMISSION:
+                    tkind = mi::mdl::IType::TK_STRUCT;
+                    struct_id = mi::mdl::IType_struct::SID_MATERIAL_EMISSION;
+                    break;
+                default:
+                    tkind = map_kind(k);
+                    break;
+                }
+                return;
+            } else {
+                MDL_ASSERT(!"null selector found when looking up selector");
+                return;
+            }
+        } else {
+            MDL_ASSERT(!"invalid (non-function) argument found when looking up selector");
+            return;
+        }
+    } else {
+        MDL_ASSERT(!"invalid (non-node) argument found when looking up selector");
+        return;
+    }
+}
+
+void Compilation_unit::output_cpp_matcher(
+    pp::Pretty_print &p,
+    Ruleset &ruleset, mi::mdl::vector<Rule const *>::Type &rules) 
+{
     // Write function header for matcher function and start switch
     // statement on rules.
 
@@ -1399,134 +1935,99 @@ void Compilation_unit::output_cpp_matcher(pp::Pretty_print &p,Ruleset &ruleset, 
     p.string(ruleset.get_name());
     p.string("::matcher");
     p.with_parens([&] (pp::Pretty_print &p) {
-            p.with_indent([&] (pp::Pretty_print &p) {
-                    p.nl();
-                    p.string_with_nl("IRule_matcher_event *event_handler,\n");
-                    p.string(m_api_class);
-                    p.string_with_nl(
-                        " &e,\n"
-                        "DAG_node const *node,\n"
-                        "const mi::mdl::Distiller_options *options,\n"
-                        "Rule_result_code &result_code");
-                });
-        });
-    p.string_with_nl("const\n");
-    p.with_braces([&] (pp::Pretty_print &p) {
-            p.with_indent([&] (pp::Pretty_print &p) {
-                    p.nl();
-                    p.string("switch (e.get_selector(node)) ");
-                    p.with_braces([&] (pp::Pretty_print &p) {
-                            p.nl();
-
-                            int i = 0;
-                            Expr const *last_node = nullptr;
-
-                            for (mi::mdl::vector<Rule const *>::Type::const_iterator it(rules.begin()), end(rules.end());
-                                 it != end; ++it, ++i) {
-
-                                Rule const &rule = **it;
-
-                                Expr const *lhs_call = rule.get_lhs();
-                                while (true) {
-                                    if (lhs_call->get_kind() == Expr::EK_ATTRIBUTE) {
-                                        Expr_attribute const* l = cast<Expr_attribute>(lhs_call);
-                                        lhs_call = l->get_argument();
-                                    } if (Expr_binary const* bin = as<Expr_binary>(lhs_call)) {
-                                        if (bin->get_operator() == Expr_binary::Operator::OK_TILDE) {
-                                            lhs_call = bin->get_right_argument();
-                                        } else {
-                                            break;
-                                        }
-                                    } else {
-                                        break;
-                                    }
-                                }
-
-                                char const *lhs_node_name = node_name(lhs_call);
-                                MDL_ASSERT(lhs_node_name);
-
-                                if (!last_node || strcmp(node_name(last_node), lhs_node_name) != 0) {
-                                    // either first match or a new top-level node name for a match
-                                    if ( last_node) {
-                                        // new top-level node, need to close last 'case'
-                                        // p.rbrace();
-                                        p.with_indent([&] (pp::Pretty_print &p) {
-                                                p.nl();
-                                                p.string("break;");
-                                            });
-                                        p.nl();
-                                    }
-                                    // open new 'case'
-                                    p.string("case ");
-                                    p.string(find_selector(lhs_call));
-                                    p.string(": // match for ");
-                                    {
-                                        std::stringstream s_out;
-                                        pp::Pretty_print p1(m_arena, s_out, pp::Pretty_print::LARGE_LINE_WIDTH);
-                                        lhs_call->pp(p1);
-                                        p.string(s_out.str().c_str());
-                                    }
-                                    p.nl();
-                                    last_node = lhs_call;
-
-                                } else {
-                                    // case where a second rule with the same top-level node exists
-                                    // p.rbrace();
-                                    p.nl();
-                                }
-                                p.without_indent([&] (pp::Pretty_print &p) {
-                                        p.string("// ");
-                                        p.string(m_filename_only);
-                                        p.string(":");
-
-                                        p.integer(rule.get_location().get_line());
-                                        p.nl();
-                                        p.string("//");
-                                        if (rule.get_dead_rule() == Rule::Dead_rule::DR_DEAD)
-                                            p.string(" deadrule ");
-                                        p.string("RUID ");
-                                        p.integer(rule.get_uid());
-                                    });
-                                p.with_indent([&] (pp::Pretty_print &p) {
-                                        p.nl();
-
-                                        p.string("if (true");
-                                        mi::mdl::string s(m_arena.get_allocator());
-                                        s = "node";
-                                        output_cpp_pattern_condition(p, rule.get_lhs(), s);
-                                        p.string(") ");
-
-                                        p.with_braces([&] (pp::Pretty_print &p) {
-                                                p.with_indent([&] (pp::Pretty_print &p) {
-                                                        p.nl();
-                                                        output_cpp_matcher_body(p,
-                                                                                rule,
-                                                                                i,
-                                                                                s);
-                                                    });
-                                                p.nl();
-                                            });
-                                    });
-                            }
-                            if (last_node) {
-                                p.with_indent([&] (pp::Pretty_print &p) {
-                                        p.string_with_nl("\nbreak;");
-                                    });
-                                p.nl();
-                            }
-
-                            // Finish outermost switch statement and function.
-
-                            p.string("default:");
-                            p.with_indent([&] (pp::Pretty_print &p) {
-                                    p.string_with_nl("\nbreak;");
-                                });
-                            p.nl();
-                        });
-                    p.string_with_nl("\n\nreturn node;");
-                });
+        p.with_indent([&] (pp::Pretty_print &p) {
             p.nl();
+            p.string_with_nl("IRule_matcher_event *event_handler,\n");
+            p.string(m_api_class);
+            p.string_with_nl(
+                " &e,\n"
+                "DAG_node const *node,\n"
+                "const mi::mdl::Distiller_options *options,\n"
+                "Rule_result_code &result_code");
         });
+    });
+    p.string_with_nl(" const\n");
+    p.with_braces([&] (pp::Pretty_print &p) {
+        p.with_indent([&] (pp::Pretty_print &p) {
+            p.nl();
+            {
+                size_t i = 0;
+                mi::mdl::IDefinition::Semantics last_sema =
+                    mi::mdl::IDefinition::Semantics::DS_UNKNOWN;
+                mi::mdl::IType::Kind last_tkind =
+                    mi::mdl::IType::TK_ERROR;
+                mi::mdl::IType_struct::Predefined_id last_struct_id = mi::mdl::IType_struct::SID_USER;
+                size_t last_arity = 0;
+                mi::mdl::vector<bool>::Type first_matcher(get_allocator());
+                mi::mdl::vector<size_t>::Type skip_tl(get_allocator());
+
+                // Calculate, for each rule, the node matching properties of the LHS. Then 
+                // collect information on which rules can be combined because their top-level 
+                // match properties are equal. The entry first_matcher[i] is true if rule i
+                // is the first with a certain set of matching properties, and needs the 
+                // matching code.
+                for (auto it(rules.begin()), end(rules.end()); it != end; ++it, ++i) {
+                    Rule const &rule = **it;
+                    mi::mdl::IDefinition::Semantics sema =
+                        mi::mdl::IDefinition::Semantics::DS_UNKNOWN;
+                    mi::mdl::IType::Kind tkind =
+                        mi::mdl::IType::TK_ERROR;
+                    mi::mdl::IType_struct::Predefined_id struct_id = mi::mdl::IType_struct::SID_USER;
+                    size_t arity = 0;
+                    get_node_properties(rule, sema, tkind, struct_id, arity);
+                    if (sema != last_sema || tkind != last_tkind || struct_id != last_struct_id || arity != last_arity) {
+                        last_sema = sema;
+                        last_tkind = tkind;
+                        last_arity = arity;
+                        first_matcher.push_back(true);
+                    } else {
+                        first_matcher.push_back(false);
+                    }
+                    skip_tl.push_back(0);
+                }
+
+                // Calculate for each rule i where first_matcher[i] is true the number of 
+                // rules to skip if the top-level matching fails.
+                for (int i = 0; i < first_matcher.size(); ++i) {
+                    if (first_matcher[i]) {
+                        for (int j = i; j < first_matcher.size() - 1; ++j) {
+                            if (first_matcher[j + 1] == false) {
+                                skip_tl[i]++;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                p.string("auto match_rule");
+                p.integer(rules.size());
+                p.string(" = [&] (DAG_node const *node, \
+IDistiller_plugin_api::Match_properties &node_props) -> \
+const DAG_node * { return node; };");
+                p.nl();
+                i = rules.size();
+                for (auto it(rules.rbegin()), end(rules.rend()); it != end; ++it, --i) {
+                    p.nl();
+
+                    Rule const &rule = **it;
+                    output_cpp_rule_matcher(p, rule,
+                                            first_matcher[i - 1],
+                                            skip_tl[i - 1],
+                                            i - 1, i);
+                }
+                p.nl();
+                p.string_with_nl("IDistiller_plugin_api::Match_properties node_props;\n");
+                p.string_with_nl("e.get_match_properties(node, node_props);\n");
+                p.string("return match_rule");
+                p.integer(0);
+                p.string("(node, node_props);");
+                p.nl();
+            }
+
+        });
+        p.nl();
+    });
     p.nl();
     p.nl();
 }
@@ -1647,61 +2148,9 @@ void Compilation_unit::output_cpp_pattern_condition(
     }
 }
 
-int Compilation_unit::find_semantics(Expr const* expr) {
+int Compilation_unit::find_semantics(Expr const *expr) {
     // Ignore all attributes and node aliases.
     for (;;) {
-        if (Expr_attribute const* call = as<Expr_attribute>(expr)) {
-            expr = call->get_argument();
-        }
-        else if (Expr_binary const* eb = as<Expr_binary>(expr)) {
-            if (eb->get_operator() == Expr_binary::Operator::OK_TILDE) {
-                expr = eb->get_right_argument();
-            }
-            else {
-                break;
-            }
-        }
-        else {
-            break;
-        }
-    }
-
-    if (Expr_call const* call = as<Expr_call>(expr)) {
-        expr = call->get_callee();
-    }
-
-    if (is<Expr_ref>(expr)) {
-        Type* expr_t = expr->get_type();
-        if (Type_function* tf = as<Type_function>(expr_t)) {
-            char const* sel = tf->get_selector();
-            if (sel)
-                return tf->get_semantics();
-            else {
-                error(expr->get_location(),
-                    "[BUG] null selector found when looking up selector");
-                MDL_ASSERT(!"[BUG] null selector found when looking up selector");
-                return 0; // "::FIXME:: null selector found when looking up selector";
-            }
-        }
-        else {
-            error(expr->get_location(),
-                "[BUG] invalid (non-function) argument found when looking up selector");
-            MDL_ASSERT(!"[BUG] invalid (non-function) argument found when looking up selector");
-            return 0; // "::FIXME:: invalid (non-function) argument found when looking up selector";
-        }
-    }
-    else {
-        error(expr->get_location(),
-            "[BUG] invalid (non-node) argument found when looking up selector");
-        MDL_ASSERT(!"[BUG] invalid (non-node) argument found when looking up selector");
-        return 0; // "::FIXME:: invalid (non-node) argument found when looking up selector";
-    }
-}
-
-
-char const *Compilation_unit::find_selector(Expr const *expr) {
-    // Ignore all attributes and node aliases.
-    for(;;) {
         if (Expr_attribute const *call = as<Expr_attribute>(expr)) {
             expr = call->get_argument();
         } else if (Expr_binary const *eb = as<Expr_binary>(expr)) {
@@ -1719,36 +2168,46 @@ char const *Compilation_unit::find_selector(Expr const *expr) {
         expr = call->get_callee();
     }
 
-    if (is<Expr_ref>(expr)) {
-        Type *expr_t = expr->get_type();
-        if (Type_function *tf = as<Type_function>(expr_t)) {
-            char const *sel = tf->get_selector();
-            if (sel)
-                return sel;
-            else {
-                error(expr->get_location(),
-                      "[BUG] null selector found when looking up selector");
-                MDL_ASSERT(!"[BUG] null selector found when looking up selector");
-                return "::FIXME:: null selector found when looking up selector";
+    MDL_ASSERT(is<Expr_ref>(expr) && "non-ref expression");
+    Type *expr_t = expr->get_type();
+    Type_function *tf = cast<Type_function>(expr_t);
+    return tf->get_semantics();
+}
+
+
+char const *Compilation_unit::find_selector(Expr const *expr) {
+    // Ignore all attributes and node aliases.
+    for (;;) {
+        if (Expr_attribute const *call = as<Expr_attribute>(expr)) {
+            expr = call->get_argument();
+        } else if (Expr_binary const *eb = as<Expr_binary>(expr)) {
+            if (eb->get_operator() == Expr_binary::Operator::OK_TILDE) {
+                expr = eb->get_right_argument();
+            } else {
+                break;
             }
         } else {
-            error(expr->get_location(),
-                  "[BUG] invalid (non-function) argument found when looking up selector");
-            MDL_ASSERT(!"[BUG] invalid (non-function) argument found when looking up selector");
-            return "::FIXME:: invalid (non-function) argument found when looking up selector";
+            break;
         }
-    } else {
-        error(expr->get_location(),
-              "[BUG] invalid (non-node) argument found when looking up selector");
-        MDL_ASSERT(!"[BUG] invalid (non-node) argument found when looking up selector");
-        return "::FIXME:: invalid (non-node) argument found when looking up selector";
     }
+
+    if (Expr_call const *call = as<Expr_call>(expr)) {
+        expr = call->get_callee();
+    }
+
+    MDL_ASSERT(is<Expr_ref>(expr) && "non-reference expression");
+    Type *expr_t = expr->get_type();
+    Type_function *tf = cast<Type_function>(expr_t);
+    char const *sel = tf->get_selector();
+    MDL_ASSERT(sel && "non-null selector expected");
+    return sel;
 }
 
 void Compilation_unit::output_cpp_postcond_helpers(pp::Pretty_print &p,
                                                    Ruleset &ruleset,
                                                    Expr *expr,
-                                                   int &idx) {
+                                                   int &idx)
+{
     switch (expr->get_kind()) {
     case Expr::Kind::EK_UNARY:
     {

@@ -32,7 +32,8 @@
 #include <mi/base/types.h>
 
 #include <functional>
-#include <set>
+
+#include <boost/unordered/unordered_flat_set.hpp>
 
 #include "i_db_transaction_id.h"
 
@@ -198,7 +199,11 @@ inline size_t dynamic_memory_consumption( const Typed_tag<T>&) { return 0; }
 
 
 /// Set of tags. Used for reference counting.
-using Tag_set = std::set<Tag>;
+using Tag_set = boost::unordered_flat_set<Tag,std::hash<Tag>>;
+
+/// See base/lib/mem/i_mem_consumption.h (implementation incorrect)
+inline bool has_dynamic_memory_consumption( const Tag_set&) { return false; }
+inline size_t dynamic_memory_consumption( const Tag_set&) { return 0; }
 
 
 /// Unique identifier for a certain version of a database element or job.
@@ -211,7 +216,7 @@ using Tag_set = std::set<Tag>;
 struct Tag_version
 {
     /// Default constructor.
-    Tag_version() : m_tag( Tag()), m_transaction_id( 0), m_version( 0) { }
+    Tag_version() = default;
     /// Constructor.
     Tag_version( Tag tag, Transaction_id transaction_id, mi::Uint32 version)
       : m_tag( tag), m_transaction_id( transaction_id), m_version( version) { }
@@ -221,7 +226,7 @@ struct Tag_version
     /// The transaction creating this tag version.
     Transaction_id m_transaction_id;
     /// The version within the transaction.
-    mi::Uint32 m_version;
+    mi::Uint32 m_version = 0;
 };
 
 /// Comparison operators

@@ -264,8 +264,10 @@ char const *Code_generator_dag::get_target_language() const
 }
 
 
-IGenerated_code_dag *Code_generator_dag::compile(IModule const *module)
+IGenerated_code_dag *Code_generator_dag::compile(IModule const *imod)
 {
+    Module const *module = impl_cast<Module>(imod);
+
     Generated_code_dag::Compile_options options = 0;
     if (m_options.get_bool_option(MDL_CG_DAG_OPTION_NO_LOCAL_FUNC_CALLS)) {
         options |= Generated_code_dag::FORBID_LOCAL_FUNC_CALLS;
@@ -297,7 +299,7 @@ IGenerated_code_dag *Code_generator_dag::compile(IModule const *module)
 
     if (m_options.get_bool_option(MDL_CG_DAG_OPTION_DUMP_MATERIAL_DAG)) {
         for (size_t i = 0, n = result->get_material_count(); i < n; ++i) {
-            result->dump_material_dag(i, NULL);
+            result->dump_material_dag(i, /*suffix=*/NULL);
         }
     }
 
@@ -311,7 +313,7 @@ IGenerated_code_dag *Code_generator_dag::compile(IModule const *module)
 }
 
 // Create a new MDL lambda function.
-ILambda_function *Code_generator_dag::create_lambda_function(
+Lambda_function *Code_generator_dag::create_lambda_function(
     ILambda_function::Lambda_execution_context context)
 {
     return m_builder.create<Lambda_function>(
@@ -321,7 +323,7 @@ ILambda_function *Code_generator_dag::create_lambda_function(
 }
 
 // Create a new MDL distribution function.
-IDistribution_function *Code_generator_dag::create_distribution_function()
+Distribution_function *Code_generator_dag::create_distribution_function()
 {
     return m_builder.create<Distribution_function>(
         m_builder.get_allocator(),
@@ -338,7 +340,7 @@ void Code_generator_dag::serialize_lambda(
 }
 
 // Deserialize a lambda function from a given de-serializer.
-ILambda_function *Code_generator_dag::deserialize_lambda(IDeserializer *ds)
+Lambda_function *Code_generator_dag::deserialize_lambda(IDeserializer *ds)
 {
     return Lambda_function::deserialize(get_allocator(), m_compiler.get(), ds);
 }

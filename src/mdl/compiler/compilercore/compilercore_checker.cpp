@@ -245,11 +245,123 @@ void Code_checker::check_type(
     }
 }
 
+// Check a given AST expression for soundness.
+void Code_checker::check_expr(
+    IModule const     *owner,
+    IExpression const *expr)
+{
+    // Visitor for expressions.
+    class Expr_checker : public Module_visitor {
+    public:
+        /// Constructor.
+        Expr_checker(Code_checker &cc, Module const *m)
+        : m_cc(cc)
+        , m_module(m)
+        , m_tf(m->get_type_factory())
+        , m_vf(m->get_value_factory())
+        {
+        }
+
+        /// Default post visitor for expressions.
+        ///
+        /// \param expr  the expression
+        IExpression *post_visit(IExpression *expr) MDL_FINAL
+        {
+            IType const *type = expr->get_type();
+
+            // check only the type in generic cases
+            m_cc.check_type(m_tf, type);
+
+            return expr;
+        }
+
+        // Post visitor for literal expressions.
+        ///
+        /// \param expr  the expression
+        IExpression *post_visit(IExpression_literal *expr) MDL_FINAL
+        {
+            IValue const *value = expr->get_value();
+
+            m_cc.check_value(m_vf, value);
+
+            return expr;
+        }
+
+        // Post visitor for reference expressions.
+        ///
+        /// \param expr  the expression
+        IExpression *post_visit(IExpression_reference *expr) MDL_FINAL
+        {
+            IType const *type = expr->get_type();
+
+            m_cc.check_type(m_tf, type);
+
+            if (expr->is_array_constructor()) {
+                // no definition
+                return expr;
+            }
+
+            IDefinition const *def = expr->get_definition();
+            m_cc.check_definition(m_module, def);
+
+            return expr;
+        }
+
+    private:
+        Code_checker &m_cc;
+        Module const *m_module;
+        Type_factory *m_tf;
+        Value_factory *m_vf;
+    };
+
+    Expr_checker ec(*this, impl_cast<Module>(owner));
+
+    ec.visit(expr);
+}
+
+// Check the parameter initializer of a definition for soundness.
+void Code_checker::check_parameter_initializers(
+    IModule const      *owner,
+    IDefinition const  *def)
+{
+    if (def->get_property(IDefinition::DP_IS_IMPORTED)) {
+        // access of parameter initializers on imported entities is forbidden
+        return;
+    }
+
+    IType_function const *f_tp = as<IType_function>(def->get_type());
+
+    if (f_tp == NULL) {
+        return;
+    }
+
+    if (def->get_kind() == IDefinition::DK_CONSTRUCTOR &&
+        is<IType_texture>(f_tp->get_return_type()))
+    {
+        // FIXME: this is an ugly work-around for texture constructors. The 2D
+        // constructor references tex::gamma_mode but are built-in (which in theory creates a
+        // dependency circle). One could call this a "design flaw".
+        // Anyway the constructor references the definition from the tex module
+        // instead. But, because they are built-in, the auto import fixer does not "reach"
+        // them for rewrite. So far, we just ignore the error here, nothing bad can happen, as
+        // the gamma_mode definitions are always in RAM being stdlib.
+        return;
+    }
+
+    for (int i = 0, n = f_tp->get_parameter_count(); i < n; ++i) {
+        if (IExpression const *init = def->get_default_param_initializer(i)) {
+            check_expr(owner, init);
+        }
+    }
+}
+
 // Check a given definition for soundness.
 void Code_checker::check_definition(
-    Definition_table const *owner,
-    IDefinition const      *def)
+    IModule const     *owner,
+    IDefinition const *def)
 {
+    Module const *module = impl_cast<Module>(owner);
+
     if (def == NULL) {
         report("def is NULL");
         return;
@@ -268,23 +380,23 @@ void Code_checker::check_definition(
         }
     }
 
-    if (!owner->is_owner(def)) {
+    if (!module->is_owner(def)) {
         report("Def is not owned by given module");
     }
 
-    check_type(owner->get_owner_module()->get_type_factory(), def->get_type());
+    check_type(module->get_type_factory(), def->get_type());
 
     switch (def->get_kind()) {
     case IDefinition::DK_ERROR:
         break;
     case IDefinition::DK_CONSTANT:
     case IDefinition::DK_ENUM_VALUE:
-        check_value(owner->get_owner_module()->get_value_factory(), def->get_constant_value());
+        check_value(module->get_value_factory(), def->get_constant_value());
         break;
     case IDefinition::DK_ANNOTATION:
     case IDefinition::DK_FUNCTION:
     case IDefinition::DK_CONSTRUCTOR:
-        // TODO: check parameter initializer
+        check_parameter_initializers(owner, def);
         break;
     case IDefinition::DK_STRUCT_CATEGORY:
         break;
@@ -320,49 +432,22 @@ Module_checker::Module_checker(
     bool         verbose,
     IPrinter     *printer)
 : Base(verbose, printer)
-, m_vf(module->get_value_factory())
-, m_tf(module->get_type_factory())
-, m_deftab(&module->get_definition_table())
+, m_module(module)
 {
+}
+
+// Check a module for soundness.
+void Module_checker::check_module(
+    Module const *module)
+{
+    visit(module);
 }
 
 // Default post visitor for expressions.
 IExpression *Module_checker::post_visit(
     IExpression *expr)
 {
-    IType const *type = expr->get_type();
-
-    // check only the type in generic cases
-    check_type(m_tf, type);
-
-    return expr;
-}
-
-// Post visitor for literal expressions.
-IExpression *Module_checker::post_visit(IExpression_literal *expr)
-{
-    IValue const *value = expr->get_value();
-
-    check_value(m_vf, value);
-
-    return expr;
-}
-
-// Post visitor for reference expressions.
-IExpression *Module_checker::post_visit(IExpression_reference *expr)
-{
-    IType const *type = expr->get_type();
-
-    check_type(m_tf, type);
-
-    if (expr->is_array_constructor()) {
-        // no definition
-        return expr;
-    }
-
-    IDefinition const *def = expr->get_definition();
-    check_definition(m_deftab, def);
-
+    check_expr(m_module, expr);
     return expr;
 }
 
@@ -388,7 +473,7 @@ bool Module_checker::check(
 
         checker.check_value_factory(module->get_value_factory());
 
-        checker.visit(module);
+        checker.check_module(module);
 
         if (checker.get_error_count() != 0) {
             printer->print("Checking ");
@@ -404,7 +489,7 @@ bool Module_checker::check(
     } else {
         Module_checker checker(module, /*verbose=*/false, /*printer=*/NULL);
         checker.check_value_factory(module->get_value_factory());
-        checker.visit(module);
+        checker.check_module(module);
         return checker.get_error_count() == 0;
     }
 }

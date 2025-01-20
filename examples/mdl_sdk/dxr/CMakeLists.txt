@@ -209,24 +209,19 @@ if(MDL_ENABLE_MATERIALX)
             "libraries/targets/genmdl.mtlx"
         )
 
+    # find all support modules from the MaterialX SDK
+    file(GLOB _MATERIALX_MDL_MODULE_PATHS "${MDL_DEPENDENCY_MATERIALX_BASE_DIR}/libraries/mdl/materialx/*.mdl")
+    set(_MATERIALX_MDL_MODULE_FILENAMES "")
+    foreach(_MODULE_PATH ${_MATERIALX_MDL_MODULE_PATHS})
+        get_filename_component(_MODULE_FILENAME ${_MODULE_PATH} NAME)
+        list(APPEND _MATERIALX_MDL_MODULE_FILENAMES ${_MODULE_FILENAME})
+    endforeach()
+
     target_add_content(TARGET ${PROJECT_NAME}
-        FILE_BASE "${MDL_DEPENDENCY_MATERIALX_BASE_DIR}/libraries/"
-        TARGET_BASE "autodesk_materialx/"
+        FILE_BASE "${MDL_DEPENDENCY_MATERIALX_BASE_DIR}/libraries/mdl/materialx/"
+        TARGET_BASE "autodesk_materialx/mdl/materialx/"
         DEP_NAME "content_mdl"
-        FILES
-            "mdl/materialx/core.mdl"
-            "mdl/materialx/hsv.mdl"
-            "mdl/materialx/noise.mdl"
-            "mdl/materialx/pbrlib.mdl"
-            "mdl/materialx/pbrlib_1_6.mdl"
-            "mdl/materialx/pbrlib_1_7.mdl"
-            "mdl/materialx/pbrlib_1_8.mdl"
-            "mdl/materialx/sampling.mdl"
-            "mdl/materialx/stdlib.mdl"
-            "mdl/materialx/stdlib_1_6.mdl"
-            "mdl/materialx/stdlib_1_7.mdl"
-            "mdl/materialx/stdlib_1_8.mdl"
-            "mdl/materialx/swizzle.mdl"
+        FILES ${_MATERIALX_MDL_MODULE_FILENAMES}
         )
 
 endif()
@@ -255,9 +250,7 @@ endif()
 # creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)
 target_create_vs_user_settings(TARGET ${PROJECT_NAME})
 
-# -------------------------------------------------------------------------------------------------
-# Create installation rules to copy the build directory
-# -------------------------------------------------------------------------------------------------
+# create installation rules
 add_target_install(
     TARGET ${PROJECT_NAME}
     DESTINATION "examples/mdl_sdk/dxr"

@@ -65,6 +65,8 @@ struct Resource_tag_tuple {
         RK_GGX_VC_MULTISCATTER,
         RK_WARD_GEISLER_MORODER_MULTISCATTER,
         RK_SHEEN_MULTISCATTER,
+        RK_MICROFLAKE_SHEEN_GENERAL,
+        RK_MICROFLAKE_SHEEN_MULTISCATTER
     };
 
     Kind        m_kind;       ///< The resource kind.

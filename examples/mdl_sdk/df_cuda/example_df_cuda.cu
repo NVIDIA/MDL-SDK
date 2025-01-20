@@ -1362,7 +1362,7 @@ __device__ inline bool trace_scene(
                             transition_diffuse, material_lobe_gtag,
                             TRANSITION_LIGHT, params.env_gtag, // light group 'env'
                             #if DF_HANDLE_SLOTS == DF_HSM_NONE
-                                (eval_data.bsdf - eval_data.bsdf_glossy) * w,
+                                eval_data.bsdf_diffuse * w,
                             #else
                                 eval_data.bsdf_diffuse[lobe] * w,
                             #endif

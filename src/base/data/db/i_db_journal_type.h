@@ -29,6 +29,10 @@
 #ifndef BASE_DATA_DB_I_DB_JOURNAL_TYPE_H
 #define BASE_DATA_DB_I_DB_JOURNAL_TYPE_H
 
+#include <vector>
+
+#include "i_db_tag.h"
+
 #include <mi/base/types.h>
 
 namespace MI {
@@ -91,6 +95,12 @@ static const Journal_type JOURNAL_NONE( 0u);
 
 /// Constant for a journal type with all bits set.
 static const Journal_type JOURNAL_ALL( ~0u);
+
+/// The result of journal query is a vector of tags with corresponding journal types describing
+/// the kind of changes.
+///
+/// Note that the same tag can occur multiple times, with the same or different journal types.
+using Journal_query_result = std::vector<std::pair<DB::Tag, Journal_type>>;
 
 } // namespace DB
 

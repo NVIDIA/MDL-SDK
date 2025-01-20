@@ -62,11 +62,11 @@ public:
     /// \param manifest_fields   A static or dynamic array of structs of type \c "Manifest_field"
     ///                          which holds fields with optional or user-defined keys to be added
     ///                          to the manifest. The struct has two members, \c "key" and
-    ///                          \c "value", both of type \c "String". \c NULL is treated like an
+    ///                          \c "value", both of type \c "String". \c nullptr is treated like an
     ///                          empty array.
     /// \return
     ///                          -  0: Success.
-    ///                          - -1: Invalid parameters (\c NULL pointer).
+    ///                          - -1: Invalid parameters (\c nullptr).
     ///                          - -2: \p archive does not end in \c ".mdr".
     ///                          - -3: An array element of \p manifest_fields or a struct member
     ///                                of one of the array elements has an incorrect type.
@@ -84,11 +84,11 @@ public:
     ///                    extracted.
     /// \return
     ///                    -  0: Success.
-    ///                    - -1: Invalid parameters (\c NULL pointer).
+    ///                    - -1: Invalid parameters (\c nullptr).
     ///                    - -2: Failure.
     virtual Sint32 extract_archive( const char* archive, const char* directory) = 0;
 
-    /// Returns the manifest for an MDL archive, or \c NULL in case of failure.
+    /// Returns the manifest for an MDL archive, or \c nullptr in case of failure.
     virtual const IManifest* get_manifest( const char* archive) = 0;
 
     /// Returns an arbitrary file from an MDL archive.
@@ -101,7 +101,7 @@ public:
     ///
     /// \param archive     The filename of the MDL archive.
     /// \param filename    The name of the file inside the MDL archive.
-    /// \return            A reader to the file, or \c NULL in case of failures.
+    /// \return            A reader to the file, or \c nullptr in case of failures.
     virtual IReader* get_file( const char* archive, const char* filename) = 0;
 
     /// Returns an arbitrary file from an MDL archive.
@@ -115,7 +115,7 @@ public:
     /// \param filename    The name of the archive followed by a colon followed by the name of
     ///                    the file inside the archive
     ///                    (e. g. my_archive.mdr:my_package/my_file.mdl).
-    /// \return            A reader to the file, or \c NULL in case of failures.
+    /// \return            A reader to the file, or \c nullptr in case of failures.
     virtual IReader* get_file(const char* filename) = 0;
 
     /// Sets the file types to be compressed in archives.
@@ -138,16 +138,16 @@ public:
     /// Returns the number of fields.
     virtual Size get_number_of_fields() const = 0;
 
-    /// Returns the key of the \p index -th field, or \c NULL if \p index is out of bounds.
+    /// Returns the key of the \p index -th field, or \c nullptr if \p index is out of bounds.
     virtual const char* get_key( Size index) const = 0;
 
-    /// Returns the value of the \p index -th field, or \c NULL if \p index is out of bounds.
+    /// Returns the value of the \p index -th field, or \c nullptr if \p index is out of bounds.
     virtual const char* get_value( Size index) const = 0;
 
     /// Returns the number of fields with the given key.
     virtual Size get_number_of_fields( const char* key) const = 0;
 
-    /// Returns the value of the \p index -th field with the given key, or \c NULL if \p index is
+    /// Returns the value of the \p index -th field with the given key, or \c nullptr if \p index is
     /// out of bounds.
     virtual const char* get_value( const char* key, Size index) const = 0;
 };

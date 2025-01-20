@@ -76,8 +76,8 @@ public:
     /// \param transaction   The transaction to be used.
     /// \param name          The name of the wrapped material or function definition.
     /// \param mdl_factory   A pointer to the API component #mi::neuraylib::IMdl_factory. Needed
-    ///                      only by #create_instance() if called with \c NULL as first argument,
-    ///                      can be \c NULL otherwise.
+    ///                      only by #create_instance() if called with \c nullptr as first argument,
+    ///                      can be \c nullptr otherwise.
     Definition_wrapper( ITransaction* transaction, const char* name, IMdl_factory* mdl_factory);
 
     /// Indicates whether the definition wrapper is in a valid state.
@@ -92,7 +92,7 @@ public:
     /// reload of the owner module itself or another module imported by the owner module.
     ///
     /// \param context  Execution context that can be queried for error messages
-    ///                 after the operation has finished. Can be \c NULL.
+    ///                 after the operation has finished. Can be \c nullptr.
     ///
     /// \return \c True, if the definition is valid, \c false otherwise.
     bool is_valid_definition( IMdl_execution_context* context) const;
@@ -125,7 +125,7 @@ public:
     /// Returns the name of the parameter at \p index.
     ///
     /// \param index    The index of the parameter.
-    /// \return         The name of the parameter, or \c NULL if \p index is out of range.
+    /// \return         The name of the parameter, or \c nullptr if \p index is out of range.
     const char* get_parameter_name( Size index) const;
 
     /// Returns the index position of a parameter.
@@ -146,7 +146,7 @@ public:
     /// it uses the 'name' argument of the annotation and resolves that in the MDL search path.
     /// If the annotation is not provided or file resolution fails, it checks for a file
     /// module_name.material_name.png next to the MDL module.
-    /// In case this cannot be found either \c NULL is returned.
+    /// In case this cannot be found either \c nullptr is returned.
     const char* get_thumbnail() const;
 
 
@@ -246,34 +246,35 @@ public:
 
     /// Creates an instance of the material or function definition.
     ///
-    /// \param arguments   If not \c NULL, then these arguments are used for the material instance
-    ///                    or function call. If an argument is missing, then the default for that
-    ///                    parameter is used. If there is no default, range annotations are used to
-    ///                    obtain a suitable value, or the argument is default-constructed as last
-    ///                    resort. Must not be \c NULL (or missing any arguments) in case of \ref
+    /// \param arguments   If not \c nullptr, then these arguments are used for the material
+    ///                    instance or function call. If an argument is missing, then the default
+    ///                    for that parameter is used. If there is no default, range annotations
+    ///                    are used to obtain a suitable value, or the argument is
+    ///                    default-constructed as last resort. Must not be \c nullptr (or missing
+    ///                    any arguments) in case of \ref
     ///                    mi_neuray_mdl_template_like_function_definitions.
     /// \param[out] errors An optional pointer to an #mi::Sint32 to which an error code will be
     ///                    written. The error codes have the following meaning:
-    ///                    -  0: Success. The method always succeeds if \p arguments is \c NULL and
-    ///                          the function definition is none of
-    ///                          \ref mi_neuray_mdl_template_like_function_definitions.
+    ///                    -  0: Success. The method always succeeds if \p arguments is \c nullptr
+    ///                          and the function definition is none of \ref
+    ///                          mi_neuray_mdl_template_like_function_definitions.
     ///                    - -4: The function definition is one of
     ///                          \ref mi_neuray_mdl_template_like_function_definitions and
-    ///                          \p arguments is \c NULL.
+    ///                          \p arguments is \c nullptr.
     ///                    .
     ///                    See #mi::neuraylib::IFunction_definition::create_function_call() for
     ///                    other possible error codes.
-    /// \return            The constructed material instance or function call, or \c NULL in case
+    /// \return            The constructed material instance or function call, or \c nullptr in case
     ///                    of errors.
     IFunction_call* create_instance(
-        const IExpression_list* arguments = 0, Sint32* errors = 0) const;
+        const IExpression_list* arguments = nullptr, Sint32* errors = nullptr) const;
 
     /// Creates an instance of the material or function definition.
     ///
     /// This template wrapper exists only for backwards compatibility with older code. In new code,
     /// use the non-template overload instead.
     template <class T>
-    T* create_instance( const IExpression_list* arguments = 0, Sint32* errors = 0) const
+    T* create_instance( const IExpression_list* arguments = nullptr, Sint32* errors = nullptr) const
     {
         IScene_element* ptr_iscene_element = create_instance( arguments, errors);
         if(  !ptr_iscene_element)
@@ -350,7 +351,7 @@ inline Element_type Definition_wrapper::get_type() const
 inline const char* Definition_wrapper::get_mdl_definition() const
 {
     if( !is_valid())
-        return 0;
+        return nullptr;
 
     return m_access->get_mdl_name();
 }
@@ -358,7 +359,7 @@ inline const char* Definition_wrapper::get_mdl_definition() const
 inline const char* Definition_wrapper::get_module() const
 {
     if( !is_valid())
-        return 0;
+        return nullptr;
 
     return m_access->get_module();
 }
@@ -398,7 +399,7 @@ inline Size Definition_wrapper::get_parameter_count() const
 inline const char* Definition_wrapper::get_parameter_name( Size index) const
 {
     if( !is_valid())
-        return 0;
+        return nullptr;
 
     return m_access->get_parameter_name( index);
 }
@@ -414,7 +415,7 @@ inline Size Definition_wrapper::get_parameter_index( const char* name) const
 inline const IType_list* Definition_wrapper::get_parameter_types() const
 {
     if( !is_valid())
-        return 0;
+        return nullptr;
 
     return m_access->get_parameter_types();
 }
@@ -422,7 +423,7 @@ inline const IType_list* Definition_wrapper::get_parameter_types() const
 inline const IType* Definition_wrapper::get_return_type() const
 {
     if( !is_valid())
-        return 0;
+        return nullptr;
 
     return m_access->get_return_type();
 }
@@ -430,7 +431,7 @@ inline const IType* Definition_wrapper::get_return_type() const
 inline const char* Definition_wrapper::get_thumbnail() const
 {
     if( !is_valid())
-        return 0;
+        return nullptr;
 
     return m_access->get_thumbnail();
 }
@@ -438,7 +439,7 @@ inline const char* Definition_wrapper::get_thumbnail() const
 inline const IExpression_list* Definition_wrapper::get_defaults() const
 {
     if( !is_valid())
-        return 0;
+        return nullptr;
 
     return m_access->get_defaults();
 }
@@ -484,7 +485,7 @@ Sint32 Definition_wrapper::get_default( const char* name, T& value) const
 inline const IAnnotation_block* Definition_wrapper::get_annotations() const
 {
     if( !is_valid())
-        return 0;
+        return nullptr;
 
     return m_access->get_annotations();
 }
@@ -492,7 +493,7 @@ inline const IAnnotation_block* Definition_wrapper::get_annotations() const
 inline const IAnnotation_list* Definition_wrapper::get_parameter_annotations() const
 {
     if( !is_valid())
-        return 0;
+        return nullptr;
 
     return m_access->get_parameter_annotations();
 }
@@ -500,7 +501,7 @@ inline const IAnnotation_list* Definition_wrapper::get_parameter_annotations() c
 inline const IAnnotation_block* Definition_wrapper::get_return_annotations() const
 {
     if( !is_valid())
-        return 0;
+        return nullptr;
 
     return m_access->get_return_annotations();
 }
@@ -508,7 +509,7 @@ inline const IAnnotation_block* Definition_wrapper::get_return_annotations() con
 inline const IExpression_list* Definition_wrapper::get_enable_if_conditions() const
 {
     if( !is_valid())
-        return 0;
+        return nullptr;
 
     return m_access->get_enable_if_conditions();
 }
@@ -533,7 +534,7 @@ inline IFunction_call* Definition_wrapper::create_instance(
     const IExpression_list* arguments, Sint32* errors) const
 {
     if( !is_valid())
-        return 0;
+        return nullptr;
 
     if( arguments)
         return m_access->create_function_call( arguments, errors);
@@ -547,7 +548,7 @@ inline IFunction_call* Definition_wrapper::create_instance(
         || semantic == IFunction_definition::DS_INTRINSIC_DAG_DECL_CAST) {
         if( errors)
             *errors = -4;
-        return 0;
+        return nullptr;
     }
 
     base::Handle<const IType_list> parameter_types( m_access->get_parameter_types());

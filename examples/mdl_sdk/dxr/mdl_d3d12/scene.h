@@ -432,7 +432,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
                 float emissive_strength = 1.0f;
             };
 
-            // corresponds to glTF Extension: KHR_materials_emissive_iridescence
+            // corresponds to glTF Extension: KHR_materials_iridescence
             struct Model_data_materials_iridescence
             {
                 float iridescence_factor = 0.0f;
@@ -441,6 +441,14 @@ namespace mi { namespace examples { namespace mdl_d3d12
                 float iridescence_thickness_minimum = 100.0f;
                 float iridescence_thickness_maximum = 400.0f;
                 Texture_info iridescence_thickness_texture = {};
+            };
+
+            // corresponds to glTF Extension: KHR_materials_anisotropy
+            struct Model_data_materials_anisotropy
+            {
+                float anisotropy_strength = 0.0f;
+                float anisotropy_rotation = 0.0f;
+                Texture_info anisotropy_texture = {};
             };
 
             struct Pbr_model_data_metallic_roughness
@@ -458,6 +466,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
                 Model_data_materials_ior ior;
                 Model_data_materials_volume volume;
                 Model_data_materials_iridescence iridescence;
+                Model_data_materials_anisotropy anisotropy;
             };
 
             // corresponds to glTF Extension: KHR_materials_pbrSpecularGlossiness

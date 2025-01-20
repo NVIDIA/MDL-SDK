@@ -26,9 +26,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_sdk/shared/utils/mdl.h
- //
- // Code shared by all examples
+// examples/mdl_sdk/shared/utils/mdl.h
+//
+// Code shared by all examples
 
 #ifndef EXAMPLE_SHARED_UTILS_MDL_H
 #define EXAMPLE_SHARED_UTILS_MDL_H
@@ -89,14 +89,32 @@ namespace mi { namespace examples { namespace mdl
     /// In general this is simple and does not require a lot of logic, but since these examples
     /// are used with different kinds of build setups and binary packaging, it makes sense to wrap
     /// the handing of special cases to support the different packagings in one function.
-    /// </summary>
     mi::Sint32 load_plugin(mi::neuraylib::INeuray* neuray, const char* path);
 
-    /// Get the path specified in the MDL_SAMPLES_ROOT environment variable or if not defined,
-    /// the path of the directory where the SDK examples expect their example content.
-    /// the latter is the example content folder in the source code directory while building the
-    /// example, or if that is not valid, the current working directory.
+    /// Returns the root directory of the examples.
+    ///
+    /// The root directory of the examples is the one that contains the "mdl/nvidia/sdk_examples"
+    /// directory. The following steps are performed to find it:
+    /// - If the environment variable MDL_SAMPLES_ROOT is set, it is returned (without checking for
+    ///   the existence of the subdirectory mentioned above).
+    /// - Starting from the directory of the executable all parent directories are considered in
+    ///   turn bottom-up, checked for the existence of the subdirectory mentioned above, and the
+    ///   first successful directory is returned.
+    /// - If that subdirectory of the source tree exists, it is returned.
+    /// - Finally, the current working directory is returned (as ".").
     std::string get_examples_root();
+
+    /// Returns a directory that contains ::nvidia::core_definitions and ::nvida::axf_to_mdl.
+    ///
+    /// Might also return "." if that directory is the "mdl" subdirectory of #get_examples_root()
+    /// and no extra handling is required.
+    ///
+    /// The following steps are performed to find it:
+    /// - If the environment variable MDL_SRC_SHADERS_MDL is set, it is returned (without checking
+    //    for the existence of the MDL modules mentioned above).
+    /// - If that subdirectory of the source tree exists, it is returned.
+    /// - Finally, the current working directory is returned (as ".").
+    std::string get_src_shaders_mdl();
 
     /// Input to the \c configure function. Allows to control the search path setup for the examples
     /// as well as to control the loaded plugins.
@@ -115,6 +133,8 @@ namespace mi { namespace examples { namespace mdl
 
         bool add_example_search_path;      ///< set to false to not add the example content mdl path
         bool skip_loading_plugins;         ///< set to true to disable (optional) plugin loading
+
+        bool single_threaded;              ///< if true, render on one thread only
 
         /// set a custom logger if we want to use a different one than Default_logger
         mi::base::ILogger* logger;
@@ -191,6 +211,7 @@ namespace mi { namespace examples { namespace mdl
         , add_user_space_search_paths(true)
         , add_example_search_path(true)
         , skip_loading_plugins(false)
+        , single_threaded(false)
         , logger(nullptr)
     {}
 
@@ -216,7 +237,7 @@ namespace mi { namespace examples { namespace mdl
             HMODULE handle = LoadLibraryA(filename);
             if( !handle) {
                 // fall back to libraries in a relative lib folder, relevant for install targets
-                std::string fallback = std::string("../../../lib/") + filename;
+                std::string fallback = std::string("../../../bin/") + filename;
                 handle = LoadLibraryA(fallback.c_str());
             }
             if( !handle) {
@@ -249,11 +270,6 @@ namespace mi { namespace examples { namespace mdl
             }
         #else // MI_PLATFORM_WINDOWS
             void* handle = dlopen( filename, RTLD_LAZY);
-            if( !handle) {
-                // fall back to libraries in a relative lib folder, relevant for install targets
-                std::string fallback = std::string("../../../lib/") + filename;
-                handle = dlopen(fallback.c_str(), RTLD_LAZY);
-            }
             if( !handle) {
                 fprintf( stderr, "%s\n", dlerror());
                 return 0;
@@ -331,20 +347,34 @@ namespace mi { namespace examples { namespace mdl
         mi::base::Handle<mi::neuraylib::IPlugin_configuration> plugin_conf(
             neuray->get_api_component<mi::neuraylib::IPlugin_configuration>());
 
+        // Temporarily disable warnings. This avoids a potentially confusing warning on Windows
+        // where the first attempt with plain "path" might fail if PATH is not set correspondingly,
+        // although the second attempt suceeds. If both fail, a suitable error message is generated
+        // at the end.
+        mi::base::Handle<mi::neuraylib::ILogging_configuration> logging_conf(
+            neuray->get_api_component<mi::neuraylib::ILogging_configuration>());
+        mi::base::Message_severity old_level = logging_conf->get_log_level();
+        logging_conf->set_log_level(std::min(mi::base::MESSAGE_SEVERITY_ERROR, old_level));
+
         // try to load the requested plugin before adding any special handling
         mi::Sint32 res = plugin_conf->load_plugin_library(path);
-        if (res == 0)
+        if (res == 0) {
+            logging_conf->set_log_level(old_level);
             return 0;
-
-        // fall back to libraries in a relative lib folder, relevant for install targets
-        if (strstr(path, "../../../lib/") != path)
-        {
-            std::string fallback = std::string("../../../lib/") + path;
-            fprintf(stderr, "Falling back to load the plugin library: '%s'\n", fallback.c_str());
-            return load_plugin(neuray, fallback.c_str());
         }
 
+#ifdef MI_PLATFORM_WINDOWS
+        // fall back to libraries in a relative lib folder, relevant for install targets
+        std::string fallback = std::string("../../../bin/") + path;
+        res = plugin_conf->load_plugin_library(fallback.c_str());
+        if (res == 0) {
+            logging_conf->set_log_level(old_level);
+            return 0;
+        }
+#endif
+
         // return the failure code
+        logging_conf->set_log_level(old_level);
         fprintf(stderr, "Failed to load the plugin library '%s'\n", path);
         return res;
     }
@@ -409,14 +439,18 @@ namespace mi { namespace examples { namespace mdl
 
         if (options.add_example_search_path)
         {
-            const std::string example_search_path = mi::examples::mdl::get_examples_root() + "/mdl";
-            if (example_search_path == "./mdl")
+            const std::string example_search_path1 = mi::examples::mdl::get_examples_root() + "/mdl";
+            if (example_search_path1 == "./mdl")
             {
                 fprintf(stderr,
                     "MDL Examples path was not found, "
                     "consider setting the environment variable MDL_SAMPLES_ROOT.");
             }
-            mdl_paths.push_back(example_search_path);
+            mdl_paths.push_back(example_search_path1);
+
+            const std::string example_search_path2 = mi::examples::mdl::get_src_shaders_mdl();
+            if (example_search_path2 != ".")
+                mdl_paths.push_back(example_search_path2);
         }
 
         // add the search paths for MDL module and resource resolution outside of MDL modules
@@ -456,26 +490,6 @@ namespace mi { namespace examples { namespace mdl
         }
 
         return true;
-    }
-
-    // --------------------------------------------------------------------------------------------
-
-    inline std::string get_examples_root()
-    {
-        std::string samples_root = mi::examples::os::get_environment("MDL_SAMPLES_ROOT");
-        if (samples_root.empty())
-        {
-            #ifdef MDL_SAMPLES_ROOT
-                samples_root = MDL_SAMPLES_ROOT;
-            #else
-                samples_root = ".";
-            #endif
-        }
-        if (!mi::examples::io::directory_exists(samples_root))
-            return ".";
-
-        // normalize the paths
-        return mi::examples::io::normalize(samples_root);
     }
 
     // --------------------------------------------------------------------------------------------

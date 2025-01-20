@@ -321,32 +321,46 @@ BSDF_INLINE float3 cosine_hemisphere_sample(
     return make_float3(r * si, math::sqrt(y), r * co);
 }
 
+BSDF_INLINE float oren_nayar_albedo(
+    const float A,
+    const float B,
+    const float ct)
+{
+    const float st_sqd = math::saturate(1.0f - ct * ct);
+    const float st = math::sqrt(st_sqd);
+    
+    return A + (float)(1.0 / M_PI) * B * (
+        st * (math::acos(ct) - st * ct) +
+        (float)(2.0 / 3.0) * (st / ct) * (1.0f - st * st_sqd - ct));
+}
+
 // Oren-Nayar diffuse component evaluation
-BSDF_INLINE float eval_oren_nayar(
+// - improved qualitative model according to https://mimosa-pudica.net/improved-oren-nayar.html
+// - with energy loss compensation
+BSDF_INLINE float2 eval_oren_nayar(
     const float3        &k1,
     const float3        &k2,
     const float3        &normal,
-    const float         roughness)
+    float               roughness)
 {
+    roughness = math::saturate(roughness);
+    const float A = 1.0f / (1.0f + (float)(0.5 - (2.0 / (3.0 * M_PI))) * roughness);
+    const float B = A * roughness;
+
     const float nk1 = math::dot(k1, normal);
     const float nk2 = math::dot(k2, normal);
 
-    const float3 kp1 = k1 - normal * nk1;
-    const float3 kp2 = k2 - normal * nk2;
+    float f = math::dot(k1, k2) - nk1 * nk2;
+    if (f > 0.0f)
+        f /= math::max(nk1, nk2);
 
-    const float sigma2 = roughness * roughness;
-    const float A = 1.0f - (sigma2 / (sigma2 * 2.0f + 0.66f));
-    const float B = 0.45f * sigma2 / (sigma2 + 0.09f);
+    const float rho1 = oren_nayar_albedo(A, B, nk1);
+    const float rho2 = oren_nayar_albedo(A, B, nk2);
+    const float rho_avg = A + (float)((2.0 / 3.0) - (28.0 / (15.0 * M_PI))) * B;
 
-    // projection might give null-length vectors kp1 or/and kp2, check to avoid division by zero
-    const float sl = math::dot(kp1, kp1) * math::dot(kp2, kp2);
-    return A + (sl == 0.f ? 0.f : B *
-                math::max(
-                    0.0f,
-                    math::dot(kp1, kp2) * math::sqrt((1.0f - nk1 * nk1) * (1.0f - nk2 * nk2) / sl)
-                     / math::max(nk1, nk2)
-                    )
-        );
+    const float factor = A + B * f;
+    const float multiscatter_factor = (1.0f - rho1) * (1.0f - rho2) / (1.0f - rho_avg);
+    return make_float2(factor, multiscatter_factor);
 }
 
 //
@@ -543,6 +557,39 @@ BSDF_INLINE float3 custom_curve_factor(
         f5 = math::pow(f, exponent);
     }
     return normal_reflectivity + (grazing_reflectivity - normal_reflectivity) * f5;
+
+}
+
+// and extended with 'f82' factor
+// https://renderwonk.com/publications/wp-generalization-adobe/gen-adobe.pdf
+BSDF_INLINE float3 generalized_custom_curve_factor(
+    const float kh,
+    const float exponent,
+    const float3 &normal_reflectivity,
+    const float3 &grazing_reflectivity,
+    const float3 &f82_factor)
+{
+    const float f = 1.0f - math::saturate(kh);
+    const float f2 = f * f;
+    const float f5 = f2 * f2 * f;
+
+    const float fc = (exponent == 5.0f) ? f5 : math::pow(f, exponent);
+    const float f6 = f5 * f;
+
+    // cos_theta_max = 1/7 ~= cos(82deg)
+    constexpr float tmp = (float)((7.0 * 7.0 * 7.0 * 7.0 * 7.0 * 7.0 * 7.0) / (6.0 * 6.0 * 6.0 * 6.0 * 6.0 * 6.0)); // = 1 / (cos_theta_max * (1 - cos_theta_max)^6
+    constexpr float m = (float)(6.0 / 7.0);
+    float mc;
+    if (exponent == 5.0f) {
+        constexpr float m2 = m * m;
+        mc = m2 * m2 * m;
+    } else
+        mc = math::pow(m, exponent);
+
+    const float3 d = grazing_reflectivity - normal_reflectivity;
+    const float3 a = (normal_reflectivity + d * mc) * tmp * (make_float3(1.0f, 1.0f, 1.0f) - f82_factor);
+
+    return math::saturate(normal_reflectivity + d * fc - a * kh * f6);
 }
 
 
@@ -1559,7 +1606,7 @@ BSDF_INLINE float3 apply_coating_color_shift(
     const float3 &coated_fresnel,
     const float3 &uncoated_fresnel)
 {
-    const float3 result = input * (coated_fresnel / uncoated_fresnel);
+    const float3 result = input + (coated_fresnel - uncoated_fresnel);
     return math::saturate(result);
 }
 
@@ -1572,13 +1619,14 @@ BSDF_INLINE float3 thin_film_custom_curve_factor_conductor(
     const float exponent,
     const float3 &normal_reflectivity,
     const float3 &grazing_reflectivity,
+    const float3 &f82_factor,
     const float coating_thickness,
     const float3 coating_ior)
 {
-    float3 result = custom_curve_factor(kh, exponent, normal_reflectivity, grazing_reflectivity);
+    float3 result = generalized_custom_curve_factor(kh, exponent, normal_reflectivity, grazing_reflectivity, f82_factor);
     if (coating_thickness > 0.0f) {
 
-        const Complex_ior c = schlick_to_conductor_fresnel(normal_reflectivity, grazing_reflectivity);
+        const Complex_ior c = schlick_to_conductor_fresnel(normal_reflectivity, grazing_reflectivity * f82_factor);
 
         const float3 incoming_ior = process_incoming_ior(data, state);
         const float3 inv_eta_i = make<float3>(1.0f) / incoming_ior;
@@ -1593,5 +1641,63 @@ BSDF_INLINE float3 thin_film_custom_curve_factor_conductor(
     }
     return result;
 }
+
+template<typename Data>
+BSDF_INLINE float3 coat_absorption(
+    Data *data,
+    State *state,
+    const float3 &ior,
+    const float3 &absorption_coefficient,
+    const float thickness,
+    const float3 &normal,
+    const float3 &k2)
+{
+    const float3 optical_depth = math::max(absorption_coefficient, make<float3>(0.0f)) * math::max(thickness, 0.0f);
+    if (optical_depth.x <= 0.0f && optical_depth.y <= 0.0f && optical_depth.z <= 0.0f)
+        return make_float3(1.0f, 1.0f, 1.0f);
+
+    float3 shading_normal, geometry_normal;
+    get_oriented_normals(
+        shading_normal, geometry_normal, normal, state->geometry_normal(), data->k1);
+
+    const float nk1 = math::abs(math::dot(data->k1, shading_normal));
+    const float nk2 = math::abs(math::dot(k2, shading_normal));
+    
+    const float incoming_ior = process_ior(data, state).x;
+    const float3 eta = make_float3(incoming_ior / ior.x, incoming_ior / ior.y, incoming_ior / ior.z);
+
+    float3 dist = make_float3(0.0f, 0.0f, 0.0f);
+    if (eta.x > 0.0f && eta.x <= 1.0f) {
+        const float nk1_r = refraction_cosine(nk1, eta.x);
+        const float nk2_r = refraction_cosine(nk2, eta.x);
+        dist.x = 1.0f / nk1_r + 1.0f / nk2_r;
+    }
+
+    if (eta.y == eta.x)
+        dist.y = dist.x;
+    else if (eta.y > 0.0f && eta.y <= 1.0f) {       
+        const float nk1_r = refraction_cosine(nk1, eta.y);
+        const float nk2_r = refraction_cosine(nk2, eta.y);
+        dist.y = 1.0f / nk1_r + 1.0f / nk2_r;
+    }
+    
+    if (eta.z == eta.x)
+        dist.z = dist.x;
+    else if (eta.z == eta.y)
+        dist.z = dist.y;
+    else if (eta.z > 0.0f && eta.z <= 1.0f) {
+        const float nk1_r = refraction_cosine(nk1, eta.z);
+        const float nk2_r = refraction_cosine(nk2, eta.z);
+        dist.z = 1.0f / nk1_r + 1.0f / nk2_r;
+    }
+
+    if (math::dot(k2, geometry_normal) < 0.0f)
+        dist *= 0.5f; // transmission, assume only half distance is travelled
+
+    return make_float3(
+        dist.x > 0.0f ? math::exp(-optical_depth.x * dist.x) : 1.0f,
+        dist.y > 0.0f ? math::exp(-optical_depth.y * dist.y) : 1.0f,
+        dist.z > 0.0f ? math::exp(-optical_depth.z * dist.z) : 1.0f);
+}   
 
 #endif // MDL_LIBBSDF_UTILITIES_H

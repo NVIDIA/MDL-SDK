@@ -35,16 +35,14 @@
 # - __TARGET_ADD_DEPENDENCY_NO_LINKING
 # -------------------------------------------------------------------------------------------------
 
-find_package(Boost QUIET)
-mark_as_advanced(CLEAR BOOST_INCLUDEDIR)
-if(NOT Boost_FOUND)
+if(NOT MDL_BOOST_FOUND)
     message(FATAL_ERROR "The dependency \"${__TARGET_ADD_DEPENDENCY_DEPENDS}\" for target \"${__TARGET_ADD_DEPENDENCY_TARGET}\" could not be resolved.")
 else()
 
     # add include directories
-    target_include_directories(${__TARGET_ADD_DEPENDENCY_TARGET} 
+    target_include_directories(${__TARGET_ADD_DEPENDENCY_TARGET}
         PRIVATE
-            ${Boost_INCLUDE_DIRS}
+            ${MDL_DEPENDENCY_BOOST_INCLUDE}
         )
-        
+
 endif()

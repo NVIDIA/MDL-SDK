@@ -31,6 +31,7 @@
 #include "dblight_info.h"
 
 #include <numeric>
+#include <set>
 #include <sstream>
 
 #include <boost/core/ignore_unused.hpp>
@@ -628,7 +629,7 @@ void Info_manager::store(
         m_infos_by_tag.insert( tag, infos_per_tag);
     }
 
-    // Retrieve (or create) set of infos for \p name (if not \c NULL).
+    // Retrieve (or create) set of infos for \p name (if not \c nullptr).
     Infos_per_name* infos_per_name = nullptr;
     if( name) {
         auto it_by_name = m_infos_by_name.find( name);
@@ -713,7 +714,7 @@ Info_impl* Info_manager::start_edit(
     // Retrieve set of infos for \p tag.
     Infos_per_tag* infos_per_tag = m_infos_by_tag.find( tag);
 
-    // Retrieve set of infos for \p name (if not \c NULL).
+    // Retrieve set of infos for \p name (if not \c nullptr).
     Infos_per_name* infos_per_name = nullptr;
     if( name) {
         infos_per_name = m_infos_by_name.find( name)->second;
@@ -721,19 +722,16 @@ Info_impl* Info_manager::start_edit(
         MI_ASSERT( name == infos_per_name->get_name().c_str());
     }
 
-    // Create info (modifies copy_references).
-    DB::Tag_set copy_references( references);
+    // Create info (modifies empty_references).
+    DB::Tag_set empty_references;
     auto* info = new Info_impl(
-        element, scope, transaction, version, tag, privacy_level, name, copy_references);
+        element, scope, transaction, version, tag, privacy_level, name, empty_references);
 
     // Insert info into the sets of infos for that tag/name/scope.
     infos_per_tag->insert_info( info);
     if( infos_per_name)
         infos_per_name->insert_info( info);
     scope->insert_info( info);
-
-    // Record DB element references of this info.
-    increment_pin_counts( references);
 
     // Consider tag as a candidate for garbage collection.
     if( m_gc_method == GC_GENERAL_CANDIDATES_THEN_PIN_COUNT_ZERO)
@@ -746,9 +744,6 @@ void Info_manager::finish_edit( Info_impl* info, Transaction_impl* transaction)
 {
     m_database->get_lock().check_is_owned();
 
-    const DB::Tag_set& old_references = info->get_references();
-    decrement_pin_counts( old_references, /*from_gc*/ false);
-
     info->update_references();
 
     const DB::Tag_set& new_references = info->get_references();
@@ -760,6 +755,13 @@ void Info_manager::finish_edit( Info_impl* info, Transaction_impl* transaction)
         const char* name = info->get_name();
         transaction->check_privacy_levels(
             referencing_level, new_references, tag, name, /*store*/ false);
+    }
+
+    // Check reference cycles.
+    if( m_database->get_check_reference_cycles_edit()) {
+        DB::Tag tag = info->get_tag();
+        const char* name = info->get_name();
+        transaction->check_reference_cycles( new_references, tag, name, /*store*/ false);
     }
 
     increment_pin_counts( new_references);
@@ -885,6 +887,7 @@ void Info_manager::garbage_collection( DB::Transaction_id lowest_open)
                 break;
 
             DB::Tag_set tags2 = std::move( m_gc_candidates_pin_count_zero);
+            m_gc_candidates_pin_count_zero.clear();
             progress = false;
 
             for( const auto& tag: tags2) {
@@ -896,8 +899,16 @@ void Info_manager::garbage_collection( DB::Transaction_id lowest_open)
 
     } else if( m_gc_method == GC_GENERAL_CANDIDATES_THEN_PIN_COUNT_ZERO) {
 
-        DB::Tag_set tags = m_gc_candidates_general;
-        for( const auto& tag: tags) {
+        size_t old_size = m_gc_candidates_general.size();
+        if( old_size > m_gc_candidates_general_max_size)
+            m_gc_candidates_general_max_size = old_size;
+
+        std::vector<DB::Tag> tags1;
+        tags1.reserve( old_size);
+        tags1.insert(
+            tags1.begin(), m_gc_candidates_general.begin(), m_gc_candidates_general.end());
+
+        for( const auto& tag: tags1) {
             bool progress_tag = false;
             cleanup_tag_general( tag, lowest_open, progress_tag);
         }
@@ -909,14 +920,23 @@ void Info_manager::garbage_collection( DB::Transaction_id lowest_open)
             if( !progress || m_gc_candidates_pin_count_zero.empty())
                 break;
 
-            tags = std::move( m_gc_candidates_pin_count_zero);
+            DB::Tag_set tags2 = std::move( m_gc_candidates_pin_count_zero);
+            m_gc_candidates_pin_count_zero.clear();
             progress = false;
 
-            for( const auto& tag: tags) {
+            for( const auto& tag: tags2) {
                 bool progress_tag = false;
                 cleanup_tag_with_pin_count_zero( tag, progress_tag);
                 progress |= progress_tag;
             }
+        }
+
+        // Rehash the container if it got way smaller to improve traversing it for tags1 above in
+        // the next GC run.
+        size_t new_size = m_gc_candidates_general.size();
+        if( new_size <= m_gc_candidates_general_max_size/2) {
+            m_gc_candidates_general.rehash( new_size);
+            m_gc_candidates_general_max_size = new_size;
         }
 
     } else {
@@ -952,10 +972,14 @@ namespace {
 
 std::ostream& operator<<( std::ostream& s, const DB::Tag_set& tag_set)
 {
+    std::set<DB::Tag> ordered_tag_set;
+    for( const auto& item: tag_set)
+        ordered_tag_set.insert( item);
+
     bool first = true;
     s << "{";
 
-    for( const auto& tag: tag_set) {
+    for( const auto& tag: ordered_tag_set) {
         if( !first)
             s << ",";
         s << " " << tag();
@@ -986,10 +1010,13 @@ void dump( std::ostream& s, bool mask_pointer_values, const Infos_per_name* ipn,
         // Omit the scope pointer. With a correct synchronous GC the cleared state should never be
         // visible from the outside.
         s << "transaction ID = " << i.get_transaction_id()();
-        if( !mask_pointer_values)
-            s << " (" << i.get_transaction().get() << ")";
+        const auto& t = i.get_transaction();
+        if( !t)
+            s << " (cleared)";
+        else if( mask_pointer_values)
+            s << " (set)";
         else
-            s << (i.get_transaction().get() ? " (set)" : " (cleared)");
+            s << " (" << t.get() << ")";
         s << ", version = " << i.get_version();
         s << ", pin count = " << i.get_pin_count();
         s << ", tag = " << i.get_tag()();
@@ -1027,10 +1054,13 @@ void dump( std::ostream& s, bool mask_pointer_values, const Infos_per_tag* ipt, 
         // Omit the scope pointer. With a correct synchronous GC the cleared state should never be
         // visible from the outside.
         s << "transaction ID = " << i.get_transaction_id()();
-        if( !mask_pointer_values)
-            s << " (" << i.get_transaction().get() << ")";
+        const auto& t = i.get_transaction();
+        if( !t)
+            s << " (cleared)";
+        else if( mask_pointer_values)
+            s << " (set)";
         else
-            s << (i.get_transaction().get() ? " (set)" : " (cleared)");
+            s << " (" << t.get() << ")";
         s << ", version = " << i.get_version();
         s << ", pin count = " << i.get_pin_count();
         s << ", tag = " << i.get_tag()();
@@ -1193,7 +1223,7 @@ void Info_manager::cleanup_tag_general( DB::Tag tag, DB::Transaction_id lowest_o
 
             // Remove current info in favor of next one if both are from the same scope and have
             // the same visibility, unless one of them is a global removal (which are processed
-            // invidividually further up) or the current info is a local removal (processed further
+            // individually further up) or the current info is a local removal (processed further
             // down in a different iteration of the loop).
             const Transaction_impl_ptr& current_transaction = current->get_transaction();
             const Transaction_impl_ptr& next_transaction = next->get_transaction();

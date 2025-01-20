@@ -51,6 +51,9 @@
 namespace mi {
 namespace mdl {
 
+// Fake debug location. Don't use line zero, as this is treated as no debug location.
+Position_impl one_pos(1, 1, 1, 2);
+
 // Constructor, creates a context for a function including its first scope.
 Function_context::Function_context(
     mi::mdl::IAllocator        *alloc,
@@ -135,60 +138,97 @@ Function_context::Function_context(
         m_retval_adr = create_local(ret_tp, "return_value");
     }
 
-    if (func_def == NULL) {
-        // debug info is not possible without a definition
-        m_di_builder = NULL;
-    } else {
-        // generate debug info
-        if (m_di_builder != NULL) {
-            llvm::DIFile *di_file = code_gen.get_debug_info_file_entry();
+    // create debug info if requested and available
+    if (m_full_debug_info && m_di_builder != NULL &&
+            (func_def != NULL || func_inst.get_lambda() != NULL)) {
+        llvm::DIFile *di_file = code_gen.get_debug_info_file_entry();
+        unsigned start_line = 1;
+        llvm::DISubroutineType *di_func_type;
+        llvm::StringRef func_name, linkage_name;
+        bool is_exported = false;
 
-            unsigned start_line = 0;
+        if (func_def != NULL) {
             if (mi::mdl::Position const *pos = func_def->get_position()) {
                 start_line = pos->get_start_line();
-
-                string filename(get_dbg_curr_filename(), alloc);
-                string directory(alloc);
-
-                size_t p = filename.rfind('/');
-                if (p != string::npos) {
-                    directory = filename.substr(0, p);
-                    filename  = filename.substr(p + 1);
-                } else {
-                    p = filename.rfind('\\');
-                    if (p != string::npos) {
-                        directory = filename.substr(0, p);
-                        filename  = filename.substr(p + 1);
-                    }
-                }
-                m_di_file = m_di_builder->createFile(filename.c_str(), directory.c_str());
-
-                di_file = m_di_file;
+                di_file    = m_di_file = Create_debug_file(get_dbg_curr_filename());
             }
 
-            llvm::DISubroutineType *di_func_type = m_type_mapper.get_debug_info_type(
+            di_func_type = m_type_mapper.get_debug_info_type(
                 m_di_builder, m_di_file, cast<mi::mdl::IType_function>(func_def->get_type()));
 
-            m_di_function = m_di_builder->createFunction(
-                /*Scope=*/di_file,
-                /*Name=*/func_def->get_symbol()->get_name(),
-                /*LinkeageName=*/func->getName(),
-                /*File=*/di_file,
-                start_line,
-                di_func_type,
-                start_line,
-                llvm::DINode::FlagPrototyped,
-                llvm::DISubprogram::toSPFlags(
-                    /*IsLocalToUnit=*/func_def != NULL ?
-                        !func_def->get_property(mi::mdl::IDefinition::DP_IS_EXPORTED) :
-                        /*assume local*/true,
-                    /*IsDefinition=*/true,
-                    /*IsOptimized=*/code_gen.is_optimized()
-                ));
+            func_name = func_def->get_symbol()->get_name();
+            linkage_name = func->getName();
+
+            is_exported = func_def->get_property(mi::mdl::IDefinition::DP_IS_EXPORTED);
+        } else {
+            ILambda_function const *lambda = func_inst.get_lambda();
+            DAG_unit const         &dag_unit = lambda->get_dag_unit();
+            DAG_DbgInfo            dbg_info;
+
+            std::vector<llvm::Metadata *> signature_types;
+
+            if (DAG_node const *body = lambda->get_body()) {
+                signature_types.push_back(m_type_mapper.get_debug_info_type(
+                    m_di_builder, m_di_file, m_di_file, body->get_type()));
+                for (int i = 0, n = lambda->get_parameter_count(); i < n; ++i) {
+                    signature_types.push_back(m_type_mapper.get_debug_info_type(
+                        m_di_builder, m_di_file, m_di_file, lambda->get_parameter_type(i)));
+                }
+
+                // Note: lambda functions do not have a source position, as there are by
+                // definition "nameless functions created from (sub-) expressions".
+                // However, for the debug location we just use the source location of
+                // the "root" node if any
+                dbg_info = body->get_dbg_info();
+
+                // report as generated, if no debug info available (e.g. for constants)
+                if (!dbg_info) {
+                    dbg_info = DAG_DbgInfo::generated;
+                }
+            } else {
+                // should be an init function
+                dbg_info = DAG_DbgInfo::generated;
+                signature_types.push_back(m_di_builder->createUnspecifiedType("void"));
+            }
+
+            if (char const *fname = dag_unit.get_fname(dbg_info)) {
+                di_file    = m_di_file = Create_debug_file(fname);
+                start_line = dag_unit.get_line(dbg_info);
+            }
+
+            llvm::DITypeRefArray signature_types_array =
+                m_di_builder->getOrCreateTypeArray(signature_types);
+            di_func_type = m_di_builder->createSubroutineType(signature_types_array);
+
+            func_name = linkage_name = lambda->get_name();
         }
+
+        m_di_function = m_di_builder->createFunction(
+            /*Scope=*/di_file,
+            func_name,
+            linkage_name,
+            /*File=*/di_file,
+            start_line,
+            di_func_type,
+            start_line,
+            llvm::DINode::FlagPrototyped,
+            llvm::DISubprogram::toSPFlags(
+                /*IsLocalToUnit=*/ !is_exported,
+                /*IsDefinition=*/ true,
+                /*IsOptimized=*/ code_gen.is_optimized()
+            ));
+        m_function->setSubprogram(m_di_function);
+
+        // provide default debug location to make verifier happy until we actually
+        // give proper locations
+        m_ir_builder.SetCurrentDebugLocation(llvm::DILocation::get(
+            m_di_function->getContext(), start_line, 0, m_di_function));
+    } else {
+        m_di_builder = NULL;
     }
+
     // create the function scope
-    push_block_scope(func_def != NULL ? func_def->get_position() : NULL);
+    push_block_scope(func_def != NULL ? func_def->get_position() : &one_pos);
 
     code_gen.enter_function(*this, func);
 }
@@ -226,7 +266,7 @@ Function_context::Function_context(
  , m_full_debug_info(code_gen.generate_full_debug_info())
  , m_break_stack(BB_stack::container_type(alloc))
  , m_continue_stack(BB_stack::container_type(alloc))
- , m_di_function()
+ , m_di_function(func->getSubprogram())
  , m_dilb_stack(DILB_stack::container_type(alloc))
  , m_accesible_parameters(alloc)
 {
@@ -261,8 +301,13 @@ Function_context::Function_context(
         m_ir_builder.SetInsertPoint(m_body_start_point);
     }
 
-    // debug info is not possible without a definition
-    m_full_debug_info = false;
+    if (m_di_function != nullptr) {
+        m_ir_builder.SetCurrentDebugLocation(llvm::DILocation::get(
+            m_di_function->getContext(), m_di_function->getLine(), 0, m_di_function));
+    } else {
+        // debug info is not possible without a function with a DISubprogram
+        m_full_debug_info = false;
+    }
 }
 
  // Destructor, closes the last scope and fills the end block, if the context was not
@@ -2086,8 +2131,9 @@ llvm::DIScope *Function_context::get_debug_info_scope()
     return m_dilb_stack.top();
 }
 
-// Set the current source position.
-void Function_context::set_curr_pos(mi::mdl::Position const &pos)
+// Set the current source position from an AST position.
+void Function_context::set_curr_pos(
+    mi::mdl::Position const &pos)
 {
     m_curr_pos = &pos;
     if (m_full_debug_info) {
@@ -2103,12 +2149,40 @@ void Function_context::set_curr_pos(mi::mdl::Position const &pos)
     }
 }
 
+// Set the current source position from a DAG debug info.
+void Function_context::set_curr_pos(
+    mi::mdl::DAG_DbgInfo dbg_info)
+{
+    m_curr_pos = NULL;
+    if (m_full_debug_info) {
+        llvm::DIScope *scope = get_debug_info_scope();
+        m_ir_builder.SetCurrentDebugLocation(
+            llvm::DILocation::get(
+                scope->getContext(),
+                dbg_info.get_line(),
+                dbg_info.get_column(),
+                scope
+            )
+        );
+    }
+}
+
+// Set the current source position from a call.
+void Function_context::set_curr_pos(
+    mi::mdl::ICall_expr const *expr)
+{
+    DAG_DbgInfo dbg_info;
+    if (expr->get_dag_dbg_info(dbg_info)) {
+        set_curr_pos(dbg_info);
+    }
+}
+
 // Add debug info for a variable declaration.
 void Function_context::add_debug_info(
     mi::mdl::IDefinition const *var_def,
-    LLVM_context_data *ctx_data)
+    LLVM_context_data          *ctx_data)
 {
-    if (m_di_builder == NULL) {
+    if (!m_full_debug_info || m_di_builder == NULL) {
         return;
     }
 
@@ -2127,16 +2201,12 @@ void Function_context::add_debug_info(
     bool is_parameter = var_def->get_kind() == mi::mdl::IDefinition::DK_PARAMETER;
 
     llvm::DIScope *scope  = is_parameter ? m_di_function : get_debug_info_scope();
+
     llvm::DIType  *diType = m_type_mapper.get_debug_info_type(
         m_di_builder,
         m_code_gen.get_debug_info_file_entry(),
-        scope,
+        m_di_file,
         var_def->get_type());
-
-    if (!m_full_debug_info) {
-        m_di_builder->retainType(diType);
-        return;
-    }
 
     unsigned start_line = 0;
     unsigned start_column = 0;
@@ -2807,6 +2877,26 @@ int Function_context::instantiate_type_size(
         }
     }
     return -1;
+}
+
+// Creates an LLVM debug file for a given source file.
+llvm::DIFile *Function_context::Create_debug_file(char const *fname)
+{
+    string filename(fname, get_allocator());
+    string directory(get_allocator());
+
+    size_t p = filename.rfind('/');
+    if (p != string::npos) {
+        directory = filename.substr(0, p);
+        filename = filename.substr(p + 1);
+    } else {
+        p = filename.rfind('\\');
+        if (p != string::npos) {
+            directory = filename.substr(0, p);
+            filename = filename.substr(p + 1);
+        }
+    }
+    return m_di_builder->createFile(filename.c_str(), directory.c_str());
 }
 
 /// Create a mangled name for an Optix entity.

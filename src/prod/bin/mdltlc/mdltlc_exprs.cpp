@@ -317,6 +317,7 @@ Expr_ref::Expr_ref(
     Symbol *symbol)
   : Base(loc, type)
   , m_symbol(symbol)
+  , m_signature(nullptr)
 {
 }
 
@@ -360,6 +361,13 @@ Symbol const* Expr_ref::get_name() const {
 
 void Expr_ref::pp(pp::Pretty_print &p) const {
     p.string(m_symbol->get_name());
+#if 0
+    if (m_signature) {
+        p.string("/*");
+        p.string(m_signature);
+        p.string("*/");
+    }
+#endif
 }
 
 // ------------------------------- Expr_type_annotation -------------------------------

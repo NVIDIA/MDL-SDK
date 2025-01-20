@@ -37,7 +37,7 @@ namespace mi {
 
 namespace neuraylib {
 
-/** 
+/**
 \addtogroup mi_neuray_impexp
 @{
 */
@@ -61,8 +61,8 @@ class IImpexp_state :
 public:
     /// Returns the URI for this file.
     ///
-    /// \return   The URI of the associated file, or \c NULL if there is no associated file, e.g.,
-    ///           for string-based import/export operations.
+    /// \return   The URI of the associated file, or \c nullptr if there is no associated file,
+    ///           e.g., for string-based import/export operations.
     virtual const char* get_uri() const = 0;
 
     /// Returns the line number after the last read or write operation.
@@ -84,7 +84,7 @@ public:
     /// Returns the state of the parent importer or exporter.
     ///
     /// The parent importer or exporter is the one that called the current importer or exporter.
-    /// Returns \c NULL if there is no parent importer or exporter.
+    /// Returns \c nullptr if there is no parent importer or exporter.
     virtual const IImpexp_state* get_parent_state() const = 0;
 };
 

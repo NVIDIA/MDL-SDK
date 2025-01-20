@@ -92,7 +92,7 @@ public:
     ///
     /// This typedef represents the type of #is_valid() used by the #bool_conversion_support()
     /// operator.
-    typedef bool (Tag::*bool_conversion_support)() const;
+    using bool_conversion_support = bool (Tag::*)() const;
 
     /// Helper function for the conversion of a Tag to a bool.
     ///
@@ -108,7 +108,7 @@ public:
     ///   \endcode
     operator bool_conversion_support() const
     {
-        return is_valid() ? &Tag::is_valid : 0;
+        return is_valid() ? &Tag::is_valid : nullptr;
     }
 };
 

@@ -141,10 +141,11 @@ Compilation_unit::Compilation_unit(
     mi::mdl::IMDL *imdl,
     mi::mdl::Node_types *node_types,
     Symbol_table *symbol_table,
+    Type_factory *type_factory,
     char const *file_name,
     Compiler_options const *comp_options,
     Message_list *messages,
-    Builtin_type_map *builtins)
+    Def_table const *def_table)
     : Base(alloc)
     , m_global_arena(*global_arena)
     , m_arena(alloc)
@@ -155,20 +156,20 @@ Compilation_unit::Compilation_unit(
     , m_filename_only(Arena_strdup(m_arena, file_basename(m_filename)))
     , m_comp_options(comp_options)
     , m_symbol_table(symbol_table)
-    , m_type_factory(m_arena, *m_symbol_table)
-    , m_value_factory(&m_arena, this, m_type_factory)
+    , m_type_factory(type_factory)
+    , m_value_factory(&m_arena, this, *m_type_factory)
     , m_expr_factory(m_arena, this, m_value_factory)
     , m_rule_factory(m_arena)
     , m_rulesets()
     , m_messages(messages)
-    , m_builtins(builtins)
     , m_error_count(0)
     , m_warning_count(0)
     , m_api_class("IDistiller_plugin_api")
     , m_rule_matcher_class("IRule_matcher")
-    , m_error_type(m_type_factory.get_error())
+    , m_error_type(m_type_factory->get_error())
     , m_attr_counter(0)
     , m_attribute_env(m_arena, Environment::Kind::ENV_ATTRIBUTE, nullptr)
+    , m_def_table(def_table)
 {
 }
 
@@ -185,7 +186,7 @@ Expr_factory &Compilation_unit::get_expression_factory()
 }
 
 // Get the type factory.
-Type_factory &Compilation_unit::get_type_factory()
+Type_factory *Compilation_unit::get_type_factory()
 {
     return m_type_factory;
 }
@@ -467,17 +468,22 @@ void Compilation_unit::add_ruleset(Ruleset *ruleset)
 ///
 /// If a binding for `name` to the same type already exists, the
 /// environment is not changed.
-void Compilation_unit::add_binding(Symbol const *name, Type *type, Environment &builtin_env) {
+void Compilation_unit::add_binding(
+    Symbol const *name, 
+    Type const *type, 
+    char const *signature, 
+    Environment &builtin_env) 
+{
     Environment::Type_list *types = builtin_env.find(name);
 
-    Type_function *this_tf = as<Type_function>(type);
+    Type_function *this_tf = const_cast<Type_function *>(as<Type_function>(type));
 
     bool already_bound = false;
 
     if (types) {
         for (Environment::Type_list::iterator it(types->begin()), end(types->end());
              it != end; ++it) {
-            Type *test_type = *it;
+            Type *test_type = const_cast<Type *>(it->first);
 
             // FIXME: Right now, we do only get selector information for
             // node types specially marked in the distiller. What we do
@@ -502,405 +508,13 @@ void Compilation_unit::add_binding(Symbol const *name, Type *type, Environment &
                     }
                 }
             }
-            if (m_type_factory.types_equal(type, test_type)) {
+            if (m_type_factory->types_equal(type, test_type)) {
                 already_bound = true;
             }
         }
     }
     if (!already_bound) {
-        builtin_env.bind(name, type);
-    }
-}
-
-/// Return the type matching the builtin type named `type_name`.
-Type *Compilation_unit::builtin_type_for(const char *type_name) {
-    Type * t_bool = m_type_factory.get_bool();
-    Type * t_int = m_type_factory.get_int();
-    Type * t_float = m_type_factory.get_float();
-    Type * t_double = m_type_factory.get_double();
-
-    if (!type_name) {
-        printf("[BUG] NULL type name in builtin_type_for\n");
-        return nullptr;
-    }
-    if (!strcmp(type_name, "")) {
-        printf("[BUG] empty type name in builtin_type_for\n");
-        return nullptr;
-    }
-    if (!strcmp(type_name, "bool"))
-        return t_bool;
-    if (!strcmp(type_name, "bool2"))
-        return m_type_factory.get_vector(2, t_bool);
-    if (!strcmp(type_name, "bool3"))
-        return m_type_factory.get_vector(3, t_bool);
-    if (!strcmp(type_name, "bool4"))
-        return m_type_factory.get_vector(4, t_bool);
-
-    if (!strcmp(type_name, "color"))
-        return m_type_factory.get_color();
-
-    if (!strcmp(type_name, "int"))
-        return m_type_factory.get_int();
-    if (!strcmp(type_name, "int2"))
-        return m_type_factory.get_vector(2, t_int);
-    if (!strcmp(type_name, "int3"))
-        return m_type_factory.get_vector(3, t_int);
-    if (!strcmp(type_name, "int4"))
-        return m_type_factory.get_vector(4, t_int);
-
-    if (!strcmp(type_name, "float"))
-        return m_type_factory.get_float();
-    if (!strcmp(type_name, "float2"))
-        return m_type_factory.get_vector(2, t_float);
-    if (!strcmp(type_name, "float3"))
-        return m_type_factory.get_vector(3, t_float);
-    if (!strcmp(type_name, "float4"))
-        return m_type_factory.get_vector(4, t_float);
-
-    if (!strcmp(type_name, "double"))
-        return m_type_factory.get_double();
-    if (!strcmp(type_name, "double2"))
-        return m_type_factory.get_vector(2, t_double);
-    if (!strcmp(type_name, "double3"))
-        return m_type_factory.get_vector(3, t_double);
-    if (!strcmp(type_name, "double4"))
-        return m_type_factory.get_vector(4, t_double);
-
-    if (!strcmp(type_name, "string"))
-        return m_type_factory.get_string();
-
-    if (!strcmp(type_name, "float2x2"))
-        return m_type_factory.get_matrix(2, m_type_factory.get_vector(2, t_float));
-    if (!strcmp(type_name, "float2x3"))
-        return m_type_factory.get_matrix(3, m_type_factory.get_vector(2, t_float));
-    if (!strcmp(type_name, "float2x4"))
-        return m_type_factory.get_matrix(4, m_type_factory.get_vector(2, t_float));
-    if (!strcmp(type_name, "float3x2"))
-        return m_type_factory.get_matrix(2, m_type_factory.get_vector(3, t_float));
-    if (!strcmp(type_name, "float3x3"))
-        return m_type_factory.get_matrix(3, m_type_factory.get_vector(3, t_float));
-    if (!strcmp(type_name, "float3x4"))
-        return m_type_factory.get_matrix(4, m_type_factory.get_vector(3, t_float));
-    if (!strcmp(type_name, "float4x2"))
-        return m_type_factory.get_matrix(2, m_type_factory.get_vector(4, t_float));
-    if (!strcmp(type_name, "float4x3"))
-        return m_type_factory.get_matrix(3, m_type_factory.get_vector(4, t_float));
-    if (!strcmp(type_name, "float4x4"))
-        return m_type_factory.get_matrix(4, m_type_factory.get_vector(4, t_float));
-
-    if (!strcmp(type_name, "double2x2"))
-        return m_type_factory.get_matrix(2, m_type_factory.get_vector(2, t_double));
-    if (!strcmp(type_name, "double2x3"))
-        return m_type_factory.get_matrix(3, m_type_factory.get_vector(2, t_double));
-    if (!strcmp(type_name, "double2x4"))
-        return m_type_factory.get_matrix(4, m_type_factory.get_vector(2, t_double));
-    if (!strcmp(type_name, "double3x2"))
-        return m_type_factory.get_matrix(2, m_type_factory.get_vector(3, t_double));
-    if (!strcmp(type_name, "double3x3"))
-        return m_type_factory.get_matrix(3, m_type_factory.get_vector(3, t_double));
-    if (!strcmp(type_name, "double3x4"))
-        return m_type_factory.get_matrix(4, m_type_factory.get_vector(3, t_double));
-    if (!strcmp(type_name, "double4x2"))
-        return m_type_factory.get_matrix(2, m_type_factory.get_vector(4, t_double));
-    if (!strcmp(type_name, "double4x3"))
-        return m_type_factory.get_matrix(3, m_type_factory.get_vector(4, t_double));
-    if (!strcmp(type_name, "double4x4"))
-        return m_type_factory.get_matrix(4, m_type_factory.get_vector(4, t_double));
-
-    if (!strcmp(type_name, "light_profile"))
-        return m_type_factory.get_light_profile();
-
-    if (!strcmp(type_name, "bsdf"))
-        return m_type_factory.get_bsdf();
-    if (!strcmp(type_name, "edf"))
-        return m_type_factory.get_edf();
-    if (!strcmp(type_name, "vdf"))
-        return m_type_factory.get_vdf();
-    if (!strcmp(type_name, "hair_bsdf"))
-        return m_type_factory.get_hair_bsdf();
-
-    if (!strcmp(type_name, "texture_2d"))
-        return m_type_factory.get_texture(Type_texture::Texture_kind::TK_2D);
-    if (!strcmp(type_name, "texture_3d"))
-        return m_type_factory.get_texture(Type_texture::Texture_kind::TK_3D);
-    if (!strcmp(type_name, "texture_cube"))
-        return m_type_factory.get_texture(Type_texture::Texture_kind::TK_CUBE);
-    if (!strcmp(type_name, "texture_ptex"))
-        return m_type_factory.get_texture(Type_texture::Texture_kind::TK_PTEX);
-
-    if (!strcmp(type_name, "bsdf_measurement"))
-        return m_type_factory.get_bsdf_measurement();
-    if (!strcmp(type_name, "material_emission"))
-        return m_type_factory.get_material_emission();
-    if (!strcmp(type_name, "material_surface"))
-        return m_type_factory.get_material_surface();
-    if (!strcmp(type_name, "material_volume"))
-        return m_type_factory.get_material_volume();
-    if (!strcmp(type_name, "material_geometry"))
-        return m_type_factory.get_material_geometry();
-    if (!strcmp(type_name, "material"))
-        return m_type_factory.get_material();
-
-    if (!strcmp(type_name, "tex_gamma_mode"))
-        return m_type_factory.create_enum(m_symbol_table->get_symbol("::tex::gamma_mode"));
-    if (!strcmp(type_name, "intensity_mode"))
-        return m_type_factory.create_enum(m_symbol_table->get_symbol("::df::intensity_mode"));
-    if (!strcmp(type_name, "::df::intensity_mode"))
-        return m_type_factory.create_enum(m_symbol_table->get_symbol("::df::intensity_mode"));
-    if (!strcmp(type_name, "scatter_mode"))
-        return m_type_factory.create_enum(m_symbol_table->get_symbol("::df::scatter_mode"));
-    if (!strcmp(type_name, "::df::scatter_mode"))
-        return m_type_factory.create_enum(m_symbol_table->get_symbol("::df::scatter_mode"));
-
-    char const *brack = strstr(type_name, "[<N>]");
-    if (brack) {
-        if (!strncmp(type_name, "color", 5)) {
-            return m_type_factory.get_array(m_type_factory.get_color());
-        }
-    }
-    printf("[BUG] unknown type in builtin_type_for: %s\n", type_name);
-    return nullptr;
-}
-
-/// Declare the functions that are built into the MDL compiler.
-///
-/// Note: these are automatically derived from the known definitions
-/// (builtins) of the MDL compiler.
-void Compilation_unit::declare_builtins(Environment &env) {
-    int num_args = 0;
-
-    (void) num_args;
-
-
-#define BUILTIN_TYPE_BEGIN(typenam, flags)                             \
-    {                                                                  \
-        Symbol *symbol = m_symbol_table->get_symbol(#typenam);         \
-        (void) symbol;                                                 \
-        Type *builtin_type = builtin_type_for(#typenam);               \
-        MDL_ASSERT(builtin_type && "unknown builtin type " #typenam);  \
-        if (!builtin_type) {                                           \
-            printf("[error]: unknown builtin type %s\n", #typenam);    \
-            builtin_type = m_error_type;                               \
-        }
-
-#define ARG0()                              num_args = 0;
-#define ARG1(a1)                            num_args = 1; a1
-#define ARG2(a1, a2)                        num_args = 2; a1 a2
-#define ARG3(a1, a2, a3)                    num_args = 3; a1 a2 a3
-#define ARG4(a1, a2, a3, a4)                num_args = 4; a1 a2 a3 a4
-#define ARG5(a1, a2, a3, a4, a5)            num_args = 5; a1 a2 a3 a4 a5
-#define ARG6(a1, a2, a3, a4, a5, a6)        num_args = 6; a1 a2 a3 a4 a5 a6
-#define ARG7(a1, a2, a3, a4, a5, a6, a7)    num_args = 7; a1 a2 a3 a4 a5 a6 a7
-#define ARG8(a1, a2, a3, a4, a5, a6, a7, a8) \
-    num_args = 8; a1 a2 a3 a4 a5 a6 a7 a8
-#define ARG9(a1, a2, a3, a4, a5, a6, a7, a8, a9) \
-    num_args = 9; a1 a2 a3 a4 a5 a6 a7 a8 a9
-#define ARG12(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12) \
-    num_args = 12; a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12
-#define ARG16(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16) \
-    num_args = 16; a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16
-
-#define ARG(type, name, arr)                                            \
-            {                                                           \
-                Type *arg_type = builtin_type_for(#type);               \
-                if (arg_type) {                                         \
-                    Type_list_elem *type_list_elem = m_arena_builder.create<Type_list_elem>(arg_type); \
-                    constr_type->add_parameter(type_list_elem);         \
-                }                                                       \
-            }
-
-#define UARG(type, name, arr) \
-    ARG(type, name, arr)
-
-#define DEFARG(type, name, arr, expr) \
-    ARG(type, name, arr)
-
-#define UDEFARG(type, name, arr, expr) \
-    ARG(type, name, arr)
-
-#define XDEFARG(type, name, arr, expr) \
-    ARG(type, name, arr)
-
-#define CONSTRUCTOR(kind, classname, args, sema, flags)                 \
-        {                                                               \
-                                \
-            Type_function *constr_type = m_type_factory.create_function(builtin_type); \
-            constr_type->set_semantics(mi::mdl::IDefinition::Semantics:: sema); \
-            args                                                        \
-            add_binding(symbol, constr_type, env);                      \
-        }
-
-#define BUILTIN_TYPE_END(typenam)              \
-    }
-
-#include "mdl/compiler/compilercore/compilercore_known_defs.h"
-}
-
-/// Declare all functions that have been loaded from the standard
-/// libraries.
-void Compilation_unit::declare_stdlib(Environment &builtin_env) {
-    for (Builtin_type_map::iterator it(m_builtins->begin()), end(m_builtins->end());
-         it != end; ++it) {
-        Symbol const *symbol = it->first;
-        mi::mdl::IDefinition::Semantics sema = it->second.get_semantics();
-
-        // FIXME: This is a hack to assign special semantics and a
-        // bsdf return type to the local_normal function, which gets
-        // special handling in the distiller.
-        bool is_local_normal = false;
-        const char *n = symbol->get_name();
-        if (strlen(n) >= strlen("local_normal") &&
-            !strcmp(n + (strlen(n) - strlen("local_normal")), "local_normal")) {
-            is_local_normal = true;
-        }
-
-        if (is_local_normal) {
-            Type_function *tf = m_type_factory.create_function(m_type_factory.get_bsdf());
-            sema = static_cast<mi::mdl::IDefinition::Semantics>(mi::mdl::Distiller_extended_node_semantics::DS_DIST_LOCAL_NORMAL);
-            tf->set_semantics(sema);
-            tf->set_selector("mi::mdl::DS_DIST_LOCAL_NORMAL");
-            Type_list_elem *tle = m_type_factory.create_type_list_elem(
-                                      m_type_factory.get_float());
-            tf->add_parameter(tle);
-            tle = m_type_factory.create_type_list_elem(
-                m_type_factory.get_vector(3, m_type_factory.get_float()));
-            tf->add_parameter(tle);
-            tf->set_node_type(m_node_types->type_from_idx(mi::mdl::local_normal));
-            add_binding(symbol, tf, builtin_env);
-
-            // Skip normal handling for local_normal.
-            continue;
-        }
-
-        Type_ptr_list const &v = it->second.get_type_list();
-
-        char const *selector = it->second.get_selector();
-        mi::mdl::string selector_str(m_arena.get_allocator());
-        if (!strcmp(selector, "::NONE::")) {
-            selector_str = "mi::mdl::IDefinition::Semantics::";
-            selector_str += get_semantics_name(sema);
-        }
-
-        // Add a function type for each overload.
-        for (Type_ptr_list::const_iterator ti(v.begin()), tend(v.end());
-             ti != tend; ++ti) {
-
-            mi::mdl::IType const *mdl_type = *ti;
-            Type *type = m_type_factory.import_type(mdl_type);
-
-            if (is<Type_error>(type)) {
-                printf("[error] could not import type for %s\n",
-                       symbol->get_name());
-                continue;
-            }
-
-            // In case of functions, assign semantics and selector strings.
-            if (Type_function *tf = as<Type_function>(type)) {
-                tf->set_semantics(sema);
-                tf->set_selector(Arena_strdup(m_arena, selector_str.c_str()));
-            }
-
-            // Add the type of this overload to the builtin
-            // environment.
-            add_binding(symbol, type, builtin_env);
-
-            // In case of enums, add all variant names as global
-            // constants typed as that enum.
-            if (is<mi::mdl::IType_enum>(mdl_type)) {
-                // For enums, add the values as global identifiers.
-                mi::mdl::IType_enum const *te = as<mi::mdl::IType_enum>(mdl_type);
-
-                for (size_t i = 0; i < te->get_value_count(); i++) {
-                    if (mi::mdl::IType_enum::Value const *e_val = te->get_value(i)) {
-                        mi::mdl::ISymbol const *sym = e_val->get_symbol();
-                        add_binding(m_symbol_table->get_symbol(sym->get_name()),
-                                    type, builtin_env);
-                    } else {
-                        // Ignore "impossible" error.
-                    }
-                }
-            }
-
-            // For structs, add a constructor function with all the
-            // fields as parameters.
-            if (is<mi::mdl::IType_struct>(mdl_type)) {
-                mi::mdl::IType_struct const *ts = as<mi::mdl::IType_struct>(mdl_type);
-
-                Type_function *tf = m_type_factory.create_function(type);
-
-                for (size_t i = 0; i < ts->get_field_count(); i++) {
-                    mi::mdl::IType_struct::Field const *s_field = ts->get_field(i);
-
-                    Type *t = m_type_factory.import_type(s_field->get_type());
-
-                    Type_list_elem *tle = m_type_factory.create_type_list_elem(t);
-                    tf->add_parameter(tle);
-                }
-                add_binding(symbol, tf, builtin_env);
-            }
-        }
-    }
-}
-
-/// Declare all the identifiers that the distiller defines as node
-/// types.
-void Compilation_unit::declare_dist_nodes(Environment &builtin_env) {
-
-    for (int idx = 0; ; idx++) {
-        bool error = false;
-        mi::mdl::Node_type const *nt = m_node_types->type_from_idx(idx);
-        // static_type_from_idx returns nullptr if the idx is larger
-        // than the last supported node type index.
-        if (!nt) {
-            break;
-        }
-
-        //mi::mdl::string nt_ret_type(m_arena.get_allocator());
-        char const *nt_ret_type = m_node_types->get_return_type(idx);
-
-        Type *ret_type = builtin_type_for(nt_ret_type);
-
-        if (!ret_type) {
-            printf("[warning] ignoring distiller function '%s' (unknown return type: '%s' for '%s' [%s])\n",
-                   nt->type_name, nt_ret_type, m_node_types->get_return_type(idx), nt->get_signature().c_str());
-            continue;
-        }
-
-        Symbol* name = m_symbol_table->get_symbol(nt->type_name);
-
-        // For builtins important from the distiller node definitions,
-        // we expand the function types for all supported parameter
-        // counts.  That means that we add types that have arities
-        // from the minimum parameter count of the node up to the
-        // maximum number of parameters, one by one.
-        for (int max_param = nt->min_parameters; max_param <= nt->parameters.size(); max_param++) {
-            Type_function *t = m_type_factory.create_function(ret_type);
-            t->set_semantics(nt->semantics);
-            t->set_selector(nt->selector_enum);
-            t->set_node_type(nt);
-
-            Type_list_elem *type_list_elem;
-
-            int i = 1;
-            for (std::vector<mi::mdl::Node_param>::const_iterator it(nt->parameters.begin()), end(nt->parameters.end());
-                 it != end && i <= max_param; ++it, ++i) {
-                Type *pt = builtin_type_for(it->param_type);
-                if (!pt) {
-                    printf("[warning] ignoring distiller function %s (unknown type for parameter %d: %s)\n",
-                           nt->type_name, i, nt->get_signature().c_str());
-                    error = true;
-                    break;
-                }
-
-                type_list_elem = m_arena_builder.create<Type_list_elem>(pt);
-                t->add_parameter(type_list_elem);
-            }
-
-            if (error)
-                continue;
-
-            add_binding(name, t, builtin_env);
-        }
+        builtin_env.bind(name, type, signature);
     }
 }
 
@@ -934,7 +548,7 @@ void Compilation_unit::declare_materials_from_module(
                 // The returned struct must be a material, or the
                 // function will be ignored.
                 if (strct->get_predefined_id() == mi::mdl::IType_struct::Predefined_id::SID_MATERIAL) {
-                    Type *mdltl_type = m_type_factory.import_type(func_type);
+                    Type *mdltl_type = m_type_factory->import_type(func_type);
 
                     if (is<Type_error>(mdltl_type)) {
                         printf("[error] could not import type for %s\n",
@@ -951,7 +565,7 @@ void Compilation_unit::declare_materials_from_module(
                     fq_name += sym->get_name();
 
                     Symbol const *mdltl_fq_sym = m_symbol_table->get_symbol(fq_name.c_str());
-                    add_binding(mdltl_fq_sym, mdltl_type, builtin_env);
+                    add_binding(mdltl_fq_sym, mdltl_type, nullptr, builtin_env); // TODO: calculate signature
                 }
                 break;
             }
@@ -977,9 +591,43 @@ void Compilation_unit::dump_env(Environment &env) {
 /// Initialize the environment with all builtin, stdlib and distiller
 /// types and functions.
 void Compilation_unit::init_builtin_env(Environment &builtin_env) {
-    declare_builtins(builtin_env);
-    declare_stdlib(builtin_env);
-    declare_dist_nodes(builtin_env);
+
+    for (auto &pr : m_def_table->get_entries()) {
+        for (auto &e : pr.second) {
+            add_binding(pr.first, e.get_type(), e.get_signature(), builtin_env);
+            // In case of enums, add all variant names as global
+            // constants typed as that enum.
+            if (e.get_mdl_type()) {
+                if (mi::mdl::IType_enum const *te = as<mi::mdl::IType_enum>(e.get_mdl_type())) {
+
+                    for (size_t i = 0; i < te->get_value_count(); i++) {
+                        mi::mdl::IType_enum::Value const *e_val = te->get_value(i);
+                        MDL_ASSERT(e_val);
+                        mi::mdl::ISymbol const *sym = e_val->get_symbol();
+                        add_binding(m_symbol_table->get_symbol(sym->get_name()),
+                            e.get_type(), /*signagure=*/nullptr, builtin_env);
+                    }
+                }
+
+                // For structs, add a constructor function with all the
+                // fields as parameters.
+                if (mi::mdl::IType_struct const *ts = as<mi::mdl::IType_struct>(e.get_mdl_type())) {
+                    
+                    Type_function *tf = m_type_factory->create_function(const_cast<Type *>(e.get_type()));
+
+                    for (size_t i = 0; i < ts->get_field_count(); i++) {
+                        mi::mdl::IType_struct::Field const *s_field = ts->get_field(i);
+
+                        Type *t = m_type_factory->import_type(s_field->get_type());
+
+                        Type_list_elem *tle = m_type_factory->create_type_list_elem(t);
+                        tf->add_parameter(tle);
+                    }
+                    add_binding(pr.first, tf, /*signature=*/nullptr, builtin_env);
+                }
+            }
+        }
+    }
 
     if (m_comp_options->get_debug_dump_builtins()) {
         dump_env(builtin_env);

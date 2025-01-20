@@ -307,7 +307,7 @@ public:
     , m_dg(dg)
     , m_dag_builder(dg.m_dag_builder)
     , m_curr(NULL)
-    , m_module(impl_cast<Module>(dg.m_dag_builder.tos_module()))
+    , m_module(dg.m_dag_builder.tos_module())
     , m_known_callees(map)
     , m_wait_q(Def_wait_queue::container_type(arena.get_allocator()))
     , m_marker(0, Def_set::hasher(), Def_set::key_equal(), arena.get_allocator())
@@ -711,9 +711,9 @@ private:
         if (name[0] == ':' && name[1] == ':') {
             // check if it has the module name as prefix.
 
-            IModule const *module   = m_dag_builder.tos_module();
-            char const    *abs_name = module->get_name();
-            size_t        len       = strlen(abs_name);
+            Module const *module   = m_dag_builder.tos_module();
+            char const   *abs_name = module->get_name();
+            size_t       len       = strlen(abs_name);
 
             if (len >= name.size()) {
                 // mismatch
@@ -1089,7 +1089,7 @@ void Dumper::visit(Dependence_node const *n, Order order)
 Dependence_node::Dependence_node(
     Memory_arena      *arena,
     size_t            id,
-    IModule const     *owner,
+    Module const      *owner,
     IDefinition const *def,
     char const        *dag_name,
     char const        *dag_simple_name,
@@ -1141,9 +1141,7 @@ Dependence_node::Dependence_node(
         m_n_params = n_params;
     }
 
-    MDL_ASSERT(
-        impl_cast<Module>(m_owner)->is_owner(m_def) &&
-        "Definition belongs to other module");
+    MDL_ASSERT(m_owner->is_owner(m_def) && "Definition belongs to other module");
 }
 
 // Constructor from a name + semantic.
@@ -1311,7 +1309,7 @@ DAG_dependence_graph::DAG_dependence_graph(
 , m_is_builtins(false)
 , m_has_loops(false)
 {
-    IModule const *module = m_dag_builder.tos_module();
+    Module const *module = m_dag_builder.tos_module();
     m_is_builtins = module->is_builtins();
 
     size_t def_count     = module->get_exported_definition_count();
@@ -1424,7 +1422,7 @@ Dependence_node *DAG_dependence_graph::get_node(
 
     unsigned flags = 0;
 
-    IModule const *module = m_dag_builder.tos_module();
+    Module const *module = m_dag_builder.tos_module();
 
     if (def->get_property(IDefinition::DP_IS_DECLARATIVE)) {
         flags |= Dependence_node::FL_IS_DECLARATIVE;
@@ -1434,7 +1432,7 @@ Dependence_node *DAG_dependence_graph::get_node(
         // imported
         flags |= Dependence_node::FL_IS_IMPORTED;
 
-        mi::base::Handle<IModule const> owner(module->get_owner_module(def));
+        mi::base::Handle<Module const> owner(module->get_owner_module(def));
         if (def->get_property(IDefinition::DP_IS_EXPORTED)) {
             // an exported import
             flags |= Dependence_node::FL_IS_EXPORTED;
@@ -1485,7 +1483,7 @@ Dependence_node *DAG_dependence_graph::get_node(
         }
 
         // check for preset
-        mi::base::Handle<IModule const> owner= mi::base::make_handle_dup(module);
+        mi::base::Handle<Module const> owner= mi::base::make_handle_dup(module);
         IDefinition const *preset_def = skip_presets(idef, owner);
         if (preset_def != idef) {
             dag_preset_name =

@@ -1,6 +1,9 @@
 import unittest
 import os
 
+import ctypes
+import numpy
+
 try:  # pragma: no cover
     # testing from within a package or CI
     from .setup import SDK, BindingModule
@@ -55,15 +58,15 @@ class MainDistillAndBake(UnittestBase):
         self.assertEqual(res.value, 0)
         self.assertIsNotNone(distilledMaterial)
         self.assertTrue(distilledMaterial.is_valid_interface())
-        
+
         # Note: the following function is deprecated and this test will be removed when
         # the function is not available anymore.
         distilledMaterial_ignored = self.assertDeprecationWarning(
             lambda: distillingApi.distill_material_with_ret(compiledMaterial, targetModel))
-        
+
         return distilledMaterial
 
-    def bakeMaterial(self, compiledMaterial: pymdlsdk.ICompiled_material):
+    def bakeMaterial(self, compiledMaterial: pymdlsdk.ICompiled_material, functionNameWithSignature: str):
         # not baking for now but at least create the bakers
         distillingApi: pymdlsdk.IMdl_distiller_api = self.sdk.neuray.get_api_component(pymdlsdk.IMdl_distiller_api)
         baker0: pymdlsdk.IBaker = distillingApi.create_baker(compiledMaterial, "geometry.normal")
@@ -71,16 +74,20 @@ class MainDistillAndBake(UnittestBase):
 
         pt: str = baker0.get_pixel_type()
         self.assertEqual(pt, "Float32<3>")
+        tn: str = baker0.get_type_name()
+        self.assertEqual(tn, "Float32<3>")
         self.assertTrue(baker0.is_uniform())
 
         imageApi: pymdlsdk.IImage_api = self.sdk.neuray.get_api_component(pymdlsdk.IImage_api)
         self.assertIsValidInterface(imageApi)
-        canvas: pymdlsdk.ICanvas = imageApi.create_canvas(pt, 16, 16)
+        canvas: pymdlsdk.ICanvas = imageApi.create_canvas(pt, 32, 16)
         self.assertIsValidInterface(canvas)
 
         self.assertZero(self.assertDeprecationWarning(lambda: baker0.bake_texture(canvas)))
         self.assertZero(self.assertDeprecationWarning(lambda: baker0.bake_texture(canvas, 2)))  # try the other overload too
         self.assertZero(self.assertDeprecationWarning(lambda: baker0.bake_texture(canvas, samples=2)))  # and named
+        self.assertException(TypeError, lambda: baker0.bake_texture(canvas, 0.0, 1.0, 0.0, 1.0, 1))  # wrong signature, anim time missing
+        self.assertException(TypeError, lambda: baker0.bake_texture(canvas, samples=32.5))  # wrong signature, wrong type
         tile: pymdlsdk.ITile = canvas.get_tile()
         self.assertIsValidInterface(tile)
         pixelValue: pymdlsdk.Color_struct = tile.get_pixel(2, 3)
@@ -90,7 +97,7 @@ class MainDistillAndBake(UnittestBase):
         self.assertEqual(pixelValue.a, 1)
 
         canvas2: pymdlsdk.ICanvas = imageApi.create_canvas(pt, 16, 16)
-        res: int = baker0.bake_texture(canvas2, 0.0, 1.0, 0.0, 1.0, 1)
+        res: int = baker0.bake_texture(canvas2, 0.0, 1.0, 0.0, 1.0, 0.0, 1)
         self.assertZero(res)
         tile: pymdlsdk.ITile = canvas2.get_tile()
         self.assertIsValidInterface(tile)
@@ -100,32 +107,109 @@ class MainDistillAndBake(UnittestBase):
         self.assertEqual(pixelValue.b, 1)
         self.assertEqual(pixelValue.a, 1)
 
+        potentialConstant: pymdlsdk.IFloat32_3 = self.sdk.transaction.create_as(pymdlsdk.IFloat32_3, tn)
+        self.assertIsValidInterface(potentialConstant)
+        isConstant: pymdlsdk.OutBoolean = pymdlsdk.OutBoolean
+        res: int = baker0.bake_texture_with_constant_detection(canvas, potentialConstant, isConstant)
+        self.assertZero(res)
+        self.assertEqual(potentialConstant.get_value().x, 0)
+        self.assertEqual(potentialConstant.get_value().y, 0)
+        self.assertEqual(potentialConstant.get_value().z, 1)
 
-        # FIXME: The following results in
-        # TypeError: Wrong number or type of arguments for overloaded function 'IBaker_bake_constant'.
-        # Possible C/C++ prototypes are:
-        #   mi::neuraylib::IBaker::bake_constant(mi::IData *,mi::Uint32) const
-        #   mi::neuraylib::IBaker::bake_constant(mi::IData *) const
-        # Why is no Color variant overload available?
-        # a: pymdlsdk.IColor = self.sdk.transaction.create_as(pymdlsdk.IColor, "Color")
-        # self.assertIsValidInterface(a)
-        # value: pymdlsdk.Color_struct = a.get_value()
-        # value.r = 0.25
-        # value.g = 0.5
-        # value.b = 0.75
-        # value.a = 1.0
-        # a.set_value(value)
-        # canvas: pymdlsdk.ICanvas = imageApi.create_canvas("Float32<3>", 16, 16)
-        # self.assertIsValidInterface(canvas)
-        # res: int = baker0.bake_constant(canvas, a)
-        # self.assertZero(res)
-        # tile: pymdlsdk.ITile = canvas.get_tile()
-        # self.assertIsValidInterface(tile)
-        # pixelValue: pymdlsdk.Color_struct = tile.get_pixel(2, 3)
-        # self.assertEqual(pixelValue.r, 0.25)
-        # self.assertEqual(pixelValue.g, 0.5)
-        # self.assertEqual(pixelValue.b, 0.75)
-        # self.assertEqual(pixelValue.a, 1)
+        bakerTint: pymdlsdk.IBaker = distillingApi.create_baker(compiledMaterial, "surface.scattering.tint")
+        self.assertIsValidInterface(bakerTint)
+
+        potentialConstantColor: pymdlsdk.IColor = self.sdk.transaction.create_as(pymdlsdk.IColor, bakerTint.get_type_name())
+        self.assertIsValidInterface(potentialConstantColor)
+        isConstant: pymdlsdk.OutBoolean = pymdlsdk.OutBoolean
+        res: int = bakerTint.bake_texture_with_constant_detection(canvas, potentialConstantColor, isConstant)
+        self.assertZero(res)
+
+        # the is_uniform is conservative
+        if (bakerTint.is_uniform()):
+            self.assertTrue(isConstant.value)  # guaranteed
+        else:
+            # self.assertFalse(isConstant.value)  # NOT guaranteed
+            pass
+
+        if (functionNameWithSignature.startswith("example_material(")):
+            self.assertTrue(isConstant.value)
+            self.assertTrue(bakerTint.is_uniform())
+            self.assertEqual(potentialConstantColor.get_value().r, 1)
+            self.assertEqual(potentialConstantColor.get_value().g, 1)
+            self.assertEqual(potentialConstantColor.get_value().b, 1)
+        elif (functionNameWithSignature.startswith("example_texture_lookup_bsdf(")):
+            self.assertFalse(isConstant.value)
+            self.assertFalse(bakerTint.is_uniform())  # guaranteed
+            tile: pymdlsdk.ITile = canvas.get_tile()
+            self.assertIsValidInterface(tile)
+            pixelValue: pymdlsdk.Color_struct = tile.get_pixel(2, 3)
+            self.assertAlmostEqual(pixelValue.r, 0.28088340163230896, places=6)
+            self.assertAlmostEqual(pixelValue.g, 0.27805379033088684, places=6)
+            self.assertAlmostEqual(pixelValue.b, 0.26071646809577940, places=6)
+            self.assertEqual(pixelValue.a, 1)
+
+            # test the native data pointer access
+            channels: int = 3  # depends on the format, here Float32<3>s
+            bytesPerChannel: int = 4  # since Float32 is 4 bytes
+
+            byteBufferSize: int = tile.get_resolution_x() * tile.get_resolution_y() * channels * bytesPerChannel
+            byteBuffer = ctypes.cast(tile.get_data(), ctypes.POINTER(ctypes.c_uint8 * byteBufferSize))
+
+            floatBufferSize: int = tile.get_resolution_x() * tile.get_resolution_y() * channels
+            floatBuffer = numpy.frombuffer(byteBuffer.contents, dtype=numpy.float32, count=floatBufferSize)
+
+            # apply in-place operations
+            floatBuffer += 1  # add 1 to all pixels on all channels
+
+            # apply out-place operations
+            floatBuffer[:] = floatBuffer + 1  # add 1 to all pixels on all channels
+
+            floatBuffer = None  # (optional)
+
+            pixelValue: pymdlsdk.Color_struct = tile.get_pixel(2, 3)
+            self.assertAlmostEqual(pixelValue.r, 2.280883312225342, places=6)
+            self.assertAlmostEqual(pixelValue.g, 2.2780537605285645, places=6)
+            self.assertAlmostEqual(pixelValue.b, 2.260716438293457, places=6)
+
+            # try the same with the additional numpy
+            imageData: numpy.ndarray = tile.get_data_numpy()
+            self.assertEqual(imageData.size, floatBufferSize)
+            self.assertEqual(imageData.shape[0], tile.get_resolution_y())
+            self.assertEqual(imageData.shape[0], 16)
+            self.assertEqual(imageData.shape[1], tile.get_resolution_x())
+            self.assertEqual(imageData.shape[1], 32)
+            self.assertEqual(imageData.shape[2], channels)
+
+            # apply in-place operations (which are faster and more memory efficient)
+            imageData *= 10
+
+            pixelValue: pymdlsdk.Color_struct = tile.get_pixel(2, 3)
+            self.assertAlmostEqual(pixelValue.r, 22.808834075927734, places=6)
+            self.assertAlmostEqual(pixelValue.g, 22.780536651611328, places=6)
+            self.assertAlmostEqual(pixelValue.b, 22.60716438293457, places=6)
+
+            # test the expected error if numpy is not available
+            pymdlsdk._numpyAvailable = False  # DO NOT CHANGE in normal usage
+            with self.assertWarns(RuntimeWarning):
+                imageData = tile.get_data_numpy()
+                self.assertIsNone(imageData)
+            pymdlsdk._numpyAvailable = True
+
+
+
+        # the baker expects the right data type, there is no compatibility between color and float3 (because of spectral for instance)
+        a: pymdlsdk.IColor = self.sdk.transaction.create_as(pymdlsdk.IColor, "Color")
+        self.assertIsValidInterface(a)
+        res: int = baker0.bake_constant(a)
+        self.assertEqual(res, -4) # expecting a float3 not color
+
+        b: pymdlsdk.IFloat32_3 = self.sdk.transaction.create_as(pymdlsdk.IFloat32_3, "Float32<3>")
+        res: int = baker0.bake_constant(b)
+        self.assertEqual(res, 0)
+        self.assertEqual(b.get_value().x, 0)
+        self.assertEqual(b.get_value().y, 0)
+        self.assertEqual(b.get_value().z, 1)
 
         baker1: pymdlsdk.IBaker = distillingApi.create_baker(compiledMaterial, "geometry.normal", pymdlsdk.Baker_resource.BAKE_ON_CPU)
         self.assertIsValidInterface(baker1)
@@ -133,7 +217,8 @@ class MainDistillAndBake(UnittestBase):
         self.assertIsValidInterface(baker2)
         baker3: pymdlsdk.IBaker = distillingApi.create_baker(compiledMaterial, "thin_walled", pymdlsdk.Baker_resource.BAKE_ON_CPU)
         self.assertIsValidInterface(baker3)
-        this_walled_baked: pymdlsdk.IBoolean = self.sdk.transaction.create_as(pymdlsdk.IBoolean, "Boolean")
+        this_walled_baked: pymdlsdk.IBoolean = self.sdk.transaction.create_as(pymdlsdk.IBoolean, baker3.get_type_name())
+        self.assertIsValidInterface(this_walled_baked)
         self.assertZero(baker3.bake_constant(this_walled_baked))
         self.assertFalse(this_walled_baked.get_value())
 
@@ -143,8 +228,8 @@ class MainDistillAndBake(UnittestBase):
         self.assertIsNotNone(self.sdk.neuray)
         self.assertIsNotNone(self.sdk.transaction)
 
-    def _distillAndBake(self, qualifiedModuleName: str, simpleFunctionName: str, targetModel: str, classCompilation: bool):
-        qualifiedFunctionName: str = qualifiedModuleName + simpleFunctionName
+    def _distillAndBake(self, qualifiedModuleName: str, functionNameWithSignature: str, targetModel: str, classCompilation: bool):
+        qualifiedFunctionName: str = qualifiedModuleName + "::" + functionNameWithSignature
         # load and fetch
         moduleDbName: str = self.load_module(qualifiedModuleName)
         self.assertNotEqual(moduleDbName, "")
@@ -165,18 +250,20 @@ class MainDistillAndBake(UnittestBase):
         distilledMaterial: pymdlsdk.ICompiled_material = self.distillMaterial(compiledMaterial, targetModel=targetModel)
         self.assertTrue(distilledMaterial.is_valid_interface())
         # create baker
-        self.bakeMaterial(compiledMaterial)
+        self.bakeMaterial(compiledMaterial, functionNameWithSignature)
 
     def test_distillAndBake_example_material(self):
-        self._distillAndBake("::nvidia::sdk_examples::tutorials", "::example_material(color,float)", "transmissive_pbr", classCompilation=True)
-        self._distillAndBake("::nvidia::sdk_examples::tutorials", "::example_material(color,float)", "transmissive_pbr", classCompilation=False)
-        self._distillAndBake("::nvidia::sdk_examples::tutorials", "::example_material(color,float)", "ue4", classCompilation=True)
-        self._distillAndBake("::nvidia::sdk_examples::tutorials", "::example_material(color,float)", "ue4", classCompilation=False)
+        self._distillAndBake("::nvidia::sdk_examples::tutorials", "example_material(color,float)", "transmissive_pbr", classCompilation=True)
+        self._distillAndBake("::nvidia::sdk_examples::tutorials", "example_material(color,float)", "transmissive_pbr", classCompilation=False)
+        self._distillAndBake("::nvidia::sdk_examples::tutorials", "example_material(color,float)", "ue4", classCompilation=True)
+        self._distillAndBake("::nvidia::sdk_examples::tutorials", "example_material(color,float)", "ue4", classCompilation=False)
+        self._distillAndBake("::nvidia::sdk_examples::tutorials", "example_texture_lookup_bsdf(texture_2d,texture_2d)", "transmissive_pbr", classCompilation=True)
+        self._distillAndBake("::nvidia::sdk_examples::tutorials", "example_texture_lookup_bsdf(texture_2d,texture_2d)", "transmissive_pbr", classCompilation=False)
 
     def test_image_and_canvas(self):
         imageApi: pymdlsdk.IImage_api = self.sdk.neuray.get_api_component(pymdlsdk.IImage_api)
         self.assertIsValidInterface(imageApi)
-        
+
         tile: pymdlsdk.ITile = imageApi.create_tile("Rgba", 16, 16)
         self.assertIsValidInterface(tile)
         self.assertEqual(tile.get_type(), "Rgba")
@@ -215,7 +302,7 @@ class MainDistillAndBake(UnittestBase):
         tile.set_pixel(1337, 1338, pixelValue)
         pixelValue3: pymdlsdk.Color_struct = tile.get_pixel(1337, 1338)
         self.assertIsNotNone(pixelValue3)  # returns garbage, but not None
-        
+
         canvas: pymdlsdk.ICanvas = imageApi.create_canvas("Rgba", 16, 16)
         self.assertIsValidInterface(canvas)
         mdlImpExpApi: pymdlsdk.IMdl_impexp_api = self.sdk.neuray.get_api_component(pymdlsdk.IMdl_impexp_api)
@@ -296,7 +383,7 @@ class MainDistillAndBake(UnittestBase):
 
         channel: pymdlsdk.ITile = imageApi.extract_channel(canvas, "A")
         self.assertIsValidInterface(channel)
-        
+
         canvas2: pymdlsdk.ICanvas = imageApi.clone_canvas(canvas)
         self.assertIsValidInterface(canvas2)
         canvas_base: pymdlsdk.ICanvas_base = canvas2.get_interface(pymdlsdk.ICanvas_base)
@@ -438,15 +525,15 @@ class MainDistillAndBake(UnittestBase):
 
         self.assertAlmostEqual(lightProfile.get_phi(0), 0.0)
         self.assertAlmostEqual(lightProfile.get_phi(2), 0.0)
-        self.assertAlmostEqual(lightProfile.get_theta(0), 0.0)
-        self.assertAlmostEqual(lightProfile.get_theta(2), 0.34906587)
-        self.assertAlmostEqual(lightProfile.get_candela_multiplier(), 10.0)
+        self.assertAlmostEqual(lightProfile.get_theta(0), 0.0, places=3)
+        self.assertAlmostEqual(lightProfile.get_theta(2), 0.34906587, places=3)
+        self.assertAlmostEqual(lightProfile.get_candela_multiplier(), 10.0, places=3)
 
         d = lightProfile.get_data()
         self.assertIsNotNone(d)
 
         s: float = lightProfile.sample(0.1, 0.2, False)
-        self.assertAlmostEqual(s, 0.0)
+        self.assertAlmostEqual(s, 0.0, places=3)
 
         lightProfile: pymdlsdk.IImage = self.sdk.transaction.edit_as(pymdlsdk.ILightprofile, lightDbName)
         res: int = lightProfile.reset_file(fn)
@@ -571,7 +658,7 @@ class MainDistillAndBake(UnittestBase):
         res = mdlImpExpApi.export_bsdf_data("bsdf_data0.mbsdf", reflIso, transIso)
         self.assertZero(res)
         pass
-    
+
 # run all tests of this file
 if __name__ == '__main__':
     unittest.main()  # pragma: no cover

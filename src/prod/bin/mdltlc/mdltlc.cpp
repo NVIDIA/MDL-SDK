@@ -99,7 +99,7 @@ int Mdltlc::run(int argc, char *argv[])
         /* 7*/ { "mdl-path",               mi::getopt::REQUIRED_ARGUMENT, NULL, 0 },
         /* 8*/ { "warn",                   mi::getopt::REQUIRED_ARGUMENT, NULL, 0 },
         /* 9*/ { "debug",                  mi::getopt::REQUIRED_ARGUMENT, NULL, 0 },
-        /*10*/ { NULL,                     0,                             NULL, 0 }
+        /*11*/ { NULL,                     0,                             NULL, 0 }
     };
 
     bool opt_error = false;

@@ -35,6 +35,9 @@ endif()
 if(POLICY CMP0102)
     cmake_policy(SET CMP0102 NEW)
 endif()
+if(POLICY CMP0167)
+    cmake_policy(SET CMP0167 NEW)
+endif()
 
 
 # MDL SDK build directories
@@ -78,6 +81,7 @@ option(MDL_LOG_PLATFORM_INFOS "Prints some infos about the current build system 
 option(MDL_LOG_DEPENDENCIES "Prints the list of dependencies during the generation step." ON)
 option(MDL_LOG_FILE_DEPENDENCIES "Prints the list of files that is copied after a successful build." OFF)
 option(MDL_TREAT_RUNTIME_DEPS_AS_BUILD_DEPS "Treat runtime dependencies as build dependencies." ON)
+option(MDL_BUILD_WITHOUT_CUDA_DRIVER "Build without requiring a CUDA driver." OFF)
 set(MDL_ADDITIONAL_COMPILER_DEFINES "MDL_SOURCE_RELEASE" CACHE STRING "Additional compile defines that are passed to each of the projects")
 set(MDL_ADDITIONAL_COMPILER_OPTIONS "" CACHE STRING "Additional compile options that are passed to each of the projects")
 
@@ -101,13 +105,13 @@ if(NOT MDL_BUILD_SDK)
 endif()
 
 if(MDL_LOG_PLATFORM_INFOS)
-    MESSAGE(STATUS "[INFO] MDL_BUILD_SDK:                        ${MDL_BUILD_SDK}")
-    MESSAGE(STATUS "[INFO] MDL_BUILD_SDK_EXAMPLES:               ${MDL_BUILD_SDK_EXAMPLES}")
-    MESSAGE(STATUS "[INFO] MDL_BUILD_CORE_EXAMPLES:              ${MDL_BUILD_CORE_EXAMPLES}")
-    MESSAGE(STATUS "[INFO] MDL_BUILD_ARNOLD_PLUGIN:              ${MDL_BUILD_ARNOLD_PLUGIN}")
-    MESSAGE(STATUS "[INFO] MDL_BUILD_OPENIMAGEIO_PLUGIN:         ${MDL_BUILD_OPENIMAGEIO_PLUGIN}")
-    MESSAGE(STATUS "[INFO] MDL_BUILD_DDS_PLUGIN:                 ${MDL_BUILD_DDS_PLUGIN}")
-    MESSAGE(STATUS "[INFO] MDL_ENABLE_PYTHON_BINDINGS:           ${MDL_ENABLE_PYTHON_BINDINGS}")
+    MESSAGE(STATUS "[INFO] MDL_BUILD_SDK:                            ${MDL_BUILD_SDK}")
+    MESSAGE(STATUS "[INFO] MDL_BUILD_SDK_EXAMPLES:                   ${MDL_BUILD_SDK_EXAMPLES}")
+    MESSAGE(STATUS "[INFO] MDL_BUILD_CORE_EXAMPLES:                  ${MDL_BUILD_CORE_EXAMPLES}")
+    MESSAGE(STATUS "[INFO] MDL_BUILD_ARNOLD_PLUGIN:                  ${MDL_BUILD_ARNOLD_PLUGIN}")
+    MESSAGE(STATUS "[INFO] MDL_BUILD_OPENIMAGEIO_PLUGIN:             ${MDL_BUILD_OPENIMAGEIO_PLUGIN}")
+    MESSAGE(STATUS "[INFO] MDL_BUILD_DDS_PLUGIN:                     ${MDL_BUILD_DDS_PLUGIN}")
+    MESSAGE(STATUS "[INFO] MDL_ENABLE_PYTHON_BINDINGS:               ${MDL_ENABLE_PYTHON_BINDINGS}")
 endif()
 
 # enable CTest if requested
@@ -208,11 +212,17 @@ if(MDL_BUILD_CORE_EXAMPLES)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_core/shared)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_core/calls)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_core/code_gen)
+    if(MDL_ENABLE_OPENGL_EXAMPLES)
+        add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_core/df_native)
+    endif()
     if(MDL_ENABLE_CUDA_EXAMPLES)
         add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_core/execution_cuda)
         if(MDL_ENABLE_OPENGL_EXAMPLES)
             add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_core/df_cuda)
         endif()
+    endif()
+    if(MDL_ENABLE_VULKAN_EXAMPLES)
+        add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_core/df_vulkan)
     endif()
 endif()
 
@@ -287,7 +297,7 @@ endif()
 
 write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/mdl-config-version.cmake"
     VERSION ${neuraylib_product_version}
-    COMPATIBILITY SameMajorVersion
+    COMPATIBILITY SameMinorVersion
 )
 
 # Install

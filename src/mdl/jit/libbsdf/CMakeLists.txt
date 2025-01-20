@@ -38,7 +38,6 @@ project(${PROJECT_NAME})
 # Files to generate
 set(_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 set(DF_HANDLE_SLOT_MODES "hsmp" "hsmn" "hsm1" "hsm2" "hsm4" "hsm8")
-set(_GENERATED_SOURCES "")
 foreach(HS ${DF_HANDLE_SLOT_MODES})
     # .d is a dependency file
     # .ll is useful for debugging
@@ -46,6 +45,9 @@ foreach(HS ${DF_HANDLE_SLOT_MODES})
         ${_GENERATED_DIR}/libbsdf_${HS}.bc
         ${_GENERATED_DIR}/libbsdf_${HS}.d
         ${_GENERATED_DIR}/libbsdf_${HS}.ll
+        ${_GENERATED_DIR}/libbsdf_${HS}_debug.bc
+        ${_GENERATED_DIR}/libbsdf_${HS}_debug.d
+        ${_GENERATED_DIR}/libbsdf_${HS}_debug.ll
     )
 endforeach()
 
@@ -111,6 +113,27 @@ foreach(HS ${DF_HANDLE_SLOT_MODES})
         COMMAND ${clang_PATH} 
             -emit-llvm -S -O3 -ffast-math -fno-vectorize -Wuninitialized -Wconditional-uninitialized -target nvptx64-nvidia-cuda-gnu ${CLANG_FLAGS_EX} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
             -o ${_GENERATED_DIR}/libbsdf_${HS}.ll
+        DEPENDS
+            ${PROJECT_SOURCES}
+        VERBATIM
+    )
+
+    # also build a debug version
+    add_custom_command(
+        OUTPUT
+            ${_GENERATED_DIR}/libbsdf_${HS}_debug.bc
+            ${_GENERATED_DIR}/libbsdf_${HS}_debug.d
+            ${_GENERATED_DIR}/libbsdf_${HS}_debug.ll
+        COMMAND ${CMAKE_COMMAND} -E echo "Compile libbsdf_${HS}_debug bytecode using clang ..."
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
+        COMMAND ${clang_PATH}
+            -emit-llvm -c -g -O3 -ffast-math -fno-vectorize -Wuninitialized -Wconditional-uninitialized -target nvptx64-nvidia-cuda-gnu ${CLANG_FLAGS_EX} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
+            -o ${_GENERATED_DIR}/libbsdf_${HS}_debug.bc -MD -MT ${_GENERATED_DIR}/libbsdf_${HS}_debug.bc -MP -MF ${_GENERATED_DIR}/libbsdf_${HS}_debug.d.tmp
+        COMMAND ${CMAKE_COMMAND} -E copy ${_GENERATED_DIR}/libbsdf_${HS}_debug.d.tmp ${_GENERATED_DIR}/libbsdf_${HS}_debug.d
+        COMMAND ${CMAKE_COMMAND} -E remove ${_GENERATED_DIR}/libbsdf_${HS}_debug.d.tmp
+        COMMAND ${clang_PATH}
+            -emit-llvm -S -g -O3 -ffast-math -fno-vectorize -Wuninitialized -Wconditional-uninitialized -target nvptx64-nvidia-cuda-gnu ${CLANG_FLAGS_EX} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
+            -o ${_GENERATED_DIR}/libbsdf_${HS}_debug.ll
         DEPENDS
             ${PROJECT_SOURCES}
         VERBATIM

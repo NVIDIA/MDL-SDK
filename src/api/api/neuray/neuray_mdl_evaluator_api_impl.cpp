@@ -113,7 +113,7 @@ public:
     ///
     /// \param compiler  the MDL compiler
     /// \param trans     the current transaction
-    /// \param param_cb  if non-NULL, a callback to retrieve parameter arguments
+    /// \param param_cb  if non- \c nullptr, a callback to retrieve parameter arguments
     explicit Evaluator(
         mi::mdl::IMDL               *compiler,
         mi::neuraylib::ITransaction *trans,
@@ -453,7 +453,7 @@ public:
                 size_t index = param->get_index();
                 mi::base::Handle<MDL::IExpression const> arg(
                     get_parameter_argument(index));
-                if (arg.is_valid_interface())
+                if (arg)
                     return evaluate(arg.get());
 
                 set_error(EC_PARAMETER);
@@ -810,7 +810,7 @@ private:
     /// The transaction to be used.
     DB::Transaction *m_trans;
 
-    /// If non-NULL, a callback to retrieve parameter arguments.
+    /// If non- \c nullptr, a callback to retrieve parameter arguments.
     IParameter_helper *m_param_cp;
 
     /// A memory arena.

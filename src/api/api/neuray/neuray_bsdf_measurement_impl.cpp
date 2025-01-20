@@ -96,8 +96,17 @@ mi::Sint32 Bsdf_measurement_impl::reset_reader( mi::neuraylib::IReader* reader)
 
 const char* Bsdf_measurement_impl::get_filename() const
 {
-    const std::string& filename = get_db_element()->get_filename();
-    return filename.empty() ? nullptr : filename.c_str();
+    const BSDFM::Bsdf_measurement* bsdfm = get_db_element();
+    if( bsdfm->is_file_based())
+        m_cached_filename = bsdfm->get_filename();
+    else if( bsdfm->is_container_based())
+        m_cached_filename
+            = bsdfm->get_container_filename() + ":" + bsdfm->get_container_membername();
+    else
+        return nullptr;
+
+    ASSERT( M_NEURAY_API, m_cached_filename.size() > 1);
+    return m_cached_filename.c_str();
 }
 
 const char* Bsdf_measurement_impl::get_original_filename() const

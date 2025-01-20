@@ -88,7 +88,7 @@ public:
     ///                         \c "::material_category".) See also
     ///                         \ref mi_neuray_mdl_decl_cast_operator and
     ///                         #mi::neuraylib::IExpression_factory::create_decl_cast().
-    ///                         Default: \c NULL (implying no type change).
+    ///                         Default: \c nullptr (implying no type change).
     ///                       .
     ///                       The following options are supported in class compilation mode:
     ///                       - \c bool "fold_ternary_on_df": Fold all ternary operators of *df
@@ -101,7 +101,7 @@ public:
     ///                         of strings of the parameters to fold. The names of the parameters
     ///                         are those that would otherwise be reported in
     ///                         #mi::neuraylib::ICompiled_material::get_parameter_name().
-    ///                         Default: \c NULL
+    ///                         Default: \c nullptr
     ///                       - \c bool "fold_trivial_cutout_opacity": Fold the expression for
     ///                         geometry.cutout_opacity if it evaluates to a constant with value
     ///                         0.0f or 1.0f. Default: \c false.
@@ -129,10 +129,10 @@ public:
     ///                         but the corresponding parameter type is uniform.
     ///                       - An element in the array for the context option
     ///                         "fold_parameters" does not have the type #mi::IString.
-    /// \return               The corresponding compiled material, or \c NULL in case of failure.
+    /// \return               The corresponding compiled material, or \c nullptr in case of failure.
     virtual ICompiled_material* create_compiled_material(
         Uint32 flags,
-        IMdl_execution_context* context = 0) const = 0;
+        IMdl_execution_context* context = nullptr) const = 0;
 };
 
 /**@}*/ // end group mi_neuray_mdl_elements

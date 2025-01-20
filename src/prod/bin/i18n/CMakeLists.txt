@@ -71,14 +71,13 @@ create_from_base_preset(
 target_add_dependencies(TARGET ${PROJECT_NAME}
     DEPENDS
         ${LINKER_START_GROUP}
-        ${LINKER_DEPENDENCIES_BASE}
+        ${LINKER_DEPENDENCIES_BASE_WITHOUT_BASE_DATA}
         ${LINKER_END_GROUP}
+        mdl::mdl_sdk
         boost
     )
 
-# -------------------------------------------------------------------------------------------------
-# Create installation rules to copy the build directory
-# -------------------------------------------------------------------------------------------------
+# create installation rules
 add_target_install(
     TARGET ${PROJECT_NAME}
     )

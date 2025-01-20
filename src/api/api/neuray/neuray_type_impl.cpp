@@ -295,14 +295,16 @@ const MDL::IStruct_category* Struct_category::get_internal_struct_category() con
     return m_struct_category.get();
 }
 
-const mi::neuraylib::IStruct_category* Struct_category_list::get_struct_category( mi::Size index) const
+const mi::neuraylib::IStruct_category* Struct_category_list::get_struct_category(
+    mi::Size index) const
 {
     mi::base::Handle<const MDL::IStruct_category> result_int(
         m_struct_category_list->get_struct_category( index));
     return m_tf->create_struct_category( result_int.get(), m_owner.get());
 }
 
-const mi::neuraylib::IStruct_category* Struct_category_list::get_struct_category( const char* name) const
+const mi::neuraylib::IStruct_category* Struct_category_list::get_struct_category(
+    const char* name) const
 {
     mi::base::Handle<const MDL::IStruct_category> result_int(
         m_struct_category_list->get_struct_category( name));

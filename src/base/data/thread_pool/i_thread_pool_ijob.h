@@ -50,8 +50,8 @@ namespace THREAD_POOL {
 
 /// The abstract interface for jobs processed by the thread pool.
 ///
-/// Database jobs (SCHED::Job) and fragmented jobs (DB::Fragmented_jobs) are directly or indirectly
-/// derived from this interface.
+/// Database jobs (SCHED::Job_base) and fragmented jobs (DB::Fragmented_jobs) are directly or
+/// indirectly derived from this interface.
 class IJob : public
     mi::base::Interface_declare<0x287beee3,0xc3f8,0x4c18,0x8b,0x85,0x40,0xa5,0xed,0x53,0x87,0x88>
 {

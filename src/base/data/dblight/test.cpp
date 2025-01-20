@@ -50,6 +50,7 @@
 #include "i_dblight.h"
 #include "dblight_database.h"
 #include "dblight_info.h"
+#include "dblight_scope.h"
 
 #include <base/data/db/i_db_access.h>
 #include <base/data/db/i_db_database.h>
@@ -62,6 +63,7 @@
 
 #include <base/data/serial/i_serializer.h>
 #include <base/data/serial/serial.h>
+#include <base/hal/thread/i_thread_condition.h>
 #include <base/lib/config/config.h>
 #include <base/lib/log/i_log_module.h>
 #include <base/system/main/access_module.h>
@@ -70,6 +72,11 @@
 
 using namespace MI;
 namespace fs = std::filesystem;
+
+const DB::Journal_type journal_a( 0x1u);
+const DB::Journal_type journal_b( 0x2u);
+const DB::Journal_type journal_c( 0x4u);
+const DB::Journal_type journal_not_c( ~0x4u);
 
 class My_element : public DB::Element<My_element, 0x12345678>
 {
@@ -82,6 +89,7 @@ public:
     std::string get_class_name() const final { return "My_element"; }
     void get_references( DB::Tag_set* result) const final
     { result->insert( m_tag_set.begin(), m_tag_set.end()); }
+    DB::Journal_type get_journal_flags() const { return journal_not_c; }
 
     My_element() : m_value( 0) { }
     explicit My_element( int value, DB::Tag_set tag_set = {})
@@ -103,7 +111,7 @@ public:
         DB::Transaction* transaction,
         size_t index,
         size_t count,
-        const mi::neuraylib::IJob_execution_context* context)
+        const mi::neuraylib::IJob_execution_context* context) final
     {
         m_db->yield();
         m_db->suspend_current_job();
@@ -111,9 +119,15 @@ public:
         ++m_fragments_done;
     }
 
-    Scheduling_mode get_scheduling_mode() const { return m_scheduling_mode; }
+    Scheduling_mode get_scheduling_mode() const final { return m_scheduling_mode; }
 
-    mi::Sint8 get_priority() const { return m_priority; }
+    mi::Sint8 get_priority() const final { return m_priority; }
+
+    void assign_fragments_to_hosts( mi::Uint32* slots, size_t nr_slots)
+    {
+        for( size_t i = 0; i < nr_slots; ++i)
+            slots[i] = 1;
+    }
 
     My_fragmented_job( DB::Database* db, Scheduling_mode scheduling_mode, mi::Sint8 priority)
       : m_db( db),
@@ -128,11 +142,99 @@ private:
     mi::Sint8 m_priority = 0;
 };
 
+/// A fragmented job where the first fragment blocks execution until the job is cancelled.
+class Cancel_job : public DB::Fragmented_job
+{
+public:
+    void execute_fragment(
+        DB::Transaction* transaction,
+        size_t index,
+        size_t count,
+        const mi::neuraylib::IJob_execution_context* context) final
+    {
+        if( index == 0)
+            m_condition.wait();
+    }
+
+    Scheduling_mode get_scheduling_mode() const final { return m_scheduling_mode; }
+
+    mi::Sint8 get_priority() const final { return m_priority; }
+
+    void cancel() final { m_condition.signal(); }
+
+    Cancel_job( DB::Database* db, Scheduling_mode scheduling_mode, mi::Sint8 priority)
+      : m_db( db),
+        m_scheduling_mode( scheduling_mode),
+        m_priority( priority) { }
+
+    std::atomic_uint32_t m_fragments_done = 0;
+
+private:
+    DB::Database* m_db;
+    Scheduling_mode m_scheduling_mode;
+    mi::Sint8 m_priority = 0;
+    THREAD::Condition m_condition;
+};
+
 class My_execution_listener : public DB::IExecution_listener
 {
 public:
-    void job_finished() { m_finished = true; }
+    void job_finished() final { m_finished = true; }
     std::atomic_bool m_finished = false;
+};
+
+class My_transaction_listener : public mi::base::Interface_implement<DB::ITransaction_listener>
+{
+public:
+    void transaction_created( DB::Transaction* transaction) final
+    { m_state << "created " << transaction->get_id()() << "\n"; }
+    void transaction_pre_commit( DB::Transaction* transaction) final
+    { m_state << "pre_commit " << transaction->get_id()() << "\n"; }
+    void transaction_pre_abort( DB::Transaction* transaction) final
+    { m_state << "pre_abort " << transaction->get_id()() << "\n"; }
+    void transaction_committed( DB::Transaction* transaction) final
+    { m_state << "committed " << transaction->get_id()() << "\n"; }
+    void transaction_aborted( DB::Transaction* transaction) final
+    { m_state << "aborted " << transaction->get_id()() << "\n"; }
+    void check_empty()
+    { MI_CHECK( m_state.str().empty()); }
+    void check_and_clear( const char* event, mi::Uint32 id)
+    {
+        std::ostringstream expected;
+        expected << event << " " << id << "\n";
+        MI_CHECK_EQUAL( expected.str(), m_state.str());
+        m_state.str("");
+    }
+    void check_and_clear2( const char* event1, const char* event2, mi::Uint32 id)
+    {
+        std::ostringstream expected;
+        expected << event1 << " " << id << "\n";
+        expected << event2 << " " << id << "\n";
+        MI_CHECK_EQUAL( expected.str(), m_state.str());
+        m_state.str("");
+    }
+private:
+    std::ostringstream m_state;
+};
+
+class My_scope_listener : public mi::base::Interface_implement<DB::IScope_listener>
+{
+public:
+    void scope_created( DB::Scope* scope) final
+    { m_state << "created " << scope->get_id() << "\n"; }
+    void scope_removed( DB::Scope* scope) final
+    { m_state << "removed " << scope->get_id() << "\n"; }
+    void check_empty()
+    { MI_CHECK( m_state.str().empty()); }
+    void check_and_clear( const char* event, mi::Uint32 id)
+    {
+        std::ostringstream expected;
+        expected << event << " " << id << "\n";
+        MI_CHECK_EQUAL( expected.str(), m_state.str());
+        m_state.str("");
+    }
+private:
+    std::ostringstream m_state;
 };
 
 /// Compares two streams in a very simple way.
@@ -178,13 +280,14 @@ bool compare_files( std::ifstream& s1, std::stringstream& s2)
 struct Test_db
 {
 public:
-    Test_db( const char* test_name, bool compare = true)
+    Test_db( const char* test_name, bool compare = true, bool enable_journal = false)
       : m_test_name( test_name), m_compare( compare)
     {
         std::cerr << "Begin test: " << m_test_name << std::endl;
         std::cerr << std::endl;
 
-        m_db = DBLIGHT::factory();
+        m_db = DBLIGHT::factory(
+            /*thread_pool*/ nullptr, /*deserialization_manager*/ nullptr, enable_journal);
         m_db_impl = static_cast<DBLIGHT::Database_impl*>( m_db);
         m_global_scope = m_db->get_global_scope();
 
@@ -2139,6 +2242,20 @@ void test_fragmented_jobs_without_transaction()
     }
 
     {
+        My_fragmented_job job( db.m_db, DB::Fragmented_job::ONCE_PER_HOST, 0);
+        mi::Sint32 result = db.m_db->execute_fragmented( &job, 10);
+        MI_CHECK_EQUAL( result, -2);
+        MI_CHECK_EQUAL( job.m_fragments_done, 0);
+    }
+
+    {
+        My_fragmented_job job( db.m_db, DB::Fragmented_job::USER_DEFINED, 0);
+        mi::Sint32 result = db.m_db->execute_fragmented( &job, 10);
+        MI_CHECK_EQUAL( result, -2);
+        MI_CHECK_EQUAL( job.m_fragments_done, 0);
+    }
+
+    {
         My_fragmented_job job( db.m_db, DB::Fragmented_job::LOCAL, -1);
         mi::Sint32 result = db.m_db->execute_fragmented( &job, 10);
         MI_CHECK_EQUAL( result, -3);
@@ -2187,6 +2304,24 @@ void test_fragmented_jobs_without_transaction_async()
     }
 
     {
+        My_fragmented_job job( db.m_db, DB::Fragmented_job::ONCE_PER_HOST, 0);
+        My_execution_listener listener;
+        mi::Sint32 result = db.m_db->execute_fragmented_async( &job, 10, &listener);
+        MI_CHECK_EQUAL( result, -2);
+        MI_CHECK( !listener.m_finished);
+        MI_CHECK_EQUAL( job.m_fragments_done, 0);
+    }
+
+    {
+        My_fragmented_job job( db.m_db, DB::Fragmented_job::USER_DEFINED, 0);
+        My_execution_listener listener;
+        mi::Sint32 result = db.m_db->execute_fragmented_async( &job, 10, &listener);
+        MI_CHECK_EQUAL( result, -2);
+        MI_CHECK( !listener.m_finished);
+        MI_CHECK_EQUAL( job.m_fragments_done, 0);
+    }
+
+    {
         My_fragmented_job job( db.m_db, DB::Fragmented_job::LOCAL, -1);
         My_execution_listener listener;
         mi::Sint32 result = db.m_db->execute_fragmented_async( &job, 10, &listener);
@@ -2224,8 +2359,22 @@ void test_fragmented_jobs_with_transaction()
     {
         My_fragmented_job job( db.m_db, DB::Fragmented_job::CLUSTER, 0);
         mi::Sint32 result = transaction->execute_fragmented( &job, 10);
-        MI_CHECK_EQUAL( result, -2);
-        MI_CHECK_EQUAL( job.m_fragments_done, 0);
+        MI_CHECK_EQUAL( result, 0);
+        MI_CHECK_EQUAL( job.m_fragments_done, 10);
+    }
+
+    {
+        My_fragmented_job job( db.m_db, DB::Fragmented_job::ONCE_PER_HOST, 0);
+        mi::Sint32 result = transaction->execute_fragmented( &job, 10);
+        MI_CHECK_EQUAL( result, 0);
+        MI_CHECK_EQUAL( job.m_fragments_done, 1);
+    }
+
+    {
+        My_fragmented_job job( db.m_db, DB::Fragmented_job::USER_DEFINED, 0);
+        mi::Sint32 result = transaction->execute_fragmented( &job, 10);
+        MI_CHECK_EQUAL( result, 0);
+        MI_CHECK_EQUAL( job.m_fragments_done, 10);
     }
 
     {
@@ -2236,6 +2385,13 @@ void test_fragmented_jobs_with_transaction()
     }
 
     transaction->commit();
+
+    {
+        My_fragmented_job job( db.m_db, DB::Fragmented_job::LOCAL, 0);
+        mi::Sint32 result = transaction->execute_fragmented( &job, 10);
+        MI_CHECK_EQUAL( result, -4);
+        MI_CHECK_EQUAL( job.m_fragments_done, 0);
+    }
 }
 
 void test_fragmented_jobs_with_transaction_async()
@@ -2281,6 +2437,24 @@ void test_fragmented_jobs_with_transaction_async()
     }
 
     {
+        My_fragmented_job job( db.m_db, DB::Fragmented_job::ONCE_PER_HOST, 0);
+        My_execution_listener listener;
+        mi::Sint32 result = transaction->execute_fragmented_async( &job, 10, &listener);
+        MI_CHECK_EQUAL( result, -2);
+        MI_CHECK( !listener.m_finished);
+        MI_CHECK_EQUAL( job.m_fragments_done, 0);
+    }
+
+    {
+        My_fragmented_job job( db.m_db, DB::Fragmented_job::USER_DEFINED, 0);
+        My_execution_listener listener;
+        mi::Sint32 result = transaction->execute_fragmented_async( &job, 10, &listener);
+        MI_CHECK_EQUAL( result, -2);
+        MI_CHECK( !listener.m_finished);
+        MI_CHECK_EQUAL( job.m_fragments_done, 0);
+    }
+
+    {
         My_fragmented_job job( db.m_db, DB::Fragmented_job::LOCAL, -1);
         My_execution_listener listener;
         mi::Sint32 result = transaction->execute_fragmented_async( &job, 10, &listener);
@@ -2290,6 +2464,805 @@ void test_fragmented_jobs_with_transaction_async()
     }
 
     transaction->commit();
+
+    {
+        My_fragmented_job job( db.m_db, DB::Fragmented_job::LOCAL, 0);
+        mi::Sint32 result = transaction->execute_fragmented( &job, 10);
+        MI_CHECK_EQUAL( result, -4);
+        MI_CHECK_EQUAL( job.m_fragments_done, 0);
+    }
+}
+
+void test_fragmented_jobs_cancelling()
+{
+    Test_db db( __func__, /*compare*/ false); // Empty dump
+
+    {
+        // Explicit cancelling.
+        DB::Transaction_ptr transaction = db.m_global_scope->start_transaction();
+        Cancel_job job( db.m_db, DB::Fragmented_job::LOCAL, 0);
+        My_execution_listener listener;
+        mi::Sint32 result = transaction->execute_fragmented_async( &job, 10, &listener);
+        MI_CHECK_EQUAL( result, 0);
+        transaction->cancel_fragmented_jobs();
+        using namespace std::chrono_literals;
+        while( !listener.m_finished)
+            std::this_thread::sleep_for( 1ms);
+        transaction->commit();
+    }
+    {
+        // Implicit cancelling via committing the transaction.
+        DB::Transaction_ptr transaction = db.m_global_scope->start_transaction();
+        Cancel_job job( db.m_db, DB::Fragmented_job::LOCAL, 0);
+        My_execution_listener listener;
+        mi::Sint32 result = transaction->execute_fragmented_async( &job, 10, &listener);
+        MI_CHECK_EQUAL( result, 0);
+        transaction->commit();
+        // The transaction is unblocked just before the finished notification is passed on to the
+        // job, i.e., there is a short period of time in which listener.m_finished is still false.
+        using namespace std::chrono_literals;
+        while( !listener.m_finished)
+            std::this_thread::sleep_for( 1ms);
+    }
+
+    {
+        // Implicit cancelling via aborting the transaction.
+        DB::Transaction_ptr transaction = db.m_global_scope->start_transaction();
+        My_execution_listener listener;
+        Cancel_job job( db.m_db, DB::Fragmented_job::LOCAL, 0);
+        mi::Sint32 result = transaction->execute_fragmented_async( &job, 10, &listener);
+        MI_CHECK_EQUAL( result, 0);
+        transaction->abort();
+        // The transaction is unblocked just before the finished notification is passed on to the
+        // job, i.e., there is a short period of time in which listener.m_finished is still false.
+        using namespace std::chrono_literals;
+        while( !listener.m_finished)
+            std::this_thread::sleep_for( 1ms);
+    }
+}
+
+void test_transaction_listeners()
+{
+    Test_db db( __func__, /*compare*/ false); // Empty dump
+
+    mi::base::Handle listener( new My_transaction_listener);
+    listener->check_empty();
+    db.m_db->register_transaction_listener( listener.get());
+    db.m_db->register_transaction_listener( nullptr);
+    db.m_db->unregister_transaction_listener( listener.get());
+    db.m_db->unregister_transaction_listener( nullptr);
+
+    db.m_db->register_transaction_listener( listener.get());
+    db.m_db->register_transaction_listener( nullptr);
+    listener->check_empty();
+
+    DB::Transaction_ptr transaction = db.m_global_scope->start_transaction();
+    listener->check_and_clear( "created", 0);
+
+    transaction->commit();
+    listener->check_and_clear2( "pre_commit", "committed", 0);
+
+    transaction = db.m_global_scope->start_transaction();
+    listener->check_and_clear( "created", 1);
+
+    transaction->abort();
+    listener->check_and_clear2( "pre_abort", "aborted", 1);
+
+    // test operation/destruction with the client giving up its reference of the listener
+    listener.reset();
+
+    transaction = db.m_global_scope->start_transaction();
+    transaction->commit();
+    transaction = db.m_global_scope->start_transaction();
+    transaction->abort();
+}
+
+void test_scope_listeners()
+{
+    Test_db db( __func__, /*compare*/ false); // Empty dump
+
+    mi::base::Handle listener( new My_scope_listener);
+    listener->check_empty();
+    db.m_db->register_scope_listener( listener.get());
+    db.m_db->register_scope_listener( nullptr);
+    db.m_db->unregister_scope_listener( listener.get());
+    db.m_db->unregister_scope_listener( nullptr);
+
+    db.m_db->register_scope_listener( listener.get());
+    db.m_db->register_scope_listener( nullptr);
+    listener->check_empty();
+
+    DB::Scope* scope1 = db.m_global_scope->create_child( 1);
+    DB::Scope_id scope1_id = scope1->get_id();
+    listener->check_and_clear( "created", scope1_id);
+
+    // Removal of global scope.
+    bool success = db.m_db->remove_scope( 0);
+    MI_CHECK( !success);
+    listener->check_empty();
+
+    DB::Scope* scope2 = scope1->create_child( 2);
+    DB::Scope_id scope2_id = scope2->get_id();
+    listener->check_and_clear( "created", scope2_id);
+
+    DB::Scope* scope3 = scope1->create_child( 2);
+    DB::Scope_id scope3_id = scope3->get_id();
+    listener->check_and_clear( "created", scope3_id);
+
+    // Removal of leaf scope (imminent removal).
+    success = db.m_db->remove_scope( scope3_id);
+    MI_CHECK( success);
+    listener->check_and_clear( "removed", scope3_id);
+
+    // Removal of no-longer existing scope.
+    success = db.m_db->remove_scope( scope3_id);
+    MI_CHECK( !success);
+    listener->check_empty();
+
+    // Removal of non-leaf scope (only marked for removal).
+    success = db.m_db->remove_scope( scope1_id);
+    MI_CHECK( success);
+    listener->check_and_clear( "removed", scope1_id);
+
+    // Repeated removal of non-leaf scope.
+    success = db.m_db->remove_scope( scope1_id);
+    MI_CHECK( success);
+    listener->check_empty();
+
+    // Removal of scope that keeps scope1 around.
+    success = db.m_db->remove_scope( scope2_id);
+    MI_CHECK( success);
+    listener->check_and_clear( "removed", scope2_id);
+
+    // test operation/destruction with the client giving up its reference of the listener
+    listener.reset();
+
+    DB::Scope* scope4 = db.m_global_scope->create_child( 1);
+    DB::Scope_id scope4_id = scope4->get_id();
+    success = db.m_db->remove_scope( scope4_id);
+    MI_CHECK( success);
+}
+
+void test_memory_limits()
+{
+    Test_db db( __func__, /*compare*/ false); // Empty dump
+
+    {
+        MI_CHECK_EQUAL( db.m_db->set_memory_limits( 1000, 2000), 0);
+        size_t low_water  = 1;
+        size_t high_water = 1;
+        db.m_db->get_memory_limits( low_water, high_water);
+        MI_CHECK_EQUAL( low_water,  1000);
+        MI_CHECK_EQUAL( high_water, 2000);
+    }
+    {
+        MI_CHECK_EQUAL( db.m_db->set_memory_limits( 1000, 0), 0);
+        size_t low_water  = 1;
+        size_t high_water = 1;
+        db.m_db->get_memory_limits( low_water, high_water);
+        MI_CHECK_EQUAL( low_water,  1000);
+        MI_CHECK_EQUAL( high_water,    0);
+    }
+    {
+        MI_CHECK_EQUAL( db.m_db->set_memory_limits( 0, 0), 0);
+        size_t low_water  = 1;
+        size_t high_water = 1;
+        db.m_db->get_memory_limits( low_water, high_water);
+        MI_CHECK_EQUAL( low_water,     0);
+        MI_CHECK_EQUAL( high_water,    0);
+    }
+    {
+        MI_CHECK_EQUAL( db.m_db->set_memory_limits( 2000, 1000), -1);
+        size_t low_water  = 1;
+        size_t high_water = 1;
+        db.m_db->get_memory_limits( low_water, high_water);
+        MI_CHECK_EQUAL( low_water,     0);
+        MI_CHECK_EQUAL( high_water,    0);
+    }
+    {
+        MI_CHECK_EQUAL( db.m_db->set_memory_limits( 2000, 2000), -1);
+        size_t low_water  = 1;
+        size_t high_water = 1;
+        db.m_db->get_memory_limits( low_water, high_water);
+        MI_CHECK_EQUAL( low_water,     0);
+        MI_CHECK_EQUAL( high_water,    0);
+    }
+}
+
+void test_journal_recording_store_with_tag()
+{
+    Test_db db( __func__, /*compare*/ true, /*enable_journal*/ true);
+
+    DB::Scope* scope1 = db.m_global_scope->create_child( 1);
+    DB::Transaction_ptr transaction = scope1->start_transaction();
+
+    DB::Tag tag1 = transaction->reserve_tag();
+    DB::Tag tag2 = transaction->reserve_tag();
+    DB::Tag tag3 = transaction->reserve_tag();
+    DB::Tag tag4 = transaction->reserve_tag();
+    DB::Tag tag5 = transaction->reserve_tag();
+    DB::Tag tag6 = transaction->reserve_tag();
+
+    {
+        // Create six elements with different journal flags in different scopes.
+        // Note that My_element uses journal_not_c as journal mask.
+        auto* element1 = new My_element( 41);
+        transaction->store( tag1, element1, "foo1", 0, journal_a, 0);
+        auto* element2 = new My_element( 42);
+        transaction->store( tag2, element2, "foo2", 0, journal_b, 0);
+        auto* element3 = new My_element( 43);
+        transaction->store( tag3, element3, "foo3", 0, journal_c, 0);
+
+        auto* element4 = new My_element( 44);
+        transaction->store( tag4, element4, "foo4", 1, journal_a, 1);
+        auto* element5 = new My_element( 45);
+        transaction->store( tag5, element5, "foo5", 1, journal_b, 1);
+        auto* element6 = new My_element( 46);
+        transaction->store( tag6, element6, "foo6", 1, journal_c, 1);
+    }
+    db.dump();
+
+    // Committing the transaction propagates the journal entries to the scopes.
+    transaction->commit();
+    db.dump();
+
+    transaction = scope1->start_transaction();
+    {
+        // Modify the six elements, adding different journal flags.
+        DB::Edit<My_element> edit1( tag1, transaction.get(), journal_b);
+        edit1->set_value( 51);
+        edit1.reset();
+        DB::Edit<My_element> edit2( tag2, transaction.get(), journal_c);
+        edit2->set_value( 52);
+        edit2.reset();
+        DB::Edit<My_element> edit3( tag3, transaction.get(), journal_a);
+        edit3->set_value( 53);
+        edit3.reset();
+
+        DB::Edit<My_element> edit4( tag4, transaction.get(), journal_b);
+        edit4->set_value( 54);
+        edit4.reset();
+        DB::Edit<My_element> edit5( tag5, transaction.get(), journal_c);
+        edit5->set_value( 55);
+        edit5.reset();
+        DB::Edit<My_element> edit6( tag6, transaction.get(), journal_a);
+        edit6->set_value( 56);
+        edit6.reset();
+    }
+    db.dump();
+
+    transaction->commit();
+    db.dump();
+}
+
+void test_journal_recording_store_without_tag()
+{
+    Test_db db( __func__, /*compare*/ true, /*enable_journal*/ true);
+
+    DB::Scope* scope1 = db.m_global_scope->create_child( 1);
+    DB::Transaction_ptr transaction = scope1->start_transaction();
+
+    {
+        // Create six elements without explicit journal flags.
+        // Default journal mask is JOURNAL_NONE.
+        auto* element1 = new My_element( 41);
+        transaction->store( element1, "foo1", 0, 0);
+        auto* element2 = new My_element( 42);
+        transaction->store( element2, "foo2", 0, 0);
+        auto* element3 = new My_element( 43);
+        transaction->store( element3, "foo3", 0, 0);
+
+        auto* element4 = new My_element( 44);
+        transaction->store( element4, "foo4", 1, 1);
+        auto* element5 = new My_element( 45);
+        transaction->store( element5, "foo5", 1, 1);
+        auto* element6 = new My_element( 46);
+        transaction->store( element6, "foo6", 1, 1);
+    }
+    db.dump();
+
+    // Nothing to propagate
+    transaction->commit();
+    db.dump();
+
+}
+
+void test_journal_recording_edit()
+{
+    Test_db db( __func__, /*compare*/ true, /*enable_journal*/ true);
+
+    DB::Transaction_ptr transaction = db.m_global_scope->start_transaction();
+
+    DB::Tag tag1 = transaction->reserve_tag();
+    DB::Tag tag2 = transaction->reserve_tag();
+
+    {
+        // Create two elements.
+        auto* element1 = new My_element( 41);
+        transaction->store( tag1, element1, "foo1", 0, journal_a, 0);
+        auto* element2 = new My_element( 42);
+        transaction->store( tag2, element2, "foo2", 0, journal_a, 0);
+
+        // Edit the first element in this transaction.
+        DB::Edit<My_element> edit( tag1, transaction.get(), DB::JOURNAL_NONE);
+        edit->set_value( 43);
+        edit.add_journal_flags( journal_b);
+    }
+    db.dump();
+
+    transaction->commit();
+    db.dump();
+
+    transaction = db.m_global_scope->start_transaction();
+    {
+        // Edit the second element in another transaction.
+        DB::Edit<My_element> edit( tag2, transaction.get(), DB::JOURNAL_NONE);
+        edit->set_value( 44);
+        edit.add_journal_flags( journal_b);
+    }
+    db.dump();
+
+    transaction->commit();
+    db.dump();
+}
+
+void test_journal_recording_abort()
+{
+    Test_db db( __func__, /*compare*/ true, /*enable_journal*/ true);
+
+    DB::Scope* scope1 = db.m_global_scope->create_child( 1);
+    DB::Transaction_ptr transaction = scope1->start_transaction();
+
+    DB::Tag tag1 = transaction->reserve_tag();
+    DB::Tag tag2 = transaction->reserve_tag();
+    DB::Tag tag3 = transaction->reserve_tag();
+    DB::Tag tag4 = transaction->reserve_tag();
+    DB::Tag tag5 = transaction->reserve_tag();
+    DB::Tag tag6 = transaction->reserve_tag();
+
+    {
+        // Create six elements with different journal flags in different scopes.
+        // Note that My_element uses journal_not_c as journal mask.
+        auto* element1 = new My_element( 41);
+        transaction->store( tag1, element1, "foo1", 0, journal_a, 0);
+        auto* element2 = new My_element( 42);
+        transaction->store( tag2, element2, "foo2", 0, journal_b, 0);
+        auto* element3 = new My_element( 43);
+        transaction->store( tag3, element3, "foo3", 0, journal_c, 0);
+
+        auto* element4 = new My_element( 44);
+        transaction->store( tag4, element4, "foo4", 1, journal_a, 1);
+        auto* element5 = new My_element( 45);
+        transaction->store( tag5, element5, "foo5", 1, journal_b, 1);
+        auto* element6 = new My_element( 46);
+        transaction->store( tag6, element6, "foo6", 1, journal_c, 1);
+    }
+    db.dump();
+
+    // Aborting the transaction clears all journal entries.
+    transaction->abort();
+    db.dump();
+}
+
+// The order of results is implementation-defined. Sort them by tag and journal type.
+auto Journal_query_result_cmp = [](
+    const std::pair<DB::Tag, DB::Journal_type>& lhs,
+    const std::pair<DB::Tag, DB::Journal_type>& rhs)
+{
+    if( lhs.first < rhs.first)
+        return true;
+    if( (lhs.first == rhs.first) && (lhs.second.get_type() < rhs.second.get_type()))
+        return true;
+    return false;
+};
+
+void test_journal_query()
+{
+    Test_db db( __func__, /*compare*/ true, /*enable_journal*/ true);
+
+    DB::Scope* scope1 = db.m_global_scope->create_child( 1);
+    DB::Transaction_ptr transaction = scope1->start_transaction();
+
+    DB::Tag tag1 = transaction->reserve_tag();
+    DB::Tag tag2 = transaction->reserve_tag();
+    DB::Tag tag3 = transaction->reserve_tag();
+    DB::Tag tag4 = transaction->reserve_tag();
+    DB::Tag tag5 = transaction->reserve_tag();
+    DB::Tag tag6 = transaction->reserve_tag();
+    DB::Tag tag7 = transaction->reserve_tag();
+    DB::Tag tag8 = transaction->reserve_tag();
+    DB::Transaction_id last_changed_transaction_id = transaction->get_id();
+    DB::Transaction_id current_transaction_id = transaction->get_id();
+    mi::Uint32 last_changed_version;
+
+    {
+        // Create four elements with different journal flags.
+        auto* element1 = new My_element( 41);
+        transaction->store( tag1, element1, "foo1", 0, journal_a, 0);
+        auto* element2 = new My_element( 42);
+        transaction->store( tag2, element2, "foo2", 0, journal_b, 0);
+        auto* element3 = new My_element( 43);
+        transaction->store( tag3, element3, "foo3", 1, journal_a, 1);
+        auto* element4 = new My_element( 44);
+        transaction->store( tag4, element4, "foo4", 1, journal_b, 1);
+        last_changed_version = transaction->get_next_sequence_number();
+        auto* element5 = new My_element( 45);
+        transaction->store( tag5, element5, "foo5", 0, journal_a, 0);
+        auto* element6 = new My_element( 46);
+        transaction->store( tag6, element6, "foo6", 0, journal_b, 0);
+        auto* element7 = new My_element( 47);
+        transaction->store( tag7, element7, "foo7", 1, journal_a, 1);
+        auto* element8 = new My_element( 48);
+        transaction->store( tag8, element8, "foo8", 1, journal_b, 1);
+    }
+    {
+        // From transaction (excluding parents).
+        auto result = transaction->get_journal(
+            last_changed_transaction_id,
+            last_changed_version,
+            journal_a,
+            /*lookup_parents*/ false);
+        MI_CHECK( result);
+        MI_CHECK_EQUAL( result->size(), 1);
+        DB::Journal_query_result expected { { tag7, journal_a } };
+        MI_CHECK( *result.get() == expected);
+    }
+    {
+        // From transaction (including parents).
+        auto result = transaction->get_journal(
+            last_changed_transaction_id,
+            last_changed_version,
+            journal_a,
+            /*lookup_parents*/ true);
+        MI_CHECK( result);
+        MI_CHECK_EQUAL( result->size(), 2);
+        std::sort( result->begin(), result->end(), Journal_query_result_cmp);
+        DB::Journal_query_result expected { { tag5, journal_a }, { tag7, journal_a } };
+        MI_CHECK( *result.get() == expected);
+    }
+    {
+        // From local scope (transaction not yet committed, excluding parents).
+        auto result = scope1->get_journal(
+            last_changed_transaction_id,
+            last_changed_version,
+            current_transaction_id,
+            journal_a,
+            /*lookup_parents*/ false);
+        MI_CHECK( result);
+        MI_CHECK_EQUAL( result->size(), 0);
+    }
+    {
+        // From local scope (transaction not yet committed, including parents).
+        auto result = scope1->get_journal(
+            last_changed_transaction_id,
+            last_changed_version,
+            current_transaction_id,
+            journal_a,
+            /*lookup_parents*/ true);
+        MI_CHECK( result);
+        MI_CHECK_EQUAL( result->size(), 0);
+    }
+    {
+        // From global scope (transaction not yet committed).
+        auto result = db.m_global_scope->get_journal(
+            last_changed_transaction_id,
+            last_changed_version,
+            current_transaction_id,
+            journal_a,
+            /*lookup_parents*/ false);
+        MI_CHECK( result);
+        MI_CHECK_EQUAL( result->size(), 0);
+    }
+    {
+        // From transaction (huge query range, i.e., pruned scope journal).
+        auto result = transaction->get_journal(
+            last_changed_transaction_id-1,
+            0,
+            journal_a,
+            /*lookup_parents*/ false);
+        MI_CHECK( !result);
+    }
+
+    // Commit the transaction and query again.
+    transaction->commit();
+    transaction = scope1->start_transaction();
+    current_transaction_id = transaction->get_id();
+
+    {
+        // From transaction (excluding parents).
+        auto result = transaction->get_journal(
+            last_changed_transaction_id,
+            last_changed_version,
+            journal_a,
+            /*lookup_parents*/ false);
+        MI_CHECK( result);
+        MI_CHECK_EQUAL( result->size(), 1);
+        DB::Journal_query_result expected { { tag7, journal_a } };
+        MI_CHECK( *result.get() == expected);
+    }
+    {
+        // From transaction (including parents).
+        auto result = transaction->get_journal(
+            last_changed_transaction_id,
+            last_changed_version,
+            journal_a,
+            /*lookup_parents*/ true);
+        MI_CHECK( result);
+        MI_CHECK_EQUAL( result->size(), 2);
+        std::sort( result->begin(), result->end(), Journal_query_result_cmp);
+        DB::Journal_query_result expected { { tag5, journal_a }, { tag7, journal_a } };
+        MI_CHECK( *result.get() == expected);
+    }
+    {
+        // From local scope (transaction committed, excluding parents).
+        auto result = scope1->get_journal(
+            last_changed_transaction_id,
+            last_changed_version,
+            current_transaction_id,
+            journal_a,
+            /*lookup_parents*/ false);
+        MI_CHECK( result);
+        MI_CHECK_EQUAL( result->size(), 1);
+        DB::Journal_query_result expected { { tag7, journal_a } };
+        MI_CHECK( *result.get() == expected);
+    }
+    {
+        // From local scope (transaction committed, including parents).
+        auto result = scope1->get_journal(
+            last_changed_transaction_id,
+            last_changed_version,
+            current_transaction_id,
+            journal_a,
+            /*lookup_parents*/ true);
+        MI_CHECK( result);
+        MI_CHECK_EQUAL( result->size(), 2);
+        std::sort( result->begin(), result->end(), Journal_query_result_cmp);
+        DB::Journal_query_result expected { { tag5, journal_a }, { tag7, journal_a } };
+        MI_CHECK( *result.get() == expected);
+    }
+    {
+        // From global scope (transaction committed).
+        auto result = db.m_global_scope->get_journal(
+            last_changed_transaction_id,
+            last_changed_version,
+            current_transaction_id,
+            journal_a,
+            /*lookup_parents*/ false);
+        MI_CHECK( result);
+        MI_CHECK_EQUAL( result->size(), 1);
+        DB::Journal_query_result expected { { tag5, journal_a } };
+        MI_CHECK( *result.get() == expected);
+    }
+    {
+        // From transaction (huge query range, i.e., pruned scope journal).
+        auto result = transaction->get_journal(
+            last_changed_transaction_id-1,
+            0,
+            journal_a,
+            /*lookup_parents*/ false);
+        MI_CHECK( !result);
+    }
+
+    transaction->commit();
+}
+
+void test_journal_query_parallel()
+{
+    Test_db db( __func__, /*compare*/ true, /*enable_journal*/ true);
+
+    DB::Transaction_ptr transaction0 = db.m_global_scope->start_transaction();
+    DB::Transaction_ptr transaction1 = db.m_global_scope->start_transaction();
+
+    DB::Tag tag1 = transaction0->reserve_tag();
+    DB::Tag tag2 = transaction1->reserve_tag();
+    DB::Tag tag3 = transaction0->reserve_tag();
+    DB::Tag tag4 = transaction1->reserve_tag();
+    DB::Transaction_id last_changed_transaction_id;
+    mi::Uint32 last_changed_version;
+
+    {
+        // Create four elements with different journal flags, two before/after (in time) getting
+        // the last_changed_version.
+        auto* element1 = new My_element( 41);
+        transaction0->store( tag1, element1, "foo1", 0, journal_a, 0);
+        auto* element2 = new My_element( 42);
+        transaction1->store( tag2, element2, "foo2", 0, journal_a, 0);
+        last_changed_transaction_id = transaction1->get_id();
+        last_changed_version = transaction1->get_next_sequence_number();
+        auto* element3 = new My_element( 43);
+        transaction0->store( tag3, element3, "foo3", 0, journal_a, 0);
+        auto* element4 = new My_element( 44);
+        transaction1->store( tag4, element4, "foo4", 0, journal_a, 0);
+    }
+    db.dump();
+
+    {
+        // Query from transaction 1. The change for tag1 is not yet visible to this transaction.
+        auto result = transaction1->get_journal(
+            last_changed_transaction_id, last_changed_version, journal_a, /*lookup_parents*/ false);
+        MI_CHECK( result);
+        MI_CHECK_EQUAL( result->size(), 1);
+        DB::Journal_query_result expected { { tag4, journal_a } };
+        MI_CHECK( *result.get() == expected);
+    }
+
+    transaction0->commit();
+    transaction1->commit();
+    db.dump();
+    DB::Transaction_ptr transaction2 = db.m_global_scope->start_transaction();
+
+    {
+        // Query from transaction 2. This includes *both* changes from transaction 0. The first one
+        // happened "in time" before the query begin, but became only visible afterwards.
+        auto result = transaction2->get_journal(
+            last_changed_transaction_id, last_changed_version, journal_a, /*lookup_parents*/ false);
+        MI_CHECK( result);
+        MI_CHECK_EQUAL( result->size(), 3);
+        std::sort( result->begin(), result->end(), Journal_query_result_cmp);
+        DB::Journal_query_result expected {
+            { tag1, journal_a }, { tag3, journal_a }, { tag4, journal_a } };
+        MI_CHECK( *result.get() == expected);
+    }
+
+    transaction2->commit();
+}
+
+void test_journal_query_disabled()
+{
+    Test_db db( __func__, /*compare*/ false, /*enable_journal*/ false);
+
+    DB::Transaction_ptr transaction = db.m_global_scope->start_transaction();
+    auto result = transaction->get_journal(
+        transaction->get_id(), 0, DB::JOURNAL_ALL, /*lookup_parents*/ false);
+    transaction->commit();
+}
+
+void test_journal_pruning()
+{
+    SYSTEM::Access_module<CONFIG::Config_module> config_module( false);
+    config_module->override( "dblight_journal_max_size=2");
+
+    Test_db db( __func__, /*compare*/ true, /*enable_journal*/ true);
+    const auto* scope_impl = static_cast<DBLIGHT::Scope_impl*>( db.m_global_scope);
+
+    // Creates n elements in the global scope.
+    auto create_elements = [&db]( size_t n) {
+        DB::Transaction_ptr transaction = db.m_global_scope->start_transaction();
+        for( size_t i = 0; i < n; ++i) {
+            DB::Tag tag = transaction->reserve_tag();
+            auto* element = new My_element( 42);
+            transaction->store( tag, element, nullptr, 0, journal_a, 0);
+        }
+        transaction->commit();
+    };
+
+    // Fill the scope journal with two elements.
+    create_elements( 2);
+    db.dump();
+    MI_CHECK_EQUAL( scope_impl->get_journal().size(), 2);
+
+    // Add another element, pruning the first one.
+    create_elements( 1);
+    db.dump();
+    MI_CHECK_EQUAL( scope_impl->get_journal().size(), 2);
+
+    // Add two more elements, pruning all others, scope journal still non-empty.
+    create_elements( 2);
+    db.dump();
+    MI_CHECK_EQUAL( scope_impl->get_journal().size(), 2);
+
+    // Add three more elements, exceeding max size, scope journal cleared.
+    create_elements( 3);
+    db.dump();
+    MI_CHECK_EQUAL( scope_impl->get_journal().size(), 0);
+
+    config_module->override( "dblight_journal_max_size=10000000");
+}
+
+void test_commit_abort_blocking()
+{
+    Test_db db( __func__, /*compare*/ false);
+    DB::Transaction_ptr transaction = db.m_global_scope->start_transaction();
+
+    bool success = false;
+
+    {
+        // block/unblock with open transaction
+        bool success = transaction->block_commit_or_abort();
+        MI_CHECK( success);
+        success = transaction->block_commit_or_abort();
+        MI_CHECK( success);
+        success = transaction->unblock_commit_or_abort();
+        MI_CHECK( success);
+        success = transaction->unblock_commit_or_abort();
+        MI_CHECK( success);
+#ifdef NDEBUG
+        // Triggers assertion in front of the check.
+        success = transaction->unblock_commit_or_abort();
+        MI_CHECK( !success);
+#endif
+    }
+    {
+        // commit while unblocked
+        transaction->commit();
+    }
+    {
+        // block/unblock with closed transaction
+        success = transaction->block_commit_or_abort();
+        MI_CHECK( !success);
+        success = transaction->unblock_commit_or_abort();
+        MI_CHECK( !success);
+    }
+    {
+        // abort while unblocked
+        transaction = db.m_global_scope->start_transaction();
+        transaction->abort();
+    }
+    {
+        // block/unblock with aborted transaction
+        success = transaction->block_commit_or_abort();
+        MI_CHECK( !success);
+        success = transaction->unblock_commit_or_abort();
+        MI_CHECK( !success);
+    }
+    {
+        transaction = db.m_global_scope->start_transaction();
+
+        // block twice
+        success = transaction->block_commit_or_abort();
+        MI_CHECK( success);
+        success = transaction->block_commit_or_abort();
+        MI_CHECK( success);
+
+        // second thread that unblocks twice when CLOSING state has been reached
+        using namespace std::chrono_literals;
+        std::thread thread([&transaction]() {
+            // sleep until commit() actually started, i.e., the CLOSING state has been reached
+            while( transaction->is_open( /*closing_is_open*/ false))
+                std::this_thread::sleep_for( 1ms);
+            // try to block again in CLOSING state (fails)
+            bool success2 = transaction->block_commit_or_abort();
+            MI_CHECK( !success2);
+            // unblock twice
+            success2 = transaction->unblock_commit_or_abort();
+            MI_CHECK( success2);
+            success2 = transaction->unblock_commit_or_abort();
+            MI_CHECK( success2);
+        });
+
+        // commit while blocked
+        transaction->commit();
+        thread.join();
+    }
+    {
+        transaction = db.m_global_scope->start_transaction();
+
+        // block twice
+        success = transaction->block_commit_or_abort();
+        MI_CHECK( success);
+        success = transaction->block_commit_or_abort();
+        MI_CHECK( success);
+
+        // second thread that unblocks twice when CLOSING state has been reached
+        using namespace std::chrono_literals;
+        std::thread thread([&transaction]() {
+            // sleep until commit() actually started, i.e., the CLOSING state has been reached
+            while( transaction->is_open( /*closing_is_open*/ false))
+                std::this_thread::sleep_for( 1ms);
+            // try to block again in CLOSING state (fails)
+            bool success2 = transaction->block_commit_or_abort();
+            MI_CHECK( !success2);
+            // unblock twice
+            success2 = transaction->unblock_commit_or_abort();
+            MI_CHECK( success2);
+            success2 = transaction->unblock_commit_or_abort();
+            MI_CHECK( success2);
+        });
+
+        // abort while blocked
+        transaction->abort();
+        thread.join();
+    }
 }
 
 void test_dump_with_pointers()
@@ -2317,6 +3290,8 @@ void test_dump_with_pointers()
 
 void test_wrong_privacy_levels()
 {
+    // Note that the expected error messages are not part of the dump file.
+
     Test_db db( __func__);
 
     DB::Scope* scope1 = db.m_global_scope->create_child( 10);
@@ -2357,6 +3332,112 @@ void test_wrong_privacy_levels()
     transaction->commit();
 }
 
+void test_reference_cycles1()
+{
+#ifdef NDEBUG
+    // Note that the expected error messages are not part of the dump file.
+
+    Test_db db( __func__);
+
+    DB::Transaction_ptr transaction = db.m_global_scope->start_transaction();
+    auto* element1 = new My_element( 42);
+    DB::Tag tag1 = transaction->store( element1, "foo1");
+    db.dump();
+
+    // Create a reference cycle within tag1. Triggers an error message if the
+    // reference cycle check is enabled.
+    auto* element2 = new My_element( 43, {tag1});
+    transaction->store( tag1, element2, "foo1");
+    db.dump();
+
+    // Remove reference cycle again and commit transaction to get rid of the problematic version.
+    auto* element3 = new My_element( 44);
+    transaction->store( tag1, element3, "foo1");
+    transaction->commit();
+    db.dump();
+
+    // Reference cycles via edits only tested with 2 elements.
+#else
+    // Self-references trigger an assertion in debug mode.
+#endif
+}
+
+void test_reference_cycles2()
+{
+    // Note that the expected error messages are not part of the dump file.
+
+    Test_db db( __func__);
+
+    DB::Transaction_ptr transaction = db.m_global_scope->start_transaction();
+    auto* element1 = new My_element( 42);
+    DB::Tag tag1 = transaction->store( element1, "foo1");
+    auto* element2 = new My_element( 43, {tag1});
+    DB::Tag tag2 = transaction->store( element2, "foo2");
+    db.dump();
+
+    // Create a reference cycle between tag1 and tag2. Triggers an error message if the
+    // reference cycle check is enabled.
+    auto* element3 = new My_element( 44, {tag2});
+    transaction->store( tag1, element3, "foo1");
+    db.dump();
+
+    // Remove reference cycle again and commit transaction to get rid of the problematic version.
+    auto* element4 = new My_element( 45);
+    transaction->store( tag1, element4, "foo1");
+    transaction->commit();
+    db.dump();
+
+    transaction = db.m_global_scope->start_transaction();
+
+    {
+        // Create a reference cycle between tag1 and tag2. Triggers an error message if the
+        // reference cycle check is enabled.
+        DB::Edit<My_element> edit( tag1, transaction.get());
+        edit->set_tag_set( {tag2});
+    }
+    db.dump();
+
+    {
+        // Remove reference cycle again.
+        DB::Edit<My_element> edit( tag1, transaction.get());
+        edit->set_tag_set( {});
+    }
+
+    // Commit transaction to get rid of the problematic version.
+    transaction->commit();
+    db.dump();
+}
+
+void test_reference_cycles3()
+{
+    // Note that the expected error messages are not part of the dump file.
+
+    Test_db db( __func__);
+
+    DB::Transaction_ptr transaction = db.m_global_scope->start_transaction();
+    auto* element1 = new My_element( 42);
+    DB::Tag tag1 = transaction->store( element1, "foo1");
+    auto* element2 = new My_element( 43, {tag1});
+    DB::Tag tag2 = transaction->store( element2, "foo2");
+    auto* element3 = new My_element( 44, {tag2});
+    DB::Tag tag3 = transaction->store( element3, "foo3");
+    db.dump();
+
+    // Create a reference cycle between tag1, tag2, and tag3. Triggers an error message if the
+    // reference cycle check is enabled.
+    auto* element4 = new My_element( 45, {tag3});
+    transaction->store( tag1, element4, "foo1");
+    db.dump();
+
+    // Remove reference cycle again and commit transaction to get rid of the problematic version.
+    auto* element5 = new My_element( 46);
+    transaction->store( tag1, element5, "foo1");
+    transaction->commit();
+    db.dump();
+
+    // Reference cycles via edits only tested with 2 elements.
+}
+
 void test_not_implemented_with_assertions()
 {
     Test_db db( __func__, /*compare*/ false); // Empty dump
@@ -2366,43 +3447,23 @@ void test_not_implemented_with_assertions()
     MI_CHECK( !result);
     db.m_db->check_is_locked( 42);
 
-    MI_CHECK_EQUAL( db.m_db->set_memory_limits( 1000, 2000), -1);
-    size_t low_water = 1;
-    size_t high_water = 1;
-    db.m_db->get_memory_limits( low_water, high_water);
-    MI_CHECK_EQUAL( low_water, 0);
-    MI_CHECK_EQUAL( high_water, 0);
-
-    // artificial test arguments
-    db.m_db->register_status_listener( nullptr);
-    db.m_db->unregister_status_listener( nullptr);
-    db.m_db->register_transaction_listener( nullptr);
-    db.m_db->unregister_transaction_listener( nullptr);
-    db.m_db->register_scope_listener( nullptr);
-    db.m_db->unregister_scope_listener( nullptr);
-
     DB::Transaction_ptr transaction = db.m_global_scope->start_transaction();
 
-    result = transaction->block_commit_or_abort();
-    MI_CHECK( !result);
-    result = transaction->unblock_commit_or_abort();
-    MI_CHECK( !result);
     // artificial test arguments
-    DB::Tag tag_job = transaction->store( static_cast<SCHED::Job*>( nullptr));
+    DB::Tag tag_job = transaction->store( static_cast<SCHED::Job_base*>( nullptr));
     MI_CHECK( !tag_job);
     // artificial test arguments
-    transaction->store( DB::Tag(), static_cast<SCHED::Job*>( nullptr));
+    transaction->store( DB::Tag(), static_cast<SCHED::Job_base*>( nullptr));
     // artificial test arguments
-    tag_job = transaction->store_for_reference_counting( static_cast<SCHED::Job*>( nullptr));
+    tag_job = transaction->store_for_reference_counting( static_cast<SCHED::Job_base*>( nullptr));
     MI_CHECK( !tag_job);
     // artificial test arguments
-    transaction->store_for_reference_counting( DB::Tag(), static_cast<SCHED::Job*>( nullptr));
-    auto journal = transaction->get_journal(
-        DB::Transaction_id( 0), 0, DB::JOURNAL_ALL, /*lookup_parents*/ false);
-    MI_CHECK( !journal);
-    transaction->cancel_fragmented_jobs();
+    transaction->store_for_reference_counting( DB::Tag(), static_cast<SCHED::Job_base*>( nullptr));
     transaction->invalidate_job_results( tag_job);
     transaction->advise( tag_job);
+
+    transaction->cancel_fragmented_jobs();
+
     DB::Element_base* base = transaction->construct_empty_element( My_element::id);
     MI_CHECK( !base);
 
@@ -2486,9 +3547,28 @@ void test( const char* explicit_gc_method)
     test_fragmented_jobs_without_transaction_async();
     test_fragmented_jobs_with_transaction();
     test_fragmented_jobs_with_transaction_async();
+    test_fragmented_jobs_cancelling();
+
+    test_transaction_listeners();
+    test_scope_listeners();
+    test_memory_limits();
+
+    test_journal_recording_store_with_tag();
+    test_journal_recording_store_without_tag();
+    test_journal_recording_edit();
+    test_journal_recording_abort();
+    test_journal_query();
+    test_journal_query_parallel();
+    test_journal_query_disabled();
+    test_journal_pruning();
+
+    test_commit_abort_blocking();
 
     test_dump_with_pointers();
     test_wrong_privacy_levels();
+    test_reference_cycles1();
+    test_reference_cycles2();
+    test_reference_cycles3();
 #ifdef NDEBUG
     test_not_implemented_with_assertions();
 #endif // NDEBUG
@@ -2499,9 +3579,16 @@ MI_TEST_AUTO_FUNCTION( test_dblight )
     SYSTEM::Access_module<LOG::Log_module> log_module( false);
     SYSTEM::Access_module<CONFIG::Config_module> config_module( false);
 
+    // For the debug messages emitted by test_fragmented_jobs_cancelling() and
+    // test_commit_abort_blocking().
+    log_module->set_severity_limit( LOG::ILogger::S_ALL);
+    log_module->set_severity_by_category( LOG::ILogger::C_DATABASE, LOG::ILogger::S_ALL);
+
     config_module->override( "check_serializer_store=1");
     config_module->override( "check_serializer_edit=1");
     config_module->override( "check_privacy_levels=1");
+    config_module->override( "check_reference_cycles_store=1");
+    config_module->override( "check_reference_cycles_edit=1");
 
     test_info_base();
 

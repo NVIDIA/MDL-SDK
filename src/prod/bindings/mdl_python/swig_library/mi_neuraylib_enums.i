@@ -19,7 +19,7 @@
 %extend SmartPtr< mi::neuraylib::INeuray > {
     %pythoncode {
 
-        @post_swig_add_type_hint_mapping("mi::neuraylib::INeuray::Status", "INeuray.Status")
+        @_post_swig_add_type_hint_mapping("mi::neuraylib::INeuray::Status", "INeuray.Status")
         class Status(Enum):
             r""" The operational status of the library."""
 
@@ -51,7 +51,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, INeuray, get_status, INeuray.Status)
 // ----------------------------------------------------------------------------
 %pythoncode {
 
-    @post_swig_add_type_hint_mapping("mi::neuraylib::Mdl_version", "Mdl_version")
+    @_post_swig_add_type_hint_mapping("mi::neuraylib::Mdl_version", "Mdl_version")
     class Mdl_version(Enum):
         r""" The MDL version."""
 
@@ -158,7 +158,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, IMessage, get_severity, Message_severity)
 
 %pythoncode{
 
-    @post_swig_add_type_hint_mapping("mi::neuraylib::Material_slot", "Material_slot")
+    @_post_swig_add_type_hint_mapping("mi::neuraylib::Material_slot", "Material_slot")
     class Material_slot(Enum):
         r"""
         Material slots identify parts of a compiled material.
@@ -223,7 +223,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, IMessage, get_severity, Message_severity)
 
 %pythoncode{
 
-    @post_swig_add_type_hint_mapping("mi::neuraylib::Material_opacity", "Material_opacity")
+    @_post_swig_add_type_hint_mapping("mi::neuraylib::Material_opacity", "Material_opacity")
     class Material_opacity(Enum):
         r"""
         The compiled material's opacity.
@@ -254,7 +254,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, ICompiled_material, get_surface_opacity, Materia
 
 %pythoncode {
 
-    @post_swig_add_type_hint_mapping("mi::neuraylib::Uvtile_mode", "Uvtile_mode")
+    @_post_swig_add_type_hint_mapping("mi::neuraylib::Uvtile_mode", "Uvtile_mode")
     class Uvtile_mode(Enum):
         r"""
         Supported uvtile modes for resources.
@@ -290,7 +290,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, IMdl_resolved_resource, get_uvtile_mode, Uvtile_
 %extend SmartPtr<mi::neuraylib::IExpression> {
     %pythoncode{
 
-        @post_swig_add_type_hint_mapping("mi::neuraylib::IExpression::Kind", "IExpression.Kind")
+        @_post_swig_add_type_hint_mapping("mi::neuraylib::IExpression::Kind", "IExpression.Kind")
         class Kind(Enum) :
             r"""The possible kinds of expressions."""
 
@@ -327,7 +327,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, IExpression_temporary, get_kind, IExpression.Kin
 %extend SmartPtr<mi::neuraylib::IExpression_factory> {
     %pythoncode{
 
-        @post_swig_add_type_hint_mapping("mi::neuraylib::IExpression_factory::Comparison_options", "IExpression_factory.Comparison_options")
+        @_post_swig_add_type_hint_mapping("mi::neuraylib::IExpression_factory::Comparison_options", "IExpression_factory.Comparison_options")
         class Comparison_options(Enum) :
             r"""
             Various options for the comparison of expressions or expression lists.
@@ -373,7 +373,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, IExpression_temporary, get_kind, IExpression.Kin
 %extend SmartPtr<mi::neuraylib::IMaterial_instance> {
     %pythoncode{
 
-        @post_swig_add_type_hint_mapping("mi::neuraylib::IMaterial_instance::Compilation_options", "IMaterial_instance.Compilation_options")
+        @_post_swig_add_type_hint_mapping("mi::neuraylib::IMaterial_instance::Compilation_options", "IMaterial_instance.Compilation_options")
         class Compilation_options(Enum) :
             r"""Various options for the creation of compiled materials."""
 
@@ -400,7 +400,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, IExpression_temporary, get_kind, IExpression.Kin
 %extend SmartPtr<mi::neuraylib::IDatabase> {
     %pythoncode{
 
-        @post_swig_add_type_hint_mapping("mi::neuraylib::Garbage_collection_priority::Garbage_collection_priority", "Garbage_collection_priority.Garbage_collection_priority")
+        @_post_swig_add_type_hint_mapping("mi::neuraylib::Garbage_collection_priority::Garbage_collection_priority", "Garbage_collection_priority.Garbage_collection_priority")
         class Garbage_collection_priority(Enum) :
             r"""Priorities for synchronous garbage collection runs."""
 
@@ -447,7 +447,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, IExpression_temporary, get_kind, IExpression.Kin
 %extend SmartPtr<mi::neuraylib::IMessage> {
     %pythoncode{
 
-        @post_swig_add_type_hint_mapping("mi::neuraylib::IMessage::Kind", "IMessage.Kind")
+        @_post_swig_add_type_hint_mapping("mi::neuraylib::IMessage::Kind", "IMessage.Kind")
         class Kind(Enum) :
             r"""
             The possible kinds of messages.
@@ -488,7 +488,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, IMessage, get_kind, IMessage.Kind)
 // We manually define the enums
 %pythoncode{
 
-    @post_swig_add_type_hint_mapping("mi::neuraylib::Element_type", "Element_type")
+    @_post_swig_add_type_hint_mapping("mi::neuraylib::Element_type", "Element_type")
     class Element_type(Enum):
         r"""Distinguishes scene elements. See #mi::neuraylib::IScene_element::get_element_type()."""
 
@@ -576,7 +576,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, ITexture, get_element_type, Element_type)
 %extend SmartPtr<mi::neuraylib::IFunction_definition> {
     %pythoncode{
 
-        @post_swig_add_type_hint_mapping("mi::neuraylib::IFunction_definition::Semantics", "IFunction_definition.Semantics")
+        @_post_swig_add_type_hint_mapping("mi::neuraylib::IFunction_definition::Semantics", "IFunction_definition.Semantics")
         class Semantics(Enum):
             r"""
             All known semantics of functions definitions.
@@ -1085,7 +1085,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, IFunction_definition, get_semantic, IFunction_de
 %extend SmartPtr<mi::neuraylib::IAnnotation_definition> {
     %pythoncode{
 
-        @post_swig_add_type_hint_mapping("mi::neuraylib::IAnnotation_definition::Semantics", "IAnnotation_definition.Semantics")
+        @_post_swig_add_type_hint_mapping("mi::neuraylib::IAnnotation_definition::Semantics", "IAnnotation_definition.Semantics")
         class Semantics(Enum) :
             r"""
             All known semantics of annotation definitions.
@@ -1177,7 +1177,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, IAnnotation_definition, get_semantic, IAnnotatio
 %extend SmartPtr<mi::neuraylib::IType> {
     %pythoncode{
 
-        @post_swig_add_type_hint_mapping("mi::neuraylib::IType::Kind", "IType.Kind")
+        @_post_swig_add_type_hint_mapping("mi::neuraylib::IType::Kind", "IType.Kind")
         class Kind(Enum):
             r"""The possible kinds of types."""
 
@@ -1221,7 +1221,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, IAnnotation_definition, get_semantic, IAnnotatio
             r""" The ``vdf`` type. See #mi::neuraylib::IType_vdf."""
             TK_FORCE_32_BIT = _pymdlsdk._IType_TK_FORCE_32_BIT
 
-        @post_swig_add_type_hint_mapping("mi::neuraylib::IType::Modifier", "IType.Modifier")
+        @_post_swig_add_type_hint_mapping("mi::neuraylib::IType::Modifier", "IType.Modifier")
         class Modifier(Enum):
             r"""The possible kinds of type modifiers."""
 
@@ -1282,7 +1282,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, IMdl_configuration, get_material_ior_frequency, 
 %extend SmartPtr<mi::neuraylib::IType_texture> {
     %pythoncode{
 
-        @post_swig_add_type_hint_mapping("mi::neuraylib::IType_texture::Shape", "IType_texture.Shape")
+        @_post_swig_add_type_hint_mapping("mi::neuraylib::IType_texture::Shape", "IType_texture.Shape")
         class Shape(Enum):
             r"""The possible texture shapes."""
 
@@ -1319,7 +1319,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, IType_texture, get_shape, IType_texture.Shape)
 %extend SmartPtr<mi::neuraylib::IStruct_category> {
     %pythoncode{
 
-        @post_swig_add_type_hint_mapping("mi::neuraylib::IStruct_category::Predefined_id", "IStruct_category.Predefined_id")
+        @_post_swig_add_type_hint_mapping("mi::neuraylib::IStruct_category::Predefined_id", "IStruct_category.Predefined_id")
         class Predefined_id(Enum) :
             r"""Identifiers of struct categories."""
 
@@ -1347,7 +1347,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, IStruct_category, get_predefined_id, IStruct_cat
 %extend SmartPtr<mi::neuraylib::IType_enumeration> {
     %pythoncode{
 
-        @post_swig_add_type_hint_mapping("mi::neuraylib::IType_enumeration::Predefined_id", "IType_enumeration.Predefined_id")
+        @_post_swig_add_type_hint_mapping("mi::neuraylib::IType_enumeration::Predefined_id", "IType_enumeration.Predefined_id")
         class Predefined_id(Enum):
             r"""TIDs to distinguish predefined enum types."""
 
@@ -1378,7 +1378,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, IType_enumeration, get_predefined_id, IType_enum
 %extend SmartPtr<mi::neuraylib::IType_structure> {
     %pythoncode{
 
-        @post_swig_add_type_hint_mapping("mi::neuraylib::IType_structure::Predefined_id", "IType_structure.Predefined_id")
+        @_post_swig_add_type_hint_mapping("mi::neuraylib::IType_structure::Predefined_id", "IType_structure.Predefined_id")
         class Predefined_id(Enum) :
             r"""TIDs to distinguish predefined struct types."""
 
@@ -1414,7 +1414,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, IType_structure, get_predefined_id, IType_struct
 %extend SmartPtr<mi::neuraylib::IValue> {
     %pythoncode{
 
-        @post_swig_add_type_hint_mapping("mi::neuraylib::IValue::Kind", "IValue.Kind")
+        @_post_swig_add_type_hint_mapping("mi::neuraylib::IValue::Kind", "IValue.Kind")
         class Kind(Enum) :
             r"""The possible kinds of values."""
 
@@ -1485,7 +1485,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, IValue_resource, get_kind, IValue.Kind)
 
 %pythoncode{
 
-    @post_swig_add_type_hint_mapping("mi::neuraylib::Lightprofile_flags", "Lightprofile_flags")
+    @_post_swig_add_type_hint_mapping("mi::neuraylib::Lightprofile_flags", "Lightprofile_flags")
     class Lightprofile_flags(Enum):
         r"""
         Ordering of horizontal angles in a light profile
@@ -1526,7 +1526,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, ILightprofile, get_flags, Lightprofile_flags)
 
 %pythoncode{
 
-    @post_swig_add_type_hint_mapping("mi::neuraylib::Lightprofile_degree", "Lightprofile_degree")
+    @_post_swig_add_type_hint_mapping("mi::neuraylib::Lightprofile_degree", "Lightprofile_degree")
     class Lightprofile_degree(Enum):
         r"""
         Degree of hermite interpolation.
@@ -1583,7 +1583,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, ILightprofile, get_degree, Lightprofile_degree)
 
 %pythoncode{
 
-    @post_swig_add_type_hint_mapping("mi::neuraylib::Texture_compression", "Texture_compression")
+    @_post_swig_add_type_hint_mapping("mi::neuraylib::Texture_compression", "Texture_compression")
     class Texture_compression(Enum):
         r"""Texture compression method."""
 
@@ -1612,7 +1612,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, ITexture, get_compression, Texture_compression)
 
 %pythoncode {
 
-    @post_swig_add_type_hint_mapping("mi::neuraylib::Filter_type", "Filter_type")
+    @_post_swig_add_type_hint_mapping("mi::neuraylib::Filter_type", "Filter_type")
     class Filter_type(Enum):
         r"""
         Supported filter types.
@@ -1649,7 +1649,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, ITexture, get_compression, Texture_compression)
 
 %pythoncode {
 
-    @post_swig_add_type_hint_mapping("mi::neuraylib::Baker_resource", "Baker_resource")
+    @_post_swig_add_type_hint_mapping("mi::neuraylib::Baker_resource", "Baker_resource")
     class Baker_resource(Enum):
         r"""
         Identifies the resource(s) to be used by a baker.
@@ -1687,7 +1687,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, ITexture, get_compression, Texture_compression)
 
 %pythoncode {
 
-    @post_swig_add_type_hint_mapping("mi::neuraylib::Mdl_repair_options", "Mdl_repair_options")
+    @_post_swig_add_type_hint_mapping("mi::neuraylib::Mdl_repair_options", "Mdl_repair_options")
     class Mdl_repair_options(Enum):
         r"""
         Options for repairing function calls.
@@ -1717,7 +1717,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, ITexture, get_compression, Texture_compression)
 
 %pythoncode{
 
-    @post_swig_add_type_hint_mapping("mi::neuraylib::Bsdf_type", "Bsdf_type")
+    @_post_swig_add_type_hint_mapping("mi::neuraylib::Bsdf_type", "Bsdf_type")
     class Bsdf_type(Enum) :
         r"""The BSDF type."""
 

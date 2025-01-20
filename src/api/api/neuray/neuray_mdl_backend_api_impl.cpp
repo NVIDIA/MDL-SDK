@@ -104,6 +104,10 @@ static mi::mdl::IValue_texture::Bsdf_data_kind convert_df_data_kind(
         return mi::mdl::IValue_texture::BDK_GGX_VC_MULTISCATTER;
     case mi::neuraylib::DFK_SHEEN_MULTISCATTER:
         return mi::mdl::IValue_texture::BDK_SHEEN_MULTISCATTER;
+    case mi::neuraylib::DFK_MICROFLAKE_SHEEN_GENERAL:
+        return mi::mdl::IValue_texture::BDK_MICROFLAKE_SHEEN_GENERAL;
+    case mi::neuraylib::DFK_MICROFLAKE_SHEEN_MULTISCATTER:
+        return mi::mdl::IValue_texture::BDK_MICROFLAKE_SHEEN_MULTISCATTER;
     case mi::neuraylib::DFK_SIMPLE_GLOSSY_MULTISCATTER:
         return mi::mdl::IValue_texture::BDK_SIMPLE_GLOSSY_MULTISCATTER;
     case mi::neuraylib::DFK_WARD_GEISLER_MORODER_MULTISCATTER:
@@ -118,12 +122,13 @@ const Float32* Mdl_backend_api_impl::get_df_data_texture(
         mi::neuraylib::Df_data_kind kind,
         mi::Size &rx,
         mi::Size &ry,
-        mi::Size &rz) const
+        mi::Size &rz,
+        const char *&pixel_type) const
 {
     mi::mdl::IValue_texture::Bsdf_data_kind data_kind = convert_df_data_kind(kind);
     if (data_kind == mi::mdl::IValue_texture::BDK_NONE)
         return nullptr;
-    return BACKENDS::Target_code::get_df_data_texture(data_kind, rx, ry, rz);
+    return BACKENDS::Target_code::get_df_data_texture(data_kind, rx, ry, rz, pixel_type);
 }
 
 mi::Sint32 Mdl_backend_api_impl::start()

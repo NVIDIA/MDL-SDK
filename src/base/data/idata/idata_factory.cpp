@@ -1222,7 +1222,7 @@ mi::Uint32 Factory::assign_from_to(
         return 0;
     }
 
-    // deep assignment, source has NULL pointer
+    // deep assignment, source has nullptr
     mi::base::Handle<mi::base::IInterface> source_pointer( source->get_pointer());
     if( !source_pointer) {
         target->set_pointer( nullptr);
@@ -1234,7 +1234,7 @@ mi::Uint32 Factory::assign_from_to(
     if( !source_pointer_data)
         return mi::neuraylib::IFactory::NON_IDATA_VALUES;
 
-    // deep assignment, target has NULL pointer
+    // deep assignment, target has nullptr
     mi::base::Handle<mi::base::IInterface> target_pointer( target->get_pointer());
     if( !target_pointer)
         return mi::neuraylib::IFactory::NULL_POINTER;
@@ -1257,7 +1257,7 @@ mi::Uint32 Factory::assign_from_to(
     if( (options & mi::neuraylib::IFactory::DEEP_ASSIGNMENT_OR_CLONE) == 0)
         return mi::neuraylib::IFactory::INCOMPATIBLE_POINTER_TYPES;
 
-    // deep assignment, source has NULL pointer
+    // deep assignment, source has nullptr
     mi::base::Handle<const mi::base::IInterface> source_pointer( source->get_pointer());
     if( !source_pointer) {
         target->set_pointer( nullptr);
@@ -1269,7 +1269,7 @@ mi::Uint32 Factory::assign_from_to(
     if( !source_pointer_data)
         return mi::neuraylib::IFactory::NON_IDATA_VALUES;
 
-    // deep assignment, target has NULL pointer
+    // deep assignment, target has nullptr
     mi::base::Handle<mi::base::IInterface> target_pointer( target->get_pointer());
     if( !target_pointer)
         return mi::neuraylib::IFactory::NULL_POINTER;
@@ -1409,12 +1409,12 @@ mi::IPointer* Factory::clone( const mi::IPointer* source, mi::Uint32 options)
         return target;
     }
 
-    // deep clone, NULL pointer
+    // deep clone, nullptr
     mi::base::Handle<mi::base::IInterface> source_pointer( source->get_pointer());
     if( !source_pointer)
         return create<mi::IPointer>( /*transaction*/ nullptr, source_type_name);
 
-    // deep clone, non-NULL pointer
+    // deep clone, non-nullptr
     mi::base::Handle source_pointer_data( source->get_pointer<mi::IData>());
     if( !source_pointer_data)
         return nullptr;
@@ -1450,12 +1450,12 @@ mi::IConst_pointer* Factory::clone( const mi::IConst_pointer* source, mi::Uint32
         return target;
     }
 
-    // deep clone, NULL pointer
+    // deep clone, nullptr
     mi::base::Handle<const mi::base::IInterface> source_pointer( source->get_pointer());
     if( !source_pointer)
         return create<mi::IConst_pointer>( /*transaction*/ nullptr, source_type_name);
 
-    // deep clone, non-NULL pointer
+    // deep clone, non-nullptr
     mi::base::Handle source_pointer_data( source->get_pointer<mi::IData>());
     if( !source_pointer_data)
         return nullptr;
@@ -1825,7 +1825,7 @@ mi::Sint32 Factory::compare( const mi::IPointer* lhs, const mi::IPointer* rhs)
     mi::base::Handle<const mi::base::IInterface> lhs_interface( lhs->get_pointer());
     mi::base::Handle<const mi::base::IInterface> rhs_interface( rhs->get_pointer());
 
-    // if at least one of the pointers is \c NULL compare the interface pointers
+    // if at least one of the pointers is \c nullptr compare the interface pointers
     if( !lhs_interface || !rhs_interface) {
         if( !lhs_interface ||  rhs_interface) return -1;
         if(  lhs_interface || !rhs_interface) return +1;
@@ -1853,7 +1853,7 @@ mi::Sint32 Factory::compare( const mi::IConst_pointer* lhs, const mi::IConst_poi
     mi::base::Handle<const mi::base::IInterface> lhs_interface( lhs->get_pointer());
     mi::base::Handle<const mi::base::IInterface> rhs_interface( rhs->get_pointer());
 
-    // if at least one of the pointers is \c NULL compare the interface pointers
+    // if at least one of the pointers is \c nullptr compare the interface pointers
     if( !lhs_interface || !rhs_interface) {
         if( !lhs_interface ||  rhs_interface) return -1;
         if(  lhs_interface || !rhs_interface) return +1;

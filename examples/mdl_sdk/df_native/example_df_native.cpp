@@ -38,25 +38,33 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <list>
 
 #include "example_shared.h"
 #include "texture_support_native.h"
-
-#include <GL/glew.h>
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
-#define GL_DISPLAY_NATIVE
-#include <utils/gl_display.h>
 
 #if MI_PLATFORM_MACOSX
 #include <sys/types.h>
 #include <sys/sysctl.h>
 #endif
 
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+
+#define GL_DISPLAY_NATIVE
+#include "utils/gl_display.h"
 #include "utils/profiling.h"
+
 using namespace mi::examples::profiling;
 
-#define USE_PARALLEL_RENDERING
+#define terminate()          \
+    do {                     \
+        glfwTerminate();     \
+        exit_failure();      \
+    } while (0)
+
+#define WINDOW_TITLE "MDL SDK df_native Example"
+
 //#define ADD_EXTRA_TIMERS
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -274,6 +282,389 @@ struct Window_context
     }
 };
 
+// Possible enum values if any.
+struct Enum_value
+{
+    std::string name;
+    int         value;
+
+    Enum_value(const std::string& name, int value)
+        : name(name), value(value)
+    {
+    }
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// Material arguments information
+///////////////////////////////////////////////////////////////////////////////
+
+// Info for an enum type.
+struct Enum_type_info
+{
+    std::vector<Enum_value> values;
+
+    // Adds a enum value and its integer value to the enum type info.
+    void add(const std::string& name, int value)
+    {
+        values.push_back(Enum_value(name, value));
+    }
+};
+
+// Material parameter information structure.
+class Param_info
+{
+public:
+    enum Param_kind
+    {
+        PK_UNKNOWN,
+        PK_FLOAT,
+        PK_FLOAT2,
+        PK_FLOAT3,
+        PK_COLOR,
+        PK_ARRAY,
+        PK_BOOL,
+        PK_INT,
+        PK_ENUM,
+        PK_STRING,
+        PK_TEXTURE,
+        PK_LIGHT_PROFILE,
+        PK_BSDF_MEASUREMENT
+    };
+
+    Param_info(
+        mi::Size index,
+        char const* name,
+        char const* display_name,
+        char const* group_name,
+        Param_kind kind,
+        Param_kind array_elem_kind,
+        mi::Size   array_size,
+        mi::Size   array_pitch,
+        char* data_ptr,
+        const Enum_type_info* enum_info = nullptr)
+        : m_index(index)
+        , m_name(name)
+        , m_display_name(display_name)
+        , m_group_name(group_name)
+        , m_kind(kind)
+        , m_array_elem_kind(array_elem_kind)
+        , m_array_size(array_size)
+        , m_array_pitch(array_pitch)
+        , m_data_ptr(data_ptr)
+        , m_range_min(-100), m_range_max(100)
+        , m_enum_info(enum_info)
+    {
+    }
+
+    // Get data as T&.
+    template<typename T>
+    T& data() { return *reinterpret_cast<T*>(m_data_ptr); }
+
+    // Get data as const T&.
+    template<typename T>
+    const T& data() const { return *reinterpret_cast<const T*>(m_data_ptr); }
+
+    const char*& display_name() { return m_display_name; }
+    const char* display_name() const { return m_display_name; }
+
+    const char*& group_name() { return m_group_name; }
+    const char* group_name() const { return m_group_name; }
+
+    Param_kind kind() const { return m_kind; }
+
+    Param_kind array_elem_kind() const { return m_array_elem_kind; }
+    mi::Size array_size() const { return m_array_size; }
+    mi::Size array_pitch() const { return m_array_pitch; }
+
+    float& range_min() { return m_range_min; }
+    float range_min() const { return m_range_min; }
+    float& range_max() { return m_range_max; }
+    float range_max() const { return m_range_max; }
+
+    const Enum_type_info* enum_info() const { return m_enum_info; }
+
+private:
+    mi::Size             m_index;
+    char const* m_name;
+    char const* m_display_name;
+    char const* m_group_name;
+    Param_kind           m_kind;
+    Param_kind           m_array_elem_kind;
+    mi::Size             m_array_size;
+    mi::Size             m_array_pitch;   // the distance between two array elements
+    char* m_data_ptr;
+    float                m_range_min, m_range_max;
+    const Enum_type_info* m_enum_info;
+};
+
+// Material information structure.
+class Material_info
+{
+public:
+    Material_info()
+    {}
+
+    // Add the parameter information as last entry of the corresponding group, or to the
+    // end of the list, if no group name is available.
+    void add_sorted_by_group(const Param_info& info)
+    {
+        bool group_found = false;
+        if (info.group_name() != nullptr)
+        {
+            for (std::list<Param_info>::iterator it = params().begin(); it != params().end(); ++it)
+            {
+                const bool same_group =
+                    it->group_name() != nullptr && strcmp(it->group_name(), info.group_name()) == 0;
+                if (group_found && !same_group)
+                {
+                    m_params.insert(it, info);
+                    return;
+                }
+                if (same_group)
+                    group_found = true;
+            }
+        }
+        m_params.push_back(info);
+    }
+
+    // Add a new enum type to the list of used enum types.
+    void add_enum_type(const std::string name, std::shared_ptr<Enum_type_info> enum_info)
+    {
+        enum_types[name] = enum_info;
+    }
+
+    // Lookup enum type info for a given enum type absolute MDL name.
+    const Enum_type_info* get_enum_type(const std::string name)
+    {
+        Enum_type_map::const_iterator it = enum_types.find(name);
+        if (it != enum_types.end())
+            return it->second.get();
+        return nullptr;
+    }
+
+    // Get the name of the material.
+    char const* get_name() const { return m_name.c_str(); }
+
+    // Set the name of the material.
+    void set_name(char const* name) { m_name = name; }
+
+    // Get the parameters of this material.
+    std::list<Param_info>& params() { return m_params; }
+
+private:
+    // name of the material
+    std::string m_name;
+
+    // parameters of the material
+    std::list<Param_info> m_params;
+
+    typedef std::map<std::string, std::shared_ptr<Enum_type_info> > Enum_type_map;
+
+    // used enum types of the material
+    Enum_type_map enum_types;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+// Target Code Resource Handling
+///////////////////////////////////////////////////////////////////////////////
+
+// Helper class to handle the string table of a target code.
+class String_constant_table
+{
+    typedef std::map<std::string, unsigned> String_map;
+public:
+    // Constructor.
+    String_constant_table(mi::base::Handle<mi::neuraylib::ITarget_code const> target_code)
+    {
+        get_all_strings(target_code);
+    }
+
+    // Get the ID for a given string, return 0 if the string does not exist in the table.
+    unsigned get_id_for_string(const char* name)
+    {
+        String_map::const_iterator it(m_string_constants_map.find(name));
+        if (it != m_string_constants_map.end())
+            return it->second;
+
+        // the user adds a string that is NOT in the code and we have not seen so far, add it
+        // and assign a new id
+        unsigned n_id = unsigned(m_string_constants_map.size() + 1);
+
+        m_string_constants_map[name] = n_id;
+        m_strings.reserve((n_id + 63) & ~63);
+        m_strings.push_back(name);
+
+        size_t l = strlen(name);
+        if (l > m_max_len)
+            m_max_len = l;
+        return n_id;
+    }
+
+    // Get the length of the longest string in the string constant table.
+    size_t get_max_length() const { return m_max_len; }
+
+    // Get the string for a given ID, or nullptr if this ID does not exist.
+    const char* get_string(unsigned id)
+    {
+        if (id == 0 || id - 1 >= m_strings.size())
+            return nullptr;
+        return m_strings[id - 1].c_str();
+    }
+
+private:
+    // Get all string constants used inside a target code and their maximum length.
+    void get_all_strings(
+        mi::base::Handle<mi::neuraylib::ITarget_code const> target_code)
+    {
+        m_max_len = 0;
+        // ignore the 0, it is the "Not-a-known-string" entry
+        m_strings.reserve(target_code->get_string_constant_count());
+        for (mi::Size i = 1, n = target_code->get_string_constant_count(); i < n; ++i)
+        {
+            const char* s = target_code->get_string_constant(i);
+            size_t l = strlen(s);
+            if (l > m_max_len)
+                m_max_len = l;
+            m_string_constants_map[s] = (unsigned)i;
+            m_strings.push_back(s);
+        }
+    }
+
+private:
+    String_map               m_string_constants_map;
+    std::vector<std::string> m_strings;
+    size_t                   m_max_len;
+};
+
+// Helper class to handle Resource tables of the target code.
+class Resource_table
+{
+    typedef std::map<std::string, unsigned> Resource_id_map;
+public:
+    enum Kind
+    {
+        RESOURCE_TEXTURE,
+        RESOURCE_LIGHT_PROFILE,
+        RESOURCE_BSDF_MEASUREMENT
+    };
+
+    // Constructor.
+    Resource_table(
+        mi::base::Handle<mi::neuraylib::ITarget_code const> target_code,
+        mi::base::Handle<mi::neuraylib::ITransaction>       transaction,
+        Kind                                                kind)
+        : m_max_len(0u)
+    {
+        read_resources(target_code, transaction, kind);
+    }
+
+    // Get the length of the longest URL in the resource table.
+    size_t get_max_length() const { return m_max_len; }
+
+    // Get all urls.
+    std::vector<std::string> const& get_urls() const { return m_urls; }
+
+private:
+    void read_resources(
+        mi::base::Handle<mi::neuraylib::ITarget_code const> target_code,
+        mi::base::Handle<mi::neuraylib::ITransaction>       transaction,
+        Kind                                                kind)
+    {
+        m_urls.push_back("<unset>");
+        switch (kind)
+        {
+        case RESOURCE_TEXTURE:
+            for (mi::Size i = 1, n = target_code->get_texture_count(); i < n; ++i)
+            {
+                const char* s = target_code->get_texture(i);
+                mi::base::Handle<mi::neuraylib::ITexture const> tex(
+                    transaction->access<mi::neuraylib::ITexture>(s));
+                char const* url = nullptr;
+                if (char const* img = tex->get_image())
+                {
+                    mi::base::Handle<mi::neuraylib::IImage const> image(
+                        transaction->access<mi::neuraylib::IImage>(img));
+                    url = image->get_filename(0, 0);
+                }
+                if (url == nullptr)
+                    url = s;
+                size_t l = strlen(url);
+                if (l > m_max_len)
+                    m_max_len = l;
+                m_resource_map[s] = (unsigned)i;
+                m_urls.push_back(url);
+            }
+            break;
+        case RESOURCE_LIGHT_PROFILE:
+            for (mi::Size i = 1, n = target_code->get_light_profile_count(); i < n; ++i)
+            {
+                const char* s = target_code->get_light_profile(i);
+                mi::base::Handle<mi::neuraylib::ILightprofile const> lp(
+                    transaction->access<mi::neuraylib::ILightprofile>(s));
+                char const* url = lp->get_filename();
+                if (url == nullptr)
+                    url = s;
+                size_t l = strlen(url);
+                if (l > m_max_len)
+                    m_max_len = l;
+                m_resource_map[s] = (unsigned)i;
+                m_urls.push_back(url);
+            }
+            break;
+        case RESOURCE_BSDF_MEASUREMENT:
+            for (mi::Size i = 1, n = target_code->get_bsdf_measurement_count(); i < n; ++i)
+            {
+                const char* s = target_code->get_bsdf_measurement(i);
+                mi::base::Handle<mi::neuraylib::IBsdf_measurement const> bm(
+                    transaction->access<mi::neuraylib::IBsdf_measurement>(s));
+                char const* url = bm->get_filename();
+                if (url == nullptr)
+                    url = s;
+                size_t l = strlen(url);
+                if (l > m_max_len)
+                    m_max_len = l;
+                m_resource_map[s] = (unsigned)i;
+                m_urls.push_back(url);
+            }
+            break;
+        }
+    }
+
+private:
+    Resource_id_map          m_resource_map;
+    std::vector<std::string> m_urls;
+    size_t                   m_max_len;
+};
+
+// Add a combobox for the given resource parameter to the GUI
+static bool handle_resource(
+    Param_info& param,
+    Resource_table const& res_table)
+{
+    bool changed = false;
+    std::vector<std::string> const& urls = res_table.get_urls();
+    int id = param.data<int>();
+    std::string cur_url = urls[id];
+
+    if (ImGui::BeginCombo(param.display_name(), cur_url.c_str()))
+    {
+        for (size_t i = 0, n = urls.size(); i < n; ++i)
+        {
+            const std::string& name = urls[i];
+            bool is_selected = (cur_url == name);
+            if (ImGui::Selectable(name.c_str(), is_selected))
+            {
+                param.data<int>() = int(i);
+                changed = true;
+            }
+            if (is_selected)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+    return changed;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Vector Helper Functions
 ///////////////////////////////////////////////////////////////////////////////
@@ -415,6 +806,9 @@ struct Options
     // This example does not support derivatives in combination with the custom texture runtime.
     bool enable_derivatives;
 
+    /// If true, render on one thread only.
+    bool single_threaded;
+
     // Material to use.
     std::string material_name;
 
@@ -423,8 +817,8 @@ struct Options
         , iterations(100)
         , outputfile("example_df_native.png")
         , output_auxiliary(false)
-        , res_x(700)
-        , res_y(520)
+        , res_x(1024)
+        , res_y(1024)
         , max_ray_length(6)
         , env_map("nvidia/sdk_examples/resources/environment.hdr")
         , env_scale(1.f)
@@ -434,10 +828,11 @@ struct Options
         , light_intensity(1.0f, 0.902f, 0.502f)
         , enable_bsdf_flags(false)
         , allowed_scatter_mode(mi::neuraylib::DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT)
-        , use_class_compilation(false)
+        , use_class_compilation(true)
         , use_custom_tex_runtime(false)
         , use_adapt_normal(false)
         , enable_derivatives(false)
+        , single_threaded(false)
     {}
 };
 
@@ -611,8 +1006,10 @@ struct Render_context
     mi::neuraylib::Shading_state_material shading_state;
     mi::neuraylib::Shading_state_material_with_derivs shading_state_derivs;
     mi::base::Handle<const mi::neuraylib::ITarget_code> target_code;
+    mi::base::Handle<mi::neuraylib::ITarget_argument_block> argument_block;
     Texture_handler *tex_handler;
     Texture_handler_deriv *tex_handler_deriv;
+    mi::Size argument_block_index;
     mi::Size init_function_index;
     mi::Size surface_bsdf_function_index;
     mi::Size surface_edf_function_index;
@@ -955,7 +1352,6 @@ struct Render_context
 
 };
 
-
 ///////////////////////////////////////////////////////////////////////////////
 // MDL Material Helper Functions
 ///////////////////////////////////////////////////////////////////////////////
@@ -967,7 +1363,9 @@ void create_material_instance(
     mi::neuraylib::IMdl_impexp_api* mdl_impexp_api,
     mi::neuraylib::IMdl_execution_context* context,
     const char* material_name,
-    const char* instance_name)
+    const char* instance_name,
+    mi::base::Handle<const mi::neuraylib::IAnnotation_list>& material_parameter_annotations,
+    std::string& mdl_name)
 {
     // split module and material name
     std::string module_name, material_simple_name;
@@ -1003,6 +1401,8 @@ void create_material_instance(
     if (!material_definition)
         exit_failure("Accessing definition '%s' failed.", material_db_name.c_str());
 
+    mdl_name = std::string(material_definition->get_mdl_name());
+
     // Create a material instance from the material definition with the default arguments.
     // Assuming the material has defaults for all parameters.
     mi::Sint32 result;
@@ -1010,6 +1410,8 @@ void create_material_instance(
         material_definition->create_function_call(0, &result));
     if (result != 0)
         exit_failure("Instantiating '%s' failed.", material_db_name.c_str());
+
+    material_parameter_annotations = material_definition->get_parameter_annotations();
 
     transaction->store(material_instance.get(), instance_name);
 }
@@ -1247,6 +1649,8 @@ void generate_native(
         context);
     check_success(print_messages(context));
 
+    mi::Size argument_block_index = descs[0].argument_block_index;
+
 #ifdef ADD_EXTRA_TIMERS
     std::chrono::steady_clock::time_point t8 = std::chrono::steady_clock::now();
 #endif
@@ -1263,6 +1667,17 @@ void generate_native(
 
     // update render context
     render_context.target_code = code_native;
+
+    if (argument_block_index != mi::Size(-1))
+    {
+        // We create our own copy of the argument data block, so we can modify the material parameters
+        mi::base::Handle<const mi::neuraylib::ITarget_argument_block> readonly_argument_block(
+            code_native->get_argument_block(argument_block_index));
+
+        render_context.argument_block = readonly_argument_block->clone();
+        render_context.argument_block_index = argument_block_index;
+    }
+
     render_context.init_function_index = descs[0].function_index;
     render_context.surface_bsdf_function_index = descs[1].function_index;
     render_context.surface_edf_function_index = descs[2].function_index;
@@ -1320,6 +1735,241 @@ void generate_native(
 #endif
 }
 
+// Collect information about the arguments of the compiled material
+void collect_material_arguments_info(
+    Material_info& mat_info,
+    Render_context& rc,
+    mi::neuraylib::ITransaction* transaction,
+    const char* compiled_material_name,
+    const mi::neuraylib::IAnnotation_list* material_parameter_annotations)
+{
+    // Get the compiled material and the parameter annotations
+    mi::base::Handle<const mi::neuraylib::ICompiled_material> cur_mat(
+        transaction->access<mi::neuraylib::ICompiled_material>(compiled_material_name));
+
+    // Get the target argument block and its layout
+    mi::base::Handle<mi::neuraylib::ITarget_value_layout const> layout(
+        rc.target_code->get_argument_block_layout(rc.argument_block_index));
+    mi::base::Handle<mi::neuraylib::ITarget_argument_block> arg_block(
+        rc.argument_block);
+    char* arg_block_data = arg_block != nullptr ? arg_block->get_data() : nullptr;
+
+    for (mi::Size j = 0, num_params = cur_mat->get_parameter_count(); j < num_params; ++j)
+    {
+        const char* name = cur_mat->get_parameter_name(j);
+        if (name == nullptr) continue;
+
+        // Determine the type of the argument
+        mi::base::Handle<mi::neuraylib::IValue const> arg(cur_mat->get_argument(j));
+        mi::neuraylib::IValue::Kind kind = arg->get_kind();
+
+        Param_info::Param_kind param_kind = Param_info::PK_UNKNOWN;
+        Param_info::Param_kind param_array_elem_kind = Param_info::PK_UNKNOWN;
+        mi::Size               param_array_size = 0;
+        mi::Size               param_array_pitch = 0;
+        const Enum_type_info* enum_type = nullptr;
+
+        switch (kind)
+        {
+        case mi::neuraylib::IValue::VK_FLOAT:
+            param_kind = Param_info::PK_FLOAT;
+            break;
+        case mi::neuraylib::IValue::VK_COLOR:
+            param_kind = Param_info::PK_COLOR;
+            break;
+        case mi::neuraylib::IValue::VK_BOOL:
+            param_kind = Param_info::PK_BOOL;
+            break;
+        case mi::neuraylib::IValue::VK_INT:
+            param_kind = Param_info::PK_INT;
+            break;
+        case mi::neuraylib::IValue::VK_VECTOR:
+        {
+            mi::base::Handle<mi::neuraylib::IValue_vector const> val(
+                arg.get_interface<mi::neuraylib::IValue_vector const>());
+            mi::base::Handle<mi::neuraylib::IType_vector const> val_type(
+                val->get_type());
+            mi::base::Handle<mi::neuraylib::IType_atomic const> elem_type(
+                val_type->get_element_type());
+            if (elem_type->get_kind() == mi::neuraylib::IType::TK_FLOAT)
+            {
+                switch (val_type->get_size())
+                {
+                case 2: param_kind = Param_info::PK_FLOAT2; break;
+                case 3: param_kind = Param_info::PK_FLOAT3; break;
+                default: assert(false && "Vector Size invalid or unhandled.");
+                }
+            }
+        }
+        break;
+        case mi::neuraylib::IValue::VK_ARRAY:
+        {
+            mi::base::Handle<mi::neuraylib::IValue_array const> val(
+                arg.get_interface<mi::neuraylib::IValue_array const>());
+            mi::base::Handle<mi::neuraylib::IType_array const> val_type(
+                val->get_type());
+            mi::base::Handle<mi::neuraylib::IType const> elem_type(
+                val_type->get_element_type());
+
+            // we currently only support arrays of some values
+            switch (elem_type->get_kind())
+            {
+            case mi::neuraylib::IType::TK_FLOAT:
+                param_array_elem_kind = Param_info::PK_FLOAT;
+                break;
+            case mi::neuraylib::IType::TK_COLOR:
+                param_array_elem_kind = Param_info::PK_COLOR;
+                break;
+            case mi::neuraylib::IType::TK_BOOL:
+                param_array_elem_kind = Param_info::PK_BOOL;
+                break;
+            case mi::neuraylib::IType::TK_INT:
+                param_array_elem_kind = Param_info::PK_INT;
+                break;
+            case mi::neuraylib::IType::TK_VECTOR:
+            {
+                mi::base::Handle<mi::neuraylib::IType_vector const> val_type(
+                    elem_type.get_interface<
+                    mi::neuraylib::IType_vector const>());
+                mi::base::Handle<mi::neuraylib::IType_atomic const> velem_type(
+                    val_type->get_element_type());
+                if (velem_type->get_kind() == mi::neuraylib::IType::TK_FLOAT)
+                {
+                    switch (val_type->get_size())
+                    {
+                    case 2:
+                        param_array_elem_kind = Param_info::PK_FLOAT2;
+                        break;
+                    case 3:
+                        param_array_elem_kind = Param_info::PK_FLOAT3;
+                        break;
+                    default:
+                        assert(false && "Vector Size invalid or unhandled.");
+                    }
+                }
+            }
+            break;
+            default:
+                assert(false && "Array element type invalid or unhandled.");
+            }
+            if (param_array_elem_kind != Param_info::PK_UNKNOWN)
+            {
+                param_kind = Param_info::PK_ARRAY;
+                param_array_size = val_type->get_size();
+
+                // determine pitch of array if there are at least two elements
+                if (param_array_size > 1)
+                {
+                    mi::neuraylib::Target_value_layout_state array_state(
+                        layout->get_nested_state(j));
+                    mi::neuraylib::Target_value_layout_state next_elem_state(
+                        layout->get_nested_state(1, array_state));
+
+                    mi::neuraylib::IValue::Kind kind;
+                    mi::Size param_size;
+                    mi::Size start_offset = layout->get_layout(
+                        kind, param_size, array_state);
+                    mi::Size next_offset = layout->get_layout(
+                        kind, param_size, next_elem_state);
+                    param_array_pitch = next_offset - start_offset;
+                }
+            }
+        }
+        break;
+        case mi::neuraylib::IValue::VK_ENUM:
+        {
+            mi::base::Handle<mi::neuraylib::IValue_enum const> val(
+                arg.get_interface<mi::neuraylib::IValue_enum const>());
+            mi::base::Handle<mi::neuraylib::IType_enum const> val_type(
+                val->get_type());
+
+            // prepare info for this enum type if not seen so far
+            const Enum_type_info* info = mat_info.get_enum_type(val_type->get_symbol());
+            if (info == nullptr)
+            {
+                std::shared_ptr<Enum_type_info> p(new Enum_type_info());
+
+                for (mi::Size i = 0, n = val_type->get_size(); i < n; ++i)
+                    p->add(val_type->get_value_name(i), val_type->get_value_code(i));
+
+                mat_info.add_enum_type(val_type->get_symbol(), p);
+                info = p.get();
+            }
+            enum_type = info;
+
+            param_kind = Param_info::PK_ENUM;
+        }
+        break;
+        case mi::neuraylib::IValue::VK_STRING:
+            param_kind = Param_info::PK_STRING;
+            break;
+        case mi::neuraylib::IValue::VK_TEXTURE:
+            param_kind = Param_info::PK_TEXTURE;
+            break;
+        case mi::neuraylib::IValue::VK_LIGHT_PROFILE:
+            param_kind = Param_info::PK_LIGHT_PROFILE;
+            break;
+        case mi::neuraylib::IValue::VK_BSDF_MEASUREMENT:
+            param_kind = Param_info::PK_BSDF_MEASUREMENT;
+            break;
+        default:
+            // Unsupported? -> skip
+            continue;
+        }
+
+        // Get the offset of the argument within the target argument block
+        mi::neuraylib::Target_value_layout_state state(layout->get_nested_state(j));
+        mi::neuraylib::IValue::Kind kind2;
+        mi::Size param_size;
+        mi::Size offset = layout->get_layout(kind2, param_size, state);
+        check_success(kind == kind2);
+
+        Param_info param_info(
+            j,
+            name,
+            name,
+            /*group_name=*/ nullptr,
+            param_kind,
+            param_array_elem_kind,
+            param_array_size,
+            param_array_pitch,
+            arg_block_data + offset,
+            enum_type);
+
+        // Check for annotation info
+        mi::base::Handle<mi::neuraylib::IAnnotation_block const> anno_block(
+            material_parameter_annotations->get_annotation_block(name));
+        if (anno_block)
+        {
+            mi::neuraylib::Annotation_wrapper annos(anno_block.get());
+            mi::Size anno_index =
+                annos.get_annotation_index("::anno::soft_range(float,float)");
+            if (anno_index == mi::Size(-1))
+            {
+                anno_index = annos.get_annotation_index("::anno::hard_range(float,float)");
+            }
+            if (anno_index != mi::Size(-1))
+            {
+                annos.get_annotation_param_value(anno_index, 0, param_info.range_min());
+                annos.get_annotation_param_value(anno_index, 1, param_info.range_max());
+            }
+            anno_index = annos.get_annotation_index("::anno::display_name(string)");
+            if (anno_index != mi::Size(-1))
+            {
+                annos.get_annotation_param_value(anno_index, 0, param_info.display_name());
+            }
+            anno_index = annos.get_annotation_index("::anno::in_group(string)");
+            if (anno_index != mi::Size(-1))
+            {
+                annos.get_annotation_param_value(anno_index, 0, param_info.group_name());
+            }
+        }
+
+        mat_info.add_sorted_by_group(param_info);
+    }
+
+}
+
 // Prepare the textures for our own texture runtime.
 bool prepare_textures(
     std::vector<Texture>& textures,
@@ -1337,7 +1987,8 @@ bool prepare_textures(
         mi::base::Handle<const mi::neuraylib::ICanvas> canvas(image->get_canvas(0, 0, 0));
         char const* image_type = image->get_type(0, 0);
 
-        if (image->is_uvtile() || image->is_animated()) {
+        if (image->is_uvtile() || image->is_animated())
+        {
             std::cerr << "The example does not support uvtile and/or animated textures!" << std::endl;
             return false;
         }
@@ -1346,7 +1997,8 @@ bool prepare_textures(
         // is pre-applied here (all images are converted to linear space).
 
         // Convert to linear color space if necessary
-        if (texture->get_effective_gamma(0, 0) != 1.0f) {
+        if (texture->get_effective_gamma(0, 0) != 1.0f)
+        {
             // Copy/convert to float4 canvas and adjust gamma from "effective gamma" to 1.
             mi::base::Handle<mi::neuraylib::ICanvas> gamma_canvas(
                 image_api->convert(canvas.get(), "Color"));
@@ -1354,7 +2006,8 @@ bool prepare_textures(
             image_api->adjust_gamma(gamma_canvas.get(), 1.0f);
             canvas = gamma_canvas;
         }
-        else if (strcmp(image_type, "Color") != 0 && strcmp(image_type, "Float32<4>") != 0) {
+        else if (strcmp(image_type, "Color") != 0 && strcmp(image_type, "Float32<4>") != 0)
+        {
             // Convert to expected format
             canvas = image_api->convert(canvas.get(), "Color");
         }
@@ -1389,7 +2042,7 @@ bool trace_shadow(Render_context& rc, Render_context::Ray& shadow_ray, unsigned 
                 rc.cutout_opacity_function_index,
                 shading_state,
                 rc.tex_handler,
-                /*arg_block_data=*/ nullptr,
+                rc.argument_block.get(),
                 &cutout_opacity);
             assert(ret_code == 0 && "execute opacity function failed");
             (void) ret_code;
@@ -1425,16 +2078,19 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
         mi::neuraylib::tct_float4 text_results[128];
 
         // update material shader state
-        if (rc.use_derivatives) {
+        if (rc.use_derivatives)
+        {
             // FIXME: compute dx, dy
-            mi::neuraylib::tct_deriv_float3 position = {
+            mi::neuraylib::tct_deriv_float3 position =
+            {
                 isect_info.pos,     // value component
                 { 0.0f, 0.0f, 0.0f },   // dx component
                 { 0.0f, 0.0f, 0.0f }    // dy component
             };
 
             // FIXME: compute dx, dy
-            mi::neuraylib::tct_deriv_float3 texture_coords[1] = {
+            mi::neuraylib::tct_deriv_float3 texture_coords[1] =
+            {
                 {
                     isect_info.uvw,     // value component
                     { 0.0f, 0.0f, 0.0f },   // dx component
@@ -1455,7 +2111,9 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
             tex_handler =
                 reinterpret_cast<mi::neuraylib::Texture_handler_base *>(rc.tex_handler_deriv);
 
-        } else {
+        }
+        else
+        {
             rc.shading_state.position = isect_info.pos;
             rc.shading_state.normal = ray.is_inside ? -isect_info.normal : isect_info.normal;
             rc.shading_state.geom_normal = rc.shading_state.normal;
@@ -1482,7 +2140,7 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
             rc.init_function_index,
             *shading_state,
             tex_handler,
-            /*arg_block_data=*/ nullptr);
+            rc.argument_block.get());
         assert(ret_code == 0 && "execute_bsdf_init failed");
 
         // evaluate material cutout opacity
@@ -1493,7 +2151,7 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
                 rc.cutout_opacity_function_index,
                 *shading_state,
                 tex_handler,
-                /*arg_block_data=*/ nullptr,
+                rc.argument_block.get(),
                 &cutout_opacity);
             assert(ret_code == 0 && "execute opacity function failed");
         }
@@ -1518,7 +2176,7 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
                     rc.thin_walled_function_index,
                     *shading_state,
                     tex_handler,
-                    /*arg_block_data=*/ nullptr,
+                    rc.argument_block.get(),
                     &is_thin_walled);
                 assert(ret_code == 0 && "execute thin_walled function failed");
             }
@@ -1538,7 +2196,7 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
                     &eval_data,
                     *shading_state,
                     tex_handler,
-                    /*arg_block_data=*/ nullptr);
+                    rc.argument_block.get());
                 assert(ret_code == 0 && "execute_edf_evaluate failed");
 
 
@@ -1554,7 +2212,7 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
                         emission_intensity_function_index,
                         *shading_state,
                         tex_handler,
-                        /*arg_block_data=*/ nullptr,
+                        rc.argument_block.get(),
                         &intensity);
                     assert(ret_code == 0 && "execute emission intensity function failed");
 
@@ -1643,7 +2301,7 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
                         &eval_data,
                         *shading_state,
                         tex_handler,
-                        /*arg_block_data=*/ nullptr);
+                        rc.argument_block.get());
                     assert(ret_code == 0 && "execute_bsdf_evaluate failed");
 
                     if (eval_data.pdf > 1.e-6f)
@@ -1681,7 +2339,7 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
                     &sample_data,   // input/output
                     *shading_state,
                     tex_handler,
-                    /*arg_block_data=*/ nullptr);
+                    rc.argument_block.get());
                 assert(ret_code == 0 && "execute_bsdf_sample failed");
 
                 if (sample_data.event_type != mi::neuraylib::BSDF_EVENT_ABSORB)
@@ -1886,10 +2544,10 @@ void usage(char const *prog_name)
         << "Options:\n"
         << "  -h|--help                  print this text and exit\n"
         << "  -v|--version               print the MDL SDK version string and exit\n"
-        << "  --res <x> <y>              resolution (default: 700x520)\n"
+        << "  --res <x> <y>              resolution (default: 1024x1024)\n"
         << "  --hdr <filename>           environment map\n"
         << "                             (default: nvidia/sdk_examples/resources/environment.hdr)\n"
-        << "  --cc                       use class compilation\n"
+        << "  --nocc                     don't compile the material using class compilation\n"
         << "  --cr                       use custom texture runtime\n"
         << "  --allowed_scatter_mode <m> limits the allowed scatter mode to \"none\", \"reflect\", "
         << "\"transmit\" or \"reflect_and_transmit\" (default: restriction disabled)\n"
@@ -1902,6 +2560,7 @@ void usage(char const *prog_name)
         << "                             (default: example_native.png)\n"
         << "  -oaux                      output albedo and normal auxiliary buffers\n"
         << "  -p|--mdl_path <path>       mdl search path, can occur multiple times\n"
+        << "  --single_threaded          render on one thread only"
         << "\n"
         << "Viewport controls:\n"
         << "  Mouse               Camera rotation, zoom\n"
@@ -1979,9 +2638,9 @@ int MAIN_UTF8(int argc, char *argv[])
                 options.light_intensity.y = static_cast<float>(atof(argv[++i]));
                 options.light_intensity.z = static_cast<float>(atof(argv[++i]));
             }
-            else if (strcmp(opt, "--cc") == 0)
+            else if (strcmp(opt, "--nocc") == 0)
             {
-                options.use_class_compilation = true;
+                options.use_class_compilation = false;
             }
             else if (strcmp(opt, "--cr") == 0)
             {
@@ -2017,6 +2676,10 @@ int MAIN_UTF8(int argc, char *argv[])
                 i < argc - 1)
             {
                 configure_options.additional_mdl_paths.push_back(argv[++i]);
+            }
+            else if (strcmp(opt, "--single_threaded") == 0)
+            {
+                configure_options.single_threaded = true;
             }
             else if (strcmp(opt, "-v") == 0 || strcmp(opt, "--version") == 0)
             {
@@ -2080,6 +2743,9 @@ int MAIN_UTF8(int argc, char *argv[])
     rc.bsdf_data_flags = options.allowed_scatter_mode;
 
     {
+        // Compiled material arguments information
+        Material_info mat_info;
+
         // Create a transaction
         mi::base::Handle<mi::neuraylib::IDatabase> database(
             neuray->get_api_component<mi::neuraylib::IDatabase>());
@@ -2107,6 +2773,9 @@ int MAIN_UTF8(int argc, char *argv[])
                 mdl_factory->create_execution_context());
 
             // Load the MDL module and create a material instance
+            mi::base::Handle<const mi::neuraylib::IAnnotation_list> material_parameter_annotations;
+            std::string mdl_name;
+
             std::string instance_name = "material instance";
             create_material_instance(
                 mdl_factory.get(),
@@ -2114,7 +2783,9 @@ int MAIN_UTF8(int argc, char *argv[])
                 mdl_impexp_api.get(),
                 context.get(),
                 options.material_name.c_str(),
-                instance_name.c_str());
+                instance_name.c_str(),
+                material_parameter_annotations,
+                mdl_name);
 
             // Compile the material instance in instance compilation mode
             std::string instance_compilation_name
@@ -2141,7 +2812,22 @@ int MAIN_UTF8(int argc, char *argv[])
                 options.use_adapt_normal,
                 options.enable_derivatives,
                 options.enable_bsdf_flags);
+
+            // Collect arguments information for the compiled material
+            mat_info.set_name(mdl_name.c_str());
+            collect_material_arguments_info(
+                mat_info,
+                rc,
+                transaction.get(),
+                compilation_name.c_str(),
+                material_parameter_annotations.get());
         }
+
+        // Collect target code resources information
+        String_constant_table constant_table(rc.target_code);
+        Resource_table texture_table(rc.target_code, transaction, Resource_table::RESOURCE_TEXTURE);
+        Resource_table lp_table(rc.target_code, transaction, Resource_table::RESOURCE_LIGHT_PROFILE);
+        Resource_table bm_table(rc.target_code, transaction, Resource_table::RESOURCE_BSDF_MEASUREMENT);
 
         // Setup custom texture handler, if requested
         std::vector<Texture>                            textures;
@@ -2198,7 +2884,7 @@ int MAIN_UTF8(int argc, char *argv[])
 
         // setup render data
         // ------------------------------------------------------------------------
-        size_t window_width = 0, window_height = 0;
+        size_t window_width = -1, window_height = -1;
         size_t frame_nb = 0; // frame counter
 
         // Viewport buffers for progressive rendering
@@ -2217,22 +2903,26 @@ int MAIN_UTF8(int argc, char *argv[])
             filename_ext = options.outputfile.substr(dot_pos);
         }
 
-
-#ifdef USE_PARALLEL_RENDERING
-        // get number of physical/virtual threads available.
+        int num_threads = 1;
+        if (configure_options.single_threaded)
+        {
+            std::cout << "Rendering on single thread.\n";
+        }
+        else
+        {
+            // get number of physical/virtual threads available.
 #ifdef MI_PLATFORM_WINDOWS
-        SYSTEM_INFO sysinfo;
-        GetSystemInfo(&sysinfo);
-        const int num_threads = sysinfo.dwNumberOfProcessors;
+            SYSTEM_INFO sysinfo;
+            GetSystemInfo(&sysinfo);
+            num_threads = sysinfo.dwNumberOfProcessors;
 #elif MI_PLATFORM_MACOSX
-        int num_threads;
-        size_t len = sizeof(num_threads);
-        sysctlbyname("hw.logicalcpu", &num_threads, &len, NULL, 0);
+            size_t len = sizeof(num_threads);
+            sysctlbyname("hw.logicalcpu", &num_threads, &len, NULL, 0);
 #else // LINUX // ARCH_64BIT
-        const int num_threads = sysconf(_SC_NPROCESSORS_ONLN);
+            num_threads = sysconf(_SC_NPROCESSORS_ONLN);
 #endif
-        std::cout << "Rendering on " << num_threads << " threads.\n";
-#endif // USE_PARALLEL_RENDERING
+            std::cout << "Rendering on " << num_threads << " threads.\n";
+        }
 
         // render options
         rc.max_ray_length = options.max_ray_length;
@@ -2322,26 +3012,29 @@ int MAIN_UTF8(int argc, char *argv[])
                 while (frame_nb < options.iterations)
                 {
                     frame_nb++;
-#ifdef USE_PARALLEL_RENDERING
-                    // preparing render threads
-                    std::vector<std::thread> threads;
-                    size_t lpt = window_height / num_threads +
-                        (window_height % num_threads != 0 ? 1 : 0); // lines per thread
+                    if (configure_options.single_threaded)
+                    {
+                        render_scene(rc, frame_nb, &vp_buffers,
+                            nullptr, 0, window_height, window_width, window_height, 4);
+                    }
+                    else
+                    {
+                        // preparing render threads
+                        std::vector<std::thread> threads;
 
-                    // Launch render threads
-                    for (int i = 0; i < num_threads; ++i)
-                        threads.push_back(std::thread(render_scene, rc, frame_nb, &vp_buffers,
-                            nullptr, lpt * i, lpt * (i + 1), window_width, window_height, 4));
+                        // window lines per thread
+                        size_t lpt = window_height / num_threads + (window_height % num_threads != 0 ? 1 : 0);
 
-                    // wait for threads to finish
-                    for (int i = 0; i < num_threads; ++i)
-                        threads[i].join();
+                        // Launch render threads
+                        for (int i = 0; i < num_threads; ++i)
+                            threads.emplace_back(std::thread(render_scene, rc, frame_nb, &vp_buffers,
+                                nullptr, lpt * i, lpt * (i + 1), window_width, window_height, 4));
 
-                    threads.clear();
-#else
-                    render_scene(rc, frame_nb, &vp_buffers,
-                        nullptr, 0, window_height, window_width, window_height, 4);
-#endif
+                        // wait for threads to finish
+                        for (auto& th : threads)
+                            if(th.joinable())
+                                th.join();
+                    }
                 }
             }
 
@@ -2357,58 +3050,93 @@ int MAIN_UTF8(int argc, char *argv[])
                     filename_base + "_normal" + filename_ext, factory, image_api, mdl_impexp_api);
             }
         }
-        else // interactive renderer
+        else // interactive rendering on OpenGL window
         {
-            // create the main window
-            if (!glfwInit())
-                exit(EXIT_FAILURE);
+            // Init OpenGL window
+            std::string version_string;
 
+            // Initialize GLFW
+            check_success(glfwInit());
             glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
             glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
             glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
             glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+            version_string = "#version 330 core"; // see top comments in 'imgui_impl_opengl3.cpp'
 
-            mi::examples::mdl::GL_window::Description window_desc;
-            window_desc.width = options.res_x;
-            window_desc.height = options.res_y;
-            window_desc.title = "MDL Native Rendering";
-            window_desc.no_gui = false;
-
-            mi::examples::mdl::GL_window gl_window(window_desc);
-
-            gl_window.set_window_user_pointer(&window_context);
-            gl_window.set_key_callback(Window_context::handle_key);
-            gl_window.set_mouse_button_callback(Window_context::handle_mouse_button);
-            gl_window.set_cursor_pos_callback(Window_context::handle_mouse_pos);
-            gl_window.set_scroll_callback(Window_context::handle_scroll);
-
-            if (GLEW_OK != glewInit())
-                exit(EXIT_FAILURE);
-
-            glfwSwapInterval(1);
-
-            // create a display, this allows to render a buffer to screen
-            mi::examples::mdl::GL_display gl_display(window_desc.width, window_desc.height);
-
-            // setup GUI
-            // ------------------------------------------------------------------------
-
-            // init the GUI system in terms of styles and fonts
-            mi::examples::gui::Root* gui = window_desc.no_gui ? nullptr : gl_window.get_gui();
-            if (gui)
+            // Create an OpenGL window and a context
+            GLFWwindow* window = glfwCreateWindow(options.res_x, options.res_y, WINDOW_TITLE, nullptr, nullptr);
+            if (!window)
             {
-                gui->initialize();
-                // add panels and other controls here
+                std::cerr << "Error creating OpenGL window!" << std::endl;
+                terminate();
             }
 
-            // render loop
-            while (gl_window.update())
+            // Attach context to window
+            glfwMakeContextCurrent(window);
+
+            // Initialize GLEW to get OpenGL extensions
+            GLenum res = glewInit();
+            if (res != GLEW_OK)
             {
+                std::cerr << "GLEW error: " << glewGetErrorString(res) << std::endl;
+                terminate();
+            }
+
+            // Disable VSync
+            glfwSwapInterval(0);
+            check_success(glGetError() == GL_NO_ERROR);
+
+            glfwSetWindowUserPointer(window, &window_context);
+            glfwSetKeyCallback(window, Window_context::handle_key);
+            glfwSetScrollCallback(window, Window_context::handle_scroll);
+            glfwSetCursorPosCallback(window, Window_context::handle_mouse_pos);
+            glfwSetMouseButtonCallback(window, Window_context::handle_mouse_button);
+            glfwSetCharCallback(window, ImGui_ImplGlfw_CharCallback);
+
+            IMGUI_CHECKVERSION();
+            ImGui::CreateContext();
+
+            ImGui_ImplGlfw_InitForOpenGL(window, false);
+            ImGui_ImplOpenGL3_Init(version_string.c_str());
+            ImGui::GetIO().IniFilename = nullptr;       // disable creating imgui.ini
+            ImGui::StyleColorsDark();
+            ImGui::GetStyle().Alpha = 0.7f;
+            ImGui::GetStyle().ScaleAllSizes(/*options.gui_scale*/1.f);
+
+            mi::examples::mdl::GL_display* gl_display = new mi::examples::mdl::GL_display(options.res_x, options.res_y);
+
+            std::chrono::duration<double> state_update_time(0.0);
+            std::chrono::duration<double> render_time(0.0);
+            std::chrono::duration<double> display_time(0.0);
+            char stats_text[128];
+            int last_update_frames = -1;
+            auto last_update_time = std::chrono::steady_clock::now();
+            const std::chrono::duration<double> update_min_interval(0.5);
+
+            // render loop
+            while (true)
+            {
+                std::chrono::time_point<std::chrono::steady_clock> t0 =
+                    std::chrono::steady_clock::now();
+
+                // Check for termination
+                if (glfwWindowShouldClose(window))
+                    break;
+
+                // Poll for events and process them
+                glfwPollEvents();
+
+                // Check if buffers need to be resized
+                int nwidth, nheight;
+                glfwGetFramebufferSize(window, &nwidth, &nheight);
+
                 // get the window size and resize the image if necessary
-                if (window_width != gl_window.get_width() || window_height != gl_window.get_height())
+                if (window_width != nwidth || window_height != nheight)
                 {
-                    window_width = gl_window.get_width();
-                    window_height = gl_window.get_height();
+                    window_width = nwidth;
+                    window_height = nheight;
+
+                    gl_display->resize(window_width, window_height);
 
                     frame_nb = 0;
                     if (vp_buffers.accum_buffer)
@@ -2436,6 +3164,237 @@ int MAIN_UTF8(int argc, char *argv[])
                     rc.cam.aspect = static_cast<float>(window_height)
                         / static_cast<float>(window_width);
                 }
+
+                // Don't render anything, if minimized
+                if (window_width == 0 || window_height == 0)
+                {
+                    // Wait until something happens
+                    glfwWaitEvents();
+                    continue;
+                }
+
+                ImGui_ImplOpenGL3_NewFrame();
+                ImGui_ImplGlfw_NewFrame();
+                ImGui::NewFrame();
+
+                // Create material parameter editor window
+
+                ImGui::SetNextWindowPos(ImVec2(10, 100), ImGuiCond_FirstUseEver);
+                ImGui::SetNextWindowSize(
+                    ImVec2(360.f, 600.f),
+                    ImGuiCond_FirstUseEver);
+                ImGui::Begin("Settings");
+                ImGui::SetWindowFontScale(1.f);
+                ImGui::PushItemWidth(-200.f);
+                if (options.use_class_compilation)
+                    ImGui::Text("CTRL + Click to manually enter numbers");
+                else
+                    ImGui::Text("Parameter editing requires class compilation.");
+
+                ImGui::Dummy(ImVec2(0.0f, 3.0f));
+                ImGui::Text("Material parameters");
+                ImGui::Separator();
+
+                // Print material name
+                ImGui::Text("%s", mat_info.get_name());
+
+                bool changed = false;
+                const char* group_name = nullptr;
+                int id = 0;
+
+                for (std::list<Param_info>::iterator it = mat_info.params().begin(),
+                    end = mat_info.params().end(); it != end; ++it, ++id)
+                {
+                    Param_info& param = *it;
+
+                    // Ensure unique ID even for parameters with same display names
+                    ImGui::PushID(id);
+
+                    // Group name changed? -> Start new group with new header
+                    if ((!param.group_name() != !group_name) ||
+                        (param.group_name() &&
+                            (!group_name || strcmp(group_name, param.group_name()) != 0)))
+                    {
+                        ImGui::Separator();
+                        if (param.group_name() != nullptr)
+                            ImGui::Text("%s", param.group_name());
+                        group_name = param.group_name();
+                    }
+
+                    // Choose proper edit control depending on the parameter kind
+                    switch (param.kind())
+                    {
+                    case Param_info::PK_FLOAT:
+                        changed |= ImGui::SliderFloat(
+                            param.display_name(),
+                            &param.data<float>(),
+                            param.range_min(),
+                            param.range_max());
+                        break;
+                    case Param_info::PK_FLOAT2:
+                        changed |= ImGui::SliderFloat2(
+                            param.display_name(),
+                            &param.data<float>(),
+                            param.range_min(),
+                            param.range_max());
+                        break;
+                    case Param_info::PK_FLOAT3:
+                        changed |= ImGui::SliderFloat3(
+                            param.display_name(),
+                            &param.data<float>(),
+                            param.range_min(),
+                            param.range_max());
+                        break;
+                    case Param_info::PK_COLOR:
+                        changed |= ImGui::ColorEdit3(
+                            param.display_name(),
+                            &param.data<float>());
+                        break;
+                    case Param_info::PK_BOOL:
+                        changed |= ImGui::Checkbox(
+                            param.display_name(),
+                            &param.data<bool>());
+                        break;
+                    case Param_info::PK_INT:
+                        changed |= ImGui::SliderInt(
+                            param.display_name(),
+                            &param.data<int>(),
+                            int(param.range_min()),
+                            int(param.range_max()));
+                        break;
+                    case Param_info::PK_ARRAY:
+                    {
+                        ImGui::Text("%s", param.display_name());
+                        ImGui::Indent(16.0f);
+                        char* ptr = &param.data<char>();
+                        for (mi::Size i = 0, n = param.array_size(); i < n; ++i)
+                        {
+                            std::string idx_str = std::to_string(i);
+                            switch (param.array_elem_kind())
+                            {
+                            case Param_info::PK_FLOAT:
+                                changed |= ImGui::SliderFloat(
+                                    idx_str.c_str(),
+                                    reinterpret_cast<float*>(ptr),
+                                    param.range_min(),
+                                    param.range_max());
+                                break;
+                            case Param_info::PK_FLOAT2:
+                                changed |= ImGui::SliderFloat2(
+                                    idx_str.c_str(),
+                                    reinterpret_cast<float*>(ptr),
+                                    param.range_min(),
+                                    param.range_max());
+                                break;
+                            case Param_info::PK_FLOAT3:
+                                changed |= ImGui::SliderFloat3(
+                                    idx_str.c_str(),
+                                    reinterpret_cast<float*>(ptr),
+                                    param.range_min(),
+                                    param.range_max());
+                                break;
+                            case Param_info::PK_COLOR:
+                                changed |= ImGui::ColorEdit3(
+                                    idx_str.c_str(),
+                                    reinterpret_cast<float*>(ptr));
+                                break;
+                            case Param_info::PK_BOOL:
+                                changed |= ImGui::Checkbox(
+                                    param.display_name(),
+                                    reinterpret_cast<bool*>(ptr));
+                                break;
+                            case Param_info::PK_INT:
+                                changed |= ImGui::SliderInt(
+                                    param.display_name(),
+                                    reinterpret_cast<int*>(ptr),
+                                    int(param.range_min()),
+                                    int(param.range_max()));
+                                break;
+                            default:
+                                assert(false && "Array element type invalid or unhandled.");
+                            }
+                            ptr += param.array_pitch();
+                        }
+                        ImGui::Unindent(16.0f);
+                    }
+                    break;
+                    case Param_info::PK_ENUM:
+                    {
+                        int value = param.data<int>();
+                        std::string curr_value;
+
+                        const Enum_type_info* info = param.enum_info();
+                        for (size_t i = 0, n = info->values.size(); i < n; ++i)
+                        {
+                            if (info->values[i].value == value)
+                            {
+                                curr_value = info->values[i].name;
+                                break;
+                            }
+                        }
+
+                        if (ImGui::BeginCombo(param.display_name(), curr_value.c_str()))
+                        {
+                            for (size_t i = 0, n = info->values.size(); i < n; ++i)
+                            {
+                                const std::string& name = info->values[i].name;
+                                bool is_selected = (curr_value == name);
+                                if (ImGui::Selectable(info->values[i].name.c_str(), is_selected))
+                                {
+                                    param.data<int>() = info->values[i].value;
+                                    changed = true;
+                                }
+                                if (is_selected)
+                                    ImGui::SetItemDefaultFocus();
+                            }
+                            ImGui::EndCombo();
+                        }
+                    }
+                    break;
+                    case Param_info::PK_STRING:
+                    {
+                        std::vector<char> buf;
+
+                        size_t max_len = constant_table.get_max_length();
+                        max_len = max_len > 63 ? max_len + 1 : 64;
+
+                        buf.resize(max_len);
+
+                        // fill the current value
+                        unsigned curr_index = param.data<unsigned>();
+                        const char* opt = constant_table.get_string(curr_index);
+                        strcpy(buf.data(), opt != nullptr ? opt : "");
+
+                        if (ImGui::InputText(
+                            param.display_name(),
+                            buf.data(), buf.size(),
+                            ImGuiInputTextFlags_EnterReturnsTrue))
+                        {
+                            unsigned id = constant_table.get_id_for_string(buf.data());
+
+                            param.data<unsigned>() = id;
+                            changed = true;
+                        }
+                    }
+                    break;
+                    case Param_info::PK_TEXTURE:
+                        changed |= handle_resource(param, texture_table);
+                        break;
+                    case Param_info::PK_LIGHT_PROFILE:
+                        changed |= handle_resource(param, lp_table);
+                        break;
+                    case Param_info::PK_BSDF_MEASUREMENT:
+                        changed |= handle_resource(param, bm_table);
+                        break;
+                    case Param_info::PK_UNKNOWN:
+                        break;
+                    }
+
+                    ImGui::PopID();
+                }
+
+                ImGui::PopItemWidth();
+                ImGui::End();
 
                 // handle key input events
                 if (window_context.key_event && !ImGui::GetIO().WantCaptureMouse)
@@ -2472,7 +3431,7 @@ int MAIN_UTF8(int argc, char *argv[])
                         !ImGui::GetIO().WantCaptureMouse)
                     {
                         window_context.moving = true;
-                        glfwGetCursorPos(gl_window.get_window(), &window_context.move_start_x, &window_context.move_start_y);
+                        glfwGetCursorPos(window, &window_context.move_start_x, &window_context.move_start_y);
                     }
                     else
                     {
@@ -2501,7 +3460,7 @@ int MAIN_UTF8(int argc, char *argv[])
                     rc.update_camera(phi, theta, base_dist, window_context.zoom);
                 }
 
-                if (window_context.key_event || window_context.mouse_event)
+                if (window_context.key_event || window_context.mouse_event || changed)
                     frame_nb = 0;
 
                 // Clear all events
@@ -2512,64 +3471,103 @@ int MAIN_UTF8(int argc, char *argv[])
                 window_context.save_sreenshot = false;
 
                 ++frame_nb;
-                gl_display.resize(window_width, window_height);
 
-                // handle resize on the application side (resize rendering buffer, restart)
-                if (gui)
-                {
-                    // begin a new frame for the GUI and update the controls
-                    gui->new_frame();   // required even when the main GUI is not rendered
-                    gui->update(/*transaction*/ nullptr);    // update GUI elements
-
-                    // process events
-                    mi::examples::gui::Event e = gui->process_event();
-                    while (e.is_valid())
-                    {
-                        /* handle custom application events here */
-                        e = gui->process_event();
-                    }
-                }
+                auto t1 = std::chrono::steady_clock::now();
+                state_update_time += t1 - t0;
+                t0 = t1;
 
                 // map the buffer, update the image data and un-map afterwards
                 // make sure this is as fast as possible
-                unsigned char* dst_image_data = gl_display.map();
+                unsigned char* dst_image_data = gl_display->map();
 
-#ifdef USE_PARALLEL_RENDERING
-                // preparing render threads
-                std::vector<std::thread> threads;
-                size_t lpt = window_height / num_threads +
-                    (window_height % num_threads != 0 ? 1 : 0); // lines per thread
+                if (configure_options.single_threaded)
+                {
+                    render_scene(rc, frame_nb, &vp_buffers,
+                        dst_image_data, 0, window_height, window_width, window_height, 4);
+                }
+                else
+                {
+                    // preparing render threads
+                    std::vector<std::thread> threads;
 
-                // launch render threads
-                for (int i = 0; i < num_threads; ++i)
-                    threads.push_back(std::thread(render_scene, rc, frame_nb, &vp_buffers,
-                        dst_image_data, lpt*i, lpt*(i + 1), window_width, window_height, 4));
+                    // window lines per thread
+                    size_t lpt = window_height / num_threads + (window_height % num_threads != 0 ? 1 : 0);
 
-                // wait for threads to finish
-                for (int i = 0; i < num_threads; ++i)
-                    threads[i].join();
+                    // launch render threads
+                    for (int i = 0; i < num_threads; ++i)
+                        threads.push_back(std::thread(render_scene, rc, frame_nb, &vp_buffers,
+                            dst_image_data, lpt * i, lpt * (i + 1), window_width, window_height, 4));
 
-                threads.clear();
-#else
-                render_scene(rc, frame_nb, &vp_buffers,
-                    dst_image_data, 0, window_height, window_width, window_height, 4);
-#endif
+                    // wait for threads to finish
+                    for (auto& th : threads)
+                        if(th.joinable())
+                            th.join();
+                }
 
-                gl_display.unmap();
+                t1 = std::chrono::steady_clock::now();
+                render_time += t1 - t0;
+                t0 = t1;
+
+                gl_display->unmap();
 
                 // render the updated image to screen
-                gl_display.update_display();
+                gl_display->update_display();
 
-                // render GUI on top
-                if (gui)
-                    gui->render(nullptr);
+                t1 = std::chrono::steady_clock::now();
+                display_time += t1 - t0;
 
-                // finish the frame
-                gl_window.present_back_buffer();
+                // Render stats window
+                ImGui::SetNextWindowPos(ImVec2(10, 10));
+                ImGui::Begin("##notitle", nullptr,
+                    ImGuiWindowFlags_NoDecoration |
+                    ImGuiWindowFlags_AlwaysAutoResize |
+                    ImGuiWindowFlags_NoSavedSettings |
+                    ImGuiWindowFlags_NoFocusOnAppearing |
+                    ImGuiWindowFlags_NoNav);
+
+                // Update stats only every 0.5s
+                ++last_update_frames;
+                if (t1 - last_update_time > update_min_interval || last_update_frames == 0)
+                {
+                    typedef std::chrono::duration<double, std::milli> durationMs;
+
+                    snprintf(stats_text, sizeof(stats_text),
+                        "%5.1f fps\n\n"
+                        "state update: %8.1f ms\n"
+                        "render:       %8.1f ms\n"
+                        "display:      %8.1f ms\n",
+                        last_update_frames / std::chrono::duration<double>(
+                            t1 - last_update_time).count(),
+                        (durationMs(state_update_time) / last_update_frames).count(),
+                        (durationMs(render_time) / last_update_frames).count(),
+                        (durationMs(display_time) / last_update_frames).count());
+
+                    last_update_time = t1;
+                    last_update_frames = 0;
+                    state_update_time = render_time = display_time =
+                        std::chrono::duration<double>::zero();
+                }
+
+                ImGui::TextUnformatted(stats_text);
+                ImGui::End();
+
+                ImGui::Render();
+                ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+                // Swap front and back buffers
+                glfwSwapBuffers(window);
+
             }
-            glfwTerminate();
-        }
 
+            delete gl_display;
+            gl_display = nullptr;
+            ImGui_ImplOpenGL3_Shutdown();
+            ImGui_ImplGlfw_Shutdown();
+            ImGui::DestroyContext();
+            glfwDestroyWindow(window);
+            glfwTerminate();
+
+        }
         // free environment image
         image = nullptr;
 

@@ -32,11 +32,15 @@
 #include <base/data/db/i_db_fragmented_job.h>
 #include <base/data/thread_pool/i_thread_pool_ijob.h>
 
+#include <boost/intrusive/list.hpp>
+
 namespace MI {
 
 namespace DB { class Fragmented_job; class IExecution_listener; class Transaction; }
 
 namespace DBLIGHT {
+
+namespace bi = boost::intrusive;
 
 /// Adapts DB::Fragmented_job to THREAD_POOL::Fragmented_job.
 class Fragmented_job : public THREAD_POOL::Fragmented_job
@@ -44,13 +48,14 @@ class Fragmented_job : public THREAD_POOL::Fragmented_job
 public:
     /// Constructor.
     ///
-    /// Note that \p transaction and \p listener might be \c NULL.
+    /// Note that \p transaction and \p listener might be \c nullptr.
     Fragmented_job(
         DB::Transaction* transaction,
         size_t count,
         DB::Fragmented_job* job,
         DB::IExecution_listener* listener)
       : THREAD_POOL::Fragmented_job( transaction, count),
+        m_transaction( transaction),
         m_fragmented_job( job),
         m_listener( listener),
         m_cpu_load( job->get_cpu_load()),
@@ -79,13 +84,16 @@ public:
         m_fragmented_job->execute_fragment( transaction, index, count, context);
     }
 
-    void job_finished() override
-    {
-        if( m_listener)
-            m_listener->job_finished();
-    }
+    void job_finished() override;
+
+    /// Expose cancel() of the wrapped job.
+    void cancel() { m_fragmented_job->cancel(); }
+
+    /// Hook for Transaction_impl::m_fragmented_jobs.
+    bi::list_member_hook<> m_fragmented_jobs_hook;
 
 private:
+    DB::Transaction* m_transaction;
     DB::Fragmented_job* m_fragmented_job;
     DB::IExecution_listener* m_listener;
     float m_cpu_load;

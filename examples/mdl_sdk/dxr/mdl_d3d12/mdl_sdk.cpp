@@ -199,10 +199,16 @@ void Mdl_sdk::reconfigure_search_paths()
 
     // also add example search paths.
     // additionally, add the executable folder (if it contains an mdl folder).
-    std::string example_root = mi::examples::mdl::get_examples_root() + "/mdl";
-    if (!mi::examples::io::directory_exists(example_root) ||
-        m_config->add_mdl_path(example_root.c_str()) != 0)
-        log_warning("Failed to add the MDL example search path: " + example_root, SRC);
+    std::string example_search_path1 = mi::examples::mdl::get_examples_root() + "/mdl";
+    if (!mi::examples::io::directory_exists(example_search_path1) ||
+        m_config->add_mdl_path(example_search_path1.c_str()) != 0)
+        log_warning("Failed to add the MDL example search path: " + example_search_path1, SRC);
+    std::string example_search_path2 = mi::examples::mdl::get_src_shaders_mdl();
+    if (example_search_path2 != ".") {
+        if (!mi::examples::io::directory_exists(example_search_path2) ||
+            m_config->add_mdl_path(example_search_path2.c_str()) != 0)
+            log_warning("Failed to add the MDL example search path: " + example_search_path2, SRC);
+    }
 
     std::string app_level_mdl_folder = mi::examples::io::get_executable_folder() + "/mdl";
     if (mi::examples::io::directory_exists(app_level_mdl_folder) &&

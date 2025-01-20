@@ -150,7 +150,7 @@ inline mi::Sint32 set_value( mi::IData* data, const mi::base::Uuid& value)
 template <class T, Size DIM>
 inline mi::Sint32 set_value( mi::IData* data, const mi::math::Vector<T,DIM>& value)
 {
-    typedef typename mi::Vector_type_traits<T,DIM>::Interface_type Vector_interface_type;
+    using Vector_interface_type = typename mi::Vector_type_traits<T, DIM>::Interface_type;
     mi::base::Handle<Vector_interface_type> v( data->get_interface<Vector_interface_type>());
     if( v) {
         v->set_value( value);
@@ -172,7 +172,7 @@ inline mi::Sint32 set_value( mi::IData* data, const mi::math::Vector<T,DIM>& val
 template <class T, Size ROW, Size COL>
 mi::Sint32 set_value( mi::IData* data, const mi::math::Matrix<T,ROW,COL>& value)
 {
-    typedef typename mi::Matrix_type_traits<T,ROW,COL>::Interface_type Matrix_interface_type;
+    using Matrix_interface_type = typename mi::Matrix_type_traits<T, ROW, COL>::Interface_type;
     mi::base::Handle<Matrix_interface_type> m( data->get_interface<Matrix_interface_type>());
     if( m) {
         m->set_value( value);
@@ -435,7 +435,7 @@ inline mi::Sint32 get_value( const mi::IData* data, mi::base::Uuid& value)
 template <class T, Size DIM>
 inline mi::Sint32 get_value( const mi::IData* data, mi::math::Vector<T,DIM>& value)
 {
-    typedef typename mi::Vector_type_traits<T,DIM>::Interface_type Vector_interface_type;
+    using Vector_interface_type = typename mi::Vector_type_traits<T, DIM>::Interface_type;
     mi::base::Handle<const Vector_interface_type> v( data->get_interface<Vector_interface_type>());
     if( v) {
         value = v->get_value();
@@ -457,7 +457,7 @@ inline mi::Sint32 get_value( const mi::IData* data, mi::math::Vector<T,DIM>& val
 template <class T, Size ROW, Size COL>
 mi::Sint32 get_value( const mi::IData* data, mi::math::Matrix<T,ROW,COL>& value)
 {
-    typedef typename mi::Matrix_type_traits<T,ROW,COL>::Interface_type Matrix_interface_type;
+    using Matrix_interface_type = typename mi::Matrix_type_traits<T, ROW, COL>::Interface_type;
     mi::base::Handle<const Matrix_interface_type> m( data->get_interface<Matrix_interface_type>());
     if( m) {
         value = m->get_value();
@@ -629,7 +629,7 @@ mi::Sint32 get_value( const mi::IData* data, std::vector<T>& values)
 ///                        - -1: The dynamic type of \p data does not match.
 inline mi::Sint32 get_value( const mi::IData* data, std::string& value)
 {
-    const char* c_str = 0;
+    const char* c_str = nullptr;
     const mi::Sint32 res = get_value( data, c_str);
     if( c_str)
         value.assign( c_str);

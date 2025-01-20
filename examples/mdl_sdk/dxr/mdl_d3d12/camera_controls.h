@@ -67,7 +67,6 @@ namespace mi { namespace examples { namespace mdl_d3d12
         int32_t m_mouse_move_start_x;
         int32_t m_mouse_move_start_y;
         mdl_d3d12::Scene_node* m_target;
-        bool m_has_focus;
     };
 
 }}} // mi::examples::mdl_d3d12

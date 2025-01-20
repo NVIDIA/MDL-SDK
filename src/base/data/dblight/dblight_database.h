@@ -35,6 +35,9 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <vector>
+
+#include <mi/base/handle.h>
 
 #include "dblight_util.h"
 
@@ -66,7 +69,17 @@ class Database_impl : public DB::Database
 {
 public:
     /// Constructor
-    Database_impl();
+    ///
+    /// \param thread_pool               The thread pool to use, or \c nullptr to use an independent
+    ///                                  thread pool instance.
+    /// \param deserialization_manager   The deserialization manager to use, or \c nullptr to use
+    ///                                  an independent deserialization manager.
+    /// \param enable_journal            Indicates whether the enable the journal. Maintaining the
+    ///                                  journal requires memory and time.
+    Database_impl(
+        THREAD_POOL::Thread_pool* thread_pool,
+        SERIAL::Deserialization_manager* deserialization_manager,
+        bool enable_journal);
 
     /// Destructor, clears the database.
     virtual ~Database_impl();
@@ -87,15 +100,22 @@ public:
     /*NI*/ bool unlock( mi::Uint32 lock_id) override;
     /*NI*/ void check_is_locked( mi::Uint32 lock_id) override;
 
-    /*NI*/ mi::Sint32 set_memory_limits( size_t low_water, size_t high_water) override;
-    /*NI*/ void get_memory_limits( size_t& low_water, size_t& high_water) const override;
+    /// Note that the configured limits are simply ignored.
+    mi::Sint32 set_memory_limits( size_t low_water, size_t high_water) override;
+    void get_memory_limits( size_t& low_water, size_t& high_water) const override;
 
-    /*NI*/ void register_status_listener( DB::Status_listener* listener) override;
-    /*NI*/ void unregister_status_listener( DB::Status_listener* listener) override;
-    /*NI*/ void register_transaction_listener( DB::ITransaction_listener* listener) override;
-    /*NI*/ void unregister_transaction_listener( DB::ITransaction_listener* listener) override;
-    /*NI*/ void register_scope_listener( DB::IScope_listener* listener) override;
-    /*NI*/ void unregister_scope_listener( DB::IScope_listener* listener) override;
+    /// Note that status listeners are never invoked since the status of the DBLIGHT database
+    /// never changes (always DB_OK).
+    void register_status_listener( DB::IStatus_listener* listener) override;
+
+    /// Note that status listeners are never invoked since the status of the DBLIGHT database
+    /// never changes (always DB_OK).
+    void unregister_status_listener( DB::IStatus_listener* listener) override;
+
+    void register_transaction_listener( DB::ITransaction_listener* listener) override;
+    void unregister_transaction_listener( DB::ITransaction_listener* listener) override;
+    void register_scope_listener( DB::IScope_listener* listener) override;
+    void unregister_scope_listener( DB::IScope_listener* listener) override;
 
     /// Only the scheduling mode LOCAL is supported.
     mi::Sint32 execute_fragmented( DB::Fragmented_job* job, size_t count) override;
@@ -122,32 +142,8 @@ public:
     /// Returns the transaction manager.
     Transaction_manager* get_transaction_manager() { return m_transaction_manager.get(); }
 
-    /// Used by transactions to allocate new tags.
-    DB::Tag allocate_tag() { return DB::Tag( m_next_tag++); }
-
-    /// Implementation of DB::Database::execute_fragmented() and
-    /// DB::Transaction::execute_fragmented().
-    ///
-    /// \param transaction   The transaction to be passed around. Might be \c NULL. RCS:NEU
-    /// \param job           The fragmented job to be executed. RCS:NEU
-    /// \param count         See #DB::Database::execute_fragmented() for details.
-    /// \return              See #DB::Database::execute_fragmented() for details.
-    mi::Sint32 execute_fragmented(
-        DB::Transaction* transaction, DB::Fragmented_job* job, size_t count);
-
-    /// Implementation of DB::Database::execute_fragmented_async() and
-    /// DB::Transaction::execute_fragmented_async().
-    ///
-    /// \param transaction   The transaction to be passed around. Might be \c NULL.
-    /// \param job           The fragmented job to be executed. RCS:NEU
-    /// \param count         See #DB::Database::execute_fragmented() for details.
-    /// \param listener      See #DB::Database::execute_fragmented() for details. RCS:NEU
-    /// \return              See #DB::Database::execute_fragmented() for details.
-    mi::Sint32 execute_fragmented_async(
-        DB::Transaction* transaction,
-        DB::Fragmented_job* job,
-        size_t count,
-        DB::IExecution_listener* listener);
+    /// Returns the thread pool.
+    THREAD_POOL::Thread_pool* get_thread_pool() { return m_thread_pool; }
 
     /// Returns the deserialization manager used for serialization checks.
     ///
@@ -166,6 +162,40 @@ public:
     /// and Transaction::finish_edit().
     bool get_check_privacy_levels() const { return m_check_privacy_levels; }
 
+    /// Indicates whether reference cycles should be tested in Transaction::store().
+    bool get_check_reference_cycles_store() const { return m_check_reference_cycles_store; }
+
+    /// Indicates whether reference cycles should be tested in Transaction::finish_edit().
+    bool get_check_reference_cycles_edit() const { return m_check_reference_cycles_edit; }
+
+    /// Indicates whether the journal is enabled.
+    bool get_journal_enabled() const { return m_journal_enabled; }
+
+    /// Indicates whether the maximum journal size.
+    size_t get_journal_max_size() const { return m_journal_max_size; }
+
+    /// Notifies all status listeners.
+    void notify_status_listeners( DB::Db_status argument);
+
+    /// Type of a member function of DB::ITransaction_listener.
+    using Transaction_listener_method
+        = std::function< void( DB::ITransaction_listener&, DB::Transaction*) >;
+
+    /// Notifies all transactions listeners.
+    void notify_transaction_listeners(
+        Transaction_listener_method method, DB::Transaction* argument);
+
+    /// Type of a member function of DB::IScope_listener.
+    using Scope_listener_method
+        = std::function< void( DB::IScope_listener&, DB::Scope*) >;
+
+    /// Notifies all scope listeners.
+    void notify_scope_listeners(
+        Scope_listener_method method, DB::Scope* argument);
+
+    /// Used by transactions to allocate new tags.
+    DB::Tag allocate_tag();
+
     /// Dumps the state of the database to the stream.
     void dump( std::ostream& s, bool mask_pointer_values = false);
 
@@ -183,13 +213,28 @@ private:
     std::unique_ptr<Transaction_manager> m_transaction_manager;
 
     /// The thread pool.
-    std::unique_ptr<THREAD_POOL::Thread_pool> m_thread_pool;
+    THREAD_POOL::Thread_pool* m_thread_pool = nullptr;
+
+    /// Indicates whether the thread pool is independent (or shared).
+    bool m_independent_thread_pool = true;
 
     /// The next tag to allocate.
     std::atomic_uint32_t m_next_tag;
 
     /// The deserialization manager.
-    SERIAL::Deserialization_manager* m_deserialization_manager;
+    SERIAL::Deserialization_manager* m_deserialization_manager = nullptr;
+
+    /// Indicates whether the deserialization manager is independent (or shared).
+    bool m_independent_deserialization_manager = true;
+
+    /// The status listeners.
+    std::vector<mi::base::Handle<DB::IStatus_listener> > m_status_listeners;
+
+    /// The scope listeners.
+    std::vector<mi::base::Handle<DB::IScope_listener> > m_scope_listeners;
+
+    /// The transaction listeners.
+    std::vector<mi::base::Handle<DB::ITransaction_listener> > m_transaction_listeners;
 
     /// Indicates whether serialization should be tested in Transaction::store().
     bool m_check_serialization_store = false;
@@ -207,6 +252,24 @@ private:
 #else
     bool m_check_privacy_levels = true;
 #endif
+
+    /// Indicates whether reference cycles should be tested in Transaction::store().
+    bool m_check_reference_cycles_store = false;
+
+    /// Indicates whether reference cycles should be tested in Transaction::finish_edit).
+    bool m_check_reference_cycles_edit = false;
+
+    /// Indicates whether the journal is enabled.
+    const bool m_journal_enabled;
+
+    /// The maximum journal size.
+    size_t m_journal_max_size = 10'000'000;
+
+    /// The low water mark for the memory limits (ignored).
+    size_t m_low_water = 0;
+
+    /// The high water mark for the memory limits (ignored).
+    size_t m_high_water = 0;
 };
 
 } // namespace DBLIGHT

@@ -37,6 +37,7 @@ namespace MI {
 namespace DBLIGHT {
 
 THREAD::Lock g_stats_lock;
+
 Statistics_data g_commit;
 Statistics_data g_abort;
 Statistics_data g_access;
@@ -54,13 +55,18 @@ Statistics_data g_get_tag_reference_count;
 Statistics_data g_get_tag_version;
 Statistics_data g_can_reference_tag;
 Statistics_data g_get_tag_is_removed;
+Statistics_data g_block_commit_or_abort;
+Statistics_data g_unblock_commit_or_abort;
+Statistics_data g_scope_get_journal;
+Statistics_data g_transaction_get_journal;
+
 Statistics_data g_lookup_info_by_tag;
 Statistics_data g_lookup_info_by_name;
 Statistics_data g_garbage_collection;
 
 #define dump( x, y) \
     snprintf( buffer, sizeof( buffer), "%-44s %7zu, %6.3lf ms, %8.3lf μs\n", \
-        x, y.m_count, 1000.0*y.m_time, (1000000.0*y.m_time)/(y.m_count>0?y.m_count:1)); \
+        x, y.m_count, 1000.0*y.m_time, (1'000'000.0*y.m_time)/(y.m_count>0?y.m_count:1)); \
     s << buffer;
 
 void dump_statistics( std::ostream& s, mi::Uint32 next_tag)
@@ -84,7 +90,11 @@ void dump_statistics( std::ostream& s, mi::Uint32 next_tag)
                + g_get_tag_reference_count.m_time
                + g_get_tag_version.m_time
                + g_can_reference_tag.m_time
-               + g_get_tag_is_removed.m_time;
+               + g_get_tag_is_removed.m_time
+               + g_block_commit_or_abort.m_time
+               + g_unblock_commit_or_abort.m_time
+               + g_scope_get_journal.m_time
+               + g_transaction_get_journal.m_time;
 
     char buffer[256];
     dump( "Transaction_impl::commit():", g_commit);
@@ -104,6 +114,11 @@ void dump_statistics( std::ostream& s, mi::Uint32 next_tag)
     dump( "Transaction_impl::get_tag_version():", g_get_tag_version);
     dump( "Transaction_impl::can_reference_tag():", g_can_reference_tag);
     dump( "Transaction_impl::get_tag_is_removed():", g_get_tag_is_removed);
+    dump( "Transaction_impl::block_commit_or_abort():", g_block_commit_or_abort);
+    dump( "Transaction_impl::unblock_commit_or_abort():", g_unblock_commit_or_abort);
+    dump( "Transaction_impl::get_journal():", g_transaction_get_journal);
+    s << std::endl;
+    dump( "Scope_impl::get_journal():", g_scope_get_journal);
     s << std::endl;
     dump( "Info_manager::lookup_info_by_tag():", g_lookup_info_by_tag);
     dump( "Info_manager::lookup_info_by_name():", g_lookup_info_by_name);

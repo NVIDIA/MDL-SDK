@@ -91,37 +91,34 @@ rules Reduce_1_4_to_1_3_rules topdown {
         where wp = math::clamp( math::luminance(w), 0.001, 0.999);
 
     //used in vMaterials
-    color_custom_curve_layer(refl_n,refl_g,exp,w,layer,bsdf(),n)
-        --> weighted_layer(1.0,custom_curve_layer( 0.0,1.0,exp, 1.0, bsdf_tint(refl_g*w,layer),bsdf_tint(refl_n*w,layer),n),bsdf(),n);
-        
+    color_custom_curve_layer(refl_n,refl_g,f82_factor,exp,w,layer,bsdf(),n)
+        --> weighted_layer(1.0,custom_curve_layer( 0.0,1.0,exp, 1.0, bsdf_tint(refl_g*w*f82_factor,layer),bsdf_tint(refl_n*w,layer),n),bsdf(),n);
 
 
-    color_custom_curve_layer(refl_n,refl_g,exp,w,layer,base,n)
+    color_custom_curve_layer(refl_n,refl_g,f82_factor,exp,w,layer,base,n)
         --> custom_curve_layer(rn,rg,exp,0.0,layer,base,n)
         if w == color(0.0)
         where rn = math::luminance(refl_n)
-              rg = math::luminance(refl_g)
+              rg = math::luminance(refl_g*f82_factor)
         deadrule; // the optimizer in the compiler removes this case
 
-    color_custom_curve_layer(refl_n,refl_g,exp,w,layer,base,n)
+    color_custom_curve_layer(refl_n,refl_g,f82_factor,exp,w,layer,base,n)
         --> custom_curve_layer(rn,rg,exp,1.0,
                                     bsdf_tint(refl_n/color(rn),layer),
                                     bsdf_tint((color(1.0)-refl_n)/color(1.0-rn),base),
                                     n)
         if w == color(1.0)
         where rn = math::clamp( math::luminance(refl_n), 0.001, 0.999)
-              rg = math::luminance(refl_g);
+              rg = math::luminance(refl_g*f82_factor);
 
-    color_custom_curve_layer(refl_n,refl_g,exp,w,layer,base,n)
+    color_custom_curve_layer(refl_n,refl_g,f82_factor,exp,w,layer,base,n)
         --> custom_curve_layer(rn,rg,exp,1.0,
                                     bsdf_tint(refl_n*w/color(rn),layer),
                                     bsdf_tint((color(1.0)-refl_n*w)/color(1.0-rn),base),
                                     n)
         where rn = math::clamp( math::luminance(refl_n), 0.001, 0.999)
-              rg = math::clamp(math::luminance(refl_g), 0.001, 0.999);
-              
-              
-              
+              rg = math::clamp(math::luminance(refl_g*f82_factor), 0.001, 0.999);
+
     color_measured_curve_layer(_,w,layer,base,n) --> fresnel_layer(1.5,0.0,layer,base,n)
         if w == color(0.0);
     color_measured_curve_layer(_,w,layer,base,n) --> fresnel_layer(1.5,1.0,layer,base,n)
@@ -195,11 +192,14 @@ rules Make_simple_rules topdown { // bottomup would work too
         simple_glossy_bsdf(ru,rv,tint,color(0.0),t,scatter_reflect,handle);
     sheen_bsdf(r,tint,tintt,_,handle) -->
         simple_glossy_bsdf(r,r,tint,tintt,state::texture_tangent_u(0),scatter_reflect,handle);
+    microflake_sheen_bsdf(r,tint,tintt,_,handle) -->
+        simple_glossy_bsdf(r,r,tint,tintt,state::texture_tangent_u(0),scatter_reflect,handle);
     measured_bsdf(_) --> bsdf();
     thin_film(_,_,base) --> base repeat_rules;
-    bsdf_directional_factor(tint_n,tint_g,_,base) -->
+    coat_absorption_factor(_, _, _, base) --> base repeat_rules;
+    bsdf_directional_factor(tint_n,tint_g,f82_factor,_,base) -->
         fresnel_layer( nvidia::distilling_support::float_ior_from_refl(tint_n), 1.0,
-                            bsdf_tint( tint_g, base), bsdf());
+                            bsdf_tint( tint_g*f82_factor, base), bsdf());
     measured_curve_factor(_,base) --> base repeat_rules;
     measured_factor(_,base) --> base repeat_rules;
     fresnel_factor(ior,k,base)
@@ -223,9 +223,9 @@ rules Make_simple_rules topdown { // bottomup would work too
     custom_curve_layer(refl_n,refl_g,_,w,layer,base,n) -->
         fresnel_layer( nvidia::distilling_support::float_ior_from_refl(refl_n), w,
                             bsdf_tint( color(refl_g), layer), base, n);
-    color_custom_curve_layer(refl_n,refl_g,_,w,layer,base,n) -->
+    color_custom_curve_layer(refl_n,refl_g,f82_factor,_,w,layer,base,n) -->
         color_fresnel_layer( nvidia::distilling_support::ior_from_refl(refl_n), w,
-                                  bsdf_tint( refl_g, layer), base, n);
+                                  bsdf_tint( refl_g * f82_factor, layer), base, n);
     measured_curve_layer(_,w,layer,base,n) -->
         fresnel_layer( 1.5, w, layer, base, n);
     color_measured_curve_layer(_,w,layer,base,n) -->
@@ -607,4 +607,5 @@ rules Make_diffuse_rules bottomup {
                              material_surface(diffuse_reflection_bsdf(_,_),_),
                              _,_,_,_));
 }
+
 

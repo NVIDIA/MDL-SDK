@@ -366,22 +366,22 @@ public:
 
     /// Returns the unresolved MDL file path of the resource.
     ///
-    /// Returns empty string (instead of \c NULL) if not available.
+    /// Returns empty string (instead of \c nullptr) if not available.
     virtual const char* get_unresolved_file_path() const = 0;
 
     /// Sets the unresolved MDL file path of the resource.
     ///
-    /// Requires the empty string to clear (instead of \c NULL which is ignored).
+    /// Requires the empty string to clear (instead of \c nullptr which is ignored).
     virtual void set_unresolved_file_path( const char* s) = 0;
 
     /// Returns the MDL name of the owner module.
     ///
-    /// Returns empty string (instead of \c NULL) if not available.
+    /// Returns empty string (instead of \c nullptr) if not available.
     virtual const char* get_owner_module() const = 0;
 
     /// Sets the MDL name of the owner module.
     ///
-    /// Requires the empty string to clear (instead of \c NULL which is ignored).
+    /// Requires the empty string to clear (instead of \c nullptr which is ignored).
     virtual void set_owner_module( const char* module) = 0;
 
     virtual std::string get_file_path( DB::Transaction* transaction) const = 0;
@@ -513,7 +513,7 @@ public:
 
     /// Creates a texture.
     ///
-    /// \param owner_module   MDL name of owner module (or \c NULL).
+    /// \param owner_module   MDL name of owner module (or \c nullptr).
     virtual IValue_texture* create_texture(
         const IType_texture* type,
         DB::Tag value,
@@ -526,7 +526,7 @@ public:
 
     /// Creates a light profile.
     ///
-    /// \param owner_module   MDL name of owner module (or \c NULL).
+    /// \param owner_module   MDL name of owner module (or \c nullptr).
     virtual IValue_light_profile* create_light_profile(
         DB::Tag value,
         const char* unresolved_file_path,
@@ -536,7 +536,7 @@ public:
 
     /// Creates a BSDF measurement.
     ///
-    /// \param owner_module   MDL name of owner module (or \c NULL).
+    /// \param owner_module   MDL name of owner module (or \c nullptr).
     virtual IValue_bsdf_measurement* create_bsdf_measurement(
         DB::Tag value,
         const char* unresolved_file_path,

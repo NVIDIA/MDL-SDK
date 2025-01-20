@@ -38,6 +38,10 @@ set(PROJECT_SOURCES
     "example_execution_cuda.cpp"
     )
 
+if(MDL_BUILD_WITHOUT_CUDA_DRIVER)
+    set(ADDITIONAL_OPTS ${ADDITIONAL_OPTS} SKIP_UNDEFINED_SYMBOL_CHECK)
+endif()
+
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
@@ -47,6 +51,7 @@ create_from_base_preset(
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
     STATIC_MSVC_RUNTIME
+    ${ADDITIONAL_OPTS}
 )
 
 # add dependencies
@@ -74,9 +79,7 @@ target_add_cuda_ptx_rule(TARGET ${PROJECT_NAME}
     FAST_MATH
     )
 
-# -------------------------------------------------------------------------------------------------
-# Create installation rules to copy the build directory
-# -------------------------------------------------------------------------------------------------
+# create installation rules
 add_target_install(
     TARGET ${PROJECT_NAME}
     DESTINATION "examples/mdl_core/execution_cuda"

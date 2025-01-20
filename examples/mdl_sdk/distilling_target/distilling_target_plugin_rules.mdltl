@@ -37,7 +37,7 @@ rules Make_simple_rules topdown { // bottomup would work too
     // Directional factor BSDFs are replaced by a fresnel layer (or
     // just the base BSDF), using a helper function from the
     // ::nvidia::distilling_support module for the IOR.
-    bsdf_directional_factor(tint_n,tint_g,_,base) -->
+    bsdf_directional_factor(tint_n,tint_g,_f82,_,base) -->
         fresnel_layer( nvidia::distilling_support::float_ior_from_refl(tint_n), 1.0,
                             bsdf_tint( tint_g, base), bsdf());
     fresnel_factor(ior,k,base) -->
@@ -66,7 +66,7 @@ rules Make_simple_rules topdown { // bottomup would work too
     custom_curve_layer(refl_n,refl_g,_,w,layer,base,n) -->
         fresnel_layer( nvidia::distilling_support::float_ior_from_refl(refl_n), w,
                             bsdf_tint( color(refl_g), layer), base, n);
-    color_custom_curve_layer(refl_n,refl_g,_,w,layer,base,n) -->
+    color_custom_curve_layer(refl_n,refl_g,_f82,_,w,layer,base,n) -->
         color_fresnel_layer( nvidia::distilling_support::ior_from_refl(refl_n), w,
                                   bsdf_tint( refl_g, layer), base, n);
     measured_curve_layer(_,w,layer,base,n) -->

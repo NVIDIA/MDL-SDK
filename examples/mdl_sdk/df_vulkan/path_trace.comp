@@ -32,16 +32,18 @@
 //   LOCAL_SIZE_X : The local work group size in the x dimension
 //   LOCAL_SIZE_Y : The local work group size in the y dimension
 //
-//   BINDING_RENDER_PARAMS         : Binding index for Render_params
-//   BINDING_ENV_MAP               : Binding index for uEnvironmentMap
-//   BINDING_ENV_MAP_SAMPLING_DATA : Binding index for Environment_sample_data_buffer
-//   BINDING_BEAUTY_BUFFER         : Binding index for uBeautyBuffer
-//   BINDING_AUX_ALBEDO_BUFFER     : Binding index for uAuxAlbedoBuffer
-//   BINDING_AUX_NORMAL_BUFFER     : Binding index for uAuxNormalBuffer
+//   BINDING_RENDER_PARAMS             : Binding index for Render_params
+//   BINDING_ENV_MAP                   : Binding index for uEnvironmentMap
+//   BINDING_ENV_MAP_SAMPLING_DATA     : Binding index for Environment_sample_data_buffer
+//   BINDING_BEAUTY_BUFFER             : Binding index for uBeautyBuffer
+//   BINDING_AUX_ALBEDO_DIFFUSE_BUFFER : Binding index for uAuxAlbedoDiffuseBuffer
+//   BINDING_AUX_ALBEDO_GLOSSY_BUFFER  : Binding index for uAuxAlbedoGlossyBuffer
+//   BINDING_AUX_NORMAL_BUFFER         : Binding index for uAuxNormalBuffer
+//   BINDING_AUX_ROUGHNESS_BUFFER      : Binding index for uAuxRoughnessBuffer
 //
-//   HAS_BACKFACE_BSDF               : Only defined if backface.scattering is non-default and different than surface.scattering
-//   HAS_BACKFACE_EDF                : Only defined if backface.emission.emission is non-default and different than surface.emission.emission
-//   HAS_BACKFACE_EMISSION_INTENSITY : Only defined if backface.emission.intensity is non-default and different than surface.emission.intensity
+//   MDL_HAS_BACKFACE_BSDF               : Only defined if backface.scattering is non-default and different than surface.scattering
+//   MDL_HAS_BACKFACE_EDF                : Only defined if backface.emission.emission is non-default and different than surface.emission.emission
+//   MDL_HAS_BACKFACE_EMISSION_INTENSITY : Only defined if backface.emission.intensity is non-default and different than surface.emission.intensity
 
 #version 450
 #extension GL_GOOGLE_include_directive : require
@@ -92,17 +94,25 @@ readonly restrict buffer Environment_sample_data_buffer
 layout(rgba32f, set = 0, binding = BINDING_BEAUTY_BUFFER)
 uniform restrict image2D uBeautyBuffer;
 
-layout(rgba32f, set = 0, binding = BINDING_AUX_ALBEDO_BUFFER)
-uniform restrict image2D uAuxAlbedoBuffer;
+layout(rgba32f, set = 0, binding = BINDING_AUX_ALBEDO_DIFFUSE_BUFFER)
+uniform restrict image2D uAuxAlbedoDiffuseBuffer;
+
+layout(rgba32f, set = 0, binding = BINDING_AUX_ALBEDO_GLOSSY_BUFFER)
+uniform restrict image2D uAuxAlbedoGlossyBuffer;
 
 layout(rgba32f, set = 0, binding = BINDING_AUX_NORMAL_BUFFER)
 uniform restrict image2D uAuxNormalBuffer;
 
+layout(rgba32f, set = 0, binding = BINDING_AUX_ROUGHNESS_BUFFER)
+uniform restrict image2D uAuxRoughnessBuffer;
+
 struct Ray_state
 {
     vec3 contribution;
-    vec3 aux_albedo;
+    vec3 aux_albedo_diffuse;
+    vec3 aux_albedo_glossy;
     vec3 aux_normal;
+    vec2 aux_roughness;
     vec3 weight;
     vec3 origin;
     vec3 dir;
@@ -129,57 +139,52 @@ const float DIRAC = -1.0;
 //-------------------------------------------------------------------------------------------------
 // MDL function prototypes
 //-------------------------------------------------------------------------------------------------
+void mdl_init(inout State state);
 bool mdl_thin_walled(in State state);
 
-void mdl_bsdf_init(inout State state);
 void mdl_bsdf_sample(inout Bsdf_sample_data sret_ptr, in State state);
 void mdl_bsdf_evaluate(inout Bsdf_evaluate_data sret_ptr, in State state);
 void mdl_bsdf_pdf(inout Bsdf_pdf_data sret_ptr, in State state);
 void mdl_bsdf_auxiliary(inout Bsdf_auxiliary_data sret_ptr, in State state);
 
-void mdl_edf_init(inout State state);
 void mdl_edf_sample(inout Edf_sample_data sret_ptr, in State state);
 void mdl_edf_evaluate(inout Edf_evaluate_data sret_ptr, in State state);
 void mdl_edf_pdf(inout Edf_pdf_data sret_ptr, in State state);
 void mdl_edf_auxiliary(inout Edf_auxiliary_data sret_ptr, inout State state);
 vec3 mdl_emission_intensity(in State state);
 
-#ifdef HAS_BACKFACE_BSDF
-void mdl_backface_bsdf_init(inout State state);
+#ifdef MDL_HAS_BACKFACE_BSDF
 void mdl_backface_bsdf_sample(inout Bsdf_sample_data sret_ptr, in State state);
 void mdl_backface_bsdf_evaluate(inout Bsdf_evaluate_data sret_ptr, in State state);
 void mdl_backface_bsdf_pdf(inout Bsdf_pdf_data sret_ptr, in State state);
 void mdl_backface_bsdf_auxiliary(inout Bsdf_auxiliary_data sret_ptr, in State state);
 #else
-#define mdl_backface_bsdf_init      mdl_bsdf_init
 #define mdl_backface_bsdf_sample    mdl_bsdf_sample
 #define mdl_backface_bsdf_evaluate  mdl_bsdf_evaluate
 #define mdl_backface_bsdf_pdf       mdl_bsdf_pdf
 #define mdl_backface_bsdf_auxiliary mdl_bsdf_auxiliary
 #endif // HAS_BACKFACE_BSDF
 
-#ifdef HAS_BACKFACE_EDF
-void mdl_backface_edf_init(inout State state);
+#ifdef MDL_HAS_BACKFACE_EDF
 void mdl_backface_edf_sample(inout Edf_sample_data sret_ptr, in State state);
 void mdl_backface_edf_evaluate(inout Edf_evaluate_data sret_ptr, in State state);
 void mdl_backface_edf_pdf(inout Edf_pdf_data sret_ptr, in State state);
 void mdl_backface_edf_auxiliary(inout Edf_auxiliary_data sret_ptr, inout State state);
 #else
-#define mdl_backface_edf_init      mdl_edf_init
 #define mdl_backface_edf_sample    mdl_edf_sample
 #define mdl_backface_edf_evaluate  mdl_edf_evaluate
 #define mdl_backface_edf_pdf       mdl_edf_pdf
 #define mdl_backface_edf_auxiliary mdl_edf_auxiliary
 #endif // HAS_BACKFACE_EDF
 
-#ifdef HAS_BACKFACE_EMISSION_INTENSITY
+#ifdef MDL_HAS_BACKFACE_EMISSION_INTENSITY
 vec3 mdl_backface_emission_intensity(in State state);
 #else
 #define mdl_backface_emission_intensity mdl_emission_intensity
 #endif // HAS_BACKFACE_EMISSION_INTENSITY
 
 vec3 mdl_absorption_coefficient(in State state);
-float mdl_cutout_opacity(in State state);
+float mdl_standalone_cutout_opacity(in State state);
 
 
 //-------------------------------------------------------------------------------------------------
@@ -364,9 +369,12 @@ vec3 offset_ray(const vec3 p, const vec3 n)
                 abs(p.z) < origin ? p.z + float_scale * n.z : p_i.z);
 }
 
-State make_state(Ray_hit_info hit_info, bool inside)
+State make_mdl_state(Ray_hit_info hit_info, bool inside)
 {
     const vec3 oriented_normal = inside ? -hit_info.normal : hit_info.normal;
+#ifdef NUM_TEX_RESULTS
+    vec4 tex_results[NUM_TEX_RESULTS]; // no need to initialize
+#endif
 
     return State(
         /*normal=*/                 oriented_normal,
@@ -376,10 +384,9 @@ State make_state(Ray_hit_info hit_info, bool inside)
         /*text_coords[1]=*/         vec3[1](hit_info.tex_coord),
         /*tangent_u[1]=*/           vec3[1](hit_info.tangent_u),
         /*tangent_v[1]=*/           vec3[1](hit_info.tangent_v),
-        /*text_results[16]=*/       vec4[16](vec4(0), vec4(0), vec4(0), vec4(0),
-                                             vec4(0), vec4(0), vec4(0), vec4(0),
-                                             vec4(0), vec4(0), vec4(0), vec4(0),
-                                             vec4(0), vec4(0), vec4(0), vec4(0)),
+    #ifdef NUM_TEX_RESULTS
+        /*text_results[NUM_TEX_RESULTS]=*/ tex_results,
+    #endif
         /*ro_data_segment_offset=*/ 0,
         /*world_to_object=*/        mat4(1.0),
         /*object_to_world=*/        mat4(1.0),
@@ -387,6 +394,7 @@ State make_state(Ray_hit_info hit_info, bool inside)
         /*meters_per_scene_unit=*/  1.0,
         /*arg_block_offset=*/       0
     );
+    
 }
 
 
@@ -413,11 +421,11 @@ void trace_path(inout Ray_state ray_state, inout uint seed)
             break;
         }
 
-        State state = make_state(hit_info, ray_state.is_inside);
-
+        State state = make_mdl_state(hit_info, ray_state.is_inside);
+        
         // Handle cutout opacity
         float x_anyhit = rnd(seed);
-        if (x_anyhit > mdl_cutout_opacity(state))
+        if (x_anyhit > mdl_standalone_cutout_opacity(state))
         {
             // Don't count this as a bounce
             bounce--;
@@ -428,10 +436,11 @@ void trace_path(inout Ray_state ray_state, inout uint seed)
             continue;
         }
 
-        // Cache shading normal because we need to reset
-        // the normal before each df::init call, which expects
-        // an unchanged normal as input.
-        const vec3 shading_normal = state.normal;
+        // Pre-compute and cache data used by generated MDL *_sample, *_evaluate functions
+        // NOTE: Would also cache data for cutout_opacity, but in this example we compile the
+        //       cutout_opacity function standalone so no expensive pre-comupation is done if
+        //       the cutout opacity causes this hit to be ignored.
+        mdl_init(state);
 
         const bool thin_walled = mdl_thin_walled(state);
         const bool is_backface = ray_state.is_inside && thin_walled;
@@ -453,26 +462,19 @@ void trace_path(inout Ray_state ray_state, inout uint seed)
         
         if (is_backface)
         {
-            mdl_backface_edf_init(state);
             mdl_backface_edf_evaluate(edf_evaluate_data, state);
             const vec3 emission_intensity = mdl_backface_emission_intensity(state);
             ray_state.contribution += ray_state.weight * emission_intensity * edf_evaluate_data.edf;
         }
         else if (!ray_state.is_inside)
         {
-            mdl_edf_init(state);
             mdl_edf_evaluate(edf_evaluate_data, state);
             const vec3 emission_intensity = mdl_emission_intensity(state);
             ray_state.contribution += ray_state.weight * emission_intensity * edf_evaluate_data.edf;
         }
 
         // BSDF
-        state.normal = shading_normal; // Restore shading normal
-        if (is_backface)
-            mdl_backface_bsdf_init(state);
-        else
-            mdl_bsdf_init(state);
-
+        //
         // Output auxiliary data
         if (bounce == 0)
         {
@@ -487,8 +489,10 @@ void trace_path(inout Ray_state ray_state, inout uint seed)
             else
                 mdl_bsdf_auxiliary(bsdf_aux_data, state);
 
-            ray_state.aux_albedo += bsdf_aux_data.albedo_diffuse + bsdf_aux_data.albedo_glossy;
+            ray_state.aux_albedo_diffuse += bsdf_aux_data.albedo_diffuse;
+            ray_state.aux_albedo_glossy += bsdf_aux_data.albedo_glossy;
             ray_state.aux_normal += bsdf_aux_data.normal;
+            ray_state.aux_roughness += bsdf_aux_data.roughness.xy;
             ray_state.aux_num_samples++;
         }
 
@@ -507,8 +511,8 @@ void trace_path(inout Ray_state ray_state, inout uint seed)
             float x_light_anyhit = rnd(seed);
             if (shadow_ray_hit)
             {
-                State shadow_hit_state = make_state(shadow_hit, ray_state.is_inside);
-                shadow_ray_hit = (x_light_anyhit <= mdl_cutout_opacity(shadow_hit_state));
+                State shadow_hit_state = make_mdl_state(shadow_hit, ray_state.is_inside);
+                shadow_ray_hit = (x_light_anyhit <= mdl_standalone_cutout_opacity(shadow_hit_state));
             }
 
             if (!shadow_ray_hit && light_pdf != 0.0)
@@ -583,8 +587,10 @@ void main()
         return;
 
     vec3 contribution = vec3(0.0);
-    vec3 aux_albedo = vec3(0.0);
+    vec3 aux_albedo_diffuse = vec3(0.0);
+    vec3 aux_albedo_glossy = vec3(0.0);
     vec3 aux_normal = vec3(0.0);
+    vec2 aux_roughness = vec2(0.0);
     uint aux_num_samples = 0;
 
     for (uint iteration = 0; iteration < uSamplesPerIteration; iteration++)
@@ -604,8 +610,10 @@ void main()
 
         Ray_state ray_state;
         ray_state.contribution = vec3(0.0);
-        ray_state.aux_albedo = vec3(0.0);
+        ray_state.aux_albedo_diffuse = vec3(0.0);
+        ray_state.aux_albedo_glossy = vec3(0.0);
         ray_state.aux_normal = vec3(0.0);
+        ray_state.aux_roughness = vec2(0.0);
         ray_state.weight = vec3(1.0);
         ray_state.origin = ray_origin;
         ray_state.dir = ray_dir;
@@ -616,32 +624,44 @@ void main()
         trace_path(ray_state, seed);
 
         contribution += ray_state.contribution;
-        aux_albedo += ray_state.aux_albedo;
+        aux_albedo_diffuse += ray_state.aux_albedo_diffuse;
+        aux_albedo_glossy += ray_state.aux_albedo_glossy;
         aux_normal += ray_state.aux_normal;
+        aux_roughness += ray_state.aux_roughness;
         aux_num_samples += ray_state.aux_num_samples;
     }
 
     contribution *= 1.0 / float(uSamplesPerIteration);
-    aux_albedo *= 1.0 / max(1.0, float(aux_num_samples));
+
+    const float aux_weight = 1.0 / max(1.0, float(aux_num_samples));
+    aux_albedo_diffuse *= aux_weight;
+    aux_albedo_glossy *= aux_weight;
     if (dot(aux_normal, aux_normal) > 0.0)
         aux_normal = normalize(aux_normal);
+    aux_roughness *= aux_weight;
 
     const ivec2 image_coord = ivec2(gl_GlobalInvocationID.xy);
 
     vec3 old_beauty = imageLoad(uBeautyBuffer, image_coord).xyz;
-    vec3 old_aux_albedo = imageLoad(uAuxAlbedoBuffer, image_coord).xyz;
+    vec3 old_aux_albedo_diffuse = imageLoad(uAuxAlbedoDiffuseBuffer, image_coord).xyz;
+    vec3 old_aux_albedo_glossy = imageLoad(uAuxAlbedoGlossyBuffer, image_coord).xyz;
     vec3 old_aux_normal = imageLoad(uAuxNormalBuffer, image_coord).xyz;
+    vec2 old_aux_roughness = imageLoad(uAuxRoughnessBuffer, image_coord).xy;
 
     float blend_weight = float(uSamplesPerIteration) / float(uProgressiveIteration + uSamplesPerIteration);
     vec3 new_beauty = mix(old_beauty, contribution, blend_weight);
-    vec3 new_aux_albedo = mix(old_aux_albedo, aux_albedo, blend_weight);
+    vec3 new_aux_albedo_diffuse = mix(old_aux_albedo_diffuse, aux_albedo_diffuse, blend_weight);
+    vec3 new_aux_albedo_glossy = mix(old_aux_albedo_glossy, aux_albedo_glossy, blend_weight);
     vec3 new_aux_normal = mix(old_aux_normal, aux_normal, blend_weight);
+    vec2 new_aux_roughness = mix(old_aux_roughness, aux_roughness, blend_weight);
 
     // Renormalize auxiliary normal
     if (dot(new_aux_normal, new_aux_normal) > 0.0)
         new_aux_normal = normalize(new_aux_normal);
 
     imageStore(uBeautyBuffer, image_coord, vec4(new_beauty, 0.0));
-    imageStore(uAuxAlbedoBuffer, image_coord, vec4(new_aux_albedo, 0.0));
+    imageStore(uAuxAlbedoDiffuseBuffer, image_coord, vec4(new_aux_albedo_diffuse, 0.0));
+    imageStore(uAuxAlbedoGlossyBuffer, image_coord, vec4(new_aux_albedo_glossy, 0.0));
     imageStore(uAuxNormalBuffer, image_coord, vec4(new_aux_normal, 0.0));
+    imageStore(uAuxRoughnessBuffer, image_coord, vec4(new_aux_roughness, 0.0, 0.0));
 }

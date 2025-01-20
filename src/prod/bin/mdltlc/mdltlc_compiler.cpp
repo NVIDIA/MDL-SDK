@@ -36,6 +36,7 @@
 #include <mdl/compiler/compilercore/compilercore_mdl.h>
 #include <mdl/compiler/compilercore/compilercore_factories.h>
 #include <mdl/compiler/compilercore/compilercore_symbols.h>
+#include <mdl/compiler/compilercore/compilercore_mangle.h>
 
 #include "mdltlc_compiler.h"
 #include "mdltlc_module.h"
@@ -58,10 +59,11 @@ Compiler::Compiler(mi::mdl::IMDL *imdl)
     , m_arena(m_allocator)
     , m_arena_builder(m_arena)
     , m_comp_options(&m_arena)
-    , m_builtin_type_map(0, Builtin_type_map::hasher(), Builtin_type_map::key_equal(), m_allocator)
     , m_symbol_table(m_arena)
+    , m_type_factory(m_arena, m_symbol_table)
     , m_messages(m_allocator)
     , m_mdl_type_cache(*mi::mdl::impl_cast<mi::mdl::MDL>(imdl)->get_type_factory())
+    , m_def_table(m_arena)
 {
 }
 
@@ -75,10 +77,11 @@ mi::base::Handle<Compilation_unit> Compiler::create_unit(const char *fname)
             m_imdl,
             &m_node_types,
             &m_symbol_table,
+            &m_type_factory,
             fname,
             &m_comp_options,
             &m_messages,
-            &m_builtin_type_map);
+            &m_def_table);
     return mi::base::make_handle(unit);
 }
 
@@ -99,8 +102,17 @@ void Compiler::run(unsigned& err_count) {
         (void)res;
     }
 
+    // Declare types built into the MDL compiler.
+    declare_builtins();
+
+    // Declare types built into the distiller.
+    declare_dist_nodes();
+
     // Load standard libraries.
     load_builtins();
+
+    //pp::Pretty_print p(m_arena, std::cout);
+    //m_def_table.dump(p);
 
     // Make the MDL paths specified in the compiler options available
     // to the core compiler.
@@ -165,9 +177,9 @@ void Compiler::print_messages() {
         const Message* m = *it;
         printer->print(m->get_filename());
         printer->print(":");
-        printer->print(static_cast<long int>(m->get_line()));
+        printer->print(m->get_line());
         printer->print(":");
-        printer->print(static_cast<long int>(m->get_column()));
+        printer->print(m->get_column());
         printer->print(": ");
         printer->print(m->get_severity_str());
         printer->print(": ");
@@ -176,7 +188,7 @@ void Compiler::print_messages() {
     }
     if (cnt < total_message_cnt) {
         printer->print("... and ");
-        printer->print(static_cast<long int>(total_message_cnt - cnt));
+        printer->print(total_message_cnt - cnt);
         printer->print(" more message(s)... (use --all-errors to see the full list)\n");
     }
 }
@@ -192,30 +204,22 @@ Compiler_options const &Compiler::get_compiler_options() const {
 void Compiler::add_builtin(
     Symbol *symbol,
     Symbol *fq_symbol,
+    Type const *type,
+    mi::mdl::IDefinition::Semantics sema,
+    char const *signature,
+    mi::mdl::IType const *mdl_type) {
+    m_def_table.add(symbol, fq_symbol, type, signature, sema, mdl_type);
+}
+
+void Compiler::add_builtin(
+    Symbol *symbol,
+    Symbol *fq_symbol,
     mi::mdl::IType const *mdl_type,
-    mi::mdl::IDefinition::Semantics sema)
+    mi::mdl::IDefinition::Semantics sema,
+    char const *signature)
 {
-    Builtin_type_map::iterator it = m_builtin_type_map.find(symbol);
-    if (it != m_builtin_type_map.end()) {
-        Type_ptr_list &vec = it->second.get_type_list();
-        vec.push_back(mdl_type);
-        if (m_comp_options.get_debug_builtin_loading()) {
-            printf("[info] %s: was overloaded\n", symbol->get_name());
-        }
-    } else {
-        mi::mdl::Allocator_builder builder(m_allocator);
-        Type_ptr_list vec(m_allocator);
-        vec.push_back(mdl_type);
-
-        Builtin_entry entry(fq_symbol, vec, sema);
-
-        std::pair<Symbol *, Builtin_entry> p(symbol, entry);
-
-        std::pair<Builtin_type_map::iterator, bool> newly_inserted =
-            m_builtin_type_map.insert(p);
-        MDL_ASSERT(newly_inserted.second);
-        (void) newly_inserted.second;
-    }
+    Type const *t = m_type_factory.import_type(mdl_type);
+    add_builtin(symbol, fq_symbol, t, sema, signature, mdl_type);
 }
 
 /// Load the given builtin module using the MDL-SDK and print some
@@ -243,6 +247,9 @@ void Compiler::load_builtin_module(const char *name) {
         printf("[error] cannot load builtin module: %s\n", name);
         return;
     }
+
+    mi::mdl::Name_printer printer(m_allocator);
+    mi::mdl::string signature(m_allocator);
 
     int exported_count = df_mod->get_exported_definition_count();
 
@@ -302,14 +309,35 @@ void Compiler::load_builtin_module(const char *name) {
         tmp += def->get_symbol()->get_name();
         Symbol *fq_symbol = m_symbol_table.get_symbol(tmp.c_str());
 
+
         mi::mdl::IType const *type = def->get_type();
+
+        char const *c_signature = nullptr;
+
+        if (mi::mdl::IType_function const *f_type = as<mi::mdl::IType_function>(type)) {
+            // Create the signature, if the definition is a function.
+            signature = tmp;
+            signature += "(";
+            for (size_t i = 0; i < f_type->get_parameter_count(); ++i) {
+                mi::mdl::IType const *p_type;
+                mi::mdl::ISymbol const *p_name;
+                f_type->get_parameter(i, p_type, p_name);
+                if (i > 0) {
+                    signature += ',';
+                }
+                printer.print(p_type->skip_type_alias());
+                signature += printer.get_line();
+            }
+            signature += ")";
+            c_signature = mi::mdl::Arena_strdup(m_arena, signature.c_str());
+        }
 
         mi::mdl::IDefinition::Semantics sema = m_imdl->get_builtin_semantic(fq_symbol->get_name());
 
         // Register the type for all unqualified and qualified names.
-        add_builtin(symbol, fq_symbol, type, sema);
-        add_builtin(q_symbol, fq_symbol, type, sema);
-        add_builtin(fq_symbol, fq_symbol, type, sema);
+        add_builtin(symbol, fq_symbol, type, sema, c_signature);
+        add_builtin(q_symbol, fq_symbol, type, sema, c_signature);
+        add_builtin(fq_symbol, fq_symbol, type, sema, c_signature);
     }
 }
 
@@ -321,4 +349,147 @@ void Compiler::load_builtins() {
      load_builtin_module("::math");
      load_builtin_module("::state");
      load_builtin_module("::nvidia::distilling_support");
+}
+
+void Compiler::declare_builtins() {
+    int num_args = 0;
+
+    (void)num_args;
+
+
+#define BUILTIN_TYPE_BEGIN(typenam, flags)                               \
+    {                                                                    \
+        Symbol *symbol = m_symbol_table.get_symbol(#typenam);            \
+        (void) symbol;                                                   \
+        std::string s = "::";\
+        s += #typenam;\
+        Symbol *fq_symbol = m_symbol_table.get_symbol(s.c_str()); \
+        (void) fq_symbol;                                                \
+        Type *builtin_type = m_type_factory.builtin_type_for(#typenam);  \
+        (void) builtin_type;
+
+#define ARG0()                              num_args = 0;
+#define ARG1(a1)                            num_args = 1; a1
+#define ARG2(a1, a2)                        num_args = 2; a1 a2
+#define ARG3(a1, a2, a3)                    num_args = 3; a1 a2 a3
+#define ARG4(a1, a2, a3, a4)                num_args = 4; a1 a2 a3 a4
+#define ARG5(a1, a2, a3, a4, a5)            num_args = 5; a1 a2 a3 a4 a5
+#define ARG6(a1, a2, a3, a4, a5, a6)        num_args = 6; a1 a2 a3 a4 a5 a6
+#define ARG7(a1, a2, a3, a4, a5, a6, a7)    num_args = 7; a1 a2 a3 a4 a5 a6 a7
+#define ARG8(a1, a2, a3, a4, a5, a6, a7, a8) \
+    num_args = 8; a1 a2 a3 a4 a5 a6 a7 a8
+#define ARG9(a1, a2, a3, a4, a5, a6, a7, a8, a9) \
+    num_args = 9; a1 a2 a3 a4 a5 a6 a7 a8 a9
+#define ARG12(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12) \
+    num_args = 12; a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12
+#define ARG16(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16) \
+    num_args = 16; a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16
+
+#define ARG(type, name, arr)                                            \
+            {                                                           \
+                Type *arg_type = m_type_factory.builtin_type_for(#type);               \
+                signature += #type;                                     \
+                signature += ',';                                       \
+                Type_list_elem *type_list_elem = m_arena_builder.create<Type_list_elem>(arg_type); \
+                constr_type->add_parameter(type_list_elem);             \
+            }
+
+#define UARG(type, name, arr) \
+    ARG(type, name, arr)
+
+#define DEFARG(type, name, arr, expr) \
+    ARG(type, name, arr)
+
+#define UDEFARG(type, name, arr, expr) \
+    ARG(type, name, arr)
+
+#define XDEFARG(type, name, arr, expr) \
+    ARG(type, name, arr)
+
+#define CONSTRUCTOR(kind, classname, args, sema, flags)                 \
+        {                                                               \
+            using mi::mdl::Version_flags::REMOVED_1_1; \
+            using mi::mdl::Version_flags::SINCE_1_1; \
+            using mi::mdl::Version_flags::REMOVED_1_5; \
+            using mi::mdl::Version_flags::SINCE_1_5; \
+            using mi::mdl::Version_flags::REMOVED_1_7; \
+            using mi::mdl::Version_flags::SINCE_1_7; \
+            unsigned version_removed = (flags >> 8) & 0xff; \
+            if (version_removed == 0) { \
+            Type_function *constr_type = m_type_factory.create_function(builtin_type); \
+            constr_type->set_semantics(mi::mdl::IDefinition::Semantics:: sema);        \
+            std::string signature;   \
+            signature += #classname; \
+            signature += '(';        \
+            args                     \
+            if (signature.back() == ',') { signature.pop_back(); } \
+            signature += ')';        \
+            add_builtin(symbol, fq_symbol, constr_type, mi::mdl::IDefinition::Semantics::sema, signature.c_str(), nullptr); \
+            } \
+        }
+
+#define BUILTIN_TYPE_END(typenam)              \
+    }
+
+#include "mdl/compiler/compilercore/compilercore_known_defs.h"
+}
+
+void Compiler::declare_dist_nodes() {
+
+    for (int idx = 0; ; idx++) {
+        bool error = false;
+        mi::mdl::Node_type const *nt = m_node_types.type_from_idx(idx);
+        // static_type_from_idx returns nullptr if the idx is larger
+        // than the last supported node type index.
+        if (!nt) {
+            break;
+        }
+
+        //mi::mdl::string nt_ret_type(m_arena.get_allocator());
+        char const *nt_ret_type = m_node_types.get_return_type(idx);
+
+        Type *ret_type = m_type_factory.builtin_type_for(nt_ret_type);
+
+        if (!ret_type) {
+            printf("[warning] ignoring distiller function '%s' (unknown return type: '%s' for '%s' [%s])\n",
+                nt->type_name, nt_ret_type, m_node_types.get_return_type(idx), nt->get_signature().c_str());
+            continue;
+        }
+
+        Symbol *name = m_symbol_table.get_symbol(nt->type_name);
+
+        // For builtins important from the distiller node definitions,
+        // we expand the function types for all supported parameter
+        // counts.  That means that we add types that have arities
+        // from the minimum parameter count of the node up to the
+        // maximum number of parameters, one by one.
+        for (int max_param = nt->min_parameters; max_param <= nt->parameters.size(); max_param++) {
+            Type_function *t = m_type_factory.create_function(ret_type);
+            t->set_semantics(nt->semantics);
+            t->set_selector(nt->selector_enum);
+            t->set_node_type(nt);
+
+            Type_list_elem *type_list_elem;
+
+            int i = 1;
+            for (std::vector<mi::mdl::Node_param>::const_iterator it(nt->parameters.begin()), end(nt->parameters.end());
+                it != end && i <= max_param; ++it, ++i) {
+                Type *pt = m_type_factory.builtin_type_for(it->param_type);
+                if (!pt) {
+                    printf("[warning] ignoring distiller function %s (unknown type for parameter %d)\n",
+                        nt->type_name, i);
+                    error = true;
+                    break;
+                }
+
+                type_list_elem = m_arena_builder.create<Type_list_elem>(pt);
+                t->add_parameter(type_list_elem);
+            }
+
+            if (error)
+                continue;
+
+            add_builtin(name, name, t, nt->semantics, Arena_strdup(m_arena, nt->get_signature().c_str()), nullptr);
+        }
+    }
 }

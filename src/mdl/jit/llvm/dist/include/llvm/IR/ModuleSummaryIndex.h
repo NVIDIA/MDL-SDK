@@ -74,7 +74,7 @@ struct CalleeInfo {
   CalleeInfo()
       : Hotness(static_cast<uint32_t>(HotnessType::Unknown)), RelBlockFreq(0) {}
   explicit CalleeInfo(HotnessType Hotness, uint64_t RelBF)
-      : Hotness(static_cast<uint32_t>(Hotness)), RelBlockFreq(RelBF) {}
+      : Hotness(static_cast<uint32_t>(Hotness)), RelBlockFreq(uint32_t(RelBF)) {}
 
   void updateHotness(const HotnessType OtherHotness) {
     Hotness = std::max(Hotness, static_cast<uint32_t>(OtherHotness));
@@ -273,7 +273,7 @@ template <> struct DenseMapInfo<ValueInfo> {
     assert(isSpecialKey(L) || isSpecialKey(R) || (L.haveGVs() == R.haveGVs()));
     return L.getRef() == R.getRef();
   }
-  static unsigned getHashValue(ValueInfo I) { return (uintptr_t)I.getRef(); }
+  static unsigned getHashValue(ValueInfo I) { return (unsigned)(uintptr_t)I.getRef(); }
 };
 
 /// Function and variable summary information to aid decisions and
@@ -765,7 +765,7 @@ template <> struct DenseMapInfo<FunctionSummary::VFuncId> {
     return L.GUID == R.GUID && L.Offset == R.Offset;
   }
 
-  static unsigned getHashValue(FunctionSummary::VFuncId I) { return I.GUID; }
+  static unsigned getHashValue(FunctionSummary::VFuncId I) { return unsigned(I.GUID); }
 };
 
 template <> struct DenseMapInfo<FunctionSummary::ConstVCall> {
@@ -784,7 +784,7 @@ template <> struct DenseMapInfo<FunctionSummary::ConstVCall> {
   }
 
   static unsigned getHashValue(FunctionSummary::ConstVCall I) {
-    return I.VFunc.GUID;
+    return unsigned(I.VFunc.GUID);
   }
 };
 

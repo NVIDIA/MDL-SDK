@@ -63,14 +63,15 @@ public:
     /// resolved.
     ///
     /// \param module_name       The relative or absolute MDL module name to resolve.
-    /// \param owner_file_path   The optional file path of the owner (or \c NULL if not available).
-    /// \param owner_name        The absolute name of the owner (or \c NULL if not available).
+    /// \param owner_file_path   The optional file path of the owner (or \c nullptr if not
+    ///                          available).
+    /// \param owner_name        The absolute name of the owner (or \c nullptr if not available).
     /// \param pos_line          The line of the corresponding source code location (or 0 if not
     ///                          available).
     /// \param pos_column        The column of the corresponding source code location (or 0 if not
     ///                          available).
     /// \param context           The execution context which can be used to retrieve messages.
-    /// \return                  A description of the resolved module, or \c NULL in case of
+    /// \return                  A description of the resolved module, or \c nullptr in case of
     ///                          errors.
     virtual IMdl_resolved_module* resolve_module(
         const char* module_name,
@@ -78,7 +79,7 @@ public:
         const char* owner_name,
         Sint32 pos_line,
         Sint32 pos_column,
-        IMdl_execution_context* context = 0) = 0;
+        IMdl_execution_context* context = nullptr) = 0;
 
     /// Resolves a resource file path.
     ///
@@ -93,14 +94,15 @@ public:
     ///                          absolute OS file system path to the MDLE file (with slashes instead
     ///                          of backslashes on Windows), followed by a colon, followed by the
     ///                          relative path inside the MDLE container.
-    /// \param owner_file_path   The optional file path of the owner (or \c NULL if not available).
-    /// \param owner_name        The absolute name of the owner (or \c NULL if not available).
+    /// \param owner_file_path   The optional file path of the owner (or \c nullptr if not
+    ///                          available).
+    /// \param owner_name        The absolute name of the owner (or \c nullptr if not available).
     /// \param pos_line          The line of the corresponding source code location (or 0 if not
     ///                          available).
     /// \param pos_column        The column of the corresponding source code location (or 0 if not
     ///                          available).
     /// \param context           The execution context which can be used to retrieve messages.
-    /// \return                  A description of the resolved resource, or \c NULL in case of
+    /// \return                  A description of the resolved resource, or \c nullptr in case of
     ///                          errors.
     virtual IMdl_resolved_resource* resolve_resource(
         const char* file_path,
@@ -108,7 +110,7 @@ public:
         const char* owner_name,
         Sint32 pos_line,
         Sint32 pos_column,
-        IMdl_execution_context* context = 0) = 0;
+        IMdl_execution_context* context = nullptr) = 0;
 };
 
 /// Supported uvtile modes for resources.
@@ -164,7 +166,7 @@ public:
     /// Returns the absolute MDL file path of a resource entity.
     ///
     /// \param i  The index of the requested resource entity (from 0 to #get_count()-1).
-    /// \return   The absolute MDL file path of the \p i -th resource entity, or \c NULL if the
+    /// \return   The absolute MDL file path of the \p i -th resource entity, or \c nullptr if the
     ///           index is out of range.
     ///
     /// \see #mi::neuraylib::IMdl_resolved_resource::get_mdl_file_path_mask()
@@ -173,8 +175,8 @@ public:
     /// Returns the absolute resolved filename of a resource entity.
     ///
     /// \param i   The index of the requested resource entity (from 0 to #get_count()-1).
-    /// \return    The absolute resolved filename of the \p i -th resource entity, or \c NULL if the
-    ///            index is out of range.
+    /// \return    The absolute resolved filename of the \p i -th resource entity, or \c nullptr if
+    ///            the index is out of range.
     ///
     /// \note If this resource is located inside a container (an MDL archive or MDLE), the returned
     ///       string is a concatenation of the container filename, a colon, and the container member
@@ -188,7 +190,7 @@ public:
     /// The reader needs to support absolute access.
     ///
     /// \param i   The index of the requested resource entity (from 0 to #get_count()-1).
-    /// \return    The reader of the \p i -th resource entity, or \c NULL if the index is out of
+    /// \return    The reader of the \p i -th resource entity, or \c nullptr if the index is out of
     ///            range.
     virtual IReader* create_reader( Size i) const = 0;
 
@@ -272,7 +274,7 @@ public:
     /// Resource elements are sorted by increasing frame numbers.
     ///
     /// \param i   The index of the requested resource element (from 0 to #get_count()-1).
-    /// \return    The requested resource element, or \c NULL if \p i is out of bounds.
+    /// \return    The requested resource element, or \c nullptr if \p i is out of bounds.
     virtual const IMdl_resolved_resource_element* get_element( Size i) const = 0;
 };
 

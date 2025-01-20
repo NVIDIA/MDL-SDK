@@ -96,7 +96,7 @@ public:
     /// Creates a file-based mipmap that represents the given file on disk.
     ///
     /// \param filename           The file that shall be represented by this mipmap.
-    /// \param selector           The selector, or \c NULL.
+    /// \param selector           The selector, or \c nullptr.
     /// \param only_first_level   Indicates whether only the first (or all) miplevels should be
     ///                           read from the file.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
@@ -121,7 +121,7 @@ public:
     ///                           absolute access.
     /// \param container_filename The resolved filename of the container itself.
     /// \param member_filename    The relative filename of the mipmap in the container.
-    /// \param selector           The selector, or \c NULL.
+    /// \param selector           The selector, or \c nullptr.
     /// \param only_first_level   Indicates whether only the first (or all) miplevels should be
     ///                           read from the reader.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
@@ -148,9 +148,9 @@ public:
     /// \param reader             The reader to be used to obtain the mipmap. Needs to support
     ///                           absolute access.
     /// \param image_format       The image format of the buffer.
-    /// \param selector           The selector, or \c NULL.
+    /// \param selector           The selector, or \c nullptr.
     /// \param mdl_file_path      The resolved MDL file path (to be used for log messages only),
-    ///                           or \c NULL in other contexts.
+    ///                           or \c nullptr in other contexts.
     /// \param only_first_level   Indicates whether only the first (or all) miplevels should be
     ///                           read from the reader.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will

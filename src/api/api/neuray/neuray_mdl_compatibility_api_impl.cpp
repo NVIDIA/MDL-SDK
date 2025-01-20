@@ -157,7 +157,7 @@ mi::Sint32 Mdl_compatibility_api_impl::compare_modules(
     {
         handle_messages(context_impl, ctx->access_messages());
 
-        if (!mod1.is_valid_interface())
+        if (!mod1)
             return -2;
     }
 
@@ -167,7 +167,7 @@ mi::Sint32 Mdl_compatibility_api_impl::compare_modules(
     {
         handle_messages(context_impl, ctx->access_messages());
 
-        if (!mod2.is_valid_interface())
+        if (!mod2)
             return -2;
     }
 

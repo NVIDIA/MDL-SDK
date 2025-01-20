@@ -65,51 +65,79 @@ DAG_node const* Run_lm2000::matcher(
     IDistiller_plugin_api &e,
     DAG_node const *node,
     const mi::mdl::Distiller_options *options,
-    Rule_result_code &result_code)const
+    Rule_result_code &result_code) const
 {
-    switch (e.get_selector(node)) {
-    case mi::mdl::DS_DIST_STRUCT_MATERIAL: // match for material(thin_walled, material_surface(diffuse_reflection_bsdf(t, r), me), backface, ior, volume, geometry, hair)
+    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+
 // 027_lm2000.mdltl:10
 //RUID 537883
-        if (true
-        && (e.get_selector(e.get_compound_argument(node, 1)) == mi::mdl::DS_DIST_STRUCT_MATERIAL_SURFACE)
-        && (e.get_selector(e.get_compound_argument(e.get_compound_argument(node, 1), 0)) == mi::mdl::IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF)) {
-            const DAG_node* v_thin_walled = e.get_compound_argument(node, 0);
-            const DAG_node* v_t = e.get_compound_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 0);
-            const DAG_node* v_r = e.get_compound_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 1);
-            const DAG_node* v_me = e.get_compound_argument(e.get_compound_argument(node, 1), 1);
-            const DAG_node* v_backface = e.get_compound_argument(node, 2);
-            const DAG_node* v_ior = e.get_compound_argument(node, 3);
-            const DAG_node* v_volume = e.get_compound_argument(node, 4);
-            const DAG_node* v_geometry = e.get_compound_argument(node, 5);
-            const DAG_node* v_hair = e.get_compound_argument(node, 6);
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 0);
-            DAG_node const *node_result_0 = e.create_call("::df::diffuse_reflection_bsdf(color,float,string)",
-                    IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<3>::mk_args(
-                        e,m_node_types, diffuse_reflection_bsdf, v_t, v_r).args,
-                    3, e.get_type_factory()->create_bsdf());
-            DAG_node const *node_result_0_roughness = e.create_float_constant(0.5f);
-            e.set_attribute(node_result_0, "roughness",node_result_0_roughness);
-            DAG_node const *node_result_1 = e.create_call("material(bool,material_surface,material_surface,color,material_volume,material_geometry,hair_bsdf)",
-                    IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<7>::mk_args(e,m_node_types,
-                        material, v_thin_walled, e.create_call("material_surface(bsdf,material_emission)",
-                            IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<2>::mk_args(
-                                e,m_node_types, material_surface, node_result_0,
-                                v_me).args, 2, e.get_type_factory()->get_predefined_struct(
-                            IType_struct::SID_MATERIAL_SURFACE)), v_backface, v_ior,
-                        v_volume, v_geometry, v_hair).args, 7, e.get_type_factory()->
-                    get_predefined_struct(IType_struct::SID_MATERIAL));
-            DAG_node const *node_result_1_hit = e.create_bool_constant(true);
-            e.set_attribute(node_result_1, "hit",node_result_1_hit);
-            return node_result_1;
-        }
-        break;
-    default:
-        break;
-    }
+    auto match_rule0 = [&] (DAG_node const *node0, IDistiller_plugin_api::Match_properties &node_props0) -> const DAG_node * {
 
-    return node;
+        // match for material(thin_walled, material_surface(diffuse_reflection_bsdf(t, r), me), backface, ior, volume, geometry, hair)
+        if (node_props0.sema != IDefinition::DS_ELEM_CONSTRUCTOR || node_props0.type_kind != IType::TK_STRUCT || node_props0.struct_id != IType_struct::SID_MATERIAL) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node2 = e.get_compound_argument(node0, 0);
+        DAG_node const *v_thin_walled = node2; (void)v_thin_walled;
+        DAG_node const *node4 = e.get_compound_argument(node0, 1);
+        IDistiller_plugin_api::Match_properties node_props4;
+        e.get_match_properties(node4, node_props4); 
+        // match for material_surface(diffuse_reflection_bsdf(t, r), me)
+        if (node_props4.sema != IDefinition::DS_ELEM_CONSTRUCTOR || node_props4.type_kind != IType::TK_STRUCT || node_props4.struct_id != IType_struct::SID_MATERIAL_SURFACE) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node5 = e.get_compound_argument(node4, 0);
+        IDistiller_plugin_api::Match_properties node_props5;
+        e.get_match_properties(node5, node_props5); 
+        // match for diffuse_reflection_bsdf(t, r)
+        if (node_props5.sema != IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node6 = e.get_compound_argument(node5, 0);
+        DAG_node const *v_t = node6; (void)v_t;
+        DAG_node const *node8 = e.get_compound_argument(node5, 1);
+        DAG_node const *v_r = node8; (void)v_r;
+        DAG_node const *node11 = e.get_compound_argument(node4, 1);
+        DAG_node const *v_me = node11; (void)v_me;
+        DAG_node const *node14 = e.get_compound_argument(node0, 2);
+        DAG_node const *v_backface = node14; (void)v_backface;
+        DAG_node const *node16 = e.get_compound_argument(node0, 3);
+        DAG_node const *v_ior = node16; (void)v_ior;
+        DAG_node const *node18 = e.get_compound_argument(node0, 4);
+        DAG_node const *v_volume = node18; (void)v_volume;
+        DAG_node const *node20 = e.get_compound_argument(node0, 5);
+        DAG_node const *v_geometry = node20; (void)v_geometry;
+        DAG_node const *node22 = e.get_compound_argument(node0, 6);
+        DAG_node const *v_hair = node22; (void)v_hair;
+        DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 0);
+        DAG_node const *node_result_0 = e.create_call("::df::diffuse_reflection_bsdf(color,float,color,string)",
+                IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<4>::mk_args(
+                    e, m_node_types, diffuse_reflection_bsdf, v_t, v_r).args, 4,
+                e.get_type_factory()->create_bsdf(), root_dbg_info);
+        DAG_node const *node_result_0_roughness = e.create_float_constant(0.5f);
+        e.set_attribute(node_result_0, "roughness",node_result_0_roughness);
+        DAG_node const *node_result_1 = e.create_call("material(bool,material_surface,material_surface,color,material_volume,material_geometry,hair_bsdf)",
+                IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<7>::mk_args(e, m_node_types,
+                    material, v_thin_walled, e.create_call("material_surface(bsdf,material_emission)",
+                        IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<2>::mk_args(
+                            e, m_node_types, material_surface, node_result_0, v_me).args,
+                        2, e.get_type_factory()->get_predefined_struct(IType_struct::SID_MATERIAL_SURFACE), root_dbg_info),
+                    v_backface, v_ior, v_volume, v_geometry, v_hair).args, 7, e.get_type_factory()->
+                get_predefined_struct(IType_struct::SID_MATERIAL), root_dbg_info);
+        DAG_node const *node_result_1_hit = e.create_bool_constant(true);
+        e.set_attribute(node_result_1, "hit",node_result_1_hit);
+        return node_result_1;
+    };
+    (void)match_rule0;
+
+    IDistiller_plugin_api::Match_properties node_props;
+    e.get_match_properties(node, node_props);
+    return match_rule0(node, node_props);
+
 }
 
 bool Run_lm2000::postcond(
@@ -183,65 +211,105 @@ DAG_node const* Run_lm2000::matcher(
     IDistiller_plugin_api &e,
     DAG_node const *node,
     const mi::mdl::Distiller_options *options,
-    Rule_result_code &result_code)const
+    Rule_result_code &result_code) const
 {
-    switch (e.get_selector(node)) {
-    case mi::mdl::IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF: // match for diffuse_reflection_bsdf(t, _)
-// 027_lm2000.mdltl:16
-//RUID 512835
-        if (true
-        && (e.get_selector(node) == mi::mdl::IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF)
-        && (e.attribute_exists(node, "roughness"))) {
-            const DAG_node* v_t = e.get_compound_argument(node, 0);
-            const DAG_node *vv_0_roughness = e.get_attribute(node, "roughness");
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 0);
-            return e.create_call("::df::diffuse_reflection_bsdf(color,float,string)",
-                IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<3>::mk_args(
-                    e,m_node_types, diffuse_reflection_bsdf, v_t, e.create_binary(
-                    IDistiller_plugin_api::OK_DIVIDE,
-                        v_roughness,
-                        e.create_float_constant(2.0f))).args, 3, e.get_type_factory()->create_bsdf());
-        }
-        break;
-    case mi::mdl::DS_DIST_STRUCT_MATERIAL: // match for material(thin_walled, material_surface(diffuse_reflection_bsdf(t, r), me), backface, ior, volume, geometry, hair)
+    auto match_rule2 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+
 // 027_lm2000.mdltl:21
 //RUID 465138
-        if (true
-        && (e.get_selector(node) == mi::mdl::DS_DIST_STRUCT_MATERIAL)
-        && (e.get_selector(e.get_compound_argument(node, 1)) == mi::mdl::DS_DIST_STRUCT_MATERIAL_SURFACE)
-        && (e.get_selector(e.get_compound_argument(e.get_compound_argument(node, 1), 0)) == mi::mdl::IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF)
-        && (e.attribute_exists(node, "hit"))) {
-            const DAG_node* v_thin_walled = e.get_compound_argument(node, 0);
-            const DAG_node* v_t = e.get_compound_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 0);
-            const DAG_node* v_r = e.get_compound_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 1);
-            const DAG_node* v_me = e.get_compound_argument(e.get_compound_argument(node, 1), 1);
-            const DAG_node* v_backface = e.get_compound_argument(node, 2);
-            const DAG_node* v_ior = e.get_compound_argument(node, 3);
-            const DAG_node* v_volume = e.get_compound_argument(node, 4);
-            const DAG_node* v_geometry = e.get_compound_argument(node, 5);
-            const DAG_node* v_hair = e.get_compound_argument(node, 6);
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 1);
-            return e.create_call("material(bool,material_surface,material_surface,color,material_volume,material_geometry,hair_bsdf)",
-                IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<7>::mk_args(e,m_node_types,
-                    material, v_thin_walled, e.create_call("material_surface(bsdf,material_emission)",
-                        IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<2>::mk_args(
-                            e,m_node_types, material_surface, e.create_call("::df::diffuse_reflection_bsdf(color,float,string)",
-                                IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF,
-                                Args_wrapper<3>::mk_args(e,m_node_types, diffuse_reflection_bsdf,
-                                    v_t, v_r).args, 3, e.get_type_factory()->create_bsdf()),
-                            v_me).args, 2, e.get_type_factory()->get_predefined_struct(
-                        IType_struct::SID_MATERIAL_SURFACE)), v_backface, v_ior,
-                    v_volume, v_geometry, v_hair).args, 7, e.get_type_factory()->
-                get_predefined_struct(IType_struct::SID_MATERIAL));
-        }
-        break;
-    default:
-        break;
-    }
+    auto match_rule1 = [&] (DAG_node const *node1, IDistiller_plugin_api::Match_properties &node_props1) -> const DAG_node * {
 
-    return node;
+        // match for material(thin_walled, material_surface(diffuse_reflection_bsdf(t, r), me), backface, ior, volume, geometry, hair)
+        if (node_props1.sema != IDefinition::DS_ELEM_CONSTRUCTOR || node_props1.type_kind != IType::TK_STRUCT || node_props1.struct_id != IType_struct::SID_MATERIAL) {
+            return match_rule2(node1, node_props1);
+        }
+        DAG_node const *node3 = e.get_compound_argument(node1, 0);
+        DAG_node const *v_thin_walled = node3; (void)v_thin_walled;
+        DAG_node const *node5 = e.get_compound_argument(node1, 1);
+        IDistiller_plugin_api::Match_properties node_props5;
+        e.get_match_properties(node5, node_props5); 
+        // match for material_surface(diffuse_reflection_bsdf(t, r), me)
+        if (node_props5.sema != IDefinition::DS_ELEM_CONSTRUCTOR || node_props5.type_kind != IType::TK_STRUCT || node_props5.struct_id != IType_struct::SID_MATERIAL_SURFACE) {
+            return match_rule2(node1, node_props1);
+        }
+        DAG_node const *node6 = e.get_compound_argument(node5, 0);
+        IDistiller_plugin_api::Match_properties node_props6;
+        e.get_match_properties(node6, node_props6); 
+        // match for diffuse_reflection_bsdf(t, r)
+        if (node_props6.sema != IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF) {
+            return match_rule2(node1, node_props1);
+        }
+        DAG_node const *node7 = e.get_compound_argument(node6, 0);
+        DAG_node const *v_t = node7; (void)v_t;
+        DAG_node const *node9 = e.get_compound_argument(node6, 1);
+        DAG_node const *v_r = node9; (void)v_r;
+        DAG_node const *node12 = e.get_compound_argument(node5, 1);
+        DAG_node const *v_me = node12; (void)v_me;
+        DAG_node const *node15 = e.get_compound_argument(node1, 2);
+        DAG_node const *v_backface = node15; (void)v_backface;
+        DAG_node const *node17 = e.get_compound_argument(node1, 3);
+        DAG_node const *v_ior = node17; (void)v_ior;
+        DAG_node const *node19 = e.get_compound_argument(node1, 4);
+        DAG_node const *v_volume = node19; (void)v_volume;
+        DAG_node const *node21 = e.get_compound_argument(node1, 5);
+        DAG_node const *v_geometry = node21; (void)v_geometry;
+        DAG_node const *node23 = e.get_compound_argument(node1, 6);
+        DAG_node const *v_hair = node23; (void)v_hair;
+        if (!e.attribute_exists(node1, "hit")) {
+            return match_rule2(node1, node_props1);
+        }
+        DAG_DbgInfo root_dbg_info = node1->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 1);
+        return e.create_call("material(bool,material_surface,material_surface,color,material_volume,material_geometry,hair_bsdf)",
+            IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<7>::mk_args(e, m_node_types,
+                material, v_thin_walled, e.create_call("material_surface(bsdf,material_emission)",
+                    IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<2>::mk_args(e, m_node_types,
+                        material_surface, e.create_call("::df::diffuse_reflection_bsdf(color,float,color,string)",
+                            IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF,
+                            Args_wrapper<4>::mk_args(e, m_node_types, diffuse_reflection_bsdf,
+                                v_t, v_r).args, 4, e.get_type_factory()->create_bsdf(), root_dbg_info),
+                        v_me).args, 2, e.get_type_factory()->get_predefined_struct(
+                    IType_struct::SID_MATERIAL_SURFACE), root_dbg_info), v_backface,
+                v_ior, v_volume, v_geometry, v_hair).args, 7, e.get_type_factory()->
+            get_predefined_struct(IType_struct::SID_MATERIAL), root_dbg_info);
+    };
+    (void)match_rule1;
+
+// 027_lm2000.mdltl:16
+//RUID 512835
+    auto match_rule0 = [&] (DAG_node const *node0, IDistiller_plugin_api::Match_properties &node_props0) -> const DAG_node * {
+
+        // match for diffuse_reflection_bsdf(t, _)
+        if (node_props0.sema != IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node2 = e.get_compound_argument(node0, 0);
+        DAG_node const *v_t = node2; (void)v_t;
+        if (!e.attribute_exists(node0, "roughness")) {
+            return match_rule1(node0, node_props0);
+        }
+        const DAG_node *node4 = e.get_attribute(node0, "roughness"); (void)node4;
+        DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 0);
+        return e.create_call("::df::diffuse_reflection_bsdf(color,float,color,string)",
+            IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<4>::mk_args(
+                e, m_node_types, diffuse_reflection_bsdf, v_t, e.create_binary(
+                IDistiller_plugin_api::OK_DIVIDE,
+                    v_roughness,
+                    e.create_float_constant(2.0f))).args, 4, e.get_type_factory()->create_bsdf(), root_dbg_info);
+    };
+    (void)match_rule0;
+
+    IDistiller_plugin_api::Match_properties node_props;
+    e.get_match_properties(node, node_props);
+    return match_rule0(node, node_props);
+
 }
 
 bool Run_lm2000::postcond(
@@ -316,69 +384,110 @@ DAG_node const* Finalize_lm2000::matcher(
     IDistiller_plugin_api &e,
     DAG_node const *node,
     const mi::mdl::Distiller_options *options,
-    Rule_result_code &result_code)const
+    Rule_result_code &result_code) const
 {
-    switch (e.get_selector(node)) {
-    case mi::mdl::IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF: // match for diffuse_reflection_bsdf(t, r)
-// 027_lm2000.mdltl:27
-//RUID 375650
-        if (true) {
-            const DAG_node* v_t = e.get_compound_argument(node, 0);
-            const DAG_node* v_r = e.get_compound_argument(node, 1);
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 0);
-            DAG_node const *node_result_4 = e.create_call("::df::diffuse_reflection_bsdf(color,float,string)",
-                    IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<3>::mk_args(
-                        e,m_node_types, diffuse_reflection_bsdf, v_t, v_r).args,
-                    3, e.get_type_factory()->create_bsdf());
-            DAG_node const *node_result_4_roughness = e.create_binary(
-                IDistiller_plugin_api::OK_PLUS,
-                    v_r,
-                    e.create_float_constant(0.1f));
-            e.set_attribute(node_result_4, "roughness",node_result_4_roughness);
-            return node_result_4;
-        }
-        break;
-    case mi::mdl::DS_DIST_STRUCT_MATERIAL: // match for material(thin_walled, material_surface(diffuse_reflection_bsdf(t, _) [[ roughness ~ _ ]], me), backface, ior, volume, geometry, hair)
+    auto match_rule2 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+
 // 027_lm2000.mdltl:33
 //RUID 770531
-        if (true
-        && (e.get_selector(node) == mi::mdl::DS_DIST_STRUCT_MATERIAL)
-        && (e.get_selector(e.get_compound_argument(node, 1)) == mi::mdl::DS_DIST_STRUCT_MATERIAL_SURFACE)
-        && (e.get_selector(e.get_compound_argument(e.get_compound_argument(node, 1), 0)) == mi::mdl::IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF)
-        && (e.attribute_exists(e.get_compound_argument(e.get_compound_argument(node, 1), 0), "roughness"))
-        && (e.attribute_exists(node, "hit"))) {
-            const DAG_node* v_thin_walled = e.get_compound_argument(node, 0);
-            const DAG_node* v_t = e.get_compound_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 0);
-            const DAG_node *vv_0_roughness = e.get_attribute(e.get_compound_argument(e.get_compound_argument(node, 1), 0), "roughness");
-            const DAG_node* v_me = e.get_compound_argument(e.get_compound_argument(node, 1), 1);
-            const DAG_node* v_backface = e.get_compound_argument(node, 2);
-            const DAG_node* v_ior = e.get_compound_argument(node, 3);
-            const DAG_node* v_volume = e.get_compound_argument(node, 4);
-            const DAG_node* v_geometry = e.get_compound_argument(node, 5);
-            const DAG_node* v_hair = e.get_compound_argument(node, 6);
-            const DAG_node *vv_1_hit = e.get_attribute(node, "hit");
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 1);
-            return e.create_call("material(bool,material_surface,material_surface,color,material_volume,material_geometry,hair_bsdf)",
-                IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<7>::mk_args(e,m_node_types,
-                    material, v_thin_walled, e.create_call("material_surface(bsdf,material_emission)",
-                        IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<2>::mk_args(
-                            e,m_node_types, material_surface, e.create_call("::df::diffuse_reflection_bsdf(color,float,string)",
-                                IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF,
-                                Args_wrapper<3>::mk_args(e,m_node_types, diffuse_reflection_bsdf,
-                                    v_t, v_roughness).args, 3, e.get_type_factory()->create_bsdf()),
-                            v_me).args, 2, e.get_type_factory()->get_predefined_struct(
-                        IType_struct::SID_MATERIAL_SURFACE)), v_backface, v_ior,
-                    v_volume, v_geometry, v_hair).args, 7, e.get_type_factory()->
-                get_predefined_struct(IType_struct::SID_MATERIAL));
-        }
-        break;
-    default:
-        break;
-    }
+    auto match_rule1 = [&] (DAG_node const *node1, IDistiller_plugin_api::Match_properties &node_props1) -> const DAG_node * {
 
-    return node;
+        // match for material(thin_walled, material_surface(diffuse_reflection_bsdf(t, _) [[ roughness ~ _ ]], me), backface, ior, volume, geometry, hair)
+        if (node_props1.sema != IDefinition::DS_ELEM_CONSTRUCTOR || node_props1.type_kind != IType::TK_STRUCT || node_props1.struct_id != IType_struct::SID_MATERIAL) {
+            return match_rule2(node1, node_props1);
+        }
+        DAG_node const *node3 = e.get_compound_argument(node1, 0);
+        DAG_node const *v_thin_walled = node3; (void)v_thin_walled;
+        DAG_node const *node5 = e.get_compound_argument(node1, 1);
+        IDistiller_plugin_api::Match_properties node_props5;
+        e.get_match_properties(node5, node_props5); 
+        // match for material_surface(diffuse_reflection_bsdf(t, _) [[ roughness ~ _ ]], me)
+        if (node_props5.sema != IDefinition::DS_ELEM_CONSTRUCTOR || node_props5.type_kind != IType::TK_STRUCT || node_props5.struct_id != IType_struct::SID_MATERIAL_SURFACE) {
+            return match_rule2(node1, node_props1);
+        }
+        DAG_node const *node6 = e.get_compound_argument(node5, 0);
+        IDistiller_plugin_api::Match_properties node_props6;
+        e.get_match_properties(node6, node_props6); 
+        // match for diffuse_reflection_bsdf(t, _)
+        if (node_props6.sema != IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF) {
+            return match_rule2(node1, node_props1);
+        }
+        DAG_node const *node7 = e.get_compound_argument(node6, 0);
+        DAG_node const *v_t = node7; (void)v_t;
+        if (!e.attribute_exists(node6, "roughness")) {
+            return match_rule2(node1, node_props1);
+        }
+        const DAG_node *node9 = e.get_attribute(node6, "roughness"); (void)node9;
+        DAG_node const *node12 = e.get_compound_argument(node5, 1);
+        DAG_node const *v_me = node12; (void)v_me;
+        DAG_node const *node15 = e.get_compound_argument(node1, 2);
+        DAG_node const *v_backface = node15; (void)v_backface;
+        DAG_node const *node17 = e.get_compound_argument(node1, 3);
+        DAG_node const *v_ior = node17; (void)v_ior;
+        DAG_node const *node19 = e.get_compound_argument(node1, 4);
+        DAG_node const *v_volume = node19; (void)v_volume;
+        DAG_node const *node21 = e.get_compound_argument(node1, 5);
+        DAG_node const *v_geometry = node21; (void)v_geometry;
+        DAG_node const *node23 = e.get_compound_argument(node1, 6);
+        DAG_node const *v_hair = node23; (void)v_hair;
+        if (!e.attribute_exists(node1, "hit")) {
+            return match_rule2(node1, node_props1);
+        }
+        const DAG_node *node25 = e.get_attribute(node1, "hit"); (void)node25;
+        DAG_DbgInfo root_dbg_info = node1->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 1);
+        return e.create_call("material(bool,material_surface,material_surface,color,material_volume,material_geometry,hair_bsdf)",
+            IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<7>::mk_args(e, m_node_types,
+                material, v_thin_walled, e.create_call("material_surface(bsdf,material_emission)",
+                    IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<2>::mk_args(e, m_node_types,
+                        material_surface, e.create_call("::df::diffuse_reflection_bsdf(color,float,color,string)",
+                            IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF,
+                            Args_wrapper<4>::mk_args(e, m_node_types, diffuse_reflection_bsdf,
+                                v_t, v_roughness).args, 4, e.get_type_factory()->create_bsdf(), root_dbg_info),
+                        v_me).args, 2, e.get_type_factory()->get_predefined_struct(
+                    IType_struct::SID_MATERIAL_SURFACE), root_dbg_info), v_backface,
+                v_ior, v_volume, v_geometry, v_hair).args, 7, e.get_type_factory()->
+            get_predefined_struct(IType_struct::SID_MATERIAL), root_dbg_info);
+    };
+    (void)match_rule1;
+
+// 027_lm2000.mdltl:27
+//RUID 375650
+    auto match_rule0 = [&] (DAG_node const *node0, IDistiller_plugin_api::Match_properties &node_props0) -> const DAG_node * {
+
+        // match for diffuse_reflection_bsdf(t, r)
+        if (node_props0.sema != IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node2 = e.get_compound_argument(node0, 0);
+        DAG_node const *v_t = node2; (void)v_t;
+        DAG_node const *node4 = e.get_compound_argument(node0, 1);
+        DAG_node const *v_r = node4; (void)v_r;
+        DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 0);
+        DAG_node const *node_result_4 = e.create_call("::df::diffuse_reflection_bsdf(color,float,color,string)",
+                IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<4>::mk_args(
+                    e, m_node_types, diffuse_reflection_bsdf, v_t, v_r).args, 4,
+                e.get_type_factory()->create_bsdf(), root_dbg_info);
+        DAG_node const *node_result_4_roughness = e.create_binary(
+            IDistiller_plugin_api::OK_PLUS,
+                v_r,
+                e.create_float_constant(0.1f));
+        e.set_attribute(node_result_4, "roughness",node_result_4_roughness);
+        return node_result_4;
+    };
+    (void)match_rule0;
+
+    IDistiller_plugin_api::Match_properties node_props;
+    e.get_match_properties(node, node_props);
+    return match_rule0(node, node_props);
+
 }
 
 bool Finalize_lm2000::postcond(

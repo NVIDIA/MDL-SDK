@@ -106,10 +106,14 @@ Type *promoted_type(Type *type1, Type *type2) {
 Type *deref(Type *type) {
     if (Type_var *tv = as<Type_var>(type)) {
         if (tv->is_bound()) {
-            return tv->get_type();
+            return const_cast<Type *>(tv->get_type());
         }
     }
     return type;
+}
+
+Type const *deref(Type const *type) {
+    return deref(const_cast<Type *>(type));
 }
 
 // ---------------------------- Base type ----------------------------
@@ -167,18 +171,18 @@ unsigned Type_var::get_index() const {
     return m_index;
 }
 
-Type *Type_var::get_type() const {
+Type const *Type_var::get_type() const {
     return m_type;
 }
 
-void Type_var::assign_type(Type *type, Type_factory &tf) {
+void Type_var::assign_type(Type const *type, Type_factory *tf) {
     if (m_type) {
-        if (tf.types_equal(m_type, type))
+        if (tf->types_equal(m_type, type))
             return;
         printf("[error] type variable assigned to multiple types\n");
         return;
     } else {
-        m_type = type;
+        m_type = const_cast<Type *>(type);
     }
 }
 
@@ -640,11 +644,11 @@ void Type_texture::pp(pp::Pretty_print &p) const {
         break;
     }
     case Texture_kind::TK_CUBE: {
-        p.string("cube");
+        p.string("texture_cube");
         break;
     }
     case Texture_kind::TK_PTEX: {
-        p.string("ptex");
+        p.string("texture_ptex");
         break;
     }
     case Texture_kind::TK_BSDF_DATA: {
@@ -887,6 +891,18 @@ mi::mdl::Node_type const *Type_function::get_node_type() {
     return m_node_type;
 }
 
+void Type_function::set_signature(char const *signature) {
+    m_signature = signature;
+}
+
+char const *Type_function::get_signature() {
+    return m_signature;
+}
+
+char const *Type_function::get_signature() const {
+    return m_signature;
+}
+
 void Type_function::pp(pp::Pretty_print &p) const {
 
     m_return_type->pp(p);
@@ -909,13 +925,13 @@ void Type_function::pp(pp::Pretty_print &p) const {
     p.rparen();
 }
 
-int Type_function::get_parameter_count() {
+int Type_function::get_parameter_count() const {
     return m_parameter_count;
 }
 
-Type *Type_function::get_parameter_type(int index) {
+Type const *Type_function::get_parameter_type(int index) const {
     int i = 0;
-    for (mi::mdl::Ast_list<Type_list_elem>::iterator it(m_parameters.begin()), end(m_parameters.end());
+    for (mi::mdl::Ast_list<Type_list_elem>::const_iterator it(m_parameters.begin()), end(m_parameters.end());
          it != end ;
          ++it, i++) {
         if (i == index)
@@ -1290,7 +1306,7 @@ Type *Type_factory::import_type(mi::mdl::IType const *mdl_type) {
 }
 
 /// Return true if both types are representing the same type.
-bool Type_factory::types_equal(Type *type1, Type *type2) {
+bool Type_factory::types_equal(Type const *type1, Type const *type2) {
     if (type1 == type2)
         return true;
 
@@ -1324,30 +1340,30 @@ bool Type_factory::types_equal(Type *type1, Type *type2) {
     case Type::Kind::TK_ENUM:
     {
         // FIXME: Handle qualified names.
-        Type_enum *te1 = cast<Type_enum>(type1);
-        Type_enum *te2 = cast<Type_enum>(type2);
+        Type_enum const *te1 = cast<Type_enum>(type1);
+        Type_enum const *te2 = cast<Type_enum>(type2);
         return te1->get_name() == te2->get_name();
     }
 
     case Type::Kind::TK_STRUCT:
     {
         // FIXME: Handle qualified names.
-        Type_struct *te1 = cast<Type_struct>(type1);
-        Type_struct *te2 = cast<Type_struct>(type2);
+        Type_struct const *te1 = cast<Type_struct>(type1);
+        Type_struct const *te2 = cast<Type_struct>(type2);
         return te1->get_name() == te2->get_name();
     }
 
     case Type::Kind::TK_FUNCTION:
     {
-        Type_function *tf1 = cast<Type_function>(type1);
-        Type_function *tf2 = cast<Type_function>(type2);
+        Type_function const *tf1 = cast<Type_function>(type1);
+        Type_function const *tf2 = cast<Type_function>(type2);
 
         if (tf1->get_parameter_count() != tf2->get_parameter_count())
             return false;
 
         for (int i = 0; i < tf1->get_parameter_count(); i++) {
-            Type *p1 = tf1->get_parameter_type(i);
-            Type *p2 = tf2->get_parameter_type(i);
+            Type const *p1 = tf1->get_parameter_type(i);
+            Type const *p2 = tf2->get_parameter_type(i);
             if (!types_equal(p1, p2))
                 return false;
         }
@@ -1355,8 +1371,8 @@ bool Type_factory::types_equal(Type *type1, Type *type2) {
     }
     case Type::Kind::TK_VAR:
     {
-        Type_var *tv1 = cast<Type_var>(type1);
-        Type_var *tv2 = cast<Type_var>(type2);
+        Type_var const *tv1 = cast<Type_var>(type1);
+        Type_var const *tv2 = cast<Type_var>(type2);
         return tv1->get_index() == tv2->get_index();
     }
     case Type::Kind::TK_ERROR:
@@ -1367,7 +1383,7 @@ bool Type_factory::types_equal(Type *type1, Type *type2) {
 
 /// Return true if the first type (as an actual parameter) matches
 /// the second (as a formal parameter).
-bool Type_factory::types_match(Type *type1, Type *type2) {
+bool Type_factory::types_match(Type const *type1, Type const *type2) {
     type1 = deref(type1);
     type2 = deref(type2);
 
@@ -1378,3 +1394,149 @@ bool Type_factory::types_match(Type *type1, Type *type2) {
 
     return types_equal(type1, type2);
 }
+
+/// Return the type matching the builtin type named `type_name`.
+Type *Type_factory::builtin_type_for(const char *type_name) {
+    Type *t_bool = get_bool();
+    Type *t_int = get_int();
+    Type *t_float = get_float();
+    Type *t_double = get_double();
+
+    MDL_ASSERT(type_name && "NULL type name");
+    MDL_ASSERT(strcmp(type_name, "") && "empty type name");
+
+    if (!strcmp(type_name, "bool"))
+        return t_bool;
+    if (!strcmp(type_name, "bool2"))
+        return get_vector(2, t_bool);
+    if (!strcmp(type_name, "bool3"))
+        return get_vector(3, t_bool);
+    if (!strcmp(type_name, "bool4"))
+        return get_vector(4, t_bool);
+
+    if (!strcmp(type_name, "color"))
+        return get_color();
+
+    if (!strcmp(type_name, "int"))
+        return get_int();
+    if (!strcmp(type_name, "int2"))
+        return get_vector(2, t_int);
+    if (!strcmp(type_name, "int3"))
+        return get_vector(3, t_int);
+    if (!strcmp(type_name, "int4"))
+        return get_vector(4, t_int);
+
+    if (!strcmp(type_name, "float"))
+        return get_float();
+    if (!strcmp(type_name, "float2"))
+        return get_vector(2, t_float);
+    if (!strcmp(type_name, "float3"))
+        return get_vector(3, t_float);
+    if (!strcmp(type_name, "float4"))
+        return get_vector(4, t_float);
+
+    if (!strcmp(type_name, "double"))
+        return get_double();
+    if (!strcmp(type_name, "double2"))
+        return get_vector(2, t_double);
+    if (!strcmp(type_name, "double3"))
+        return get_vector(3, t_double);
+    if (!strcmp(type_name, "double4"))
+        return get_vector(4, t_double);
+
+    if (!strcmp(type_name, "string"))
+        return get_string();
+
+    if (!strcmp(type_name, "float2x2"))
+        return get_matrix(2, get_vector(2, t_float));
+    if (!strcmp(type_name, "float2x3"))
+        return get_matrix(3, get_vector(2, t_float));
+    if (!strcmp(type_name, "float2x4"))
+        return get_matrix(4, get_vector(2, t_float));
+    if (!strcmp(type_name, "float3x2"))
+        return get_matrix(2, get_vector(3, t_float));
+    if (!strcmp(type_name, "float3x3"))
+        return get_matrix(3, get_vector(3, t_float));
+    if (!strcmp(type_name, "float3x4"))
+        return get_matrix(4, get_vector(3, t_float));
+    if (!strcmp(type_name, "float4x2"))
+        return get_matrix(2, get_vector(4, t_float));
+    if (!strcmp(type_name, "float4x3"))
+        return get_matrix(3, get_vector(4, t_float));
+    if (!strcmp(type_name, "float4x4"))
+        return get_matrix(4, get_vector(4, t_float));
+
+    if (!strcmp(type_name, "double2x2"))
+        return get_matrix(2, get_vector(2, t_double));
+    if (!strcmp(type_name, "double2x3"))
+        return get_matrix(3, get_vector(2, t_double));
+    if (!strcmp(type_name, "double2x4"))
+        return get_matrix(4, get_vector(2, t_double));
+    if (!strcmp(type_name, "double3x2"))
+        return get_matrix(2, get_vector(3, t_double));
+    if (!strcmp(type_name, "double3x3"))
+        return get_matrix(3, get_vector(3, t_double));
+    if (!strcmp(type_name, "double3x4"))
+        return get_matrix(4, get_vector(3, t_double));
+    if (!strcmp(type_name, "double4x2"))
+        return get_matrix(2, get_vector(4, t_double));
+    if (!strcmp(type_name, "double4x3"))
+        return get_matrix(3, get_vector(4, t_double));
+    if (!strcmp(type_name, "double4x4"))
+        return get_matrix(4, get_vector(4, t_double));
+
+    if (!strcmp(type_name, "light_profile"))
+        return get_light_profile();
+
+    if (!strcmp(type_name, "bsdf"))
+        return get_bsdf();
+    if (!strcmp(type_name, "edf"))
+        return get_edf();
+    if (!strcmp(type_name, "vdf"))
+        return get_vdf();
+    if (!strcmp(type_name, "hair_bsdf"))
+        return get_hair_bsdf();
+
+    if (!strcmp(type_name, "texture_2d"))
+        return get_texture(Type_texture::Texture_kind::TK_2D);
+    if (!strcmp(type_name, "texture_3d"))
+        return get_texture(Type_texture::Texture_kind::TK_3D);
+    if (!strcmp(type_name, "texture_cube"))
+        return get_texture(Type_texture::Texture_kind::TK_CUBE);
+    if (!strcmp(type_name, "texture_ptex"))
+        return get_texture(Type_texture::Texture_kind::TK_PTEX);
+
+    if (!strcmp(type_name, "bsdf_measurement"))
+        return get_bsdf_measurement();
+    if (!strcmp(type_name, "material_emission"))
+        return get_material_emission();
+    if (!strcmp(type_name, "material_surface"))
+        return get_material_surface();
+    if (!strcmp(type_name, "material_volume"))
+        return get_material_volume();
+    if (!strcmp(type_name, "material_geometry"))
+        return get_material_geometry();
+    if (!strcmp(type_name, "material"))
+        return get_material();
+
+    if (!strcmp(type_name, "tex_gamma_mode"))
+        return create_enum(m_symtab.get_symbol("::tex::gamma_mode"));
+    if (!strcmp(type_name, "intensity_mode"))
+        return create_enum(m_symtab.get_symbol("::df::intensity_mode"));
+    if (!strcmp(type_name, "::df::intensity_mode"))
+        return create_enum(m_symtab.get_symbol("::df::intensity_mode"));
+    if (!strcmp(type_name, "scatter_mode"))
+        return create_enum(m_symtab.get_symbol("::df::scatter_mode"));
+    if (!strcmp(type_name, "::df::scatter_mode"))
+        return create_enum(m_symtab.get_symbol("::df::scatter_mode"));
+
+    char const *brack = strstr(type_name, "[<N>]");
+    if (brack) {
+        if (!strncmp(type_name, "color", 5)) {
+            return get_array(get_color());
+        }
+    }
+    MDL_ASSERT(!"unknown type in builtin_type_for");
+    return nullptr;
+}
+

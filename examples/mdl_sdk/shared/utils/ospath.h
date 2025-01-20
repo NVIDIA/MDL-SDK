@@ -156,10 +156,6 @@ class Ospath
     static std::string get_ext(
         const std::string& path);
 
-    /// Return the OS-dependent path separator. This is the character separating the single
-    /// directories from each other. E.g.  "\\" or "/".
-    static std::string sep();
-
     /// Return the OS independent path set separators. This is a string containing all characters
     /// which can be used to separate single paths from each other and might contain more than
     /// one character.On Linux and MacOSX, path set is separated by ":" and/or ";", e.g.,

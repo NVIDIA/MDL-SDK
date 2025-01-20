@@ -26,7 +26,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #*****************************************************************************
 
-set(PROJECT_VERSION 1.75) # 58b3e02b95b4c7c5bb9128a28c6d55546501bf93
+set(PROJECT_VERSION 1.90.9) # cb16be3a3fc1f9cd146ae24d52b615f8a05fa93d
 
 # collect sources
 set(PROJECT_SOURCES
@@ -40,6 +40,7 @@ set(PROJECT_SOURCES
     "imgui_demo.cpp"
     "imgui_draw.cpp"
     "imgui_widgets.cpp"
+    "imgui_tables.cpp"
     )
 
 if(WINDOWS)
@@ -77,8 +78,14 @@ if(MDL_ENABLE_OPENGL_EXAMPLES)
     list(APPEND PROJECT_SOURCES 
         "imgui_impl_glfw.cpp"
         "imgui_impl_glfw.h"
+    )
+endif()
+
+if(MDL_ENABLE_OPENGL_EXAMPLES)
+    list(APPEND PROJECT_SOURCES 
         "imgui_impl_opengl3.cpp"
         "imgui_impl_opengl3.h"
+        "imgui_impl_opengl3_loader.h"
     )
 endif()
 
@@ -100,14 +107,8 @@ if(MDL_ENABLE_OPENGL_EXAMPLES)
     # add dependencies
     target_add_dependencies(TARGET ${PROJECT_NAME} 
         DEPENDS 
-            opengl
             glfw
-        )
-
-    # additional definitions
-    target_compile_definitions(${PROJECT_NAME} 
-        PRIVATE 
-            "IMGUI_IMPL_OPENGL_LOADER_GLEW" 
+            opengl
         )
 endif()
 
@@ -117,11 +118,34 @@ target_include_directories(${PROJECT_NAME}
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     )
 
+# suppress MacOS/clang specific warning
+if(MACOSX)
+    target_compile_options(${PROJECT_NAME}
+        PRIVATE
+            "-Wno-arc-bridge-casts-disallowed-in-nonarc"
+        )
+endif()
+
 # name of the target and the resulting library
 #
-# This variant is used by the mdl_core/df_cuda example which needs to use a
-# static MSVC runtime.
+# This variant is used by the mdl_core and Vulkan examples which
+# need to use a static MSVC runtime.
 set(PROJECT_NAME imgui_static)
+
+# vulkan implementation is only in the static MSVC runtime variant
+if(MDL_ENABLE_VULKAN_EXAMPLES)
+    list(APPEND PROJECT_SOURCES 
+        "imgui_impl_vulkan.cpp"
+        "imgui_impl_vulkan.h"
+    )
+    # add glfw sources only if previously not added because of opengl dependency
+    if(NOT MDL_ENABLE_OPENGL_EXAMPLES)
+        list(APPEND PROJECT_SOURCES 
+            "imgui_impl_glfw.cpp"
+            "imgui_impl_glfw.h"
+        )
+    endif()
+endif()
 
 # create target from template
 create_from_base_preset(
@@ -133,18 +157,34 @@ create_from_base_preset(
     STATIC_MSVC_RUNTIME
 )
 
+set_target_properties(${PROJECT_NAME} PROPERTIES PROJECT_LABEL "imgui_static")
+
+if(MDL_ENABLE_OPENGL_EXAMPLES OR MDL_ENABLE_VULKAN_EXAMPLES)
+    # add dependencies
+    target_add_dependencies(TARGET ${PROJECT_NAME} 
+        DEPENDS 
+            glfw
+        )
+endif()
+
 if(MDL_ENABLE_OPENGL_EXAMPLES)
     # add dependencies
     target_add_dependencies(TARGET ${PROJECT_NAME} 
         DEPENDS 
             opengl
-            glfw
+        )
+endif()
+
+if(MDL_ENABLE_VULKAN_EXAMPLES)
+    # add dependencies
+    target_add_dependencies(TARGET ${PROJECT_NAME} 
+        DEPENDS 
+            vulkan
         )
 
-    # additional definitions
-    target_compile_definitions(${PROJECT_NAME} 
-        PRIVATE 
-            "IMGUI_IMPL_OPENGL_LOADER_GLEW" 
+    target_compile_definitions(${PROJECT_NAME}
+        PRIVATE
+            "IMGUI_IMPL_VULKAN_USE_VOLK"
         )
 endif()
 
@@ -153,3 +193,11 @@ target_include_directories(${PROJECT_NAME}
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     )
+
+# suppress MacOS/clang specific warning
+if(MACOSX)
+    target_compile_options(${PROJECT_NAME}
+        PRIVATE
+            "-Wno-arc-bridge-casts-disallowed-in-nonarc"
+        )
+endif()

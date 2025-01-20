@@ -608,6 +608,8 @@ enum Bsdf_data_kind {
     BDK_GGX_VC_MULTISCATTER,
     BDK_WARD_GEISLER_MORODER_MULTISCATTER,
     BDK_SHEEN_MULTISCATTER,
+    BDK_MICROFLAKE_SHEEN_GENERAL,
+    BDK_MICROFLAKE_SHEEN_MULTISCATTER
 };
 
 class State
@@ -825,6 +827,12 @@ struct color_EDF_component
 };
 
 
+// Clamps the given value to [0, 1).
+BSDF_INLINE float saturate_below_one(float a)
+{
+    return math::clamp(a, 0.0f, 0x1.fffffep-1f);
+}
+
 // This function gets replaced by a constant in translate_libbsdf_runtime_call.
 BSDF_PARAM bool is_bsdf_flags_enabled();
 
@@ -898,7 +906,7 @@ BSDF_INLINE bool has_allowed_components(Data const *data, EDF const &edf)
 // to the allowed scatter mode. Returns false in the absorb case.
 template <typename Data>
 BSDF_INLINE bool adapt_reflect_prob_for_allowed_mode(
-    Data const *data, scatter_mode mode, float *f_refl)
+    Data const *data, scatter_mode mode, float *f_refl, const bool tir = false)
 {
     Df_flags allowed_mode = get_allowed_scatter_mode(data);
     if (!is_allowed_scatter_mode(allowed_mode, mode))
@@ -910,7 +918,7 @@ BSDF_INLINE bool adapt_reflect_prob_for_allowed_mode(
     }
 
     if (mode == scatter_transmit) {
-        *f_refl = 0.0f;
+        *f_refl = tir ? 1.0f : 0.0f;
         return true;
     }
 
@@ -940,8 +948,8 @@ BSDF_INLINE bool decide_sampling_and_update_random_number(
     *sample_layer = false;
 
     Df_flags allowed_mode = get_allowed_scatter_mode(data);
-    bool layer_allowed = layer.has_allowed_components(allowed_mode);
-    bool base_allowed = base.has_allowed_components(allowed_mode);
+    bool layer_allowed = layer.has_allowed_components(allowed_mode) && *prob_layer > 0.0f;
+    bool base_allowed = base.has_allowed_components(allowed_mode) && *prob_layer < 1.0f;
     if (!layer_allowed && !base_allowed) {
         return false;
     }
@@ -966,7 +974,7 @@ BSDF_INLINE bool decide_sampling_and_update_random_number(
             *prob_selected_inv = 1.0f / (1.0f - *prob_layer);
 
             // Only update random number, if layer and base are allowed
-            data->xi.z = (data->xi.z - *prob_layer) * *prob_selected_inv;
+            data->xi.z = saturate_below_one((data->xi.z - *prob_layer) * *prob_selected_inv);
         } else {
             *prob_layer = 0.0f;
             *prob_selected_inv = 1.0f;

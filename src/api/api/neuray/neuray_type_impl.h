@@ -94,8 +94,8 @@ public:
     virtual const MDL::IStruct_category* get_internal_struct_category() const = 0;
 };
 
-/// Returns the internal struct category wrapped by \p struct_category (or \c NULL if
-/// \p struct_category is \c NULL or not a wrapper).
+/// Returns the internal struct category wrapped by \p struct_category (or \c nullptr if
+/// \p struct_category is \c nullptr or not a wrapper).
 const MDL::IStruct_category* get_internal_struct_category(
     const mi::neuraylib::IStruct_category* struct_category);
 
@@ -109,8 +109,8 @@ public:
     virtual const MDL::IStruct_category_list* get_internal_struct_category_list() const = 0;
 };
 
-/// Returns the internal struct category list wrapped by \p struct_category_list (or \c NULL if
-/// \p struct_category_list is \c NULL or not a wrapper).
+/// Returns the internal struct category list wrapped by \p struct_category_list (or \c nullptr if
+/// \p struct_category_list is \c nullptr or not a wrapper).
 const MDL::IStruct_category_list* get_internal_struct_category_list(
     const mi::neuraylib::IStruct_category_list* struct_category_list);
 
@@ -125,11 +125,11 @@ public:
     virtual const MDL::IType* get_internal_type() const = 0;
 };
 
-/// Returns the internal type wrapped by \p type (or \c NULL if \p type is \c NULL or not a
+/// Returns the internal type wrapped by \p type (or \c nullptr if \p type is \c nullptr or not a
 /// wrapper).
 const MDL::IType* get_internal_type( const mi::neuraylib::IType* type);
 
-/// Returns the internal type wrapped by \p type (or \c NULL if \p type is \c NULL or not a
+/// Returns the internal type wrapped by \p type (or \c nullptr if \p type is \c nullptr or not a
 /// wrapper).
 template <class T>
 const T* get_internal_type( const mi::neuraylib::IType* type)
@@ -150,8 +150,8 @@ public:
     virtual const MDL::IType_list* get_internal_type_list() const = 0;
 };
 
-/// Returns the internal type_list wrapped by \p type_list (or \c NULL if \p type_list is \c NULL or
-/// not a wrapper).
+/// Returns the internal type_list wrapped by \p type_list (or \c nullptr if \p type_list is
+/// \c nullptr or not a wrapper).
 const MDL::IType_list* get_internal_type_list( const mi::neuraylib::IType_list* type_list);
 
 

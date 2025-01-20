@@ -98,7 +98,7 @@ public:
     ///
     /// \return
     ///           -  0: Success.
-    ///           - -1: Invalid parameters (\c NULL pointer).
+    ///           - -1: Invalid parameters (\c nullptr).
     ///           - -2: There is no element with that name.
     ///           - -3: The element can not be referenced because it is in a more private scope
     ///                 than the texture.
@@ -107,7 +107,7 @@ public:
 
     /// Returns the referenced image.
     ///
-    /// \return   The referenced image, or \c NULL if no image is referenced.
+    /// \return   The referenced image, or \c nullptr if no image is referenced.
     virtual const char* get_image() const = 0;
 
     //@}
@@ -121,7 +121,7 @@ public:
     ///
     /// \return
     ///           -  0: Success.
-    ///           - -1: Invalid parameters (\c NULL pointer).
+    ///           - -1: Invalid parameters (\c nullptr).
     ///           - -2: There is no element with that name.
     ///           - -3: The element can not be referenced because it is in a more private scope
     ///                 than the texture.
@@ -132,7 +132,7 @@ public:
     /// \if IRAY_API
     /// Returns the referenced volume data.
     ///
-    /// \return   The referenced volume, or \c NULL if no volume is referenced.
+    /// \return   The referenced volume, or \c nullptr if no volume is referenced.
     /// \endif
     virtual const char* get_volume() const = 0;
 
@@ -179,7 +179,7 @@ public:
     /// \name Miscellaneous methods
     //@{
 
-    /// Returns the selector (or \c NULL).
+    /// Returns the selector (or \c nullptr).
     virtual const char* get_selector() const = 0;
 
     /// Sets the texture compression method.

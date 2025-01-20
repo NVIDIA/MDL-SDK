@@ -289,6 +289,29 @@ bool Mdl_material::recompile_material(mi::neuraylib::IMdl_execution_context* con
             !compiled_material)
                 return false;
 
+        if (m_app->get_options()->gpu_debug)
+        {
+            // for debugging it might also be valuable to see the compiled material graph
+            // that is as basis for HLSL code generation
+            std::string dir = mi::examples::io::get_working_directory() + "/compiled_materials";
+            mi::examples::io::mkdir(dir);
+
+            const mi::base::Uuid compiled_hash = compiled_material->get_hash();
+            std::string compiled_hash_s = mi::examples::strings::format(
+                "%08x_%08x_%08x_%08x", compiled_hash.m_id1, compiled_hash.m_id2,
+                compiled_hash.m_id3, compiled_hash.m_id4);
+
+            std::string filename = dir + "/" + get_name() + "_" + compiled_hash_s + ".log";
+
+            FILE* file = _wfopen(mi::examples::strings::str_to_wstr(filename).c_str(), L"w");
+            if (file)
+            {
+                std::string dump = dump_compiled_material(m_sdk, compiled_material.get());
+                fwrite(dump.c_str(), dump.size(), 1, file);
+                fclose(file);
+            }
+        }
+
         if (mdl_options.distilling_support_enabled && mdl_options.distill_target != "none")
         {
             mi::Sint32 res = 0;

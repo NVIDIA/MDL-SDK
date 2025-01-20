@@ -68,14 +68,14 @@ public:
     /// Returns the \p index -th element of the array.
     ///
     /// \param index   The index of the requested element.
-    /// \return        The requested element, or \c NULL if \p index is equal to or larger than
+    /// \return        The requested element, or \c nullptr if \p index is equal to or larger than
     ///                the size of the array.
     virtual const base::IInterface* get_element( Size index) const = 0;
 
     /// Returns the \p index -th element of the array.
     ///
     /// \param index   The index of the requested element.
-    /// \return        The requested element, or \c NULL if \p index is equal to or larger than
+    /// \return        The requested element, or \c nullptr if \p index is equal to or larger than
     ///                the size of the array.
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
@@ -97,14 +97,14 @@ public:
     /// Returns the \p index -th element of the array.
     ///
     /// \param index   The index of the requested element.
-    /// \return        The requested element, or \c NULL if \p index is equal to or larger than
+    /// \return        The requested element, or \c nullptr if \p index is equal to or larger than
     ///                the size of the array.
     virtual base::IInterface* get_element( Size index) = 0;
 
     /// Returns the \p index -th element of the array.
     ///
     /// \param index   The index of the requested element.
-    /// \return        The requested element, or \c NULL if \p index is equal to or larger than
+    /// \return        The requested element, or \c nullptr if \p index is equal to or larger than
     ///                the size of the array.
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's
@@ -133,7 +133,7 @@ public:
     /// \return
     ///                     -  0: Success.
     ///                     - -1: \p index is out of bounds.
-    ///                     - -2: \p element is \c NULL or has the wrong type.
+    ///                     - -2: \p element is \c nullptr or has the wrong type.
     virtual Sint32 set_element( Size index, base::IInterface* element) = 0;
 
     /// Checks whether the array is empty.

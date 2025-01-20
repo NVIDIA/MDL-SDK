@@ -45,60 +45,34 @@
 class Type_factory;
 
 
-typedef mi::mdl::vector<mi::mdl::IType const*>::Type Type_ptr_list;
+class Overload_entry {
+public:
+    Overload_entry(
+        Symbol const *fq_symbol,
+        mi::mdl::IType const *type,
+        mi::mdl::IDefinition::Semantics semantics,
+        char const *signature)
+        : m_fq_symbol(fq_symbol)
+        , m_type(type)
+        , m_semantics(semantics)
+        , m_signature(signature) {}
 
-/// Entry for the map of builtin (e.g. loaded from standard library
-/// modules or Distiller-specific) DFs and functions.
-class Builtin_entry {
-    Symbol *m_fq_symbol;
-    Type_ptr_list m_type_list;
+    Symbol const *get_fq_symbol() const { return m_fq_symbol; }
+    mi::mdl::IType const *get_type() const { return m_type; }
+    mi::mdl::IDefinition::Semantics const get_semantics() const { return m_semantics; }
+    char const *get_signature() const { return m_signature; }
+private:
+    Symbol const *m_fq_symbol;
+    mi::mdl::IType const *m_type;
     mi::mdl::IDefinition::Semantics m_semantics;
-    char const *m_selector;
-
-  public:
-
-  Builtin_entry(Symbol *fq_symbol,
-                Type_ptr_list type_list,
-                mi::mdl::IDefinition::Semantics semantics)
-      : m_fq_symbol(fq_symbol)
-        , m_type_list(type_list)
-        , m_semantics(semantics)
-        , m_selector("::NONE::")
-        {
-        }
-
-  Builtin_entry(Symbol *fq_symbol,
-                Type_ptr_list type_list,
-                mi::mdl::IDefinition::Semantics semantics,
-                char const *selector)
-      : m_fq_symbol(fq_symbol)
-        , m_type_list(type_list)
-        , m_semantics(semantics)
-        , m_selector(selector)
-    {
-    }
-
-    /// Return the fully qualified name of the entry.
-    Symbol *get_fq_symbol() { return m_fq_symbol; }
-
-    /// Return the list of overloaded types for the entry.
-    Type_ptr_list &get_type_list() { return m_type_list; }
-
-    /// Return the semantics of the entry.
-    mi::mdl::IDefinition::Semantics get_semantics() { return m_semantics; };
-
-    /// Return the semantics of the (read-only) entry.
-    mi::mdl::IDefinition::Semantics get_semantics() const { return m_semantics; };
-
-    /// Return the selector of the entry. The selector is the string
-    /// to be used for cases in in generated switch statements.
-    char const *get_selector() { return m_selector; };
-
-    /// Return the selector of the (read-only) entry.
-    char const *get_selector() const { return m_selector; };
+    char const *m_signature;
 };
 
-typedef mi::mdl::ptr_hash_map<Symbol, Builtin_entry >::Type Builtin_type_map;
+using Overload_list = mi::mdl::vector<Overload_entry>::Type;
+
+using Builtin_overloads_map = mi::mdl::ptr_hash_map<Symbol, Overload_list>::Type; 
+
+typedef mi::mdl::vector<mi::mdl::IType const*>::Type Type_ptr_list;
 
 /// The mdltl type.
 ///
@@ -183,11 +157,11 @@ public:
     /// distinct type variable.
     unsigned get_index() const;
 
-    void assign_type(Type *type, Type_factory &tf);
+    void assign_type(Type const *type, Type_factory *tf);
 
     /// Return the type this type variable is bound to, or NULL if
     /// unbound.
-    Type *get_type() const;
+    Type const *get_type() const;
     bool is_bound() const;
 
     /// Pretty-print the type using the given pretty-printer.
@@ -199,7 +173,7 @@ public:
 
 private:
     unsigned m_index;
-    Type *m_type;
+    Type const *m_type;
 };
 
 /// An atomic type.
@@ -808,8 +782,8 @@ public:
 
     Type *get_return_type();
     Type const *get_return_type() const;
-    int get_parameter_count();
-    Type *get_parameter_type(int index);
+    int get_parameter_count() const;
+    Type const *get_parameter_type(int index) const;
 
     void set_semantics(mi::mdl::IDefinition::Semantics semantics);
     mi::mdl::IDefinition::Semantics get_semantics();
@@ -823,6 +797,10 @@ public:
     mi::mdl::Node_type const *get_node_type() const;
     mi::mdl::Node_type const *get_node_type();
 
+    void set_signature(char const *signature);
+    char const *get_signature();
+    char const *get_signature() const;
+
 public:
     /// Constructor.
     explicit Type_function(Type *return_type);
@@ -834,6 +812,7 @@ private:
     mi::mdl::IDefinition::Semantics m_semantics;
     char const *m_selector;
     mi::mdl::Node_type const *m_node_type;
+    char const *m_signature;
 };
 
 /// Check if a type is of a certain type.
@@ -881,6 +860,12 @@ template <typename T>
 inline T *cast(Type *arg) {
     MDL_ASSERT(arg == NULL || is<T>(arg));
     return static_cast<T *>(arg);
+}
+
+template <typename T>
+inline T const *cast(Type const *arg) {
+    MDL_ASSERT(arg == NULL || is<T>(arg));
+    return static_cast<T const *>(arg);
 }
 
 /// The interface for creating types.
@@ -986,14 +971,18 @@ public:
     Type *import_type(mi::mdl::IType const *mdl_type);
 
     /// Return true if both types are representing the same type.
-    bool types_equal(Type *type1, Type *type2);
+    bool types_equal(Type const *type1, Type const *type2);
 
     /// Return true if the first type (as an actual parameter) matches
     /// the second (as a formal parameter).
-    bool types_match(Type *type1, Type *type2);
+    bool types_match(Type const *type1, Type const *type2);
 
     /// Return the symbol table of this type factory.
     Symbol_table &get_symbol_table() { return m_symtab; }
+
+    /// Return the mdltlc type the given type name, which must be one of the predefined basic MDL types 
+    /// like int, bool2, float4x4 etc.
+    Type *builtin_type_for(const char *type_name);
 
     /// Constructs a new type factory.
     ///
@@ -1025,5 +1014,6 @@ bool is_matrix(Type *type);
 bool is_array(Type *type);
 Type *promoted_type(Type *type1, Type *type2);
 Type *deref(Type *type);
+Type const *deref(Type const *type);
 
 #endif // MDLTLC_TYPES_H

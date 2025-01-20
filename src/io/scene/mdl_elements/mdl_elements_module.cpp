@@ -2131,7 +2131,7 @@ const SERIAL::Serializable* Mdl_module::serialize( SERIAL::Serializer* serialize
     SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
     mdlc_module->serialize_module( serializer, m_module.get());
 
-    bool has_code = m_code_dag.is_valid_interface();
+    bool has_code = !!m_code_dag;
     SERIAL::write( serializer, has_code);
     if( has_code)
         mdlc_module->serialize_code_dag( serializer, m_code_dag.get());

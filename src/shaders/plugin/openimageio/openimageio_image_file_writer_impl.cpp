@@ -101,6 +101,18 @@ Image_file_writer_impl::Image_file_writer_impl(
 
     OIIO::ImageSpec image_spec = get_image_spec( m_pixel_type, m_resolution_x, m_resolution_y, 1);
 
+#if OIIO_VERSION >= OIIO_MAKE_VERSION(3,0,0)
+    // Export gamma/colorspace information.
+    if( true) {
+#else
+    // Export gamma/colorspace information (skip for TIFF, which results in a file format error).
+    if( plugin_name != "oiio_tif") {
+#endif
+        std::string cs = get_oiio_colorspace( m_gamma);
+        if( !cs.empty())
+            image_spec["oiio:ColorSpace"] = cs;
+    }
+
     // Pass unassociated alpha for the image handlers that support it.
     if(    plugin_name == "oiio_png"
         || plugin_name == "oiio_tif"
@@ -175,6 +187,7 @@ Image_file_writer_impl::Image_file_writer_impl(
                     = image_spec.channelnames[image_spec.alpha_channel];
                 m_exr_multipart_image_spec[1].alpha_channel = 0;
                 m_exr_multipart_image_spec[1]["oiio:subimagename"] = "alpha";
+                m_exr_multipart_image_spec[1]["oiio:ColorSpace"] = "linear";
             }
 
         }

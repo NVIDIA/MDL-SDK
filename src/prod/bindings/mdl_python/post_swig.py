@@ -32,7 +32,7 @@ import shutil
 import re
 from ast import literal_eval as make_tuple
 
-# Note, this scipt is used to remove unnecessary and potentially misused functions from the binding.
+# Note, this script is used to remove unnecessary and potentially misused functions from the binding.
 # In the future this script or the generation itself can change in order to avoid post processing
 # like this. But in the meantime we want to make sure that nobody relies on functions that are not 
 # meant to be used.
@@ -130,6 +130,10 @@ def run(args, binding_file_path):
     manualTypeHintMap[': "_IType_struct"'] = ': "IType_structure"'
     manualTypeHintMap[': "_IType_enum"'] = ': "IType_enumeration"'
 
+    # reference parameters. we are as strict as possible here
+
+    # we map to INOUT to keep the docstring right even though we use it as OUTPUT
+    manualTypeHintMap['is_constant: "bool &"'] = 'is_constant: OutBoolean'
 
     def add_type_map_iinterface(map: dict, map_from: str, map_to: str):
         map[f'-> "_{map_from}":'] =                             f'-> "{map_to}":'
@@ -229,8 +233,8 @@ def run(args, binding_file_path):
             continue # stop here since we changed the line_index
 
         # handle type hint mappings
-        elif lineNoWhiteSpaces.startswith('@post_swig_add_type_hint_mapping('):
-            deco_args: tuple = make_tuple(lineNoWhiteSpaces[32:])
+        elif lineNoWhiteSpaces.startswith('@_post_swig_add_type_hint_mapping('):
+            deco_args: tuple = make_tuple(lineNoWhiteSpaces[33:])
             manualTypeHintMap[f'-> "{deco_args[0]}":'] = f'-> "{deco_args[1]}":'
             manualTypeHintMap[f': "{deco_args[0]}"'] = f': "{deco_args[1]}"'
             strip_n_lines = 1  # drop this line
@@ -246,7 +250,7 @@ def run(args, binding_file_path):
             if args.verbose:
                 print(f"removed __deref__ from class: '{class_name}'")
 
-        # there is also an additional golbal IID function that is redundant, side effection from creating a static function
+        # there is also an additional global IID function that is redundant, side effect from creating a static function
         elif lineNoWhiteSpaces.startswith('def I') and \
             lineNoWhiteSpaces.startswith(f'def {class_name}_IID() -> "mi::base::Uuid const":'):
             strip = True
@@ -289,7 +293,7 @@ def run(args, binding_file_path):
                     print(f"Error: Bindings contain global constant '{general.group(1)}' that isn't handled.")
 
         # move (extended) functions to the end of the class to make sure regular functions are defined earlier
-        elif lineNoWhiteSpaces == '@post_swig_move_to_end_of_class':
+        elif lineNoWhiteSpaces == '@_post_swig_move_to_end_of_class':
             found_function_begin: bool = False
             while(True):
                 line_index = line_index + 1
@@ -314,7 +318,7 @@ def run(args, binding_file_path):
                 ProcessedLines.append(line)
 
         # to read the next line.
-        # can't use a range iterator here because we need to manipulate the intex
+        # can't use a range iterator here because we need to manipulate the index
         line_index = line_index + 1
 
 
@@ -356,6 +360,11 @@ def run(args, binding_file_path):
             if ' &"' in line:
                 print(f"Error: Bindings contains a reference in the signature: {line.strip()}")
                 continue
+
+        if '" = property' in lineNoWhiteSpaces:
+            for key, value in manualTypeHintMap.items():
+                line = line.replace(key, value)
+            ProcessedLines[i] = line
 
 
     # write the file

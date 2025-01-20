@@ -111,7 +111,7 @@ class Mdl_compiled_material;
 class Mdl_function_definition;
 class Mdl_module;
 
-// **********  Computation of references to other DB element ***************************************
+// ********** Computation of references to other DB element ****************************************
 
 /// Inserts all tag references in \p value into \p result.
 void collect_references( const IValue* value, DB::Tag_set* result);
@@ -135,7 +135,7 @@ void collect_references( const IAnnotation_block* block, DB::Tag_set* result);
 void collect_references( const IAnnotation_list* list, DB::Tag_set* result);
 
 
-// **********  Memory allocation helper class ******************************************************
+// ********** Memory allocation helper class *******************************************************
 
 /// A VLA using space inside the object or using an allocator if the requested size is too large.
 /// \tparam T  element type, must be a POD.
@@ -194,7 +194,7 @@ private:
     A m_alloc;
 };
 
-// **********  Name parsing/splitting **************************************************************
+// ********** Name parsing/splitting ***************************************************************
 
 // These functions are supposed to centralize all parsing/splitting of strings.
 //
@@ -248,7 +248,7 @@ std::string strip_resource_owner_prefix( const std::string& name);
 /// Returns the empty string for resource URLs without '::'.
 std::string get_resource_owner_prefix( const std::string& name);
 
-// **********  Misc utility functions **************************************************************
+// ********** Misc utility functions ***************************************************************
 
 /// Returns the DB element name used for the array constructor.
 const char* get_array_constructor_db_name();
@@ -385,7 +385,7 @@ std::string get_mdl_annotation_name(
 
 /// Encodes a string with or without signature (and adds a missing signature for materials).
 ///
-/// Tries to find the name in the code DAG (if not NULL), and uses the DB as fallback.
+/// Tries to find the name in the code DAG (if not \c nullptr), and uses the DB as fallback.
 ///
 /// \note This function assumes that parentheses, comma, and dollar are always meta-characters and
 ///       do not appear as part of a simple name. TODO encoded names: Remove this limitation.
@@ -406,9 +406,9 @@ std::string encode_name_add_missing_signature(
 /// \param return_type       The actual return type of the function call. Required for the cast
 ///                          operator, ignored otherwise.
 /// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
-///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
+///                          non-MDLE modules. Can be \c nullptr (which is treated like a callback
 ///                          implementing the identity transformation).
-/// \return                  The serialized function definition (and module) name, or \c NULL in
+/// \return                  The serialized function definition (and module) name, or \c nullptr in
 ///                          case of errors.
 const mi::neuraylib::ISerialized_function_name* serialize_function_name(
     const char* definition_name,
@@ -424,10 +424,10 @@ const mi::neuraylib::ISerialized_function_name* serialize_function_name(
 /// \param transaction       The DB transaction to use.
 /// \param function_name     The serialized function name.
 /// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
-///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
+///                          non-MDLE modules. Can be \c nullptr (which is treated like a callback
 ///                          implementing the identity transformation).
-/// \return                  The deserialized function name and argument types, or \c NULL in case
-///                          of errors.
+/// \return                  The deserialized function name and argument types, or \c nullptr in
+///                          case of errors.
 const IDeserialized_function_name* deserialize_function_name(
     DB::Transaction* transaction,
     const char* function_name,
@@ -443,10 +443,10 @@ const IDeserialized_function_name* deserialize_function_name(
 /// \param module_name       The serialized module name.
 /// \param function_name_without_module_name   The serialized function name without module name.
 /// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
-///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
+///                          non-MDLE modules. Can be \c nullptr (which is treated like a callback
 ///                          implementing the identity transformation).
-/// \return                  The deserialized function name and argument types, or \c NULL in case
-///                          of errors.
+/// \return                  The deserialized function name and argument types, or \c nullptr in
+///                          case of errors.
 const IDeserialized_function_name* deserialize_function_name(
     DB::Transaction* transaction,
     const char* module_name,
@@ -460,9 +460,9 @@ const IDeserialized_function_name* deserialize_function_name(
 ///
 /// \param module_name       The serialized module name.
 /// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
-///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
+///                          non-MDLE modules. Can be \c nullptr (which is treated like a callback
 ///                          implementing the identity transformation).
-/// \return                  The deserialized module name, or \c NULL in case of errors.
+/// \return                  The deserialized module name, or \c nullptr in case of errors.
 const mi::neuraylib::IDeserialized_module_name* deserialize_module_name(
     const char* module_name,
     mi::neuraylib::IMdle_deserialization_callback* mdle_callback,
@@ -501,7 +501,7 @@ bool is_supported_prototype(
 
 /// Returns a default compiled material.
 ///
-/// Can be used as a default for failed compilation steps. Returns \c NULL if someone explicitly
+/// Can be used as a default for failed compilation steps. Returns \c nullptr if someone explicitly
 /// removed the corresponding material definition from the DB without removing the entire module
 /// (should not happen).
 Mdl_compiled_material* get_default_compiled_material( DB::Transaction* transaction);
@@ -715,7 +715,7 @@ private:
     std::vector<Message> m_error_messages;
     mi::Sint32 m_result = 0;
 
-    /// Points to an instance holding the default options (or \c NULL if this is the instance
+    /// Points to an instance holding the default options (or \c nullptr if this is the instance
     /// holding the default options).
     const Execution_context* m_default_options = nullptr;
 
@@ -731,11 +731,12 @@ private:
 void convert_messages( const mi::mdl::Messages& in_messages, Execution_context* context);
 
 /// Logs the messages in an execution context.
-void log_messages( const Execution_context* context);
+void log_messages( const Execution_context* context, mi::Size start_index);
 
 /// Adds MDL messages to an optional execution context and logs them.
 ///
-/// Similar to #convert_messages() followed by #log_messages(), except that context can be \c NULL.
+/// Similar to #convert_messages() followed by #log_messages(), except that context can be
+/// \c nullptr.
 void convert_and_log_messages( const mi::mdl::Messages& in_messages, Execution_context* context);
 
 /// Adds messages from an execution context to the mi::mdl::Messages.
@@ -747,39 +748,39 @@ void convert_messages( const Execution_context* context, mi::mdl::Messages& out_
 /// the message is also added as error message to the context, and the context result is set to
 /// \p result.
 ///
-/// Does nothing if \p context is \c NULL. Returns \p result.
+/// Does nothing if \p context is \c nullptr. Returns \p result.
 mi::Sint32 add_message( Execution_context* context, const Message& message, mi::Sint32 result);
 
 /// Adds \p message as message and error message to the context, and sets the result to
 /// \p result_and_code.
 ///
 /// Uses #Message::MSG_INTEGRATION as message kind, and \p result_and_code as message code.
-/// Does nothing if \p context is \c NULL. Returns \p result_and_code.
+/// Does nothing if \p context is \c nullptr. Returns \p result_and_code.
 mi::Sint32 add_error_message(
     Execution_context* context, const std::string& message, mi::Sint32 result_and_code);
 
 /// Adds \p message as warning message to the context.
 ///
 /// Uses #Message::MSG_INTEGRATION as message kind, and -1 as message code.
-/// Does nothing if \p context is \c NULL.
+/// Does nothing if \p context is \c nullptr.
 void add_warning_message( Execution_context* context, const std::string& message);
 
 /// Adds \p message as info message to the context.
 ///
 /// Uses #Message::MSG_INTEGRATION as message kind, and -1 as message code.
-/// Does nothing if \p context is \c NULL.
+/// Does nothing if \p context is \c nullptr.
 void add_info_message( Execution_context* context, const std::string& message);
 
 /// Creates a thread context.
 ///
-/// If \p context is not \c NULL, its relevant options are copied to the thread context. (Not all
+/// If \p context is not \c nullptr, its relevant options are copied to the thread context. (Not all
 /// API context options are passed to the core compiler via the thread context, hence, only a
 /// subset, the relevant ones, are copied by this method.)
 mi::mdl::IThread_context* create_thread_context( mi::mdl::IMDL* mdl, Execution_context* context);
 
 /// Creates a thread context.
 ///
-/// If \p context is not \c NULL, its relevant options are copied to the thread context. (Not all
+/// If \p context is not \c nullptr, its relevant options are copied to the thread context. (Not all
 /// API context options are passed to the core compiler via the thread context, hence, only a
 /// subset, the relevant ones, are copied by this method.)
 ///
@@ -789,13 +790,13 @@ mi::mdl::IThread_context* create_thread_context( Execution_context* context);
 
 /// Creates an execution context.
 ///
-/// If \p ctx is not \c NULL, its relevant options are copied to the execution context. (Not all
+/// If \p ctx is not \c nullptr, its relevant options are copied to the execution context. (Not all
 /// API context options are passed to the core compiler via the thread context, hence, only a
 /// subset, the relevant ones, are copied by this method.)
 Execution_context* create_execution_context( mi::mdl::IThread_context* ctx);
 
 
-// **********  Readers, writers & streams **********************************************************
+// ********** Readers, writers & streams ***********************************************************
 
 /// An mi::mdl::IOutput_stream with the extra functionality to check for errors.
 class IOutput_stream : public mi::base::Interface_declare<
@@ -839,7 +840,7 @@ mi::neuraylib::IReader* get_container_resource_reader(
 IMAGE::IMdl_container_callback* create_mdl_container_callback();
 
 
-// **********  Resource-related attributes *********************************************************
+// ********** Resource-related attributes **********************************************************
 
 /// Retrieve the attributes of a texture resource (general).
 ///
@@ -925,34 +926,148 @@ const mi::mdl::IValue* int_value_to_core_value(
     const mi::mdl::IType* core_type,
     const IValue* value);
 
-/// Converts MI::MDL::IExpression to mi::mdl::DAG_node.
-const mi::mdl::DAG_node* int_expr_to_core_dag_node(
-    DB::Transaction* transaction,
-    mi::mdl::IDag_builder* builder,
-    const mi::mdl::IType* core_type,
-    const IExpression* expr);
+/// Converts a path from the SDK representation (dots and array index brackets) to the MDL core
+/// representation (dots only).
+///
+/// The simple search-and-replace fails to reject some invalid input like "foo[bar".
+std::string int_path_to_core_path( const char* path);
 
-// **********  Mdl_dag_builder *********************************************************************
+// ********** Code_dag *****************************************************************************
 
-/// Helper class to handle conversion from MDL::IExpression into mi::mdl::DAG_node.
-class Mdl_dag_builder
+/// Wrapper around mi::mdl::IGenerated_code_dag that dispatches between functions and materials.
+class Code_dag
+{
+public:
+    Code_dag( const mi::mdl::IGenerated_code_dag* code_dag, bool is_material)
+      : m_code_dag( code_dag), m_is_material( is_material) { }
+
+    /// Names (cloned and original might be nullptr)
+    const char* get_name( mi::Size index) const;
+    const char* get_simple_name( mi::Size index) const;
+    const char* get_cloned_name( mi::Size index) const;
+    const char* get_original_name( mi::Size index) const;
+
+    /// Properties
+    mi::mdl::IDefinition::Semantics get_semantics( mi::Size index) const;
+    bool get_exported( mi::Size index) const;
+    bool get_declarative( mi::Size index) const;
+    bool get_uniform( mi::Size index) const;
+
+    /// Return type
+    const mi::mdl::IType* get_return_type( mi::Size index) const;
+
+    /// Parameters
+    mi::Size get_parameter_count( mi::Size index) const;
+    const mi::mdl::IType* get_parameter_type( mi::Size index, mi::Size parameter_index) const;
+    const char* get_parameter_type_name( mi::Size index, mi::Size parameter_index) const;
+    const char* get_parameter_name( mi::Size index, mi::Size parameter_index) const;
+    mi::Size get_parameter_index( mi::Size index, const char* parameter_name) const;
+    const mi::mdl::DAG_node* get_parameter_default( mi::Size index, mi::Size parameter_index) const;
+
+    /// Parameters enabled_if()
+    const mi::mdl::DAG_node* get_parameter_enable_if_condition(
+        mi::Size index, mi::Size parameter_index) const;
+    mi::Size get_parameter_enable_if_condition_users(
+        mi::Size index, mi::Size parameter_index) const;
+    mi::Size get_parameter_enable_if_condition_user(
+        mi::Size index, mi::Size parameter_index, mi::Size user_index) const;
+
+    /// Parameter annotations
+    mi::Size get_parameter_annotation_count( mi::Size index, mi::Size parameter_index) const;
+    const mi::mdl::DAG_node* get_parameter_annotation(
+        mi::Size index, mi::Size parameter_index, mi::Size annotation_index) const;
+
+    /// Temporaries
+    mi::Size get_temporary_count( mi::Size index) const;
+    const mi::mdl::DAG_node* get_temporary( mi::Size index, mi::Size temporary_index) const;
+    const char* get_temporary_name( mi::Size index, mi::Size temporary_index) const;
+
+    /// Annotations
+    mi::Size get_annotation_count( mi::Size index) const;
+    const mi::mdl::DAG_node* get_annotation( mi::Size index, mi::Size annotation_index) const;
+    mi::Size get_return_annotation_count( mi::Size index) const;
+    const mi::mdl::DAG_node* get_return_annotation(
+        mi::Size index, mi::Size annotation_index) const;
+
+    /// Body
+    const mi::mdl::DAG_node* get_body( mi::Size index) const;
+
+    /// Hash (might be nullptr)
+    const mi::mdl::DAG_hash* get_hash( mi::Size index) const;
+
+private:
+    const mi::mdl::IGenerated_code_dag* const m_code_dag;
+    const bool m_is_material;
+};
+
+// ********** Dag_cloner ***************************************************************************
+
+/// Helper class to import DAG nodes into another DAG builder.
+///
+/// Unfortunately, mi::mdl::IDag_builder does not export such a method.
+class Dag_importer
 {
 public:
     /// Constructor.
     ///
-    /// \param transaction                 The DB transaction to use (needed to access attached
-    ///                                    function calls or material instances).
-    /// \param dag_builder                 A DAG builder used to construct the DAG nodes.
-    /// \param compiled_material           The compiled material that will be used to resolve
-    ///                                    temporaries. Can be \c NULL if the expressions to be
-    ///                                    converted do not contain any references to temporaries.
+    /// \param dag_builder   The DAG builder used to construct the DAG nodes.
+    Dag_importer( mi::mdl::IDag_builder* dag_builder);
+
+    /// Destructor.
+    ~Dag_importer() { m_dag_builder->enable_opt( m_enable_opt); }
+
+    /// Imports a DAG node from a different DAG factory into this DAG builder.
+    const mi::mdl::DAG_node* import( const mi::mdl::DAG_node* node);
+
+    /// Imports a value from a different value factory into this DAG builder.
+    const mi::mdl::IValue* import( const mi::mdl::IValue* value);
+
+    /// Imports a type from a different value factory into this DAG builder.
+    const mi::mdl::IType* import( const mi::mdl::IType* value);
+
+    /// Disable optimizations on DAG_node construction and return the old value.
+    bool enable_opt( bool flag) { return m_dag_builder->enable_opt( flag); }
+
+    /// Returns the cached converted temporaries.
+    const std::vector<const mi::mdl::DAG_node*>& get_temporaries() const
+    { return m_temporaries; }
+
+protected:
+    /// Returns \c nullptr (explicit method for simpler debugging).
+    const mi::mdl::DAG_node* error_node();
+
+    /// The DAG builder used to construct the DAG nodes.
+    mi::mdl::IDag_builder* m_dag_builder;
+    /// The type factory of the DAG builder.
+    mi::mdl::IType_factory* m_type_factory;
+    /// The value factory of the DAG builder.
+    mi::mdl::IValue_factory* m_value_factory;
+
+    /// Original setting of the optimize flag.
+    bool m_enable_opt;
+
+    /// The converted temporaries.
+    std::vector<const mi::mdl::DAG_node*> m_temporaries;
+};
+
+// ********** Mdl_dag_builder **********************************************************************
+
+/// Helper class to handle conversion from MDL::IExpression into mi::mdl::DAG_node.
+class Mdl_dag_builder : public Dag_importer
+{
+public:
+    /// Constructor.
+    ///
+    /// \param transaction         The DB transaction to use (needed to access attached function
+    ///                            calls or material instances).
+    /// \param dag_builder         A DAG builder used to construct the DAG nodes.
+    /// \param compiled_material   The compiled material that will be used to resolve temporaries.
+    ///                            Can be \c nullptr if the expressions to be converted do not
+    ///                            contain any references to temporaries.
     Mdl_dag_builder(
         DB::Transaction* transaction,
         mi::mdl::IDag_builder* dag_builder,
         const Mdl_compiled_material* compiled_material);
-
-    /// Destructor.
-    ~Mdl_dag_builder() { m_dag_builder->enable_opt( m_enable_opt); }
 
     /// Converts an MDL::IExpression plus mi::mdl::IType into an mi::mdl::DAG_node.
     ///
@@ -966,22 +1081,15 @@ public:
     ///
     /// \param core_type                   The core type corresponding to \p expr.
     /// \param expr                        The expression to convert.
-    /// \return                            The created MDL DAG node, or \c NULL in case of failures,
-    ///                                    e.g., argument type mismatches (including further down
-    ///                                    the call graph).
+    /// \return                            The created MDL DAG node, or \c nullptr in case of
+    ///                                    failures, e.g., argument type mismatches (including
+    ///                                    further down the call graph).
     const mi::mdl::DAG_node* int_expr_to_core_dag_node(
         const mi::mdl::IType* core_type, const IExpression* expr);
-
-    /// Returns the cached converted temporaries.
-    const std::vector<const mi::mdl::DAG_node*>& get_temporaries() const
-    { return m_temporaries; }
 
     /// Returns the cached parameter types.
     const std::vector<const mi::mdl::IType*>& get_parameter_types() const
     { return m_parameter_types; }
-
-    /// Disable optimizations on DAG_node construction and return the old value.
-    bool enable_opt( bool flag) { return m_dag_builder->enable_opt( flag); }
 
 private:
     const mi::mdl::DAG_node* int_expr_constant_to_core_dag_node(
@@ -1017,35 +1125,22 @@ private:
         const IExpression_list* arguments);
 
     /// Adds \p value to m_converted_call_expressions and returns it.
-    const mi::mdl::DAG_node* add_cache_entry( DB::Tag tag, const mi::mdl::DAG_node* value);
-
-    /// Returns \c nullptr (explicit method for simpler debugging).
-    const mi::mdl::DAG_node* error_node();
+    const mi::mdl::DAG_node* add_cache_entry( DB::Tag tag, const mi::mdl::DAG_node* node);
 
     /// The DB transaction to use (needed to access attached function calls or material instances).
     DB::Transaction* m_transaction;
-    /// The DAG builder used to construct the DAG nodes.
-    mi::mdl::IDag_builder* m_dag_builder;
-    /// The type factory of the DAG builder.
-    mi::mdl::IType_factory* m_type_factory;
-    /// The value factory of the DAG builder.
-    mi::mdl::IValue_factory* m_value_factory;
-    /// If non-NULL, a compiled material that will be used to resolve temporaries.
-    const Mdl_compiled_material* m_compiled_material;
-    /// The converted temporaries.
-    std::vector<const mi::mdl::DAG_node*> m_temporaries;
+    /// The core material instances used to resolve temporary references.
+    mi::base::Handle<const mi::mdl::IMaterial_instance> m_core_material_instance;
     /// The core types of the parameter references.
     std::vector<const mi::mdl::IType*> m_parameter_types;
     /// Set of indirect calls in the current call stack, used to check for cycles.
     robin_hood::unordered_set<DB::Tag> m_set_indirect_calls;
     /// Cache of already converted function calls or material instances.
     std::map<DB::Tag, const mi::mdl::DAG_node*> m_converted_call_expressions;
-    /// Original setting of the optimize flag.
-    bool m_enable_opt;
 };
 
 
-// **********  Mdl_call_resolver *******************************************************************
+// ********** Mdl_call_resolver ********************************************************************
 
 /// Finds the owning module of entities.
 class Mdl_call_resolver : public mi::mdl::ICall_name_resolver
@@ -1064,7 +1159,7 @@ public:
     ///
     /// \param entity_name    the entity name (note: this cannot be a module name)
     ///
-    /// \returns the owning module of this entity if found, NULL otherwise
+    /// \returns the owning module of this entity if found, \c nullptr otherwise
     const mi::mdl::IModule* get_owner_module(const char* name) const override;
 
     /// Find the owner code DAG of a given entity name.
@@ -1073,7 +1168,7 @@ public:
     ///
     /// \param entity_name    the entity name (note: this cannot be a module name)
     ///
-    /// \returns the owning module of this entity if found, NULL otherwise
+    /// \returns the owning module of this entity if found, \c nullptr otherwise
     const mi::mdl::IGenerated_code_dag* get_owner_dag(const char* entity_name) const override;
 
 private:
@@ -1102,7 +1197,7 @@ public:
     /// Finds the owning module of a function definition.
     ///
     /// \param name   The core name of a function definition.
-    /// \return       The owning module, or \c NULL in case of failures.
+    /// \return       The owning module, or \c nullptr in case of failures.
     const mi::mdl::IModule* get_owner_module(const char* name) const override;
 
 private:
@@ -1111,7 +1206,7 @@ private:
     std::string m_module_core_name;
 };
 
-// **********  Mdl_module_wait_queue  **************************************************************
+// ********** Mdl_module_wait_queue  ***************************************************************
 class Module_cache;
 
 /// Used with module cache in order to allow parallel loading of modules.
@@ -1227,11 +1322,12 @@ public:
     /// Return structure for the \c lockup method
     struct Queue_lockup
     {
-        /// If the module is already in the cache, NULL otherwise
+        /// If the module is already in the cache, \c nullptr otherwise
         mi::mdl::IModule const* cached_module;
 
         /// If the module is not in the cache, \c wait has to be called on this queue entry
-        /// If this pointer is NULL, too, the current thread is responsible for loading the module.
+        /// If this pointer is \c nullptr, too, the current thread is responsible for loading the
+        /// module.
         Entry* queue_entry;
     };
 
@@ -1242,8 +1338,8 @@ public:
     /// \param cache            The current module cache.
     /// \param transaction      The current transaction to use.
     /// \param name             The name of the module to load.
-    /// \return                 The module, a waiting entry, or both NULL which means the module
-    ///                         has to be loaded on this thread.
+    /// \return                 The module, a waiting entry, or both \c nullptr which means the
+    ///                         module has to be loaded on this thread.
     Queue_lockup lookup(
         const Module_cache* cache,
         size_t transaction,
@@ -1283,7 +1379,7 @@ private:
     std::mutex m_mutex;
 };
 
-// ********** Module_cache_lookup_handle **********************************************************
+// ********** Module_cache_lookup_handle ***********************************************************
 
 class Module_cache_lookup_handle : public mi::mdl::IModule_cache_lookup_handle
 {
@@ -1302,7 +1398,7 @@ private:
     bool m_is_processing;
 };
 
-// ********** Module_cache ************************************************************************
+// ********** Module_cache *************************************************************************
 
 /// Adapts the DB (or rather a transaction) to the IModule_cache interface.
 class Module_cache : public mi::mdl::IModule_cache
@@ -1354,28 +1450,28 @@ public:
     /// Free a handle created by \c create_lookup_handle.
     void free_lookup_handle(mi::mdl::IModule_cache_lookup_handle* handle) const override;
 
-    /// If the DB contains the MDL module \p module_name, return it, otherwise \c NULL.
+    /// If the DB contains the MDL module \p module_name, return it, otherwise \c nullptr.
     ///
-    /// In case of access from multiple threads, only the first thread that wants to load
-    /// module will return \c NULL immediately, further threads will block until notify was called
-    /// by the loading thread. In case loading failed on a different thread, \c lookup will also
-    /// return \c NULL after returning from waiting. The caller can check whether the current
+    /// In case of access from multiple threads, only the first thread that wants to load module
+    /// will return \c nullptr immediately, further threads will block until notify was called by
+    /// the loading thread. In case loading failed on a different thread, \c lookup will also
+    /// return \c nullptr after returning from waiting. The caller can check whether the current
     /// thread is supposed to load the module by calling \c processed_on_this_thread.
     ///
     /// \param module_name  The core name of the module to lookup.
-    /// \param handle       a handle created by \c create_lookup_handle which is used throughout the
-    ///                     loading process of a model or NULL in case the goal is to just check if
-    ///                     a module is loaded.
+    /// \param handle       A handle created by #create_lookup_handle() which is used throughout
+    ///                     the loading process of a module or \c nullptr in case the goal is to
+    ///                     just check if a module is loaded.
     const mi::mdl::IModule* lookup(
         const char* module_name,
         mi::mdl::IModule_cache_lookup_handle *handle) const override;
 
-    /// Checks if the module is the DB. If so, the module is returned and NULL otherwise.
+    /// Checks if the module is the DB. If so, the module is returned and \c nullptr otherwise.
     ///
     /// \param module_name  The core name of the module to lookup.
     const mi::mdl::IModule* lookup_db(const char* module_name) const;
 
-    /// Checks if the module is the DB. If so, the module is returned and NULL otherwise.
+    /// Checks if the module is the DB. If so, the module is returned and \c nullptr otherwise.
     const mi::mdl::IModule* lookup_db(DB::Tag tag) const;
 
     /// Check if this module is loading was started in the current context. I.e., on the thread
@@ -1496,7 +1592,9 @@ private:
         const mi::mdl::IValue* argument) const;
 
     /// Folds tex::width() to a constant, or returns IValue_bad in case of errors.
-    /// uvtile_arg may be NULL for non-uvtile texture calls.
+    ///
+    /// \param uvtile_arg   May be \c nullptr for non-uvtile texture calls.
+    /// \param frame_arg    May be \c nullptr for non-animated texture calls.
     const mi::mdl::IValue* fold_tex_width(
         mi::mdl::IValue_factory* value_factory,
         const mi::mdl::IValue* argument,
@@ -1504,7 +1602,9 @@ private:
         const mi::mdl::IValue* frame_arg) const;
 
     /// Folds tex::height() to a constant, or returns IValue_bad in case of errors.
-    /// uvtile_arg may be NULL for non-uvtile texture calls.
+    ///
+    /// \param uvtile_arg   May be \c nullptr for non-uvtile texture calls.
+    /// \param frame_arg    May be \c nullptr for non-animated texture calls.
     const mi::mdl::IValue* fold_tex_height(
         mi::mdl::IValue_factory* value_factory,
         const mi::mdl::IValue* argument,
@@ -1512,6 +1612,8 @@ private:
         const mi::mdl::IValue* frame_arg) const;
 
     /// Folds tex::depth() to a constant, or returns IValue_bad in case of errors.
+    ///
+    /// \p frame_arg may be \c nullptr for non-animated texture calls.
     const mi::mdl::IValue* fold_tex_depth(
         mi::mdl::IValue_factory* value_factory,
         const mi::mdl::IValue* argument,
@@ -1561,7 +1663,7 @@ private:
     bool m_has_resource_attributes;
 };
 
-// **********  Resource names **********************************************************************
+// ********** Resource names ***********************************************************************
 
 namespace DETAIL {
 
@@ -1651,7 +1753,7 @@ mi::mdl::IMDL::MDL_version combine_mdl_version( int major, int minor);
 ///                      corresponding to the return value.
 /// \param gamma         The value that is returned by #TEXTURE::Texture::get_gamma()
 ///                      on the DB element referenced by the return value.
-/// \param selector      The selector (or \c NULL).
+/// \param selector      The selector (or \c nullptr).
 /// \param shared        Indicates whether you want to re-use the DB elements for that texture
 ///                      if it has already been loaded, or if you want to create new DB elements
 ///                      in all cases. Note that sharing is based on the location where the
@@ -1660,11 +1762,11 @@ mi::mdl::IMDL::MDL_version combine_mdl_version( int major, int minor);
 ///                      defaults.
 /// \param context       Execution context. The error codes have the following meaning:
 ///                      -  0: Success.
-///                      - -1: Invalid parameters (\c NULL pointer).
+///                      - -1: Invalid parameters (\c nullptr pointer).
 ///                      - -2: The file path is not an absolute MDL file path.
 ///                      - -3: Failed to resolve the given file path, or no suitable image
 ///                            plugin available.
-/// \return              The value referencing the texture, or \c NULL in case of failure.
+/// \return              The value referencing the texture, or \c nullptr in case of failure.
 IValue_texture* create_texture(
     DB::Transaction* transaction,
     const char* file_path,
@@ -1688,10 +1790,10 @@ IValue_texture* create_texture(
 ///                      light profiles in defaults.
 /// \param context       Execution context. The error codes have the following meaning:
 ///                      -  0: Success.
-///                      - -1: Invalid parameters (\c NULL pointer).
+///                      - -1: Invalid parameters (\c nullptr pointer).
 ///                      - -2: The file path is not an absolute MDL file path.
 ///                      - -3: Failed to resolve the given file path.
-/// \return              The value referencing the light profile, or \c NULL in case of failure.
+/// \return              The value referencing the light profile, or \c nullptr in case of failure.
 IValue_light_profile* create_light_profile(
     DB::Transaction* transaction,
     const char* file_path,
@@ -1712,10 +1814,10 @@ IValue_light_profile* create_light_profile(
 ///                      BSDF measurements in defaults.
 /// \param context       Execution context. The error codes have the following meaning:
 ///                      -  0: Success.
-///                      - -1: Invalid parameters (\c NULL pointer).
+///                      - -1: Invalid parameters (\c nullptr pointer).
 ///                      - -2: The file path is not an absolute MDL file path.
 ///                      - -3: Failed to resolve the given file path.
-/// \return              The value referencing the BSDF measurement, or \c NULL in case of
+/// \return              The value referencing the BSDF measurement, or \c nullptr in case of
 ///                      failure.
 IValue_bsdf_measurement* create_bsdf_measurement(
     DB::Transaction* transaction,

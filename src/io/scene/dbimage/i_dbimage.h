@@ -78,7 +78,7 @@ public:
     /// Returns an empty string if this image set is not an MDL resource.
     virtual const char* get_mdl_file_path() const = 0;
 
-    /// Returns the selector, or \p NULL if there is none.
+    /// Returns the selector, or \c nullptr.
     virtual const char* get_selector() const = 0;
 
     /// Returns the image format, or the empty string if not available.
@@ -132,12 +132,12 @@ public:
 
     /// Returns a reader for frame \p f, uvtile \p i.
     ///
-    /// Returns \c NULL if not supported.
+    /// Returns \c nullptr if not supported.
     virtual mi::neuraylib::IReader* open_reader( mi::Size f, mi::Size i) const = 0;
 
     /// Returns a canvas for frame \p f, uvtile \p i.
     ///
-    /// Returns \c NULL if not supported.
+    /// Returns \c nullptr if not supported.
     virtual mi::neuraylib::ICanvas* get_canvas( mi::Size f, mi::Size i) const = 0;
 
     /// Creates a mipmap for frame \p f, uvtile \p i.
@@ -295,7 +295,7 @@ public:
     ///
     /// \param original_filename     The filename of the mipmap. The resource search paths are
     ///                              used to locate the file.
-    /// \param selector              The selector (or \c NULL).
+    /// \param selector              The selector (or \c nullptr).
     /// \param impl_hash             Hash of the data in the implementation class. Use {0,0,0,0} if
     ///                              hash is not known.
     /// \return
@@ -316,7 +316,7 @@ public:
     ///
     /// \param reader                The reader for the mipmap.
     /// \param image_format          The image format.
-    /// \param selector              The selector (or \c NULL).
+    /// \param selector              The selector (or \c nullptr).
     /// \param impl_hash             Hash of the data in the implementation class. Use {0,0,0,0} if
     ///                              hash is not known.
     /// \return
@@ -359,10 +359,10 @@ public:
     /// Actually, the mipmap might not be memory-based, but it will be treated as if it was a
     /// memory-based mipmap, in particular for serialization purposes.
     ///
-    /// A \c NULL pointer can be passed to restore the state after default construction.
+    /// A \c nullptr pointer can be passed to restore the state after default construction.
     ///
-    /// \param selector              The selector (or \c NULL). Not applied to \p mipmap, only for
-    ///                              information.
+    /// \param selector              The selector (or \c nullptr). Not applied to \p mipmap, only
+    ///                              for information.
     /// \param impl_hash             Hash of the data in the implementation class. Use {0,0,0,0} if
     ///                              hash is not known.
     void set_mipmap(
@@ -375,9 +375,9 @@ public:
     ///
     /// \param frame_id   The frame ID of the mimap.
     /// \param uvtile_id  The uv-tile ID of the mimap.
-    /// \return           Returns the requested mipmap, or \c NULL if \p frame_id or \p uvtile_id
+    /// \return           Returns the requested mipmap, or \c nullptr if \p frame_id or \p uvtile_id
     ///                   is out of bounds. In contrast to other resources, the method does \em not
-    ///                   return \c NULL if #is_valid() returns \c false, but a dummy mipmap.
+    ///                   return \c nullptr if #is_valid() returns \c false, but a dummy mipmap.
     const IMAGE::IMipmap* get_mipmap(
         DB::Transaction* transaction, mi::Size frame_id, mi::Size uvtile_id) const;
 
@@ -386,7 +386,9 @@ public:
     /// \param frame_id   The frame ID of the mimap.
     /// \param uvtile_id  The uv-tile ID of the mipmap.
     /// \return           The resolved filename of the referenced uv-tile, or the empty string if
-    ///                   the uv-tile is not file-based (including failure to resolve the filename).
+    ///                   the uv-tile is memory-based (including failure to resolve the filename).
+    ///                   For container-based uv-tiles, the container and members names are
+    ///                   separated by a colon.
     const std::string& get_filename( mi::Size frame_id, mi::Size uvtile_id) const;
 
     /// Returns the original filename of the referenced mipmap.
@@ -410,7 +412,7 @@ public:
 
     /// Indicates whether this image references a valid mipmap.
     ///
-    /// After default construction and after set_mipmap() is called with a \c NULL pointer this
+    /// After default construction and after set_mipmap() is called with a \c nullptr pointer this
     /// image references a dummy mipmap with a 1x1 canvas with a pink pixel.
     bool is_valid() const { return m_cached_is_valid; }
 
@@ -547,7 +549,7 @@ private:
     ///
     /// \param path       Path to resolve.
     /// \param selector   The selector.
-    /// \return           Image set containing the resolved filenames for \p path, or \c NULL in
+    /// \return           Image set containing the resolved filenames for \p path, or \c nullptr in
     ///                   case of error.
     static Image_set* resolve_filename( const std::string& path, const char* selector);
 
@@ -658,7 +660,7 @@ public:
     /// \param frame_id    The frame ID of the mipmap.
     /// \param uvtile_id   The uv-tile ID of the mipmap.
     ///
-    /// Returns the requested mipmap, or \c NULL if \p frame_id or \p uvtile_id is out of bounds.
+    /// Returns the requested mipmap, or \c nullptr if \p frame_id or \p uvtile_id is out of bounds.
     const IMAGE::IMipmap* get_mipmap( mi::Size frame_id, mi::Size uvtile_id) const;
 
     /// Indicates whether the referenced mipmap represents a cubemap.

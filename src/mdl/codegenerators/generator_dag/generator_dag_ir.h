@@ -35,6 +35,8 @@
 #include "mdl/compiler/compilercore/compilercore_cc_conf.h"
 #include "mdl/compiler/compilercore/compilercore_memory_arena.h"
 
+#include "generator_dag_unit.h"
+
 namespace mi {
 namespace mdl {
 
@@ -58,19 +60,18 @@ public:
     /// Constructor.
     ///
     /// \param mdl             The MDL compiler interface.
-    /// \param arena           The memory arena.
-    /// \param value_factory   The value factory used to create values.
+    /// \param unit            The DAG unit.
     /// \param internal_space  The internal space for which to compile.
     DAG_node_factory_impl(
         IMDL          *mdl,
-        Memory_arena  &arena,
-        Value_factory &value_factory,
+        DAG_unit      &unit,
         char const    *internal_space);
 
     /// Create a constant.
     /// \param value       The value of the constant.
     /// \returns           The created constant.
-    DAG_constant const *create_constant(IValue const *value) MDL_FINAL;
+    DAG_constant const *create_constant(
+        IValue const *value) MDL_FINAL;
 
     /// Create a temporary reference.
     /// \param node         The DAG IR node that is "named" by this temporary.
@@ -86,19 +87,25 @@ public:
     /// \param call_args       The call arguments of the called function.
     /// \param num_call_args   The number of call arguments.
     /// \param ret_type        The return type of the function.
+    /// \param dbg_info        The debug info for this node if any.
     /// \returns               The created call or an equivalent IR node.
     DAG_node const *create_call(
         char const                    *name,
         IDefinition::Semantics        sema,
         DAG_call::Call_argument const call_args[],
-        int                           num_call_args,
-        IType const                   *ret_type) MDL_FINAL;
+        size_t                        num_call_args,
+        IType const                   *ret_type,
+        DAG_DbgInfo                   dbg_info) MDL_FINAL;
 
     /// Create a parameter reference.
     /// \param type        The type of the parameter
     /// \param index       The index of the parameter.
+    /// \param dbg_info    The debug info for this node if any.
     /// \returns           The created parameter.
-    DAG_parameter const *create_parameter(IType const *type, int index) MDL_FINAL;
+    DAG_parameter const *create_parameter(
+        IType const *type,
+        int         index,
+        DAG_DbgInfo dbg_info) MDL_FINAL;
 
     /// Enable common subexpression elimination.
     ///
@@ -131,13 +138,19 @@ public:
     /// \returns            The value factory.
     Value_factory *get_value_factory() MDL_FINAL;
 
+    /// Get the DAG unit of the entity that is built.
+    DAG_unit const &get_dag_unit() const { return m_dag_unit; }
+
+    /// Get the DAG unit of the entity that is built.
+    DAG_unit &get_dag_unit() { return m_dag_unit; }
+
     /// Get the type factory associated with this node factory.
     /// \returns            The type factory.
-    Type_factory const &get_type_factory() const { return *m_value_factory.get_type_factory(); }
+    Type_factory const &get_type_factory() const { return m_dag_unit.get_type_factory(); }
 
     /// Get the value factory associated with this node factory.
     /// \returns            The value factory.
-    Value_factory const &get_value_factory() const { return m_value_factory; }
+    Value_factory const &get_value_factory() const { return m_dag_unit.get_value_factory(); }
 
     /// Clear the value table.
     void identify_clear() { m_value_table.clear(); m_temp_name_map.clear(); }
@@ -147,7 +160,7 @@ public:
 
     /// Enable exposing names of let expressions.
     ///
-    /// \param flag  If true, exposing names of let epressions will be enabled, else disabled.
+    /// \param flag  If true, exposing names of let expressions will be enabled, else disabled.
     /// \return      The old value of the flag.
     bool enable_expose_names_of_let_expressions(bool flag) {
         bool res = m_expose_names_of_let_expressions; m_expose_names_of_let_expressions = flag;
@@ -188,6 +201,17 @@ public:
     bool enable_inline(bool flag) {
         bool res = m_inline_allowed; m_inline_allowed = flag; return res;
     }
+
+    /// Register a new file name (for debug info) and get its ID.
+    ///
+    /// \param fname  the file name
+    ///
+    /// \note This method does NOT check if the file name is already registered, it should
+    ///       only be called from a Dag_builder.
+    size_t register_file_name(char const *fname) { return m_dag_unit.register_file_name(fname); }
+
+    /// Check if debug info is enabled.
+    bool is_dbg_info_enabled() const { return m_dag_unit.has_dbg_info(); }
 
     /// Create a float4x4 identity matrix.
     ///
@@ -295,7 +319,7 @@ public:
     char const *get_internal_space() const { return m_internal_space; }
 
     /// Check if this node factory owns the given DAG node.
-    bool is_owner(DAG_node const *n) const;
+    MDL_CHECK_RESULT bool is_owner(DAG_node const *n) const;
 
     /// Adds a name to a given DAG node.
     void add_node_name(DAG_node const *node, char const *name);
@@ -322,6 +346,10 @@ public:
     size_t get_next_id() const { return m_next_id; }
 
     /// Return a shallow copy of the top-level node with CSE disabled.
+    ///
+    /// \param node  the node to copy
+    ///
+    /// \note node must be owner by the same owner
     DAG_node const *shallow_copy(DAG_node const *node);
 
     /// Get the allocator of this factory.
@@ -337,27 +365,33 @@ public:
 private:
     /// Build a call to a conversion from a ::tex::gamma value to int.
     ///
-    /// \param x   the value to convert
+    /// \param x         the value to convert
+    /// \param dbg_info  the debug info for this node if any
     DAG_node const *build_gamma_conv(
-        DAG_node const *x);
+        DAG_node const *x,
+        DAG_DbgInfo    dbg_info);
 
     /// Build a call to a operator== for a ::tex::gamma value.
     ///
-    /// \param x   the left gamma value
-    /// \param y   the right gamma value
+    /// \param x         the left gamma value
+    /// \param y         the right gamma value
+    /// \param dbg_info  the debug info for this node if any
     DAG_node const *build_gamma_equal(
         DAG_node const *x,
-        DAG_node const *y);
+        DAG_node const *y,
+        DAG_DbgInfo    dbg_info);
 
     /// Build a call to a ternary operator for a texture.
     ///
     /// \param cond       the condition
     /// \param true_tex   the texture returned in the true case
     /// \param false_tex  the texture returned in the false case
+    /// \param dbg_info   the debug info for this node if any
     DAG_node const *build_texture_ternary(
         DAG_node const *cond,
         DAG_node const *true_tex,
-        DAG_node const *false_tex);
+        DAG_node const *false_tex,
+        DAG_DbgInfo    dbg_info);
 
     /// Avoid non-const gamma textures.
     ///
@@ -365,11 +399,13 @@ private:
     /// \param url       the resource url
     /// \param gamma     the non-const gamma expression
     /// \param selector  the channel selector
+    /// \param dbg_info  the debug info for this node if any
     DAG_node const *do_avoid_non_const_gamma(
         IType_texture const *tex_type,
         DAG_constant const  *url,
         DAG_node const      *gamma,
-        DAG_constant const  *selector);
+        DAG_constant const  *selector,
+        DAG_DbgInfo         dbg_info);
 
     /// Create an operator call.
     ///
@@ -377,31 +413,39 @@ private:
     /// \param op              The operator.
     /// \param call_args       The arguments of the called operator.
     /// \param ret_type        The return type of the function.
+    /// \param dbg_info        The debug info for this node if any.
+    ///
     /// \returns               The created call or an equivalent IR node.
     DAG_node const *create_operator_call(
         char const                    *name,
         IExpression::Operator         op,
         DAG_call::Call_argument const call_args[],
-        IType const                   *ret_type);
+        IType const                   *ret_type,
+        DAG_DbgInfo                   dbg_info);
 
     /// Create a call to df::diffuse_reflection_bsdf() with default values.
     ///
     /// \param ret_type  the bsdf type
+    /// \param dbg_info  the debug info for this node if any
     DAG_node const *create_diffuse_reflection_bsdf(
-        IType const                   *ret_type);
+        IType const                   *ret_type,
+        DAG_DbgInfo                   dbg_info);
 
     /// Try to move a ternary operator down.
     ///
     /// \param cond            The condition expression.
     /// \param t_expr          The true expression.
     /// \param f_cond          The false expression.
-    /// \param ret_type        The return type of the function.
+    /// \param ret_type        The return type of the ternary operator.
+    /// \param dbg_info        The debug info of the ternary operator.
+    ///
     /// \returns               The result of moving the operator down or NULL if that failed.
     DAG_node const *move_ternary_down(
         DAG_node const *cond,
         DAG_node const *true_expr,
         DAG_node const *false_expr,
-        IType const    *ret_type);
+        IType const    *ret_type,
+        DAG_DbgInfo    dbg_line);
 
     /// Create a ternary operator call.
     ///
@@ -409,12 +453,15 @@ private:
     /// \param t_expr          The true expression.
     /// \param f_cond          The false expression.
     /// \param ret_type        The return type of the function.
+    /// \param dbg_info        The debug info for this node if any.
+    ///
     /// \returns               The created call or an equivalent IR node.
     DAG_node const *create_ternary_call(
         DAG_node const *cond,
         DAG_node const *t_expr,
         DAG_node const *f_expr,
-        IType const    *ret_type);
+        IType const    *ret_type,
+        DAG_DbgInfo    dbg_info);
 
     /// Create a constructor call.
     ///
@@ -423,13 +470,16 @@ private:
     /// \param call_args       The arguments of the called constructor.
     /// \param num_call_args   The number of call arguments.
     /// \param ret_type        The return type of the constructor.
+    /// \param dbg_info        The debug info for this node if any.
+    ///
     /// \returns               The created call or an equivalent IR node.
     DAG_node const *create_constructor_call(
         char const                    *name,
         IDefinition::Semantics        sema,
         DAG_call::Call_argument const call_args[],
         int                           num_call_args,
-        IType const                   *ret_type);
+        IType const                   *ret_type,
+        DAG_DbgInfo                   dbg_info);
 
     /// Create a df::*_mix() call.
     /// \param name            The name of the called function.
@@ -437,13 +487,16 @@ private:
     /// \param call_arg        The call argument of the called function.
     /// \param param_name      The name of the call parameter.
     /// \param ret_type        The return type of the function.
+    /// \param dbg_info        The debug info for this node if any.
+    ///
     /// \returns               The created call or an equivalent IR node.
     DAG_node const *create_mix_call(
         char const             *name,
         IDefinition::Semantics sema,
         DAG_node const         *call_arg,
         char const             *param_name,
-        IType const            *ret_type);
+        IType const            *ret_type,
+        DAG_DbgInfo            dbg_info);
 
     /// Creates an invalid reference (i.e. a call to the a default df constructor).
     ///
@@ -482,12 +535,20 @@ private:
         char const           *call_name);
 
     /// Allocate a Call node.
+    ///
+    /// \param name            The name of the called function.
+    /// \param sema            The semantics of the called function.
+    /// \param call_args       The call arguments of the called function.
+    /// \param num_call_args   The number of call arguments.
+    /// \param ret_type        The return type of the function.
+    /// \param dbg_info        The debug info for this call if any.
     Call_impl *alloc_call(
         char const                    *name,
         IDefinition::Semantics        sema,
         DAG_call::Call_argument const call_args[],
         size_t                        num_call_args,
-        IType const                   *ret_type);
+        IType const                   *ret_type,
+        DAG_DbgInfo                   dbg_info);
 
     /// Unwrap a float to color cast, i.e. return a node computing a float from
     /// a node computing a color.
@@ -500,13 +561,16 @@ private:
     /// \param call_args       The call arguments of the called function.
     /// \param num_call_args   The number of call arguments.
     /// \param ret_type        The return type of the function.
+    /// \param dbg_info        The debug info for this node if any.
+    ///
     /// \returns               The created call or an equivalent IR node.
     DAG_node const *normalize_thin_film(
         char const                    *name,
         IDefinition::Semantics        sema,
         DAG_call::Call_argument const call_args[],
         int                           num_call_args,
-        IType const                   *ret_type);
+        IType const                   *ret_type,
+        DAG_DbgInfo                   dbg_info);
 
 private:
     /// The arena builder.
@@ -515,11 +579,8 @@ private:
     /// The mdl interface.
     mi::base::Handle<IMDL> m_mdl;
 
-    /// The value factory.
-    Value_factory &m_value_factory;
-
-    /// The symbol table to share call signatures.
-    Symbol_table &m_sym_tab;
+    /// The DAG unit to fill.
+    DAG_unit &m_dag_unit;
 
     /// The internal space for which to compile.
     char const *m_internal_space;
@@ -586,10 +647,14 @@ private:
 
     /// An Equal functor for DAG IR nodes.
     struct Equal_dag_node {
-        Equal_dag_node(const Definition_temporary_name_map& temp_name_map)
-        : m_temp_name_map(temp_name_map) { }
+        Equal_dag_node(Definition_temporary_name_map const &temp_name_map)
+        : m_temp_name_map(temp_name_map)
+        {
+        }
+
         bool operator()(DAG_node const *a, DAG_node const *b) const;
-        const Definition_temporary_name_map& m_temp_name_map;
+
+        Definition_temporary_name_map const &m_temp_name_map;
     };
 
     typedef hash_set<

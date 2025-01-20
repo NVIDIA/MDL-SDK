@@ -79,13 +79,27 @@ protected:
         Type_factory const *owner,
         IType const        *type);
 
+    /// Check a given AST expression for soundness.
+    ///
+    /// \param expr   the expression to check
+    void check_expr(
+        IModule const     *owner,
+        IExpression const *expr);
+
+    /// Check the parameter initializer of a definition for soundness.
+    ///
+    /// \param owner  the owner module of the definition to check
+    /// \param def    the definition to check
+    void check_parameter_initializers(
+        IModule const     *owner,
+        IDefinition const *def);
+
     /// Check a given definition for soundness.
     ///
-    /// \param owner  the owner definition table of the definition to check
     /// \param def   the definition to check
     void check_definition(
-        Definition_table const *owner,
-        IDefinition const      *def);
+        IModule const     *owner,
+        IDefinition const *def);
 
     /// Report an error.
     ///
@@ -127,20 +141,16 @@ public:
         bool          verbose);
 
 private:
+    /// Check a module for soundness.
+    ///
+    /// \param module  the module to check
+    void check_module(
+        Module const *module);
+
     /// Default post visitor for expressions.
     ///
     /// \param expr  the expression
     IExpression *post_visit(IExpression *expr) MDL_FINAL;
-
-    // Post visitor for literal expressions.
-    ///
-    /// \param expr  the expression
-    IExpression *post_visit(IExpression_literal *expr) MDL_FINAL;
-
-    // Post visitor for reference expressions.
-    ///
-    /// \param expr  the expression
-    IExpression *post_visit(IExpression_reference *expr) MDL_FINAL;
 
 private:
     /// Constructor.
@@ -154,14 +164,8 @@ private:
         IPrinter     *printer);
 
 private:
-    /// The value factory of the module to check.
-    Value_factory const *m_vf;
-
-    /// The type factory of the module to check.
-    Type_factory const *m_tf;
-
-    /// The definition table of the module to check.
-    Definition_table const *m_deftab;
+    /// The module to check.
+    Module const *m_module;
 };
 
 /// Helper class to check that our input is really a Tree, and not a DAG.

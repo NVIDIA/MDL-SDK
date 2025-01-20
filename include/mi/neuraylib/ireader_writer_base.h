@@ -101,7 +101,7 @@ public:
     /// Returns the error message of the last error that happened in this reader or writer.
     ///
     /// The returned string might be platform-dependent, e.g., by using \c strerror(). The method
-    /// \em might return \c NULL if #get_error_number() returns 0.
+    /// \em might return \c nullptr if #get_error_number() returns 0.
     virtual const char* get_error_message() const = 0;
 
     /// Returns \c true if the end of the file has been reached.

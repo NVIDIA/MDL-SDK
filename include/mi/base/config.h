@@ -44,7 +44,7 @@
  */
 
 // The current copyright year string.
-#define MI_COPYRIGHT_YEARS_STRING "2024"
+#define MI_COPYRIGHT_YEARS_STRING "2025"
 
 // The NVIDIA company name string for copyrights etc.
 #define MI_COPYRIGHT_COMPANY_STRING "NVIDIA Corporation"
@@ -362,11 +362,6 @@
 #else
 /// The operating system specific default filename extension for shared libraries (DLLs)
 #define MI_BASE_DLL_FILE_EXT ".so"
-#endif
-
-#if (__cplusplus >= 201103L)
-/// This macro is defined if the compiler supports rvalue references.
-#define MI_CXX_FEATURE_RVALUE_REFERENCES
 #endif
 
 /**@}*/ // end group mi_base_config

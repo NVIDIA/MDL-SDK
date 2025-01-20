@@ -56,7 +56,7 @@ class IMdl_execution_context;
 ///       - Reformatting of the MDL source code.
 ///       - Possibly restructuring of alias declarations (including introduction of new ones).
 ///
-/// /// \see #mi::neuraylib::IMdl_factory::create_module_transformer()
+/// \see #mi::neuraylib::IMdl_factory::create_module_transformer()
 class IMdl_module_transformer : public
     mi::base::Interface_declare<0x3501f2ef,0xe7c0,0x492e,0xb2,0xd5,0x73,0xe2,0x33,0xa0,0x77,0x36>
 {
@@ -73,11 +73,11 @@ public:
     /// changed.
     ///
     /// \param include_filter  An extended regular expression [\ref OGBS7] of absolute MDL module
-    ///                        names to include, or \c NULL which matches any module.
+    ///                        names to include, or \c nullptr which matches any module.
     /// \param exclude_filter  An extended regular expression [\ref OGBS7] of absolute MDL module
-    ///                        names to exclude, or \c NULL which matches no module.
+    ///                        names to exclude, or \c nullptr which matches no module.
     /// \param context         The execution context can be used to obtain messages like errors or
-    ///                        warnings are stored in the context. Can be \c NULL.
+    ///                        warnings are stored in the context. Can be \c nullptr.
     /// \return                A return code. The return codes have the following meaning:
     ///                        -  0: Success.
     ///                        - -1: An error occurred. Details are provided in the execution
@@ -96,11 +96,11 @@ public:
     /// This transformation requires MDL version >= 1.3.
     ///
     /// \param include_filter  An extended regular expression [\ref OGBS7] of absolute MDL module
-    ///                        names to include, or \c NULL which matches any module.
+    ///                        names to include, or \c nullptr which matches any module.
     /// \param exclude_filter  An extended regular expression [\ref OGBS7] of absolute MDL module
-    ///                        names to exclude, or \c NULL which matches no module.
+    ///                        names to exclude, or \c nullptr which matches no module.
     /// \param context         The execution context can be used to obtain messages like errors or
-    ///                        warnings are stored in the context. Can be \c NULL.
+    ///                        warnings are stored in the context. Can be \c nullptr.
     /// \return                A return code. The return codes have the following meaning:
     ///                        -  0: Success.
     ///                        - -1: An error occurred. Details are provided in the execution
@@ -117,11 +117,11 @@ public:
     /// transformation. Later, they are exported next to the module with relative paths.
     ///
     /// \param include_filter  An extended regular expression [\ref OGBS7] of absolute file paths
-    ///                        to include, or \c NULL which matches any resource.
+    ///                        to include, or \c nullptr which matches any resource.
     /// \param exclude_filter  An extended regular expression [\ref OGBS7] of absolute file paths
-    ///                        to exclude, or \c NULL which matches no resource.
+    ///                        to exclude, or \c nullptr which matches no resource.
     /// \param context         The execution context can be used to obtain messages like errors or
-    ///                        warnings are stored in the context. Can be \c NULL.
+    ///                        warnings are stored in the context. Can be \c nullptr.
     /// \return                A return code. The return codes have the following meaning:
     ///                        -  0: Success.
     ///                        - -1: An error occurred. Details are provided in the execution
@@ -142,11 +142,11 @@ public:
     /// This transformation requires MDL version >= 1.3.
     ///
     /// \param include_filter  An extended regular expression [\ref OGBS7] of absolute file paths
-    ///                        to include, or \c NULL which matches any resource.
+    ///                        to include, or \c nullptr which matches any resource.
     /// \param exclude_filter  An extended regular expression [\ref OGBS7] of absolute file paths
-    ///                        to exclude, or \c NULL which matches no resource.
+    ///                        to exclude, or \c nullptr which matches no resource.
     /// \param context         The execution context can be used to obtain messages like errors or
-    ///                        warnings are stored in the context. Can be \c NULL.
+    ///                        warnings are stored in the context. Can be \c nullptr.
     /// \return                A return code. The return codes have the following meaning:
     ///                        -  0: Success.
     ///                        - -1: An error occurred. Details are provided in the execution
@@ -163,15 +163,15 @@ public:
     /// does not work.
     ///
     /// \param include_filter    An extended regular expression [\ref OGBS7] of absolute MDL module
-    ///                          names to include, or \c NULL which matches any module.
+    ///                          names to include, or \c nullptr which matches any module.
     /// \param exclude_filter    An extended regular expression [\ref OGBS7] of absolute MDL module
-    ///                          names to exclude, or \c NULL which matches no module.
+    ///                          names to exclude, or \c nullptr which matches no module.
     /// \param omit_anno_origin  The \c anno::origin annotation causes an MDL version of at least
     ///                          1.5 for the new module. Omitting the annotation allows to create
     ///                          MDL modules of older versions (depending on the other features
     ///                          used).
     /// \param context           The execution context can be used to obtain messages like errors or
-    ///                          warnings are stored in the context. Can be \c NULL.
+    ///                          warnings are stored in the context. Can be \c nullptr.
     /// \return                  A return code. The return codes have the following meaning:
     ///                          -  0: Success.
     ///                          - -1: An error occurred. Details are provided in the execution
@@ -193,10 +193,10 @@ public:
     ///
     /// \param filename          The name of the file to be used for the export.
     /// \param context           The execution context can be used to obtain messages like errors
-    ///                          or warnings are stored in the context. Can be \c NULL.
+    ///                          or warnings are stored in the context. Can be \c nullptr.
     /// \return
     ///                          -     0: Success.
-    ///                          -    -1: Invalid parameters (\c NULL pointer).
+    ///                          -    -1: Invalid parameters (\c nullptr).
     ///                          -    -2: Failed to open \p filename for write operations.
     ///                          - -6002: There is no MDL module in the database of the given name.
     ///                          - -6003: The export failed for unknown reasons.
@@ -214,10 +214,10 @@ public:
     ///
     /// \param exported_module   The exported module source code is written to this string.
     /// \param context           The execution context can be used to obtain messages like errors
-    ///                          or warnings are stored in the context. Can be \c NULL.
+    ///                          or warnings are stored in the context. Can be \c nullptr.
     /// \return
     ///                          -     0: Success.
-    ///                          -    -1: Invalid parameters (\c NULL pointer).
+    ///                          -    -1: Invalid parameters (\c nullptr).
     ///                          - -6002: There is no MDL module in the database of the given name.
     ///                          - -6003: The export failed for unknown reasons.
     ///                          - -6004: The MDL module can not be exported since it is a builtin

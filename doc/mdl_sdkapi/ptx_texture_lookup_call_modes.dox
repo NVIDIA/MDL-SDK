@@ -47,7 +47,7 @@ parameter \c res_data which has to be provided to the generated code by the rend
     };
 \endcode
 
-\note The \c shared_data field is currently unused and should always be NULL.
+\note The \c shared_data field is currently unused and should always be nullptr.
 
 \section mi_neuray_ptx_texture_lookup_call_modes_vtable "vtable" mode
 
@@ -176,7 +176,7 @@ The implementations must be linked to the generated code.
 The expected prototypes correspond to the prototypes in the
 \c Texture_handler_vtable structure of the vtable, except that the
 \c Texture_handler structure is not required to contain the \c vtable field.
-The \c texture_handler field of the #mi::neuraylib::Resource_data structure may be NULL, if your
+The \c texture_handler field of the #mi::neuraylib::Resource_data structure may be nullptr, if your
 implementation does not need it.
 
 Here are the CUDA prototypes of the functions you have to implement:

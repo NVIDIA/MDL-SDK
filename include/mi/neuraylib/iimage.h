@@ -142,11 +142,11 @@ public:
     /// v-coordinates of 0.
     ///
     /// \param filename       The filename of the image to load.
-    /// \param selector       The selector, or \c NULL. See section 2.3.1 in [\ref MDLLS] for
+    /// \param selector       The selector, or \c nullptr. See section 2.3.1 in [\ref MDLLS] for
     ///                       details.
     /// \return
     ///                       -   0: Success.
-    ///                       -  -1: Invalid parameters (\c NULL pointer).
+    ///                       -  -1: Invalid parameters (\c nullptr).
     ///                       -  -3: No image plugin found to handle the file.
     ///                       -  -4: Failure to resolve the given filename, e.g., the file does not
     ///                              exist.
@@ -156,7 +156,7 @@ public:
     ///
     /// \see #mi::neuraylib::IMdl_factory::create_texture() for a way to create a texture based
     ///      on an MDL file path instead of a filename.
-    virtual Sint32 reset_file( const char* filename, const char* selector = 0) = 0;
+    virtual Sint32 reset_file( const char* filename, const char* selector = nullptr) = 0;
 
     /// Sets the image to the data provided by a reader.
     ///
@@ -165,17 +165,17 @@ public:
     /// \param image_format   The image format of the data, e.g., \c "jpg". Note that support for a
     ///                       given image format requires an image plugin capable of handling that
     ///                       format.
-    /// \param selector       The selector, or \c NULL. See section 2.3.1 in [\ref MDLLS] for
+    /// \param selector       The selector, or \c nullptr. See section 2.3.1 in [\ref MDLLS] for
     ///                       details.
     /// \return
     ///                       -   0: Success.
-    ///                       -  -1: Invalid parameters (\c NULL pointer).
+    ///                       -  -1: Invalid parameters (\c nullptr).
     ///                       -  -3: No image plugin found to handle the file.
     ///                       -  -6: The reader does not support absolute access.
     ///                       -  -7: The image plugin failed to import the data.
     ///                       - -10: Failure to apply the given selector.
     virtual Sint32 reset_reader(
-        IReader* reader, const char* image_format, const char* selector = 0) = 0;
+        IReader* reader, const char* image_format, const char* selector = nullptr) = 0;
 
     /// Sets the image to the frame/uv-tile data provided by an array of readers.
     ///
@@ -193,11 +193,11 @@ public:
     /// \param image_format   The image format of the data, e.g., \c "jpg". Note that support for a
     ///                       given image format requires an image plugin capable of handling that
     ///                       format.
-    /// \param selector       The selector, or \c NULL. See section 2.3.1 in [\ref MDLLS] for
+    /// \param selector       The selector, or \c nullptr. See section 2.3.1 in [\ref MDLLS] for
     ///                       details.
     /// \return
     ///                       -   0: Success.
-    ///                       -  -1: Invalid parameters (\c NULL pointer).
+    ///                       -  -1: Invalid parameters (\c nullptr).
     ///                       -  -3: No image plugin found to handle the file.
     ///                       -  -6: The reader does not support absolute access.
     ///                       -  -7: The image plugin failed to import the data.
@@ -206,7 +206,7 @@ public:
     ///                              array slots or struct fields).
     ///                       - -12: Repeated u/v coordinates (per frame).
     virtual Sint32 reset_reader(
-        IArray* reader, const char* image_format, const char* selector = 0) = 0;
+        IArray* reader, const char* image_format, const char* selector = nullptr) = 0;
 
     /// Sets the image to the passed canvas (without sharing).
     ///
@@ -214,18 +214,18 @@ public:
     ///                   copied, not shared. If sharing is intended, use
     ///            #mi::neuraylib::IImage::set_from_canvas(mi::neuraylib::ICanvas*,const char*,bool)
     ///                   instead.
-    /// \param selector   The selector, or \c NULL. See section 2.3.1 in [\ref MDLLS] for
+    /// \param selector   The selector, or \c nullptr. See section 2.3.1 in [\ref MDLLS] for
     ///                   details. Note that the selector is \em not applied to the canvas, the
     ///                   information is just stored for retrieval via #get_selector().
     /// \return           \c true if the pixel data of this image has been set correctly, and
     ///                   \c false otherwise.
     virtual bool set_from_canvas(
-        const ICanvas* canvas, const char* selector = 0) = 0;
+        const ICanvas* canvas, const char* selector = nullptr) = 0;
 
     /// Sets the image to the passed canvas (possibly sharing the pixel data).
     ///
     /// \param canvas     The pixel data to be used by this image.
-    /// \param selector   The selector, or \c NULL. See section 2.3.1 in [\ref MDLLS] for
+    /// \param selector   The selector, or \c nullptr. See section 2.3.1 in [\ref MDLLS] for
     ///                   details. Note that the selector is \em not applied to the canvas, the
     ///                   information is just stored for retrieval via #get_selector().
     /// \param shared     If \c false (the default), the pixel data is copied from \c canvas and the
@@ -237,7 +237,7 @@ public:
     /// \return           \c true if the pixel data of this image has been set correctly, and
     ///                   \c false otherwise.
     virtual bool set_from_canvas(
-        ICanvas* canvas, const char* selector = 0, bool shared = false) = 0;
+        ICanvas* canvas, const char* selector = nullptr, bool shared = false) = 0;
 
 #ifdef MI_NEURAYLIB_DEPRECATED_14_0
     inline bool set_from_canvas( ICanvas* canvas, bool shared)
@@ -259,13 +259,13 @@ public:
     ///                     copied, not shared. If sharing is intended, use
     ///                     #mi::neuraylib::IImage::set_from_canvas(mi::IArray*,const char*,bool)
     ///                     instead.
-    /// \param selector   The selector, or \c NULL. See section 2.3.1 in [\ref MDLLS] for
+    /// \param selector   The selector, or \c nullptr. See section 2.3.1 in [\ref MDLLS] for
     ///                   details. Note that the selector is \em not applied to the canvas, the
     ///                   information is just stored for retrieval via #get_selector().
     /// \return           \c true if the pixel data of this image has been set correctly, and
     ///                   \c false otherwise.
     virtual bool set_from_canvas(
-        const IArray* uvtiles, const char* selector = 0) = 0;
+        const IArray* uvtiles, const char* selector = nullptr) = 0;
 
     /// Sets the frames/uv-tiles of this image based to the passed canvases (possibly sharing the
     /// pixel data).
@@ -280,7 +280,7 @@ public:
     ///                     The frame number of this uv-tile.
     ///                   - #mi::neuraylib::ICanvas* \b canvas \n
     ///                     The pixel data to be used for this image.
-    /// \param selector   The selector, or \c NULL. See section 2.3.1 in [\ref MDLLS] for
+    /// \param selector   The selector, or \c nullptr. See section 2.3.1 in [\ref MDLLS] for
     ///                   details. Note that the selector is \em not applied to the canvas, the
     ///                   information is just stored for retrieval via #get_selector().
     /// \param shared     If \c false (the default), the pixel data is copied from \c canvas and
@@ -292,7 +292,7 @@ public:
     /// \return           \c true if the pixel data of this image has been set correctly, and
     ///                   \c false otherwise.
     virtual bool set_from_canvas(
-        IArray* uvtiles, const char* selector = 0, bool shared = false) = 0;
+        IArray* uvtiles, const char* selector = nullptr, bool shared = false) = 0;
 
 #ifdef MI_NEURAYLIB_DEPRECATED_14_0
     inline bool set_from_canvas( IArray* uvtiles, bool shared)
@@ -372,7 +372,7 @@ public:
 
     /// Returns the resolved file name of a mipmap of the image.
     ///
-    /// The method returns \c NULL if there is no file associated with the mipmap, e.g., after
+    /// The method returns \c nullptr if there is no file associated with the mipmap, e.g., after
     /// default construction, calls to #set_from_canvas(), or failures to resolve the file name
     /// passed to #reset_file().
     ///
@@ -384,12 +384,12 @@ public:
 
     /// Returns the unresolved file as passed to #reset_file().
     ///
-    /// The method returns \c NULL after default construction or calls to #set_from_canvas().
+    /// The method returns \c nullptr after default construction or calls to #set_from_canvas().
     ///
     /// \see #get_filename()
     virtual const char* get_original_filename() const = 0;
 
-    /// Returns the selector (or \c NULL).
+    /// Returns the selector (or \c nullptr).
     virtual const char* get_selector() const = 0;
 
     /// Returns a canvas with the pixel data of the image.
@@ -399,8 +399,8 @@ public:
     /// \param frame_id    The frame ID of the canvas.
     /// \param uvtile_id   The uv-tile ID of the canvas.
     /// \param level       The desired mipmap level. Level 0 is the highest resolution.
-    /// \return            A canvas pointing to the pixel data of the image, or \c NULL in case of
-    ///                    failure, e.g., because of an invalid uv-tile ID.
+    /// \return            A canvas pointing to the pixel data of the image, or \c nullptr in case
+    ///                    of failure, e.g., because of an invalid uv-tile ID.
     virtual const ICanvas* get_canvas( Size frame_id, Size uvtile_id, Uint32 level) const = 0;
 
     //@}
@@ -411,7 +411,8 @@ public:
     ///
     /// \param frame_id    The frame ID of the mipmap.
     /// \param uvtile_id   The uv-tile ID of the mipmap to get the pixel type for.
-    /// \return            The pixel type, or \c NULL in case of an invalid frame ID or uv-tile ID.
+    /// \return            The pixel type, or \c nullptr in case of an invalid frame ID or uv-tile
+    ///                    ID.
     ///
     /// See \ref mi_neuray_types for a list of supported pixel types.
     virtual const char* get_type( Size frame_id, Size uvtile_id) const = 0 ;

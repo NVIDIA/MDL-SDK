@@ -33,17 +33,7 @@
 // Constructor.
 Compiler_options::Compiler_options(mi::mdl::Memory_arena *arena)
     : m_arena(arena)
-    , m_verbosity(0)
-    , m_generate(false)
-    , m_all_errors(false)
-    , m_debug_builtin_loading(false)
-    , m_debug_dump_builtins(false)
-    , m_warn_non_normalized_mixers(false)
-    , m_warn_overlapping_patterns(false)
-    , m_normalize_mixers(false)
     , m_filenames(m_arena->get_allocator())
-    , m_silent(false)
-    , m_output_dir(nullptr)
     , m_mdl_path(m_arena->get_allocator())
 {
 }

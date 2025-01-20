@@ -56,7 +56,10 @@ public:
     bool operator<(const Device_id& o) const { return m_id < o.m_id; }
     bool is_valid() const { return INVALID != m_id; }
     bool is_cpu() const { return CPU == m_id; }
-    bool is_cuda_device() const { return is_valid() && !is_cpu(); }
+    bool is_cuda_device() const { return m_id >= 0; }
+
+    /// IDs for other uses, valid but neither CPU nor a CUDA device.
+    bool is_other() const { return is_valid() && !(is_cpu() || is_cuda_device()); }
 
     static Device_id cpu() { return Device_id{CPU}; }
 private:

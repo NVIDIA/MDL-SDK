@@ -57,6 +57,12 @@
 namespace mi {
 namespace mdl {
 
+/// The "generated" debug info.
+DAG_DbgInfo const DAG_DbgInfo::generated(0u, 1u, 1u);
+
+/// The "builtin" debug info.
+DAG_DbgInfo const DAG_DbgInfo::builtin(0u, 1u, 2u);
+
 typedef Store<bool> Flag_store;
 
 namespace {
@@ -101,10 +107,12 @@ class Type_binder {
 
 public:
     /// Constructor.
-    Type_binder(IAllocator *alloc, Type_factory &tf)
-    : m_tf(tf)
-    , m_type_bindings(0, Bind_type_map::hasher(), Bind_type_map::key_equal(), alloc)
-    , m_size_bindings(0, Bind_size_map::hasher(), Bind_size_map::key_equal(), alloc)
+    ///
+    /// \param unit  the DAG unit
+    explicit Type_binder(DAG_unit &unit)
+    : m_tf(unit.get_type_factory())
+    , m_type_bindings(0, Bind_type_map::hasher(), Bind_type_map::key_equal(), unit.get_allocator())
+    , m_size_bindings(0, Bind_size_map::hasher(), Bind_size_map::key_equal(), unit.get_allocator())
     {
     }
 
@@ -179,7 +187,7 @@ public:
     /// \param dag        the code dag
     /// \param mat_index  the material index of the material to dump
     /// \param out        an output stream, the dot file is written to
-    explicit Material_dumper(
+    Material_dumper(
         IAllocator               *alloc,
         Generated_code_dag const &dag,
         int                      mat_index,
@@ -222,6 +230,7 @@ Material_dumper::Material_dumper(
 , m_dag(dag)
 , m_mat_index(mat_index)
 {
+    set_dag_unit(&dag.get_dag_unit());
 }
 
 // Dump the material expression DAG to the output stream.
@@ -231,8 +240,10 @@ void Material_dumper::dump(
 {
     m_printer->print("digraph \"");
     char const *name = m_dag.get_material_name(m_mat_index);
-    if (name == NULL || name[0] == '\0')
+    if (name == NULL || name[0] == '\0') {
         name = "DAG";
+    }
+
     m_printer->print(name);
     m_printer->print("\" {\n");
     m_walker.walk_material(const_cast<Generated_code_dag *>(&m_dag), m_mat_index, this);
@@ -293,6 +304,7 @@ Instance_dumper::Instance_dumper(
 : Base(alloc, out)
 , m_inst(inst)
 {
+    set_dag_unit(&inst.get_dag_unit());
 }
 
 // Dump the material instance expression DAG to the output stream.
@@ -698,7 +710,8 @@ private:
                     c->get_semantic(),
                     call_args.data(),
                     n_args,
-                    c->get_type());
+                    c->get_type(),
+                    c->get_dbg_info());
             }
             break;
         case DAG_node::EK_PARAMETER:
@@ -868,24 +881,21 @@ int Resource_tagger::get_resource_tag(
 Generated_code_dag::Generated_code_dag(
     IAllocator      *alloc,
     MDL             *compiler,
-    IModule const   *module,
+    Module const    *module,
     char const      *internal_space,
     Compile_options options,
     char const      *renderer_context_name)
 : Base(alloc)
-, m_arena(alloc)
 , m_module_name(string(module != NULL ? module->get_name() : "", alloc))
 , m_module_file_name(string(module != NULL ? module->get_filename() : "", alloc))
 , m_mangler(alloc)
 , m_printer(m_mangler.get_printer())
-, m_sym_tab(m_arena)
-, m_type_factory(m_arena, *compiler, m_sym_tab)
-, m_value_factory(m_arena, m_type_factory)
-, m_messages(alloc, module != NULL ? impl_cast<Module>(module)->get_msg_name() : "")
+, m_dag_unit(compiler, /*enable_debug_info=*/(options & DISABLE_DBG_INFO) == 0)
+, m_messages(alloc, module != NULL ? module->get_msg_name() : "")
 , m_module_imports(alloc)
 , m_builder(alloc)
 , m_mdl(mi::base::make_handle_dup(compiler))
-, m_node_factory(compiler, m_arena, m_value_factory, internal_space)
+, m_node_factory(compiler, m_dag_unit, internal_space)
 , m_module_annotations(alloc)
 , m_function_infos(alloc)
 , m_functions(alloc)
@@ -914,7 +924,7 @@ Generated_code_dag::Generated_code_dag(
         m_module_imports.reserve(n);
 
         for (size_t i = 0; i < n; ++i) {
-            mi::base::Handle<IModule const> import(module->get_import(i));
+            mi::base::Handle<Module const> import(module->get_import(i));
 
             m_module_imports.push_back(string(import->get_name(), alloc));
         }
@@ -1109,7 +1119,7 @@ void Generated_code_dag::gen_function_parameter_annotations(
     DAG_builder        &dag_builder,
     Parameter_info     &param,
     IDefinition const  *f_def,
-    IModule const      *owner_module,
+    Module const       *owner_module,
     IDeclaration const *decl,
     int                k)
 {
@@ -1143,8 +1153,9 @@ void Generated_code_dag::gen_function_parameter_annotations(
             IDeclaration_function const *fun_decl = cast<IDeclaration_function>(decl);
             bool is_preset = fun_decl->is_preset();
             if (is_preset) {
-                mi::base::Handle<IModule const> owner = mi::base::make_handle_dup(owner_module);
-                fun_decl = skip_presets(fun_decl, owner);
+                mi::base::Handle<Module const> owner = mi::base::make_handle_dup(owner_module);
+                fun_decl = cast<IDeclaration_function>(
+                    skip_presets(fun_decl, owner)->get_declaration());
 
                 // enter the module of the original declaration
                 dag_builder.push_module(owner.get());
@@ -1183,7 +1194,6 @@ void Generated_code_dag::gen_annotation_parameter_annotations(
     DAG_builder                   &dag_builder,
     Parameter_info                &param,
     IDefinition const             *f_def,
-    IModule const                 *owner_module,
     IDeclaration_annotation const *decl,
     int                           k)
 {
@@ -1246,13 +1256,15 @@ static IExpression const *get_single_expr_body(
 
 // Compile functions.
 void Generated_code_dag::compile_function(
-    IModule const         *module,
+    Module const          *module,
     Dependence_node const *f_node)
 {
     IType const *ret_type = f_node->get_return_type();
 
+    Type_factory &tf = m_dag_unit.get_type_factory();
+
     // import the return type into our type factory
-    ret_type = m_type_factory.import(ret_type);
+    ret_type = tf.import(ret_type);
 
     DAG_hash func_hash, *fh = NULL;
 
@@ -1268,7 +1280,7 @@ void Generated_code_dag::compile_function(
         if (f_def->get_property(IDefinition::DP_IS_VARYING)) {
             // explicitly mark the return type as varying to simplify analysis later
             if ((ret_type->get_type_modifiers() & IType_alias::MK_VARYING) == 0) {
-                ret_type = m_type_factory.create_alias(
+                ret_type = tf.create_alias(
                     ret_type, /*name=*/NULL, IType_alias::MK_VARYING);
             }
         }
@@ -1294,7 +1306,7 @@ void Generated_code_dag::compile_function(
         f_node->get_parameter(k, parameter_type, parameter_name);
 
         // import the parameter type into our type factory
-        parameter_type = m_type_factory.import(parameter_type);
+        parameter_type = tf.import(parameter_type);
         string parameter_type_name = dag_builder.parameter_type_to_name(parameter_type);
 
         Parameter_info param(
@@ -1353,7 +1365,7 @@ void Generated_code_dag::compile_function(
     IDeclaration const *proto_decl = orig_f_def->get_prototype_declaration();
     IDeclaration const *func_decl  = orig_f_def->get_declaration();
 
-    mi::base::Handle<IModule const> orig_module(module->get_owner_module(f_def));
+    mi::base::Handle<Module const> orig_module(module->get_owner_module(f_def));
 
     if (proto_decl == NULL) {
         proto_decl = func_decl;
@@ -1408,8 +1420,9 @@ void Generated_code_dag::compile_function(
                     IDeclaration_function const *fun_decl = cast<IDeclaration_function>(proto_decl);
 
                     if (fun_decl->is_preset()) {
-                        mi::base::Handle<IModule const> handle = orig_module;
-                        fun_decl = skip_presets(fun_decl, handle);
+                        mi::base::Handle<Module const> handle = orig_module;
+                        fun_decl = cast<IDeclaration_function>(
+                            skip_presets(fun_decl, handle)->get_declaration());
                     }
                     IParameter const *parameter = fun_decl->get_parameter(k);
                     dag_builder.make_accessible(parameter);
@@ -1443,7 +1456,7 @@ void Generated_code_dag::compile_function(
 
 // Compile an annotation (declaration).
 void Generated_code_dag::compile_annotation(
-    IModule const         *module,
+    Module const          *module,
     Dependence_node const *f_node)
 {
     Annotation_info anno(
@@ -1455,6 +1468,8 @@ void Generated_code_dag::compile_annotation(
 
     DAG_builder dag_builder(get_allocator(), m_node_factory, m_mangler);
 
+    Type_factory &tf = m_dag_unit.get_type_factory();
+
     size_t parameter_count = f_node->get_parameter_count();
     for (size_t k = 0; k < parameter_count; ++k) {
         IType const *parameter_type;
@@ -1463,7 +1478,7 @@ void Generated_code_dag::compile_annotation(
         f_node->get_parameter(k, parameter_type, parameter_name);
 
         // import the parameter type into our type factory
-        parameter_type = m_type_factory.import(parameter_type);
+        parameter_type = tf.import(parameter_type);
         string parameter_type_name = dag_builder.parameter_type_to_name(parameter_type);
 
         Parameter_info param(
@@ -1484,7 +1499,7 @@ void Generated_code_dag::compile_annotation(
     IDeclaration_annotation const *decl =
         cast<IDeclaration_annotation>(orig_f_def->get_declaration());
 
-    mi::base::Handle<IModule const> orig_module(module->get_owner_module(f_def));
+    mi::base::Handle<Module const> orig_module(module->get_owner_module(f_def));
 
     // the rest of the processing is done inside the owner module
     Module_scope scope(dag_builder, orig_module.get());
@@ -1501,7 +1516,7 @@ void Generated_code_dag::compile_annotation(
         No_CSE_scope cse_off(m_node_factory);
 
         gen_annotation_parameter_annotations(
-            dag_builder, param, f_def, orig_module.get(), decl, k);
+            dag_builder, param, f_def, decl, k);
 
         // create the default parameter initializers, but disable inlining
         // for them, so inspection shows the same structure as MDL declaration
@@ -1522,7 +1537,7 @@ void Generated_code_dag::compile_annotation(
 
 // Compile a local annotation (declaration).
 void Generated_code_dag::compile_local_annotation(
-    IModule const         *module,
+    Module const          *module,
     DAG_builder           &dag_builder,
     Dependence_node const *a_node)
 {
@@ -1533,6 +1548,8 @@ void Generated_code_dag::compile_local_annotation(
         a_node->get_dag_simple_name(),
         a_node->get_dag_alias_name());
 
+    Type_factory &tf = m_dag_unit.get_type_factory();
+
     size_t parameter_count = a_node->get_parameter_count();
     for (size_t k = 0; k < parameter_count; ++k) {
         IType const *parameter_type;
@@ -1541,7 +1558,7 @@ void Generated_code_dag::compile_local_annotation(
         a_node->get_parameter(k, parameter_type, parameter_name);
 
         // import the parameter type into our type factory
-        parameter_type = m_type_factory.import(parameter_type);
+        parameter_type = tf.import(parameter_type);
         string parameter_type_name = dag_builder.parameter_type_to_name(parameter_type);
 
         Parameter_info param(
@@ -1581,14 +1598,16 @@ void Generated_code_dag::compile_local_annotation(
 
 // Compile a local function.
 void Generated_code_dag::compile_local_function(
-    IModule const         *module,
+    Module const          *module,
     DAG_builder           &dag_builder,
     Dependence_node const *f_node)
 {
     IType const *ret_type = f_node->get_return_type();
 
+    Type_factory &tf = m_dag_unit.get_type_factory();
+
     // import the return type into our type factory
-    ret_type = m_type_factory.import(ret_type);
+    ret_type = tf.import(ret_type);
 
     DAG_hash func_hash, *fh = NULL;
 
@@ -1620,7 +1639,7 @@ void Generated_code_dag::compile_local_function(
         f_node->get_parameter(k, parameter_type, parameter_name);
 
         // import the parameter type into our type factory
-        parameter_type = m_type_factory.import(parameter_type);
+        parameter_type = tf.import(parameter_type);
         string parameter_type_name = dag_builder.parameter_type_to_name(parameter_type);
 
         Parameter_info param(
@@ -1643,7 +1662,7 @@ void Generated_code_dag::compile_local_function(
         IDeclaration const *proto_decl = orig_f_def->get_prototype_declaration();
         IDeclaration const *func_decl  = orig_f_def->get_declaration();
 
-        mi::base::Handle<IModule const> orig_module(module->get_owner_module(f_def));
+        mi::base::Handle<Module const> orig_module(module->get_owner_module(f_def));
 
         if (proto_decl == NULL) {
             proto_decl = func_decl;
@@ -1665,9 +1684,10 @@ void Generated_code_dag::compile_local_function(
                 if (proto_decl->get_kind() == IDeclaration::DK_FUNCTION) {
                     IDeclaration_function const *fun_decl = cast<IDeclaration_function>(func_decl);
                     if (fun_decl->is_preset()) {
-                        mi::base::Handle<IModule const> handle = orig_module;
+                        mi::base::Handle<Module const> handle = orig_module;
                         fun_decl = cast<IDeclaration_function>(proto_decl);
-                        fun_decl = skip_presets(fun_decl, handle);
+                        fun_decl = cast<IDeclaration_function>(
+                            skip_presets(fun_decl, handle)->get_declaration());
                     }
 
                     for (size_t k = 0; k < parameter_count; ++k) {
@@ -1704,7 +1724,7 @@ namespace {
 class Let_entry {
 public:
     /// Constructor.
-    Let_entry(IExpression_let const *let, IModule const *let_owner)
+    Let_entry(IExpression_let const *let, Module const *let_owner)
     : m_let(let), m_let_owner(let_owner)
     {
     }
@@ -1713,14 +1733,14 @@ public:
     IExpression_let const *get_let() const { return m_let; }
 
     /// Get the owner module of the let expression.
-    IModule const *get_let_owner() const { return m_let_owner; }
+    Module const *get_let_owner() const { return m_let_owner; }
 
 private:
     /// The let expression.
     IExpression_let const *m_let;
 
     /// The owner module of the let expression.
-    IModule const         *m_let_owner;
+    Module const          *m_let_owner;
 };
 
 
@@ -1760,13 +1780,13 @@ void Generated_code_dag::compile_material(
     IType const *ret_type = m_node->get_return_type();
 
     // import the return type into our type factory
-    ret_type = m_type_factory.import(ret_type);
+    ret_type = m_dag_unit.import(ret_type);
 
     IDefinition const *material_def = m_node->get_definition();
     MDL_ASSERT(material_def != NULL);
 
 
-    IModule const *module = dag_builder.tos_module();
+    Module const *module = dag_builder.tos_module();
 
     // We are starting a new DAG. Ensure CSE will not find old expressions.
     m_node_factory.identify_clear();
@@ -1809,7 +1829,7 @@ void Generated_code_dag::compile_material(
         fun_type->get_parameter(k, parameter_type, parameter_symbol);
 
         // import the parameter type into our type factory
-        parameter_type = m_type_factory.import(parameter_type);
+        parameter_type = m_dag_unit.import(parameter_type);
         string parameter_type_name = dag_builder.parameter_type_to_name(parameter_type);
 
         Parameter_info param(
@@ -1827,7 +1847,7 @@ void Generated_code_dag::compile_material(
     } else {
         // a real material or a clone
         IDefinition const *orig_mat_def = module->get_original_definition(material_def);
-        mi::base::Handle<IModule const> orig_module(module->get_owner_module(material_def));
+        mi::base::Handle<Module const> orig_module(module->get_owner_module(material_def));
 
 
         IDeclaration_function const *mat_decl =
@@ -1889,8 +1909,8 @@ void Generated_code_dag::compile_material(
             IDefinition           const *orig_mat_def;
             IDeclaration_function const *orig_mat_proto;
 
-            IDeclaration_function const     *orig_mat_decl = mat_decl;
-            mi::base::Handle<IModule const> orig_mat_module(orig_module);
+            IDeclaration_function const    *orig_mat_decl = mat_decl;
+            mi::base::Handle<Module const> orig_mat_module(orig_module);
 
             typedef stack<Let_entry>::Type Let_stack;
 
@@ -1913,7 +1933,7 @@ void Generated_code_dag::compile_material(
 
                 orig_mat_def = ref->get_definition();
 
-                mi::base::Handle<IModule const> next(
+                mi::base::Handle<Module const> next(
                     orig_mat_module->get_owner_module(orig_mat_def));
 
                 orig_mat_def    = orig_mat_module->get_original_definition(orig_mat_def);
@@ -2157,7 +2177,7 @@ private:
 };
 
 // Compile the module.
-void Generated_code_dag::compile(IModule const *module)
+void Generated_code_dag::compile(Module const *module)
 {
     m_current_material_index = 0;
     m_current_function_index = 0;
@@ -2169,7 +2189,7 @@ void Generated_code_dag::compile(IModule const *module)
 
 
     // first step
-    IAllocator *alloc = m_arena.get_allocator();
+    IAllocator *alloc = m_dag_unit.get_allocator();
 
     // .. handle module annotations if any, ...
     if (IDeclaration_module const *mod_decl = module->get_module_declaration()) {
@@ -2200,7 +2220,7 @@ void Generated_code_dag::compile(IModule const *module)
     if (include_locals) {
         // collect local types
         Local_type_enumerator::enumerate_local_types(
-            *this, impl_cast<Module>(module), dag_builder);
+            *this, module, dag_builder);
     }
 
     // ... build the dependence graph first
@@ -2285,6 +2305,9 @@ DAG_node const *Generated_code_dag::build_material_dag(
     int argument_count = fun_type->get_parameter_count();
     VLA<DAG_call::Call_argument> arguments(get_allocator(), argument_count);
 
+    // the material constructor is built in
+    DAG_DbgInfo dbg_info;  // FIXME: builtin
+
     for (int i = 0; i < argument_count; ++i) {
         IType const   *parameter_type;
         ISymbol const *parameter_symbol;
@@ -2292,9 +2315,9 @@ DAG_node const *Generated_code_dag::build_material_dag(
         fun_type->get_parameter(i, parameter_type, parameter_symbol);
 
         // import the parameter type
-        parameter_type = m_type_factory.import(parameter_type->skip_type_alias());
+        parameter_type = m_dag_unit.import(parameter_type->skip_type_alias());
 
-        arguments[i].arg        = m_node_factory.create_parameter(parameter_type, i);
+        arguments[i].arg        = m_node_factory.create_parameter(parameter_type, i, dbg_info);
         arguments[i].param_name = parameter_symbol->get_name();
     }
     return m_node_factory.create_call(
@@ -2302,7 +2325,8 @@ DAG_node const *Generated_code_dag::build_material_dag(
         def->get_semantics(),
         arguments.data(),
         argument_count,
-        fun_type->get_return_type());
+        fun_type->get_return_type(),
+        dbg_info);
 }
 
 // Compile a user defined struct category.
@@ -2319,7 +2343,7 @@ void Generated_code_dag::compile_struct_category(
     IDeclaration const *decl = is_reexported ? NULL : def->get_declaration();
 
     IStruct_category const *cat = def->get_category();
-    cat = cat ? m_type_factory.import_category(cat) : NULL;
+    cat = cat != NULL ? m_dag_unit.import_category(cat) : NULL;
 
     ISymbol const *sym = def->get_symbol();
 
@@ -2368,7 +2392,7 @@ void Generated_code_dag::compile_type(
     IDeclaration const *decl = is_reexported ? NULL : def->get_declaration();
 
     IType const *type = def->get_type();
-    type = m_type_factory.import(type);
+    type = m_dag_unit.import(type);
 
     ISymbol const *sym = def->get_symbol();
 
@@ -2507,7 +2531,7 @@ void Generated_code_dag::compile_constant(
     ISymbol const *sym = def->get_symbol();
     IValue const  *v   = def->get_constant_value();
 
-    v = m_value_factory.import(v);
+    v = m_dag_unit.import(v);
 
     DAG_constant const *c = m_node_factory.create_constant(v);
 
@@ -2589,7 +2613,7 @@ void Generated_code_dag::compile_entity(
     IDefinition const *def      = node->get_definition();
     IType const       *ret_type = node->get_return_type();
 
-    IModule const *owner = node->get_owner_module();
+    Module const *owner = node->get_owner_module();
 
     if (owner == NULL) {
         owner = dag_builder.tos_module();
@@ -2615,7 +2639,7 @@ void Generated_code_dag::compile_local_entity(
     IDefinition const *def      = node->get_definition();
     IType const       *ret_type = node->get_return_type();
 
-    IModule const *owner = node->get_owner_module();
+    Module const *owner = node->get_owner_module();
 
     if (owner == NULL) {
         owner = dag_builder.tos_module();
@@ -3491,15 +3515,13 @@ Generated_code_dag::Material_instance::Material_instance(
     IAllocator  *alloc,
     size_t      material_index,
     char const  *internal_space,
-    bool        unsafe_math_optimizations)
+    bool        unsafe_math_optimizations,
+    bool        enable_debug_info)
 : Base(alloc)
 , m_builder(alloc)
 , m_mdl(mi::base::make_handle_dup(impl_cast<MDL>(mdl)))
-, m_arena(alloc)
-, m_sym_tab(m_arena)
-, m_type_factory(m_arena, *impl_cast<MDL>(mdl), m_sym_tab)
-, m_value_factory(m_arena, m_type_factory)
-, m_node_factory(mdl, m_arena, m_value_factory, internal_space)
+, m_dag_unit(impl_cast<MDL>(mdl), enable_debug_info)
+, m_node_factory(mdl, m_dag_unit, internal_space)
 , m_messages(alloc, /*owner_fname=*/"")
 , m_material_index(material_index)
 , m_constructor(NULL)
@@ -3531,13 +3553,13 @@ mi::base::IInterface const *Generated_code_dag::Material_instance::get_interface
 // Get the type factory of this instance.
 IType_factory *Generated_code_dag::Material_instance::get_type_factory()
 {
-    return &m_type_factory;
+    return &m_dag_unit.get_type_factory();
 }
 
 // Get the value factory of this instance.
 IValue_factory *Generated_code_dag::Material_instance::get_value_factory()
 {
-    return &m_value_factory;
+    return &m_dag_unit.get_value_factory();
 }
 
 // Create a constant.
@@ -3581,11 +3603,11 @@ void Generated_code_dag::Material_instance::add_resource_tag(
     size_t l = m_resource_tag_map.size();
     m_resource_tag_map.resize(l + 1);
 
-    ISymbol const *shared_value = m_sym_tab.get_shared_symbol(res->get_string_value());
+    ISymbol const *shared_value = m_dag_unit.get_shared_symbol(res->get_string_value());
     char const    *shared_sel   = NULL;
 
     if (IValue_texture const *tex = as<IValue_texture>(res)) {
-        ISymbol const *shared_selector = m_sym_tab.get_shared_symbol(tex->get_selector());
+        ISymbol const *shared_selector = m_dag_unit.get_shared_symbol(tex->get_selector());
         shared_sel                     = shared_selector->get_name();
     }
     m_resource_tag_map[l] = Resource_tag_tuple(
@@ -3598,18 +3620,20 @@ DAG_node const *Generated_code_dag::Material_instance::create_call(
     IDefinition::Semantics        sema,
     DAG_call::Call_argument const call_args[],
     int                           num_call_args,
-    IType const                   *ret_type)
+    IType const                   *ret_type,
+    DAG_DbgInfo                   dbg_info)
 {
     // Note: we already assured that all constants are different, hence
     // any created call will be different ... No need to switch off CSE here ...
     return m_node_factory.create_call(
-        name, sema, call_args, num_call_args, ret_type);
+        name, sema, call_args, num_call_args, ret_type, dbg_info);
 }
 
 // Create a parameter reference.
 DAG_parameter const *Generated_code_dag::Material_instance::create_parameter(
     IType const *type,
-    int         index)
+    int         index,
+    DAG_DbgInfo dbg_info)
 {
     MDL_ASSERT(!"should not be called");
     return NULL;
@@ -3702,7 +3726,7 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
         return EC_TOO_MANY_ARGUMENTS;
     }
 
-    Type_binder type_binder(get_allocator(), m_type_factory);
+    Type_binder type_binder(m_dag_unit);
 
     // check parameters
     for (int i = 0; i < argc; ++i) {
@@ -3720,7 +3744,7 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
             IType::Modifiers p_mods = p_type->get_type_modifiers();
 
             // import the parameter type into the type factory of this material
-            p_type = m_type_factory.import(p_type);
+            p_type = m_dag_unit.import(p_type);
 
             arg_type = arg_type->skip_type_alias();
             p_type   = p_type->skip_type_alias();
@@ -3737,7 +3761,7 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
                 if (a_arg_type->is_immediate_sized()) {
                     if (a_p_type->is_immediate_sized()) {
                         // both are immediate sized, must be identical
-                        arg_type = m_type_factory.get_equal(arg_type);
+                        arg_type = m_dag_unit.get_equal(arg_type);
                         if (arg_type != p_type->skip_type_alias()) {
                             // types does not match
                             return EC_ARGUMENT_TYPE_MISMATCH;
@@ -3748,7 +3772,7 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
                         IType const *e_p_type   = a_p_type->get_element_type()->skip_type_alias();
                         IType const *e_arg_type = a_arg_type->get_element_type()->skip_type_alias();
 
-                        e_arg_type = m_type_factory.get_equal(e_arg_type);
+                        e_arg_type = m_dag_unit.get_equal(e_arg_type);
 
                         if (e_arg_type != e_p_type) {
                             // element types does not match
@@ -3757,7 +3781,7 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
 
                         // Otherwise the argument type will be bound to this parameter type.
                         // Note that it might not exists yet in our type factory, hence import it.
-                        arg_type = m_type_factory.import(arg_type);
+                        arg_type = m_dag_unit.import(arg_type);
 
                         type_binder.bind_param_type(a_p_type, cast<IType_array>(arg_type));
                         continue;
@@ -3767,7 +3791,7 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
                 return EC_ARGUMENT_TYPE_MISMATCH;
             } else {
                 // non-array types
-                arg_type = m_type_factory.get_equal(arg_type->skip_type_alias());
+                arg_type = m_dag_unit.get_equal(arg_type->skip_type_alias());
                 if (arg_type != p_type->skip_type_alias()) {
                     // types does not match
                     return EC_ARGUMENT_TYPE_MISMATCH;
@@ -3878,9 +3902,10 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
     std::sort(m_referenced_scene_data.begin(), m_referenced_scene_data.end());
 
     bool is_std_material = is_material_type(m_constructor->get_type());
+    bool uses_target_material_mode = (props & IP_TARGET_MATERIAL_MODEL) != 0;
 
     Error_code res = EC_NONE;
-    if (is_std_material && (flags & CLASS_COMPILATION) == 0) {
+    if (is_std_material && !uses_target_material_mode && (flags & CLASS_COMPILATION) == 0) {
         if (!check_thin_walled_material()) {
             res = EC_WRONG_TRANSMISSION_ON_THIN_WALLED;
         }
@@ -3911,10 +3936,11 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
 
         material_name += buffer;
 
-        if (flags & CLASS_COMPILATION)
+        if (flags & CLASS_COMPILATION) {
             material_name += "_class";
-        else
+        } else {
             material_name += "_inst";
+        }
 
         dump_instance_dag(material_name.c_str());
     }
@@ -4055,6 +4081,12 @@ private:
     DAG_node const *copy_dag(
         DAG_node const *node);
 
+    /// Creates a copy (import) of a debug info.
+    ///
+    /// \param dbg_info  the debug info to copy
+    DAG_DbgInfo copy_dbg_info(
+        DAG_DbgInfo dbg_info);
+
 private:
     /// The allocator.
     IAllocator *m_alloc;
@@ -4103,7 +4135,8 @@ restart:
             DAG_parameter const *p    = cast<DAG_parameter>(node);
             IType const         *type = p->get_type();
             int                 index = p->get_index();
-            node = m_node_factory->create_parameter(m_type_factory->import(type), index);
+            node = m_node_factory->create_parameter(
+                m_type_factory->import(type), index, copy_dbg_info(p->get_dbg_info()));
         }
         break;
     case DAG_node::EK_TEMPORARY:
@@ -4128,12 +4161,20 @@ restart:
             }
 
             node = m_node_factory->create_call(
-                name, sema, args.data(), args.size(), type);
+                name, sema, args.data(), args.size(), type, copy_dbg_info(call->get_dbg_info()));
         }
         break;
     }
     m_marker_map.insert(Visited_node_map::value_type(original_node, node));
     return node;
+}
+
+// Creates a copy (import) of a debug info.
+DAG_DbgInfo Instance_cloner::copy_dbg_info(
+    DAG_DbgInfo dbg_info)
+{
+    // FIXME: NYI
+    return DAG_DbgInfo();
 }
 
 // Clone an instance.
@@ -4146,13 +4187,21 @@ Generated_code_dag::Material_instance *Instance_cloner::clone(
 
     mi::base::Handle<IMDL> mdl(src->get_mdl());
 
+    DAG_unit const &src_unit = src->get_dag_unit();
+
     Generated_code_dag::Material_instance *curr =
         builder.create<Generated_code_dag::Material_instance>(
         mdl.get(),
         m_alloc,
         src->get_material_index(),
         src->get_node_factory().get_internal_space(),
-        unsafe_math_opt);
+        unsafe_math_opt,
+        src_unit.has_dbg_info());
+
+    if (src_unit.has_dbg_info()) {
+        DAG_unit &curr_unit = curr->get_dag_unit();
+        curr_unit.copy_fname_table(src_unit);
+    }
 
     Store<DAG_node_factory_impl *> nf(m_node_factory,  curr->get_node_factory());
     Store<IType_factory *>         tf(m_type_factory,  curr->get_type_factory());
@@ -4186,11 +4235,11 @@ Generated_code_dag::Material_instance *Instance_cloner::clone(
         char const *selector = res_tuple->m_selector;
         unsigned tag = res_tuple->m_tag;
 
-        ISymbol const *shared_value = curr->m_sym_tab.get_shared_symbol(value);
+        ISymbol const *shared_value = curr->m_dag_unit.get_shared_symbol(value);
         char const *shared_sel = "";
 
-        if (selector && !selector[0]) {
-            shared_sel = curr->m_sym_tab.get_shared_symbol(selector)->get_name();
+        if (selector != NULL && selector[0] != '\0') {
+            shared_sel = curr->m_dag_unit.get_shared_symbol(selector)->get_name();
         }
         curr->m_resource_tag_map.push_back(
             Resource_tag_tuple(kind, shared_value->get_name(), shared_sel, tag));
@@ -4229,8 +4278,9 @@ void Generated_code_dag::Material_instance::dump_instance_dag(char const *name) 
 
     for (size_t i = 0, n = fname.size(); i < n; ++i) {
         char c = fname[i];
-        if (c == ':' || c == '/' || c == '\\')
+        if (c == ':' || c == '/' || c == '\\') {
             fname[i] = '_';
+        }
     }
 
     if (FILE *f = fopen(fname.c_str(), "w")) {
@@ -4266,12 +4316,15 @@ IMaterial_instance *Generated_code_dag::create_material_instance(
         return NULL;
     }
 
+    // note: currently the debug info flag must match the flag of the code DAG, because
+    // the info is copied and the copy does not check if it should elide it
     Material_instance *result = m_builder.create<Material_instance>(
         m_mdl.get(),
         m_builder.get_allocator(),
         index,
         m_internal_space.c_str(),
-        (m_options & UNSAFE_MATH_OPTIMIZATIONS) != 0);
+        (m_options & UNSAFE_MATH_OPTIMIZATIONS) != 0,
+        m_dag_unit.has_dbg_info());
     *error_code = EC_NONE;
     return result;
 }
@@ -4293,11 +4346,10 @@ void Generated_code_dag::Material_instance::serialize(
     dag_serializer.write_cstring(m_node_factory.get_internal_space());
     dag_serializer.write_unsigned(m_material_index);
     dag_serializer.write_bool(m_node_factory.get_unsafe_math_opt());
+    dag_serializer.write_bool(m_dag_unit.has_dbg_info());
 
-    m_sym_tab.serialize(dag_serializer);
-    m_type_factory.serialize(dag_serializer);
-    m_value_factory.serialize(dag_serializer);
- 
+    m_dag_unit.serialize(dag_serializer);
+
     // serialize the node factory m_node_factory by serializing all reachable DAGs
     serialize_dags(dag_serializer);
 
@@ -4344,9 +4396,9 @@ void Generated_code_dag::Material_instance::serialize(
 
 // Deserialize a material instance.
 Generated_code_dag::Material_instance const *Generated_code_dag::Material_instance::deserialize(
-    IDeserializer *deserializer,
+    IDeserializer           *deserializer,
     MDL_binary_deserializer *bin_deserializer,
-    MDL *compiler)
+    MDL                     *compiler)
 {
     DAG_deserializer dag_deserializer(deserializer, bin_deserializer);
 
@@ -4360,7 +4412,8 @@ Generated_code_dag::Material_instance const *Generated_code_dag::Material_instan
 
     string internal_space(dag_deserializer.read_cstring(), dag_deserializer.get_allocator());
     size_t material_index = dag_deserializer.read_unsigned();
-    bool math_opt = dag_deserializer.read_bool();
+    bool math_opt         = dag_deserializer.read_bool();
+    bool enable_debug     = dag_deserializer.read_bool();
 
     mi::base::Handle<Generated_code_dag::Material_instance> instance(
         dag_deserializer.create_material_instance(
@@ -4369,15 +4422,9 @@ Generated_code_dag::Material_instance const *Generated_code_dag::Material_instan
             material_index,
             internal_space.c_str(),
             math_opt,
-            // FIXME: we do not serialize the context name here because we do not want to break
-            // compatibility with the beta release.
-            // However, this IS safe, because only compiled entities are serialized/deserialized
-            // which are error free, so the context name is not needed.
-            "renderer"));
+            enable_debug));
 
-    instance->m_sym_tab.deserialize(dag_deserializer);
-    instance->m_type_factory.deserialize(dag_deserializer);
-    instance->m_value_factory.deserialize(dag_deserializer);
+    instance->m_dag_unit.deserialize(dag_deserializer);
 
     // Deserialize the node factory m_node_factory by deserializing all reachable DAGs
     instance->deserialize_dags(dag_deserializer);
@@ -4412,11 +4459,11 @@ Generated_code_dag::Material_instance const *Generated_code_dag::Material_instan
         string selector(dag_deserializer.read_cstring(), dag_deserializer.get_allocator());
         unsigned tag = dag_deserializer.read_db_tag();
 
-        ISymbol const *shared_value = instance->m_sym_tab.get_shared_symbol(value.c_str());
+        ISymbol const *shared_value = instance->m_dag_unit.get_shared_symbol(value.c_str());
         char const *shared_sel = "";
 
         if (!selector.empty()) {
-            shared_sel = instance->m_sym_tab.get_shared_symbol(selector.c_str())->get_name();
+            shared_sel = instance->m_dag_unit.get_shared_symbol(selector.c_str())->get_name();
         }
         instance->m_resource_tag_map.push_back(
             Resource_tag_tuple(kind, shared_value->get_name(), shared_sel, tag));
@@ -5428,12 +5475,12 @@ IType const *Generated_code_dag::Material_instance::compute_type(
     Path_entry const    *e)
 {
     IType const *t = arg->get_type();
-    t = m_type_factory.import(t);
+    t = m_dag_unit.import(t);
 
     switch (arg->get_kind()) {
     case DAG_node::EK_CONSTANT:
         // constants are always uniform
-        return m_type_factory.create_alias(t, NULL, IType::MK_UNIFORM);
+        return m_dag_unit.get_type_factory().create_alias(t, NULL, IType::MK_UNIFORM);
     case DAG_node::EK_TEMPORARY:
         MDL_ASSERT(!"Given argument is a temporary");
         break;
@@ -5442,12 +5489,13 @@ IType const *Generated_code_dag::Material_instance::compute_type(
             DAG_call const *call = cast<DAG_call>(arg);
 
             char const *signature = call->get_name();
-            mi::base::Handle<mi::mdl::IModule const> mod(resolver.get_owner_module(signature));
+            mi::base::Handle<Module const> mod(
+                impl_cast<Module>(resolver.get_owner_module(signature)));
             if (!mod.is_valid_interface()) {
                 MDL_ASSERT(!"Cannot resolve call");
-                return m_type_factory.create_error();
+                return m_dag_unit.get_type_factory().create_error();
             }
-            Module const *owner = impl_cast<mi::mdl::Module>(mod.get());
+            Module const *owner = mod.get();
 
             IDefinition const *def = owner->find_signature(signature, /*only_exported=*/false);
             bool              uniform_call = is_uniform_call(call, def);
@@ -5534,14 +5582,15 @@ IType const *Generated_code_dag::Material_instance::compute_type(
                 // varying functions have varying result
                 result_mod = IType::MK_VARYING;
             }
-            return m_type_factory.create_alias(t->skip_type_alias(), NULL, result_mod);
+            return m_dag_unit.get_type_factory().create_alias(
+                t->skip_type_alias(), NULL, result_mod);
         }
         break;
     case DAG_node::EK_PARAMETER:
         MDL_ASSERT(!"Given argument is a parameter");
         break;
     }
-    return m_type_factory.create_error();
+    return m_dag_unit.get_type_factory().create_error();
 }
 
 // Access messages.
@@ -5562,7 +5611,7 @@ size_t Generated_code_dag::Material_instance::get_memory_size() const
 {
     size_t res = sizeof(*this);
 
-    res += m_arena.get_chunks_size();
+    res += m_dag_unit.get_arena().get_chunks_size();
     res += dynamic_memory_consumption(m_messages);
 
     res += dynamic_memory_consumption(m_temporaries);
@@ -6106,6 +6155,16 @@ void Generated_code_dag::Material_instance::Instantiate_helper::process_string_c
     }
 }
 
+// Copy the debug info.
+DAG_DbgInfo Generated_code_dag::Material_instance::Instantiate_helper::copy_dbg_info(
+    DAG_DbgInfo dbg_info)
+{
+    // Note: we just copy the debug info here: This is valid, because we copy initially
+    // the whole file table from the code DAG and instantiation cannot add
+    // new one...
+    return dbg_info;
+}
+
 // Compile the material.
 DAG_call const *
 Generated_code_dag::Material_instance::Instantiate_helper::compile(
@@ -6123,10 +6182,20 @@ Generated_code_dag::Material_instance::Instantiate_helper::compile(
         old_inline = m_node_factory.enable_inline(false);
     }
 
+    if (m_node_factory.is_dbg_info_enabled()) {
+        // copy the file table from the code DAG to the instance (represented by its DAG_unit
+        // in the node factory)
+        DAG_unit const &code_unit = m_code_dag.get_dag_unit();
+        DAG_unit       &inst_unit = m_node_factory.get_dag_unit();
+
+        MDL_ASSERT(inst_unit.get_file_name_count() == 0 && "instance file name table not empty");
+        inst_unit.copy_fname_table(code_unit);
+    }
+
     // unfortunately we don't have the module of our material here, so retrieve it from the
     // name resolver
-    mi::base::Handle<IModule const> mod(
-        m_resolver.get_owner_module(m_code_dag.get_material_name(m_material_index)));
+    mi::base::Handle<Module const> mod(impl_cast<Module>(
+        m_resolver.get_owner_module(m_code_dag.get_material_name(m_material_index))));
     Module_scope scope(m_dag_builder, mod.get());
 
     handle_cutout_opacity();
@@ -6134,10 +6203,16 @@ Generated_code_dag::Material_instance::Instantiate_helper::compile(
 
     DAG_node const *root = m_code_dag.get_material_value(m_material_index);
 
-    // Perform decl_cast transformation if a target type is given.
-    target_type = target_type ? 
-        const_cast<Type_factory *>(m_code_dag.get_type_factory())->import(target_type) : NULL;
-    root = target_type ? translate_decl_cast(root, target_type) : root;
+    // Perform decl_cast transformation on the root if a target type is given and different from
+    // the type of root.
+    if (target_type != NULL) {
+        target_type =
+            const_cast<Type_factory *>(m_code_dag.get_type_factory())->import(target_type);
+        if (root->get_type() != target_type) {
+            root = insert_elemental_constructor(
+                root, target_type, copy_dbg_info(root->get_dbg_info()));
+        }
+    }
 
     DAG_node const *node = instantiate_dag(root);
 
@@ -6691,11 +6766,12 @@ void Generated_code_dag::Material_instance::Instantiate_helper::analyze_call(
             // user defined function
 
             char const *signature = call->get_name();
-            mi::base::Handle<mi::mdl::IModule const> mod(m_resolver.get_owner_module(signature));
+            mi::base::Handle<Module const> mod(
+                impl_cast<Module>(m_resolver.get_owner_module(signature)));
             if (!mod.is_valid_interface()) {
                 break;
             }
-            Module const *owner = impl_cast<mi::mdl::Module>(mod.get());
+            Module const *owner = mod.get();
 
             IDefinition const *def = owner->find_signature(signature, /*only_exported=*/false);
             if (def == NULL) {
@@ -6814,14 +6890,17 @@ static bool same_type(
     return dst_type == owner_tf.import(src_field_type);
 }
 
+// Create an elemental constructor call for the given target_type.
 DAG_node const *
-Generated_code_dag::Material_instance::Instantiate_helper::translate_decl_cast(
-    DAG_node const *node, IType const *target_type) 
+Generated_code_dag::Material_instance::Instantiate_helper::insert_elemental_constructor(
+    DAG_node const *node,
+    IType const    *target_type,
+    DAG_DbgInfo    dbg_info)
 {
     DAG_node const *res = NULL;
 
     IType_struct const *src_type =
-        cast<IType_struct>(node->get_type()->skip_type_alias());
+        node != NULL ? cast<IType_struct>(node->get_type()->skip_type_alias()) : NULL;
     IType_struct const *dst_type =
         cast<IType_struct>(target_type->skip_type_alias());
 
@@ -6860,13 +6939,15 @@ Generated_code_dag::Material_instance::Instantiate_helper::translate_decl_cast(
             // cannot search by symbol
             char const *f_name = field->get_symbol()->get_name();
             IType const *f_type = tf.import(field->get_type());
-            size_t     src_index = src_type->find_field_index(f_name);
+
+            size_t src_index = src_type != NULL ?
+                src_type->find_field_index(f_name) : ~size_t(0);
 
             DAG_node const *f_node = NULL;
             if (src_index != ~size_t(0) && same_type(f_type, tf, src_type, src_index)) {
                 // this fields exists in the src, extract it
                 f_node = m_dag_builder.create_field_select(
-                    node, f_name, field->get_type());
+                    node, f_name, field->get_type(), dbg_info);
             } else {
                 // this field does not exists, construct it from the initializer
                 IExpression const *init = elem_constr->get_default_param_initializer(i);
@@ -6875,9 +6956,16 @@ Generated_code_dag::Material_instance::Instantiate_helper::translate_decl_cast(
                     f_node = m_dag_builder.expr_to_dag(init);
                 } else {
                     // default construct
-                    IValue const *v = m_value_factory.create_zero(f_type);
+                    if (is<IType_struct>(f_type)) {
+                        // for structs, just insert the default constructor (as elemental one)
+                        f_node = insert_elemental_constructor(NULL, f_type, dbg_info);
+                    } else {
+                        // in all other cases, insert the zero value
+                        IValue const *v = m_value_factory.create_zero(f_type);
 
-                    f_node = m_node_factory.create_constant(v);
+                        MDL_ASSERT(!is<IValue_bad>(v) && "cannot create zero value for type");
+                        f_node = m_node_factory.create_constant(v);
+                    }
                 }
             }
             args[i].param_name = field->get_symbol()->get_name();
@@ -6886,29 +6974,27 @@ Generated_code_dag::Material_instance::Instantiate_helper::translate_decl_cast(
 
         string signature(m_dag_builder.def_to_name(elem_constr, owner.get()));
 
-        IType const *res_type = tf.import(dst_type);
-        res_type = tf.create_alias(res_type, /*name=*/NULL, IType::MK_UNIFORM);
-
         res = m_node_factory.create_call(
             signature.c_str(),
             IDefinition::DS_ELEM_CONSTRUCTOR,
             args.data(),
             args.size(),
-            res_type);
+            target_type,
+            dbg_info);
     }
     return res;
 }
 
 DAG_node const *
 Generated_code_dag::Material_instance::Instantiate_helper::translate_decl_cast_call(
-    DAG_call const *call) 
+    DAG_call const *call)
 {
     DAG_node const *arg = call->get_argument(0);
 
     IType_struct const *dst_type =
         cast<IType_struct>(call->get_type()->skip_type_alias());
 
-    return translate_decl_cast(arg, dst_type);
+    return insert_elemental_constructor(arg, dst_type, call->get_dbg_info());
 }
 
 // Instantiate a DAG expression.
@@ -6966,6 +7052,16 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag(
             if (sema == IDefinition::DS_INTRINSIC_DAG_DECL_CAST) {
                 // ALWAYS optimize decl_cast node away
                 res = translate_decl_cast_call(call);
+
+                if (res != NULL) {
+                    m_visit_map[node] = res;
+                    return res;
+                }
+            } else if (sema == IDefinition::DS_DEFAULT_STRUCT_CONSTRUCTOR) {
+                // ALWAYS convert default struct constructor to elemental constructor.
+                // We use the same implementation as for the decl_cast but convert from nothing
+                // to the struct type
+                res = insert_elemental_constructor(NULL, call->get_type(), call->get_dbg_info());
 
                 if (res != NULL) {
                     m_visit_map[node] = res;
@@ -7032,10 +7128,10 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag(
 
                 if (m_node_factory.is_inline_allowed()) {
                     // basically this means we are inside an argument, see the parameter case
-                    mi::base::Handle<IModule const> mod(
-                        m_resolver.get_owner_module(signature.c_str()));
+                    mi::base::Handle<Module const> mod(
+                        impl_cast<Module>(m_resolver.get_owner_module(signature.c_str())));
 
-                    Module const *module = impl_cast<Module>(mod.get());
+                    Module const *module = mod.get();
                     IDefinition const *def =
                         module->find_signature(signature.c_str(), /*only_exported=*/true);
                     if (def != NULL) {
@@ -7085,7 +7181,9 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag(
                 ret_type = m_type_factory.import(ret_type);
                 res = m_node_factory.create_call(
                     signature.c_str(), call->get_semantic(),
-                    args.data(), args.size(), ret_type);
+                    args.data(), args.size(),
+                    ret_type,
+                    copy_dbg_info(call->get_dbg_info()));
 
                 if (DAG_call const *n_call = as<DAG_call>(res)) {
                     // still a call, check if it depends on the object
@@ -7248,7 +7346,8 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag_argum
                     if (it != m_resource_param_map.end()) {
                         res = it->second;
                     } else {
-                        res = m_node_factory.create_parameter(t, m_params++);
+                        // Note: we create a parameter from a constant here, so no debug info
+                        res = m_node_factory.create_parameter(t, m_params++, DAG_DbgInfo());
                         m_default_param_values.push_back(v);
                         m_param_names.push_back(m_curr_param_name);
 
@@ -7260,7 +7359,8 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag_argum
                 } else {
                     // not a resource or sharing disabled, folding not explicitly requested by
                     // name: just create a new parameter
-                    res = m_node_factory.create_parameter(t, m_params++);
+                    // Note: we create a parameter from a constant here, so no debug info
+                    res = m_node_factory.create_parameter(t, m_params++, DAG_DbgInfo());
                     m_default_param_values.push_back(v);
                     m_param_names.push_back(m_curr_param_name);
                 }
@@ -7275,7 +7375,7 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag_argum
             DAG_call const *call  = cast<DAG_call>(node);
 
             int n_args = call->get_argument_count();
-            VLA<DAG_call::Call_argument> args(get_allocator(), n_args);
+            Small_VLA<DAG_call::Call_argument, 8> args(get_allocator(), n_args);
             for (int i = 0; i < n_args; ++i) {
                 char const *param_name = call->get_parameter_name(i);
 
@@ -7290,9 +7390,10 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag_argum
 
             if (m_node_factory.is_inline_allowed()) {
                 // basically this means we are inside an argument, see the parameter case
-                mi::base::Handle<IModule const> mod(m_resolver.get_owner_module(signature.c_str()));
+                mi::base::Handle<Module const> mod(
+                    impl_cast<Module>(m_resolver.get_owner_module(signature.c_str())));
 
-                Module const *module = impl_cast<Module>(mod.get());
+                Module const *module = mod.get();
                 IDefinition const *def =
                     module->find_signature(signature.c_str(), /*only_exported=*/true);
                 if (def != NULL) {
@@ -7340,8 +7441,11 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag_argum
                 IType const *ret_type = call->get_type();
                 ret_type = m_type_factory.import(ret_type);
                 res = m_node_factory.create_call(
-                    signature.c_str(), call->get_semantic(),
-                    args.data(), args.size(), ret_type);
+                    signature.c_str(),
+                    call->get_semantic(),
+                    args.data(), args.size(),
+                    ret_type,
+                    copy_dbg_info(call->get_dbg_info()));
 
                 if (DAG_call const *n_call = as<DAG_call>(res)) {
                     // still a call, check if it depends on the object
@@ -7468,7 +7572,7 @@ size_t Generated_code_dag::get_memory_size() const
 {
     size_t res = sizeof(*this);
 
-    res += m_arena.get_chunks_size();
+    res += m_dag_unit.get_arena().get_chunks_size();
     res += dynamic_memory_consumption(m_messages);
     res += dynamic_memory_consumption(m_module_imports);
 
@@ -7770,11 +7874,11 @@ void Generated_code_dag::add_resource_tag(
     size_t l = m_resource_tag_map.size();
     m_resource_tag_map.resize(l + 1);
 
-    ISymbol const *shared_value = m_sym_tab.get_shared_symbol(res->get_string_value());
+    ISymbol const *shared_value = m_dag_unit.get_shared_symbol(res->get_string_value());
     char const    *shared_sel   = NULL;
 
     if (IValue_texture const *tex = as<IValue_texture>(res)) {
-        ISymbol const *shared_selector = m_sym_tab.get_shared_symbol(tex->get_selector());
+        ISymbol const *shared_selector = m_dag_unit.get_shared_symbol(tex->get_selector());
         shared_sel = shared_selector->get_name();
     }
 
@@ -7800,11 +7904,12 @@ void Generated_code_dag::serialize(
     // write the internal space
     dag_serializer.write_cstring(m_internal_space.c_str());
 
+    // write the context name
+    dag_serializer.write_cstring(m_renderer_context_name.c_str());
+
     // Serialize the Generated_code<> first
     // no need to serialize: m_printer
-    m_sym_tab.serialize(dag_serializer);
-    m_type_factory.serialize(dag_serializer);
-    m_value_factory.serialize(dag_serializer);
+    m_dag_unit.serialize(dag_serializer);
     m_messages.serialize(dag_serializer);
 
     dag_serializer.serialize(m_module_imports);
@@ -8345,26 +8450,23 @@ Generated_code_dag const *Generated_code_dag::deserialize(
     // read the internal space
     string internal_space(dag_deserializer.read_cstring(), dag_deserializer.get_allocator());
 
+    // read the context name
+    string context_name(dag_deserializer.read_cstring(), dag_deserializer.get_allocator());
+
     mi::base::Handle<Generated_code_dag> code(
         dag_deserializer.create_code_dag(
             dag_deserializer.get_allocator(),
             compiler,
-            (IModule const *)0,
+            (Module const *)0,
             internal_space.c_str(),
-            // FIXME: we do not serialize the context name here because we do not want to break
-            // compatibility with the beta release.
-            // However, this IS safe, because only compiled entities are serialized/deserialized
-            // which are error free, so the context name is not needed.
-            "renderer"));
+            context_name.c_str()));
 
     code->m_module_name      = module_name;
     code->m_module_file_name = module_file_name;
 
     // Deserialize the Generated_code<> first
     // no need to deserialize: m_printer
-    code->m_sym_tab.deserialize(dag_deserializer);
-    code->m_type_factory.deserialize(dag_deserializer);
-    code->m_value_factory.deserialize(dag_deserializer);
+    code->m_dag_unit.deserialize(dag_deserializer);
     code->m_messages.deserialize(dag_deserializer);
 
     dag_deserializer.deserialize(code->m_module_imports);
@@ -8406,11 +8508,11 @@ Generated_code_dag const *Generated_code_dag::deserialize(
         string selector(dag_deserializer.read_cstring(), dag_deserializer.get_allocator());
         unsigned tag = dag_deserializer.read_db_tag();
 
-        ISymbol const *shared_value = code->m_sym_tab.get_shared_symbol(value.c_str());
+        ISymbol const *shared_value = code->m_dag_unit.get_shared_symbol(value.c_str());
         char const    *shared_sel   = "";
 
         if (!selector.empty()) {
-            shared_sel = code->m_sym_tab.get_shared_symbol(selector.c_str())->get_name();
+            shared_sel = code->m_dag_unit.get_shared_symbol(selector.c_str())->get_name();
         }
         code->m_resource_tag_map.push_back(
             Resource_tag_tuple(kind, shared_value->get_name(), shared_sel, tag));
@@ -8454,15 +8556,16 @@ void Generated_code_dag::dump_material_dag(
     // dump the dependency graph
     string fname(get_allocator());
     fname += get_material_name(index);
-    if (suffix) {
+    if (suffix != NULL) {
         fname += suffix;
     }
     fname += "_DAG.gv";
 
     for (size_t i = 0, n = fname.size(); i < n; ++i) {
         char c = fname[i];
-        if (c == ':' || c == '/' || c == '\\')
+        if (c == ':' || c == '/' || c == '\\') {
             fname[i] = '_';
+        }
     }
 
     if (FILE *f = fopen(fname.c_str(), "w")) {

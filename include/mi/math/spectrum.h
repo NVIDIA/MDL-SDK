@@ -76,23 +76,23 @@ namespace math {
 class Spectrum : public Spectrum_struct
 {
 public:
-    typedef Spectrum_struct   Pod_type;         ///< POD class corresponding to this spectrum.
-    typedef Spectrum_struct   storage_type;     ///< Storage class used by this spectrum.
-    typedef Float32           value_type;       ///< Element type.
-    typedef Size              size_type;        ///< Size type, unsigned.
-    typedef Difference        difference_type;  ///< Difference type, signed.
-    typedef Float32 *         pointer;          ///< Mutable pointer to element.
-    typedef const Float32 *   const_pointer;    ///< Const pointer to element.
-    typedef Float32 &         reference;        ///< Mutable reference to element.
-    typedef const Float32 &   const_reference;  ///< Const reference to element.
+    using Pod_type        = Spectrum_struct;    ///< POD class corresponding to this spectrum.
+    using storage_type    = Spectrum_struct;    ///< Storage class used by this spectrum.
+    using value_type      = Float32;            ///< Element type.
+    using size_type       = Size;               ///< Size type, unsigned.
+    using difference_type = Difference;         ///< Difference type, signed.
+    using pointer         = Float32*;           ///< Mutable pointer to element.
+    using const_pointer   = const Float32*;     ///< Const pointer to element.
+    using reference       = Float32&;           ///< Mutable reference to element.
+    using const_reference = const Float32&;     ///< Const reference to element.
 
-    static const Size SIZE      = 3;            ///< Constant size of the spectrum.
+    static constexpr Size SIZE      = 3;        ///< Constant size of the spectrum.
 
      /// Constant size of the spectrum.
-    static inline Size size()     { return SIZE; }
+    static constexpr inline Size size()     { return SIZE; }
 
      /// Constant maximum size of the spectrum.
-    static inline Size max_size() { return SIZE; }
+    static constexpr inline Size max_size() { return SIZE; }
 
     /// Returns the pointer to the first spectrum element.
     inline Float32*        begin()       { return &c[0]; }
@@ -117,21 +117,19 @@ public:
         // In debug mode, default-constructed spectra are initialized with signaling NaNs or, if not
         // applicable, with a maximum value to increase the chances of diagnosing incorrect use of
         // an uninitialized spectrum.
-        typedef mi::base::numeric_traits<Float32> Traits;
+        using Traits = mi::base::numeric_traits<Float32>;
         Float32 v = (Traits::has_signaling_NaN)
             ? Traits::signaling_NaN() : Traits::max MI_PREVENT_MACRO_EXPAND ();
-        for( Size i = 0; i < SIZE; ++i)
-            c[i] = v;
+        for( float& cc : c)
+            cc = v;
 #endif
     }
 
-#if (__cplusplus >= 201103L)
     /// Default copy constructor.
     Spectrum( const Spectrum& s) = default;
 
     /// Default assignment operator.
     Spectrum& operator=( const Spectrum& s) = default;
-#endif
 
     /// Constructor from underlying storage type.
     inline Spectrum( const Spectrum_struct& s)
@@ -144,61 +142,58 @@ public:
     /// Constructor initializes all vector elements to the value \p s.
     inline explicit Spectrum( const Float32 s)
     {
-        for( Size i = 0; i < SIZE; ++i)
-            c[i] = s;
+        for( float& cc : c)
+            cc = s;
     }
 
     /// Constructor initializes (r,g,b) from (\p nr,\p ng,\p nb).
-    inline Spectrum( Float32 nr, Float32 ng, Float32 nb)
+#if (__cplusplus >= 201402L)
+    constexpr
+#endif
+    inline Spectrum( Float32 nr, Float32 ng, Float32 nb) : Spectrum_struct{nr,ng,nb}
     {
-        c[0] = nr;
-        c[1] = ng;
-        c[2] = nb;
     }
 
     /// Conversion from %Vector<Float32,3>.
-    inline explicit Spectrum( const Vector<Float32,3>& v3)
+#if (__cplusplus >= 201402L)
+    //constexpr
+#endif
+    inline explicit Spectrum( const Vector<Float32,3>& v3) : Spectrum_struct{v3[0],v3[1],v3[2]}
     {
-        c[0] = v3[0];
-        c[1] = v3[1];
-        c[2] = v3[2];
     }
 
     /// Conversion from %Vector<Float32,4>.
-    inline explicit Spectrum( const Vector<Float32,4>& v4)
+#if (__cplusplus >= 201402L)
+    //constexpr
+#endif
+    inline explicit Spectrum( const Vector<Float32,4>& v4) : Spectrum_struct{v4[0],v4[1],v4[2]}
     {
-        c[0] = v4[0];
-        c[1] = v4[1];
-        c[2] = v4[2];
     }
 
     /// Conversion from %Color.
-    inline explicit Spectrum( const Color& col)
+#if (__cplusplus >= 201402L)
+    constexpr
+#endif
+    inline explicit Spectrum( const Color& col) : Spectrum_struct{col.r,col.g,col.b}
     {
-        c[0] = col.r;
-        c[1] = col.g;
-        c[2] = col.b;
     }
 
     /// Conversion to %Vector<Float32,3>.
+#if (__cplusplus >= 201402L)
+    constexpr
+#endif
     inline Vector<Float32,3> to_vector3() const
     {
-        Vector<Float32,3> result;
-        result[0] = c[0];
-        result[1] = c[1];
-        result[2] = c[2];
-        return result;
+        return { c[0],c[1],c[2]};
     }
 
     /// Conversion to %Vector<Float32,4>.
+#if (__cplusplus >= 201402L)
+    constexpr
+#endif
     inline Vector<Float32,4> to_vector4() const
     {
-        Vector<Float32,4> result;
-        result[0] = c[0];
-        result[1] = c[1];
-        result[2] = c[2];
-        result[3] = 1.0;
-        return result;
+        return { c[0],c[1],c[2],1.0f};
     }
 
     /// Accesses the \c i-th spectrum element, <tt>0 <= i < 3</tt>.
@@ -233,8 +228,8 @@ public:
     /// Returns \c true if the spectrum is black ignoring the alpha value.
     inline bool is_black() const
     {
-        for( Size i = 0; i < SIZE; ++i)
-            if( c[i] != 0.0f)
+        for( float cc : c)
+            if( cc != 0.0f)
                 return false;
         return true;
     }
@@ -243,9 +238,9 @@ public:
     inline Float32 linear_intensity() const
     {
         Float32 sum = 0.f;
-        for( Size i = 0; i < SIZE; ++i)
-            sum += c[i];
-        return sum / Float32( SIZE);
+        for( float cc : c)
+            sum += cc;
+        return sum * Float32( 1.0 / SIZE);
     }
 };
 
@@ -348,7 +343,7 @@ inline Spectrum operator+( const Spectrum& lhs, const Spectrum& rhs)
 {
     mi_math_assert_msg( lhs.size() == 3, "precondition");
     mi_math_assert_msg( rhs.size() == 3, "precondition");
-    return Spectrum( lhs[0] + rhs[0], lhs[1] + rhs[1], lhs[2] + rhs[2]);
+    return { lhs[0] + rhs[0], lhs[1] + rhs[1], lhs[2] + rhs[2]};
 }
 
 /// Subtracts \p rhs elementwise from \p lhs and returns the new result.
@@ -356,7 +351,7 @@ inline Spectrum operator-( const Spectrum& lhs, const Spectrum& rhs)
 {
     mi_math_assert_msg( lhs.size() == 3, "precondition");
     mi_math_assert_msg( rhs.size() == 3, "precondition");
-    return Spectrum( lhs[0] - rhs[0], lhs[1] - rhs[1], lhs[2] - rhs[2]);
+    return { lhs[0] - rhs[0], lhs[1] - rhs[1], lhs[2] - rhs[2]};
 }
 
 /// Multiplies \p rhs elementwise with \p lhs and returns the new result.
@@ -364,7 +359,7 @@ inline Spectrum operator*( const Spectrum& lhs, const Spectrum& rhs)
 {
     mi_math_assert_msg( lhs.size() == 3, "precondition");
     mi_math_assert_msg( rhs.size() == 3, "precondition");
-    return Spectrum( lhs[0] * rhs[0], lhs[1] * rhs[1], lhs[2] * rhs[2]);
+    return { lhs[0] * rhs[0], lhs[1] * rhs[1], lhs[2] * rhs[2]};
 }
 
 /// Divides \p rhs elementwise by \p lhs and returns the new result.
@@ -372,14 +367,14 @@ inline Spectrum operator/( const Spectrum& lhs, const Spectrum& rhs)
 {
     mi_math_assert_msg( lhs.size() == 3, "precondition");
     mi_math_assert_msg( rhs.size() == 3, "precondition");
-    return Spectrum( lhs[0] / rhs[0], lhs[1] / rhs[1], lhs[2] / rhs[2]);
+    return { lhs[0] / rhs[0], lhs[1] / rhs[1], lhs[2] / rhs[2]};
 }
 
 /// Negates the spectrum \p c elementwise and returns the new result.
 inline Spectrum operator-( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( -c[0], -c[1], -c[2]);
+    return { -c[0], -c[1], -c[2]};
 }
 
 
@@ -412,14 +407,14 @@ inline Spectrum& operator/=( Spectrum& c, Float32 s)
 inline Spectrum operator*( const Spectrum& c, Float32 s)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( c[0] * s, c[1] * s, c[2] * s);
+    return { c[0] * s, c[1] * s, c[2] * s};
 }
 
 /// Multiplies the spectrum \p c elementwise with the scalar \p s and returns the new result.
 inline Spectrum operator*( Float32 s, const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( s * c[0], s * c[1], s* c[2]);
+    return { s * c[0], s * c[1], s* c[2]};
 }
 
 /// Divides the spectrum \p c elementwise by the scalar \p s and returns the new result.
@@ -427,7 +422,7 @@ inline Spectrum operator/( const Spectrum& c, Float32 s)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
     Float32 f = 1.0f / s;
-    return Spectrum( c[0] * f, c[1] * f, c[2] * f);
+    return { c[0] * f, c[1] * f, c[2] * f};
 }
 
 
@@ -438,14 +433,14 @@ inline Spectrum operator/( const Spectrum& c, Float32 s)
 inline Spectrum abs( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( abs( c[0]), abs( c[1]), abs( c[2]));
+    return { abs( c[0]), abs( c[1]), abs( c[2])};
 }
 
 /// Returns a spectrum with the elementwise arc cosine of the spectrum \p c.
 inline Spectrum acos( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( acos( c[0]), acos( c[1]), acos( c[2]));
+    return { acos( c[0]), acos( c[1]), acos( c[2])};
 }
 
 /// Returns \c true if all elements of \c c are not equal to zero.
@@ -466,14 +461,14 @@ inline bool any( const Spectrum& c)
 inline Spectrum asin( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( asin( c[0]), asin( c[1]), asin( c[2]));
+    return { asin( c[0]), asin( c[1]), asin( c[2])};
 }
 
 /// Returns a spectrum with the elementwise arc tangent of the spectrum \p c.
 inline Spectrum atan( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( atan( c[0]), atan( c[1]), atan( c[2]));
+    return { atan( c[0]), atan( c[1]), atan( c[2])};
 }
 
 /// Returns a spectrum with the elementwise arc tangent of the spectrum \p c / \p d.
@@ -482,7 +477,7 @@ inline Spectrum atan( const Spectrum& c)
 inline Spectrum atan2( const Spectrum& c, const Spectrum& d)
 {
     mi_math_assert_msg( c.size() == 3 && d.size() == 3, "precondition");
-    return Spectrum( atan2( c[0], d[0]), atan2( c[1], d[1]), atan2( c[2], d[2]));
+    return { atan2( c[0], d[0]), atan2( c[1], d[1]), atan2( c[2], d[2])};
 }
 
 /// Returns a spectrum with the elementwise smallest integral value that is not less than the
@@ -490,7 +485,7 @@ inline Spectrum atan2( const Spectrum& c, const Spectrum& d)
 inline Spectrum ceil( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( ceil( c[0]), ceil( c[1]), ceil( c[2]));
+    return { ceil( c[0]), ceil( c[1]), ceil( c[2])};
 }
 
 /// Returns the spectrum \p c elementwise clamped to the range [\p low, \p high].
@@ -499,9 +494,9 @@ inline Spectrum clamp( const Spectrum& c, const Spectrum& low, const Spectrum& h
     mi_math_assert_msg( c.size() == 3, "precondition");
     mi_math_assert_msg( low.size() == 3, "precondition");
     mi_math_assert_msg( high.size() == 3, "precondition");
-    return Spectrum( clamp( c[0], low[0], high[0]),
-                     clamp( c[1], low[1], high[1]),
-                     clamp( c[2], low[2], high[2]));
+    return { clamp( c[0], low[0], high[0]),
+             clamp( c[1], low[1], high[1]),
+             clamp( c[2], low[2], high[2])};
 }
 
 /// Returns the spectrum \p c elementwise clamped to the range [\p low, \p high].
@@ -509,9 +504,9 @@ inline Spectrum clamp( const Spectrum& c, const Spectrum& low, Float32 high)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
     mi_math_assert_msg( low.size() == 3, "precondition");
-    return Spectrum( clamp( c[0], low[0], high),
-                     clamp( c[1], low[1], high),
-                     clamp( c[2], low[2], high));
+    return { clamp( c[0], low[0], high),
+             clamp( c[1], low[1], high),
+             clamp( c[2], low[2], high)};
 }
 
 /// Returns the spectrum \p c elementwise clamped to the range [\p low, \p high].
@@ -519,32 +514,32 @@ inline Spectrum clamp( const Spectrum& c, Float32 low, const Spectrum& high)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
     mi_math_assert_msg( high.size() == 3, "precondition");
-    return Spectrum( clamp( c[0], low, high[0]),
-                     clamp( c[1], low, high[1]),
-                     clamp( c[2], low, high[2]));
+    return { clamp( c[0], low, high[0]),
+             clamp( c[1], low, high[1]),
+             clamp( c[2], low, high[2])};
 }
 
 /// Returns the spectrum \p c elementwise clamped to the range [\p low, \p high].
 inline Spectrum clamp( const Spectrum& c, Float32 low, Float32 high)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( clamp( c[0], low, high),
-                     clamp( c[1], low, high),
-                     clamp( c[2], low, high));
+    return { clamp( c[0], low, high),
+             clamp( c[1], low, high),
+             clamp( c[2], low, high)};
 }
 
 /// Returns a spectrum with the elementwise cosine of the spectrum \p c.
 inline Spectrum cos( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( cos( c[0]), cos( c[1]), cos( c[2]));
+    return { cos( c[0]), cos( c[1]), cos( c[2])};
 }
 
 /// Converts elementwise radians in \p c to degrees.
 inline Spectrum degrees( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( degrees( c[0]), degrees( c[1]), degrees( c[2]));
+    return { degrees( c[0]), degrees( c[1]), degrees( c[2])};
 }
 
 /// Returns elementwise max for each element in spectrum \p lhs that is less than the corresponding
@@ -553,9 +548,9 @@ inline Spectrum elementwise_max( const Spectrum& lhs, const Spectrum& rhs)
 {
     mi_math_assert_msg( lhs.size() == 3, "precondition");
     mi_math_assert_msg( rhs.size() == 3, "precondition");
-    return Spectrum( base::max MI_PREVENT_MACRO_EXPAND ( lhs[0], rhs[0]),
-                     base::max MI_PREVENT_MACRO_EXPAND ( lhs[1], rhs[1]),
-                     base::max MI_PREVENT_MACRO_EXPAND ( lhs[2], rhs[2]));
+    return { base::max MI_PREVENT_MACRO_EXPAND ( lhs[0], rhs[0]),
+             base::max MI_PREVENT_MACRO_EXPAND ( lhs[1], rhs[1]),
+             base::max MI_PREVENT_MACRO_EXPAND ( lhs[2], rhs[2])};
 }
 
 /// Returns elementwise min for each element in spectrum \p lhs that is less than the corresponding
@@ -564,23 +559,23 @@ inline Spectrum elementwise_min( const Spectrum& lhs, const Spectrum& rhs)
 {
     mi_math_assert_msg( lhs.size() == 3, "precondition");
     mi_math_assert_msg( rhs.size() == 3, "precondition");
-    return Spectrum( base::min MI_PREVENT_MACRO_EXPAND ( lhs[0], rhs[0]),
-                     base::min MI_PREVENT_MACRO_EXPAND ( lhs[1], rhs[1]),
-                     base::min MI_PREVENT_MACRO_EXPAND ( lhs[2], rhs[2]));
+    return { base::min MI_PREVENT_MACRO_EXPAND ( lhs[0], rhs[0]),
+             base::min MI_PREVENT_MACRO_EXPAND ( lhs[1], rhs[1]),
+             base::min MI_PREVENT_MACRO_EXPAND ( lhs[2], rhs[2])};
 }
 
 /// Returns a spectrum with elementwise \c e to the power of the element in the spectrum \p c.
 inline Spectrum exp( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( exp( c[0]), exp( c[1]), exp( c[2]));
+    return { exp( c[0]), exp( c[1]), exp( c[2])};
 }
 
 /// Returns a spectrum with elementwise \c 2 to the power of the element in the spectrum \p c.
 inline Spectrum exp2( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( exp2( c[0]), exp2( c[1]), exp2( c[2]));
+    return { exp2( c[0]), exp2( c[1]), exp2( c[2])};
 }
 
 /// Returns a spectrum with the elementwise largest integral value that is not greater than the
@@ -588,7 +583,7 @@ inline Spectrum exp2( const Spectrum& c)
 inline Spectrum floor( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( floor( c[0]), floor( c[1]), floor( c[2]));
+    return { floor( c[0]), floor( c[1]), floor( c[2])};
 }
 
 /// Returns elementwise \p a modulo \p b, in other words, the remainder of a/b.
@@ -598,7 +593,7 @@ inline Spectrum fmod( const Spectrum& a, const Spectrum& b)
 {
     mi_math_assert_msg( a.size() == 3, "precondition");
     mi_math_assert_msg( b.size() == 3, "precondition");
-    return Spectrum( fmod( a[0], b[0]), fmod( a[1], b[1]), fmod( a[2], b[2]));
+    return { fmod( a[0], b[0]), fmod( a[1], b[1]), fmod( a[2], b[2])};
 }
 
 /// Returns elementwise \p a modulo \p b, in other words, the remainder of a/b.
@@ -607,14 +602,14 @@ inline Spectrum fmod( const Spectrum& a, const Spectrum& b)
 inline Spectrum fmod( const Spectrum& a, Float32 b)
 {
     mi_math_assert_msg( a.size() == 3, "precondition");
-    return Spectrum( fmod( a[0], b), fmod( a[1], b), fmod( a[2], b));
+    return { fmod( a[0], b), fmod( a[1], b), fmod( a[2], b)};
 }
 
 /// Returns a spectrum with the elementwise positive fractional part of the spectrum \p c.
 inline Spectrum frac( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( frac( c[0]), frac( c[1]), frac( c[2]));
+    return { frac( c[0]), frac( c[1]), frac( c[2])};
 }
 
 /// Returns a gamma corrected spectrum.
@@ -630,10 +625,10 @@ inline Spectrum gamma_correction(
 {
     mi_math_assert_msg( spectrum.size() == 3, "precondition");
     mi_math_assert( gamma_factor > 0);
-    const Float32 f = Float32(1.0) / gamma_factor;
-    return Spectrum( fast_pow( spectrum[0], f),
-                     fast_pow( spectrum[1], f),
-                     fast_pow( spectrum[2], f));
+    const Float32 f = 1.0f / gamma_factor;
+    return { fast_pow( spectrum[0], f),
+             fast_pow( spectrum[1], f),
+             fast_pow( spectrum[2], f)};
 }
 
 /// Compares the two given values elementwise for equality within the given epsilon.
@@ -659,9 +654,9 @@ inline Spectrum lerp(
     mi_math_assert_msg( c1.size() == 3, "precondition");
     mi_math_assert_msg( c2.size() == 3, "precondition");
     mi_math_assert_msg( t.size() == 3, "precondition");
-    return Spectrum( lerp( c1[0], c2[0], t[0]),
-                     lerp( c1[1], c2[1], t[1]),
-                     lerp( c1[2], c2[2], t[2]));
+    return { lerp( c1[0], c2[0], t[0]),
+             lerp( c1[1], c2[1], t[1]),
+             lerp( c1[2], c2[2], t[2])};
 }
 
 /// Returns the linear interpolation between \p c1 and \c c2, i.e., it returns
@@ -673,33 +668,33 @@ inline Spectrum lerp(
 {
     mi_math_assert_msg( c1.size() == 3, "precondition");
     mi_math_assert_msg( c2.size() == 3, "precondition");
-    // equivalent to: return c1 * (Float32(1)-t) + c2 * t;
-    return Spectrum( lerp( c1[0], c2[0], t),
-                     lerp( c1[1], c2[1], t),
-                     lerp( c1[2], c2[2], t));
+    // equivalent to: return c1 * (1-t) + c2 * t;
+    return { lerp( c1[0], c2[0], t),
+             lerp( c1[1], c2[1], t),
+             lerp( c1[2], c2[2], t)};
 }
 
 /// Returns a spectrum with elementwise natural logarithm of the spectrum \p c.
 inline Spectrum log( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( log( c[0]), log( c[1]), log( c[2]));
+    return { log( c[0]), log( c[1]), log( c[2])};
 }
 
 /// Returns a spectrum with elementwise %base 2 logarithm of the spectrum \p c.
 inline Spectrum log2 MI_PREVENT_MACRO_EXPAND ( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( log2 MI_PREVENT_MACRO_EXPAND (c[0]),
-                     log2 MI_PREVENT_MACRO_EXPAND (c[1]),
-                     log2 MI_PREVENT_MACRO_EXPAND (c[2]));
+    return { log2 MI_PREVENT_MACRO_EXPAND (c[0]),
+             log2 MI_PREVENT_MACRO_EXPAND (c[1]),
+             log2 MI_PREVENT_MACRO_EXPAND (c[2])};
 }
 
 /// Returns a spectrum with elementwise %base 10 logarithm of the spectrum \p c.
 inline Spectrum log10( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( log10( c[0]), log10( c[1]), log10( c[2]));
+    return { log10( c[0]), log10( c[1]), log10( c[2])};
 }
 
 /// Returns the elementwise fractional part of \p c and stores the elementwise integral part of \p c
@@ -710,7 +705,7 @@ inline Spectrum modf( const Spectrum& c, Spectrum& i)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
     mi_math_assert_msg( i.size() == 3, "precondition");
-    return Spectrum( modf( c[0], i[0]), modf( c[1], i[1]), modf( c[2], i[2]));
+    return { modf( c[0], i[0]), modf( c[1], i[1]), modf( c[2], i[2])};
 }
 
 /// Returns the spectrum \p a  elementwise to the power of \p b.
@@ -718,56 +713,56 @@ inline Spectrum pow( const Spectrum& a,  const Spectrum& b)
 {
     mi_math_assert_msg( a.size() == 3, "precondition");
     mi_math_assert_msg( b.size() == 3, "precondition");
-    return Spectrum( pow( a[0], b[0]), pow( a[1], b[1]), pow( a[2], b[2]));
+    return { pow( a[0], b[0]), pow( a[1], b[1]), pow( a[2], b[2])};
 }
 
 /// Returns the spectrum \p a  elementwise to the power of \p b.
 inline Spectrum pow( const Spectrum& a,  Float32 b)
 {
     mi_math_assert_msg( a.size() == 3, "precondition");
-    return Spectrum( pow( a[0], b), pow( a[1], b), pow( a[2], b));
+    return { pow( a[0], b), pow( a[1], b), pow( a[2], b)};
 }
 
 /// Converts elementwise degrees in \p c to radians.
 inline Spectrum radians( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( radians( c[0]), radians( c[1]), radians( c[2]));
+    return { radians( c[0]), radians( c[1]), radians( c[2])};
 }
 
 /// Returns a spectrum with the elements of spectrum \p c  rounded to nearest integers.
 inline Spectrum round( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( round( c[0]), round( c[1]), round( c[2]));
+    return { round( c[0]), round( c[1]), round( c[2])};
 }
 
 /// Returns the reciprocal of the square root of each element of \p c.
 inline Spectrum rsqrt( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( rsqrt( c[0]), rsqrt( c[1]), rsqrt( c[2]));
+    return { rsqrt( c[0]), rsqrt( c[1]), rsqrt( c[2])};
 }
 
 /// Returns the spectrum \p c clamped elementwise to the range [0,1].
 inline Spectrum saturate( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( saturate( c[0]), saturate( c[1]), saturate( c[2]));
+    return { saturate( c[0]), saturate( c[1]), saturate( c[2])};
 }
 
 /// Returns the elementwise sign of spectrum \p c.
 inline Spectrum sign( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( sign( c[0]), sign( c[1]), sign( c[2]));
+    return { sign( c[0]), sign( c[1]), sign( c[2])};
 }
 
 /// Returns a spectrum with the elementwise sine of the spectrum \p c.
 inline Spectrum sin( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( sin( c[0]), sin( c[1]), sin( c[2]));
+    return { sin( c[0]), sin( c[1]), sin( c[2])};
 }
 
 /// Computes elementwise the sine \p s and cosine \p c of angles \p a simultaneously.
@@ -793,9 +788,9 @@ inline Spectrum smoothstep( const Spectrum& a, const Spectrum& b, const Spectrum
     mi_math_assert_msg( a.size() == 3, "precondition");
     mi_math_assert_msg( b.size() == 3, "precondition");
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( smoothstep( a[0], b[0], c[0]),
-                     smoothstep( a[1], b[1], c[1]),
-                     smoothstep( a[2], b[2], c[2]));
+    return { smoothstep( a[0], b[0], c[0]),
+             smoothstep( a[1], b[1], c[1]),
+             smoothstep( a[2], b[2], c[2])};
 }
 
 /// Returns 0 if \p c is less than \p a and 1 if \p c is greater than \p b in an elementwise
@@ -807,16 +802,16 @@ inline Spectrum smoothstep( const Spectrum& a, const Spectrum& b, Float32 x)
 {
     mi_math_assert_msg( a.size() == 3, "precondition");
     mi_math_assert_msg( b.size() == 3, "precondition");
-    return Spectrum( smoothstep( a[0], b[0], x),
-                     smoothstep( a[1], b[1], x),
-                     smoothstep( a[2], b[2], x));
+    return { smoothstep( a[0], b[0], x),
+             smoothstep( a[1], b[1], x),
+             smoothstep( a[2], b[2], x)};
 }
 
 /// Returns the square root of each element of \p c.
 inline Spectrum sqrt( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( sqrt( c[0]), sqrt( c[1]), sqrt( c[2]));
+    return { sqrt( c[0]), sqrt( c[1]), sqrt( c[2])};
 }
 
 /// Returns elementwise 0 if \p c is less than \p a and 1 otherwise.
@@ -824,14 +819,14 @@ inline Spectrum step( const Spectrum& a, const Spectrum& c)
 {
     mi_math_assert_msg( a.size() == 3, "precondition");
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( step( a[0], c[0]), step( a[1], c[1]), step( a[1], c[2]));
+    return { step( a[0], c[0]), step( a[1], c[1]), step( a[1], c[2])};
 }
 
 /// Returns a spectrum with the elementwise tangent of the spectrum \p c.
 inline Spectrum tan( const Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
-    return Spectrum( tan( c[0]), tan( c[1]), tan( c[2]));
+    return { tan( c[0]), tan( c[1]), tan( c[2])};
 }
 
 /// Indicates whether all components of the spectrum are finite.

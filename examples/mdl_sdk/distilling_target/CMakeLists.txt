@@ -54,9 +54,7 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
 # creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)
 target_create_vs_user_settings(TARGET ${PROJECT_NAME})
 
-# -------------------------------------------------------------------------------------------------
-# Create installation rules to copy the build directory
-# -------------------------------------------------------------------------------------------------
+# create installation rules
 add_target_install(
     TARGET ${PROJECT_NAME}
     DESTINATION "examples/mdl_sdk/distilling_target"
@@ -162,6 +160,9 @@ else()
     endif()
 endif()
 
+file(GLOB _MDL_CORE_HEADERS ${MDL_INCLUDE_FOLDER}/mi/mdl/*)
+list(SORT _MDL_CORE_HEADERS)
+
 add_custom_command(
     OUTPUT
         ${_GENERATED_DIR}/distilling_target_plugin_rules.h
@@ -171,13 +172,12 @@ add_custom_command(
     COMMAND ${mdltlc_PATH} --generate --output-dir ${_GENERATED_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/distilling_target_plugin_rules.mdltl
     DEPENDS
         ${CMAKE_CURRENT_SOURCE_DIR}/distilling_target_plugin_rules.mdltl
+        ${_MDL_CORE_HEADERS}
     VERBATIM
     )
 
 
-# -------------------------------------------------------------------------------------------------
-# Create installation rules to copy the build directory
-# -------------------------------------------------------------------------------------------------
+# create installation rules
 add_target_install(
     TARGET ${PLUGIN_PROJECT_NAME}
     DESTINATION "examples/mdl_sdk/distilling_target"

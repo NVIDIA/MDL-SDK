@@ -60,25 +60,27 @@ class Printer;
 
 /// Version flags of predefined entities.
 enum Version_flags {
-    SINCE_1_1 = IMDL::MDL_VERSION_1_1,           ///< Exists since MDL 1.1.
-    REMOVED_1_1 = (IMDL::MDL_VERSION_1_1 << 8),  ///< Removed since MDL 1.1.
-    SINCE_1_2 = IMDL::MDL_VERSION_1_2,           ///< Exists since MDL 1.2.
-    REMOVED_1_2 = (IMDL::MDL_VERSION_1_2 << 8),  ///< Removed since MDL 1.2.
-    SINCE_1_3 = IMDL::MDL_VERSION_1_3,           ///< Exists since MDL 1.3.
-    REMOVED_1_3 = (IMDL::MDL_VERSION_1_3 << 8),  ///< Removed since MDL 1.3.
-    SINCE_1_4 = IMDL::MDL_VERSION_1_4,           ///< Exists since MDL 1.4.
-    REMOVED_1_4 = (IMDL::MDL_VERSION_1_4 << 8),  ///< Removed since MDL 1.4.
-    SINCE_1_5 = IMDL::MDL_VERSION_1_5,           ///< Exists since MDL 1.5.
-    REMOVED_1_5 = (IMDL::MDL_VERSION_1_5 << 8),  ///< Removed since MDL 1.5.
-    SINCE_1_6 = IMDL::MDL_VERSION_1_6,           ///< Exists since MDL 1.6.
-    REMOVED_1_6 = (IMDL::MDL_VERSION_1_6 << 8),  ///< Removed since MDL 1.6.
-    SINCE_1_7 = IMDL::MDL_VERSION_1_7,           ///< Exists since MDL 1.7.
-    REMOVED_1_7 = (IMDL::MDL_VERSION_1_7 << 8),  ///< Removed since MDL 1.7.
-    SINCE_1_8 = IMDL::MDL_VERSION_1_8,           ///< Exists since MDL 1.8.
-    REMOVED_1_8 = (IMDL::MDL_VERSION_1_8 << 8),  ///< Removed since MDL 1.8.
-    SINCE_1_9 = IMDL::MDL_VERSION_1_9,           ///< Exists since MDL 1.9.
-    REMOVED_1_9 = (IMDL::MDL_VERSION_1_9 << 8),  ///< Removed since MDL 1.9.
-    SINCE_EXP = IMDL::MDL_VERSION_EXP,           ///< Exists in experimental.
+    SINCE_1_1 = IMDL::MDL_VERSION_1_1,            ///< Exists since MDL 1.1.
+    REMOVED_1_1 = (IMDL::MDL_VERSION_1_1 << 8),   ///< Removed since MDL 1.1.
+    SINCE_1_2 = IMDL::MDL_VERSION_1_2,            ///< Exists since MDL 1.2.
+    REMOVED_1_2 = (IMDL::MDL_VERSION_1_2 << 8),   ///< Removed since MDL 1.2.
+    SINCE_1_3 = IMDL::MDL_VERSION_1_3,            ///< Exists since MDL 1.3.
+    REMOVED_1_3 = (IMDL::MDL_VERSION_1_3 << 8),   ///< Removed since MDL 1.3.
+    SINCE_1_4 = IMDL::MDL_VERSION_1_4,            ///< Exists since MDL 1.4.
+    REMOVED_1_4 = (IMDL::MDL_VERSION_1_4 << 8),   ///< Removed since MDL 1.4.
+    SINCE_1_5 = IMDL::MDL_VERSION_1_5,            ///< Exists since MDL 1.5.
+    REMOVED_1_5 = (IMDL::MDL_VERSION_1_5 << 8),   ///< Removed since MDL 1.5.
+    SINCE_1_6 = IMDL::MDL_VERSION_1_6,            ///< Exists since MDL 1.6.
+    REMOVED_1_6 = (IMDL::MDL_VERSION_1_6 << 8),   ///< Removed since MDL 1.6.
+    SINCE_1_7 = IMDL::MDL_VERSION_1_7,            ///< Exists since MDL 1.7.
+    REMOVED_1_7 = (IMDL::MDL_VERSION_1_7 << 8),   ///< Removed since MDL 1.7.
+    SINCE_1_8 = IMDL::MDL_VERSION_1_8,            ///< Exists since MDL 1.8.
+    REMOVED_1_8 = (IMDL::MDL_VERSION_1_8 << 8),   ///< Removed since MDL 1.8.
+    SINCE_1_9 = IMDL::MDL_VERSION_1_9,            ///< Exists since MDL 1.9.
+    REMOVED_1_9 = (IMDL::MDL_VERSION_1_9 << 8),   ///< Removed since MDL 1.9.
+    SINCE_1_10 = IMDL::MDL_VERSION_1_10,          ///< Exists since MDL 1.9.
+    REMOVED_1_10 = (IMDL::MDL_VERSION_1_10 << 8), ///< Removed since MDL 1.9.
+    SINCE_EXP = IMDL::MDL_VERSION_EXP,            ///< Exists in experimental.
 };
 
 /// Implementation of a definition.
@@ -137,6 +139,7 @@ public:
         DEF_USES_DERIVATIVES,       ///< This function uses derivatives.
         DEF_IS_DERIVABLE,           ///< This parameter or return type is derivable.
         DEF_IS_DECLARATIVE,         ///< This type or function is declarative.
+        DEF_IS_VERSIONED,           ///< This entity has version depended overloads.
         DEF_LAST
     };
 

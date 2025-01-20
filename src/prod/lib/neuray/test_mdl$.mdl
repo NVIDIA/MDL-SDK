@@ -64,7 +64,10 @@ export material md_1(color tint = color(1.0))
 );
 
 // A variant of the md_1 material.
-export material md_1_green(*) = md_1(color(1, 0, 0));
+export material md_1_green(*) = md_1(color(0, 1, 0));
+
+// A variant of the md_1 material.
+export material md_1_blue(*) [[ origin("existing_origin") ]] = md_1(color(0, 0, 1));
 
 // A material with a single parameter without default.
 export material md_1_no_default(color tint)
@@ -463,11 +466,18 @@ export material md_parameters_uniform_auto_varying(
 ) = material();
 
 
-// A function with uniform/auto/varying parameters.
+// A function with uniform/auto/varying int parameters.
 export int fd_parameters_uniform_auto_varying(
     uniform int param0_uniform = 42 [[ unused() ]],
             int param1_auto    = 42 [[ unused() ]],
     varying int param2_varying = 42 [[ unused() ]]
+) { return 42; }
+
+// A function with uniform/auto/varying color parameters.
+export int fd_parameters_uniform_auto_varying_color(
+    uniform color param0_uniform = color() [[ unused() ]],
+            color param1_auto    = color() [[ unused() ]],
+    varying color param2_varying = color() [[ unused() ]]
 ) { return 42; }
 
 // A uniform function.
@@ -630,19 +640,6 @@ export color fd_cycle( color tint = color(1.0, 0.0, 0.0)) { return tint; }
 export const int some_constant = 42;
 
 
-// A material for baking.
-export material md_baking()
-= let {
-    color color_expr
-        = color(1.0, 1.0, 1.0) - base::file_texture( texture_2d( "./test_cube.png")).tint;
-    float float_expr = float3( color_expr).x;
-} in material(
-    surface: material_surface(scattering: df::diffuse_reflection_bsdf(
-        tint: color_expr)),
-    backface: material_surface(scattering: df::diffuse_reflection_bsdf(
-        tint: color(float_expr, 0.0, 0.0)))
-);
-
 export struct sub_struct
 {
     bool   a;
@@ -662,8 +659,8 @@ export struct top_struct
 };
 
 
-// A material for baking with class compilation.
-export material md_class_baking(
+// A material for baking.
+export material md_baking(
     float p = 0.3,
     top_struct s = top_struct(
         0.1,
@@ -697,9 +694,9 @@ export material md_class_baking(
         math::lerp(e, f, uvw.x),
         math::lerp(g, h, uvw.y));
 
-    color color_expr = color(1) - base::file_texture( texture_2d( "./test_cube.png")).tint
+    color color_expr = color(1) - base::file_texture( texture_2d("./test_cube.png")).tint
                        + params_res * math::sin(uvw.x * math::PI * 8);
-    float float_expr = float3( color_expr).x;
+    float float_expr = float3(color_expr).x;
 } in material(
     surface: material_surface(scattering: df::diffuse_reflection_bsdf(
         tint: color_expr)),
@@ -707,7 +704,22 @@ export material md_class_baking(
         tint: color(float_expr, 0.0, 0.0)))
 );
 
-
+// A material for the constant detection of the baker.
+//
+// color_expr is not uniform, but constant within a certain range of texture coordinates.
+export material md_baking_const()
+= let {
+    float3 uvw = state::texture_coordinate(0);
+    color color_expr = uvw.x > -10 && uvw.x < 10 ? color(0, 1, 0) : color(uvw.x, uvw.y, 0.5);
+    float float_expr = float3(color_expr).y;
+} in material(
+    surface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(
+            tint: color_expr)),
+    backface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(
+            tint: color(float_expr, 0.0f, 0.0f)))
+);
 // A material with various let expressions which should remain as named
 // temporaries.
 export material md_named_temporaries(float param0)

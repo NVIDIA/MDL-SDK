@@ -91,6 +91,7 @@ public:
             return false;
         }
 
+     
         string mangled_name = m_dag_mangler.mangle(def, (char const *)NULL, true);
         return mangled_name == m_signature;
     }
@@ -224,6 +225,7 @@ Module::Module(
 , m_res_table(&m_arena)
 , m_func_hashes(Func_hash_map::key_compare(), alloc)
 , m_find_signature_cache(0, Definition_map::hasher(), Definition_map::key_equal(), alloc)
+, m_syn_creator(*this)
 {
     MDL_ASSERT(file_name != NULL);
     if (!m_is_compiler_owned) {
@@ -296,6 +298,7 @@ void Module::get_version(IMDL::MDL_version version, int &major, int &minor)
     case IMDL::MDL_VERSION_1_7:     major = 1; minor = 7; return;
     case IMDL::MDL_VERSION_1_8:     major = 1; minor = 8; return;
     case IMDL::MDL_VERSION_1_9:     major = 1; minor = 9; return;
+    case IMDL::MDL_VERSION_1_10:    major = 1; minor = 10; return;
     case IMDL::MDL_VERSION_EXP:     major = 99; minor = 99; return;
     }
     MDL_ASSERT(!"MDL version not known");
@@ -311,13 +314,12 @@ void Module::get_version(int &major, int &minor) const
 
 // Set the language version.
 bool Module::set_version(
-    MDL  *compiler,
     int  major,
     int  minor,
     bool enable_mdl_next,
     bool enable_experimental)
 {
-    return compiler->check_version(
+    return m_compiler->check_version(
         major, minor, m_mdl_version, enable_mdl_next, enable_experimental);
 }
 
@@ -552,7 +554,7 @@ char const *Module::get_owner_module_name(IDefinition const *idef) const
         return "";
     }
 
-    MDL_ASSERT(def->get_owner_module_id() == m_unique_id && "Definition belongs to other module");
+    MDL_ASSERT(is_owner(def) && "Definition belongs to other module");
 
     size_t import_idx = def->get_original_import_idx();
     if (import_idx == 0) {
@@ -570,7 +572,7 @@ Module const *Module::get_owner_module(IDefinition const *idef) const
 {
     Definition const *def = impl_cast<Definition>(idef);
 
-    MDL_ASSERT(def->get_owner_module_id() == m_unique_id && "Definition belongs to other module");
+    MDL_ASSERT(is_owner(def) && "Definition belongs to other module");
 
     if (def->has_flag(Definition::DEF_IS_PREDEFINED)) {
         this->retain();
@@ -635,7 +637,7 @@ Definition const *Module::get_original_definition(
     //
     // Hence we life with this ugliness, but need either an extra case in
     // this assert OR move it a little bit down, so we do not fall into the bad case ...
-    MDL_ASSERT(def->get_owner_module_id() == m_unique_id && "Definition belongs to other module");
+    MDL_ASSERT(is_owner(def) && "Definition belongs to other module");
 
     if (Import_entry const *entry = get_import_entry(import_idx)) {
         if (Module const *owner = entry->get_module()) {
@@ -1804,23 +1806,6 @@ void Module::allocate_initializers(Definition *def, size_t num)
     def->m_parameter_inits = init;
 }
 
-/// Copy the position from one AST element to another.
-/// \tparam IAst   type of the AST element
-/// \param dst     the destination
-/// \param src     the original element the position is copied
-template<typename IAst>
-static void copy_position(
-    IAst       *dst,
-    IAst const *src)
-{
-    Position const &s_pos = src->access_position();
-    Position       &d_pos = dst->access_position();
-    d_pos.set_start_line(s_pos.get_start_line());
-    d_pos.set_start_column(s_pos.get_start_column());
-    d_pos.set_end_line(s_pos.get_end_line());
-    d_pos.set_end_column(s_pos.get_end_column());
-}
-
 // Clone the given parameter.
 IParameter const *Module::clone_param(
     IParameter const *param,
@@ -2437,10 +2422,161 @@ void Module::replace_declarations(IDeclaration const * const decls[], size_t len
     }
 }
 
+/// Check if two types (from different type factories) describe the same type
+static bool equivalent_type(
+    IType const *left,
+    IType const *right)
+{
+    if (left == right) {
+        return true;
+    }
+    if (left->get_kind() != right->get_kind()) {
+        return false;
+    }
+
+    switch (left->get_kind()) {
+    case IType::TK_ALIAS:
+        if (left->get_type_modifiers() != right->get_type_modifiers()) {
+            return false;
+        }
+        // ignore alias names
+        return equivalent_type(left->skip_type_alias(), right->skip_type_alias());
+    case IType::TK_BOOL:
+    case IType::TK_INT:
+        return true;
+    case IType::TK_ENUM:
+        {
+            IType_enum const          *e_left  = cast<IType_enum>(left);
+            IType_enum const          *e_right = cast<IType_enum>(right);
+            IType_enum::Predefined_id id       = e_left->get_predefined_id();
+
+            if (id != IType_enum::EID_USER) {
+                // a builtin enum
+                return id == e_right->get_predefined_id();
+            }
+
+            // check names (only)
+            ISymbol const *sym_left  = e_left->get_symbol();
+            ISymbol const *sym_right = e_right->get_symbol();
+            return strcmp(sym_left->get_name(), sym_right->get_name()) == 0;
+        }
+    case IType::TK_FLOAT:
+    case IType::TK_DOUBLE:
+    case IType::TK_STRING:
+    case IType::TK_LIGHT_PROFILE:
+    case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
+    case IType::TK_EDF:
+    case IType::TK_VDF:
+        return true;
+    case IType::TK_VECTOR:
+    case IType::TK_MATRIX:
+        // vector and matrix types are owned by the compiler, hence
+        // if they are not pointer equal, they are different
+        return false;
+    case IType::TK_ARRAY:
+        {
+            IType_array const *a_left  = cast<IType_array>(left);
+            IType_array const *a_right = cast<IType_array>(right);
+
+            if (!a_left->is_immediate_sized()) {
+                // we cannot compare abstract arrays yet
+                return false;
+            }
+            if (!a_right->is_immediate_sized()) {
+                // we cannot compare abstract arrays yet
+                return false;
+            }
+            if (a_left->get_size() != a_right->get_size()) {
+                return false;
+            }
+
+            IType const *e_left = a_left->get_element_type();
+            IType const *e_right = a_right->get_element_type();
+
+            if (!equivalent_type(e_left, e_right)) {
+                return false;
+            }
+            return true;
+        }
+    case IType::TK_COLOR:
+        return true;
+    case IType::TK_FUNCTION:
+        {
+            IType_function const *f_left  = cast<IType_function>(left);
+            IType_function const *f_right = cast<IType_function>(right);
+
+            int n_args = f_left->get_parameter_count();
+            if (n_args != f_right->get_parameter_count()) {
+                return false;
+            }
+
+            IType const *ret_left  = f_left->get_return_type();
+            IType const *ret_right = f_right->get_return_type();
+
+            if (ret_left == NULL || ret_right == NULL) {
+                if (ret_left != ret_right) {
+                    return false;
+                }
+            }
+
+            if (!equivalent_type(ret_left, ret_right)) {
+                return false;
+            }
+
+            for (int i = 0; i < n_args; ++i) {
+                IType const *p_left;
+                ISymbol const *s_left;
+                f_left->get_parameter(i, p_left, s_left);
+
+                IType const *p_right;
+                ISymbol const *s_right;
+                f_right->get_parameter(i, p_right, s_right);
+
+                if (strcmp(s_left->get_name(), s_right->get_name()) != 0) {
+                    return false;
+                }
+
+                if (!equivalent_type(p_left, p_right)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    case IType::TK_STRUCT:
+        {
+            IType_struct const          *s_left  = cast<IType_struct>(left);
+            IType_struct const          *s_right = cast<IType_struct>(right);
+            IType_struct::Predefined_id id       = s_left->get_predefined_id();
+
+            if (id != IType_struct::SID_USER) {
+                // a builtin struct
+                return id == s_right->get_predefined_id();
+            }
+
+            // check names (only)
+            ISymbol const *sym_left  = s_left->get_symbol();
+            ISymbol const *sym_right = s_right->get_symbol();
+            return strcmp(sym_left->get_name(), sym_right->get_name()) == 0;
+        }
+    case IType::TK_TEXTURE:
+        // texture types are owned by the compiler, hence
+        // if they are not pointer equal, they are different
+        return false;
+    case IType::TK_BSDF_MEASUREMENT:
+    case IType::TK_AUTO:
+    case IType::TK_ERROR:
+        return true;
+    }
+    MDL_ASSERT(!"Unsupported type kind");
+
+    return false;
+}
+
 // Get the imported definition for an outside definition if it is imported.
 Definition const *Module::find_imported_definition(Definition const *def) const
 {
-    if (def->get_owner_module_id() == m_unique_id) {
+    if (is_owner(def)) {
         // this definition is owned by this module (i.e. either created
         // by this module or already imported)
         return def;
@@ -2464,9 +2600,26 @@ Definition const *Module::find_imported_definition(Definition const *def) const
         return NULL;
     }
 
-    Scope *scope = NULL;
+    Scope const *scope = NULL;
 
-    if (def->get_kind() == Definition::DK_CONSTRUCTOR) {
+    Definition::Kind kind = def->get_kind();
+    if (kind == Definition::DK_MEMBER) {
+        // find the imported scope of members
+        Scope const      *type_scope = def->get_def_scope();
+        Definition const *type_def   = type_scope->get_owner_definition();
+        IType const      *scope_type = type_def->get_type();
+
+        scope_type = m_type_factory.get_equal(scope_type);
+        if (scope_type == NULL) {
+            return NULL;
+        }
+
+        scope = m_def_tab.get_type_scope(scope_type);
+        if (scope == NULL) {
+            return NULL;
+        }
+    } else if (kind == Definition::DK_CONSTRUCTOR) {
+        // find the imported scope of constructors
         IType_function const *fct_type = as<IType_function>(def->get_type());
         if (fct_type == NULL) {
             return NULL;
@@ -2505,10 +2658,17 @@ Definition const *Module::find_imported_definition(Definition const *def) const
         Definition const *imp = scope->find_definition_in_scope(imp_sym);
 
         // check if its ours
+        IDefinition::Semantics orig_sema  = def->get_semantics();
+        IType const            *orig_type = def->get_type();
+
         for (; imp != NULL; imp = imp->get_prev_def()) {
             if (imp->has_flag(Definition::DEF_IS_PREDEFINED)) {
-                // predefined are never imported, hence do not check for the module id
-                if (imp->get_original_unique_id() == def->get_original_unique_id()) {
+                // predefined entities are never imported, hence do not check for the module id
+                // moreover, because they are created (depending on the module version)
+                // there unique IDs might be different, so check for the type
+                IType const *imp_type = imp->get_type();
+
+                if (orig_sema == imp->get_semantics() && equivalent_type(imp_type, orig_type)) {
                     // found it
                     return imp;
                 }
@@ -4124,351 +4284,375 @@ void Module::add_resource_entry(
             exists));
 }
 
+// Create an integer literal.
+IExpression_literal const *Module::create_int_literal(int value)
+{
+    IValue_int const *v = m_value_factory.create_int(value);
+    return m_expr_factory.create_literal(v);
+}
+
+// Create an int2 literal.
+IExpression_literal const *Module::create_int2_literal(int value)
+{
+    IValue_int const   *v        = m_value_factory.create_int(value);
+    IType_int const    *int_tp   = m_type_factory.create_int();
+    IType_vector const *int2_tp  = m_type_factory.create_vector(int_tp, 2);
+    IValue const       *values[] = { v, v };
+    IValue const       *v_vec    = m_value_factory.create_vector(int2_tp, values, 2);
+    return m_expr_factory.create_literal(v_vec);
+}
+
+// Create a float literal.
+IExpression_literal const *Module::create_float_literal(float value)
+{
+    IValue_float const *v = m_value_factory.create_float(value);
+    return m_expr_factory.create_literal(v);
+}
+
+// Create an (RGB) color(v) literal.
+IExpression_literal const *Module::create_color_literal(float value)
+{
+    IValue_float const     *v   = m_value_factory.create_float(value);
+    IValue_rgb_color const *rgb = m_value_factory.create_rgb_color(v, v, v);
+    return m_expr_factory.create_literal(rgb);
+}
+
+// Create a string literal.
+IExpression_literal const *Module::create_string_literal(char const *value)
+{
+    IValue_string const *v = m_value_factory.create_string(value);
+    return m_expr_factory.create_literal(v);
+}
+
+// Create a parameterless stdlib call to <name1> or <name1>::<name2>.
+IExpression_call *Module::Syntactical_stdlib_call_creator::create_stdlib_call(
+    IExpression const *args[],
+    size_t            n_args,
+    char const        *name1,
+    char const        *name2)
+{
+    Name_factory &nf = *m_module.get_name_factory();
+
+    IQualified_name *qn = nf.create_qualified_name();
+
+    {
+        ISymbol const *s = nf.create_symbol(name1);
+        ISimple_name const *sn = nf.create_simple_name(s);
+        qn->add_component(sn);
+    }
+    if (name2 != NULL) {
+        ISymbol const *s = nf.create_symbol(name2);
+        ISimple_name const *sn = nf.create_simple_name(s);
+        qn->add_component(sn);
+    }
+
+    IType_name *tn = nf.create_type_name(qn);
+
+    Expression_factory &ef = *m_module.get_expression_factory();
+
+    IExpression_reference *callee = ef.create_reference(tn);
+    IExpression_call *call = ef.create_call(callee);
+
+    for (size_t i = 0; i < n_args; ++i) {
+        IArgument const *arg = ef.create_positional_argument(args[i]);
+        call->add_argument(arg);
+    }
+
+    return call;
+}
+
 // Alters one call argument according to the given promotion rules.
 int Module::promote_call_arguments(
-    IExpression_call *call,
-    IArgument const  *arg,
-    int              param_index,
-    unsigned         rules)
+    IExpression_call     *call,
+    IArgument const      *arg,
+    int                  param_index,
+    unsigned             rules,
+    IStdlib_call_creator *creator)
 {
-    if (rules & PR_SPOT_EDF_ADD_SPREAD_PARAM) {
-        if (param_index == 0) {
-            // add M_PI as 1. argument
-            IValue_float const  *v    = m_value_factory.create_float(M_PIf);
-            IExpression const   *e    = m_expr_factory.create_literal(v);
-            IArgument const     *narg = m_expr_factory.create_positional_argument(e);
-            call->add_argument(narg);
-            return param_index + 1;
-        }
+    if (creator == NULL) {
+        // use the simple syntactical stdlib call creator if none was given
+        creator = &m_syn_creator;
     }
-    if (rules & PC_MEASURED_EDF_ADD_MULTIPLIER) {
-        if (param_index == 0) {
-            // add 1.0 as 1. argument
-            IValue_float const  *v    = m_value_factory.create_float(1.0);
-            IExpression const   *e    = m_expr_factory.create_literal(v);
-            IArgument const     *narg = m_expr_factory.create_positional_argument(e);
-            call->add_argument(narg);
-            return param_index + 1;
-        }
-    }
-    if (rules & PR_MEASURED_EDF_ADD_TANGENT_U) {
-        if (param_index == 3) {
-            // add state::tangent_u(0) as 4. argument
 
-            ISymbol const *sym_state = m_sym_tab.get_symbol("state");
-            ISymbol const *sym_tanu = m_sym_tab.get_symbol("texture_tangent_u");
+    for (; rules != 0;) {
+        unsigned rules_at_start = rules;
 
-            ISimple_name *sn_state = m_name_factory.create_simple_name(sym_state);
-            ISimple_name *sn_tanu = m_name_factory.create_simple_name(sym_tanu);
-
-            IQualified_name *qn = m_name_factory.create_qualified_name();
-            qn->add_component(sn_state);
-            qn->add_component(sn_tanu);
-            qn->set_absolute();
-
-            IType_name *tn = m_name_factory.create_type_name(qn);
-
-            IExpression_reference *ref = m_expr_factory.create_reference(tn);
-            IExpression_call      *tu_call = m_expr_factory.create_call(ref);
-
-            IValue_int const  *v = m_value_factory.create_int(0);
-            IExpression const *e = m_expr_factory.create_literal(v);
-            IArgument const   *a = m_expr_factory.create_positional_argument(e);
-
-            tu_call->add_argument(a);
-
-            IArgument const *narg = m_expr_factory.create_positional_argument(tu_call);
-            call->add_argument(narg);
-            return param_index + 1;
-        }
-    }
-    if (rules & PR_FRESNEL_LAYER_TO_COLOR) {
-        if (param_index == 1) {
-            // wrap the 1. argument by a color constructor
-            ISymbol const *sym_color = m_sym_tab.get_symbol("color");
-
-            ISimple_name *sn_color = m_name_factory.create_simple_name(sym_color);
-            IQualified_name *qn = m_name_factory.create_qualified_name();
-            qn->add_component(sn_color);
-
-            IType_name *tn = m_name_factory.create_type_name(qn);
-
-            IExpression_reference *ref = m_expr_factory.create_reference(tn);
-            IExpression_call      *color_call = m_expr_factory.create_call(ref);
-
-            IExpression const *e = arg->get_argument_expr();
-            IArgument const   *a = m_expr_factory.create_positional_argument(e);
-
-            color_call->add_argument(a);
-
-            const_cast<IArgument *>(arg)->set_argument_expr(color_call);
-            return param_index;
-        }
-    }
-    if (rules & PR_WIDTH_HEIGHT_ADD_UV_TILE) {
-        if (param_index == 0) {
-            // add int2(0) as 1. argument
-            ISymbol const *sym_int2 = m_sym_tab.get_symbol("int2");
-
-            ISimple_name *sn_int2 = m_name_factory.create_simple_name(sym_int2);
-
-            IQualified_name *qn = m_name_factory.create_qualified_name();
-            qn->add_component(sn_int2);
-
-            IType_name *tn = m_name_factory.create_type_name(qn);
-
-            IExpression_reference *ref = m_expr_factory.create_reference(tn);
-            IExpression_call      *int2_call = m_expr_factory.create_call(ref);
-
-            IValue_int const  *v = m_value_factory.create_int(0);
-            IExpression const *e = m_expr_factory.create_literal(v);
-            IArgument const   *a = m_expr_factory.create_positional_argument(e);
-
-            int2_call->add_argument(a);
-
-            IArgument const *narg = m_expr_factory.create_positional_argument(int2_call);
-            call->add_argument(narg);
-            return param_index + 1;
-        }
-    }
-    if (rules & PR_TEXEL_ADD_UV_TILE) {
-        if (param_index == 1) {
-            // add int2(0) as 2. argument
-            ISymbol const *sym_int2 = m_sym_tab.get_symbol("int2");
-
-            ISimple_name *sn_int2 = m_name_factory.create_simple_name(sym_int2);
-
-            IQualified_name *qn = m_name_factory.create_qualified_name();
-            qn->add_component(sn_int2);
-
-            IType_name *tn = m_name_factory.create_type_name(qn);
-
-            IExpression_reference *ref = m_expr_factory.create_reference(tn);
-            IExpression_call      *int2_call = m_expr_factory.create_call(ref);
-
-            IValue_int const  *v = m_value_factory.create_int(0);
-            IExpression const *e = m_expr_factory.create_literal(v);
-            IArgument const   *a = m_expr_factory.create_positional_argument(e);
-
-            int2_call->add_argument(a);
-
-            IArgument const *narg = m_expr_factory.create_positional_argument(int2_call);
-            call->add_argument(narg);
-            return param_index + 1;
-        }
-    }
-    if (rules & PR_ROUNDED_CORNER_ADD_ROUNDNESS) {
-        if (param_index == 1) {
-            // add roundness as 2. argument
-            IValue_float const  *v    = m_value_factory.create_float(1.0f);
-            IExpression const   *e    = m_expr_factory.create_literal(v);
-            IArgument const     *narg = m_expr_factory.create_positional_argument(e);
-            call->add_argument(narg);
-            return param_index + 1;
-        }
-    }
-    if (rules & PR_MATERIAL_ADD_HAIR) {
-        if (param_index == 5) {
-            // MDL 1.4 -> 1.5: add default hair bsdf
-            ISymbol const *s = m_name_factory.create_symbol("hair_bsdf");
-            ISimple_name const *sn = m_name_factory.create_simple_name(s);
-            IQualified_name *qn = m_name_factory.create_qualified_name();
-            qn->add_component(sn);
-            IType_name *tn = m_name_factory.create_type_name(qn);
-            IExpression_reference *hair_ref = m_expr_factory.create_reference(tn);
-            IExpression_call *hair_call = m_expr_factory.create_call(hair_ref);
-
-            IArgument const *a    = call->get_argument(5);
-            IArgument const *narg = NULL;
-            if (a->get_kind() == IArgument::AK_POSITIONAL) {
-                narg = m_expr_factory.create_positional_argument(hair_call);
-            } else {
-                ISymbol const      *sh      = m_name_factory.create_symbol("hair");
-                ISimple_name const *sn_hair = m_name_factory.create_simple_name(sh);
-                narg = m_expr_factory.create_named_argument(sn_hair, hair_call);
+        if (rules & PR_SPOT_EDF_ADD_SPREAD_PARAM) {
+            if (param_index == 0) {
+                // add M_PI as 1. argument
+                IExpression const *e = create_float_literal(M_PIf);
+                IArgument const *narg = m_expr_factory.create_positional_argument(e);
+                call->add_argument(narg);
+                ++param_index;
+                rules &= ~PR_SPOT_EDF_ADD_SPREAD_PARAM;
             }
-            call->add_argument(narg);
-
-            return param_index + 1;
         }
-    }
-    if (rules & PR_GLOSSY_ADD_MULTISCATTER) {
-        if (param_index == 2) {
-            // add color(0) as 3. argument for glossy bsdfs
-            ISymbol const *sym_color = m_sym_tab.get_symbol("color");
-
-            ISimple_name *sn_color = m_name_factory.create_simple_name(sym_color);
-
-            IQualified_name *qn = m_name_factory.create_qualified_name();
-            qn->add_component(sn_color);
-
-            IType_name *tn = m_name_factory.create_type_name(qn);
-
-            IExpression_reference *ref = m_expr_factory.create_reference(tn);
-            IExpression_call      *color_call = m_expr_factory.create_call(ref);
-
-            IValue_float const *v = m_value_factory.create_float(0.0f);
-            IExpression const *e  = m_expr_factory.create_literal(v);
-            IArgument const   *a  = m_expr_factory.create_positional_argument(e);
-
-            color_call->add_argument(a);
-
-            IArgument const *narg = m_expr_factory.create_positional_argument(color_call);
-            call->add_argument(narg);
-            return param_index + 1;
-        }
-    }
-    if (rules & PR_MATERIAL_VOLUME_ADD_EMISSION_INTENSITY) {
-        if (param_index == 2) {
-            // MDL 1.6 -> 1.7: add default emission_intensity
-            ISymbol const *s = m_name_factory.create_symbol("color");
-            ISimple_name const *sn = m_name_factory.create_simple_name(s);
-            IQualified_name *qn = m_name_factory.create_qualified_name();
-            qn->add_component(sn);
-            IType_name *tn = m_name_factory.create_type_name(qn);
-            IExpression_reference *color_ref = m_expr_factory.create_reference(tn);
-            IExpression_call *color_call = m_expr_factory.create_call(color_ref);
-
-            color_call->add_argument(m_expr_factory.create_positional_argument(
-                m_expr_factory.create_literal(m_value_factory.create_float(0.0f))));
-
-            IArgument const *a = call->get_argument(2);
-            IArgument const *narg = NULL;
-            if (a->get_kind() == IArgument::AK_POSITIONAL) {
-                narg = m_expr_factory.create_positional_argument(color_call);
-            } else {
-                ISymbol const      *sh = m_name_factory.create_symbol("emission_intensity");
-                ISimple_name const *sn_hair = m_name_factory.create_simple_name(sh);
-                narg = m_expr_factory.create_named_argument(sn_hair, color_call);
+        if (rules & PC_MEASURED_EDF_ADD_MULTIPLIER) {
+            if (param_index == 0) {
+                // add 1.0 as 1. argument
+                IExpression const *e = create_float_literal(1.0f);
+                IArgument const *narg = m_expr_factory.create_positional_argument(e);
+                call->add_argument(narg);
+                ++param_index;
+                rules &= ~PC_MEASURED_EDF_ADD_MULTIPLIER;
             }
-            call->add_argument(narg);
-
-            return param_index + 1;
         }
-    }
-    if (rules & PR_SHEEN_ADD_MULTISCATTER) {
-        if (param_index == 2) {
-            // MDL 1.6 -> 1.7: Add diffuse_reflection_bsdf() as 4. parameter
-            IQualified_name *qn = m_name_factory.create_qualified_name();
+        if (rules & PR_MEASURED_EDF_ADD_TANGENT_U) {
+            if (param_index == 3) {
+                // add state::tangent_u(0) as 4. argument
+                IExpression const *arg = create_int_literal(0);
+                IExpression_call *tu_call =
+                    creator->create_stdlib_call(&arg, 1, "state", "texture_tangent_u");
 
-            {
-                ISymbol const      *s  = m_name_factory.create_symbol("df");
-                ISimple_name const *sn = m_name_factory.create_simple_name(s);
-                qn->add_component(sn);
+                IArgument const *narg = m_expr_factory.create_positional_argument(tu_call);
+                call->add_argument(narg);
+                ++param_index;
+                rules &= ~PR_MEASURED_EDF_ADD_TANGENT_U;
             }
-            {
-                ISymbol const      *s = m_name_factory.create_symbol("diffuse_reflection_bsdf");
-                ISimple_name const *sn = m_name_factory.create_simple_name(s);
-                qn->add_component(sn);
+        }
+        if (rules & PR_FRESNEL_LAYER_TO_COLOR) {
+            if (param_index == 1) {
+                // wrap the 1. argument by a color constructor
+                IExpression const *e = arg->get_argument_expr();
+                IExpression_call *color_call = creator->create_stdlib_call(&e, 1, "color");
+
+                const_cast<IArgument *>(arg)->set_argument_expr(color_call);
+                rules &= ~PR_FRESNEL_LAYER_TO_COLOR;
             }
-
-            IType_name *tn = m_name_factory.create_type_name(qn);
-            IExpression_reference *bsdf_ref = m_expr_factory.create_reference(tn);
-            IExpression_call *bsdf_call = m_expr_factory.create_call(bsdf_ref);
-
-            IArgument const *a = call->get_argument(2);
-            IArgument const *narg = NULL;
-            if (a->get_kind() == IArgument::AK_POSITIONAL) {
-                narg = m_expr_factory.create_positional_argument(bsdf_call);
-            } else {
-                ISymbol const      *sh = m_name_factory.create_symbol("multiscatter");
-                ISimple_name const *sn_multiscatter = m_name_factory.create_simple_name(sh);
-                narg = m_expr_factory.create_named_argument(sn_multiscatter, bsdf_call);
+        }
+        if (rules & PR_WIDTH_HEIGHT_ADD_UV_TILE) {
+            if (param_index == 0) {
+                // add int2(0) as 1. argument
+                IExpression const *e = create_int2_literal(0);
+                IArgument const *narg = m_expr_factory.create_positional_argument(e);
+                call->add_argument(narg);
+                ++param_index;
+                rules &= ~PR_WIDTH_HEIGHT_ADD_UV_TILE;
             }
-            call->add_argument(narg);
+        }
+        if (rules & PR_TEXEL_ADD_UV_TILE) {
+            if (param_index == 1) {
+                // add int2(0) as 2. argument
+                IExpression const *e = create_int2_literal(0);
+                IArgument const *narg = m_expr_factory.create_positional_argument(e);
+                call->add_argument(narg);
+                ++param_index;
+                rules &= ~PR_TEXEL_ADD_UV_TILE;
+            }
+        }
+        if (rules & PR_ROUNDED_CORNER_ADD_ROUNDNESS) {
+            if (param_index == 1) {
+                // add roundness as 2. argument
+                IExpression const *e = create_float_literal(1.0f);
+                IArgument const *narg = m_expr_factory.create_positional_argument(e);
+                call->add_argument(narg);
+                ++param_index;
+                rules &= ~PR_ROUNDED_CORNER_ADD_ROUNDNESS;
+            }
+        }
+        if (rules & PR_MATERIAL_ADD_HAIR) {
+            if (param_index == 5) {
+                // MDL 1.4 -> 1.5: add default hair_bsdf() call
+                IExpression_call *hair_call = creator->create_stdlib_call(NULL, 0, "hair_bsdf");
 
-            return param_index + 1;
+                IArgument const *a = call->get_argument(5);
+                IArgument const *narg = NULL;
+                if (a->get_kind() == IArgument::AK_POSITIONAL) {
+                    narg = m_expr_factory.create_positional_argument(hair_call);
+                } else {
+                    ISymbol const *sh = m_name_factory.create_symbol("hair");
+                    ISimple_name const *sn_hair = m_name_factory.create_simple_name(sh);
+                    narg = m_expr_factory.create_named_argument(sn_hair, hair_call);
+                }
+                call->add_argument(narg);
+                ++param_index;
+                rules &= ~PR_MATERIAL_ADD_HAIR;
+            }
+        }
+        if (rules & PR_INSERT_COLOR_0_AFTER_3) {
+            if (param_index == 2) {
+                // insert color(0) after 3. argument
+                IExpression const *e = create_color_literal(0.0f);
+                IArgument const *narg = m_expr_factory.create_positional_argument(e);
+                call->add_argument(narg);
+                ++param_index;
+                rules &= ~PR_INSERT_COLOR_0_AFTER_3;
+            }
+        }
+        if (rules & PR_MATERIAL_VOLUME_ADD_EMISSION_INTENSITY) {
+            if (param_index == 2) {
+                // MDL 1.6 -> 1.7: add default emission_intensity
+                IExpression const *e = create_color_literal(0.0f);
+
+                IArgument const *a = call->get_argument(2);
+                IArgument const *narg = NULL;
+                if (a->get_kind() == IArgument::AK_POSITIONAL) {
+                    narg = m_expr_factory.create_positional_argument(e);
+                } else {
+                    ISymbol const *sh = m_name_factory.create_symbol("emission_intensity");
+                    ISimple_name const *sn_hair = m_name_factory.create_simple_name(sh);
+                    narg = m_expr_factory.create_named_argument(sn_hair, e);
+                }
+                call->add_argument(narg);
+                ++param_index;
+                rules &= ~PR_INSERT_COLOR_0_AFTER_3;
+            }
+        }
+        if (rules & (PR_INSERT_DIFF_REFL_BSDF_AFTER_3 | PR_INSERT_DIFF_REFL_BSDF_10_AFTER_3)) {
+            if (param_index == 2) {
+                // insert a call to diffuse_reflection_bsdf(color(1.0), 0.0, color(0.0), "") after
+                // 3. param
+                IExpression const *args[4];
+                size_t i = 0;
+                args[i++] = create_color_literal(1.0f);
+                args[i++] = create_float_literal(0.0f);
+                if (rules & PR_INSERT_DIFF_REFL_BSDF_10_AFTER_3) {
+                    args[i++] = create_color_literal(0.0f);
+                }
+                args[i++] = create_string_literal("");
+
+                size_t n_args = rules & PR_INSERT_DIFF_REFL_BSDF_10_AFTER_3 ? 4 : 3;
+
+                IExpression_call *bsdf_call =
+                    creator->create_stdlib_call(args, n_args, "df", "diffuse_reflection_bsdf");
+
+                IArgument const *a = call->get_argument(2);
+                IArgument const *narg = NULL;
+                if (a->get_kind() == IArgument::AK_POSITIONAL) {
+                    narg = m_expr_factory.create_positional_argument(bsdf_call);
+                } else {
+                    ISymbol const *sh = m_name_factory.create_symbol("multiscatter");
+                    ISimple_name const *sn_multiscatter = m_name_factory.create_simple_name(sh);
+                    narg = m_expr_factory.create_named_argument(sn_multiscatter, bsdf_call);
+                }
+                call->add_argument(narg);
+                ++param_index;
+
+                // both rules are mutual exclusive, so it is same to deactivate both
+                rules &= ~(PR_INSERT_DIFF_REFL_BSDF_AFTER_3 | PR_INSERT_DIFF_REFL_BSDF_10_AFTER_3);
+            }
+        }
+        if (rules & PR_INSERT_FLOAT_0_AFTER_1) {
+            if (param_index == 0) {
+                // insert 0.0 as 1. argument
+                IExpression const *e = create_float_literal(0.0f);
+                IArgument const *narg = m_expr_factory.create_positional_argument(e);
+                call->add_argument(narg);
+                ++param_index;
+                rules &= ~PR_INSERT_FLOAT_0_AFTER_1;
+            }
+        }
+        if (rules & PR_INSERT_FLOAT_0_AFTER_2) {
+            if (param_index == 1) {
+                // insert 0.0 after 2. argument
+                IExpression const *e = create_float_literal(0.0f);
+                IArgument const *narg = m_expr_factory.create_positional_argument(e);
+                call->add_argument(narg);
+                ++param_index;
+                rules &= ~PR_INSERT_FLOAT_0_AFTER_2;
+            }
+        }
+        if (rules & PR_INSERT_FLOAT_0_AFTER_3) {
+            if (param_index == 2) {
+                // insert 0.0 after 3. argument
+                IExpression const *e = create_float_literal(0.0f);
+                IArgument const *narg = m_expr_factory.create_positional_argument(e);
+                call->add_argument(narg);
+                ++param_index;
+                rules &= ~PR_INSERT_FLOAT_0_AFTER_3;
+            }
+        }
+        if (rules & PR_INSERT_FLOAT_0_AFTER_6) {
+            if (param_index == 5) {
+                // insert a 0.0 after 6. argument
+                IExpression const *e = create_float_literal(0.0f);
+                IArgument const *narg = m_expr_factory.create_positional_argument(e);
+                call->add_argument(narg);
+                ++param_index;
+                rules &= ~PR_INSERT_FLOAT_0_AFTER_6;
+            }
+        }
+        if (rules & PR_INSERT_FLOAT_0_AFTER_8) {
+            if (param_index == 7) {
+                // insert 0.0 after 8. argument
+                IExpression const *e = create_float_literal(0.0f);
+                IArgument const *narg = m_expr_factory.create_positional_argument(e);
+                call->add_argument(narg);
+                ++param_index;
+                rules &= ~PR_INSERT_FLOAT_0_AFTER_8;
+            }
+        }
+        if (rules & PR_INSERT_EMPTY_STRING_AFTER_2) {
+            if (param_index == 1) {
+                // insert "" after 2. argument
+                IExpression const *e = create_string_literal("");
+                IArgument const *narg = m_expr_factory.create_positional_argument(e);
+                call->add_argument(narg);
+                ++param_index;
+                rules &= ~PR_INSERT_EMPTY_STRING_AFTER_2;
+            }
+        }
+        if (rules & PR_ADD_FALSE_AS_LAST) {
+            if (param_index == call->get_argument_count() - 1) {
+                // add false as additional argument
+                IValue_bool const *v = m_value_factory.create_bool(false);
+                IExpression const *e = m_expr_factory.create_literal(v);
+
+                IArgument const *narg = m_expr_factory.create_positional_argument(e);
+                call->add_argument(narg);
+                ++param_index;
+                rules &= ~PR_ADD_FALSE_AS_LAST;
+            }
+        }
+        if (rules & PR_INSERT_COLOR_0_AFTER_2) {
+            if (param_index == 1) {
+                // insert color(0) after 2. argument
+                IExpression const *e = create_color_literal(0.0f);
+                IArgument const *narg = m_expr_factory.create_positional_argument(e);
+                call->add_argument(narg);
+                ++param_index;
+                rules &= ~PR_INSERT_COLOR_0_AFTER_2;
+            }
+        }
+        if (rules & PR_INSERT_COLOR_1_AFTER_2) {
+            if (param_index == 1) {
+                // insert color(1) after 2. argument
+                IExpression const *e = create_color_literal(1.0f);
+                IArgument const *narg = m_expr_factory.create_positional_argument(e);
+                call->add_argument(narg);
+                ++param_index;
+                rules &= ~PR_INSERT_COLOR_1_AFTER_2;
+            }
+        }
+        if (rules & PR_ADD_INTENSITY_RADIANT_EXTNCE) {
+            if (param_index == 1) {
+                // MDL 1.0 -> 1.1: add default intensity_mode
+                IType_enum const *e_type =
+                    m_type_factory.get_predefined_enum(IType_enum::EID_INTENSITY_MODE);
+                IValue const *v = m_value_factory.create_enum(e_type, 0);
+
+                IExpression const *e = m_expr_factory.create_literal(v);
+
+                IArgument const *a = call->get_argument(1);
+                IArgument const *narg = NULL;
+                if (a->get_kind() == IArgument::AK_POSITIONAL) {
+                    narg = m_expr_factory.create_positional_argument(e);
+                } else {
+                    ISymbol const *sh = m_name_factory.create_symbol("mode");
+                    ISimple_name const *sn_hair = m_name_factory.create_simple_name(sh);
+                    narg = m_expr_factory.create_named_argument(sn_hair, e);
+                }
+                call->add_argument(narg);
+                ++param_index;
+                rules &= ~PR_ADD_INTENSITY_RADIANT_EXTNCE;
+            }
+        }
+
+        if (rules_at_start == rules) {
+            // no rule had matched, exit
+            break;
         }
     }
-    if (rules & PR_WIDTH_HEIGHT_2D_ADD_FRAME) {
-        if (param_index == 2) {
-            // add 0.0 as 3. argument
-            IValue_float const *v = m_value_factory.create_float(0.0f);
-            IExpression const  *e = m_expr_factory.create_literal(v);
-
-            IArgument const *narg = m_expr_factory.create_positional_argument(e);
-            call->add_argument(narg);
-            return param_index + 1;
-        }
-    }
-    if (rules & PR_WIDTH_HEIGHT_3D_ADD_FRAME) {
-        if (param_index == 1) {
-            // add 0.0 as 2. argument
-            IValue_float const *v = m_value_factory.create_float(0.0f);
-            IExpression const *e = m_expr_factory.create_literal(v);
-
-            IArgument const *narg = m_expr_factory.create_positional_argument(e);
-            call->add_argument(narg);
-            return param_index + 1;
-        }
-    }
-    if (rules & PR_LOOKUP_2D_ADD_FRAME) {
-        if (param_index == 6) {
-            // add 0.0 as 7. argument
-            IValue_float const *v = m_value_factory.create_float(0.0f);
-            IExpression const *e = m_expr_factory.create_literal(v);
-
-            IArgument const *narg = m_expr_factory.create_positional_argument(e);
-            call->add_argument(narg);
-            return param_index + 1;
-        }
-    }
-    if (rules & PR_LOOKUP_3D_ADD_FRAME) {
-        if (param_index == 8) {
-            // add 0.0 as 9. argument
-            IValue_float const *v = m_value_factory.create_float(0.0f);
-            IExpression const *e = m_expr_factory.create_literal(v);
-
-            IArgument const *narg = m_expr_factory.create_positional_argument(e);
-            call->add_argument(narg);
-            return param_index + 1;
-        }
-    }
-    if (rules & PR_TEXEL_2D_ADD_FRAME) {
-        if (param_index == 3) {
-            // add 0.0 as 4. argument
-            IValue_float const *v = m_value_factory.create_float(0.0f);
-            IExpression const *e = m_expr_factory.create_literal(v);
-
-            IArgument const *narg = m_expr_factory.create_positional_argument(e);
-            call->add_argument(narg);
-            return param_index + 1;
-        }
-    }
-    if (rules & PR_TEXEL_3D_ADD_FRAME) {
-        if (param_index == 2) {
-            // add 0.0 as 3. argument
-            IValue_float const *v = m_value_factory.create_float(0.0f);
-            IExpression const *e = m_expr_factory.create_literal(v);
-
-            IArgument const *narg = m_expr_factory.create_positional_argument(e);
-            call->add_argument(narg);
-            return param_index + 1;
-        }
-    }
-    if (rules & PR_TEXTURE_ADD_SELECTOR) {
-        if (param_index == 2) {
-            // add "" as 3. argument
-            IValue_string const *v = m_value_factory.create_string("");
-            IExpression const   *e = m_expr_factory.create_literal(v);
-
-            IArgument const *narg = m_expr_factory.create_positional_argument(e);
-            call->add_argument(narg);
-            return param_index + 1;
-        }
-    }
-    if (rules & PR_IN_GROUP_ADD_COLAPSED) {
-        if (param_index == call->get_argument_count() - 1) {
-            // add false as additional argument
-            IValue_bool const *v = m_value_factory.create_bool(false);
-            IExpression const *e = m_expr_factory.create_literal(v);
-
-            IArgument const *narg = m_expr_factory.create_positional_argument(e);
-            call->add_argument(narg);
-            return param_index + 1;
-        }
-    }
-
     return param_index;
 }
 
@@ -4810,7 +4994,7 @@ static IArgument const *promote_argument(
     return arg;
 }
 
-///< Promote a given function call to the version of a given module.
+/// Promote a given function call to the version of a given module.
 ///
 /// \param[in]  mod    the destination module
 /// \param[in]  tn     the type name of the call reference
@@ -4948,7 +5132,18 @@ static IType_name const *promote_name(
                                 n == "microfacet_ggx_vcavities_bsdf" ||
                                 n == "ward_geisler_moroder_bsdf")
                             {
-                                rules = Module::PR_GLOSSY_ADD_MULTISCATTER;
+                                // insert multiscatter_tint default parameter
+                                rules = Module::PR_INSERT_COLOR_0_AFTER_3;
+                            }
+                        } else if (minor == 10) {
+                            // all functions deprecated after MDL 1.10
+                            if (n == "diffuse_reflection_bsdf") {
+                                // insert multiscatter_tint default parameter
+                                rules = Module::PR_INSERT_COLOR_0_AFTER_2;
+                            } else if (n == "directional_factor" ||
+                                n == "color_custom_curve_layer") {
+                                // insert f82_factor default parameter
+                                rules = Module::PR_INSERT_COLOR_1_AFTER_2;
                             }
                         }
                     }
@@ -5083,7 +5278,7 @@ static IExpression const *promote_expr(
                 IArgument const *arg = promote_argument(mod, c_expr->get_argument(i));
                 call->add_argument(arg);
 
-                j = mod.promote_call_arguments(call, arg, j, rules);
+                j = mod.promote_call_arguments(call, arg, j, rules, /*creator=*/NULL);
             }
             call->set_type(expr->get_type());
             return call;

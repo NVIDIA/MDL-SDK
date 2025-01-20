@@ -83,8 +83,7 @@ private:
 class Symbol_table : public ISymbol_table
 {
     friend class Module;
-    friend class Generated_code_dag;
-    friend class Lambda_function;
+    friend class DAG_unit;
 public:
     /// Create a symbol.
     ///

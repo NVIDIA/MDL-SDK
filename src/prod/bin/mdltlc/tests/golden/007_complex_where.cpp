@@ -65,122 +65,186 @@ DAG_node const* Complex_where::matcher(
     IDistiller_plugin_api &e,
     DAG_node const *node,
     const mi::mdl::Distiller_options *options,
-    Rule_result_code &result_code)const
+    Rule_result_code &result_code) const
 {
-    switch (e.get_selector(node)) {
-    case mi::mdl::DS_DIST_STRUCT_MATERIAL: // match for material(tw, material_surface(bsdf_mix_2(w2, custom_curve_layer(f0, f90, e, w, layer, diffuse_reflection_bsdf(tint2, r2), n), w1, microfacet_ggx_vcavities_bsdf(ru1, rv1, tint1, _, t1)), em), bf, ior, vol, material_geometry(d, cutout, ng))
+    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+
 // 007_complex_where.mdltl:10
 //RUID 385889
-        if (true
-        && (e.get_selector(e.get_compound_argument(node, 1)) == mi::mdl::DS_DIST_STRUCT_MATERIAL_SURFACE)
-        && (e.get_selector(e.get_compound_argument(e.get_compound_argument(node, 1), 0)) == mi::mdl::DS_DIST_BSDF_MIX_2)
-        && (e.get_selector(e.get_remapped_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 1)) == mi::mdl::IDefinition::Semantics::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER)
-        && (e.get_selector(e.get_compound_argument(e.get_remapped_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 1), 5)) == mi::mdl::IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF)
-        && (e.get_selector(e.get_remapped_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 3)) == mi::mdl::IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF)
-        && (e.get_selector(e.get_compound_argument(node, 5)) == mi::mdl::DS_DIST_STRUCT_MATERIAL_GEOMETRY)) {
-            const DAG_node* v_tw = e.get_compound_argument(node, 0);
-            const DAG_node* v_w2 = e.get_remapped_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 0);
-            const DAG_node* v_f0 = e.get_compound_argument(e.get_remapped_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 1), 0);
-            const DAG_node* v_f90 = e.get_compound_argument(e.get_remapped_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 1), 1);
-            const DAG_node* v_e = e.get_compound_argument(e.get_remapped_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 1), 2);
-            const DAG_node* v_w = e.get_compound_argument(e.get_remapped_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 1), 3);
-            const DAG_node* v_layer = e.get_compound_argument(e.get_remapped_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 1), 4);
-            const DAG_node* v_tint2 = e.get_compound_argument(e.get_compound_argument(e.get_remapped_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 1), 5), 0);
-            const DAG_node* v_r2 = e.get_compound_argument(e.get_compound_argument(e.get_remapped_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 1), 5), 1);
-            const DAG_node* v_n = e.get_compound_argument(e.get_remapped_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 1), 6);
-            const DAG_node* v_w1 = e.get_remapped_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 2);
-            const DAG_node* v_ru1 = e.get_compound_argument(e.get_remapped_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 3), 0);
-            const DAG_node* v_rv1 = e.get_compound_argument(e.get_remapped_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 3), 1);
-            const DAG_node* v_tint1 = e.get_compound_argument(e.get_remapped_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 3), 2);
-            const DAG_node* v_t1 = e.get_compound_argument(e.get_remapped_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 3), 4);
-            const DAG_node* v_em = e.get_compound_argument(e.get_compound_argument(node, 1), 1);
-            const DAG_node* v_bf = e.get_compound_argument(node, 2);
-            const DAG_node* v_ior = e.get_compound_argument(node, 3);
-            const DAG_node* v_vol = e.get_compound_argument(node, 4);
-            const DAG_node* v_d = e.get_compound_argument(e.get_compound_argument(node, 5), 0);
-            const DAG_node* v_cutout = e.get_compound_argument(e.get_compound_argument(node, 5), 1);
-            const DAG_node* v_ng = e.get_compound_argument(e.get_compound_argument(node, 5), 2);
-            DAG_node const* v_w1a = e.create_binary(
-            IDistiller_plugin_api::OK_MULTIPLY,
-                v_w1,
-                e.create_function_call("::math::max_value", Nodes_wrapper<1>(v_tint1).data(),
-                    1));
-            DAG_node const* v_w2a = e.create_binary(
-            IDistiller_plugin_api::OK_MULTIPLY,
-                v_w2,
-                e.create_function_call("::math::max_value", Nodes_wrapper<1>(v_tint2).data(),
-                    1));
-            DAG_node const* v_w1b = e.create_function_call("::math::saturate", Nodes_wrapper<1>(e.create_binary(
-                    IDistiller_plugin_api::OK_DIVIDE,
-                        v_w1a,
-                        e.create_binary(
-                        IDistiller_plugin_api::OK_PLUS,
-                            v_w1a,
-                            v_w2a))).data(), 1);
-            DAG_node const* v_w2b = e.create_binary(
-            IDistiller_plugin_api::OK_MINUS,
-                e.create_float_constant(1.0f),
-                v_w1b);
-            DAG_node const* v_c4 = e.create_binary(
-            IDistiller_plugin_api::OK_PLUS,
-                e.create_binary(
-                IDistiller_plugin_api::OK_MULTIPLY,
-                    v_tint1,
-                    v_w1),
-                e.create_binary(
-                IDistiller_plugin_api::OK_MULTIPLY,
-                    v_tint2,
-                    v_w2));
-            if (e.eval_maybe_if(e.create_binary(
-                IDistiller_plugin_api::OK_LOGICAL_AND,
-                    e.create_binary(
-                    IDistiller_plugin_api::OK_NOT_EQUAL,
-                        v_tint1,
-                        v_tint2),
-                    e.create_binary(
-                    IDistiller_plugin_api::OK_EQUAL,
-                        v_w,
-                        e.create_float_constant(0.0f))))) {
-                if (event_handler != nullptr)
-                    fire_match_event(*event_handler, 0);
-                result_code = RULE_SKIP_RECURSION;
-                return e.create_call("material(bool,material_surface,material_surface,color,material_volume,material_geometry,hair_bsdf)",
-                    IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<7>::mk_args(e,m_node_types,
-                        material, v_tw, e.create_call("material_surface(bsdf,material_emission)",
-                            IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<2>::mk_args(
-                                e,m_node_types, material_surface, e.create_mixer_call(Args_wrapper<4>::mk_args(e,m_node_types,
-                                        node_null, v_w2b, e.create_call("::df::custom_curve_layer(float,float,float,float,bsdf,bsdf,float3)",
-                                            IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER,
-                                            Args_wrapper<7>::mk_args(e,m_node_types,
-                                                custom_curve_layer, v_f0, v_f90,
-                                                v_e, v_w, v_layer, e.create_call("::df::diffuse_reflection_bsdf(color,float,string)",
-                                                    IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF,
-                                                    Args_wrapper<3>::mk_args(e,m_node_types,
-                                                        diffuse_reflection_bsdf,
-                                                        v_c4, v_r2).args, 3, e.get_type_factory()->create_bsdf()),
-                                                v_n).args, 7, e.get_type_factory()->create_bsdf()),
-                                        v_w1b, e.create_call("::df::microfacet_ggx_vcavities_bsdf(float,float,color,color,float3,::df::scatter_mode,string)",
-                                            IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF,
-                                            Args_wrapper<7>::mk_args(e,m_node_types,
-                                                microfacet_ggx_vcavities_bsdf, v_ru1,
-                                                v_rv1, v_c4, e.create_color_constant(0,0,0),
-                                                v_t1).args, 7, e.get_type_factory()->create_bsdf())).args,
-                                    4),
-                                v_em).args, 2, e.get_type_factory()->get_predefined_struct(
-                            IType_struct::SID_MATERIAL_SURFACE)), v_bf, v_ior, v_vol,
-                        e.create_call("material_geometry(float3,float,float3)", IDefinition::DS_ELEM_CONSTRUCTOR,
-                            Args_wrapper<3>::mk_args(e,m_node_types, material_geometry,
-                                v_d, v_cutout, v_ng).args, 3, e.get_type_factory()->
-                            get_predefined_struct(IType_struct::SID_MATERIAL_GEOMETRY))).args,
-                    7, e.get_type_factory()->get_predefined_struct(IType_struct::SID_MATERIAL));
-            }
-        }
-        break;
-    default:
-        break;
-    }
+    auto match_rule0 = [&] (DAG_node const *node0, IDistiller_plugin_api::Match_properties &node_props0) -> const DAG_node * {
 
-    return node;
+        // match for material(tw, material_surface(bsdf_mix_2(w2, custom_curve_layer(f0, f90, e, w, layer, diffuse_reflection_bsdf(tint2, r2), n), w1, microfacet_ggx_vcavities_bsdf(ru1, rv1, tint1, _, t1)), em), bf, ior, vol, material_geometry(d, cutout, ng))
+        if (node_props0.sema != IDefinition::DS_ELEM_CONSTRUCTOR || node_props0.type_kind != IType::TK_STRUCT || node_props0.struct_id != IType_struct::SID_MATERIAL) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node2 = e.get_compound_argument(node0, 0);
+        DAG_node const *v_tw = node2; (void)v_tw;
+        DAG_node const *node4 = e.get_compound_argument(node0, 1);
+        IDistiller_plugin_api::Match_properties node_props4;
+        e.get_match_properties(node4, node_props4); 
+        // match for material_surface(bsdf_mix_2(w2, custom_curve_layer(f0, f90, e, w, layer, diffuse_reflection_bsdf(tint2, r2), n), w1, microfacet_ggx_vcavities_bsdf(ru1, rv1, tint1, _, t1)), em)
+        if (node_props4.sema != IDefinition::DS_ELEM_CONSTRUCTOR || node_props4.type_kind != IType::TK_STRUCT || node_props4.struct_id != IType_struct::SID_MATERIAL_SURFACE) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node5 = e.get_compound_argument(node4, 0);
+        IDistiller_plugin_api::Match_properties node_props5;
+        e.get_match_properties(node5, node_props5); 
+        // match for bsdf_mix_2(w2, custom_curve_layer(f0, f90, e, w, layer, diffuse_reflection_bsdf(tint2, r2), n), w1, microfacet_ggx_vcavities_bsdf(ru1, rv1, tint1, _, t1))
+        if (node_props5.sema != IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX || node_props5.arity != 2
+         || node_props5.type_kind != IType::TK_BSDF) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node6 = e.get_remapped_argument(node5, 0);
+        DAG_node const *v_w2 = node6; (void)v_w2;
+        DAG_node const *node8 = e.get_remapped_argument(node5, 1);
+        IDistiller_plugin_api::Match_properties node_props8;
+        e.get_match_properties(node8, node_props8); 
+        // match for custom_curve_layer(f0, f90, e, w, layer, diffuse_reflection_bsdf(tint2, r2), n)
+        if (node_props8.sema != IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node9 = e.get_compound_argument(node8, 0);
+        DAG_node const *v_f0 = node9; (void)v_f0;
+        DAG_node const *node11 = e.get_compound_argument(node8, 1);
+        DAG_node const *v_f90 = node11; (void)v_f90;
+        DAG_node const *node13 = e.get_compound_argument(node8, 2);
+        DAG_node const *v_e = node13; (void)v_e;
+        DAG_node const *node15 = e.get_compound_argument(node8, 3);
+        DAG_node const *v_w = node15; (void)v_w;
+        DAG_node const *node17 = e.get_compound_argument(node8, 4);
+        DAG_node const *v_layer = node17; (void)v_layer;
+        DAG_node const *node19 = e.get_compound_argument(node8, 5);
+        IDistiller_plugin_api::Match_properties node_props19;
+        e.get_match_properties(node19, node_props19); 
+        // match for diffuse_reflection_bsdf(tint2, r2)
+        if (node_props19.sema != IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node20 = e.get_compound_argument(node19, 0);
+        DAG_node const *v_tint2 = node20; (void)v_tint2;
+        DAG_node const *node22 = e.get_compound_argument(node19, 1);
+        DAG_node const *v_r2 = node22; (void)v_r2;
+        DAG_node const *node25 = e.get_compound_argument(node8, 6);
+        DAG_node const *v_n = node25; (void)v_n;
+        DAG_node const *node28 = e.get_remapped_argument(node5, 2);
+        DAG_node const *v_w1 = node28; (void)v_w1;
+        DAG_node const *node30 = e.get_remapped_argument(node5, 3);
+        IDistiller_plugin_api::Match_properties node_props30;
+        e.get_match_properties(node30, node_props30); 
+        // match for microfacet_ggx_vcavities_bsdf(ru1, rv1, tint1, _, t1)
+        if (node_props30.sema != IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node31 = e.get_compound_argument(node30, 0);
+        DAG_node const *v_ru1 = node31; (void)v_ru1;
+        DAG_node const *node33 = e.get_compound_argument(node30, 1);
+        DAG_node const *v_rv1 = node33; (void)v_rv1;
+        DAG_node const *node35 = e.get_compound_argument(node30, 2);
+        DAG_node const *v_tint1 = node35; (void)v_tint1;
+        DAG_node const *node37 = e.get_compound_argument(node30, 4);
+        DAG_node const *v_t1 = node37; (void)v_t1;
+        DAG_node const *node41 = e.get_compound_argument(node4, 1);
+        DAG_node const *v_em = node41; (void)v_em;
+        DAG_node const *node44 = e.get_compound_argument(node0, 2);
+        DAG_node const *v_bf = node44; (void)v_bf;
+        DAG_node const *node46 = e.get_compound_argument(node0, 3);
+        DAG_node const *v_ior = node46; (void)v_ior;
+        DAG_node const *node48 = e.get_compound_argument(node0, 4);
+        DAG_node const *v_vol = node48; (void)v_vol;
+        DAG_node const *node50 = e.get_compound_argument(node0, 5);
+        IDistiller_plugin_api::Match_properties node_props50;
+        e.get_match_properties(node50, node_props50); 
+        // match for material_geometry(d, cutout, ng)
+        if (node_props50.sema != IDefinition::DS_ELEM_CONSTRUCTOR || node_props50.type_kind != IType::TK_STRUCT || node_props50.struct_id != IType_struct::SID_MATERIAL_GEOMETRY) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node51 = e.get_compound_argument(node50, 0);
+        DAG_node const *v_d = node51; (void)v_d;
+        DAG_node const *node53 = e.get_compound_argument(node50, 1);
+        DAG_node const *v_cutout = node53; (void)v_cutout;
+        DAG_node const *node55 = e.get_compound_argument(node50, 2);
+        DAG_node const *v_ng = node55; (void)v_ng;
+        DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
+        (void) root_dbg_info;
+        DAG_node const* v_w1a = e.create_binary(
+        IDistiller_plugin_api::OK_MULTIPLY,
+            v_w1,
+            e.create_function_call("::math::max_value", Nodes_wrapper<1>(v_tint1).data(),
+                1, root_dbg_info));
+        DAG_node const* v_w2a = e.create_binary(
+        IDistiller_plugin_api::OK_MULTIPLY,
+            v_w2,
+            e.create_function_call("::math::max_value", Nodes_wrapper<1>(v_tint2).data(),
+                1, root_dbg_info));
+        DAG_node const* v_w1b = e.create_function_call("::math::saturate", Nodes_wrapper<1>(e.create_binary(
+                IDistiller_plugin_api::OK_DIVIDE,
+                    v_w1a,
+                    e.create_binary(
+                    IDistiller_plugin_api::OK_PLUS,
+                        v_w1a,
+                        v_w2a))).data(), 1, root_dbg_info);
+        DAG_node const* v_w2b = e.create_binary(
+        IDistiller_plugin_api::OK_MINUS,
+            e.create_float_constant(1.0f),
+            v_w1b);
+        DAG_node const* v_c4 = e.create_binary(
+        IDistiller_plugin_api::OK_PLUS,
+            e.create_binary(
+            IDistiller_plugin_api::OK_MULTIPLY,
+                v_tint1,
+                v_w1),
+            e.create_binary(
+            IDistiller_plugin_api::OK_MULTIPLY,
+                v_tint2,
+                v_w2));
+        if (!e.eval_maybe_if(e.create_binary(
+            IDistiller_plugin_api::OK_LOGICAL_AND,
+                e.create_binary(
+                IDistiller_plugin_api::OK_NOT_EQUAL,
+                    v_tint1,
+                    v_tint2),
+                e.create_binary(
+                IDistiller_plugin_api::OK_EQUAL,
+                    v_w,
+                    e.create_float_constant(0.0f))))) {
+            return match_rule1(node0, node_props0);
+        }
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 0);
+        result_code = RULE_SKIP_RECURSION;
+        return e.create_call("material(bool,material_surface,material_surface,color,material_volume,material_geometry,hair_bsdf)",
+            IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<7>::mk_args(e, m_node_types,
+                material, v_tw, e.create_call("material_surface(bsdf,material_emission)",
+                    IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<2>::mk_args(e, m_node_types,
+                        material_surface, e.create_mixer_call(Args_wrapper<4>::mk_args(e, m_node_types,
+                                node_null, v_w2b, e.create_call("::df::custom_curve_layer(float,float,float,float,bsdf,bsdf,float3)",
+                                    IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER,
+                                    Args_wrapper<7>::mk_args(e, m_node_types, custom_curve_layer,
+                                        v_f0, v_f90, v_e, v_w, v_layer, e.create_call("::df::diffuse_reflection_bsdf(color,float,color,string)",
+                                            IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF,
+                                            Args_wrapper<4>::mk_args(e, m_node_types,
+                                                diffuse_reflection_bsdf, v_c4, v_r2).args,
+                                            4, e.get_type_factory()->create_bsdf(), root_dbg_info),
+                                        v_n).args, 7, e.get_type_factory()->create_bsdf(), root_dbg_info),
+                                v_w1b, e.create_call("::df::microfacet_ggx_vcavities_bsdf(float,float,color,color,float3,::df::scatter_mode,string)",
+                                    IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF,
+                                    Args_wrapper<7>::mk_args(e, m_node_types, microfacet_ggx_vcavities_bsdf,
+                                        v_ru1, v_rv1, v_c4, e.create_color_constant(0,0,0),
+                                        v_t1).args, 7, e.get_type_factory()->create_bsdf(), root_dbg_info)).args,
+                            4), v_em).args, 2, e.get_type_factory()->
+                    get_predefined_struct(IType_struct::SID_MATERIAL_SURFACE), root_dbg_info),
+                v_bf, v_ior, v_vol, e.create_call("material_geometry(float3,float,float3)",
+                    IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<3>::mk_args(e, m_node_types,
+                        material_geometry, v_d, v_cutout, v_ng).args, 3, e.get_type_factory()->
+                    get_predefined_struct(IType_struct::SID_MATERIAL_GEOMETRY), root_dbg_info)).args,
+            7, e.get_type_factory()->get_predefined_struct(IType_struct::SID_MATERIAL), root_dbg_info);
+    };
+    (void)match_rule0;
+
+    IDistiller_plugin_api::Match_properties node_props;
+    e.get_match_properties(node, node_props);
+    return match_rule0(node, node_props);
+
 }
 
 bool Complex_where::postcond(

@@ -126,7 +126,7 @@ Assume you want to implement the following interface.
 
 Further assume that the implementation of \c IRegistry needs to reference the
 registered instance of \c IFoo after the method \c register_foo() returned.
-This can be done as follows. Checking \c foo and \c m_foo for \c NULL has been
+This can be done as follows. Checking \c foo and \c m_foo for \c nullptr has been
 omitted for brevity.
 
 \code
@@ -145,14 +145,14 @@ omitted for brevity.
     Registry_impl::Registry_impl( IFoo* foo)
     {
         m_foo = foo;
-        m_foo->retain();  
+        m_foo->retain();
     }
 
     Registry_impl::Registry_impl( const Registry_impl& other)
       : mi::base::Interface_implement<IRegistry>( other)
     {
         m_foo = other.m_foo;
-        m_foo->retain();  
+        m_foo->retain();
     }
 
     Registry_impl& Registry_impl::operator=( const Registry_impl& rhs)
@@ -166,25 +166,25 @@ omitted for brevity.
 
     Registry_impl::~Registry_impl()
     {
-        m_foo->release(); 
+        m_foo->release();
     }
 
     void Registry_impl::register_foo( IFoo* foo)
     {
-        m_foo->release(); 
+        m_foo->release();
         m_foo = foo;
-        m_foo->retain();  
+        m_foo->retain();
     }
 \endcode
 
 As described by the rules above you need to increment and decrement the
 reference count of the \c IFoo instance if you keep a reference that exceeds
-the lifetime of the called method. 
+the lifetime of the called method.
 
 \note This example demonstrates the rules for reference counting. We strongly
 recommend not to call \c retain() and \c release() manually. See the variant of
 this example in \ref mi_neuray_handle which is much simpler and where copy
-constructor, assignment operator, destructor, and \c NULL handling are for
+constructor, assignment operator, destructor, and \c nullptr handling are for
 free.
 
 \section mi_neuray_handle Handle class
@@ -200,7 +200,7 @@ necessary. Note that it is also possible to use other handle class
 implementations, e.g., \c std::shared_ptr<T> (or \c
 boost::shared_ptr<T>). See \ref mi_neuray_example_start_shutdown for
 details.
-		
+
 Example 1:
 
 Assume there is an interface \c IFoo derived from #mi::base::IInterface, and an
@@ -228,7 +228,7 @@ to capture the return value. The destructor or the \c reset() method of
 
 Using #mi::base::Handle (or similar helper classes) instead of manually calling
 \c retain() and \c release() is strongly recommended for exception-safe code.
-    
+
 Example 2:
 
 Assume you want to implement the following interface.
@@ -273,7 +273,7 @@ which does that for you.
 Note that the default implementation of the copy constructor, assignment
 operator, and destructor of #mi::base::Handle just do the right thing, and
 therefore, there is no need to implement them for \c Registry_impl. Also \c
-NULL handling for \c foo and \c m_foo is for free.
+nullptr handling for \c foo and \c m_foo is for free.
 
 \section mi_neuray_resources Resources
 
@@ -294,5 +294,5 @@ must not deallocate the memory pointed to by such a pointer. These
 pointers are valid as long as the interface from which the pointer was
 obtained is valid. Exceptions from this rule are documented with the
 corresponding method.
- 
+
 */

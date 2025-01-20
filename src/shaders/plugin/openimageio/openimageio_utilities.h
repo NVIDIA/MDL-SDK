@@ -135,6 +135,12 @@ bool compute_properties(
     mi::Sint32& channel_start,
     mi::Sint32& channel_end);
 
+/// Returns an OIIO colorspace indentification string for the given gamma value.
+///
+/// Returns "linear" for 1.0, "sRGB" for 2.2, "GammaX.Y" for other positive values X.Y, and the
+/// empty string on errors (zero or negative values).
+std::string get_oiio_colorspace( float gamma);
+
 } // namespace MI_OIIO
 
 } // namespace MI

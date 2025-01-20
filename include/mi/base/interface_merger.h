@@ -81,18 +81,16 @@ class Interface_merger
 {
 public:
     /// Typedef for the MAJOR %base class
-    typedef MAJOR MAJOR_BASE;
-    
+    using MAJOR_BASE = MAJOR;
+
     /// Typedef for the MINOR %base class
-    typedef MINOR MINOR_BASE;
+    using MINOR_BASE = MINOR;
 
     /// Typedef for this type
-    typedef Interface_merger<MAJOR,MINOR> Self;
+    using Self = Interface_merger<MAJOR, MINOR>;
 
-#if __cplusplus >= 201103L
     /// Make MAJOR's constructors available
     using MAJOR::MAJOR;
-#endif
 
     /// Reimplements #mi::base::IInterface::compare_iid().
     ///

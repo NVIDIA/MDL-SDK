@@ -129,7 +129,7 @@ void Compilation_unit::type_check_rule(Rule &rule, Environment &global_env) {
         return;
     }
 
-    if (!m_type_factory.types_equal(t_lhs, t_rhs)) {
+    if (!m_type_factory->types_equal(t_lhs, t_rhs)) {
         error(rule.get_location(),
               "both sides of a rule must have the same type");
     }
@@ -153,7 +153,7 @@ Type *Compilation_unit::type_check_reference(
     // type.
 
     if (!strcmp(name->get_name(), "_")) {
-        return m_type_factory.create_type_variable();
+        return m_type_factory->create_type_variable();
     }
 
     Environment *binding_env = nullptr;
@@ -164,8 +164,8 @@ Type *Compilation_unit::type_check_reference(
         // bound in an enclosing environment, then we bind it.
 
         if (!types || types->size() == 0 || binding_env != &env) {
-            Type_var *tv = m_type_factory.create_type_variable();
-            env.bind(name, tv);
+            Type_var *tv = m_type_factory->create_type_variable();
+            env.bind(name, tv, nullptr);
             expr->set_type(tv);
             return tv;
         }
@@ -196,7 +196,7 @@ Type *Compilation_unit::type_check_reference(
     // types guaranteed to be non-null here.
 
     if (types->size() == 1) {
-        Type *ref_type = types->front();
+        Type *ref_type = const_cast<Type *>(types->front().first);
 
         expr->set_type(ref_type);
         return ref_type;
@@ -231,7 +231,7 @@ bool Compilation_unit::check_reference_exists(Expr *expr, Environment &env) {
         return false;
     }
 
-    Type *t = types->front();
+    Type *t = const_cast<Type *>(types->front().first);
     expr->set_type(t);
     return true;
 }
@@ -284,7 +284,7 @@ void Compilation_unit::generate_overload_hints(Expr *expr, Expr_call *call_expr,
         {
             std::stringstream out;
             pp::Pretty_print p(m_arena, out);
-            (*it)->pp(p);
+            it->first->pp(p);
             s_msg += out.str().c_str();
         }
 
@@ -303,6 +303,7 @@ void Compilation_unit::generate_overload_hints(Expr *expr, Expr_call *call_expr,
 /// if no matching overload was found.
 Type *Compilation_unit::resolve_overload(Symbol const *name, Expr *expr, Expr_call *call_expr, Environment::Type_list *ts, Mdl_type_vector &arg_types) {
     Type *result = nullptr;
+    char const *signature = nullptr;
 
     // We collect all types that match the argument list to generate
     // hints to the user if overload resolution results in
@@ -316,29 +317,30 @@ Type *Compilation_unit::resolve_overload(Symbol const *name, Expr *expr, Expr_ca
     for (Environment::Type_list::iterator it(ts->begin()), end(ts->end());
          it != end; ++it) {
 
-        Type *t = *it;
+        Type *t = const_cast<Type *>(it->first);
 
         if (Type_function *tf = as<Type_function>(t)) {
-            function_types.push_back(t);
+            function_types.push_back({ t, it->second });
             if (tf->get_parameter_count() == arg_types.size()) {
                 bool mismatch = false;
                 int i = 0;
 
                 for (Mdl_type_vector::iterator it(arg_types.begin()), end(arg_types.end());
                      it != end; ++it, ++i) {
-                    Type *arg_type = *it;
-                    Type *param_type = tf->get_parameter_type(i);
+                    Type const *arg_type = *it;
+                    Type const *param_type = tf->get_parameter_type(i);
 
-                    if (!m_type_factory.types_match(arg_type, param_type)) {
+                    if (!m_type_factory->types_match(arg_type, param_type)) {
                         mismatch = true;
                         break;
                     }
                 }
                 if (!mismatch) {
-                    matched_types.push_back(t);
+                    matched_types.push_back({ t, it->second });
 
                     if (!result) {
                         result = t;
+                        signature = it->second;
                     }
                 }
             }
@@ -355,7 +357,7 @@ Type *Compilation_unit::resolve_overload(Symbol const *name, Expr *expr, Expr_ca
 
         generate_overload_hints(expr, call_expr, matched_types, arg_types);
 
-        return m_type_factory.create_type_variable();
+        return m_type_factory->create_type_variable();
     }
 
     // We don't have any match. This means that the identifier either
@@ -372,6 +374,7 @@ Type *Compilation_unit::resolve_overload(Symbol const *name, Expr *expr, Expr_ca
         return m_error_type;
     }
 
+    cast<Expr_ref>(expr)->set_signature(signature);
     return result;
 }
 
@@ -468,9 +471,9 @@ Type *Compilation_unit::type_check_attribute(Expr *expr, Expr_attribute *e, Envi
             t = m_error_type;
         } else {
             if (!attr_types || attr_types->size() == 0) {
-                m_attribute_env.bind(p.name, t);
+                m_attribute_env.bind(p.name, t, nullptr);
             } else {
-                Type *other_t = deref(attr_types->front());
+                Type *other_t = deref(const_cast<Type *>(attr_types->front().first));
                 if (Type_var *t_tv = as<Type_var>(t)) {
                     if (!is<Type_var>(other_t)) {
                         t_tv->assign_type(other_t, m_type_factory);
@@ -479,7 +482,7 @@ Type *Compilation_unit::type_check_attribute(Expr *expr, Expr_attribute *e, Envi
                     tv->assign_type(t, m_type_factory);
                 } else if (is<Type_error>(other_t) || is<Type_error>(t)) {
                     // Error was already emitted.
-                } else if (!m_type_factory.types_equal(t, other_t)) {
+                } else if (!m_type_factory->types_equal(t, other_t)) {
                     mi::mdl::string s_msg(m_arena.get_allocator());
                     s_msg = "type mismatch for attribute: ";
                     s_msg += p.name->get_name();
@@ -489,7 +492,7 @@ Type *Compilation_unit::type_check_attribute(Expr *expr, Expr_attribute *e, Envi
                 }
             }
             if (!env_types || env_types->size() == 0)
-                env.bind(p.name, t);
+                env.bind(p.name, t, nullptr);
         }
         p.type = t;
         if (p.expr)
@@ -540,7 +543,7 @@ Type *Compilation_unit::type_check_pattern(Expr *expr, Environment &env) {
     case Expr::Kind::EK_TYPE_ANNOTATION:
     {
         Expr_type_annotation *e = cast<Expr_type_annotation>(expr);
-        Type *t = builtin_type_for(e->get_type_name()->get_name());
+        Type *t = m_type_factory->builtin_type_for(e->get_type_name()->get_name());
         if (!t) {
             error(expr->get_location(), "invalid type in type annotation. Only basic builtin types are allowed.");
             t = m_error_type;
@@ -556,7 +559,7 @@ Type *Compilation_unit::type_check_pattern(Expr *expr, Environment &env) {
         if (Type_var *tv = as<Type_var>(t_arg)) {
             tv->assign_type(t, m_type_factory);
         } else {
-            if (!m_type_factory.types_equal(t, t_arg)) {
+            if (!m_type_factory->types_equal(t, t_arg)) {
                 error(expr->get_location(), "type annotation does not match type of annotated expression");
                 expr->set_type(m_error_type);
                 e->get_argument()->set_type(m_error_type);
@@ -592,7 +595,7 @@ Type *Compilation_unit::type_check_pattern(Expr *expr, Environment &env) {
 
         if (is<Type_var>(type_true) || is<Type_var>(type_false)) {
         } else {
-            if (!m_type_factory.types_equal(type_true, type_false)) {
+            if (!m_type_factory->types_equal(type_true, type_false)) {
                 error(expr->get_location(), "type mismatch in branches of conditional expression");
                 return m_error_type;
             }
@@ -687,7 +690,7 @@ void Compilation_unit::type_check_where(Argument_list &list, Environment &env) {
             error(e->get_location(), s_msg.c_str());
             t = m_error_type;
         } else {
-            env.bind(name, t);
+            env.bind(name, t, nullptr);
         }
         r->set_type(t);
         e->set_type(t);
@@ -757,7 +760,7 @@ Type *Compilation_unit::type_check_call(Expr *expr, Environment &env,
 
         for (int i = 0; i < e->get_argument_count(); i++) {
             Expr *arg = e->get_argument(i);
-            Type *param_type = function_type->get_parameter_type(i);
+            Type const *param_type = function_type->get_parameter_type(i);
 
             if (Type_var *tv = as<Type_var>(arg->get_type())) {
                 tv->assign_type(param_type, m_type_factory);
@@ -777,7 +780,7 @@ Type *Compilation_unit::type_check_call(Expr *expr, Environment &env,
         }
         return function_type->get_return_type();
     } else if (is<Type_var>(callee_type)) {
-        Type *t_v = m_type_factory.create_type_variable();
+        Type *t_v = m_type_factory->create_type_variable();
         expr->set_type(t_v);
         return t_v;
     } else {
@@ -800,7 +803,7 @@ Type *Compilation_unit::type_check_expr(Expr *expr, Environment &env) {
     case Expr::Kind::EK_TYPE_ANNOTATION:
     {
         Expr_type_annotation *e = cast<Expr_type_annotation>(expr);
-        Type *t = builtin_type_for(e->get_type_name()->get_name());
+        Type *t = m_type_factory->builtin_type_for(e->get_type_name()->get_name());
         if (!t) {
             error(expr->get_location(), "invalid type in type annotation. Only basic builtin types are allowed");
             expr->set_type(m_error_type);
@@ -815,7 +818,7 @@ Type *Compilation_unit::type_check_expr(Expr *expr, Environment &env) {
         if (Type_var *tv = as<Type_var>(t_arg)) {
             tv->assign_type(t, m_type_factory);
         } else {
-            if (!m_type_factory.types_equal(t, t_arg)) {
+            if (!m_type_factory->types_equal(t, t_arg)) {
                 error(expr->get_location(), "type annotation does not match type of annotated expression");
                 expr->set_type(m_error_type);
                 e->get_argument()->set_type(m_error_type);
@@ -855,8 +858,8 @@ Type *Compilation_unit::type_check_expr(Expr *expr, Environment &env) {
                 expr->set_type(m_error_type);
                 return m_error_type;
             }
-            expr->set_type(m_type_factory.get_bool());
-            return m_type_factory.get_bool();
+            expr->set_type(m_type_factory->get_bool());
+            return m_type_factory->get_bool();
         }
 
         case Expr_unary::Operator::OK_MATCH:
@@ -865,7 +868,7 @@ Type *Compilation_unit::type_check_expr(Expr *expr, Environment &env) {
 
             (void) t_arg; // Nothing we can check here.
 
-            return m_type_factory.get_bool();
+            return m_type_factory->get_bool();
         }
 
         case Expr_unary::Operator::OK_OPTION:
@@ -885,15 +888,15 @@ Type *Compilation_unit::type_check_expr(Expr *expr, Environment &env) {
                     Symbol const *option_name = ref->get_name();
 
                     if (option_name == m_symbol_table->get_symbol("top_layer_weight")) {
-                        t_arg = m_type_factory.get_float();
+                        t_arg = m_type_factory->get_float();
                     } else if (option_name == m_symbol_table->get_symbol("global_ior")) {
-                        t_arg = m_type_factory.get_float();
+                        t_arg = m_type_factory->get_float();
                     } else if (option_name == m_symbol_table->get_symbol("global_float_ior")) {
-                        t_arg = m_type_factory.get_float();
+                        t_arg = m_type_factory->get_float();
                     } else if (option_name == m_symbol_table->get_symbol("merge_metal_and_base_color")) {
-                        t_arg = m_type_factory.get_bool();
+                        t_arg = m_type_factory->get_bool();
                     } else if (option_name == m_symbol_table->get_symbol("merge_transmission_and_base_color")) {
-                        t_arg = m_type_factory.get_bool();
+                        t_arg = m_type_factory->get_bool();
                     } else {
                         error(expr->get_location(),
                               "unsupported option name");
@@ -1041,13 +1044,13 @@ Type *Compilation_unit::type_check_expr(Expr *expr, Environment &env) {
             return type_false;
         }
 
-        if (!m_type_factory.types_equal(type_cond, m_type_factory.get_bool())) {
+        if (!m_type_factory->types_equal(type_cond, m_type_factory->get_bool())) {
             error(expr->get_location(),
                   "condition in conditional expression must be of type bool");
             return m_error_type;
         }
 
-        if (!m_type_factory.types_equal(type_true, type_false)) {
+        if (!m_type_factory->types_equal(type_true, type_false)) {
             error(expr->get_location(),
                   "type mismatch in branches of conditional expressions");
             return m_error_type;
@@ -1078,7 +1081,7 @@ Type *Compilation_unit::type_check_expr(Expr *expr, Environment &env) {
 }
 
 Type *Compilation_unit::types_compatible_arith(Expr *expr, Expr_binary::Operator op, Type *type1, Type *type2) {
-    if (m_type_factory.types_equal(type1, type2))
+    if (m_type_factory->types_equal(type1, type2))
         return type1;
 
     if (is_color(type1) && is_scalar(type2))
@@ -1115,7 +1118,7 @@ Type *Compilation_unit::types_compatible_arith(Expr *expr, Expr_binary::Operator
 }
 
 Type *Compilation_unit::types_compatible_cmp(Expr *expr, Expr_binary::Operator op, Type *type1, Type *type2) {
-    Type *t_bool = m_type_factory.get_bool();
+    Type *t_bool = m_type_factory->get_bool();
 
     switch (op) {
     case Expr_binary::Operator::OK_EQUAL:
@@ -1133,7 +1136,7 @@ Type *Compilation_unit::types_compatible_cmp(Expr *expr, Expr_binary::Operator o
         if (is<Type_string>(type1) && is<Type_string>(type2))
             return t_bool;
 
-        if (is<Type_enum>(type1) && m_type_factory.types_equal(type1, type2))
+        if (is<Type_enum>(type1) && m_type_factory->types_equal(type1, type2))
             return t_bool;
 
         if (is_vector(type1) && is_vector(type2)) {
@@ -1150,13 +1153,13 @@ Type *Compilation_unit::types_compatible_cmp(Expr *expr, Expr_binary::Operator o
 
         if (is_vector(type1)) {
             Type_vector* v1 = cast<Type_vector>(type1);
-            if (m_type_factory.types_equal(v1->get_element_type(), type2))
+            if (m_type_factory->types_equal(v1->get_element_type(), type2))
                 return t_bool;
         }
 
         if (is_vector(type2)) {
             Type_vector* v2 = cast<Type_vector>(type2);
-            if (m_type_factory.types_equal(type1, v2->get_element_type()))
+            if (m_type_factory->types_equal(type1, v2->get_element_type()))
                 return t_bool;
         }
 
@@ -1165,7 +1168,7 @@ Type *Compilation_unit::types_compatible_cmp(Expr *expr, Expr_binary::Operator o
 
     default:
     {
-        if (is_scalar(type1) && m_type_factory.types_equal(type1, type2))
+        if (is_scalar(type1) && m_type_factory->types_equal(type1, type2))
             return t_bool;
     }
     }
@@ -1231,7 +1234,7 @@ Type *Compilation_unit::types_compatible(Expr *expr, Expr_binary::Operator op, T
             expr->set_type(m_error_type);
             return m_error_type;
         }
-        return m_type_factory.get_bool();
+        return m_type_factory->get_bool();
 
     case Expr_binary::Operator::OK_ASSIGN:
         return type2;

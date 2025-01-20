@@ -85,13 +85,13 @@ public:
     /// The parameters should be used to initialize the corresponding properties of the state. The
     /// initial line number should be set to 1.
     ///
-    /// \param uri            The URI of the associated file, or \c NULL if there is no associated
-    ///                       file, e.g., for string-based import/export operations.
+    /// \param uri            The URI of the associated file, or \c nullptr if there is no
+    ///                       associated file, e.g., for string-based import/export operations.
     /// \param parent_state   The state of the parent importer or exporter. The parent importer or
     ///                       exporter is the one that called the current importer or exporter.
     virtual IImpexp_state* create_impexp_state(
         const char* uri,
-        const IImpexp_state* parent_state = 0) const = 0;
+        const IImpexp_state* parent_state = nullptr) const = 0;
 
     /// Indicates whether a file name extension is supported.
     ///
@@ -117,8 +117,8 @@ public:
 
     /// Returns the \p i -th supported file name extension.
     ///
-    /// \return   The file name extension including the separating dot, or \c NULL if \p i is out of
-    ///           range.
+    /// \return   The file name extension including the separating dot, or \c nullptr if \p i is
+    ///           out of range.
     virtual const char* get_supported_extensions( Uint32 i) const = 0;
 
     /// Returns a concise single-line clear text description of the importer or exporter.

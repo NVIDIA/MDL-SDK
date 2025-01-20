@@ -188,7 +188,7 @@ struct StrOffsetsContributionDescriptor {
       : Base(Base), Size(Size), FormParams({Version, 0, Format}) {}
   StrOffsetsContributionDescriptor() = default;
 
-  uint8_t getVersion() const { return FormParams.Version; }
+  uint8_t getVersion() const { return uint8_t(FormParams.Version); }
   dwarf::DwarfFormat getFormat() const { return FormParams.Format; }
   uint8_t getDwarfOffsetByteSize() const {
     return FormParams.getDwarfOffsetByteSize();
@@ -245,7 +245,7 @@ class DWARFUnit {
   uint32_t getDIEIndex(const DWARFDebugInfoEntry *Die) {
     auto First = DieArray.data();
     assert(Die >= First && Die < First + DieArray.size());
-    return Die - First;
+    return uint32_t(Die - First);
   }
 
 protected:

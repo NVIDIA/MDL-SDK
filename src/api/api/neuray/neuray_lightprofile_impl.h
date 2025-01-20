@@ -35,6 +35,8 @@
 
 #include <mi/neuraylib/ilightprofile.h>
 
+#include <string>
+
 #include "neuray_db_element_impl.h"
 #include "neuray_attribute_set_impl.h"
 
@@ -104,6 +106,8 @@ public:
 
     // internal methods
 
+private:
+    mutable std::string m_cached_filename;
 };
 
 } // namespace NEURAY

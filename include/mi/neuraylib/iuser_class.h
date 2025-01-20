@@ -90,7 +90,8 @@ public:
     /// \param transaction   A transaction that can be used to create the return value or temporary
     ///                      values.
     /// \return              An array of strings, where each string is the name of a referenced
-    ///                      element. Can be \c NULL if the element does not refer other elements.
+    ///                      element. Can be \c nullptr if the element does not refer other
+    ///                      elements.
     virtual IArray* get_references( ITransaction* transaction) const = 0;
 
     //  Sets the embedded pointer.
@@ -116,13 +117,13 @@ class User_class : public base::Interface_implement<I>
 {
 public:
     /// Declares the class ID
-    typedef base::Uuid_t<id1,id2,id3,id4,id5,id6,id7,id8,id9,id10,id11> IID;
+    using IID = base::Uuid_t<id1, id2, id3, id4, id5, id6, id7, id8, id9, id10, id11>;
 
     /// Default constructor
-    User_class() : m_pointer( 0) { }
+    User_class() = default;
 
     /// Copy constructor
-    User_class( const User_class& other) : base::Interface_implement<I>( other), m_pointer( 0) { }
+    User_class( const User_class& other) : base::Interface_implement<I>( other) { }
 
     /// Assignment operator
     User_class& operator=( const User_class& other)
@@ -163,7 +164,7 @@ public:
         }
         if(( count == 2) && m_pointer) {
             m_pointer->release();
-            m_pointer = 0;
+            m_pointer = nullptr;
         }
         return base::Interface_implement<I>::release();
     }
@@ -197,7 +198,7 @@ private:
     //  The embedded pointer.
     //
     //  The embedded pointer is used for internal purposes. Users must not access the pointer.
-    mutable const base::IInterface* m_pointer;
+    mutable const base::IInterface* m_pointer = nullptr;
 
     //  The lock that protects the embedded pointer.
     mutable base::Lock m_pointer_lock;

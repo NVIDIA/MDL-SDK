@@ -43,9 +43,10 @@ namespace mdl {
 
 // Constructor.
 DAG_dumper::DAG_dumper(
-    IAllocator           *alloc,
-    IOutput_stream       *out)
-: m_next_node_id(0)
+    IAllocator     *alloc,
+    IOutput_stream *out)
+: m_dag_unit(NULL)
+, m_next_node_id(0)
 , m_walker(alloc)
 , m_printer()
 , m_node_to_is_map(0, Node_to_id_map::hasher(), Node_to_id_map::key_equal(), alloc)
@@ -94,9 +95,12 @@ void DAG_dumper::node_name(char type, size_t index)
 }
 
 // Print a DAG IR node.
-void DAG_dumper::node(DAG_node const *node, char const *color)
+void DAG_dumper::node(
+    DAG_node const *node,
+    char const     *color)
 {
-    bool use_box_shape = true;
+    bool use_box_shape   = true;
+    DAG_DbgInfo dbg_info;
 
     m_printer->print("  ");
     node_name(node);
@@ -114,7 +118,7 @@ void DAG_dumper::node(DAG_node const *node, char const *color)
         {
             DAG_temporary const *t = cast<DAG_temporary>(node);
             m_printer->print("Temp _");
-            m_printer->print((long)t->get_index());
+            m_printer->print(t->get_index());
         }
         break;
     case DAG_node::EK_PARAMETER:
@@ -122,33 +126,50 @@ void DAG_dumper::node(DAG_node const *node, char const *color)
             DAG_parameter const *p = cast<DAG_parameter>(node);
             int index = p->get_index();
             m_printer->print("Parm ");
-            m_printer->print((long)index);
+            m_printer->print(index);
 
             if (char const *name = get_parameter_name(index)) {
                 m_printer->print(": ");
                 m_printer->print(name);
             }
             use_box_shape = false;
+
+            dbg_info = p->get_dbg_info();
         }
         break;
     case DAG_node::EK_CALL:
         {
             DAG_call const *c = cast<DAG_call>(node);
             m_printer->print(c->get_name());
+
+            dbg_info = c->get_dbg_info();
         }
         break;
     }
     m_printer->print("\"");
 
     if (color != NULL) {
-        m_printer->print(" color=");
+        m_printer->print(" fillcolor=");
         m_printer->print(color);
     }
 
-    if (use_box_shape)
+    if (use_box_shape) {
         m_printer->print(" shape=box");
-    else
+    } else {
         m_printer->print(" shape=ellipse");
+    }
+
+    if (dbg_info && m_dag_unit != NULL) {
+        if (char const *fname = m_dag_unit->get_fname(dbg_info)) {
+            m_printer->print(" tooltip=\"");
+            m_printer->print(fname);
+            m_printer->print(":");
+            m_printer->print(dbg_info.get_line());
+            m_printer->print("(");
+            m_printer->print(dbg_info.get_column());
+            m_printer->print(")\"");
+        }
+    }
 
     m_printer->print("];\n");
 }
@@ -162,7 +183,7 @@ void DAG_dumper::temporary(int index, char const *color)
     node_name('t', index);
     m_printer->print(" [label=\"Temp _");
 
-    m_printer->print((long)index);
+    m_printer->print(index);
     m_printer->print("\"");
 
     if (color != NULL) {
@@ -170,8 +191,9 @@ void DAG_dumper::temporary(int index, char const *color)
         m_printer->print(color);
     }
 
-    if (use_box_shape)
+    if (use_box_shape) {
         m_printer->print(" shape=box");
+    }
 
     m_printer->print("];\n");
 }
@@ -185,7 +207,7 @@ void DAG_dumper::argument(
     m_printer->print("  ");
     node_name('a', index);
     m_printer->print(" [label=\"Parm ");
-    m_printer->print((long)index);
+    m_printer->print(index);
 
     m_printer->print(": ");
     m_printer->print(name);
@@ -261,25 +283,25 @@ void DAG_dumper::edge(
 // Post-visit a Constant.
 void DAG_dumper::visit(DAG_constant *cnst)
 {
-    node(cnst, NULL);
+    node(cnst, get_node_color(cnst));
 }
 
 // Post-visit a Temporary.
 void DAG_dumper::visit(DAG_temporary *tmp)
 {
-    node(tmp, NULL);
+    node(tmp, get_node_color(tmp));
 }
 
 // Post-visit a Parameter.
 void DAG_dumper::visit(DAG_parameter *param)
 {
-    node(param, NULL);
+    node(param, get_node_color(param));
 }
 
 // Post-visit a call.
 void DAG_dumper::visit(DAG_call *call)
 {
-    node(call, NULL);
+    node(call, get_node_color(call));
     for (int i = 0, n = call->get_argument_count(); i < n; ++i) {
         DAG_node const *arg = call->get_argument(i);
         char const *label = call->get_parameter_name(i);

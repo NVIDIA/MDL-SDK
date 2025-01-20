@@ -81,7 +81,7 @@ public:
     ///
     /// \return
     ///                -  0: Success.
-    ///                - -1: Invalid parameters (\c NULL pointer).
+    ///                - -1: Invalid parameters (\c nullptr).
     ///                - -2: \p key exists already.
     ///                - -3: \p value has the wrong type.
     virtual Sint32 insert( const char* key, base::IInterface* value) = 0;
@@ -90,7 +90,7 @@ public:
     ///
     /// \return
     ///                -  0: Success.
-    ///                - -1: Invalid parameters (\c NULL pointer).
+    ///                - -1: Invalid parameters (\c nullptr).
     ///                - -2: \p key does not exist
     virtual Sint32 erase( const char* key) = 0;
 };

@@ -1,0 +1,74 @@
+Count of all scopes: 1
+ID 0: name = (null), pin count = 3, level = 0, parent ID = (null), removed = 0
+    Journal last pruned visibility: 4294967295
+    Journal size: 0
+
+Count of all transactions: 2
+Count of open transactions: 2
+ID 0: pin count = 4, state = OPEN, next sequence number = 2, visibility ID = 4294967295
+    Journal size: 2
+    Item 0: tag = 1, version = 0, scope ID = 0, journal type = 1
+    Item 1: tag = 3, version = 1, scope ID = 0, journal type = 1
+ID 1: pin count = 4, state = OPEN, next sequence number = 2, visibility ID = 4294967295
+    Journal size: 2
+    Item 0: tag = 2, version = 0, scope ID = 0, journal type = 1
+    Item 1: tag = 4, version = 1, scope ID = 0, journal type = 1
+
+Count of infos by distinct names: 4
+Index 0: name = "foo1", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, references = { }
+Index 1: name = "foo2", count = 1
+    Index 0: scope ID = 0, transaction ID = 1 (set), version = 0, pin count = 0, tag = 2, privacy level = 0, removal = 0, references = { }
+Index 2: name = "foo3", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 3, privacy level = 0, removal = 0, references = { }
+Index 3: name = "foo4", count = 1
+    Index 0: scope ID = 0, transaction ID = 1 (set), version = 1, pin count = 0, tag = 4, privacy level = 0, removal = 0, references = { }
+
+Count of infos by distinct tags: 4
+Index 0: tag = 1, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo1", references = { }
+Index 1: tag = 2, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 1 (set), version = 0, pin count = 0, tag = 2, privacy level = 0, removal = 0, name = "foo2", references = { }
+Index 2: tag = 3, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 3, privacy level = 0, removal = 0, name = "foo3", references = { }
+Index 3: tag = 4, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 1 (set), version = 1, pin count = 0, tag = 4, privacy level = 0, removal = 0, name = "foo4", references = { }
+
+
+Count of all scopes: 1
+ID 0: name = (null), pin count = 3, level = 0, parent ID = (null), removed = 0
+    Journal last pruned visibility: 4294967295
+    Journal size: 4
+    Item 0: visibility ID = 2, tag = 1, version = 0, transaction ID = 0, journal type = 1
+    Item 1: visibility ID = 2, tag = 3, version = 1, transaction ID = 0, journal type = 1
+    Item 2: visibility ID = 2, tag = 2, version = 0, transaction ID = 1, journal type = 1
+    Item 3: visibility ID = 2, tag = 4, version = 1, transaction ID = 1, journal type = 1
+
+Count of all transactions: 2
+Count of open transactions: 0
+ID 0: pin count = 1, state = COMMITTED, next sequence number = 2, visibility ID = 2
+    Journal size: 0
+ID 1: pin count = 1, state = COMMITTED, next sequence number = 2, visibility ID = 2
+    Journal size: 0
+
+Count of infos by distinct names: 4
+Index 0: name = "foo1", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, references = { }
+Index 1: name = "foo2", count = 1
+    Index 0: scope ID = 0, transaction ID = 1 (cleared), version = 0, pin count = 0, tag = 2, privacy level = 0, removal = 0, references = { }
+Index 2: name = "foo3", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 1, pin count = 0, tag = 3, privacy level = 0, removal = 0, references = { }
+Index 3: name = "foo4", count = 1
+    Index 0: scope ID = 0, transaction ID = 1 (cleared), version = 1, pin count = 0, tag = 4, privacy level = 0, removal = 0, references = { }
+
+Count of infos by distinct tags: 4
+Index 0: tag = 1, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo1", references = { }
+Index 1: tag = 2, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 1 (cleared), version = 0, pin count = 0, tag = 2, privacy level = 0, removal = 0, name = "foo2", references = { }
+Index 2: tag = 3, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 1, pin count = 0, tag = 3, privacy level = 0, removal = 0, name = "foo3", references = { }
+Index 3: tag = 4, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 1 (cleared), version = 1, pin count = 0, tag = 4, privacy level = 0, removal = 0, name = "foo4", references = { }
+
+

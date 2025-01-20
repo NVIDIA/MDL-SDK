@@ -65,7 +65,7 @@ public:
     /// \param kind            The backend kind.
     /// \param compiler        The MDL compiler.
     /// \param jit             The JIT code generator.
-    /// \param code_cache      If non-NULL, the code cache.
+    /// \param code_cache      If non-\c nullptr, the code cache.
     /// \param string_ids      If True, string arguments are mapped to string identifiers.
     Mdl_llvm_backend(
         mi::neuraylib::IMdl_backend_api::Mdl_backend_kind kind,
@@ -148,7 +148,7 @@ public:
     Link_unit(
         BACKENDS::Mdl_llvm_backend            &be,
         mi::neuraylib::ITransaction           *transaction,
-        mi::neuraylib::IMdl_execution_context *context);
+        MDL::Execution_context                *context);
 
     // API methods
 

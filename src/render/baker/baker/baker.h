@@ -79,7 +79,8 @@ public:
         mi::Uint32 gpu_dev_id,
         const mi::neuraylib::ITarget_code *gpu_code,
         const mi::neuraylib::ITarget_code *cpu_code,
-        bool is_environment);
+        bool is_environment,
+        bool is_uniform);
 
     /// Get the target device ID if should run on GPU.
     mi::Uint32 get_used_gpu_device_id() const;
@@ -97,6 +98,10 @@ public:
         return m_is_environment;
     }
 
+    bool is_uniform() const {
+        return m_is_uniform;
+    }
+
 private:
     /// The GPU id if code should run on the GPU.
     mi::Uint32 m_gpu_dev_id;
@@ -109,6 +114,9 @@ private:
 
     /// Is this an environment function?
     bool m_is_environment;
+
+    /// Store the uniform flag
+    bool m_is_uniform;
 };
 
 class Baker_module_impl : public Baker_module
@@ -152,7 +160,23 @@ public:
         mi::Float32 max_u,
         mi::Float32 min_v,
         mi::Float32 max_v,
+        mi::Float32 animation_time,
         mi::Uint32 samples,
+        mi::Uint32 state_flags) const;
+
+    mi::Sint32 bake_texture_with_constant_detection(
+        DB::Transaction* transaction,
+        const IBaker_code* baker_code,
+        mi::neuraylib::ICanvas* texture,
+        Constant_result& constant,
+        bool& is_constant,
+        mi::Float32 min_u,
+        mi::Float32 max_u,
+        mi::Float32 min_v,
+        mi::Float32 max_v,
+        mi::Float32 animation_time,
+        mi::Uint32 samples,
+        const char* pixel_type,
         mi::Uint32 state_flags) const;
 
     mi::Sint32 bake_constant(
@@ -163,6 +187,21 @@ public:
         const char* pixel_type) const;
 
 private:
+    mi::Sint32 bake_texture_internal(
+        DB::Transaction* transaction,
+        const IBaker_code* baker_code,
+        mi::neuraylib::ICanvas* texture,
+        Constant_result& constant,
+        bool& is_constant,
+        mi::Float32 min_u,
+        mi::Float32 max_u,
+        mi::Float32 min_v,
+        mi::Float32 max_v,
+        mi::Float32 animation_time,
+        mi::Uint32 samples,
+        const char* pixel_type,
+        mi::Uint32 state_flags,
+        bool want_constant_detection) const;
 
     const IBaker_code* create_baker_code_internal(
         DB::Transaction* transaction,

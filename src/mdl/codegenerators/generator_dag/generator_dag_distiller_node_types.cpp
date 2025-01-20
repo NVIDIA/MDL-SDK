@@ -305,6 +305,7 @@ Node_types::Node_types() {
           "mi::mdl::IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF", 0,
           Node_param( "color", "tint", "color(1.0)"),
           Node_param( "float", "roughness", "0.0"),
+          Node_param( "color", "multiscatter_tint", "color(0.0)"),
           Node_param( "string", "handle", ""));
     push( dusty_diffuse_reflection_bsdf,
           "dusty_diffuse_reflection_bsdf",
@@ -348,6 +349,15 @@ Node_types::Node_types() {
           "::df::sheen_bsdf",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF,
           "mi::mdl::IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF", 3,
+          Node_param(  "float", "roughness", "0.0"),
+          Node_param(  "color", "tint", "color(1.0)"),
+          Node_param(  "color", "multiscatter_tint", "color(0.0)"),
+          Node_param(  "bsdf", "multiscatter", "::df::diffuse_reflection_bsdf()"),
+          Node_param( "string", "handle", ""));
+    push( microflake_sheen_bsdf, "microflake_sheen_bsdf",
+          "::df::microflake_sheen_bsdf",
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_MICROFLAKE_SHEEN_BSDF,
+          "mi::mdl::IDefinition::DS_INTRINSIC_DF_MICROFLAKE_SHEEN_BSDF", 3,
           Node_param(  "float", "roughness", "0.0"),
           Node_param(  "color", "tint", "color(1.0)"),
           Node_param(  "color", "multiscatter_tint", "color(0.0)"),
@@ -437,6 +447,7 @@ Node_types::Node_types() {
           "mi::mdl::DS_DIST_BSDF_DIRECTIONAL_FACTOR", 0,
           Node_param(  "color", "normal_tint", "color(1.0)"),
           Node_param(  "color", "grazing_tint", "color(1.0)"),
+          Node_param(  "color", "f82_factor", "color(1.0)"),
           Node_param(  "float", "exponent", "5.0"),
           Node_param(  "bsdf", "base", "bsdf()"));
     push( measured_curve_factor, "measured_curve_factor", "::df::measured_curve_factor",
@@ -455,6 +466,13 @@ Node_types::Node_types() {
           Node_param(  "color", "ior", ""),
           Node_param(  "color", "extinction_coefficient", ""),
           Node_param(  "bsdf", "base", "bsdf()"));
+    push( coat_absorption_factor, "coat_absorption_factor", "::df::coat_absorption_factor",
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_COAT_ABSORPTION_FACTOR,
+          "mi::mdl::IDefinition::DS_INTRINSIC_DF_COAT_ABSORPTION_FACTOR", 3,
+          Node_param(  "color", "ior", "color(1.0)"),
+          Node_param(  "color", "absorption_coefficient", "color(0.0)"),
+          Node_param(  "float", "thickness", "0.0"),
+          Node_param(  "bsdf",  "base", "bsdf()"));
 
     push( bsdf_mix_1, "bsdf_mix_1", "::df::normalized_mix",
           mi::mdl::IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX,
@@ -521,7 +539,7 @@ Node_types::Node_types() {
           Node_param( "float", "weight_4", "0.0"),
           Node_param(  "bsdf", "component_4", "bsdf()"));
     push( bsdf_unbounded_mix_1, "bsdf_unbounded_mix_1", "::df::unbounded_mix",
-          mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX,
+          mi::mdl::IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX,
           "mi::mdl::DS_DIST_BSDF_UNBOUNDED_MIX_1", 2,
           Node_param("float", "weight_1", "0.0"),
           Node_param("bsdf", "component_1", "bsdf()"));
@@ -696,6 +714,7 @@ Node_types::Node_types() {
           "mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER", 1,
           Node_param(  "color", "normal_reflectivity", ""),
           Node_param(  "color", "grazing_reflectivity", "color(1.0)"),
+          Node_param(  "color", "f82_factor", "color(1.0)"),
           Node_param(  "float", "exponent", "5.0"),
           Node_param(  "color", "weight", "color(1.0)"),
           Node_param(  "bsdf", "layer", "bsdf()"),

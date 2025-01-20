@@ -45,6 +45,7 @@
 #include "compilercore_malloc_allocator.h"
 #include "compilercore_analysis.h"
 #include "compilercore_modules.h"
+#include "compilercore_module_transformer.h"
 #include "compilercore_printers.h"
 #include "compilercore_streams.h"
 #include "compilercore_def_table.h"
@@ -755,6 +756,9 @@ static void replace_since_version(
         case 9:
             flags |= unsigned(IMDL::MDL_VERSION_1_9);
             break;
+        case 10:
+            flags |= unsigned(IMDL::MDL_VERSION_1_10);
+            break;
         default:
             MDL_ASSERT(!"Unsupported version");
             break;
@@ -807,6 +811,9 @@ static void replace_removed_version(
             break;
         case 9:
             flags |= (unsigned(IMDL::MDL_VERSION_1_9) << 8);
+            break;
+        case 10:
+            flags |= (unsigned(IMDL::MDL_VERSION_1_10) << 8);
             break;
         default:
             MDL_ASSERT(!"Unsupported version");
@@ -972,7 +979,7 @@ static bool is_material_constructor(Definition const *def)
 /* ------------------------------ Helper classes ------------------------------- */
 
 /// Helper class to modify a default initializer.
-class Default_initializer_modifier : public IClone_modifier
+class Default_initializer_modifier : public IClone_modifier, Module::IStdlib_call_creator
 {
     typedef IClone_modifier Base;
 public:
@@ -990,9 +997,28 @@ public:
     , m_ana(ana)
     , m_dst(ana.m_module)
     , m_src(origin)
+    , m_dst_version(m_dst.get_mdl_version())
+    , m_src_version(m_dst_version)
     , m_param_expr(ana.get_allocator(), num_args)
     , m_auto_imports(ana.m_auto_imports)
+    , m_need_tex_gamma(ana.m_need_tex_gamma)
+    , m_maybe_promotions(true)
     {
+        if (m_src != NULL) {
+            m_src_version = m_src->get_mdl_version();
+        }
+
+        // This is tricky: we obviously do not need promotions if we have defaults from
+        // the same MDL version
+        if (m_dst_version == m_src_version) {
+            m_maybe_promotions = false;
+        }
+        // if the source module is from the standard lib, THEN the source version means nothings
+        // (as stdlib is multi-version), BUT the import filter should always choose the right
+        // version, hence no promotion is needed
+        if (m_src != NULL && m_src->is_stdlib()) {
+            m_maybe_promotions = false;
+        }
         std::fill_n(m_param_expr.data(), m_param_expr.size(), (IExpression const *)0);
     }
 
@@ -1005,6 +1031,144 @@ public:
         m_param_expr[index] = expr;
     }
 
+    /// Find a version overload.
+    ///
+    /// \param odef         the original definition
+    /// \param dst_version  the destination MDL version
+    /// \param rules        promotion rules
+    ///
+    /// \return the "promoted" definition
+    Definition const *find_version_overload(
+        Definition const  *odef,
+        IMDL::MDL_version dst_version,
+        unsigned          rules)
+    {
+        Definition const *def = odef;
+
+        if (m_src != NULL && def->get_kind() == IDefinition::DK_CONSTRUCTOR) {
+            // ugly sub case: if this is a constructor of a built-in type,
+            // find_version_overload() will not find a "newer" one, as the
+            // old originated from the old module..., hence get it from
+            // the destination module...
+            IType_function const *f_tp = cast<IType_function>(def->get_type());
+            IType const *ret_tp = f_tp->get_return_type();
+
+            if (is_material_type_or_sub_type(ret_tp)) {
+                ret_tp = m_dst.import_type(ret_tp);
+                def = m_dst.get_first_constructor(ret_tp);
+            }
+        }
+
+        // the owner module is either the source (if it exists) or destination (if src does not
+        // exists OR def was already switched to dst in case of a builtin type constructor above)
+        Module const &owner =
+            m_src == NULL || def->get_owner_module_id() == m_dst.get_unique_id() ? m_dst : *m_src;
+
+        MDL_ASSERT(def->get_owner_module_id() == owner.get_unique_id());
+
+        Module const *real_owner = NULL;
+        if (def->has_flag(Definition::DEF_IS_IMPORTED)) {
+            // an imported entity, find it here
+            Definition const *imported = owner.get_original_definition(def, real_owner);
+            MDL_ASSERT(imported != NULL);
+            def = imported != NULL ? imported : def;
+        }
+
+        if (rules & Module::PR_CNG_TO_COLOR_FRESNEL_LAYER) {
+            // argh, replace the definition completely
+            Scope const *scope = def->get_def_scope();
+
+            if (real_owner == NULL) {
+                real_owner = &owner;
+            }
+
+            ISymbol const *sym =
+                real_owner->get_symbol_table().lookup_symbol("color_fresnel_layer");
+
+            Definition *replace = scope->find_definition_in_scope(sym);
+            MDL_ASSERT(replace != NULL);
+            if (replace != NULL) {
+                def = replace;
+            }
+        }
+
+        IDefinition::Semantics orig_sema = def->get_semantics();
+
+        // check which extra checks we need
+        IType const *match_first_type = NULL;
+        switch (orig_sema) {
+        case Definition::DS_INTRINSIC_TEX_WIDTH:
+        case Definition::DS_INTRINSIC_TEX_HEIGHT:
+        case Definition::DS_INTRINSIC_TEX_TEXEL_COLOR:
+        case Definition::DS_INTRINSIC_TEX_TEXEL_FLOAT:
+        case Definition::DS_INTRINSIC_TEX_TEXEL_FLOAT2:
+        case Definition::DS_INTRINSIC_TEX_TEXEL_FLOAT3:
+        case Definition::DS_INTRINSIC_TEX_TEXEL_FLOAT4:
+        case Definition::DS_INTRINSIC_TEX_LOOKUP_COLOR:
+        case Definition::DS_INTRINSIC_TEX_LOOKUP_FLOAT:
+        case Definition::DS_INTRINSIC_TEX_LOOKUP_FLOAT2:
+        case Definition::DS_INTRINSIC_TEX_LOOKUP_FLOAT3:
+        case Definition::DS_INTRINSIC_TEX_LOOKUP_FLOAT4:
+            // those tex functions have "normal" overload, to find the right one, the first
+            // type must match
+            {
+                IType_function const *f_tp = cast<IType_function>(def->get_type());
+                ISymbol const *dummy;
+
+                f_tp->get_parameter(0, match_first_type, dummy);
+            }
+            break;
+        default:
+            break;
+        }
+
+        // search for a overload that exists in the destination version: Assume here, that
+        // versioned overload do NOT have other overloads (or we catch them with the extra tests)
+        for (Definition const *next = def->get_next_def();
+            next != NULL;
+            next = def->get_next_def())
+        {
+            def = next;
+        }
+        for (; def != NULL; def = def->get_prev_def()) {
+            // ignore copy constructors: these are never version overloaded
+            if (def->get_semantics() == IDefinition::DS_COPY_CONSTRUCTOR) {
+                continue;
+            }
+
+            // check version
+            if (is_available_in_mdl(m_dst_version, def->get_version_flags())) {
+                // check if we need extra tests
+                if (match_first_type != NULL) {
+                    IType_function const *f_tp = cast<IType_function>(def->get_type());
+                    ISymbol const *dummy;
+                    IType const *p_tp;
+
+                    f_tp->get_parameter(0, p_tp, dummy);
+
+                    if (p_tp != match_first_type) {
+                        // wrong overload
+                        continue;
+                    }
+                }
+
+                // was not removed prior the destination version and exists
+                // since this or earlier version: found the right version
+                return def;
+            }
+        }
+
+        // failed
+        m_ana.error(
+            INTERNAL_COMPILER_ERROR,
+            odef,
+            Error_params(m_ana)
+            .add("auto promotion of '")
+            .add_signature(odef)
+            .add("' failed"));
+        return odef;
+    }
+
     /// Clone a reference expression.
     ///
     /// \param ref   the expression to clone
@@ -1014,11 +1178,6 @@ public:
             IDefinition const *idef = ref->get_definition();
             Definition const  *def  = impl_cast<Definition>(idef);
 
-            if (def->get_owner_module_id() != m_dst.get_unique_id()) {
-                // an entity from another module
-                m_auto_imports.insert(def);
-            }
-
             switch (def->get_kind()) {
             case IDefinition::DK_PARAMETER:
                 {
@@ -1026,7 +1185,7 @@ public:
 
                     MDL_ASSERT(0 <= index && size_t(index) < m_param_expr.size());
                     if (IExpression const *expr = m_param_expr[index]) {
-                        return m_dst.clone_expr(expr, NULL);
+                        return m_dst.clone_expr(expr, /*modifier=*/NULL);
                     }
                 }
                 break;
@@ -1039,9 +1198,16 @@ public:
             default:
                 break;
             }
+
+            // if we are here, it was NOT a parameter, hence maybe insert the def to auto imports
+            if (def->get_owner_module_id() != m_dst.get_unique_id()) {
+                // an entity from another module
+                m_auto_imports.insert(def);
+            }
         }
-        // just clone it
-        return m_dst.clone_expr(ref, NULL);
+
+    // just clone it
+        return m_dst.clone_expr(ref, /*modifier=*/NULL);
     }
 
     /// Clone a literal.
@@ -1050,6 +1216,13 @@ public:
     IExpression *clone_literal(IExpression_literal const *lit) MDL_FINAL
     {
         IValue const *value = lit->get_value();
+
+        if (is<IValue_texture>(value)) {
+            // this is an ugly case: texture constructors are always folded into constants
+            // by design, BUT includes "inside" a reference to tex::gamma_mode
+            m_need_tex_gamma = true;
+        }
+
         if (IValue_enum const *v = as<IValue_enum>(value)) {
 #ifdef ENABLE_ASSERT
             bool already_known = m_dst.get_type_factory()->find_imported_user_type(
@@ -1126,19 +1299,334 @@ public:
         return m_dst.clone_expr(lit, /*modifier=*/NULL);
     }
 
-    /// Clone a call.
-    ///
-    /// \param call the expression to clone
-    IExpression *clone_expr_call(IExpression_call const *c_expr) MDL_FINAL
+    // Clone the given simple name.
+    ISimple_name const *clone_simple_name(
+        ISimple_name const *sname,
+        IDefinition const  *def = NULL)
     {
-        IExpression const *ref = m_dst.clone_expr(c_expr->get_reference(), this);
-        IExpression_call *call = m_dst.get_expression_factory()->create_call(ref);
+        ISymbol const *sym = def != NULL ? def->get_symbol() : sname->get_symbol();
+
+        Symbol_table &sym_tab = m_dst.get_symbol_table();
+
+        // symbol can come from another symbol table, so check it
+        if (sym_tab.get_symbol_for_id(sym->get_id()) != sym) {
+            sym = m_dst.import_symbol(sym);
+        }
+
+        Name_factory &nf = *m_dst.get_name_factory();
+
+        ISimple_name *res = const_cast<ISimple_name *>(nf.create_simple_name(sym));
+        res->set_definition(def != NULL ? def : sname->get_definition());
+        copy_position(res, sname);
+        return res;
+    }
+
+    // Clone the given qualified name.
+    IQualified_name *clone_qualified_name(
+        IQualified_name const *qname,
+        IDefinition const     *def)
+    {
+        IQualified_name *res = m_dst.get_name_factory()->create_qualified_name();
+
+        int n = qname->get_component_count();
+        for (int i = 0; i < n - 1; ++i) {
+            ISimple_name const *sname = clone_simple_name(qname->get_component(i), NULL);
+            res->add_component(sname);
+        }
+        // update the definition on the last one
+        ISimple_name const *sname = clone_simple_name(qname->get_component(n - 1), def);
+        res->add_component(sname);
+
+        // and of the qualified name itself
+        res->set_definition(def);
+        copy_position(res, qname);
+        return res;
+    }
+
+    // Clone the given type name.
+    IType_name *clone_type_name(
+        IType_name const  *type_name,
+        IDefinition const *def)
+    {
+        IQualified_name *qname = clone_qualified_name(type_name->get_qualified_name(), def);
+        IType_name *res = m_dst.get_name_factory()->create_type_name(qname);
+
+        if (type_name->is_absolute()) {
+            res->set_absolute();
+        }
+
+        res->set_qualifier(type_name->get_qualifier());
+
+        if (type_name->is_incomplete_array()) {
+            res->set_incomplete_array();
+        }
+
+        if (IExpression const *array_size = type_name->get_array_size()) {
+            array_size = m_dst.clone_expr(array_size, this);
+            res->set_array_size(array_size);
+        }
+
+        if (ISimple_name const *sname = type_name->get_size_name()) {
+            res->set_size_name(clone_simple_name(sname));
+        }
+        copy_position(res, type_name);
+        return res;
+    }
+
+    /// Clone a reference and enter a new definition.
+    ///
+    /// \param r_expr  the original reference
+    /// \param def     the new definition
+    IExpression_reference *clone_reference(
+        IExpression_reference const *r_expr,
+        IDefinition const            *def)
+    {
+        IType_name const *name       = clone_type_name(r_expr->get_name(), def);
+        IExpression_reference *n_ref = m_dst.get_expression_factory()->create_reference(name);
+        if (r_expr->is_array_constructor()) {
+            n_ref->set_array_constructor();
+        } else {
+            n_ref->set_definition(def);
+        }
+        copy_position(n_ref, r_expr);
+        return n_ref;
+    }
+
+    /// Create a parameterless stdlib call to <name1> or <name1>::<name2>.
+    ///
+    /// \param args    call arguments
+    /// \param n_args  number of call arguments that will be added
+    /// \param name1   an MDL identifier
+    /// \param name2   an MDL identifier or NULL
+    IExpression_call *create_stdlib_call(
+        IExpression const *args[],
+        size_t            n_args,
+        char const        *name1,
+        char const        *name2 = NULL) MDL_FINAL
+    {
+        Module const     *owner = NULL;
+        Definition const *def   = NULL;
+        char const       *ent   = name1;
+
+        // try to find the definition
+        if (name2 == NULL) {
+            // assume this is a built-in, search in the destination module
+            owner = &m_dst;
+        } else {
+            // name 1 is assumed to be the name of a stdlib module
+            string mod_name("::", m_dst.get_allocator());
+
+            // need an absolute name here
+            owner = m_ana.m_compiler->find_builtin_module(mod_name + name1);
+            ent   = name2;
+        }
+        if (owner != NULL) {
+            Symbol_table const &symtab = owner->get_symbol_table();
+
+            ISymbol const *sym = symtab.lookup_symbol(ent);
+            MDL_ASSERT(sym != NULL && "cannot find builtin symbol");
+
+            if (sym != NULL) {
+                Definition_table const &dt = owner->get_definition_table();
+                Scope const *scope = name2 == NULL ? dt.get_predef_scope() : dt.get_global_scope();
+
+                def = scope->find_definition_in_scope(sym);
+
+                if (def != NULL) {
+                    // ensure, we point to a function-like object
+                    if (def->get_kind() == IDefinition::DK_TYPE) {
+                        // replace by the constructor.
+                        def = owner->get_first_constructor(def->get_type());
+                    }
+
+                    // find the right overload now. We assume there is only ONE match
+                    // for the given argument types
+                    for (Definition const *next = def->get_next_def();
+                        next != NULL;
+                        next = def->get_next_def())
+                    {
+                        def = next;
+                    }
+                    for (Definition const *prev = def; prev != NULL; prev = def->get_prev_def()) {
+                        def = prev;
+
+                        IType const *type = def->get_type();
+
+                        if (IType_function const *f_tp = as<IType_function>(type)) {
+                            size_t n_param = f_tp->get_parameter_count();
+
+                            if (n_param != n_args) {
+                                // number of parameters must match
+                                continue;
+                            }
+
+                            // check types: This is ugly, as the types might be owned by different
+                            // modules, BUT in the interesting cases we "known" in advance that
+                            // all types are predefined and owned by the compiler, so we ignore
+                            // the "expensive" checks here
+                            bool match = true;
+                            for (size_t i = 0; i < n_args; ++i) {
+                                IType const *p_type;
+                                ISymbol const *p_sym;
+
+                                f_tp->get_parameter(i, p_type, p_sym);
+
+                                IType const *arg_type = args[i]->get_type();
+                                if (p_type->skip_type_alias() != arg_type->skip_type_alias()) {
+                                    match = false;
+                                    break;
+                                }
+                            }
+                            if (match) {
+                                break;
+                            }
+                        } else {
+                            // should be the error type otherwise
+                            MDL_ASSERT(is<IType_error>(type) && "overload set contains wrong type");
+                        }
+                    }
+                    MDL_ASSERT(def != NULL && "overload not found in create_stdlib_call");
+                }
+            }
+        }
+
+        Name_factory    &nf = *m_dst.get_name_factory();
+        IQualified_name *qn = nf.create_qualified_name();
+
+        {
+            ISymbol const *s = nf.create_symbol(name1);
+            ISimple_name *sn = nf.create_simple_name(s);
+            qn->add_component(sn);
+
+            if (name2 == NULL) {
+                sn->set_definition(def);
+            }
+        }
+        if (name2 != NULL) {
+            ISymbol const *s = nf.create_symbol(name2);
+            ISimple_name *sn = nf.create_simple_name(s);
+            qn->add_component(sn);
+            sn->set_definition(def);
+        }
+
+        IType_name *tn = nf.create_type_name(qn);
+
+        Expression_factory &ef = *m_dst.get_expression_factory();
+
+        IExpression_reference *callee = ef.create_reference(tn);
+        IExpression_call      *call   = ef.create_call(callee);
+
+        MDL_ASSERT(def != NULL && "could not find definition for call inserted on promotion");
+
+        if (def != NULL) {
+            IType_function const *f_tp = cast<IType_function>(def->get_type());
+            IType const *ret_type = f_tp->get_return_type();
+
+            callee->set_definition(def);
+            call->set_type(ret_type);
+
+            m_ana.update_call_graph(def);
+
+            if (def->get_owner_module_id() != m_dst.get_unique_id()) {
+                // an entity from another module
+                m_auto_imports.insert(def);
+            }
+        }
+
+        for (size_t i = 0; i < n_args; ++i) {
+            IArgument const *arg = ef.create_positional_argument(args[i]);
+            call->add_argument(arg);
+        }
+
+        return call;
+    }
+
+    /// Promote a call if necessary.
+    ///
+    /// \param call    the call to promote
+    /// \param callee  the callee of the call
+    /// \param rules   promote rules
+    IExpression_call *promote_call(
+        IExpression_call const      *c_expr,
+        IExpression_reference const *callee,
+        unsigned                    rules)
+    {
+        Definition const *def = impl_cast<Definition>(callee->get_definition());
+
+        if (mdl_removed_version(def->get_version_flags()) <= unsigned(m_dst_version)) {
+            MDL_ASSERT(
+                def->has_flag(Definition::DEF_IS_VERSIONED) && "removed entity not versioned");
+
+            MDL_ASSERT(
+                def->get_kind() == IDefinition::DK_FUNCTION ||
+                def->get_kind() == IDefinition::DK_CONSTRUCTOR);
+
+            // update the definition here, the promotion of the AST will follow
+            def = find_version_overload(def, m_dst_version, rules);
+        }
+
+        callee = clone_reference(callee, def);
+
+        if (def->get_owner_module_id() != m_dst.get_unique_id()) {
+            // an entity from another module
+            m_auto_imports.insert(def);
+        }
+
+        m_ana.update_call_graph(def);
+
+        IExpression_call *call = m_dst.get_expression_factory()->create_call(callee);
+        copy_position(call, c_expr);
+
+        for (int i = 0, j = 0, n = c_expr->get_argument_count(); i < n; ++i, ++j) {
+            IArgument const *arg = m_dst.clone_arg(c_expr->get_argument(i), this);
+            call->add_argument(arg);
+            j = m_dst.promote_call_arguments(call, arg, j, rules, /*creator=*/this);
+        }
+
+        return call;
+    }
+
+    /// Clone a call without promotion.
+    ///
+    /// \param call  the call expression to clone
+    IExpression *clone_simple_call(
+        IExpression_call const *c_expr)
+    {
+        IExpression const *ref_expr = m_dst.clone_expr(c_expr->get_reference(), this);
+        IExpression_call  *call     = m_dst.get_expression_factory()->create_call(ref_expr);
 
         for (int i = 0, n = c_expr->get_argument_count(); i < n; ++i) {
             IArgument const *arg = m_dst.clone_arg(c_expr->get_argument(i), this);
             call->add_argument(arg);
         }
         return call;
+    }
+
+    /// Clone a call.
+    ///
+    /// \param call the expression to clone
+    IExpression *clone_expr_call(IExpression_call const *c_expr) MDL_FINAL
+    {
+        IExpression const *ref_expr = c_expr->get_reference();
+
+        if (m_maybe_promotions) {
+            if (IExpression_reference const *callee = as<IExpression_reference>(ref_expr)) {
+                if (!callee->is_array_constructor()) {
+                    Definition const *def = impl_cast<Definition>(callee->get_definition());
+
+                    unsigned rules =
+                        Module_inliner::get_promotion_rules(m_dst_version, m_src_version, def);
+
+                    if (rules != 0) {
+                        // we found a call that will need promotion, handle this gracefully
+                        return promote_call(c_expr, callee, rules);
+                    }
+                }
+            }
+        }
+
+        // default case
+        return clone_simple_call(c_expr);
     }
 
     /// Clone a qualified name.
@@ -1159,11 +1647,23 @@ private:
     /// The source module if any.
     Module const *m_src;
 
+    /// The version of the destination module.
+    IMDL::MDL_version m_dst_version;
+
+    /// The version of the src module.
+    IMDL::MDL_version m_src_version;
+
     /// The map of other parameters.
     VLA<IExpression const *> m_param_expr;
 
     /// The auto-import map.
     Auto_imports &m_auto_imports;
+
+    /// True, if tex::gamma_moe mus be imported
+    bool &m_need_tex_gamma;
+
+    /// True, if promotions might be necessary.
+    bool m_maybe_promotions;
 };
 
 namespace {
@@ -2712,6 +3212,7 @@ NT_analysis::NT_analysis(
 , m_array_size_map(0, Array_size_map::hasher(), Array_size_map::key_equal(), module.get_allocator())
 , m_exported_decls_only(module.get_allocator())
 , m_auto_imports(module.get_allocator())
+, m_need_tex_gamma(false)
 , m_initializers_must_be_fixed(module.get_allocator())
 , m_sema_version_pos(NULL)
 , m_resource_entries(Resource_table::key_compare(), module.get_allocator())
@@ -3052,6 +3553,8 @@ restart:
          c_def = m_module.get_next_constructor(c_def))
     {
         if (c_def->has_flag(Definition::DEF_IS_CONST_CONSTRUCTOR)) {
+            // note: this might be true for the default constructor OR
+            // the elemental constructor acting as the default constructor
             return true;
         }
     }
@@ -3145,6 +3648,25 @@ private:
 
 }  // anon namespace
 
+/// Copy inherited flags from the type definition to a constructor definition.
+///
+/// \param type_def    the type definition
+/// \param constr_def  the constructor definition
+static void copy_inherited_flags(
+    Definition const *type_def,
+    Definition       *constr_def)
+{
+    if (type_def->has_flag(Definition::DEF_IS_EXPORTED)) {
+        // copy the exported flag but do not export this definition, constructors
+        // are handled using a different mechanism
+        constr_def->set_flag(Definition::DEF_IS_EXPORTED);
+    }
+    if (type_def->has_flag(Definition::DEF_IS_DECLARATIVE)) {
+        // a constructor of a declarative type is declarative too
+        constr_def->set_flag(Definition::DEF_IS_DECLARATIVE);
+    }
+}
+
 // Create the default constructors and operators for a given struct type.
 void NT_analysis::create_default_members(
     IType_struct const             *s_type,
@@ -3214,6 +3736,8 @@ void NT_analysis::create_default_members(
                         is_const_constructor = false;
                     }
                 } else {
+                    // the elemental constructor requires an argument, hence we need an extra
+                    // default constructor
                     need_default_constructor = true;
 
                     if (!has_const_default_constructor(f_type)) {
@@ -3250,6 +3774,11 @@ void NT_analysis::create_default_members(
                     c_def->set_default_param_initializer(i, init);
                 }
             }
+            // register for waiting auto-import fixes
+            if (!is_error(c_def)) {
+                m_initializers_must_be_fixed.push_back(c_def);
+            }
+
         }
 
         if (is_const_constructor) {
@@ -3260,11 +3789,7 @@ void NT_analysis::create_default_members(
         c_def->set_semantic(IDefinition::DS_ELEM_CONSTRUCTOR);
         c_def->set_declaration(struct_decl);
 
-        if (def->has_flag(Definition::DEF_IS_EXPORTED)) {
-            // copy the exported flag but do not export this definition, constructors
-            // are handled using a different mechanism
-            c_def->set_flag(Definition::DEF_IS_EXPORTED);
-        }
+        copy_inherited_flags(def, c_def);
 
         if (need_default_constructor) {
             // create the (implicit) default constructor
@@ -3281,11 +3806,7 @@ void NT_analysis::create_default_members(
             c_def->set_semantic(IDefinition::DS_DEFAULT_STRUCT_CONSTRUCTOR);
             c_def->set_declaration(struct_decl);
 
-            if (def->has_flag(Definition::DEF_IS_EXPORTED)) {
-                // copy the exported flag but do not export this definition, constructors
-                // are handled using a different mechanism
-                c_def->set_flag(Definition::DEF_IS_EXPORTED);
-            }
+            copy_inherited_flags(def, c_def);
         }
     }
     // create the (implicit) copy constructor
@@ -3303,11 +3824,7 @@ void NT_analysis::create_default_members(
         c_def->set_semantic(IDefinition::DS_COPY_CONSTRUCTOR);
         c_def->set_declaration(struct_decl);
 
-        if (def->has_flag(Definition::DEF_IS_EXPORTED)) {
-            // copy the exported flag but do not export this definition, constructors
-            // are handled using a different mechanism
-            c_def->set_flag(Definition::DEF_IS_EXPORTED);
-        }
+        copy_inherited_flags(def, c_def);
     }
     // create the assignment operator=(struct x, struct y)
     {
@@ -3328,11 +3845,7 @@ void NT_analysis::create_default_members(
         op_def->set_flag(Definition::DEF_OP_LVALUE);
         op_def->set_semantic(operator_to_semantic(IExpression::OK_ASSIGN));
 
-        if (def->has_flag(Definition::DEF_IS_EXPORTED)) {
-            // copy the exported flag but do not export this definition, member-operators
-            // are handled using a different mechanism
-            op_def->set_flag(Definition::DEF_IS_EXPORTED);
-        }
+        copy_inherited_flags(def, op_def);
     }
 }
 
@@ -3547,6 +4060,8 @@ Module const *NT_analysis::load_module_to_import(
         import_name += sym->get_name();
     }
 
+    string user_import_name(import_name.c_str(), m_builder.get_allocator());
+
     bool is_weak    = false;
     bool is_weak_16 = false;
 
@@ -3645,6 +4160,11 @@ Module const *NT_analysis::load_module_to_import(
     if (imp_mod != NULL) {
         // reference count is not increased by find_imported_mode(), do it here
         imp_mod->retain();
+
+        // Emit warning/error if standard module is imported with weak relative
+        // name from search path root.
+        check_weak_stdlib_import(rel_name->access_position(), user_import_name.c_str(), imp_mod);
+
         if (!direct) {
             bool first_import = false;
 
@@ -3735,6 +4255,10 @@ Module const *NT_analysis::load_module_to_import(
     }
     check_imported_module_dependencies(imp_mod, rel_name->access_position());
 
+    // Emit warning/error if standard module is imported with weak relative
+    // name from search path root.
+    check_weak_stdlib_import(rel_name->access_position(), user_import_name.c_str(), imp_mod);
+
     return imp_mod;
 }
 
@@ -3820,6 +4344,7 @@ void NT_analysis::import_qualified(
             // errors already reported
             return;
         }
+
         // import it under the relative name
         import_all_definitions(imp_mod.get(), rel_name, skip_dots, err_pos);
     } else {
@@ -3959,6 +4484,10 @@ void NT_analysis::import_type_scope(
     IType const *orig_type = imported->get_type();
     if (is<IType_alias>(orig_type)) {
         // do nothing, as the alias type has no type scope
+        return;
+    }
+    if (is<IType_error>(orig_type)) {
+        // ignore previous errors
         return;
     }
 
@@ -4670,7 +5199,7 @@ restart:
     case IType::TK_STRUCT:
         {
             IType_struct const *s_type = cast<IType_struct>(type);
-            if (s_type->get_predefined_id() != IType_struct::SID_USER) {
+            if (!allow_declarative && s_type->get_predefined_id() != IType_struct::SID_USER) {
                 // materials and its parts are forbidden
                 return s_type;
             }
@@ -4861,14 +5390,14 @@ bool Analysis::is_allowed_array_type(
 
 /// Checks if the given type is allowed for function parameter types.
 ///
-/// \param type            the type to check
-/// \param allow_df        true *df types are allowed
-/// \param allow_resource  true if resource types are allowed
+/// \param type               the type to check
+/// \param allow_declarative  true if declarative types are allowed
+/// \param allow_resource     true if resource types are allowed
 ///
 /// \returns  the forbidden type or NULL if the type is ok
 static IType const *has_forbidden_parameter_type(
     IType const *type,
-    bool        allow_df,
+    bool        allow_declarative,
     bool        allow_resource)
 {
     for (;;) {
@@ -4890,7 +5419,7 @@ static IType const *has_forbidden_parameter_type(
         case IType::TK_EDF:
         case IType::TK_VDF:
             // only allowed in std library functions
-            return allow_df ? NULL : type;
+            return allow_declarative ? NULL : type;
 
         case IType::TK_VECTOR:
         case IType::TK_MATRIX:
@@ -4900,7 +5429,7 @@ static IType const *has_forbidden_parameter_type(
             {
                 IType_array const *a_type = cast<IType_array>(type);
                 IType const       *e_type = a_type->get_element_type();
-                return has_forbidden_parameter_type(e_type, allow_df, allow_resource);
+                return has_forbidden_parameter_type(e_type, allow_declarative, allow_resource);
             }
 
         case IType::TK_COLOR:
@@ -4913,15 +5442,15 @@ static IType const *has_forbidden_parameter_type(
         case IType::TK_STRUCT:
             {
                 IType_struct const *s_type = cast<IType_struct>(type);
-                if (s_type->get_predefined_id() != IType_struct::SID_USER) {
-                    // materials and its parts are forbidden
+                if (!allow_declarative && s_type->is_declarative()) {
+                    // declarative types are forbidden
                     return s_type;
                 }
                 // do a deep check
                 for (size_t i = 0, n = s_type->get_field_count(); i < n; ++i) {
                     IType const *f_type   = s_type->get_field(i)->get_type();
                     IType const *bad_type =
-                        has_forbidden_parameter_type(f_type, allow_df, allow_resource);
+                        has_forbidden_parameter_type(f_type, allow_declarative, allow_resource);
                     if (bad_type != NULL) {
                         return bad_type;
                     }
@@ -4949,15 +5478,15 @@ static IType const *has_forbidden_parameter_type(
 
 /// Checks if the given type is allowed for function parameter types.
 ///
-/// \param type       the type to check
-/// \param allow_df   true if DFs are allowed
+/// \param type               the type to check
+/// \param allow_declarative  true if declarative types are allowed
 ///
 /// \returns  the forbidden type or NULL if the type is ok
 static IType const *has_forbidden_function_parameter_type(
     IType const *type,
-    bool        allow_df)
+    bool        allow_declarative)
 {
-    return has_forbidden_parameter_type(type, allow_df, /*allow_resource=*/true);
+    return has_forbidden_parameter_type(type, allow_declarative, /*allow_resource=*/true);
 }
 
 /// Checks if the given type is allowed for annotation parameter types.
@@ -5254,6 +5783,28 @@ Definition const *NT_analysis::check_function_redeclaration(
             if (curr_def->has_flag(Definition::DEF_IS_DECL_ONLY)) {
                 remove_it = true;
             }
+        }
+
+        if (m_is_stdlib && same_def->get_version_flags() != curr_def->get_version_flags()) {
+            // Note: we "allow" a redefintion of a function inside the stdlib if the
+            // "existence range" does not overlap
+            unsigned same_v       = same_def->get_version_flags();
+            unsigned since_same   = mdl_since_version(same_v);
+            unsigned removed_same = mdl_removed_version(same_v);
+
+            unsigned curr_v       = curr_def->get_version_flags();
+            unsigned since_curr   = mdl_since_version(curr_v);
+            unsigned removed_curr = mdl_removed_version(curr_v);
+
+            if (removed_same <= since_curr) {
+                // the "same" definition was removed before the "current" starts, ok
+                continue;
+            }
+            if (removed_curr <= since_same) {
+                // the "current" definition was removed before the "same" starts, ok
+                continue;
+            }
+            // otherwise fall into error
         }
 
         // remember the prototype found
@@ -7379,10 +7930,20 @@ void NT_analysis::handle_select_scopes(IExpression_binary *sel_expr)
             rhs = n_rhs;
         }
 
-        error(
-            SELECT_FROM_NON_STRUCT,
-            lhs->access_position(),
-            Error_params(*this).add(rhs));
+        // check if the struct declaration is not imported
+        if (IType_struct const *s_type = as<IType_struct>(lhs_type)) {
+            // if lhs is a type and has no scope, then it was not imported
+            error(
+                SELECT_FROM_NOT_IMPORTED_STRUCT,
+                lhs->access_position(),
+                Error_params(*this).add(s_type->get_symbol()));
+        } else {
+            // not a struct
+            error(
+                SELECT_FROM_NON_STRUCT,
+                lhs->access_position(),
+                Error_params(*this).add(rhs));
+        }
 
         // kill the right type, because lhs is invalid, but later the type of the whole
         // expression is taken from this
@@ -8265,8 +8826,13 @@ static void update_flags(
                 }
                 unsigned flags = def->get_version_flags();
 
-                m_since_ver   = max(m_since_ver,   mdl_since_version(flags));
-                m_removed_ver = min(m_removed_ver, mdl_removed_version(flags));
+                m_since_ver = max(m_since_ver,   mdl_since_version(flags));
+
+                if (!def->has_flag(Definition::DEF_IS_VERSIONED)) {
+                    // if this is not a versioned entity AND it was removed, update the version
+                    // here
+                    m_removed_ver = min(m_removed_ver, mdl_removed_version(flags));
+                }
 
                 if (def->has_flag(Definition::DEF_IS_DECLARATIVE)) {
                     // check, if this is a material constructor
@@ -9085,7 +9651,7 @@ NT_analysis::Definition_list NT_analysis::resolve_overload(
             Signature_entry entry(
                 (IType const *const *)Arena_memdup(
                     arena, signature.data(), signature.size() * sizeof(signature[0])),
-                (bool const *const)Arena_memdup(
+                (bool const *)Arena_memdup(
                     arena, bounds.data(), bounds.size() * sizeof(bounds[0])),
                 signature.size(),
                 candidate);
@@ -9095,7 +9661,7 @@ NT_analysis::Definition_list NT_analysis::resolve_overload(
             Signature_entry entry(
                 (IType const *const *)Arena_memdup(
                     arena, signature.data(), signature.size() * sizeof(signature[0])),
-                (bool const *const)Arena_memdup(
+                (bool const *)Arena_memdup(
                     arena, bounds.data(), bounds.size() * sizeof(bounds[0])),
                 signature.size(),
                 candidate);
@@ -9352,8 +9918,10 @@ Definition const *NT_analysis::find_overload(
 
             // All fine, found only ONE possible overload.
             if (def->get_semantics() == IDefinition::DS_DEFAULT_STRUCT_CONSTRUCTOR) {
-                // reformat to elemental struct constructor
-                def = reformat_default_struct_constructor(def, call);
+                // reformat to elemental struct constructor if possible
+                if (def->has_flag(Definition::DEF_IS_CONST_CONSTRUCTOR)) {
+                    def = reformat_const_default_struct_constructor(def, call);
+                }
             } else {
                 // Otherwise add argument conversions if needed and reorder the arguments.
                 reformat_arguments(
@@ -9690,7 +10258,7 @@ NT_analysis::Definition_list NT_analysis::resolve_annotation_overload(
             Signature_entry entry(
                 (IType const *const *)Arena_memdup(
                     arena, signature.data(), signature.size() * sizeof(signature[0])),
-                (bool const *const)Arena_memdup(
+                (bool const *)Arena_memdup(
                     arena, bounds.data(), bounds.size() * sizeof(bounds[0])),
                 signature.size(),
                 candidate);
@@ -9700,7 +10268,7 @@ NT_analysis::Definition_list NT_analysis::resolve_annotation_overload(
             Signature_entry entry(
                 (IType const *const *)Arena_memdup(
                     arena, signature.data(), signature.size() * sizeof(signature[0])),
-                (bool const *const)Arena_memdup(
+                (bool const *)Arena_memdup(
                     arena, bounds.data(), bounds.size() * sizeof(bounds[0])),
                 signature.size(),
                 candidate);
@@ -10574,23 +11142,27 @@ void NT_analysis::check_argument_range(
     }
 }
 
-// replace default struct constructors by elemental constructors
-Definition const *NT_analysis::reformat_default_struct_constructor(
+// Replace default const struct constructors by elemental constructors.
+Definition const *NT_analysis::reformat_const_default_struct_constructor(
     Definition const *callee_def,
     IExpression_call *call)
 {
+    // if the callee is not a const constructor, we cannot fold the field initializers
+    MDL_ASSERT(
+        callee_def->has_flag(Definition::DEF_IS_CONST_CONSTRUCTOR) && "not const constructor");
+
     IType_function const *f_type = cast<IType_function>(callee_def->get_type());
     IType_struct const   *s_type = cast<IType_struct>(f_type->get_return_type());
 
     // first step: find the elementary constructor inside THIS module
-    Definition const *c_def = m_module.get_elemental_constructor(s_type);
-    MDL_ASSERT(c_def != NULL && "could not find default constructor");
+    Definition const *elem_c_def = m_module.get_elemental_constructor(s_type);
+    MDL_ASSERT(elem_c_def != NULL && "could not find elemental constructor");
 
     // lookup the original definition to get default arguments
     Module const *origin = NULL;
-    Definition const *orig_c_def = m_module.get_original_definition(callee_def, origin);
+    Definition const *orig_elem_c_def = m_module.get_original_definition(elem_c_def, origin);
 
-    f_type = cast<IType_function>(c_def->get_type());
+    f_type = cast<IType_function>(elem_c_def->get_type());
     size_t param_count = f_type->get_parameter_count();
 
     // Use origin to rewrite resource URLs
@@ -10600,7 +11172,7 @@ Definition const *NT_analysis::reformat_default_struct_constructor(
     for (size_t i = 0; i < param_count; ++i) {
         IExpression const *expr = NULL;
 
-        if ((expr = orig_c_def->get_default_param_initializer(i))) {
+        if ((expr = orig_elem_c_def->get_default_param_initializer(i))) {
             // this struct field has an initializer, clone it
             expr = m_module.clone_expr(expr, &def_modifier);
         } else {
@@ -10652,7 +11224,7 @@ Definition const *NT_analysis::reformat_default_struct_constructor(
                 // might fail) ...
                 IValue const *pval = ptype_mod->create_default_value(
                     ptype_mod->get_value_factory(), ptype);
-                /// ... and import it into out module if necessary
+                // ... and import it into out module if necessary
                 if (ptype_mod.get() != &m_module) {
                     pval = m_module.import_value(pval);
                 }
@@ -10664,7 +11236,7 @@ Definition const *NT_analysis::reformat_default_struct_constructor(
         IArgument_positional const *new_arg = fact->create_positional_argument(expr);
         call->add_argument(new_arg);
     }
-    return c_def;
+    return elem_c_def;
 }
 
 // Reformat and reorder the arguments of a call.
@@ -11078,6 +11650,60 @@ bool NT_analysis::convert_array_cons_argument(
         }
     }
     return true;
+}
+
+void NT_analysis::check_weak_stdlib_import(
+    Position const &pos,
+    char const *import_name,
+    Module const *import_module
+) {
+    // Only check if importing module is MDL 1.6 or greater.
+    if (m_module.get_mdl_version() < IMDL::MDL_VERSION_1_6) {
+        return;
+    }
+
+    // Only warn if imported module is a standard library module.
+    if (!import_module->is_stdlib()) {
+        return;
+    }
+
+    // Only warn if importing module is in a search path root.
+    bool is_weak_relative_name = false;
+    if (import_name[0] != ':') {
+        if (import_name[0] != '.') {
+            is_weak_relative_name = true;
+        }
+    }
+    if (!is_weak_relative_name) {
+        return;
+    }
+
+    IQualified_name const *importing_name = m_module.get_qualified_name();
+
+    // Only warn if importing module is in a search path root.
+    bool in_search_path_root = false;
+    if (importing_name->get_component_count() == 1) {
+        in_search_path_root = true;
+    }
+    if (!in_search_path_root) {
+        return;
+    }
+
+    int major = 1, minor = 0;
+    m_module.get_version(major, minor);
+
+    // Emit warning for MDL version <= 1.9, error otherwise.
+    if (m_module.get_mdl_version() <= IMDL::MDL_VERSION_1_9) {
+        warning(
+            WEAK_RELATIVE_IMPORT_FROM_SEARCH_PATH_ROOT,
+            pos,
+            Error_params(*this).add(major).add(minor));
+    } else {
+        error(
+            WEAK_RELATIVE_IMPORT_FROM_SEARCH_PATH_ROOT,
+            pos,
+            Error_params(*this).add(major).add(minor));
+    }
 }
 
 // Start an import declaration.
@@ -11995,6 +12621,12 @@ bool NT_analysis::pre_visit(
         visit(anno);
     }
 
+    // the declarative property must be set here, so it can be inherited to constructors
+    if (is_declarative) {
+        type_def->set_flag(Definition::DEF_IS_DECLARATIVE);
+        struct_decl->set_declarative(true);
+    }
+
     // create a new type scope
     bool has_error = false;
     int n_fields = struct_decl->get_field_count();
@@ -12040,7 +12672,8 @@ bool NT_analysis::pre_visit(
 
             // do not promote types in the standard library, this will give unexpected results
             if (!m_is_stdlib) {
-                if (f_type->is_declarative() || is<IType_df>(f_type->skip_type_alias())) {
+                if (m_mdl_version  >= IMDL::MDL_VERSION_1_9 &&
+                    (f_type->is_declarative() || is<IType_df>(f_type->skip_type_alias()))) {
                     // "A structure type with a field of a declarative structure or declarative
                     // array type is automatically a declarative structure type."
                     is_declarative = true;
@@ -12189,11 +12822,6 @@ bool NT_analysis::pre_visit(
                 create_default_members(cast<IType_struct>(s_type), sym, type_def, struct_decl);
             }
         }
-    }
-
-    if (is_declarative) {
-        type_def->set_flag(Definition::DEF_IS_DECLARATIVE);
-        struct_decl->set_declarative(true);
     }
 
     // clear the incomplete flag
@@ -14602,6 +15230,23 @@ static bool is_annotation(IDefinition const *def)
     return def->get_kind() == IDefinition::DK_ANNOTATION;
 }
 
+/// Get the value of an annotation parameter.
+///
+/// \param owner  the owner module
+/// \param anno   the annotation
+/// \param idx    the index of the parameter
+///
+/// \return the folded value of the parameter expression
+static IValue const *get_const_parameter_value(
+    Module const      &owner,
+    IAnnotation const *anno,
+    size_t            idx)
+{
+    IExpression const *expr = anno->get_argument(idx)->get_argument_expr();
+    IValue const      *v    = expr->fold(&owner, owner.get_value_factory(), NULL);
+    return v;
+}
+
 // Handle known annotations.
 Definition const *NT_analysis::handle_known_annotation(
     Definition const *def,
@@ -14618,18 +15263,10 @@ Definition const *NT_analysis::handle_known_annotation(
             switch (def->get_semantics()) {
             case IDefinition::DS_VERSION_ANNOTATION:
                 {
-                    IExpression const *major_expr = anno->get_argument(0)->get_argument_expr();
-                    IValue const      *major      =
-                        major_expr->fold(&m_module, m_module.get_value_factory(), NULL);
-                    IExpression const *minor_expr = anno->get_argument(1)->get_argument_expr();
-                    IValue const      *minor      =
-                        minor_expr->fold(&m_module, m_module.get_value_factory(), NULL);
-                    IExpression const *patch_expr = anno->get_argument(2)->get_argument_expr();
-                    IValue const      *patch      =
-                        patch_expr->fold(&m_module, m_module.get_value_factory(), NULL);
-                    IExpression const *prerl_expr = anno->get_argument(3)->get_argument_expr();
-                    IValue const      *prerl      =
-                        prerl_expr->fold(&m_module, m_module.get_value_factory(), NULL);
+                    IValue const *major = get_const_parameter_value(m_module, anno, 0);
+                    IValue const *minor = get_const_parameter_value(m_module, anno, 1);
+                    IValue const *patch = get_const_parameter_value(m_module, anno, 2);
+                    IValue const *prerl = get_const_parameter_value(m_module, anno, 3);
 
                     Position const *prev_pos = set_module_sem_version(
                         m_module,
@@ -14889,12 +15526,8 @@ Definition const *NT_analysis::handle_known_annotation(
         break;
     case Definition::DS_SINCE_ANNOTATION:
         {
-            IExpression const *major_expr = anno->get_argument(0)->get_argument_expr();
-            IValue const      *major      =
-                major_expr->fold(&m_module, m_module.get_value_factory(), NULL);
-            IExpression const *minor_expr = anno->get_argument(1)->get_argument_expr();
-            IValue const      *minor      =
-                minor_expr->fold(&m_module, m_module.get_value_factory(), NULL);
+            IValue const *major = get_const_parameter_value(m_module, anno, 0);
+            IValue const *minor = get_const_parameter_value(m_module, anno, 1);
 
             if (!is<IValue_int>(major) || !is<IValue_int>(minor)) {
                 error(
@@ -14915,12 +15548,8 @@ Definition const *NT_analysis::handle_known_annotation(
         break;
     case Definition::DS_REMOVED_ANNOTATION:
         {
-            IExpression const *major_expr = anno->get_argument(0)->get_argument_expr();
-            IValue const      *major      =
-                major_expr->fold(&m_module, m_module.get_value_factory(), NULL);
-            IExpression const *minor_expr = anno->get_argument(1)->get_argument_expr();
-            IValue const      *minor      =
-                minor_expr->fold(&m_module, m_module.get_value_factory(), NULL);
+        IValue const *major = get_const_parameter_value(m_module, anno, 0);
+        IValue const *minor = get_const_parameter_value(m_module, anno, 1);
 
             if (!is<IValue_int>(major) || !is<IValue_int>(minor)) {
                 error(
@@ -14928,12 +15557,17 @@ Definition const *NT_analysis::handle_known_annotation(
                     anno->access_position(),
                     Error_params(*this)
                     .add("Cannot fold removed() parameter"));
-                MDL_ASSERT(!"since() failed");
+                MDL_ASSERT(!"remove() failed");
             } else {
                 int v_major = cast<IValue_int>(major)->get_value();
                 int v_minor = cast<IValue_int>(minor)->get_value();
 
                 replace_removed_version(m_annotated_def, v_major, v_minor);
+
+                // we assume here, that an entity with a "removed()" annotation has
+                // version depended overloads, as so far we did not really remove
+                // things without adding new ones
+                m_annotated_def->set_flag(Definition::DEF_IS_VERSIONED);
             }
             // ensure the REMOVED annotation is deleted from the source for later ...
             def = get_error_definition();
@@ -14956,9 +15590,7 @@ Definition const *NT_analysis::handle_known_annotation(
         break;
     case Definition::DS_LITERAL_PARAM_MASK_ANNOTATION:
         {
-            IExpression const *mask_expr = anno->get_argument(0)->get_argument_expr();
-            IValue const *mask =
-                mask_expr->fold(&m_module, m_module.get_value_factory(), NULL);
+            IValue const *mask = get_const_parameter_value(m_module, anno, 0);
 
             if (!is<IValue_int>(mask)) {
                 error(
@@ -15082,9 +15714,8 @@ Definition const *NT_analysis::handle_known_annotation(
             m_annotated_def->set_flag(Definition::DEF_IS_DEPRECATED);
 
             if (anno->get_argument_count() == 1) {
-                IExpression const   *msg_expr = anno->get_argument(0)->get_argument_expr();
                 IValue_string const *msg = as<IValue_string>(
-                    msg_expr->fold(&m_module, m_module.get_value_factory(), NULL));
+                    get_const_parameter_value(m_module, anno, 0));
 
                 if (msg != NULL) {
                     m_module.set_deprecated_message(m_annotated_def, msg);
@@ -15171,38 +15802,35 @@ Definition const *NT_analysis::handle_known_annotation(
             def = get_error_definition();
         } else {
             // check file path
-            IArgument const *arg0 = anno->get_argument(0);
-            IExpression_literal const *name_lit = as<IExpression_literal>(
-                arg0->get_argument_expr());
-            if (name_lit != NULL) {
-                if (IValue_string const *sval = as<IValue_string>(name_lit->get_value())) {
-                    if (char const *str = sval->get_value()) {
-                        size_t len = strlen(str);
-                        bool valid = false;
-                        if (len > 4 && str[len - 4] == '.' && (
-                                strcmp(str + len - 3, "png") == 0 ||
-                                strcmp(str + len - 3, "PNG") == 0 ||
-                                strcmp(str + len - 3, "jpg") == 0 ||
-                                strcmp(str + len - 3, "JPG") == 0))
-                            valid = true;
-                        else if (len > 5 && str[len - 5] == '.' && (
-                                strcmp(str + len - 4, "jpeg") == 0 ||
-                                strcmp(str + len - 4, "JPEG") == 0))
-                            valid = true;
-                        if (!valid) {
-                            warning(
-                                INVALID_THUMBNAIL_EXTENSION,
-                                name_lit->access_position(),
-                                Error_params(*this));
-                            // ensure the thumbnail annotation is deleted from the source for later
-                            def = get_error_definition();
-                        }
+            IValue_string const *sval =
+                as<IValue_string>(get_const_parameter_value(m_module, anno, 0));
+            if (sval != NULL) {
+                if (char const *str = sval->get_value()) {
+                    size_t len = strlen(str);
+                    bool valid = false;
+                    if (len > 4 && str[len - 4] == '.' && (
+                            strcmp(str + len - 3, "png") == 0 ||
+                            strcmp(str + len - 3, "PNG") == 0 ||
+                            strcmp(str + len - 3, "jpg") == 0 ||
+                            strcmp(str + len - 3, "JPG") == 0))
+                        valid = true;
+                    else if (len > 5 && str[len - 5] == '.' && (
+                            strcmp(str + len - 4, "jpeg") == 0 ||
+                            strcmp(str + len - 4, "JPEG") == 0))
+                        valid = true;
+                    if (!valid) {
+                        warning(
+                            INVALID_THUMBNAIL_EXTENSION,
+                            anno->get_argument(0)->get_argument_expr()->access_position(),
+                            Error_params(*this));
+                        // ensure the thumbnail annotation is deleted from the source for later
+                        def = get_error_definition();
                     }
                 }
             } else {
                 warning(
                     RESOURCE_NAME_NOT_LITERAL,
-                    arg0->access_position(),
+                    anno->get_argument(0)->get_argument_expr()->access_position(),
                     Error_params(*this));
                 // ensure the thumbnail annotation is deleted from the source for later ...
                 def = get_error_definition();
@@ -16841,6 +17469,38 @@ void NT_analysis::add_auto_import_declaration(
 // Insert all auto imports from default initializers.
 void NT_analysis::fix_auto_imports()
 {
+    if (m_need_tex_gamma) {
+        IType_enum const *tex_gamma_mode = m_tc.tex_gamma_mode_type;
+
+        if (m_module.get_definition_table().get_type_scope(tex_gamma_mode) == NULL) {
+            // tex::gamma_mode is not yet imported
+            Definition const *def = NULL;
+
+            if (Module const *texmod =
+                m_compiler->find_builtin_module(string("::tex", get_allocator())))
+            {
+                MDL_ASSERT(texmod->is_stdlib());
+
+                // so just lookup its definition from the ::tex module and add it to our
+                // auto import list
+                Scope const *scope = texmod->get_definition_table().get_type_scope(tex_gamma_mode);
+                if (scope != NULL) {
+                    def = scope->get_owner_definition();
+                    m_auto_imports.insert(def);
+                }
+            }
+
+            if (def == NULL) {
+                Position_impl zero(0, 0, 0, 0);
+                error(
+                    INTERNAL_COMPILER_ERROR,
+                    zero,
+                    Error_params(*this)
+                        .add("auto import of '::tex::gamma_mode' failed"));
+            }
+        }
+    }
+
     if (m_auto_imports.empty()) {
         return;
     }
@@ -16862,7 +17522,8 @@ void NT_analysis::fix_auto_imports()
             Module const *imp_mod = m_module.find_imported_module(
                 def->get_owner_module_id(), already_imported);
 
-            if (def->get_kind() == IDefinition::DK_ENUM_VALUE) {
+            Definition::Kind kind = def->get_kind();
+            if (kind == Definition::DK_ENUM_VALUE || kind == Definition::DK_MEMBER) {
                 if (imp_mod == NULL) {
                     // this should really not happen here, it it does, then something
                     // in the imported modules goes wrong, probably in auto-import
@@ -16876,15 +17537,24 @@ void NT_analysis::fix_auto_imports()
                     continue;
                 }
 
-                // Get the enum type definition for this value here.
-                // unfortunately enum value definitions does NOT live inside
-                // the enum type scope, so we must lookup the enum type scope
-                // first using the definition table of the imported module.
-                IType const *e_type = def->get_type();
-                Definition_table const &deftab = imp_mod->get_definition_table();
-                Scope const *scope = deftab.get_type_scope(e_type);
-                MDL_ASSERT(scope != NULL && "Cannot find enum type for enum value");
-                Definition const *type_def = scope->get_owner_definition();
+                Definition const *type_def = NULL;
+                if (kind == Definition::DK_ENUM_VALUE) {
+                    // Get the enum type definition for this value here.
+                    // unfortunately enum value definitions does NOT live inside
+                    // the enum type scope, so we must lookup the enum type scope
+                    // first using the definition table of the imported module.
+                    IType const *e_type = def->get_type();
+                    Definition_table const &deftab = imp_mod->get_definition_table();
+                    Scope const *scope = deftab.get_type_scope(e_type);
+                    MDL_ASSERT(scope != NULL && "Cannot find enum type for enum value");
+                    type_def = scope->get_owner_definition();
+                } else {
+                    // Get the owning struct type definition for this member here.
+                    MDL_ASSERT(kind == Definition::DK_MEMBER);
+                    Scope const *scope = def->get_def_scope();
+                    type_def = scope->get_owner_definition();
+                }
+                MDL_ASSERT(type_def != NULL && "could not find owner type definition");
 
                 // just add a new auto-import for the type and stop here, the enum values
                 // will be fixed in the next step
@@ -16913,52 +17583,62 @@ void NT_analysis::fix_auto_imports()
                 }
 
                 ISymbol const *symbol_to_import = def->get_sym();
-                if (def->get_kind() == IDefinition::DK_CONSTRUCTOR) {
-                    // constructors cannot be found in global scope.
-                    // import the containing type, this automatically also imports the constructors
-                    if (Scope const *type_scope = def->get_def_scope()) {
-                        if (ISymbol const *type_scope_symbol = type_scope->get_scope_name()) {
-                            symbol_to_import = type_scope_symbol;
+                if (def->has_flag(Definition::DEF_IS_PREDEFINED)) {
+                    entry.imported = m_module.find_imported_definition(def);
+                } else {
+                    if (def->get_kind() == IDefinition::DK_CONSTRUCTOR) {
+                        // constructors cannot be found in global scope.
+                        // import the containing type, this automatically also imports the constructors
+                        if (Scope const *type_scope = def->get_def_scope()) {
+                            if (ISymbol const *type_scope_symbol = type_scope->get_scope_name()) {
+                                symbol_to_import = type_scope_symbol;
+                            } else {
+                                MDL_ASSERT(!"no scope name found for type scope");
+                            }
                         } else {
-                            MDL_ASSERT(!"no scope name found for type scope");
+                            MDL_ASSERT(!"no def scope found for constructor");
                         }
-                    } else {
-                        MDL_ASSERT(!"no def scope found for constructor");
+                    }
+
+                    bool res = auto_import(imp_mod, symbol_to_import);
+                    if (res) {
+                        // add an import declaration
+                        add_auto_import_declaration(imp_mod, symbol_to_import);
+
+                        entry.imported = m_module.find_imported_definition(def);
                     }
                 }
-
-                bool res = auto_import(imp_mod, symbol_to_import);
-                if (res) {
-                    // add an import declaration
-                    add_auto_import_declaration(imp_mod, symbol_to_import);
-
-                    entry.imported = m_module.find_imported_definition(def);
-                    MDL_ASSERT(entry.imported != NULL && "Could not find autoimported entity");
-                }
-            } else {
-                // this should not happen
-                error(
-                    INTERNAL_COMPILER_ERROR,
-                    def,
-                    Error_params(*this)
+                if (entry.imported == NULL) {
+                    // this should not happen
+                    error(
+                        INTERNAL_COMPILER_ERROR,
+                        def,
+                        Error_params(*this)
                         .add("auto import of '")
                         .add_signature(def)
                         .add("' failed"));
+
+                    entry.imported = get_error_definition();
+                }
             }
         }
     }
 
-    // second step: handle enum values, they still might be not resolved
+    // second step: handle enum values/members, they still might be not resolved
     for (size_t i = 0, n = m_auto_imports.size(); i < n; ++i) {
         Auto_imports::Entry &entry = m_auto_imports[i];
         Definition const    *def = entry.def;
 
-        if (entry.imported == NULL && def->get_kind() == IDefinition::DK_ENUM_VALUE) {
-            // the enum type must be auto-imported already, hence the values should be found now
-            Definition const *imp_def = m_module.find_imported_definition(def);
-            entry.imported = imp_def;
+        if (entry.imported == NULL) {
+            Definition::Kind kind = def->get_kind();
+            if (kind == Definition::DK_ENUM_VALUE || kind == Definition::DK_MEMBER) {
+                // the owner type must be auto-imported already, hence the values/members
+                // should be found now
+                Definition const *imp_def = m_module.find_imported_definition(def);
+                entry.imported = imp_def;
 
-            MDL_ASSERT(imp_def != NULL && "second step of auto-import failed");
+                MDL_ASSERT(imp_def != NULL && "second step of auto-import failed");
+            }
         }
     }
 

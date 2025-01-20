@@ -66,7 +66,7 @@ public:
     /// \param name        The name of the new member.
     /// \return
     ///                    -  0: Success.
-    ///                    - -1: Invalid parameters (\c NULL pointer).
+    ///                    - -1: Invalid parameters (\c nullptr).
     ///                    - -2: There is already a member with name \p name.
     virtual Sint32 add_member( const char* type_name, const char* name) = 0;
 
@@ -75,7 +75,7 @@ public:
     /// \param name        The name of the member to remove.
     /// \return
     ///                    -  0: Success.
-    ///                    - -1: Invalid parameters (\c NULL pointer).
+    ///                    - -1: Invalid parameters (\c nullptr).
     ///                    - -2: There is no member with name \p name.
     virtual Sint32 remove_member( const char* name) = 0;
 
@@ -85,21 +85,21 @@ public:
     /// Returns the type name of a certain structure member.
     ///
     /// \param index   The index of the requested structure member.
-    /// \return        The type name of that structure member, or \c NULL if \p index is out of
+    /// \return        The type name of that structure member, or \c nullptr if \p index is out of
     ///                bounds.
     virtual const char* get_member_type_name( Size index) const = 0;
 
     /// Returns the type name of a certain structure member.
     ///
     /// \param name    The name of the requested structure member.
-    /// \return        The type name of that structure member, or \c NULL if there is no structure
-    ///                member with name \p name.
+    /// \return        The type name of that structure member, or \c nullptr if there is no
+    ///                structure member with name \p name.
     virtual const char* get_member_type_name( const char* name) const = 0;
 
     /// Returns the member name of a certain structure member.
     ///
     /// \param index   The index of the requested structure member.
-    /// \return        The member name of that structure member, or \c NULL if \p index is out of
+    /// \return        The member name of that structure member, or \c nullptr if \p index is out of
     ///                bounds.
     virtual const char* get_member_name( Size index) const = 0;
 
@@ -116,7 +116,7 @@ public:
     /// any way. Use the methods on this interface to obtain information about the type itself.
     ///
     /// \return        The type name under which this structure declaration was registered, or
-    ///                \c NULL in case of failure.
+    ///                \c nullptr in case of failure.
     virtual const char* get_structure_type_name() const = 0;
 };
 

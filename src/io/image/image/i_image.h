@@ -132,7 +132,7 @@ public:
     /// \param gamma              The desired gamma value. The special value 0.0 represents the
     ///                           default gamma which is 1.0 for HDR pixel types and 2.2 for LDR
     ///                           pixel types.
-    /// \return                   The requested mipmap, or \c NULL in case of invalid pixel type,
+    /// \return                   The requested mipmap, or \c nullptr in case of invalid pixel type,
     ///                           width, height, layers, or cubemap flag, or memory allocation
     ///                           failures.
     virtual IMipmap* create_mipmap(
@@ -146,7 +146,7 @@ public:
     /// Creates a file-based mipmap that represents the given file on disk.
     ///
     /// \param filename           The file that shall be represented by this mipmap.
-    /// \param selector           The selector (or \c NULL).
+    /// \param selector           The selector (or \c nullptr).
     /// \param only_first_level   Indicates whether only the first (or all) miplevels should be
     ///                           read from the file.
     /// \param[out] errors        An optional pointer to an #mi::Sint32 to which an error code will
@@ -170,7 +170,7 @@ public:
     ///                           absolute access.
     /// \param container_filename The resolved filename of the container itself.
     /// \param member_filename    The relative filename of the mipmap in the container.
-    /// \param selector           The selector (or \c NULL).
+    /// \param selector           The selector (or \c nullptr).
     /// \param only_first_level   Indicates whether only the first (or all) miplevels should be
     ///                           read from the reader.
     /// \param[out] errors        An optional pointer to an #mi::Sint32 to which an error code will
@@ -197,9 +197,9 @@ public:
     /// \param reader             The reader to be used to obtain the mipmap. Needs to support
     ///                           absolute access.
     /// \param image_format       The image format of the buffer.
-    /// \param selector           The selector (or \c NULL).
+    /// \param selector           The selector (or \c nullptr).
     /// \param mdl_file_path      The resolved MDL file path (to be used for log messages only),
-    ///                           or \c NULL in other contexts.
+    ///                           or \c nullptr in other contexts.
     /// \param only_first_level   Indicates whether only the first (or all) miplevels should be
     ///                           read from the reader.
     /// \param[out] errors        An optional pointer to an #mi::Sint32 to which an error code will
@@ -245,7 +245,7 @@ public:
     /// \param canvases           The array of canvases to create the mipmap from, starting with the
     ///                           base level.
     /// \param is_cubemap         Flag that indicates whether this mipmap represents a cubemap.
-    /// \return                   The requested mipmap, or \c NULL in case of invalid pointers in
+    /// \return                   The requested mipmap, or \c nullptr in case of invalid pointers in
     ///                           \c canvases.
     virtual IMipmap* create_mipmap(
         std::vector<mi::base::Handle<mi::neuraylib::ICanvas> >& canvases,
@@ -267,7 +267,7 @@ public:
     /// \param gamma              The desired gamma value. The special value 0.0 represents the
     ///                           default gamma which is 1.0 for HDR pixel types and 2.2 for LDR
     ///                           pixel types.
-    /// \return                   The requested canvas, or \c NULL in case of invalid pixel type,
+    /// \return                   The requested canvas, or \c nullptr in case of invalid pixel type,
     ///                           width, height, layers, or cubemap flag, or memory allocation
     ///                           failures.
     virtual mi::neuraylib::ICanvas* create_canvas(
@@ -281,7 +281,7 @@ public:
     /// Creates a file-based canvas that represents the given file on disk.
     ///
     /// \param filename           The file that shall be represented by this canvas.
-    /// \param selector           The selector (or \c NULL).
+    /// \param selector           The selector (or \c nullptr).
     /// \param miplevel           The miplevel in the file that shall be represented by this canvas.
     /// \param[out] errors        An optional pointer to an #mi::Sint32 to which an error code will
     ///                           be written. The error codes have the following meaning:
@@ -305,7 +305,7 @@ public:
     ///                           absolute access.
     /// \param container_filename The resolved filename of the container itself.
     /// \param member_filename    The relative filename of the canvas in the container.
-    /// \param selector           The selector (or \c NULL).
+    /// \param selector           The selector (or \c nullptr).
     /// \param miplevel           The miplevel in the reader that shall be represented by this
     ///                           canvas.
     /// \param[out] errors        An optional pointer to an #mi::Sint32 to which an error code will
@@ -336,9 +336,9 @@ public:
     /// \param reader             The reader to be used to obtain the canvas. Needs to support
     ///                           absolute access.
     /// \param image_format       The image format of the buffer.
-    /// \param selector           The selector (or \c NULL).
+    /// \param selector           The selector (or \c nullptr).
     /// \param mdl_file_path      The resolved MDL file path (to be used for log messages only),
-    ///                           or \c NULL in other contexts.
+    ///                           or \c nullptr in other contexts.
     /// \param miplevel           The miplevel in the buffer that shall be represented by this
     ///                           canvas.
     /// \param[out] errors        An optional pointer to an #mi::Sint32 to which an error code will
@@ -368,7 +368,7 @@ public:
     /// \param gamma              The desired gamma value. The special value 0.0 represents the
     ///                           default gamma which is 1.0 for HDR pixel types and 2.2 for LDR
     ///                           pixel types. Note that the pixel data itself is not changed.
-    /// \return                   The requested canvas, or \c NULL in case of invalid \c tile
+    /// \return                   The requested canvas, or \c nullptr in case of invalid \c tile
     ///                           pointers.
     virtual mi::neuraylib::ICanvas* create_canvas(
         const std::vector<mi::base::Handle<mi::neuraylib::ITile>>& tiles,
@@ -379,7 +379,7 @@ public:
     /// \param pixel_type         The desired pixel type.
     /// \param width              The desired width.
     /// \param height             The desired height.
-    /// \return                   The requested tile, or \c NULL in case of invalid pixel type,
+    /// \return                   The requested tile, or \c nullptr in case of invalid pixel type,
     ///                           width, or height, or memory allocation failures.
     virtual mi::neuraylib::ITile* create_tile(
         Pixel_type pixel_type,
@@ -465,7 +465,7 @@ public:
     /// \param pixel_type       The desired pixel type.
     /// \param only_first_level Indicates whether only the first (or all) miplevels should be
     ///                         converted.
-    /// \return                 The mipmap with the desired pixel type, or \c NULL in case of
+    /// \return                 The mipmap with the desired pixel type, or \c nullptr in case of
     ///                         invalid pixel types.
     virtual IMipmap* convert_mipmap(
         const IMipmap* mipmap,
@@ -481,7 +481,7 @@ public:
     ///
     /// \param canvas           The canvas to convert.
     /// \param pixel_type       The desired pixel type.
-    /// \return                 The canvas with the desired pixel type, or \c NULL in case of
+    /// \return                 The canvas with the desired pixel type, or \c nullptr in case of
     ///                         invalid pixel types.
     virtual mi::neuraylib::ICanvas* convert_canvas(
         const mi::neuraylib::ICanvas* canvas,
@@ -496,7 +496,7 @@ public:
     ///
     /// \param tile             The tile to convert.
     /// \param pixel_type       The desired pixel type.
-    /// \return                 The tile with the desired pixel type, or \c NULL in case of
+    /// \return                 The tile with the desired pixel type, or \c nullptr in case of
     ///                         invalid pixel types.
     virtual mi::neuraylib::ITile* convert_tile(
         const mi::neuraylib::ITile* tile,
@@ -550,7 +550,7 @@ public:
     /// \param selector         The RGBA channel selector.
     /// \param only_first_level Indicates whether only the first (or all) miplevels should be
     ///                         extracted.
-    /// \return                 The extracted channel, or \c NULL in case of invalid pixel type/
+    /// \return                 The extracted channel, or \c nullptr in case of invalid pixel type/
     ///                         channel selector combinations (see #get_pixel_type_for_channel()).
     virtual IMipmap* extract_channel(
         const IMipmap* mipmap, const char* selector, bool only_first_level = true) const = 0;
@@ -559,7 +559,7 @@ public:
     ///
     /// \param canvas           The canvas to extract a channel from.
     /// \param selector         The RGBA channel selector.
-    /// \return                 The extracted channel, or \c NULL in case of invalid pixel type/
+    /// \return                 The extracted channel, or \c nullptr in case of invalid pixel type/
     ///                         channel selector combinations (see #get_pixel_type_for_channel()).
     virtual mi::neuraylib::ICanvas* extract_channel(
         const mi::neuraylib::ICanvas* canvas, const char* selector) const = 0;
@@ -568,7 +568,7 @@ public:
     ///
     /// \param tile             The tile to extract a channel from.
     /// \param selector         The RGBA channel selector.
-    /// \return                 The extracted channel, or \c NULL in case of invalid pixel type/
+    /// \return                 The extracted channel, or \c nullptr in case of invalid pixel type/
     ///                         channel selector combinations (see #get_pixel_type_for_channel()).
     virtual mi::neuraylib::ITile* extract_channel(
         const mi::neuraylib::ITile* tile, const char* selector) const = 0;
@@ -621,7 +621,7 @@ public:
     /// \param image                 The image to export.
     /// \param output_filename       The filename for the exported image.
     /// \param export_options        See <mi/neuraylib/iimage_api.h> for supported export options.
-    ///                              Can be \c NULL.
+    ///                              Can be \c nullptr.
     /// \return                      \c true in case of success, \c false in case of failure.
 
     virtual bool export_canvas(
@@ -634,7 +634,7 @@ public:
     /// \param image                 The image to export.
     /// \param output_filename       The filename for the exported image.
     /// \param export_options        See <mi/neuraylib/iimage_api.h> for supported export options.
-    ///                              Can be \c NULL.
+    ///                              Can be \c nullptr.
     /// \return                      \c true in case of success, \c false in case of failure.
     virtual bool export_mipmap(
         const IMipmap* image,
@@ -652,8 +652,8 @@ public:
     /// \param pixel_type            The desired pixel type. Ignored if the plugin for the file
     ///                              format does not support the requested pixel type.
     /// \param export_options        See <mi/neuraylib/iimage_api.h> for supported export options.
-    ///                              Can be \c NULL.
-    /// \return                      The encoded image, or \c NULL in case of failure.
+    ///                              Can be \c nullptr.
+    /// \return                      The encoded image, or \c nullptr in case of failure.
     virtual mi::neuraylib::IBuffer* create_buffer_from_canvas(
         const mi::neuraylib::ICanvas* canvas,
         const char* image_format,
@@ -665,31 +665,31 @@ public:
 
     /// Finds a suitable plugin for import.
     ///
-    /// \param extension   The extension of the file intended to import, may be \c NULL.
+    /// \param extension   The extension of the file intended to import, may be \c nullptr.
     /// \param reader      The reader to use for the test buffer. Calls rewind() after the file
-    ///                    header has been read. \c NULL can be passed to skip this test.
+    ///                    header has been read. \c nullptr can be passed to skip this test.
     /// \return            One of the plugins of highest priority that support the extension
     ///                    \p extension and where mi::neuraylib::IImage_plugin::test() succeeds (if
-    ///                    a reader was passed), or \c NULL in case of failure.
+    ///                    a reader was passed), or \c nullptr in case of failure.
     virtual mi::neuraylib::IImage_plugin* find_plugin_for_import(
         const char* extension, mi::neuraylib::IReader* reader) const = 0;
 
     /// Finds a suitable plugin for export.
     ///
-    /// \param extension   The extension of the file intended to export, may not be \c NULL.
+    /// \param extension   The extension of the file intended to export, may not be \c nullptr.
     /// \return            One of the plugins of highest priority that support the extension
-    ///                    \p extension, or \c NULL in case of failure.
+    ///                    \p extension, or \c nullptr in case of failure.
     virtual mi::neuraylib::IImage_plugin* find_plugin_for_export( const char* extension) const = 0;
 
     /// Sets the callback to support lazy loading of images in MDL containers and MDLE.
     ///
-    /// Pass \c NULL to clear the callback. Not thread-safe. Resetting during runtime causes errors
-    /// for not yet loaded tiles.
+    /// Pass \c nullptr to clear the callback. Not thread-safe. Resetting during runtime causes
+    /// errors for not yet loaded tiles.
     virtual void set_mdl_container_callback( IMdl_container_callback* mdl_container_callback) = 0;
 
     /// Returns the callback to support lazy loading of images in MDL containers and MDLE.
     ///
-    /// ... or \c NULL if no callback is set.
+    /// ... or \c nullptr if no callback is set.
     virtual IMdl_container_callback* get_mdl_container_callback() const = 0;
 
     /// Creates the next miplevel from the given canvas.
@@ -722,7 +722,7 @@ class IMdl_container_callback : public
     mi::base::Interface_declare<0x039d55cf,0xd57f,0x4ef8,0x8e,0xb4,0xc7,0x2b,0x9e,0x77,0x02,0x96>
 {
 public:
-    /// Returns a reader for a file in an MDL container, MDLE, or \c NULL in case of failure.
+    /// Returns a reader for a file in an MDL container, MDLE, or \c nullptr in case of failure.
     virtual mi::neuraylib::IReader* get_reader(
         const char* container_filename, const char* member_filename) = 0;
 };

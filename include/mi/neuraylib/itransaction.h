@@ -67,9 +67,7 @@ class IScope;
 ///
 /// Access to database elements is provided by #access() (read-only) and #edit() (for modification).
 /// The interface pointers returned by these methods must be released when you are done, in
-/// particular before the transaction is committed or aborted. Releasing the last interface pointer
-/// obtained from #edit() makes the changes also visible to later #edit() calls for the same
-/// database element.
+/// particular before the transaction is committed or aborted.
 /// \par
 /// Note that it is possible to access the same database element concurrently in the same
 /// transaction. Concurrently means that the interface pointer obtained from an earlier #access()
@@ -107,6 +105,37 @@ class ITransaction : public
     mi::base::Interface_declare<0x6ca1f0c2,0xb262,0x4f09,0xa6,0xa5,0x05,0xae,0x14,0x45,0xed,0xfa>
 {
 public:
+    /// Symbolic privacy level for the privacy level of the scope of this transaction.
+    ///
+    /// This symbolic constant can be passed to #store() and #copy() to indicate the privacy level
+    /// of the scope of this transaction. It has the same affect as passing the result of
+    /// #mi::neuraylib::IScope::get_privacy_level(), but is more convenient.
+    static const mi::Uint8 LOCAL_SCOPE = 255;
+
+    /// \name Static properties
+    //@{
+
+    /// Returns the ID of this transaction.
+    ///
+    /// The transaction ID is of most use when debugging an application as the value returned allows
+    /// one to correlate log messages and admin HTTP server output with the API actions.
+    ///
+    /// \return            The ID of the transaction.
+    virtual const char* get_id() const = 0;
+
+    /// Returns the scope of this transaction.
+    virtual IScope* get_scope() const = 0;
+
+    //@}
+    /// \name Committing and aborting
+    //@{
+
+    /// Indicates whether the transaction is open.
+    ///
+    /// \return   \c true if the transaction is still open, or \c false if the transaction is
+    ///           closed, i.e., it has been committed or aborted.
+    virtual bool is_open() const = 0;
+
     /// Commits the transaction.
     ///
     /// Note that a commit() implicitly closes the transaction.
@@ -124,11 +153,9 @@ public:
     /// A closed transaction does not allow any future operations and needs to be released.
     virtual void abort() = 0;
 
-    /// Indicates whether the transaction is open.
-    ///
-    /// \return   \c true if the transaction is still open, or \c false if the transaction is
-    ///           closed, i.e., it has been committed or aborted.
-    virtual bool is_open() const = 0;
+    //@}
+    /// \name Creation of DB elements
+    //@{
 
     /// Creates an object of the type \p type_name.
     ///
@@ -160,12 +187,12 @@ public:
     ///                     of the object to create.
     /// \param argv         The array of arguments passed to the constructor. Passed to the
     ///                     constructor of factory of the object to create.
-    /// \return             A pointer to the created object, or \c NULL if \p type_name is invalid
-    ///                     (\c NULL pointer) or not a valid type name.
+    /// \return             A pointer to the created object, or \c nullptr if \p type_name is
+    ///                     invalid (\c nullptr) or not a valid type name.
     virtual base::IInterface* create(
         const char* type_name,
         Uint32 argc = 0,
-        const base::IInterface* argv[] = 0) = 0;
+        const base::IInterface* argv[] = nullptr) = 0;
 
     /// Creates an object of the type \p type_name.
     ///
@@ -214,14 +241,14 @@ public:
     /// \param argv         The array of arguments passed to the constructor. Passed to the
     ///                     constructor of factory of the object to create.
     /// \tparam T           The interface type of the class to create.
-    /// \return             A pointer to the created object, or \c NULL if \p type_name is invalid
-    ///                     (\c NULL pointer), not a valid type name, or does not create an object
-    ///                     of type \c T.
+    /// \return             A pointer to the created object, or \c nullptr if \p type_name is
+    ///                     invalid (\c nullptr), not a valid type name, or does not create an
+    ///                     object of type \c T.
     template<class T>
     T* create(
         const char* type_name,
         Uint32 argc = 0,
-        const base::IInterface* argv[] = 0)
+        const base::IInterface* argv[] = nullptr)
     {
         base::IInterface* ptr_iinterface = create( type_name, argc, argv);
         if( !ptr_iinterface)
@@ -271,12 +298,10 @@ public:
         return create<T>( Type_traits<T>::get_type_name());
     }
 
-    /// Symbolic privacy level for the privacy level of the scope of this transaction.
-    ///
-    /// This symbolic constant can be passed to #store() and #copy() to indicate the privacy level
-    /// of the scope of this transaction. It has the same affect as passing the result of
-    /// #mi::neuraylib::IScope::get_privacy_level(), but is more convenient.
-    static const mi::Uint8 LOCAL_SCOPE = 255;
+    //@}
+
+    /// \name Storing of DB elements
+    //@{
 
     /// Stores the element \p db_element in the database under the name \p name and with the privacy
     /// level \p privacy.
@@ -306,7 +331,7 @@ public:
     /// \return
     ///        -  0: Success.
     ///        - -1: Unspecified failure.
-    ///        - -2: Invalid parameters (\c NULL pointer).
+    ///        - -2: Invalid parameters (\c nullptr).
     ///        - -3: The transaction is not open.
     ///        - -4: \p db_element is not a DB element.
     ///        - -5: Invalid privacy level.
@@ -325,14 +350,18 @@ public:
     virtual Sint32 store(
         base::IInterface* db_element, const char* name, Uint8 privacy = LOCAL_SCOPE) = 0;
 
+    //@}
+    /// \name Accessing and editing DB elements
+    //@{
+
     /// Retrieves an element from the database.
     ///
     /// The database searches for the most recent version of the named DB element visible for the
     /// current transaction. That version will be returned.
     ///
     /// \param name   The name of the element to retrieve.
-    /// \return       The requested element from the database, or \c NULL if \p name is invalid, no
-    ///               DB element with that name exists, or the transaction is already closed.
+    /// \return       The requested element from the database, or \c nullptr if \p name is invalid,
+    ///               no DB element with that name exists, or the transaction is already closed.
     virtual const base::IInterface* access( const char* name) = 0;
 
     /// Retrieves an element from the database.
@@ -348,15 +377,15 @@ public:
     ///
     /// \param name   The name of the element to retrieve.
     /// \tparam T     The interface type of the element to retrieve.
-    /// \return       The requested element from the database, or \c NULL if \p name is invalid, no
-    ///               DB element with that name exists, the transaction is already closed, or the
-    ///               element is not of type \c T.
+    /// \return       The requested element from the database, or \c nullptr if \p name is invalid,
+    ///               no DB element with that name exists, the transaction is already closed, or
+    ///               the element is not of type \c T.
     template<class T>
     const T* access( const char* name)
     {
         const base::IInterface* ptr_iinterface = access( name);
         if( !ptr_iinterface)
-            return 0;
+            return nullptr;
         const T* ptr_T = static_cast<const T*>( ptr_iinterface->get_interface( typename T::IID()));
         ptr_iinterface->release();
         return ptr_T;
@@ -371,8 +400,8 @@ public:
     /// manually in the database using the #store() method.
     ///
     /// \param name   The name of the element to retrieve.
-    /// \return       The requested element from the database, or \c NULL if \p name is invalid, no
-    ///               DB element with that name exists, or the transaction is already closed.
+    /// \return       The requested element from the database, or \c nullptr if \p name is invalid,
+    ///               no DB element with that name exists, or the transaction is already closed.
     virtual base::IInterface* edit( const char* name) = 0;
 
     /// Retrieves an element from the database and returns it ready for editing.
@@ -391,19 +420,22 @@ public:
     ///
     /// \param name   The name of the element to retrieve.
     /// \tparam T     The interface type of the element to retrieve.
-    /// \return       The requested element from the database, or \c NULL if \p name is invalid, no
-    ///               DB element with that name exists, the transaction is already closed, or the
-    ///               element is not of type \c T.
+    ///               no DB element with that name exists, the transaction is already closed, or
+    ///               the element is not of type \c T.
     template<class T>
     T* edit( const char* name)
     {
         base::IInterface* ptr_iinterface = edit( name);
         if( !ptr_iinterface)
-            return 0;
+            return nullptr;
         T* ptr_T = static_cast<T*>( ptr_iinterface->get_interface( typename T::IID()));
         ptr_iinterface->release();
         return ptr_T;
     }
+
+    //@}
+    /// \name Copies, removal, and properties of DB elements
+    //@{
 
     /// Creates a copy of a database element.
     ///
@@ -419,7 +451,7 @@ public:
     ///                  itself.
     /// \return
     ///                  -  0: Success.
-    ///                  - -2: Invalid parameters (\c NULL pointer).
+    ///                  - -2: Invalid parameters (\c nullptr).
     ///                  - -3: The transaction is not open.
     ///                  - -4: There is no DB element named \p source visible in this transaction.
     ///                  - -5: Invalid privacy level.
@@ -478,17 +510,32 @@ public:
     ///                                  no DB element named \p name in the scope of this
     ///                                  transaction or there is no version of that DB element in
     ///                                  one of the parent scopes.
-    ///                            - -2: Invalid parameters (\c NULL pointer).
+    ///                            - -2: Invalid parameters (\c nullptr).
     ///                            - -3: The transaction is not open.
     virtual Sint32 remove( const char* name, bool only_localized = false) = 0;
 
     /// Returns the name of a database element.
     ///
     /// \param db_element   The DB element.
-    /// \return             The name of the DB element, or \c NULL if \p db_element is invalid
-    ///                     (\c NULL pointer), the object is not in the database, or the
+    /// \return             The name of the DB element, or \c nullptr if \p db_element is invalid
+    ///                     (\c nullptr), the object is not in the database, or the
     ///                     transaction is already closed.
     virtual const char* name_of( const base::IInterface* db_element) const = 0;
+
+    /// Returns the privacy level of the element with the name \p name.
+    ///
+    /// \param name          The name of the element.
+    /// \return
+    ///                      - >= 0: Success. The privacy level of the element (in the range 0-255).
+    ///                      -   -2: Invalid parameters (\c nullptr).
+    ///                      -   -3: The transaction is not open.
+    ///                      -   -4: There is no DB element named \p name visible in this
+    ///                              transaction.
+    virtual Sint32 get_privacy_level( const char* name) const = 0;
+
+    //@}
+    /// \name Time stamps
+    //@{
 
     /// Returns the time stamp describing the current "time".
     ///
@@ -545,16 +592,9 @@ public:
     virtual bool has_changed_since_time_stamp(
         const char* element, const char* time_stamp) const = 0;
 
-    /// Returns the ID of this transaction.
-    ///
-    /// The transaction ID is of most use when debugging an application as the value returned allows
-    /// one to correlate log messages and admin HTTP server output with the API actions.
-    ///
-    /// \return            The ID of the transaction.
-    virtual const char* get_id() const = 0;
-
-    /// Returns the scope of this transaction.
-    virtual IScope* get_scope() const = 0;
+    //@}
+    /// \name Traversal
+    //@{
 
     /// Returns scene elements of a subgraph originating at a given scene element.
     ///
@@ -573,30 +613,21 @@ public:
     /// \param name_pattern   An extended regular expression that acts as filter on the names of
     ///                       returned scene elements (see [\ref OGBS7]). The regular expression
     ///                       is matched to \em any \em part of the scene element name, not just to
-    ///                       the \em entire scene element name. The value \c NULL is handled as
+    ///                       the \em entire scene element name. The value \c nullptr is handled as
     ///                       \c ".*".
     /// \param type_names     A list of type names that acts as filter on the names of returned
     ///                       scene elements. Only scene elements with a matching type name pass
-    ///                       the filter. The value \c NULL lets all scene elements pass the filter
-    ///                       irrespective of their type name.
+    ///                       the filter. The value \c nullptr lets all scene elements pass the
+    ///                       filter irrespective of their type name.
     /// \return               A list of name of scene elements in the subgraph matching the given
-    ///                       regular expression and type name filter, or \c NULL in case of
-    ///                       an invalid root element name or an invalid regular expression.
+    ///                       regular expression and type name filter, or \c nullptr in case of an
+    ///                       invalid root element name or an invalid regular expression.
     virtual IArray* list_elements(
         const char* root_element,
-        const char* name_pattern = 0,
-        const IArray* type_names = 0) const = 0;
+        const char* name_pattern = nullptr,
+        const IArray* type_names = nullptr) const = 0;
 
-    /// Returns the privacy level of the element with the name \p name.
-    ///
-    /// \param name          The name of the element.
-    /// \return
-    ///                      - >= 0: Success. The privacy level of the element (in the range 0-255).
-    ///                      -   -2: Invalid parameters (\c NULL pointer).
-    ///                      -   -3: The transaction is not open.
-    ///                      -   -4: There is no DB element named \p name visible in this
-    ///                              transaction.
-    virtual Sint32 get_privacy_level( const char* name) const = 0;
+    //@}
 };
 
 /**@}*/ // end group mi_neuray_database_access

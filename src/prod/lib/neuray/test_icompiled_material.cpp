@@ -41,6 +41,7 @@
 
 #include <mi/neuraylib/argument_editor.h>
 #include <mi/neuraylib/icanvas.h>
+#include <mi/neuraylib/icolor.h>
 #include <mi/neuraylib/icompiled_material.h>
 #include <mi/neuraylib/idebug_configuration.h>
 #include <mi/neuraylib/iimage_api.h>
@@ -65,6 +66,8 @@
 #define DIR_PREFIX "output_test_icompiled_material"
 
 #include "test_shared_mdl.h" // depends on DIR_PREFIX
+
+#include <io/image/image/test_shared.h> // MI_CHECK_IMG_DIFF
 
 
 
@@ -159,7 +162,7 @@ void check_icompiled_material(
         mi::base::Handle<const mi::neuraylib::IExpression_list> arguments2(
             scattering->get_arguments());
         MI_CHECK_EQUAL_CSTR(
-            "mdl::df::diffuse_reflection_bsdf(color,float,string)", scattering->get_definition());
+            "mdl::df::diffuse_reflection_bsdf(color,float,color,string)", scattering->get_definition());
         if( !class_compilation) {
             mi::base::Handle<const mi::neuraylib::IExpression_constant> tint_expr(
                 arguments2->get_expression<mi::neuraylib::IExpression_constant>( "tint"));
@@ -1505,37 +1508,42 @@ void check_multiscatter_textures( mi::neuraylib::INeuray* neuray)
         mi::Size rx;
         mi::Size ry;
         mi::Size rz;
+        const char* pixel_type;
     };
 
     mi::base::Handle<mi::neuraylib::IMdl_backend_api> mdl_backend_api(
         neuray->get_api_component<mi::neuraylib::IMdl_backend_api>());
 
     std::vector<Df_data> df_data = {
-        { mi::neuraylib::DFK_SIMPLE_GLOSSY_MULTISCATTER, 65, 64, 33 },
-        { mi::neuraylib::DFK_BACKSCATTERING_GLOSSY_MULTISCATTER, 65, 64, 1 },
-        { mi::neuraylib::DFK_BECKMANN_SMITH_MULTISCATTER, 65, 64, 33 },
-        { mi::neuraylib::DFK_BECKMANN_VC_MULTISCATTER, 65, 64, 33 },
-        { mi::neuraylib::DFK_GGX_SMITH_MULTISCATTER, 65, 64, 33 },
-        { mi::neuraylib::DFK_GGX_VC_MULTISCATTER, 65, 64, 33 },
-        { mi::neuraylib::DFK_WARD_GEISLER_MORODER_MULTISCATTER, 65, 64, 1 },
-        { mi::neuraylib::DFK_SHEEN_MULTISCATTER, 65, 64, 1 }
+        { mi::neuraylib::DFK_SIMPLE_GLOSSY_MULTISCATTER, 65, 64, 33, "Float32" },
+        { mi::neuraylib::DFK_BACKSCATTERING_GLOSSY_MULTISCATTER, 65, 64, 1, "Float32" },
+        { mi::neuraylib::DFK_BECKMANN_SMITH_MULTISCATTER, 65, 64, 33, "Float32" },
+        { mi::neuraylib::DFK_BECKMANN_VC_MULTISCATTER, 65, 64, 33, "Float32" },
+        { mi::neuraylib::DFK_GGX_SMITH_MULTISCATTER, 65, 64, 33, "Float32" },
+        { mi::neuraylib::DFK_GGX_VC_MULTISCATTER, 65, 64, 33, "Float32" },
+        { mi::neuraylib::DFK_WARD_GEISLER_MORODER_MULTISCATTER, 65, 64, 1, "Float32" },
+        { mi::neuraylib::DFK_SHEEN_MULTISCATTER, 65, 64, 1, "Float32" },
+        { mi::neuraylib::DFK_MICROFLAKE_SHEEN_GENERAL, 32, 32, 1, "Float32<3>" },
+        { mi::neuraylib::DFK_MICROFLAKE_SHEEN_MULTISCATTER, 65, 64, 1, "Float32" }
     };
 
     const float* data = nullptr;
+    const char* pixel_type = nullptr;
     mi::Size rx, ry, rz;
 
     for( const auto& entry : df_data) {
-        data = mdl_backend_api->get_df_data_texture( entry.kind, rx, ry, rz);
+        data = mdl_backend_api->get_df_data_texture( entry.kind, rx, ry, rz, pixel_type);
         MI_CHECK( data);
         MI_CHECK_EQUAL( entry.rx, rx);
         MI_CHECK_EQUAL( entry.ry, ry);
         MI_CHECK_EQUAL( entry.rz, rz);
+        MI_CHECK_EQUAL_CSTR( entry.pixel_type, pixel_type);
     }
 
-    data = mdl_backend_api->get_df_data_texture( mi::neuraylib::DFK_NONE, rx, ry, rz);
+    data = mdl_backend_api->get_df_data_texture( mi::neuraylib::DFK_NONE, rx, ry, rz, pixel_type);
     MI_CHECK( !data);
 
-    data = mdl_backend_api->get_df_data_texture( mi::neuraylib::DFK_INVALID, rx, ry, rz);
+    data = mdl_backend_api->get_df_data_texture( mi::neuraylib::DFK_INVALID, rx, ry, rz, pixel_type);
     MI_CHECK( !data);
 }
 
@@ -1651,189 +1659,206 @@ void check_distiller_for_multiple_targets(
     }
 }
 
-// Check whether the canvases are equal except for small rounding errors.
-bool check_canvas_nearly_equal(
-    const mi::neuraylib::ICanvas* canvas_a,
-    const mi::neuraylib::ICanvas* canvas_b,
-    size_t num_image_floats)
-{
-    mi::base::Handle<const mi::neuraylib::ITile> tile_a( canvas_a->get_tile());
-    mi::base::Handle<const mi::neuraylib::ITile> tile_b( canvas_b->get_tile());
-    const auto* data_a = reinterpret_cast<const float*>( tile_a->get_data());
-    const auto* data_b = reinterpret_cast<const float*>( tile_b->get_data());
-    for( size_t i = 0; i < num_image_floats; ++i)
-        if( fabs( data_a[i] - data_b[i]) > 0.00001f)
-            return false;
-    return true;
-}
-
-// Bakes \p path of \p instance_name with various compilation and baker flags.
-mi::neuraylib::ICanvas* bake_to_canvas(
+void check_baker(
     mi::neuraylib::ITransaction* transaction,
     mi::neuraylib::INeuray* neuray,
-    const char* instance_name,
-    const char* path,
-    const char* pixel_type,
-    mi::Uint32 width,
-    mi::Uint32 height,
+    bool first_run,
+    const std::string& pixel_type,
+    const std::string& type_name,
+    bool use_constant_detection,
+    bool constant_expression,
+    const std::string& instance_name,
+    const std::string& path,
+    const std::string& file_name_prefix,
     mi::neuraylib::IMaterial_instance::Compilation_options compilation_flags,
     mi::neuraylib::Baker_resource baker_flags)
 {
-    mi::base::Handle<mi::neuraylib::IMdl_distiller_api> mdl_distiller_api(
-        neuray->get_api_component<mi::neuraylib::IMdl_distiller_api>());
     mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
         neuray->get_api_component<mi::neuraylib::IMdl_factory>());
-
     mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
         mdl_factory->create_execution_context());
 
+    // create compiled material with the given flags
     mi::base::Handle<const mi::neuraylib::IMaterial_instance> mi(
-        transaction->access<mi::neuraylib::IMaterial_instance>( instance_name));
+        transaction->access<mi::neuraylib::IMaterial_instance>( instance_name.c_str()));
     mi::base::Handle<const mi::neuraylib::ICompiled_material> cm( mi->create_compiled_material(
         compilation_flags, context.get()));
     MI_CHECK_CTX( context);
     MI_CHECK( cm);
 
+    // create baker for the given path and flags
+    mi::base::Handle<mi::neuraylib::IMdl_distiller_api> mdl_distiller_api(
+        neuray->get_api_component<mi::neuraylib::IMdl_distiller_api>());
     mi::base::Handle<const mi::neuraylib::IBaker> baker(
-        mdl_distiller_api->create_baker( cm.get(), path, baker_flags, 0));
+        mdl_distiller_api->create_baker( cm.get(), path.c_str(), baker_flags, /*gpu_device_id*/ 0));
     MI_CHECK( baker);
     MI_CHECK_EQUAL( baker->is_uniform(), false);
-    MI_CHECK_EQUAL_CSTR( pixel_type, baker->get_pixel_type());
+    MI_CHECK_EQUAL( pixel_type, baker->get_pixel_type());
+    MI_CHECK_EQUAL( type_name, baker->get_type_name());
 
+    // allocate canvas
+    mi::Uint32 width = 100;
+    mi::Uint32 height = 100;
     mi::base::Handle<mi::neuraylib::IImage_api> image_api(
         neuray->get_api_component<mi::neuraylib::IImage_api>());
     mi::base::Handle<mi::neuraylib::ICanvas> canvas(
-        image_api->create_canvas( pixel_type, width, height));
-    result = baker->bake_texture( canvas.get());
-    MI_CHECK_EQUAL( 0, result);
+        image_api->create_canvas( pixel_type.c_str(), width, height));
 
-    // additional test for baker
+    // allocate constant
     mi::base::Handle<mi::neuraylib::IFactory> factory(
         neuray->get_api_component<mi::neuraylib::IFactory>());
-    bool is_rgb_fp = strcmp( pixel_type, "Rgb_fp") == 0;
     mi::base::Handle<mi::IData> constant(
-        factory->create<mi::IData>( is_rgb_fp ? "Color" : "Float32"));
-    result = baker->bake_constant( constant.get());
+        factory->create<mi::IData>( type_name.c_str()));
+
+    // run baker
+    bool is_constant = false;
+    if( use_constant_detection) {
+        result = baker->bake_texture_with_constant_detection(
+            canvas.get(), constant.get(), is_constant, /*samples*/ 1);
+    } else {
+        result = baker->bake_texture( canvas.get(), /*samples*/ 1);
+        MI_CHECK_EQUAL( 0, result);
+    }
+
+    // export baked texture
+    std::string output_name = std::string( DIR_PREFIX) + dir_sep + file_name_prefix;
+    output_name += first_run
+        ? "_1st_run"
+        : "_2nd_run";
+    output_name += compilation_flags == mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS
+        ? "_instance"
+        : "_class";
+    output_name += baker_flags == mi::neuraylib::BAKE_ON_CPU
+        ? "_cpu"
+        : "_gpu_with_cpu_fallback";
+    output_name += ".png";
+
+    mi::base::Handle<mi::neuraylib::IMdl_impexp_api> mdl_impexp_api(
+        neuray->get_api_component<mi::neuraylib::IMdl_impexp_api>());
+    result = mdl_impexp_api->export_canvas( output_name.c_str(), canvas.get());
     MI_CHECK_EQUAL( 0, result);
 
-    return canvas.extract();
+    // check that constant detection recognizes constants
+    if( use_constant_detection) {
+        MI_CHECK_EQUAL( is_constant, constant_expression);
+    }
+
+    // check results
+    if( !use_constant_detection || !constant_expression) {
+
+        // compare baked texture with reference texture
+        std::string ref_name
+            = MI::TEST::mi_src_path( "prod/lib/neuray/reference/") + file_name_prefix + ".png";
+        MI_CHECK_IMG_DIFF( output_name, ref_name, /*strict*/ false);
+
+    } else {
+
+        // compare baked constant with reference value
+        if( pixel_type == "Rgb_fp") {
+
+            mi::base::Handle color( constant->get_interface<mi::IColor>());
+            mi::Color v;
+            color->get_value( v);
+            MI_CHECK_EQUAL( v.r, 0.0f);
+            MI_CHECK_EQUAL( v.g, 1.0f);
+            MI_CHECK_EQUAL( v.b, 0.0f);
+            MI_CHECK_EQUAL( v.a, 1.0f);
+
+        } else if( pixel_type == "Float32") {
+
+            mi::base::Handle float32( constant->get_interface<mi::IFloat32>());
+            MI_CHECK_EQUAL( float32->get_value<mi::Float32>(), 1.0f);
+
+        } else {
+            MI_CHECK( false);
+        }
+    }
 }
 
-// Bakes surface.scattering.tint of mi_class_baking with various compilations and baker flags.
-mi::neuraylib::ICanvas* bake_rgb_fp(
+void check_baker(
     mi::neuraylib::ITransaction* transaction,
     mi::neuraylib::INeuray* neuray,
-    mi::Uint32 width,
-    mi::Uint32 height,
-    mi::neuraylib::IMaterial_instance::Compilation_options compilation_flags,
-    mi::neuraylib::Baker_resource baker_flags)
+    bool first_run,
+    const std::string& pixel_type,
+    const std::string& type_name,
+    bool use_constant_detection,
+    bool constant_expression)
 {
-    return bake_to_canvas(
-        transaction,
-        neuray,
-        "mdl::" TEST_MDL "::mi_class_baking",
-        "surface.scattering.tint",
-        "Rgb_fp",
-        width,
-        height,
-        compilation_flags,
-        baker_flags);
-}
+    MI_CHECK( pixel_type == "Rgb_fp" || pixel_type == "Float32");
+    bool is_rgb_fp = pixel_type == "Rgb_fp";
 
-// Bakes surface.scattering.tint of mi_class_baking with various compilations and baker flags.
-mi::neuraylib::ICanvas* bake_float32(
-    mi::neuraylib::ITransaction* transaction,
-    mi::neuraylib::INeuray* neuray,
-    mi::Uint32 width,
-    mi::Uint32 height,
-    mi::neuraylib::IMaterial_instance::Compilation_options compilation_flags,
-    mi::neuraylib::Baker_resource baker_flags)
-{
-    return bake_to_canvas(
-        transaction,
-        neuray,
-        "mdl::" TEST_MDL "::mi_baking",
-        "backface.scattering.tint.r",
-        "Float32",
-        width,
-        height,
-        compilation_flags,
-        baker_flags);
+    std::string instance_name = constant_expression
+        ? "mdl::" TEST_MDL "::mi_baking_const"
+        : "mdl::" TEST_MDL "::mi_baking";
+
+    std::string path = is_rgb_fp
+        ? "surface.scattering.tint"
+        : "backface.scattering.tint.r";
+
+    std::string file_name_prefix = "baker";
+    file_name_prefix += is_rgb_fp
+        ? "_rgb_fp"
+        : "_float32";
+    file_name_prefix += constant_expression
+        ? "_constant"
+        : "_non_constant";
+
+    // instance compilation / CPU
+    check_baker(
+        transaction, neuray, first_run, pixel_type, type_name, use_constant_detection,
+        constant_expression, instance_name, path, file_name_prefix,
+        mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS,
+        mi::neuraylib::BAKE_ON_CPU);
+
+    // class compilation / CPU
+    check_baker(
+        transaction, neuray, first_run, pixel_type, type_name, use_constant_detection,
+        constant_expression, instance_name, path, file_name_prefix,
+        mi::neuraylib::IMaterial_instance::CLASS_COMPILATION,
+        mi::neuraylib::BAKE_ON_CPU);
+
+    if( true) {
+
+    // instance compilation / GPU
+    check_baker(
+        transaction, neuray, first_run, pixel_type, type_name, use_constant_detection,
+        constant_expression, instance_name, path, file_name_prefix,
+        mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS,
+        mi::neuraylib::BAKE_ON_GPU_WITH_CPU_FALLBACK);
+
+    // class compilation / GPU
+    check_baker(
+        transaction, neuray, first_run, pixel_type, type_name, use_constant_detection,
+        constant_expression, instance_name, path, file_name_prefix,
+        mi::neuraylib::IMaterial_instance::CLASS_COMPILATION,
+        mi::neuraylib::BAKE_ON_GPU_WITH_CPU_FALLBACK);
+
+    }
 }
 
 void check_baker(
     mi::neuraylib::ITransaction* transaction, mi::neuraylib::INeuray* neuray, bool first_run)
 {
-    mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
-        neuray->get_api_component<mi::neuraylib::IMdl_factory>());
-
-    mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
-        mdl_factory->create_execution_context());
-
 #ifndef RESOLVE_RESOURCES_FALSE
-    {
-        // Bake a color expression to Rgb_fp canvases.
-        mi::Uint32 width = 100;
-        mi::Uint32 height = 100;
-        size_t num_image_floats = width * height * 3;
-        mi::base::Handle<mi::neuraylib::ICanvas> canvas, reference;
 
-        // Bake on CPU.
-        reference = bake_rgb_fp( transaction, neuray, width, height,
-            mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS,
-            mi::neuraylib::BAKE_ON_CPU);
+    // Rgb_fp / without constant detection / non-constant expression
+    check_baker( transaction, neuray, first_run, "Rgb_fp", "Color", false, false);
+    // Rgb_fp / without constant detection / constant expression
+    check_baker( transaction, neuray, first_run, "Rgb_fp", "Color", false, true);
+    // Rgb_fp / constant detection / non-constant expression
+    check_baker( transaction, neuray, first_run, "Rgb_fp", "Color", true, false);
+    // Rgb_fp / constant detection / constant expression
+    check_baker( transaction, neuray, first_run, "Rgb_fp", "Color", true, true);
 
-        // Compare with CPU and class compilation.
-        canvas = bake_rgb_fp( transaction, neuray, width, height,
-            mi::neuraylib::IMaterial_instance::CLASS_COMPILATION,
-            mi::neuraylib::BAKE_ON_CPU);
-        MI_CHECK( check_canvas_nearly_equal(
-            reference.get(), canvas.get(), num_image_floats));
+    // Float32 / without constant detection / non-constant expression
+    check_baker( transaction, neuray, first_run, "Float32", "Float32", false, false);
+    // Float32 / without constant detection / constant expression
+    check_baker( transaction, neuray, first_run, "Float32", "Float32", false, true);
+    // Float32 / constant detection / non-constant expression
+    check_baker( transaction, neuray, first_run, "Float32", "Float32", true, false);
+    // Float32 / constant detection / constant expression
+    check_baker( transaction, neuray, first_run, "Float32", "Float32", true, true);
 
-        if( true) {
-
-            // Compare with GPU baking (with CPU fallback).
-            canvas = bake_rgb_fp( transaction, neuray, width, height,
-                mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS,
-                mi::neuraylib::BAKE_ON_GPU_WITH_CPU_FALLBACK);
-            MI_CHECK( check_canvas_nearly_equal(
-                reference.get(), canvas.get(), num_image_floats));
-
-            // Compare with GPU baking (with CPU fallback), using PTX code cache.
-            canvas = bake_rgb_fp( transaction, neuray, width, height,
-                mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS,
-                mi::neuraylib::BAKE_ON_GPU_WITH_CPU_FALLBACK);
-            MI_CHECK( check_canvas_nearly_equal(
-                reference.get(), canvas.get(), num_image_floats));
-
-            // Compare with GPU baking (with CPU fallback) and class compilation.
-            canvas = bake_rgb_fp( transaction, neuray, width, height,
-                mi::neuraylib::IMaterial_instance::CLASS_COMPILATION,
-                mi::neuraylib::BAKE_ON_GPU_WITH_CPU_FALLBACK);
-            MI_CHECK( check_canvas_nearly_equal(
-                reference.get(), canvas.get(), num_image_floats));
-
-            // Compare with GPU baking (with CPU fallback) and class compilation, using PTX code
-            // cache.
-            canvas = bake_rgb_fp( transaction, neuray, width, height,
-                mi::neuraylib::IMaterial_instance::CLASS_COMPILATION,
-                mi::neuraylib::BAKE_ON_GPU_WITH_CPU_FALLBACK);
-            MI_CHECK( check_canvas_nearly_equal(
-                reference.get(), canvas.get(), num_image_floats));
-
-        }
-    }
-    {
-        // Bake a float expression to Float32 canvases.
-        mi::Uint32 width = 100;
-        mi::Uint32 height = 100;
-
-        // Bake on GPU with CPU fallback.
-        mi::base::Handle<mi::neuraylib::ICanvas> reference(
-            bake_float32( transaction, neuray, width, height,
-                mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS,
-                mi::neuraylib::BAKE_ON_CPU));
-    }
 #endif // RESOLVE_RESOURCES_FALSE
 }
 

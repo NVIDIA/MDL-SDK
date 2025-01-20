@@ -127,6 +127,8 @@ mi::Float32 convert_rtt_kind_to_gamma( mi::mdl::Resource_tag_tuple::Kind kind)
         case mi::mdl::Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
         case mi::mdl::Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
         case mi::mdl::Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
+        case mi::mdl::Resource_tag_tuple::RK_MICROFLAKE_SHEEN_GENERAL:
+        case mi::mdl::Resource_tag_tuple::RK_MICROFLAKE_SHEEN_MULTISCATTER:
             ASSERT( M_NEURAY_API, false);
             return 0.0f;
     }
@@ -149,9 +151,9 @@ const char* Resource_callback::get_resource_name(
     // Resources in modules loaded from disk or string most likely do not have a valid tag in AST
     // representation (only in the DAG representation). There is not much we can do in such a case:
     // If resolving succeeds, so does unresolving, and we return the same (or an equivalent) string.
-    // If resolving fails, we return NULL, which triggers the default action of printing the string
-    // value (and the useless tag version). So returning the string value seems to be the best
-    // solution.
+    // If resolving fails, we return \c nullptr, which triggers the default action of printing the
+    // string value (and the useless tag version). So returning the string value seems to be the
+    // best solution.
     DB::Tag tag( resource->get_tag_value());
     if( !tag && m_module) {
 
@@ -664,10 +666,13 @@ std::string Resource_callback::export_texture_image(
                     success = false;
                 }
             } else if( copy_all) {
-                // copy the file
+                // copy the file (might exist in case of frame/uvtile markers).
                 std::error_code ec;
                 success &= fs::copy_file(
-                    fs::u8path( old_filename_fuv), fs::u8path( new_filename_fuv), ec);
+                    fs::u8path( old_filename_fuv),
+                    fs::u8path( new_filename_fuv),
+                    fs::copy_options::overwrite_existing,
+                    ec);
             } else {
                 // export to file
                 assert( !copy_all);

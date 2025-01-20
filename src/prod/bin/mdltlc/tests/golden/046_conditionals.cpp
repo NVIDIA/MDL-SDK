@@ -65,37 +65,55 @@ DAG_node const* Conditionals::matcher(
     IDistiller_plugin_api &e,
     DAG_node const *node,
     const mi::mdl::Distiller_options *options,
-    Rule_result_code &result_code)const
+    Rule_result_code &result_code) const
 {
-    switch (e.get_selector(node)) {
-    case mi::mdl::DS_DIST_BSDF_TINT: // match for bsdf_tint(c, bsdf_conditional_operator(cond, bsdf1, bsdf2))
+    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+
 // 046_conditionals.mdltl:8
 //RUID 117358
-        if (true
-        && (e.get_selector(e.get_compound_argument(node, 1)) == mi::mdl::DS_DIST_BSDF_CONDITIONAL_OPERATOR)) {
-            const DAG_node* v_c = e.get_compound_argument(node, 0);
-            const DAG_node* v_cond = e.get_compound_argument(e.get_compound_argument(node, 1), 0);
-            const DAG_node* v_bsdf1 = e.get_compound_argument(e.get_compound_argument(node, 1), 1);
-            const DAG_node* v_bsdf2 = e.get_compound_argument(e.get_compound_argument(node, 1), 2);
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 0);
-            result_code = RULE_REPEAT_RULES;
-            return e.create_call("operator?(bool,<0>,<0>)(bool,bsdf,bsdf)", static_cast<mi::mdl::IDefinition::Semantics>(555),
-                Args_wrapper<3>::mk_args(e,m_node_types, bsdf_conditional_operator,
-                    v_cond, e.create_call("::df::tint(color,bsdf)", IDefinition::DS_INTRINSIC_DF_TINT,
-                        Args_wrapper<2>::mk_args(e,m_node_types, bsdf_tint, v_c,
-                            v_bsdf1).args, 2, e.get_type_factory()->create_bsdf()),
-                    e.create_call("::df::tint(color,bsdf)", IDefinition::DS_INTRINSIC_DF_TINT,
-                        Args_wrapper<2>::mk_args(e,m_node_types, bsdf_tint, v_c,
-                            v_bsdf2).args, 2, e.get_type_factory()->create_bsdf())).args,
-                3, e.get_type_factory()->create_bsdf());
-        }
-        break;
-    default:
-        break;
-    }
+    auto match_rule0 = [&] (DAG_node const *node0, IDistiller_plugin_api::Match_properties &node_props0) -> const DAG_node * {
 
-    return node;
+        // match for bsdf_tint(c, bsdf_conditional_operator(cond, bsdf1, bsdf2))
+        if (node_props0.sema != IDefinition::DS_INTRINSIC_DF_TINT || node_props0.arity != 2 || node_props0.type_kind != IType::TK_BSDF) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node2 = e.get_compound_argument(node0, 0);
+        DAG_node const *v_c = node2; (void)v_c;
+        DAG_node const *node4 = e.get_compound_argument(node0, 1);
+        IDistiller_plugin_api::Match_properties node_props4;
+        e.get_match_properties(node4, node_props4); 
+        // match for bsdf_conditional_operator(cond, bsdf1, bsdf2)
+        if (node_props4.sema != (IDefinition::DS_OP_BASE + IExpression::OK_TERNARY)
+         || node_props4.type_kind != IType::TK_BSDF) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node5 = e.get_compound_argument(node4, 0);
+        DAG_node const *v_cond = node5; (void)v_cond;
+        DAG_node const *node7 = e.get_compound_argument(node4, 1);
+        DAG_node const *v_bsdf1 = node7; (void)v_bsdf1;
+        DAG_node const *node9 = e.get_compound_argument(node4, 2);
+        DAG_node const *v_bsdf2 = node9; (void)v_bsdf2;
+        DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 0);
+        result_code = RULE_REPEAT_RULES;
+        return e.create_call("operator?(bool,<0>,<0>)(bool,bsdf,bsdf)", static_cast<mi::mdl::IDefinition::Semantics>(555),
+            Args_wrapper<3>::mk_args(e, m_node_types, bsdf_conditional_operator,
+                v_cond, e.create_call("::df::tint(color,bsdf)", IDefinition::DS_INTRINSIC_DF_TINT,
+                    Args_wrapper<2>::mk_args(e, m_node_types, bsdf_tint, v_c, v_bsdf1).args,
+                    2, e.get_type_factory()->create_bsdf(), root_dbg_info), e.create_call("::df::tint(color,bsdf)",
+                    IDefinition::DS_INTRINSIC_DF_TINT, Args_wrapper<2>::mk_args(
+                        e, m_node_types, bsdf_tint, v_c, v_bsdf2).args, 2, e.get_type_factory()->create_bsdf(), root_dbg_info)).args,
+            3, e.get_type_factory()->create_bsdf(), root_dbg_info);
+    };
+    (void)match_rule0;
+
+    IDistiller_plugin_api::Match_properties node_props;
+    e.get_match_properties(node, node_props);
+    return match_rule0(node, node_props);
+
 }
 
 bool Conditionals::postcond(

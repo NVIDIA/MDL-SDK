@@ -99,13 +99,13 @@ public:
     /// very few log messages might be received during startup before the host has joined the
     /// cluster.
     ///
-    /// \param logger      The receiving logger. It is valid to pass \c NULL in which case logging
-    ///                    is reset to be done to stderr.
+    /// \param logger      The receiving logger. It is valid to pass \c nullptr in which case
+    ///                    logging is reset to be done to stderr.
     virtual void set_receiving_logger( base::ILogger* logger) = 0;
 
     /// Returns the receiving logger.
     ///
-    /// Note that if no receiving logger has been set, this method returns \c NULL and logging is
+    /// Note that if no receiving logger has been set, this method returns \c nullptr and logging is
     /// done using a default logger that is internal to this library. This default logger simply
     /// writes to stderr.
     ///

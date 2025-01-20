@@ -131,7 +131,7 @@ void run_tests (
 
     mi::base::Handle<mi::base::ILogger> forwarding_logger(
         logging_configuration->get_forwarding_logger());
-    MI_CHECK( forwarding_logger.is_valid_interface());
+    MI_CHECK( forwarding_logger);
 
     forwarding_logger->message( mi::base::MESSAGE_SEVERITY_INFO, "TEST:MISC", "foo");
     forwarding_logger->printf(
@@ -258,11 +258,11 @@ void run_tests (
 MI_TEST_AUTO_FUNCTION( test_ilogging_configuration )
 {
     mi::base::Handle<mi::neuraylib::INeuray> neuray( load_and_get_ineuray());
-    MI_CHECK( neuray.is_valid_interface());
+    MI_CHECK( neuray);
 
     {
         mi::base::Handle<Test_logger> receiving_logger( new Test_logger);
-        MI_CHECK( receiving_logger.is_valid_interface());
+        MI_CHECK( receiving_logger);
 
         mi::base::Handle<mi::neuraylib::ILogging_configuration> logging_configuration(
             neuray->get_api_component<mi::neuraylib::ILogging_configuration>());

@@ -59,10 +59,10 @@ public:
     Bsdf_buffer( Size size) : m_buffer( new Float32[size]()) { }
 
     /// Destructor.
-    ~Bsdf_buffer() { delete[] m_buffer; }
+    ~Bsdf_buffer() override { delete[] m_buffer; }
 
     /// Gives access to the memory block (const).
-    const Float32* get_data() const { return m_buffer; }
+    const Float32* get_data() const override { return m_buffer; }
 
     /// Gives access to the memory block (mutable).
     Float32* get_data() { return m_buffer; }
@@ -96,16 +96,16 @@ public:
     }
 
     /// Returns the number of values in theta direction.
-    Uint32 get_resolution_theta() const { return m_resolution_theta; }
+    Uint32 get_resolution_theta() const override { return m_resolution_theta; }
 
     /// Returns the number of values in phi direction.
-    Uint32 get_resolution_phi() const { return m_resolution_phi; }
+    Uint32 get_resolution_phi() const override { return m_resolution_phi; }
 
     /// Returns the type of the values.
-    Bsdf_type get_type() const { return m_type; }
+    Bsdf_type get_type() const override { return m_type; }
 
     /// Returns the buffer containing the values (const).
-    const Bsdf_buffer* get_bsdf_buffer() const
+    const Bsdf_buffer* get_bsdf_buffer() const override
     { m_bsdf_buffer->retain(); return m_bsdf_buffer.get(); }
 
     /// Returns the buffer containing the values (mutable).

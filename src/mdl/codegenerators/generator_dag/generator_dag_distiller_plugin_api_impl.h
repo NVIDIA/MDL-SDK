@@ -119,7 +119,7 @@ public:
 
     /// Create a constant.
     ///
-    /// \param  value       The value of the constant.
+    /// \param value        The value of the constant.
     ///
     /// \returns            The created constant.
     DAG_constant const *create_constant(
@@ -131,7 +131,9 @@ public:
     /// \param index        The index of the temporary.
     ///
     /// \returns            The created temporary reference.
-    DAG_temporary const *create_temporary(DAG_node const *node, int index)  MDL_FINAL;
+    DAG_temporary const *create_temporary(
+        DAG_node const *node,
+        int            index)  MDL_FINAL;
 
     /// Create a call.
     ///
@@ -140,14 +142,16 @@ public:
     /// \param  call_args       The call arguments of the called function.
     /// \param  num_call_args   The number of call arguments.
     /// \param  ret_type        The return type of the function.
+    /// \param dbg_info         The debug info for this call if any.
     ///
     /// \returns                The created call or an equivalent expression.
     DAG_node const *create_call(
         char const                    *name,
         IDefinition::Semantics        sema,
         DAG_call::Call_argument const call_args[],
-        int                           num_call_args,
-        IType const                   *ret_type)  MDL_FINAL;
+        size_t                        num_call_args,
+        IType const                   *ret_type,
+        DAG_DbgInfo                   dbg_info)  MDL_FINAL;
 
     /// Create a function call for a non-overloaded function. All parameter
     /// and return types are deduced from the function definition.
@@ -155,12 +159,14 @@ public:
     /// \param  name            The name of the called function, e.g., "::state::normal".
     /// \param  call_args       The call arguments of the called function.
     /// \param  num_call_args   The number of call arguments.
+    /// \param dbg_info         The debug info for this node if any.
     ///
     /// \returns                The created call or an equivalent expression.
     DAG_node const *create_function_call(
         char const             *name,
         DAG_node const * const call_args[],
-        size_t                 num_call_args)  MDL_FINAL;
+        size_t                 num_call_args,
+        DAG_DbgInfo            dbg_info)  MDL_FINAL;
 
     /// Create a 1-, 2-, or 3-mixer call, with 2, 4, or 6 parameters respectively.
     DAG_node const *create_mixer_call(
@@ -174,11 +180,15 @@ public:
 
     /// Create a parameter reference.
     ///
-    /// \param  type        The type of the parameter
-    /// \param  index       The index of the parameter.
+    /// \param type        The type of the parameter
+    /// \param index       The index of the parameter.
+    /// \param dbg_info    The debug info for this node if any.
     ///
     /// \returns            The created parameter reference.
-    DAG_parameter const *create_parameter(IType const *type, int index)  MDL_FINAL;
+    DAG_parameter const *create_parameter(
+        IType const *type,
+        int         index,
+        DAG_DbgInfo dbg_info)  MDL_FINAL;
 
     /// Enable common subexpression elimination.
     ///
@@ -416,7 +426,12 @@ public:
     /// to true or cannot be evaluated.
     bool eval_maybe_if( DAG_node const* node)  MDL_FINAL;
 
-    /// Compute the node selector for the matcher, either the semantic for a DAG_call
+    // Compute all properties of a node that are required for matching against a rule pattern.
+    void get_match_properties(
+        DAG_node const *node,
+        Match_properties &mprops) const MDL_FINAL;
+
+     /// Compute the node selector for the matcher, either the semantic for a DAG_call
     /// node, or one of the Distiller_extended_node_semantics covering DAG_constant 
     /// of type bsdf, edf or vdf respectively, or for DAG_constant's and DAG_call's of 
     /// one of the material structs, and selectors for mix_1, mix_2, mix_3, 

@@ -31,12 +31,14 @@
 #include "dblight_scope.h"
 
 #include <sstream>
+#include <utility>
 
 #include <boost/core/ignore_unused.hpp>
-#include <utility>
 
 #include "dblight_database.h"
 #include "dblight_transaction.h"
+
+#include <base/lib/log/i_log_logger.h>
 
 namespace MI {
 
@@ -93,6 +95,37 @@ DB::Transaction* Scope_impl::start_transaction()
     return m_database->get_transaction_manager()->start_transaction( this);
 }
 
+std::unique_ptr<DB::Journal_query_result> Scope_impl::get_journal(
+    DB::Transaction_id last_transaction_id,
+    mi::Uint32 last_transaction_change_version,
+    DB::Transaction_id current_transaction_id,
+    DB::Journal_type journal_type,
+    bool lookup_parents)
+{
+    Statistics_helper helper( g_scope_get_journal);
+
+    if( !m_database->get_journal_enabled()) {
+        LOG::mod_log->error(
+            M_DB, LOG::Mod_log::C_DATABASE, "Journal query with disabled journal.");
+        return {};
+    }
+
+    THREAD::Block_shared block( &m_database->get_lock());
+    auto result = std::make_unique<DB::Journal_query_result>();
+
+    bool success = get_journal(
+        last_transaction_id,
+        last_transaction_change_version,
+        current_transaction_id,
+        journal_type,
+        lookup_parents,
+        *result.get());
+    if( !success)
+        return nullptr;
+
+    return result;
+}
+
 void Scope_impl::insert_info( Info_impl* info)
 {
     m_database->get_lock().check_is_owned();
@@ -112,6 +145,106 @@ void Scope_impl::erase_info( Info_impl* info)
     m_infos.erase( it);
 }
 
+size_t Scope_impl::update_journal(
+    DB::Transaction_id transaction_id,
+    DB::Transaction_id visibility_id,
+    const Transaction_journal_entry* journal,
+    size_t count)
+{
+    m_database->get_lock().check_is_owned();
+    MI_ASSERT( m_database->get_journal_enabled());
+
+    MI_ASSERT( count > 0);
+    MI_ASSERT( journal[0].m_scope_id == m_id);
+
+    // Find length of initial array segment with matching scope IDs.
+    size_t i = 0;
+    for( ; (i < count) && (journal[i].m_scope_id == m_id); ++i)
+        ;
+    count = i;
+
+    // Prune entire journal if the newly added entries exceed the maximum size.
+    size_t max_size = m_database->get_journal_max_size();
+    if( count > max_size) {
+        m_journal_last_pruned_visibility = visibility_id;
+        m_journal.clear();
+        return count;
+    }
+
+    // Partially prune journal if required.
+    size_t new_size = m_journal.size() + count;
+    if( new_size > max_size) {
+        size_t prune_count = new_size - max_size;
+        auto first = m_journal.begin();
+        auto last  = first;
+        advance( last, prune_count-1);
+        m_journal_last_pruned_visibility = last->first;
+        ++last;
+        m_journal.erase( first, last);
+    }
+
+    // Add all journal entries (from the initial array segment with matching scope IDs).
+    for( i = 0; i < count; ++i) {
+        const Transaction_journal_entry& entry = journal[i];
+        MI_ASSERT( entry.m_journal_type != DB::JOURNAL_NONE);
+        Scope_journal_entry new_entry(
+            entry.m_tag, entry.m_version, transaction_id, entry.m_journal_type);
+        m_journal.emplace( visibility_id, new_entry);
+    }
+
+    return count;
+}
+
+bool Scope_impl::get_journal(
+    DB::Transaction_id last_transaction_id,
+    mi::Uint32 last_transaction_change_version,
+    DB::Transaction_id current_transaction_id,
+    DB::Journal_type journal_type,
+    bool include_parent_scopes,
+    DB::Journal_query_result& result)
+{
+    m_database->get_lock().check_is_owned_shared_or_exclusive();
+    MI_ASSERT( m_database->get_journal_enabled());
+
+    // Fail if the query range includes pruned parts of the journal.
+    if( last_transaction_id <= m_journal_last_pruned_visibility)
+        return false;
+
+    // Loop over the journal with visibility IDs from \p last_transaction_id+1 to
+    // \p current_transaction_id.
+    //
+    // Note that the visibility ID of changes from \p last_transaction is at least
+    // \p last_transaction_id+1.
+    auto it     = m_journal.upper_bound( last_transaction_id);
+    auto it_end = m_journal.end();
+    for( ; (it != it_end) && (it->first <= current_transaction_id); ++it) {
+
+        const Scope_journal_entry& entry = it->second;
+        // Skip entries from \p last_transaction_id which happened before
+        // \p last_transaction_change_version.
+        if(    entry.m_transaction_id == last_transaction_id
+            && entry.m_version < last_transaction_change_version)
+            continue;
+        // Skip entries that do not match the journal type filter.
+        if( (entry.m_journal_type.get_type() & journal_type.get_type()) == 0)
+            continue;
+        result.emplace_back( entry.m_tag, entry.m_journal_type);
+    }
+
+    if( !include_parent_scopes)
+        return true;
+    if( !m_parent)
+        return true;
+
+    return m_parent->get_journal(
+        last_transaction_id,
+        last_transaction_change_version,
+        current_transaction_id,
+        journal_type,
+        include_parent_scopes,
+        result);
+}
+
 Scope_manager::Scope_manager( Database_impl* database)
   : m_database( database)
 {
@@ -127,6 +260,12 @@ Scope_manager::~Scope_manager()
     // marked for removal but is still pinned by its child scopes.
     while( !m_scopes_by_id.empty()) {
         Scope_impl* last = & *m_scopes_by_id.rbegin();
+        // An assertion failure indicates
+        // - a leaked DB element/transaction/scope,
+        // - a reference cycle between elements, or
+        // - a DB element pinned while the last transaction was committed (edit, or access after
+        //   edit), which prevented the GC from clearing the creator transaction.
+        // Calling dump() from Database_impl::~Database_impl() might provide some insights.
         MI_ASSERT( last->get_pin_count() == 1);
         last->unpin();
     }
@@ -187,6 +326,9 @@ DB::Scope* Scope_manager::create_scope(
     if( !name.empty())
         m_scopes_by_name.insert( *scope);
 
+    if( parent)
+        m_database->notify_scope_listeners( &DB::IScope_listener::scope_created, scope);
+
     return scope;
 }
 
@@ -206,6 +348,9 @@ bool Scope_manager::remove_scope( DB::Scope_id id)
         return true;
 
     it->set_is_removed();
+
+    if( it->get_parent())
+        m_database->notify_scope_listeners( &DB::IScope_listener::scope_removed, & *it);
 
     block.release();
     it->unpin();
@@ -247,7 +392,27 @@ void Scope_manager::dump( std::ostream& s, bool mask_pointer_values)
         else
             s << ", parent ID = (null)";
         s << ", removed = " << scope.get_is_removed() << std::endl;
+
+        if( m_database->get_journal_enabled()) {
+            s << "    Journal last pruned visibility: "
+              << scope.get_journal_last_pruned_visibility()()
+              << std::endl;
+            const Scope_impl::Scope_journal& journal = scope.get_journal();
+            size_t n = journal.size();
+            s << "    Journal size: " << n << std::endl;
+            size_t i = 0;
+            for( const auto& entry: journal) {
+                 s << "    Item " << i++
+                   << ": visibility ID = " << entry.first()
+                   << ", tag = " << entry.second.m_tag()
+                   << ", version = " << entry.second.m_version
+                   << ", transaction ID = " << entry.second.m_transaction_id()
+                   << ", journal type = " << entry.second.m_journal_type.get_type()
+                   << std::endl;
+            }
+         }
     }
+
     if( !m_scopes_by_id.empty())
         s << std::endl;
 }

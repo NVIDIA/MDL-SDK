@@ -32,6 +32,8 @@
 namespace MI {
 
 namespace DB { class Database; }
+namespace SERIAL { class Deserialization_manager; }
+namespace THREAD_POOL { class Thread_pool; }
 
 namespace DBLIGHT {
 
@@ -41,7 +43,17 @@ namespace DBLIGHT {
 ///
 /// The instances are independent, except for the statistics which are shared by all instances
 /// (but statistics are disabled by default, see DBLIGHT_ENABLE_STATISTICS).
-DB::Database* factory();
+///
+/// \param thread_pool               The thread pool to use, or \c nullptr to use an independent
+///                                  thread pool instance.
+/// \param deserialization_manager   The deserialization manager to use, or \c nullptr to use an
+///                                  independent deserialization manager.
+/// \param enable_journal            Indicates whether to enable the journal. Maintaining the
+///                                  journal requires memory and time.
+DB::Database* factory(
+    THREAD_POOL::Thread_pool* thread_pool,
+    SERIAL::Deserialization_manager* deserialization_manager,
+    bool enable_journal);
 
 } // namespace DBLIGHT
 

@@ -170,7 +170,7 @@ public:
 
                 case IType::TK_ARRAY:
                 {
-                    // handle arrays seperately, because get_compount_type(0) returns null,
+                    // handle arrays separately, because get_compount_type(0) returns null,
                     // for zero-size arrays
                     IType_array const *array_type =
                         static_cast<IType_array const *>(mdl_type);
@@ -1005,7 +1005,8 @@ size_t Generated_code_source::Source_res_manag::get_resource_index(
     char const                 *selector)
 {
     if (!m_resource_attr_map.empty()) {
-        Resource_tag_tuple key(kind, url, selector, tag);
+        // If the tag is not known, attempt a lookup without taking the tag into account.
+        Resource_tag_tuple key(kind, url, selector, tag == 0 ? Resource_equal_to::IGNORE_TAG : tag);
 
         Resource_attr_map::const_iterator it(m_resource_attr_map.find(key));
         if (it != m_resource_attr_map.end()) {
@@ -1014,7 +1015,7 @@ size_t Generated_code_source::Source_res_manag::get_resource_index(
         }
         // Bad: we have a resource map, but could not find the requested resource.
         // This means the integration was not able to retrieve it from the material
-        // and has not loaded it. return 0 (invalid) here, the resource *is* missing.
+        // and has not loaded it. Return 0 (invalid) here, the resource *is* missing.
         return 0;
     }
 
@@ -1032,6 +1033,8 @@ size_t Generated_code_source::Source_res_manag::get_resource_index(
     case Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
     case Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
     case Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
+    case Resource_tag_tuple::RK_MICROFLAKE_SHEEN_GENERAL:
+    case Resource_tag_tuple::RK_MICROFLAKE_SHEEN_MULTISCATTER:
         // we support textures, light profiles, bsdf_measurements, and bsdf_data textures
         {
             Tag_index_map::const_iterator it = m_res_indexes.find(tag);
@@ -1217,6 +1220,8 @@ void Generated_code_lambda_function::init(
         case Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
         case Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
         case Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
+        case Resource_tag_tuple::RK_MICROFLAKE_SHEEN_GENERAL:
+        case Resource_tag_tuple::RK_MICROFLAKE_SHEEN_MULTISCATTER:
             res_handler->tex_init(
                 (void *)p,
                 IType_texture::TS_BSDF_DATA,
@@ -1269,6 +1274,8 @@ void Generated_code_lambda_function::term()
             case Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
             case Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
             case Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
+            case Resource_tag_tuple::RK_MICROFLAKE_SHEEN_GENERAL:
+            case Resource_tag_tuple::RK_MICROFLAKE_SHEEN_MULTISCATTER:
                 // bsdf data texture
                 m_res_data.m_resource_handler->tex_term((void *)p, IType_texture::TS_BSDF_DATA);
                 break;
@@ -1639,6 +1646,21 @@ size_t Generated_code_lambda_function::register_string(
     return m_string_entries.size();
 }
 
+// Register a resource for a given index.
+void Generated_code_lambda_function::register_resource_for_index(
+    size_t index,
+    Resource_entry const &entry)
+{
+    // the invalid index is not stored in m_res_entries
+    if (index == 0)
+        return;
+
+    if (m_res_entries.size() <= index - 1) {
+        m_res_entries.resize(index, Resource_entry(0, Resource_tag_tuple::RK_BAD));
+    }
+    m_res_entries[index - 1] = entry;
+}
+
 // Constructor.
 Generated_code_lambda_function::Lambda_res_manag::Lambda_res_manag(
     Generated_code_lambda_function &lambda,
@@ -1650,6 +1672,56 @@ Generated_code_lambda_function::Lambda_res_manag::Lambda_res_manag(
 , m_string_indexes(
     0, String_index_map::hasher(), String_index_map::key_equal(), lambda.get_allocator())
 {
+    if (resource_map) {
+        register_resources(resource_map);
+    }
+}
+
+// Register all resources in the compiled lambda function using the exact indices
+// from the resource map.
+void Generated_code_lambda_function::Lambda_res_manag::register_resources(
+    Resource_attr_map const *resource_map)
+{
+    for (Resource_attr_map::const_iterator it = resource_map->begin(),
+        end = resource_map->end(); it != end; ++it)
+    {
+        Resource_tag_tuple const& val = it->first;
+        Resource_attr_entry const& e = it->second;
+        if (val.m_kind == Resource_tag_tuple::RK_BAD ||
+            val.m_kind == Resource_tag_tuple::RK_INVALID_REF)
+        {
+            continue;
+        }
+        IType_texture::Shape shape = IType_texture::TS_2D;
+
+        switch (val.m_kind) {
+        case Resource_tag_tuple::RK_TEXTURE_GAMMA_DEFAULT:
+        case Resource_tag_tuple::RK_TEXTURE_GAMMA_SRGB:
+        case Resource_tag_tuple::RK_TEXTURE_GAMMA_LINEAR:
+        case Resource_tag_tuple::RK_BACKSCATTERING_GLOSSY_MULTISCATTER:
+        case Resource_tag_tuple::RK_BECKMANN_SMITH_MULTISCATTER:
+        case Resource_tag_tuple::RK_BECKMANN_VC_MULTISCATTER:
+        case Resource_tag_tuple::RK_GGX_SMITH_MULTISCATTER:
+        case Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
+        case Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
+        case Resource_tag_tuple::RK_MICROFLAKE_SHEEN_GENERAL:
+        case Resource_tag_tuple::RK_MICROFLAKE_SHEEN_MULTISCATTER:
+        case Resource_tag_tuple::RK_SIMPLE_GLOSSY_MULTISCATTER:
+        case Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
+            shape = e.u.tex.shape;
+            break;
+        case Resource_tag_tuple::RK_LIGHT_PROFILE:
+        case Resource_tag_tuple::RK_BSDF_MEASUREMENT:
+            break;
+        default:
+            MDL_ASSERT(!"unexpected kind");
+            break;
+        }
+
+        m_lambda.register_resource_for_index(
+            it->second.index,
+            Resource_entry(val.m_tag, val.m_kind, shape));
+    }
 }
 
 // Returns the resource index for the given resource usable by the target code resource
@@ -1684,6 +1756,8 @@ size_t Generated_code_lambda_function::Lambda_res_manag::get_resource_index(
     case Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
     case Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
     case Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
+    case Resource_tag_tuple::RK_MICROFLAKE_SHEEN_GENERAL:
+    case Resource_tag_tuple::RK_MICROFLAKE_SHEEN_MULTISCATTER:
         // we support textures, ...
         {
             Tag_index_map::const_iterator it = m_res_indexes.find(tag);
@@ -1771,6 +1845,7 @@ void Generated_code_lambda_function::Lambda_res_manag::import_from_resource_attr
         return;
 
     if (m_resource_map != NULL) {
+        register_resources(resource_map);
         m_resource_map->insert(resource_map->begin(), resource_map->end());
         return;
     }
@@ -1807,6 +1882,8 @@ void Generated_code_lambda_function::Lambda_res_manag::import_from_resource_attr
         case Resource_tag_tuple::RK_GGX_SMITH_MULTISCATTER:
         case Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
         case Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
+        case Resource_tag_tuple::RK_MICROFLAKE_SHEEN_GENERAL:
+        case Resource_tag_tuple::RK_MICROFLAKE_SHEEN_MULTISCATTER:
         case Resource_tag_tuple::RK_SIMPLE_GLOSSY_MULTISCATTER:
         case Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
             gamma_mode = IValue_texture::gamma_linear;

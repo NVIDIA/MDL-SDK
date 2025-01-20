@@ -31,7 +31,9 @@
 #define MI_TEST_AUTO_SUITE_NAME "Regression Test Suite for io/scene/dbimage"
 #define MI_TEST_IMPLEMENT_TEST_MAIN_INSTEAD_OF_MAIN
 
+#include <filesystem>
 #include <vector>
+
 #include <base/system/test/i_test_auto_driver.h>
 #include <base/system/test/i_test_auto_case.h>
 
@@ -40,7 +42,6 @@
 #include <mi/neuraylib/itile.h>
 
 #include <base/hal/disk/disk_file_reader_writer_impl.h>
-#include <base/hal/hal/i_hal_ospath.h>
 #include <base/lib/config/config.h>
 #include <base/lib/mem/mem.h>
 #include <base/lib/log/i_log_module.h>
@@ -60,6 +61,8 @@
 #include <io/scene/mdl_elements/test_shared.h>
 
 using namespace MI;
+
+namespace fs = std::filesystem;
 
 SYSTEM::Access_module<IMAGE::Image_module> g_image_module;
 
@@ -168,7 +171,7 @@ void check_uvtile(
         mi::Sint32 u, v;
         MI_CHECK_EQUAL( image->get_uvtile_uv( frame_id, i, u, v), 0);
 
-        std::string fn = HAL::Ospath::basename( image->get_filename( frame_id, i));
+        std::string fn = fs::u8path( image->get_filename( frame_id, i)).filename().u8string();
         const std::pair<mi::Sint32, mi::Sint32>& uvs = expected_tiles.at( fn);
         MI_CHECK_EQUAL( u, uvs.first);
         MI_CHECK_EQUAL( v, uvs.second);

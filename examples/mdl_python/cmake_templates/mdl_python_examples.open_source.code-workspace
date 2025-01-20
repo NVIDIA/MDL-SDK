@@ -37,8 +37,12 @@
 			"path": "@CMAKE_CURRENT_SOURCE_DIR@"
 		},
 		{
-			"name": "MDL Example Content",
+			"name": "MDL Content: Examples",
 			"path": "@CMAKE_CURRENT_SOURCE_DIR@/../mdl"
+		},
+		{
+			"name": "MDL Content: src/shaders",
+			"path": "@MDL_SRC_FOLDER@/shaders/mdl"
 		}
 	],
 	"settings": {
@@ -71,6 +75,7 @@
 					"PYTHONPATH": "@BINDING_MODULE_PATH@/${input:CMAKE_BUILD_CONFIGURATION}@ENV_SEP@${env:PYTHONPATH}",
 					// Path of the examples to access the example content
 					"MDL_SAMPLES_ROOT": "@CMAKE_CURRENT_SOURCE_DIR@/../",
+					"MDL_SRC_SHADERS_MDL": "@MDL_SRC_FOLDER@/shaders/mdl/",
 					// when starting unittest from VS Code, create a coverage report if the python module is installed
 					"CREATE_COVERAGE_REPORT": "@MDL_ENABLE_PYTHON_UNIT_TEST_COVERAGE@"
 				}

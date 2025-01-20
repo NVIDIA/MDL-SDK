@@ -38,7 +38,7 @@ namespace mi {
 
 namespace neuraylib {
 
-/** 
+/**
 \addtogroup mi_neuray_impexp
 @{
 */
@@ -87,7 +87,7 @@ public:
     ///
     /// It is possible to query the all messages, see #get_messages_length() and
     /// #get_message(mi::Size)const. This method just reports the the first message of severity
-    /// #mi::base::details::MESSAGE_SEVERITY_ERROR or above, or \c NULL if there is no such
+    /// #mi::base::details::MESSAGE_SEVERITY_ERROR or above, or \c nullptr if there is no such
     /// message.
     virtual const char* get_error_message() const = 0;
 
@@ -124,7 +124,7 @@ public:
 ///       explicit message with message number 0. If there are no other exporter-specific messages,
 ///       messages, the message array should then just be empty, such that
 ///       #mi::neuraylib::IExport_result::get_error_number() returns 0 and
-///       #mi::neuraylib::IExport_result::get_error_message() returns \c NULL.
+///       #mi::neuraylib::IExport_result::get_error_message() returns \c nullptr.
 class IExport_result_ext :
     public base::Interface_declare<0xfbf13ba1,0x7310,0x4e1a,0x80,0x0a,0x88,0xc4,0x20,0x3e,0xad,0x96,
                                    neuraylib::IExport_result>
@@ -136,7 +136,7 @@ public:
     ///
     /// \return
     ///                 -  0: Success.
-    ///                 - -1: Invalid parameters (\c NULL pointer).
+    ///                 - -1: Invalid parameters (\c nullptr).
     ///
     /// \see #mi::neuraylib::IExport_result_ext for valid message numbers
     virtual Sint32 set_message(
@@ -150,7 +150,7 @@ public:
     /// \param message  The message to append.
     /// \return
     ///                 -  0: Success.
-    ///                 - -1: Invalid parameters (\c NULL pointer).
+    ///                 - -1: Invalid parameters (\c nullptr).
     ///
     /// \see #mi::neuraylib::IExport_result_ext for valid message numbers
     virtual Sint32 message_push_back(
@@ -165,7 +165,7 @@ public:
     /// \param message  The message to append.
     /// \return
     ///                 -  0: Success.
-    ///                 - -1: Invalid parameters (\c NULL pointer).
+    ///                 - -1: Invalid parameters (\c nullptr).
     ///                 - -2: \p index is out of bounds.
     ///
     /// \see #mi::neuraylib::IExport_result_ext for valid message numbers
@@ -178,7 +178,7 @@ public:
     /// Appends all messages in \p export_result to this instance.
     /// \return
     ///                 -  0: Success.
-    ///                 - -1: Invalid parameters (\c NULL pointer).
+    ///                 - -1: Invalid parameters (\c nullptr).
     virtual Sint32 append_messages( const IExport_result* export_result) = 0;
 };
 

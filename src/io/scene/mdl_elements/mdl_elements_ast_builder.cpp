@@ -1093,10 +1093,11 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
             Handle<IType const>       tp(arg->get_type());
             Handle<IType_array const> a_tp(tp->get_interface<IType_array>());
 
-            if (!a_tp.is_valid_interface()) {
+            if (!a_tp) {
                 ASSERT( M_SCENE, false);
                 return m_ef.create_invalid();
             }
+
             if (a_tp->is_immediate_sized()) {
                 mi::Size size = a_tp->get_size();
 

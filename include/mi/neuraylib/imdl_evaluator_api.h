@@ -60,13 +60,13 @@ public:
     /// \param[out] errors An optional pointer to an #mi::Sint32 to which an error code will be
     ///                    written. The error codes have the following meaning:
     ///                    -  0: Success.
-    ///                    - -1: An input parameter is \c NULL.
+    ///                    - -1: An input parameter is \c nullptr.
     ///                    - -2: The parameter index is out of bounds.
     ///                    - -3: A malformed expression (contains temporaries).
     ///                    - -4: An unsupported expression occurred.
     ///                    - -5: The evaluation was aborted, too complex to evaluate.
     ///
-    /// \return \c NULL if the condition was to complex to evaluate, else \c true or \c false.
+    /// \return \c nullptr if the condition was to complex to evaluate, else \c true or \c false.
     virtual const IValue_bool* is_function_parameter_enabled(
         ITransaction* trans,
         IValue_factory* fact,

@@ -371,7 +371,7 @@ float4 *Material_gpu_context::gen_mip_level(
             unsigned prev_x = 2 * x, prev_y = 2 * y;
 
             unsigned num_summands = 0;
-            float4 sum = { 0 };
+            float4 sum = { 0, 0, 0, 0 };
 
             // Loop over the at most four pixels corresponding to pixel (x,y)
             for (unsigned i = 0; i < 4; ++i) {
@@ -892,45 +892,4 @@ CUmodule build_linked_kernel(
 
     return cuda_module;
 }
-
-
-//------------------------------------------------------------------------------
-//
-// Utility functions
-//
-//------------------------------------------------------------------------------
-
-// Export the given RGBF data to the given path.
-// The file format is determined by the path (must be supported by OpenImageIO).
-bool export_image_rgbf(
-    char const *path, mi::Uint32 width, mi::Uint32 height, float3 const *data)
-{
-    size_t n = width * height;
-    std::vector<unsigned char> tmp(3*n);
-    for (size_t i = 0, j = 0; i < n; ++i, j += 3) {
-        tmp[j  ] = static_cast<unsigned char>(std::max(0.f, std::min(data[i].x, 1.f)) * 255.0f);
-        tmp[j+1] = static_cast<unsigned char>(std::max(0.f, std::min(data[i].y, 1.f)) * 255.0f);
-        tmp[j+2] = static_cast<unsigned char>(std::max(0.f, std::min(data[i].z, 1.f)) * 255.0f);
-    }
-
-    OIIO::ROI roi( 0, width, 0, height, 0, 1, 0, 3);
-    OIIO::ImageSpec spec( roi, OIIO::TypeDesc::UINT8);
-
-    std::unique_ptr<OIIO::ImageOutput> image(OIIO::ImageOutput::create(path));
-    if (!image)
-           return false;
-
-    mi::Sint32 bytes_per_row = 3 * width * sizeof(unsigned char);
-
-    image->open(path, spec);
-    bool success = image->write_image(
-        OIIO::TypeDesc::UINT8,
-        tmp.data() + (height-1) * 3 * width,
-        /*xstride*/ OIIO::AutoStride,
-        /*ystride*/ -bytes_per_row,
-        /*zstride*/ OIIO::AutoStride);
-    image->close();
-    return success;
-}
-
 #endif // EXAMPLE_CUDA_SHARED_H

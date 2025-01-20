@@ -655,10 +655,11 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
     }
 
     // stop on absorb
-    if (sample_data.event_type == BSDF_EVENT_ABSORB)
+    if ((sample_data.pdf == 0.0f && (sample_data.event_type & BSDF_EVENT_SPECULAR) == 0) ||
+        sample_data.event_type == BSDF_EVENT_ABSORB)
     {
         add_flag(payload.flags, FLAG_DONE);
-        // no not return here, we need to do next event estimation first
+        // do not return here, we need to do next event estimation first
     }
     else
     {

@@ -63,6 +63,7 @@ enum Mdl_node_type_enum {
     simple_glossy_bsdf,
     backscattering_glossy_reflection_bsdf,
     sheen_bsdf,
+    microflake_sheen_bsdf,
     measured_bsdf,
     //
     microfacet_beckmann_smith_bsdf,
@@ -78,6 +79,7 @@ enum Mdl_node_type_enum {
     measured_curve_factor,
     measured_factor,
     fresnel_factor,
+    coat_absorption_factor,
     //
     bsdf_mix_1,
     bsdf_mix_2,

@@ -598,7 +598,7 @@ public:
   LLVM_ATTRIBUTE_DEPRECATED(
       inline unsigned getPreferredAlignment(const GlobalVariable *GV) const,
       "Use getPreferredAlign instead") {
-    return getPreferredAlign(GV).value();
+    return unsigned(getPreferredAlign(GV).value());
   }
 
   /// Returns the preferred alignment of the specified global, returned

@@ -26,9 +26,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #*****************************************************************************
 
-# name of the target and the resulting library
-set(PROJECT_NAME examples-mdl_sdk-shared)
-
 # collect sources
 set(PROJECT_SOURCES
     "example_shared.cpp"
@@ -43,6 +40,7 @@ set(PROJECT_SOURCES
     "utils/enums.h"
     "utils/io.h"
     "utils/mdl.h"
+    "utils/mdl.cpp"
     "utils/os.h"
     "utils/strings.h"
     )
@@ -83,14 +81,6 @@ if (MDL_BUILD_SDK_EXAMPLES OR MDL_BUILD_CORE_EXAMPLES)
             )
     endif()
 
-    if(MDL_ENABLE_VULKAN_EXAMPLES)
-        set(PROJECT_SOURCES
-            ${PROJECT_SOURCES}
-            "example_vulkan_shared.h"
-            "example_vulkan_shared.cpp"
-            )
-    endif()
-
     if(MDL_ENABLE_D3D11_EXAMPLES)
         set(PROJECT_SOURCES
             ${PROJECT_SOURCES}
@@ -106,6 +96,58 @@ if (MDL_BUILD_SDK_EXAMPLES OR MDL_BUILD_CORE_EXAMPLES)
     endif()
 endif()
 
+
+# helper function for common shared target properties, dependencies, etc.
+function(ADD_COMMON_TARGET_PROPERTIES TARGET_NAME)
+    # inject the MDL_SAMPLES_ROOT path
+    target_compile_definitions(${TARGET_NAME}
+        PRIVATE
+            "MDL_SAMPLES_ROOT=\"${MDL_EXAMPLES_FOLDER}\""
+        )
+
+    if(WINDOWS)
+        # MS deprecated the codecvt_utf8 functions without providing a replacement
+        # the deprecated function will be available until there is such a replacement
+        target_compile_definitions(${TARGET_NAME}
+            PUBLIC
+                "_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING"
+            )
+    endif()
+
+    if(MDL_TREAT_RUNTIME_DEPS_AS_BUILD_DEPS)
+        # make sure the plugins are build before samples are build
+        if(TARGET shaders-plugin-dds)
+            add_dependencies(${TARGET_NAME} shaders-plugin-dds)
+        endif()
+        if(TARGET shaders-plugin-openimageio)
+            add_dependencies(${TARGET_NAME} shaders-plugin-openimageio)
+        endif()
+        if(TARGET shaders-plugin-mdl_distiller)
+            add_dependencies(${TARGET_NAME} shaders-plugin-mdl_distiller)
+        endif()
+    endif()
+
+    # add include directories
+    target_include_directories(${TARGET_NAME}
+        INTERFACE
+            # the template makes non public headers private by default
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        )
+
+    # add dependencies
+    target_add_dependencies(TARGET ${TARGET_NAME}
+        DEPENDS
+            mdl::mdl_sdk
+        NO_RUNTIME_COPY
+        )
+endfunction()
+
+
+# name of the target and the resulting library
+#
+# This variant is used by almost all examples which use a dynamic MSVC runtime.
+set(PROJECT_NAME examples-mdl_sdk-shared)
+
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
@@ -116,34 +158,70 @@ create_from_base_preset(
 )
 add_library(mdl_sdk::shared ALIAS ${PROJECT_NAME})
 
-# inject the MDL_SAMPLES_ROOT path
-target_compile_definitions(${PROJECT_NAME}
-    PUBLIC
-        "MDL_SAMPLES_ROOT=\"${CMAKE_CURRENT_SOURCE_DIR}/../..\""
-    )
-
-if(WINDOWS)
-    # MS deprecated the codecvt_utf8 functions without providing a replacement
-    # the deprecated function will be available until there is such a replacement
-    target_compile_definitions(${PROJECT_NAME}
-        PUBLIC
-            "_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING"
-        )
-endif()
+add_common_target_properties(${PROJECT_NAME})
 
 # add dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME}
-    DEPENDS
-        mdl::mdl_sdk
-    NO_RUNTIME_COPY     # header only -> the consumer will also add this dependency
-    )
-
-if (MDL_BUILD_SDK_EXAMPLES OR MDL_BUILD_CORE_EXAMPLES)
-    if (TARGET imgui)
+if(MDL_BUILD_SDK_EXAMPLES OR MDL_BUILD_CORE_EXAMPLES)
+    if(TARGET imgui)
         target_add_dependencies(TARGET ${PROJECT_NAME}
             DEPENDS
                 imgui
-            NO_RUNTIME_COPY     # header only -> the consumer will also add this dependency
+            NO_RUNTIME_COPY
+            )
+        target_compile_definitions(${PROJECT_NAME}
+            PUBLIC
+                "USE_IMGUI"
+            )
+    endif()
+
+    if(MDL_ENABLE_OPENGL_EXAMPLES)
+        target_add_dependencies(TARGET ${PROJECT_NAME}
+            DEPENDS
+                glfw
+            NO_RUNTIME_COPY
+            )
+    endif()
+endif()
+
+
+# name of the target and the resulting library
+#
+# This variant is used by the mdl_core and Vulkan examples which
+# need to use a static MSVC runtime.
+set(PROJECT_NAME examples-mdl_sdk-shared_static)
+
+# vulkan is only in the static variant
+if(MDL_BUILD_SDK_EXAMPLES OR MDL_BUILD_CORE_EXAMPLES)
+    if(MDL_ENABLE_VULKAN_EXAMPLES)
+        set(PROJECT_SOURCES
+            ${PROJECT_SOURCES}
+            "example_vulkan_shared.h"
+            "example_vulkan_shared.cpp"
+            )
+    endif()
+endif()
+
+# create target from template
+create_from_base_preset(
+    TARGET ${PROJECT_NAME}
+    NAMESPACE mdl_sdk
+    OUTPUT_NAME "shared_static"
+    SOURCES ${PROJECT_SOURCES}
+    EXAMPLE
+    STATIC_MSVC_RUNTIME
+)
+add_library(mdl_sdk::shared_static ALIAS ${PROJECT_NAME})
+set_target_properties(${PROJECT_NAME} PROPERTIES PROJECT_LABEL "shared_static")
+
+add_common_target_properties(${PROJECT_NAME})
+
+# add dependencies
+if(MDL_BUILD_SDK_EXAMPLES OR MDL_BUILD_CORE_EXAMPLES)
+    if(TARGET imgui)
+        target_add_dependencies(TARGET ${PROJECT_NAME}
+            DEPENDS
+                imgui_static
+            NO_RUNTIME_COPY
             )
         target_compile_definitions(${PROJECT_NAME}
             PUBLIC
@@ -167,23 +245,3 @@ if (MDL_BUILD_SDK_EXAMPLES OR MDL_BUILD_CORE_EXAMPLES)
             )
     endif()
 endif()
-
-if(MDL_TREAT_RUNTIME_DEPS_AS_BUILD_DEPS)
-    # make sure the plugins are build before samples are build
-    if(TARGET shaders-plugin-dds)
-        add_dependencies(${PROJECT_NAME} shaders-plugin-dds)
-    endif()
-    if(TARGET shaders-plugin-openimageio)
-        add_dependencies(${PROJECT_NAME} shaders-plugin-openimageio)
-    endif()
-    if(TARGET shaders-plugin-mdl_distiller)
-        add_dependencies(${PROJECT_NAME} shaders-plugin-mdl_distiller)
-    endif()
-endif()
-
-# add include directories
-target_include_directories(${PROJECT_NAME}
-    INTERFACE
-        # the template makes non public headers private by default
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> 
-    )

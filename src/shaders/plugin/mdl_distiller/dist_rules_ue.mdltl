@@ -37,10 +37,12 @@ rules Make_simple_for_ue4 bottomup {
     ward_geisler_moroder_bsdf(ru,rv,tint,_,t) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t) repeat_rules;
     backscattering_glossy_reflection_bsdf(ru,rv,tint,_,t,handle) --> microfacet_ggx_vcavities_bsdf(ru,rv,tint,color(0.0),t,scatter_reflect,handle) repeat_rules;
     sheen_bsdf(r,tint,tintt,_,handle) --> microfacet_ggx_vcavities_bsdf(r,r,tint,tintt,state::texture_tangent_u(0),scatter_reflect,handle) repeat_rules;
+    microflake_sheen_bsdf(r,tint,tintt,_,handle) --> microfacet_ggx_vcavities_bsdf(r,r,tint,tintt,state::texture_tangent_u(0),scatter_reflect,handle) repeat_rules;
 
     //some brutal removal of unsupported components: todo see if we can do better
     measured_bsdf(_) --> bsdf();
     thin_film(_,_,base) --> base repeat_rules;
+    coat_absorption_factor(_, _, _, base) --> base repeat_rules;
     measured_curve_factor(a,base) -->
         //custom_curve_layer( 0.0, 1.0, 5.0, 1.,
             //bsdf_tint(a[0],base), bsdf_tint(nvidia::distilling_support::last_element(a),base), state::normal());
@@ -53,10 +55,10 @@ rules Make_simple_for_ue4 bottomup {
                               wrap_repeat,wrap_repeat,float2(0.0,1.0),float2(0.0,1.0),0.0
                       ),1.0),base);
 
-    bsdf_directional_factor(tint_n,tint_g,e,base) -->
-        bsdf_tint( nvidia::distilling_support::directional_coloring(tint_n,tint_g,e), base) maybe tint_g!=color(1.0);
-    bsdf_directional_factor(tint_n,tint_g,e,base) -->
-        custom_curve_layer( 0.0,1.0,e, 1.0, bsdf_tint(tint_g,base), bsdf_tint(tint_n,base));
+    bsdf_directional_factor(tint_n,tint_g,f82_factor,e,base) -->
+        bsdf_tint( nvidia::distilling_support::directional_coloring(tint_n,tint_g*f82_factor,e), base) maybe tint_g!=color(1.0);
+    bsdf_directional_factor(tint_n,tint_g,f82_factor,e,base) -->
+        custom_curve_layer( 0.0,1.0,e, 1.0, bsdf_tint(tint_g*f82_factor,base), bsdf_tint(tint_n,base));
 
     bsdf_clamped_mix_1(w1,df1) --> bsdf_tint( color(w1), df1);
     bsdf_unbounded_mix_1(w1,df1) --> bsdf_tint( color(w1), df1);
@@ -109,6 +111,7 @@ rules Make_simple_for_ue4 bottomup {
         nonode(simple_glossy_bsdf) &&//done testing
         nonode(backscattering_glossy_reflection_bsdf) &&//done testing
         nonode(sheen_bsdf) &&//done testing
+        nonode(microflake_sheen_bsdf) &&//done testing
         nonode(measured_bsdf) &&
         nonode(microfacet_beckmann_smith_bsdf) &&
         nonode(microfacet_ggx_smith_bsdf) &&
@@ -2392,6 +2395,5 @@ postcond  (
           );
 
 }
-
 
 

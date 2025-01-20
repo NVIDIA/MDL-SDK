@@ -445,14 +445,22 @@ public:
 
     const char* proxytype () const override { return "nv_reader"; }
     void close() override { m_reader.reset(); }
+#if OIIO_VERSION >= OIIO_MAKE_VERSION(3,0,0)
+    int64_t tell() const override { return m_reader->tell_absolute(); }
+#else
     int64_t tell() override { return m_reader->tell_absolute(); }
+#endif
     bool seek( int64_t offset) override { return m_reader->seek_absolute( offset); }
     size_t read( void* buf, size_t size) override;
     size_t write( const void* buf, size_t size) override;
     size_t pread( void* buf, size_t size, int64_t offset) override;
     size_t pwrite( const void* buf, size_t size, int64_t offset) override;
     size_t size() const override { return m_reader->get_file_size(); }
+#if OIIO_VERSION >= OIIO_MAKE_VERSION(3,0,0)
+    void flush() override { }
+#else
     void flush() const override { }
+#endif
 
 private:
     /// The wrapped reader.
@@ -526,14 +534,22 @@ public:
 
     const char* proxytype () const override { return "nv_writer"; }
     void close() override { m_writer.reset(); }
+#if OIIO_VERSION >= OIIO_MAKE_VERSION(3,0,0)
+    int64_t tell() const override { return m_writer->tell_absolute(); }
+#else
     int64_t tell() override { return m_writer->tell_absolute(); }
+#endif
     bool seek( int64_t offset) override { return m_writer->seek_absolute( offset); }
     size_t read( void* buf, size_t size) override;
     size_t write( const void* buf, size_t size) override;
     size_t pread( void* buf, size_t size, int64_t offset) override;
     size_t pwrite( const void* buf, size_t size, int64_t offset) override;
     size_t size() const override { return m_writer->get_file_size(); }
+#if OIIO_VERSION >= OIIO_MAKE_VERSION(3,0,0)
+    void flush() override { m_writer->flush(); }
+#else
     void flush() const override { m_writer->flush(); }
+#endif
 
 private:
     /// The wrapped writer.
@@ -824,6 +840,20 @@ bool compute_properties(
     channel_start = -1;
     channel_end   = -1;
     return false;
+}
+
+std::string get_oiio_colorspace( float gamma)
+{
+    if( gamma <= 0.0f)
+        return {};
+    if( gamma == 1.0f)
+        return "linear";
+    if( gamma == 2.2f)
+        return "sRGB";
+
+    char buffer[22];
+    snprintf( buffer, sizeof( buffer), "Gamma%.9g", gamma);
+    return buffer;
 }
 
 } // namespace MI_OIIO

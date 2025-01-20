@@ -59,7 +59,7 @@ void run_tests( mi::neuraylib::INeuray* neuray)
 void load_test_unload()
 {
     mi::base::Handle<mi::neuraylib::INeuray> neuray( load_and_get_ineuray());
-    MI_CHECK( neuray.is_valid_interface());
+    MI_CHECK( neuray);
 
     run_tests( neuray.get());
     run_tests( neuray.get());

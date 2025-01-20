@@ -91,8 +91,8 @@ std::string convert_os_separators_to_slashes( const std::string& s)
 }
 
 /// Calls the MDL entity resolver with the given arguments and returns the file name set, or
-/// \c NULL in case of failure. The flag \c log_messages indicates whether error messages should be
-/// logged. This method supports all three kinds of resources, including animated and/or uvtile
+/// \c nullptr in case of failure. The flag \c log_messages indicates whether error messages should
+/// be logged. This method supports all three kinds of resources, including animated and/or uvtile
 /// textures.
 mi::mdl::IMDL_resource_set* get_resource_set(
     const char* file_path,
@@ -117,10 +117,10 @@ mi::mdl::IMDL_resource_set* get_resource_set(
     return res_set;
 }
 
-/// Calls the MDL entity resolver with the given arguments and returns the resulting reader, or \c
-/// NULL in case of failure. The flag \c log_messages indicates whether error messages should be
-/// logged. This method does not support animated nor uvtile textures. It should only be used for
-/// light profiles and BSDF measurements.
+/// Calls the MDL entity resolver with the given arguments and returns the resulting reader, or
+/// \c nullptr in case of failure. The flag \c log_messages indicates whether error messages should
+/// be logged. This method does not support animated nor uvtile textures. It should only be used
+/// for light profiles and BSDF measurements.
 mi::mdl::IMDL_resource_reader* get_reader(
     const char* file_path,
     const char* module_file_system_path,
@@ -201,7 +201,7 @@ void decompose_resolved_filename(
     container_membername = get_container_membername( resolved_filename);
 }
 
-/// Returns a decoded module name suitable for error messages. Support \c NULL arguments.
+/// Returns a decoded module name suitable for error messages. Support \c nullptr arguments.
 std::string get_module_name_for_error_msg( const char* module_name)
 {
     if( !module_name)
@@ -441,9 +441,9 @@ DB::Tag core_texture_to_tag(
             + "\" in \"" + decoded_mdl_module_name + "\".";
         if( errors_are_warnings) {
             LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO, "%s", msg.c_str());
-            add_warning_message( context, msg.c_str());
+            add_warning_message( context, msg);
         } else {
-            add_error_message( context, msg.c_str(), -4);
+            add_error_message( context, msg, -4);
         }
         return {};
     }
@@ -493,9 +493,9 @@ DB::Tag core_texture_to_tag(
 
         if( errors_are_warnings) {
             LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO, "%s", msg.c_str());
-            add_warning_message( context, msg.c_str());
+            add_warning_message( context, msg);
         } else {
-            add_error_message( context, msg.c_str(), result);
+            add_error_message( context, msg, result);
         }
         return {};
     }
@@ -568,9 +568,9 @@ DB::Tag core_light_profile_to_tag(
             + "\" in \"" + decoded_mdl_module_name + "\".";
         if( errors_are_warnings) {
             LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO, "%s", msg.c_str());
-            add_warning_message( context, msg.c_str());
+            add_warning_message( context, msg);
         } else {
-            add_error_message( context, msg.c_str(), -3);
+            add_error_message( context, msg, -3);
         }
         return {};
     }
@@ -583,9 +583,9 @@ DB::Tag core_light_profile_to_tag(
             + "\" in \"" + decoded_mdl_module_name + "\".";
         if( errors_are_warnings) {
             LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO, "%s", msg.c_str());
-            add_warning_message( context, msg.c_str());
+            add_warning_message( context, msg);
         } else {
-            add_error_message( context, msg.c_str(), -4);
+            add_error_message( context, msg, -4);
         }
         return {};
     }
@@ -627,9 +627,9 @@ DB::Tag core_light_profile_to_tag(
             + "\" in \"" + decoded_mdl_module_name + "\".";
         if( errors_are_warnings) {
             LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO, "%s", msg.c_str());
-            add_warning_message( context, msg.c_str());
+            add_warning_message( context, msg);
         } else {
-            add_error_message( context, msg.c_str(), result);
+            add_error_message( context, msg, result);
         }
         return {};
     }
@@ -688,9 +688,9 @@ DB::Tag core_bsdf_measurement_to_tag(
             + "\" in \"" + decoded_mdl_module_name + "\".";
         if( errors_are_warnings) {
             LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO, "%s", msg.c_str());
-            add_warning_message( context, msg.c_str());
+            add_warning_message( context, msg);
         } else {
-            add_error_message( context, msg.c_str(), -3);
+            add_error_message( context, msg, -3);
         }
         return {};
     }
@@ -703,9 +703,9 @@ DB::Tag core_bsdf_measurement_to_tag(
             + "\" in \"" + decoded_mdl_module_name + "\".";
         if( errors_are_warnings) {
             LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO, "%s", msg.c_str());
-            add_warning_message( context, msg.c_str());
+            add_warning_message( context, msg);
         } else {
-            add_error_message( context, msg.c_str(), -4);
+            add_error_message( context, msg, -4);
         }
         return {};
     }
@@ -747,9 +747,9 @@ DB::Tag core_bsdf_measurement_to_tag(
             + "\" in \"" + decoded_mdl_module_name + "\".";
         if( errors_are_warnings) {
             LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO, "%s", msg.c_str());
-            add_warning_message( context, msg.c_str());
+            add_warning_message( context, msg);
         } else {
-            add_error_message( context, msg.c_str(), result);
+            add_error_message( context, msg, result);
         }
         return {};
     }

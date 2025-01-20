@@ -44,7 +44,6 @@
 
 #include <mi/math/vector.h>
 
-
 ///////////////////////////////////////////////////////////////////////////////
 // Convenience operator for vector printing
 ///////////////////////////////////////////////////////////////////////////////
@@ -72,7 +71,6 @@ namespace mi { namespace math {
 ///////////////////////////////////////////////////////////////////////////////
 // Pseudo random number generation
 ///////////////////////////////////////////////////////////////////////////////
-
 
 std::mt19937 prng;
 
@@ -113,7 +111,6 @@ void randomize(double &val)
     if (prng() % 2)
         val *= -1.0f;
 }
-
 
 template <class T, mi::Size DIM>
 void randomize(mi::math::Vector<T,DIM> & v)
@@ -1121,4 +1118,3 @@ MI_TEST_AUTO_FUNCTION( test_convert_vector )
     MI_CHECK_EQUAL((mi::math::convert_vector<mi::Sint32, 5>(v)),
                    (mi::math::Vector<mi::Sint32, 5>(v5)));
 }
-

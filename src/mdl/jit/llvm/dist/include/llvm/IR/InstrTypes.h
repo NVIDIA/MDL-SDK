@@ -1256,7 +1256,7 @@ public:
     return data_operands_end() == data_operands_begin();
   }
   unsigned data_operands_size() const {
-    return std::distance(data_operands_begin(), data_operands_end());
+    return unsigned(std::distance(data_operands_begin(), data_operands_end()));
   }
 
   bool isDataOperand(const Use *U) const {
@@ -1278,7 +1278,7 @@ public:
   /// corresponds to it.
   unsigned getDataOperandNo(const Use *U) const {
     assert(isDataOperand(U) && "Data operand # out of range!");
-    return U - data_operands_begin();
+    return unsigned(U - data_operands_begin());
   }
 
   /// Return the iterator pointing to the beginning of the argument list.
@@ -1305,7 +1305,7 @@ public:
     return make_range(arg_begin(), arg_end());
   }
   bool arg_empty() const { return arg_end() == arg_begin(); }
-  unsigned arg_size() const { return arg_end() - arg_begin(); }
+  unsigned arg_size() const { return unsigned(arg_end() - arg_begin()); }
 
   // Legacy API names that duplicate the above and will be removed once users
   // are migrated.
@@ -1350,7 +1350,7 @@ public:
   /// corresponds to it.
   unsigned getArgOperandNo(const Use *U) const {
     assert(isArgOperand(U) && "Arg operand # out of range!");
-    return U - arg_begin();
+    return unsigned(U - arg_begin());
   }
 
   /// Given a value use iterator, return the arg operand number corresponding to
@@ -1670,7 +1670,7 @@ public:
   LLVM_ATTRIBUTE_DEPRECATED(unsigned getRetAlignment() const,
                             "Use getRetAlign() instead") {
     if (const auto MA = Attrs.getRetAlignment())
-      return MA->value();
+      return unsigned(MA->value());
     return 0;
   }
 
@@ -1681,7 +1681,7 @@ public:
   LLVM_ATTRIBUTE_DEPRECATED(unsigned getParamAlignment(unsigned ArgNo) const,
                             "Use getParamAlign() instead") {
     if (const auto MA = Attrs.getParamAlignment(ArgNo))
-      return MA->value();
+      return unsigned(MA->value());
     return 0;
   }
 
@@ -1855,7 +1855,7 @@ public:
 
   /// Return the number of operand bundles associated with this User.
   unsigned getNumOperandBundles() const {
-    return std::distance(bundle_op_info_begin(), bundle_op_info_end());
+    return unsigned(std::distance(bundle_op_info_begin(), bundle_op_info_end()));
   }
 
   /// Return true if this User has any operand bundles.
@@ -1883,7 +1883,7 @@ public:
   bool isBundleOperand(const Use *U) const {
     assert(this == U->getUser() &&
            "Only valid to query with a use of this instruction!");
-    return hasOperandBundles() && isBundleOperand(U - op_begin());
+    return hasOperandBundles() && isBundleOperand(unsigned(U - op_begin()));
   }
   bool isBundleOperand(Value::const_user_iterator UI) const {
     return isBundleOperand(&UI.getUse());

@@ -78,7 +78,7 @@ application that reconstructs compilable MDL code.
         Each of these three methods provides a pointer to the compiled material that is processed,
         the custom context object, and a \c Traversal_element with information about the element
         that is currently visited. This includes pointers to the current expression, value,
-        parameter, or temporary. Only one of these four pointers is different from \c NULL during
+        parameter, or temporary. Only one of these four pointers is different from \c nullptr during
         each invocation. Depending on the stage, not all cases are possible. During the \c
         ES_PARAMETERS stage, for instance, only parameters and values but no temporaries or
         expressions can occur. The Traversal_element also provides a \c sibling_count and a \c

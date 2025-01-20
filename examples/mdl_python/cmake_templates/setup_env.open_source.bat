@@ -39,5 +39,8 @@ set PYTHONPATH=@BINDING_MODULE_PATH@/@_CONFIG@;%PYTHONPATH%
 :: Path of the examples to access the example content
 set MDL_SAMPLES_ROOT=@CMAKE_CURRENT_SOURCE_DIR@/../
 
+:: Path of the examples to access the common modules
+set MDL_SRC_SHADERS_MDL=@MDL_SRC_FOLDER@/shaders/mdl/
+
 :: Path of the python binary matching the version used for building the bindings
 set PYTHON_BINARY=@MDL_DEPENDENCY_PYTHON_DEV_EXE@

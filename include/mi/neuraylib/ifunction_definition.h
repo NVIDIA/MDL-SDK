@@ -305,6 +305,7 @@ public:
         DS_INTRINSIC_DF_TINT,                     ///< The df::tint() function.
         DS_INTRINSIC_DF_DIRECTIONAL_FACTOR,       ///< The df::directional_factor() function.
         DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR,    ///< The df::measured_curve_factor() function.
+        DS_INTRINSIC_DF_COAT_ABSORPTION_FACTOR,   ///< The df::coat_absorption_factor() function.
         DS_INTRINSIC_DF_LIGHT_PROFILE_POWER,      ///< The df::light_profile_power() function.
         DS_INTRINSIC_DF_LIGHT_PROFILE_MAXIMUM,    ///< The df::light_profile_maximum() function.
         DS_INTRINSIC_DF_LIGHT_PROFILE_ISVALID,    ///< The df::light_profile_isvalid() function.
@@ -330,6 +331,7 @@ public:
         DS_INTRINSIC_DF_MEASURED_FACTOR,          ///< The df::measured_factor() function.
         DS_INTRINSIC_DF_CHIANG_HAIR_BSDF,         ///< The df::chiang_hair_bsdf() function.
         DS_INTRINSIC_DF_SHEEN_BSDF,               ///< The df::sheen_bsdf() function.
+        DS_INTRINSIC_DF_MICROFLAKE_SHEEN_BSDF,    ///< The df::microflake_sheen_bsdf() function.
         DS_INTRINSIC_DF_UNBOUNDED_MIX,            ///< The df::unbounded_mix() function.
         DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX,      ///< The df::color_unbounded() function.
         DS_INTRINSIC_DF_LAST = DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX,
@@ -441,10 +443,10 @@ public:
     ///       instead.
     ///
     /// \param index    The index of the parameter.
-    /// \return         The type name of the parameter, or \c NULL if \p index is out of range.
+    /// \return         The type name of the parameter, or \c nullptr if \p index is out of range.
     virtual const char* get_mdl_parameter_type_name( Size index) const = 0;
 
-    /// Returns the DB name of the prototype, or \c NULL if this function definition is not a
+    /// Returns the DB name of the prototype, or \c nullptr if this function definition is not a
     /// variant.
     virtual const char* get_prototype() const = 0;
 
@@ -518,7 +520,7 @@ public:
     /// Returns the name of the parameter at \p index.
     ///
     /// \param index    The index of the parameter.
-    /// \return         The name of the parameter, or \c NULL if \p index is out of range.
+    /// \return         The name of the parameter, or \c nullptr if \p index is out of range.
     virtual const char* get_parameter_name( Size index) const = 0;
 
     /// Returns the index position of a parameter.
@@ -562,12 +564,12 @@ public:
     ///                 parameter argument, or ~0 if indexes are out of range.
     virtual Size get_enable_if_user( Size index, Size u_index) const = 0;
 
-    /// Returns the annotations of the function definition itself, or \c NULL if there are no such
-    /// annotations.
+    /// Returns the annotations of the function definition itself, or \c nullptr if there are no
+    /// such annotations.
     virtual const IAnnotation_block* get_annotations() const = 0;
 
-    /// Returns the annotations of the return type of this function definition, or \c NULL if there
-    /// are no such annotations.
+    /// Returns the annotations of the return type of this function definition, or \c nullptr if
+    /// there are no such annotations.
     virtual const IAnnotation_block* get_return_annotations() const = 0;
 
     /// Returns the annotations of all parameters.
@@ -584,7 +586,7 @@ public:
     /// it uses the 'name' argument of the annotation and resolves that in the MDL search path.
     /// If the annotation is not provided or file resolution fails, it checks for a file
     /// module_name.material_name.png next to the MDL module.
-    /// In case this cannot be found either \c NULL is returned.
+    /// In case this cannot be found either \c nullptr is returned.
     virtual const char* get_thumbnail() const = 0;
 
     /// Returns \c true if the definition is valid, \c false otherwise.
@@ -595,7 +597,7 @@ public:
     /// definition can be validated by reloading the module it has been
     /// defined in.
     /// \param context  Execution context that can be queried for error messages
-    ///                 after the operation has finished. Can be \c NULL.
+    ///                 after the operation has finished. Can be \c nullptr.
     /// \return     - \c true   The definition is valid.
     ///             - \c false  The definition is invalid.
     virtual bool is_valid( IMdl_execution_context* context) const = 0;
@@ -603,13 +605,13 @@ public:
     /// Returns the expression that represents the body of the function (if possible).
     ///
     /// \note Functions bodies with control flow can not be represented by an expression. For such
-    ///       functions, this method always returns \c NULL. For all other functions, i.e., for
+    ///       functions, this method always returns \c nullptr. For all other functions, i.e., for
     ///       functions, whose body is an expression or a plain return statement, the method never
-    ///       returns \c NULL (unless there is no body at all, see below).
+    ///       returns \c nullptr (unless there is no body at all, see below).
     ///
     /// \note Functions with a known semantic, i.e., different from
     ///       #mi::neuraylib::IFunction_definition::DS_UNKNOWN, do not have a body as such, and the
-    ///       method returns \c NULL for such functions.
+    ///       method returns \c nullptr for such functions.
     virtual const IExpression* get_body() const = 0;
 
     /// Returns the number of temporaries used by this function.
@@ -618,7 +620,7 @@ public:
     /// Returns the expression of a temporary.
     ///
     /// \param index            The index of the temporary.
-    /// \return                 The expression of the temporary, or \c NULL if \p index is out of
+    /// \return                 The expression of the temporary, or \c nullptr if \p index is out of
     ///                         range.
     virtual const IExpression* get_temporary( Size index) const = 0;
 
@@ -630,8 +632,8 @@ public:
     /// \see #mi::neuraylib::IMdl_configuration::set_expose_names_of_let_expressions()
     ///
     /// \param index            The index of the temporary.
-    /// \return                 The name of the temporary, or \c NULL if the temporary has no name
-    ///                         or \p index is out of range.
+    /// \return                 The name of the temporary, or \c nullptr if the temporary has no
+    ///                         name or \p index is out of range.
     virtual const char* get_temporary_name( Size index) const = 0;
 
     /// Returns the expression of a temporary.
@@ -644,7 +646,7 @@ public:
     ///
     /// \tparam T               The interface type of the requested element.
     /// \param index            The index of the temporary.
-    /// \return                 The expression of the temporary, or \c NULL if \p index is out of
+    /// \return                 The expression of the temporary, or \c nullptr if \p index is out of
     ///                         range.
     template<class T>
     const T* get_temporary( Size index) const
@@ -667,7 +669,7 @@ public:
     ///                     Note that the expressions in \p arguments are copied. This copy
     ///                     operation is a deep copy, e.g., DB elements referenced in call
     ///                     expressions are also copied. \n
-    ///                     \c NULL is a valid argument which is handled like an empty expression
+    ///                     \c nullptr is a valid argument which is handled like an empty expression
     ///                     list.
     /// \param[out] errors  An optional pointer to an #mi::Sint32 to which an error code will be
     ///                     written. The error codes have the following meaning:
@@ -691,9 +693,9 @@ public:
     ///                            #is_valid() for diagnostics.
     ///                     - -10: The definition is non-declarative and at least one of the
     ///                            arguments is a declarative call.
-    /// \return             The created function call, or \c NULL in case of errors.
+    /// \return             The created function call, or \c nullptr in case of errors.
     virtual IFunction_call* create_function_call(
-        const IExpression_list* arguments, Sint32* errors = 0) const = 0;
+        const IExpression_list* arguments, Sint32* errors = nullptr) const = 0;
 
     /// Returns the mangled name of the function.
     ///

@@ -106,8 +106,9 @@ void DAG_ir_walker::walk_material(
         int temp = queue.front();
         queue.pop_front();
 
-        if (visited_temps.test_bit(temp))
+        if (visited_temps.test_bit(temp)) {
             continue;
+        }
         visited_temps.set_bit(temp);
 
         DAG_node *tmp_init = const_cast<DAG_node *>(dag->get_material_temporary(mat_index, temp));
@@ -136,8 +137,9 @@ void DAG_ir_walker::walk_instance(
         int temp = queue.front();
         queue.pop_front();
 
-        if (visited_temps.test_bit(temp))
+        if (visited_temps.test_bit(temp)) {
             continue;
+        }
         visited_temps.set_bit(temp);
 
         DAG_node *tmp_init = const_cast<DAG_node *>(instance->get_temporary_value(temp));
@@ -267,8 +269,9 @@ void DAG_ir_walker::walk_instance_slot(
         int temp = queue.front();
         queue.pop_front();
 
-        if (visited_temps.test_bit(temp))
+        if (visited_temps.test_bit(temp)) {
             continue;
+        }
         visited_temps.set_bit(temp);
 
         DAG_node *tmp_init = const_cast<DAG_node *>(instance->get_temporary_value(temp));
@@ -298,8 +301,9 @@ void DAG_ir_walker::walk_function(
         int temp = queue.front();
         queue.pop_front();
 
-        if (visited_temps.test_bit(temp))
+        if (visited_temps.test_bit(temp)) {
             continue;
+        }
         visited_temps.set_bit(temp);
 
         DAG_node *tmp_init = const_cast<DAG_node *>(dag->get_function_temporary(func_index, temp));
@@ -575,8 +579,7 @@ void Dag_hasher::hash_call(DAG_call const *call)
         // semantic is enough
         m_hasher.update(sema);
         hash(call->get_type());
-    }
-    else {
+    } else {
         // name is needed
         m_hasher.update(call->get_name());
     }
@@ -617,8 +620,9 @@ void Dag_hasher::hash(IType const *tp) {
         {
             IType_alias const *a_tp = cast<IType_alias>(tp);
             m_hasher.update(a_tp->get_type_modifiers());
-            if (ISymbol const *sym = a_tp->get_symbol())
+            if (ISymbol const *sym = a_tp->get_symbol()) {
                 m_hasher.update(sym->get_name());
+            }
             hash(a_tp->get_aliased_type());
         }
         break;

@@ -33,13 +33,13 @@
 #include "example_shared.h"
 #include "example_vulkan_shared.h"
 
-#include <vulkan/vulkan.h>
-#include <GLFW/glfw3.h>
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_vulkan.h>
 
 #include <numeric>
 #define _USE_MATH_DEFINES
 #include <math.h>
-#include <cassert>
 
 static const VkFormat g_accumulation_texture_format = VK_FORMAT_R32G32B32A32_SFLOAT;
 
@@ -49,16 +49,17 @@ static const uint32_t g_local_size_y = 8;
 
 // Descriptor set bindings. Used as a define in the shaders.
 static const uint32_t g_binding_beauty_buffer = 0;
-static const uint32_t g_binding_aux_albedo_buffer = 1;
-static const uint32_t g_binding_aux_normal_buffer = 2;
-static const uint32_t g_binding_render_params = 3;
-static const uint32_t g_binding_environment_map = 4;
-static const uint32_t g_binding_environment_sampling_data = 5;
-static const uint32_t g_binding_material_textures_indices = 6;
-static const uint32_t g_binding_material_textures_2d = 7;
-static const uint32_t g_binding_material_textures_3d = 8;
-static const uint32_t g_binding_ro_data_buffer = 9;
-static const uint32_t g_binding_argument_block_buffer = 10;
+static const uint32_t g_binding_aux_albedo_diffuse_buffer = 1;
+static const uint32_t g_binding_aux_albedo_glossy_buffer = 2;
+static const uint32_t g_binding_aux_normal_buffer = 3;
+static const uint32_t g_binding_aux_roughness_buffer = 4;
+static const uint32_t g_binding_render_params = 5;
+static const uint32_t g_binding_environment_map = 6;
+static const uint32_t g_binding_environment_sampling_data = 7;
+static const uint32_t g_binding_material_textures_2d = 8;
+static const uint32_t g_binding_material_textures_3d = 9;
+static const uint32_t g_binding_ro_data_buffer = 10;
+static const uint32_t g_binding_argument_block_buffer = 11;
 
 static const uint32_t g_set_ro_data_buffer = 0;
 static const uint32_t g_set_argument_block_buffer = 0;
@@ -70,58 +71,36 @@ struct Options
     bool no_window = false;
     std::string output_file = "output.exr";
     uint32_t res_x = 1024;
-    uint32_t res_y = 1024;
+    uint32_t res_y = 768;
     uint32_t num_images = 3;
+    int32_t device_index = -1;
     uint32_t samples_per_pixel = 4096;
     uint32_t samples_per_iteration = 8;
     uint32_t max_path_length = 4;
     float cam_fov = 96.0f;
     mi::Float32_3 cam_pos = { 0.0f, 0.0f, 3.0f };
     mi::Float32_3 light_pos = { 10.0f, 0.0f, 5.0f };
-    mi::Float32_3 light_intensity = { 0.0f, 0.0f, 0.0f };
+    mi::Float32_3 light_intensity = { 1.0f, 0.95f, 0.9f };
+    bool light_enabled = false;
     std::string hdr_file = "nvidia/sdk_examples/resources/environment.hdr";
     float hdr_intensity = 1.0f;
     bool use_class_compilation = true;
+    uint32_t tex_results_cache_size = 16;
+    bool enable_ro_segment = false;
+    bool disable_ssbo = false;
+    uint32_t max_const_data = 1024;
     std::string material_name = "::nvidia::sdk_examples::tutorials::example_df";
     bool enable_validation_layers = false;
+    bool enable_shader_optimization = true;
     bool dump_glsl = false;
+    bool hide_gui = false;
     bool enable_bsdf_flags = false;
     mi::neuraylib::Df_flags allowed_scatter_mode =
         mi::neuraylib::DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT;
 };
 
-struct Vulkan_texture
-{
-    VkImage image = nullptr;
-    VkImageView image_view = nullptr;
-    VkDeviceMemory device_memory = nullptr;
-
-    void destroy(VkDevice device)
-    {
-        vkDestroyImageView(device, image_view, nullptr);
-        vkDestroyImage(device, image, nullptr);
-        vkFreeMemory(device, device_memory, nullptr);
-    }
-};
-
-struct Vulkan_buffer
-{
-    VkBuffer buffer = nullptr;
-    VkDeviceMemory device_memory = nullptr;
-    void* mapped_data = nullptr; // unused for device-local buffers
-
-    void destroy(VkDevice device)
-    {
-        if (mapped_data)
-        {
-            vkUnmapMemory(device, device_memory);
-            mapped_data = nullptr;
-        }
-
-        vkDestroyBuffer(device, buffer, nullptr);
-        vkFreeMemory(device, device_memory, nullptr);
-    }
-};
+using Vulkan_texture = mi::examples::vk::Vulkan_texture;
+using Vulkan_buffer = mi::examples::vk::Vulkan_buffer;
 
 Vulkan_buffer create_storage_buffer(
     VkDevice device,
@@ -178,53 +157,6 @@ Vulkan_buffer create_storage_buffer(
 //------------------------------------------------------------------------------
 // MDL-Vulkan resource interop
 //------------------------------------------------------------------------------
-
-// Creates the storage buffer for the material's read-only data.
-Vulkan_buffer create_ro_data_buffer(
-    VkDevice device,
-    VkPhysicalDevice physical_device,
-    VkQueue queue,
-    VkCommandPool command_pool,
-    const mi::neuraylib::ITarget_code* target_code)
-{
-    mi::Size num_segments = target_code->get_ro_data_segment_count();
-    if (num_segments == 0)
-        return {}; // empty buffer
-
-    if (num_segments > 1)
-    {
-        std::cerr << "Multiple data segments (SSBOs) are defined for read-only data."
-            << " This should not be the case if a storage buffer is used.\n";
-        terminate();
-    }
-
-    return create_storage_buffer(device, physical_device, queue, command_pool,
-        target_code->get_ro_data_segment_data(0), target_code->get_ro_data_segment_size(0));
-}
-
-// Creates the storage buffer for the material's argument block. This buffer is used
-// for the material's dynamic parameters when using class compilation.
-Vulkan_buffer create_argument_block_buffer(
-    VkDevice device,
-    VkPhysicalDevice physical_device,
-    VkQueue queue,
-    VkCommandPool command_pool,
-    const mi::neuraylib::ITarget_code* target_code,
-    mi::Size argument_block_index)
-{
-    if (target_code->get_argument_block_count() == 0)
-        return {}; // empty buffer
-
-    mi::base::Handle<const mi::neuraylib::ITarget_argument_block> argument_block(
-        target_code->get_argument_block(argument_block_index));
-
-    // We create a device-local storage buffer for the argument block for simplicity since in
-    // this example we don't have the possibility to change the material parameters.
-    // This choice is not meant to be a recommendation. The appropriate memory properties and
-    // buffer update strategies depend on the application.
-    return create_storage_buffer(device, physical_device, queue, command_pool,
-        argument_block->get_data(), argument_block->get_size());
-}
 
 // Creates the image and image view for the given texture index.
 Vulkan_texture create_material_texture(
@@ -340,30 +272,14 @@ Vulkan_texture create_material_texture(
         mi::examples::vk::Temporary_command_buffer command_buffer(device, command_pool);
         command_buffer.begin();
 
-        {
-            VkImageMemoryBarrier image_memory_barrier = {};
-            image_memory_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            image_memory_barrier.srcAccessMask = 0;
-            image_memory_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            image_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            image_memory_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            image_memory_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            image_memory_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            image_memory_barrier.image = material_texture.image;
-            image_memory_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            image_memory_barrier.subresourceRange.baseMipLevel = 0;
-            image_memory_barrier.subresourceRange.levelCount = 1;
-            image_memory_barrier.subresourceRange.baseArrayLayer = 0;
-            image_memory_barrier.subresourceRange.layerCount = 1;
-
-            vkCmdPipelineBarrier(command_buffer.get(),
-                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT,
-                0,
-                0, nullptr,
-                0, nullptr,
-                1, &image_memory_barrier);
-        }
+        mi::examples::vk::transitionImageLayout(command_buffer.get(),
+            /*image=*/           material_texture.image,
+            /*src_access_mask=*/ 0,
+            /*dst_access_mask=*/ VK_ACCESS_TRANSFER_WRITE_BIT,
+            /*old_layout=*/      VK_IMAGE_LAYOUT_UNDEFINED,
+            /*new_layout=*/      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            /*src_stage_mask=*/  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            /*dst_stage_mask=*/  VK_PIPELINE_STAGE_TRANSFER_BIT);
 
         VkBufferImageCopy copy_region = {};
         copy_region.bufferOffset = 0;
@@ -380,30 +296,14 @@ Vulkan_texture create_material_texture(
             material_texture.image,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
 
-        {
-            VkImageMemoryBarrier image_memory_barrier = {};
-            image_memory_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            image_memory_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            image_memory_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            image_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            image_memory_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            image_memory_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            image_memory_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            image_memory_barrier.image = material_texture.image;
-            image_memory_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            image_memory_barrier.subresourceRange.baseMipLevel = 0;
-            image_memory_barrier.subresourceRange.levelCount = 1;
-            image_memory_barrier.subresourceRange.baseArrayLayer = 0;
-            image_memory_barrier.subresourceRange.layerCount = 1;
-
-            vkCmdPipelineBarrier(command_buffer.get(),
-                VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                0,
-                0, nullptr,
-                0, nullptr,
-                1, &image_memory_barrier);
-        }
+        mi::examples::vk::transitionImageLayout(command_buffer.get(),
+            /*image=*/           material_texture.image,
+            /*src_access_mask=*/ VK_ACCESS_TRANSFER_WRITE_BIT,
+            /*dst_access_mask=*/ VK_ACCESS_SHADER_READ_BIT,
+            /*old_layout=*/      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            /*new_layout=*/      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            /*src_stage_mask=*/  VK_PIPELINE_STAGE_TRANSFER_BIT,
+            /*dst_stage_mask=*/  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
         command_buffer.end_and_submit(queue);
     }
@@ -439,11 +339,15 @@ public:
         mi::base::Handle<mi::neuraylib::IMdl_impexp_api> mdl_impexp_api,
         mi::base::Handle<mi::neuraylib::IImage_api> image_api,
         mi::base::Handle<const mi::neuraylib::ITarget_code> target_code,
+        mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material,
+        mi::base::Handle<const mi::neuraylib::IAnnotation_list> material_parameter_annotations,
         mi::Size argument_block_index,
         const Options& options)
     : Vulkan_example_app(mdl_impexp_api.get(), image_api.get())
     , m_transaction(transaction)
     , m_target_code(target_code)
+    , m_compiled_material(compiled_material)
+    , m_material_parameter_annotations(material_parameter_annotations)
     , m_argument_block_index(argument_block_index)
     , m_options(options)
     {
@@ -466,7 +370,7 @@ public:
     virtual void render(VkCommandBuffer command_buffer, uint32_t frame_index, uint32_t image_index) override;
 
     // Window event handlers.
-    virtual void key_callback(int key, int action) override;
+    virtual void key_callback(int key, int action, int mods) override;
     virtual void mouse_button_callback(int button, int action) override;
     virtual void mouse_scroll_callback(float offset_x, float offset_y) override;
     virtual void mouse_move_callback(float pos_x, float pos_y) override;
@@ -500,12 +404,15 @@ private:
     };
 
 private:
-    void update_camera_render_params(const Camera_state& cam_state);
+    void do_settings_and_stats_gui();
 
-    void create_material_textures_index_buffer(const std::vector<uint32_t>& indices);
+    void update_camera_render_params(const Camera_state& cam_state);
 
     void create_accumulation_images();
 
+    // Creates the rendering shader module. The generated GLSL target code,
+    // GLSL MDL renderer runtime implementation, and renderer code are compiled
+    // and linked together here.
     VkShaderModule create_path_trace_shader_module();
 
     // Creates the descriptors set layout which is used to create the
@@ -525,17 +432,30 @@ private:
     // the resources.
     void create_descriptor_pool_and_sets();
 
+    void create_query_pool();
+
     void update_accumulation_image_descriptors();
+
+    void write_accum_images_to_files();
 
 private:
     mi::base::Handle<mi::neuraylib::ITransaction> m_transaction;
     mi::base::Handle<const mi::neuraylib::ITarget_code> m_target_code;
+    mi::base::Handle<const mi::neuraylib::ICompiled_material> m_compiled_material;
+    mi::base::Handle<const mi::neuraylib::IAnnotation_list> m_material_parameter_annotations;
     mi::Size m_argument_block_index;
     Options m_options;
 
-    Vulkan_texture m_beauty_texture;
-    Vulkan_texture m_auxiliary_albedo_texture;
-    Vulkan_texture m_auxiliary_normal_texture;
+    enum AccumImage
+    {
+        ACCUM_IMAGE_BEAUTY = 0,
+        ACCUM_IMAGE_AUX_ALBEDO_DIFFUSE,
+        ACCUM_IMAGE_AUX_ALBEDO_GLOSSY,
+        ACCUM_IMAGE_AUX_NORMAL,
+        ACCUM_IMAGE_AUX_ROUGHNESS,
+        ACCUM_IMAGE_COUNT
+    };
+    Vulkan_texture m_accum_images[ACCUM_IMAGE_COUNT];
     VkSampler m_linear_sampler = nullptr;
 
     VkRenderPass m_path_trace_render_pass = nullptr;
@@ -550,6 +470,7 @@ private:
     std::vector<VkDescriptorSet> m_path_trace_descriptor_sets;
     VkDescriptorSet m_display_descriptor_set;
     std::vector<Vulkan_buffer> m_render_params_buffers;
+    VkQueryPool m_query_pool;
 
     Vulkan_texture m_environment_map;
     Vulkan_buffer m_environment_sampling_data_buffer;
@@ -558,14 +479,21 @@ private:
     // Material resources
     Vulkan_buffer m_ro_data_buffer;
     Vulkan_buffer m_argument_block_buffer;
-    Vulkan_buffer m_material_textures_index_buffer;
+    std::vector<mi::examples::vk::Staging_buffer> m_argument_block_staging_buffers;
     std::vector<Vulkan_texture> m_material_textures_2d;
     std::vector<Vulkan_texture> m_material_textures_3d;
+    mi::base::Handle<mi::neuraylib::ITarget_argument_block> m_argument_block;
 
     Render_params m_render_params;
     bool m_camera_moved = true; // Force a clear in first frame
+    bool m_material_changed = false; // If the argument buffer needs to be updated
     uint32_t m_display_buffer_index = 0; // Which buffer to display
-
+    bool m_show_gui = true;
+    bool m_first_stats_update = true;
+    double m_last_stats_update;
+    float m_render_time = 0.0f;
+    bool m_vsync_enabled = true;
+    
     // Camera movement
     Camera_state m_camera_state;
     mi::Float32_2 m_mouse_start;
@@ -579,14 +507,48 @@ void Df_vulkan_app::init_resources()
     m_linear_sampler = mi::examples::vk::create_linear_sampler(m_device);
     
     // Create the render resources for the material
-    m_ro_data_buffer = create_ro_data_buffer(m_device, m_physical_device,
-        m_graphics_queue, m_command_pool, m_target_code.get());
+    //
+    // Create the storage buffer for the material's read-only data
+    mi::Size num_segments = m_target_code->get_ro_data_segment_count();
+    if (num_segments > 0)
+    {
+        if (num_segments > 1)
+        {
+            std::cerr << "Multiple data segments are defined for read-only data."
+                << " This should not be the case if a read-only segment or SSBO is used.\n";
+            terminate();
+        }
 
+        m_ro_data_buffer = create_storage_buffer(
+            m_device, m_physical_device, m_graphics_queue, m_command_pool,
+            m_target_code->get_ro_data_segment_data(0),
+            m_target_code->get_ro_data_segment_size(0));
+    }
+
+    // Create the storage buffers for the material's argument block
     bool is_class_compiled = (m_argument_block_index != mi::Size(-1));
     if (is_class_compiled)
     {
-        m_argument_block_buffer = create_argument_block_buffer(m_device, m_physical_device,
-            m_graphics_queue, m_command_pool, m_target_code.get(), m_argument_block_index);
+        // We create our own copy of the argument data block, so we can modify the material parameters
+        mi::base::Handle<const mi::neuraylib::ITarget_argument_block> readonly_argument_block(
+            m_target_code->get_argument_block(m_argument_block_index));
+        m_argument_block = readonly_argument_block->clone();
+
+        // We create a device-local storage buffer for the argument block for simplicity since we
+        // we don't expect to change the material parameters every frame.
+        // This choice is not meant to be a recommendation. The appropriate memory properties and
+        // buffer update strategies depend on the application.
+        m_argument_block_buffer = create_storage_buffer(
+            m_device, m_physical_device, m_graphics_queue, m_command_pool,
+            m_argument_block->get_data(), m_argument_block->get_size());
+
+        // Need the staging buffer so we can update the argument block storage buffers later
+        m_argument_block_staging_buffers.reserve(m_image_count);
+        for (uint32_t i = 0; i < m_image_count; i++)
+        {
+            m_argument_block_staging_buffers.emplace_back(
+                m_device, m_physical_device, m_argument_block->get_size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+        }
     }
 
     // Record the indices of each texture in their respective array
@@ -611,13 +573,11 @@ void Df_vulkan_app::init_resources()
                 material_textures_indices.push_back(static_cast<uint32_t>(m_material_textures_2d.size()));
                 m_material_textures_2d.push_back(texture);
                 break;
-
             case mi::neuraylib::ITarget_code::Texture_shape_3d:
             case mi::neuraylib::ITarget_code::Texture_shape_bsdf_data:
                 material_textures_indices.push_back(static_cast<uint32_t>(m_material_textures_3d.size()));
                 m_material_textures_3d.push_back(texture);
                 break;
-
             default:
                 std::cerr << "Unsupported texture shape!" << std::endl;
                 terminate();
@@ -626,8 +586,6 @@ void Df_vulkan_app::init_resources()
         }
     }
 
-    create_material_textures_index_buffer(material_textures_indices);
-
     create_descriptor_set_layouts();
     create_pipeline_layouts();
     create_accumulation_images();
@@ -635,6 +593,7 @@ void Df_vulkan_app::init_resources()
     create_render_params_buffers();
     create_environment_map();
     create_descriptor_pool_and_sets();
+    create_query_pool();
 
     // Initialize render parameters
     m_render_params.progressive_iteration = 0;
@@ -643,11 +602,12 @@ void Df_vulkan_app::init_resources()
     m_render_params.bsdf_data_flags = m_options.allowed_scatter_mode;
 
     m_render_params.point_light_pos = m_options.light_pos;
-    m_render_params.point_light_intensity
-        = std::max(std::max(m_options.light_intensity.x, m_options.light_intensity.y), m_options.light_intensity.z);
+    m_render_params.point_light_intensity = m_options.light_enabled
+        ? std::max(std::max(m_options.light_intensity.x, m_options.light_intensity.y), m_options.light_intensity.z)
+        : 0.0f;
     m_render_params.point_light_color = m_render_params.point_light_intensity > 0.0f
         ? m_options.light_intensity / m_render_params.point_light_intensity
-        : mi::Float32_3(0.0f, 0.0f, 0.0f);
+        : m_options.light_intensity;
     m_render_params.environment_intensity_factor = m_options.hdr_intensity;
 
     const float fov = m_options.cam_fov;
@@ -663,58 +623,59 @@ void Df_vulkan_app::init_resources()
     m_camera_state.zoom = 0;
 
     update_camera_render_params(m_camera_state);
+
+    // Init gui
+    if (!m_options.no_window)
+    {
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+
+        ImGui_ImplVulkan_InitInfo imgui_init_info = {};
+        imgui_init_info.Instance = m_instance;
+        imgui_init_info.PhysicalDevice = m_physical_device;
+        imgui_init_info.Device = m_device;
+        imgui_init_info.QueueFamily = m_graphics_queue_family_index;
+        imgui_init_info.Queue = m_graphics_queue;
+        imgui_init_info.DescriptorPool = m_descriptor_pool;
+        imgui_init_info.RenderPass = m_main_render_pass;
+        imgui_init_info.MinImageCount = m_image_count;
+        imgui_init_info.ImageCount = m_image_count;
+
+        ImGui_ImplGlfw_InitForVulkan(m_window, false);
+        ImGui_ImplVulkan_Init(&imgui_init_info);
+        ImGui::GetIO().IniFilename = nullptr; // disable creating imgui.ini
+        ImGui::StyleColorsDark();
+        ImGui::GetStyle().Alpha = 0.7f;
+        ImGui::GetStyle().WindowBorderSize = 0;
+
+        glfwSetCharCallback(m_window, ImGui_ImplGlfw_CharCallback);
+
+        m_show_gui = !m_options.hide_gui;
+    }
 }
 
 void Df_vulkan_app::cleanup_resources()
 {
     // In headless mode we output the accumulation buffers to files
     if (m_options.no_window)
+        write_accum_images_to_files();
+
+    // Cleanup imgui
+    if (!m_options.no_window)
     {
-        std::string filename_base = m_options.output_file;
-        std::string filename_ext;
-
-        size_t dot_pos = m_options.output_file.rfind('.');
-        if (dot_pos != std::string::npos) {
-            filename_base = m_options.output_file.substr(0, dot_pos);
-            filename_ext = m_options.output_file.substr(dot_pos);
-        }
-
-        VkImage output_images[] = {
-            m_beauty_texture.image,
-            m_auxiliary_albedo_texture.image,
-            m_auxiliary_normal_texture.image
-        };
-        std::string output_filenames[] = {
-            filename_base + filename_ext,
-            filename_base + "_albedo" + filename_ext,
-            filename_base + "_normal" + filename_ext
-        };
-
-        for (uint32_t i = 0; i < 3; i++)
-        {
-            uint32_t bpp = mi::examples::vk::get_image_format_bpp(g_accumulation_texture_format);
-            std::vector<uint8_t> pixels = mi::examples::vk::copy_image_to_buffer(
-                m_device, m_physical_device, m_command_pool, m_graphics_queue,
-                output_images[i], m_image_width, m_image_height, bpp,
-                VK_IMAGE_LAYOUT_GENERAL, false);
-
-            mi::base::Handle<mi::neuraylib::ICanvas> canvas(
-                m_image_api->create_canvas("Color", m_image_width, m_image_height));
-            mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile());
-            std::memcpy(tile->get_data(), pixels.data(), pixels.size());
-            canvas = m_image_api->convert(canvas.get(), "Rgb_fp");
-            m_mdl_impexp_api->export_canvas(output_filenames[i].c_str(), canvas.get());
-        }
+        ImGui_ImplVulkan_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
     }
 
     // Cleanup resources
-    m_material_textures_index_buffer.destroy(m_device);
     for (Vulkan_texture& texture : m_material_textures_3d)
         texture.destroy(m_device);
     for (Vulkan_texture& texture : m_material_textures_2d)
         texture.destroy(m_device);
     m_ro_data_buffer.destroy(m_device);
     m_argument_block_buffer.destroy(m_device);
+    m_argument_block_staging_buffers.clear();
 
     m_environment_sampling_data_buffer.destroy(m_device);
     m_environment_map.destroy(m_device);
@@ -722,6 +683,7 @@ void Df_vulkan_app::cleanup_resources()
     for (Vulkan_buffer& buffer : m_render_params_buffers)
         buffer.destroy(m_device);
 
+    vkDestroyQueryPool(m_device, m_query_pool, nullptr);
     vkDestroyDescriptorPool(m_device, m_descriptor_pool, nullptr);
     vkDestroyDescriptorSetLayout(m_device, m_display_descriptor_set_layout, nullptr);
     vkDestroyDescriptorSetLayout(m_device, m_path_trace_descriptor_set_layout, nullptr);
@@ -732,9 +694,8 @@ void Df_vulkan_app::cleanup_resources()
     vkDestroyRenderPass(m_device, m_path_trace_render_pass, nullptr);
     vkDestroySampler(m_device, m_linear_sampler, nullptr);
 
-    m_auxiliary_normal_texture.destroy(m_device);
-    m_auxiliary_albedo_texture.destroy(m_device);
-    m_beauty_texture.destroy(m_device);
+    for (Vulkan_texture& texture : m_accum_images)
+        texture.destroy(m_device);
     vkDestroySampler(m_device, m_environment_sampler, nullptr);
 
     glslang::FinalizeProcess();
@@ -749,9 +710,8 @@ void Df_vulkan_app::recreate_size_dependent_resources()
     vkDestroyPipeline(m_device, m_display_pipeline, nullptr);
     vkDestroyRenderPass(m_device, m_path_trace_render_pass, nullptr);
 
-    m_auxiliary_normal_texture.destroy(m_device);
-    m_auxiliary_albedo_texture.destroy(m_device);
-    m_beauty_texture.destroy(m_device);
+    for (Vulkan_texture& texture : m_accum_images)
+        texture.destroy(m_device);
 
     create_accumulation_images();
     create_pipelines();
@@ -763,6 +723,28 @@ void Df_vulkan_app::recreate_size_dependent_resources()
 // next frame is rendered.
 void Df_vulkan_app::update(float elapsed_seconds, uint32_t frame_index)
 {
+    uint64_t timestamps[2];
+    VkResult result = vkGetQueryPoolResults(m_device, m_query_pool, frame_index * 2, 2,
+        sizeof(uint64_t) * 2, timestamps, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
+    if (result == VK_SUCCESS)
+    {
+        auto time_now = glfwGetTime();
+        if (time_now - m_last_stats_update > 0.5 || m_first_stats_update)
+        {
+            VkPhysicalDeviceProperties device_properties;
+            vkGetPhysicalDeviceProperties(m_physical_device, &device_properties);
+
+            m_render_time = (float)((timestamps[1] - timestamps[0])
+                * (double)device_properties.limits.timestampPeriod * 1e-6);
+
+            m_first_stats_update = false;
+            m_last_stats_update = time_now;
+        }
+    }
+
+    if (!m_options.no_window && m_show_gui)
+        do_settings_and_stats_gui();
+
     if (m_camera_moved)
         m_render_params.progressive_iteration = 0;
 
@@ -771,24 +753,26 @@ void Df_vulkan_app::update(float elapsed_seconds, uint32_t frame_index)
         &m_render_params, sizeof(Render_params));
 
     m_render_params.progressive_iteration += m_options.samples_per_iteration;
-
-    if (!m_options.no_window)
-    {
-        std::string window_title = "MDL SDK DF Vulkan Example | Press keys 1 - 3 for output buffers | Iteration: ";
-        window_title += std::to_string(m_render_params.progressive_iteration);
-        glfwSetWindowTitle(m_window, window_title.c_str());
-    }
 }
 
-// Populates the current frame's command buffer. The base application's
-// render pass has already been started at this point.
+// Populates the current frame's command buffer.
 void Df_vulkan_app::render(VkCommandBuffer command_buffer, uint32_t frame_index, uint32_t image_index)
 {
-    const VkImage accum_images[] = {
-        m_beauty_texture.image,
-        m_auxiliary_albedo_texture.image,
-        m_auxiliary_normal_texture.image
-    };
+    // Update the storage buffer for the material's argument block if any argument value changed
+    if (m_material_changed)
+    {
+        m_material_changed = false;
+
+        void* mapped_data = m_argument_block_staging_buffers[frame_index].map_memory();
+        std::memcpy(mapped_data, m_argument_block->get_data(), m_argument_block->get_size());
+        m_argument_block_staging_buffers[frame_index].unmap_memory();
+
+        VkBufferCopy copy_region = {};
+        copy_region.size = m_argument_block->get_size();
+
+        vkCmdCopyBuffer(command_buffer,
+            m_argument_block_staging_buffers[frame_index].get(), m_argument_block_buffer.buffer, 1, &copy_region);
+    }
 
     // Path trace compute pass
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_path_trace_pipeline);
@@ -801,7 +785,7 @@ void Df_vulkan_app::render(VkCommandBuffer command_buffer, uint32_t frame_index,
     {
         m_camera_moved = false;
 
-        for (VkImage image : accum_images)
+        for (const Vulkan_texture& accum_image : m_accum_images)
         {
             VkClearColorValue clear_color = { 0.0f, 0.0f, 0.0f, 0.0f };
 
@@ -813,38 +797,29 @@ void Df_vulkan_app::render(VkCommandBuffer command_buffer, uint32_t frame_index,
             clear_range.layerCount = 1;
 
             vkCmdClearColorImage(command_buffer,
-                image, VK_IMAGE_LAYOUT_GENERAL, &clear_color, 1, &clear_range);
+                accum_image.image, VK_IMAGE_LAYOUT_GENERAL, &clear_color, 1, &clear_range);
         }
     }
+
+    vkCmdResetQueryPool(command_buffer, m_query_pool, frame_index * 2, 2);
+    vkCmdWriteTimestamp(command_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_query_pool, frame_index * 2);
 
     uint32_t group_count_x = (m_image_width + g_local_size_x - 1) / g_local_size_x;
     uint32_t group_count_y = (m_image_width + g_local_size_y - 1) / g_local_size_y;
     vkCmdDispatch(command_buffer, group_count_x, group_count_y, 1);
 
-    for (VkImage image : accum_images)
-    {
-        VkImageMemoryBarrier image_memory_barrier = {};
-        image_memory_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        image_memory_barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-        image_memory_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        image_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-        image_memory_barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-        image_memory_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        image_memory_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        image_memory_barrier.image = image;
-        image_memory_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        image_memory_barrier.subresourceRange.baseMipLevel = 0;
-        image_memory_barrier.subresourceRange.levelCount = 1;
-        image_memory_barrier.subresourceRange.baseArrayLayer = 0;
-        image_memory_barrier.subresourceRange.layerCount = 1;
+    vkCmdWriteTimestamp(command_buffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_query_pool, frame_index * 2 + 1);
 
-        vkCmdPipelineBarrier(command_buffer,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-            0,
-            0, nullptr,
-            0, nullptr,
-            1, &image_memory_barrier);
+    for (const Vulkan_texture& accum_image : m_accum_images)
+    {
+        mi::examples::vk::transitionImageLayout(command_buffer,
+            /*image=*/           accum_image.image,
+            /*src_access_mask=*/ VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+            /*dst_access_mask=*/ VK_ACCESS_SHADER_READ_BIT,
+            /*old_layout=*/      VK_IMAGE_LAYOUT_GENERAL,
+            /*new_layout=*/      VK_IMAGE_LAYOUT_GENERAL,
+            /*src_stage_mask=*/  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            /*dst_stage_mask=*/  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
     }
 
     // Display render pass
@@ -874,29 +849,35 @@ void Df_vulkan_app::render(VkCommandBuffer command_buffer, uint32_t frame_index,
 
     vkCmdDraw(command_buffer, 3, 1, 0, 0);
 
+    if (!m_options.no_window && m_show_gui)
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), command_buffer);
     vkCmdEndRenderPass(command_buffer);
 }
 
 // Handles keyboard input from the window.
-void Df_vulkan_app::key_callback(int key, int action)
+void Df_vulkan_app::key_callback(int key, int action, int mods)
 {
-    // Handle only key press events
-    if (action != GLFW_PRESS)
-        return;
+    if (action == GLFW_PRESS && !ImGui::GetIO().WantCaptureKeyboard)
+    {
+        if (key == GLFW_KEY_ENTER)
+            request_screenshot();
 
-    if (key == GLFW_KEY_ENTER)
-        request_screenshot();
+        if (key == GLFW_KEY_SPACE)
+            m_show_gui = !m_show_gui;
 
-    if (key == GLFW_KEY_SPACE)
-        m_camera_moved = true;
+        if (key == GLFW_KEY_R)
+            m_camera_moved = true;
 
-    if (key >= GLFW_KEY_1 && key <= GLFW_KEY_3)
-        m_display_buffer_index = key - GLFW_KEY_1;
+        if (key >= GLFW_KEY_1 && key <= GLFW_KEY_6)
+            m_display_buffer_index = key - GLFW_KEY_1;
+    }
+    
+    ImGui_ImplGlfw_KeyCallback(m_window, key, glfwGetKeyScancode(key), action, mods);
 }
 
 void Df_vulkan_app::mouse_button_callback(int button, int action)
 {
-    if (button == GLFW_MOUSE_BUTTON_LEFT)
+    if (button == GLFW_MOUSE_BUTTON_LEFT && !ImGui::GetIO().WantCaptureMouse)
     {
         m_camera_moving = (action == GLFW_PRESS);
 
@@ -905,17 +886,24 @@ void Df_vulkan_app::mouse_button_callback(int button, int action)
         m_mouse_start.x = static_cast<float>(mouse_x);
         m_mouse_start.y = static_cast<float>(mouse_y);
     }
+
+    ImGui_ImplGlfw_MouseButtonCallback(m_window, button, action, 0);
 }
 
 void Df_vulkan_app::mouse_scroll_callback(float offset_x, float offset_y)
 {
-    if (offset_y < 0.0f)
-        m_camera_state.zoom -= 1.0f;
-    else if (offset_y > 0.0f)
-        m_camera_state.zoom += 1.0f;
+    if (!ImGui::GetIO().WantCaptureMouse)
+    {
+        if (offset_y < 0.0f)
+            m_camera_state.zoom -= 1.0f;
+        else if (offset_y > 0.0f)
+            m_camera_state.zoom += 1.0f;
 
-    update_camera_render_params(m_camera_state);
-    m_camera_moved = true;
+        update_camera_render_params(m_camera_state);
+        m_camera_moved = true;
+    }
+
+    ImGui_ImplGlfw_ScrollCallback(m_window, offset_x, offset_y);
 }
 
 void Df_vulkan_app::mouse_move_callback(float pos_x, float pos_y)
@@ -945,6 +933,217 @@ void Df_vulkan_app::resized_callback(uint32_t width, uint32_t height)
     m_camera_moved = true;
 }
 
+void Df_vulkan_app::do_settings_and_stats_gui()
+{
+    bool changed = false;
+
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    // Stats overlay
+    ImGuiWindowFlags window_flags =
+        ImGuiWindowFlags_NoDecoration
+        | ImGuiWindowFlags_AlwaysAutoResize
+        | ImGuiWindowFlags_NoSavedSettings
+        | ImGuiWindowFlags_NoFocusOnAppearing
+        | ImGuiWindowFlags_NoNav
+        | ImGuiWindowFlags_NoMove;
+
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImVec2 window_pos(viewport->WorkPos.x + viewport->WorkSize.x - 10.0f, viewport->WorkPos.y + 10.0f);
+    ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always, ImVec2(1, 0));
+    ImGui::SetNextWindowSize(ImVec2(230, 0));
+    ImGui::SetNextWindowBgAlpha(0.4f);
+
+    ImGui::Begin("stats overlay", nullptr, window_flags);
+    ImGui::Text("%s", ("progressive iteration: " + std::to_string(m_render_params.progressive_iteration)).c_str());
+    ImGui::Separator();
+    ImGui::Text("%s", ("render time: " + std::to_string(m_render_time) + " ms").c_str());
+    ImGui::End();
+
+    // Settings window
+    ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(360, m_options.use_class_compilation ? 550.0f : 275.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowBgAlpha(0.4f);
+    ImGui::Begin("Settings");
+    ImGui::PushItemWidth(-200);
+
+    ImGui::Text("Display options:");
+    ImGui::Separator();
+    if (ImGui::Checkbox("Enable VSync", &m_vsync_enabled))
+    {
+        set_vsync_enabled(m_vsync_enabled);
+        changed = true;
+    }
+    {
+        const char* options[] = { "Beauty", "Albedo", "Albedo (Diffuse)", "Albedo (Glossy)", "Normal", "Roughness"};
+        changed |= ImGui::Combo("Buffer", (int*)&m_display_buffer_index, options, IM_ARRAYSIZE(options));
+    }
+    if (m_options.enable_bsdf_flags)
+    {
+        const char* options[] = { "None", "Reflect only", "Transmit only", "Reflect+Transmit" };
+        changed |= ImGui::Combo("BSDF flags", (int*)&m_render_params.bsdf_data_flags, options, IM_ARRAYSIZE(options));
+    }
+    ImGui::Spacing();
+
+    ImGui::Text("Light parameters:");
+    ImGui::Separator();
+    changed |= ImGui::ColorEdit3("Point Light Color", m_render_params.point_light_color.begin());
+    changed |= ImGui::DragFloat("Point Light Intensity", &m_render_params.point_light_intensity, 10.0f, 0.0f, std::numeric_limits<float>::max());
+    changed |= ImGui::DragFloat("Environment Intensity", &m_render_params.environment_intensity_factor, 0.01f, 0.0f, std::numeric_limits<float>::max());
+    ImGui::Spacing();
+
+    ImGui::Text("Material parameters:");
+    ImGui::Separator();
+    if (m_options.use_class_compilation)
+    {
+        bool material_changed = false;
+
+        mi::base::Handle<const mi::neuraylib::ITarget_value_layout> layout(
+            m_target_code->get_argument_block_layout(m_argument_block_index));
+
+        for (mi::Size i = 0; i < m_compiled_material->get_parameter_count(); i++)
+        {
+            const char* parameter_name = m_compiled_material->get_parameter_name(i);
+
+            const char* display_name = parameter_name;
+            float range_min = -std::numeric_limits<float>::max();
+            float range_max = std::numeric_limits<float>::max();
+
+            mi::base::Handle<const mi::neuraylib::IAnnotation_block> anno_block(
+                m_material_parameter_annotations->get_annotation_block(parameter_name));
+            if (anno_block)
+            {
+                mi::neuraylib::Annotation_wrapper annos(anno_block.get());
+
+                mi::Size anno_index =
+                    annos.get_annotation_index("::anno::soft_range(float,float)");
+                if (anno_index == mi::Size(-1))
+                    anno_index = annos.get_annotation_index("::anno::hard_range(float,float)");
+                if (anno_index != mi::Size(-1))
+                {
+                    annos.get_annotation_param_value(anno_index, 0, range_min);
+                    annos.get_annotation_param_value(anno_index, 1, range_max);
+                }
+
+                anno_index = annos.get_annotation_index("::anno::display_name(string)");
+                if (anno_index != mi::Size(-1))
+                    annos.get_annotation_param_value(anno_index, 0, display_name);
+            }
+
+            mi::base::Handle<const mi::neuraylib::IValue> argument(
+                m_compiled_material->get_argument(i));
+            mi::neuraylib::Target_value_layout_state state = layout->get_nested_state(i);
+
+            mi::neuraylib::IValue::Kind argument_kind;
+            mi::Size argument_size;
+            mi::Size data_offset = layout->get_layout(argument_kind, argument_size, state);
+            char* data_ptr = m_argument_block->get_data() + data_offset;
+
+            switch (argument_kind)
+            {
+            case mi::neuraylib::IValue::VK_FLOAT:
+                material_changed |= ImGui::DragFloat(display_name, reinterpret_cast<float*>(data_ptr), 0.01f, range_min, range_max);
+                break;
+            case mi::neuraylib::IValue::VK_INT:
+                material_changed |= ImGui::DragInt(display_name, reinterpret_cast<int*>(data_ptr), 0.25f, (int)range_min, (int)range_max);
+                break;
+            case mi::neuraylib::IValue::VK_BOOL:
+                material_changed |= ImGui::Checkbox(display_name, reinterpret_cast<bool*>(data_ptr));
+                break;
+            case mi::neuraylib::IValue::VK_VECTOR:
+            {
+                auto value_vector = argument.get_interface<const mi::neuraylib::IValue_vector>();
+                if (value_vector->get_size() == 2)
+                    material_changed |= ImGui::DragFloat2(display_name, reinterpret_cast<float*>(data_ptr), 0.01f, range_min, range_max);
+                else if (value_vector->get_size() == 3)
+                    material_changed |= ImGui::DragFloat3(display_name, reinterpret_cast<float*>(data_ptr), 0.01f, range_min, range_max);
+                else if (value_vector->get_size() == 4)
+                    material_changed |= ImGui::DragFloat4(display_name, reinterpret_cast<float*>(data_ptr), 0.01f, range_min, range_max);
+                break;
+            }
+            case mi::neuraylib::IValue::VK_COLOR:
+                material_changed |= ImGui::ColorEdit3(display_name, reinterpret_cast<float*>(data_ptr));
+                break;
+            case mi::neuraylib::IValue::VK_ENUM:
+            {
+                auto value_enum = argument.get_interface<const mi::neuraylib::IValue_enum>();
+                auto type_enum = mi::base::make_handle(value_enum->get_type());
+
+                std::vector<const char*> names;
+                names.reserve(type_enum->get_size());
+                for (mi::Size index = 0; index < type_enum->get_size(); index++)
+                    names.push_back(type_enum->get_value_name(index));
+
+                material_changed |= ImGui::Combo(display_name, reinterpret_cast<int*>(data_ptr), names.data(), names.size());
+                break;
+            }
+            case mi::neuraylib::IValue::VK_STRING:
+            {
+                int* value = reinterpret_cast<int*>(data_ptr);
+                char buffer[128];
+                const char* str = m_target_code->get_string_constant(*value);
+                std::strcpy(buffer, str ? str : "");
+                if (ImGui::InputText(display_name, buffer, 128, ImGuiInputTextFlags_EnterReturnsTrue))
+                {
+                    *value = (int)m_target_code->get_string_constant_count();
+                    for (mi::Size index = 0; index < m_target_code->get_string_constant_count(); index++)
+                    {
+                        if (std::strcmp(buffer, m_target_code->get_string_constant(index)) == 0)
+                        {
+                            *value = (int)index;
+                            break;
+                        }
+                    }
+                    material_changed = true;
+                }
+                break;
+            }
+            case mi::neuraylib::IValue::VK_TEXTURE:
+            {
+                auto get_url = [&](int index)
+                {
+                    if (index <= 0)
+                        return "<unset>";
+                    const char* db_name = m_target_code->get_texture(index);
+                    auto texture = mi::base::make_handle(
+                        m_transaction->access<const mi::neuraylib::ITexture>(db_name));
+                    if (texture)
+                    {
+                        auto image = mi::base::make_handle(
+                            m_transaction->access<const mi::neuraylib::IImage>(texture->get_image()));
+                        return image->get_filename(0, 0);
+                    }
+                    return db_name;
+                };
+
+                std::vector<const char*> urls;
+                urls.reserve(m_target_code->get_texture_count());
+                for (mi::Size index = 0; index < m_target_code->get_texture_count(); index++)
+                    urls.push_back(get_url((int)index));
+
+                material_changed |= ImGui::Combo(display_name, reinterpret_cast<int*>(data_ptr), urls.data(), urls.size());
+                break;
+            }
+            default:
+                break;
+            }
+        }
+
+        changed |= material_changed;
+        m_material_changed = material_changed;
+    }
+    else
+        ImGui::Text("Parameter editing requires class compilation.");
+
+    if (changed)
+        m_camera_moved = true;
+
+    ImGui::End();
+    ImGui::Render();
+}
+
 void Df_vulkan_app::update_camera_render_params(const Camera_state& cam_state)
 {
     m_render_params.cam_dir.x = -mi::math::sin(cam_state.phi) * mi::math::sin(cam_state.theta);
@@ -965,57 +1164,6 @@ void Df_vulkan_app::update_camera_render_params(const Camera_state& cam_state)
     m_render_params.cam_pos.z = -m_render_params.cam_dir.z * dist;
 }
 
-void Df_vulkan_app::create_material_textures_index_buffer(const std::vector<uint32_t>& indices)
-{
-    if (indices.empty())
-        return;
-
-    // The uniform buffer has std140 layout which means each array entry must be the size of a vec4 (16 byte)
-    std::vector<uint32_t> buffer_data(indices.size() * 4);
-    for (size_t i = 0; i < indices.size(); i++)
-        buffer_data[i * 4] = indices[i];
-
-    const size_t num_buffer_data_bytes = buffer_data.size() * sizeof(uint32_t);
-
-    { // Create the uniform buffer in device local memory (VRAM)
-        VkBufferCreateInfo buffer_create_info = {};
-        buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        buffer_create_info.size = num_buffer_data_bytes;
-        buffer_create_info.usage
-            = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-        VK_CHECK(vkCreateBuffer(
-            m_device, &buffer_create_info, nullptr, &m_material_textures_index_buffer.buffer));
-
-        // Allocate device memory for the buffer.
-        m_material_textures_index_buffer.device_memory = mi::examples::vk::allocate_and_bind_buffer_memory(
-            m_device, m_physical_device, m_material_textures_index_buffer.buffer,
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    }
-
-    {
-        mi::examples::vk::Staging_buffer staging_buffer(m_device, m_physical_device,
-            num_buffer_data_bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-
-        // Memcpy the read-only data into the staging buffer
-        void* mapped_data = staging_buffer.map_memory();
-        std::memcpy(mapped_data, buffer_data.data(), num_buffer_data_bytes);
-        staging_buffer.unmap_memory();
-
-        // Upload the read-only data from the staging buffer into the storage buffer
-        mi::examples::vk::Temporary_command_buffer command_buffer(m_device, m_command_pool);
-        command_buffer.begin();
-
-        VkBufferCopy copy_region = {};
-        copy_region.size = num_buffer_data_bytes;
-
-        vkCmdCopyBuffer(command_buffer.get(),
-            staging_buffer.get(), m_material_textures_index_buffer.buffer, 1, &copy_region);
-
-        command_buffer.end_and_submit(m_graphics_queue);
-    }
-}
-
 void Df_vulkan_app::create_accumulation_images()
 {
     VkImageCreateInfo image_create_info = {};
@@ -1033,52 +1181,28 @@ void Df_vulkan_app::create_accumulation_images()
         | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-    VK_CHECK(vkCreateImage(m_device, &image_create_info, nullptr, &m_beauty_texture.image));
-    VK_CHECK(vkCreateImage(m_device, &image_create_info, nullptr, &m_auxiliary_albedo_texture.image));
-    VK_CHECK(vkCreateImage(m_device, &image_create_info, nullptr, &m_auxiliary_normal_texture.image));
+    for (Vulkan_texture& accum_image : m_accum_images)
+    {
+        VK_CHECK(vkCreateImage(m_device, &image_create_info, nullptr, &accum_image.image));
 
-    m_beauty_texture.device_memory = mi::examples::vk::allocate_and_bind_image_memory(
-        m_device, m_physical_device, m_beauty_texture.image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    m_auxiliary_albedo_texture.device_memory = mi::examples::vk::allocate_and_bind_image_memory(
-        m_device, m_physical_device, m_auxiliary_albedo_texture.image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    m_auxiliary_normal_texture.device_memory = mi::examples::vk::allocate_and_bind_image_memory(
-        m_device, m_physical_device, m_auxiliary_normal_texture.image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        accum_image.device_memory = mi::examples::vk::allocate_and_bind_image_memory(
+            m_device, m_physical_device, accum_image.image, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    }
 
     { // Transition image layout
         mi::examples::vk::Temporary_command_buffer command_buffer(m_device, m_command_pool);
         command_buffer.begin();
 
-        VkImageMemoryBarrier image_memory_barrier = {};
-        image_memory_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        image_memory_barrier.srcAccessMask = 0;
-        image_memory_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        image_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        image_memory_barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-        image_memory_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        image_memory_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        image_memory_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        image_memory_barrier.subresourceRange.baseMipLevel = 0;
-        image_memory_barrier.subresourceRange.levelCount = 1;
-        image_memory_barrier.subresourceRange.baseArrayLayer = 0;
-        image_memory_barrier.subresourceRange.layerCount = 1;
-
-        const VkImage images_to_transition[] = {
-            m_beauty_texture.image,
-            m_auxiliary_albedo_texture.image,
-            m_auxiliary_normal_texture.image
-        };
-
-        for (VkImage image : images_to_transition)
+        for (Vulkan_texture& accum_image : m_accum_images)
         {
-            image_memory_barrier.image = image;
-
-            vkCmdPipelineBarrier(command_buffer.get(),
-                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                0,
-                0, nullptr,
-                0, nullptr,
-                1, &image_memory_barrier);
+            mi::examples::vk::transitionImageLayout(command_buffer.get(),
+                /*image=*/           accum_image.image,
+                /*src_access_mask=*/ 0,
+                /*dst_access_mask=*/ VK_ACCESS_SHADER_READ_BIT,
+                /*old_layout=*/      VK_IMAGE_LAYOUT_UNDEFINED,
+                /*new_layout=*/      VK_IMAGE_LAYOUT_GENERAL,
+                /*src_stage_mask=*/  VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                /*dst_stage_mask=*/  VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
         }
 
         command_buffer.end_and_submit(m_graphics_queue);
@@ -1093,18 +1217,14 @@ void Df_vulkan_app::create_accumulation_images()
     image_view_create_info.subresourceRange.levelCount = 1;
     image_view_create_info.subresourceRange.baseArrayLayer = 0;
     image_view_create_info.subresourceRange.layerCount = 1;
-    
-    image_view_create_info.image = m_beauty_texture.image;
-    VK_CHECK(vkCreateImageView(
-        m_device, &image_view_create_info, nullptr, &m_beauty_texture.image_view));
 
-    image_view_create_info.image = m_auxiliary_albedo_texture.image;
-    VK_CHECK(vkCreateImageView(
-        m_device, &image_view_create_info, nullptr, &m_auxiliary_albedo_texture.image_view));
+    for (Vulkan_texture& accum_image : m_accum_images)
+    {
+        image_view_create_info.image = accum_image.image;
 
-    image_view_create_info.image = m_auxiliary_normal_texture.image;
-    VK_CHECK(vkCreateImageView(
-        m_device, &image_view_create_info, nullptr, &m_auxiliary_normal_texture.image_view));
+        VK_CHECK(vkCreateImageView(
+            m_device, &image_view_create_info, nullptr, &accum_image.image_view));
+    }
 }
 
 VkShaderModule Df_vulkan_app::create_path_trace_shader_module()
@@ -1122,19 +1242,25 @@ VkShaderModule Df_vulkan_app::create_path_trace_shader_module()
     defines.push_back("BINDING_ENV_MAP=" + std::to_string(g_binding_environment_map));
     defines.push_back("BINDING_ENV_MAP_SAMPLING_DATA=" + std::to_string(g_binding_environment_sampling_data));
     defines.push_back("BINDING_BEAUTY_BUFFER=" + std::to_string(g_binding_beauty_buffer));
-    defines.push_back("BINDING_AUX_ALBEDO_BUFFER=" + std::to_string(g_binding_aux_albedo_buffer));
+    defines.push_back("BINDING_AUX_ALBEDO_DIFFUSE_BUFFER=" + std::to_string(g_binding_aux_albedo_diffuse_buffer));
+    defines.push_back("BINDING_AUX_ALBEDO_GLOSSY_BUFFER=" + std::to_string(g_binding_aux_albedo_glossy_buffer));
     defines.push_back("BINDING_AUX_NORMAL_BUFFER=" + std::to_string(g_binding_aux_normal_buffer));
+    defines.push_back("BINDING_AUX_ROUGHNESS_BUFFER=" + std::to_string(g_binding_aux_roughness_buffer));
 
-    defines.push_back("NUM_MATERIAL_TEXTURES_2D=" + std::to_string(m_material_textures_2d.size()));
-    defines.push_back("NUM_MATERIAL_TEXTURES_3D=" + std::to_string(m_material_textures_3d.size()));
-    defines.push_back("SET_MATERIAL_TEXTURES_INDICES=" + std::to_string(g_set_material_textures));
-    defines.push_back("SET_MATERIAL_TEXTURES_2D=" + std::to_string(g_set_material_textures));
-    defines.push_back("SET_MATERIAL_TEXTURES_3D=" + std::to_string(g_set_material_textures));
-    defines.push_back("SET_MATERIAL_ARGUMENT_BLOCK=" + std::to_string(g_set_argument_block_buffer));
-    defines.push_back("BINDING_MATERIAL_TEXTURES_INDICES=" + std::to_string(g_binding_material_textures_indices));
-    defines.push_back("BINDING_MATERIAL_TEXTURES_2D=" + std::to_string(g_binding_material_textures_2d));
-    defines.push_back("BINDING_MATERIAL_TEXTURES_3D=" + std::to_string(g_binding_material_textures_3d));
-    defines.push_back("BINDING_MATERIAL_ARGUMENT_BLOCK=" + std::to_string(g_binding_argument_block_buffer));
+    defines.push_back("MDL_SET_MATERIAL_TEXTURES_2D=" + std::to_string(g_set_material_textures));
+    defines.push_back("MDL_SET_MATERIAL_TEXTURES_3D=" + std::to_string(g_set_material_textures));
+    defines.push_back("MDL_SET_MATERIAL_ARGUMENT_BLOCK=" + std::to_string(g_set_argument_block_buffer));
+    defines.push_back("MDL_SET_MATERIAL_RO_DATA_SEGMENT=" + std::to_string(g_set_ro_data_buffer));
+    defines.push_back("MDL_BINDING_MATERIAL_TEXTURES_2D=" + std::to_string(g_binding_material_textures_2d));
+    defines.push_back("MDL_BINDING_MATERIAL_TEXTURES_3D=" + std::to_string(g_binding_material_textures_3d));
+    defines.push_back("MDL_BINDING_MATERIAL_ARGUMENT_BLOCK=" + std::to_string(g_binding_argument_block_buffer));
+    defines.push_back("MDL_BINDING_MATERIAL_RO_DATA_SEGMENT=" + std::to_string(g_binding_ro_data_buffer));
+
+    if (m_options.tex_results_cache_size > 0)
+        defines.push_back("NUM_TEX_RESULTS=" + std::to_string(m_options.tex_results_cache_size));
+
+    if (m_options.enable_ro_segment)
+        defines.push_back("USE_RO_DATA_SEGMENT");
 
     // Check if functions for backface were generated
     for (mi::Size i = 0; i < m_target_code->get_callable_function_count(); i++)
@@ -1142,15 +1268,22 @@ VkShaderModule Df_vulkan_app::create_path_trace_shader_module()
         const char* fname = m_target_code->get_callable_function(i);
 
         if (std::strcmp(fname, "mdl_backface_bsdf_sample") == 0)
-            defines.push_back("HAS_BACKFACE_BSDF");
+            defines.push_back("MDL_HAS_BACKFACE_BSDF");
         else if (std::strcmp(fname, "mdl_backface_edf_sample") == 0)
-            defines.push_back("HAS_BACKFACE_EDF");
+            defines.push_back("MDL_HAS_BACKFACE_EDF");
         else if (std::strcmp(fname, "mdl_backface_emission_intensity") == 0)
-            defines.push_back("HAS_BACKFACE_EMISSION_INTENSITY");
+            defines.push_back("MDL_HAS_BACKFACE_EMISSION_INTENSITY");
     }
 
-    return mi::examples::vk::create_shader_module_from_sources(m_device,
-        { df_glsl_source, path_trace_shader_source }, EShLangCompute, defines);
+    auto t0 = std::chrono::steady_clock::now();
+    VkShaderModule shader_module = mi::examples::vk::create_shader_module_from_sources(
+        m_device, { df_glsl_source, path_trace_shader_source }, EShLangCompute,
+        defines, m_options.enable_shader_optimization);
+    auto t1 = std::chrono::steady_clock::now();
+    if (!m_path_trace_pipeline) // Print only the first time
+        std::cout << "Compile GLSL to SPIR-V: " << std::chrono::duration<float>(t1 - t0).count() << "s\n";
+
+    return shader_module;
 }
 
 // Creates the descriptors set layout which is used to create the
@@ -1158,97 +1291,62 @@ VkShaderModule Df_vulkan_app::create_path_trace_shader_module()
 void Df_vulkan_app::create_descriptor_set_layouts()
 {
     {
-        VkDescriptorSetLayoutBinding render_params_layout_binding = {};
-        render_params_layout_binding.binding = g_binding_render_params;
-        render_params_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        render_params_layout_binding.descriptorCount = 1;
-        render_params_layout_binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-        VkDescriptorSetLayoutBinding env_map_layout_binding = {};
-        env_map_layout_binding.binding = g_binding_environment_map;
-        env_map_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        env_map_layout_binding.descriptorCount = 1;
-        env_map_layout_binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-        VkDescriptorSetLayoutBinding env_sampling_data_layout_binding = {};
-        env_sampling_data_layout_binding.binding = g_binding_environment_sampling_data;
-        env_sampling_data_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        env_sampling_data_layout_binding.descriptorCount = 1;
-        env_sampling_data_layout_binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-        VkDescriptorSetLayoutBinding textures_indices_layout_binding = {};
-        textures_indices_layout_binding.binding = g_binding_material_textures_indices;
-        textures_indices_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        textures_indices_layout_binding.descriptorCount = 1;
-        textures_indices_layout_binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-        VkDescriptorSetLayoutBinding textures_2d_layout_binding = {};
-        textures_2d_layout_binding.binding = g_binding_material_textures_2d;
-        textures_2d_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        textures_2d_layout_binding.descriptorCount
-            = static_cast<uint32_t>(m_material_textures_2d.size());
-        textures_2d_layout_binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-        VkDescriptorSetLayoutBinding textures_3d_layout_binding = {};
-        textures_3d_layout_binding.binding = g_binding_material_textures_3d;
-        textures_3d_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        textures_3d_layout_binding.descriptorCount
-            = static_cast<uint32_t>(m_material_textures_3d.size());
-        textures_3d_layout_binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-        VkDescriptorSetLayoutBinding beauty_buffer_layout_binding = {};
-        beauty_buffer_layout_binding.binding = g_binding_beauty_buffer;
-        beauty_buffer_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-        beauty_buffer_layout_binding.descriptorCount = 1;
-        beauty_buffer_layout_binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-        VkDescriptorSetLayoutBinding aux_albedo_buffer_layout_binding
-            = beauty_buffer_layout_binding;
-        aux_albedo_buffer_layout_binding.binding = g_binding_aux_albedo_buffer;
-
-        VkDescriptorSetLayoutBinding aux_albedo_normal_layout_binding
-            = beauty_buffer_layout_binding;
-        aux_albedo_normal_layout_binding.binding = g_binding_aux_normal_buffer;
-
-        VkDescriptorSetLayoutBinding ro_data_buffer_layout_binding = {};
-        ro_data_buffer_layout_binding.binding = g_binding_ro_data_buffer;
-        ro_data_buffer_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        ro_data_buffer_layout_binding.descriptorCount = 1;
-        ro_data_buffer_layout_binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-        VkDescriptorSetLayoutBinding argument_block_buffer_layout_binding = {};
-        argument_block_buffer_layout_binding.binding = g_binding_argument_block_buffer;
-        argument_block_buffer_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        argument_block_buffer_layout_binding.descriptorCount = 1;
-        argument_block_buffer_layout_binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-        const VkDescriptorSetLayoutBinding bindings[] = {
-            render_params_layout_binding,
-            env_map_layout_binding,
-            env_sampling_data_layout_binding,
-            textures_indices_layout_binding,
-            textures_2d_layout_binding,
-            textures_3d_layout_binding,
-            beauty_buffer_layout_binding,
-            aux_albedo_buffer_layout_binding,
-            aux_albedo_normal_layout_binding,
-            ro_data_buffer_layout_binding,
-            argument_block_buffer_layout_binding
+        auto make_binding = [](uint32_t binding, VkDescriptorType type, uint32_t count)
+        {
+            VkDescriptorSetLayoutBinding layout_binding = {};
+            layout_binding.binding = binding;
+            layout_binding.descriptorType = type;
+            layout_binding.descriptorCount = count;
+            layout_binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+            return layout_binding;
         };
+
+        // We reserve enough space for the maximum amount of textures we expect (arbitrary number here)
+        // in combination with descriptor indexing. The partially bound flag is used because all textures
+        // in MDL share the same index range, but in GLSL we must use separate arrays. This leads to "holes"
+        // in the GLSL texture arrays since for each index only one of the texture arrays is populated.
+        // We can also leave the descriptor sets empty with the partially bound flag, in case no
+        // textures of the corresponding shapes is used.
+        // See Df_vulkan_app::create_descriptor_pool_and_sets() for how the descriptor sets are populated.
+        const uint32_t max_num_textures = 100;
+
+        std::vector<VkDescriptorSetLayoutBinding> bindings;
+        bindings.push_back(make_binding(g_binding_render_params, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1));
+        bindings.push_back(make_binding(g_binding_environment_map, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1));
+        bindings.push_back(make_binding(g_binding_environment_sampling_data, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1));
+        bindings.push_back(make_binding(g_binding_material_textures_2d, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, max_num_textures));
+        bindings.push_back(make_binding(g_binding_material_textures_3d, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, max_num_textures));
+        bindings.push_back(make_binding(g_binding_beauty_buffer, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1));
+        bindings.push_back(make_binding(g_binding_aux_albedo_diffuse_buffer, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1));
+        bindings.push_back(make_binding(g_binding_aux_albedo_glossy_buffer, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1));
+        bindings.push_back(make_binding(g_binding_aux_normal_buffer, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1));
+        bindings.push_back(make_binding(g_binding_aux_roughness_buffer, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1));
+        bindings.push_back(make_binding(g_binding_ro_data_buffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1));
+        bindings.push_back(make_binding(g_binding_argument_block_buffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1));
 
         VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {};
         descriptor_set_layout_create_info.sType
             = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        descriptor_set_layout_create_info.bindingCount = std::size(bindings);
-        descriptor_set_layout_create_info.pBindings = bindings;
+        descriptor_set_layout_create_info.bindingCount = static_cast<uint32_t>(bindings.size());
+        descriptor_set_layout_create_info.pBindings = bindings.data();
+
+        std::vector<VkDescriptorBindingFlags> binding_flags(bindings.size(), 0);
+        binding_flags[3] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT; // g_binding_material_textures_2d
+        binding_flags[4] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT; // g_binding_material_textures_3d
+
+        VkDescriptorSetLayoutBindingFlagsCreateInfoEXT descriptor_set_layout_binding_flags = {};
+        descriptor_set_layout_binding_flags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
+        descriptor_set_layout_binding_flags.bindingCount = static_cast<uint32_t>(bindings.size());
+        descriptor_set_layout_binding_flags.pBindingFlags = binding_flags.data();
+        descriptor_set_layout_create_info.pNext = &descriptor_set_layout_binding_flags;
 
         VK_CHECK(vkCreateDescriptorSetLayout(
             m_device, &descriptor_set_layout_create_info, nullptr, &m_path_trace_descriptor_set_layout));
     }
 
     {
-        VkDescriptorSetLayoutBinding layout_bindings[3];
-        for (uint32_t i = 0; i < 3; i++)
+        VkDescriptorSetLayoutBinding layout_bindings[5];
+        for (uint32_t i = 0; i < 5; i++)
         {
             layout_bindings[i].binding = i;
             layout_bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
@@ -1325,96 +1423,14 @@ void Df_vulkan_app::create_pipelines()
     { // Create display graphics pipeline
         VkShaderModule fullscreen_triangle_vertex_shader
             = mi::examples::vk::create_shader_module_from_file(
-                m_device, "display.vert", EShLangVertex);
+                m_device, "display.vert", EShLangVertex, {}, m_options.enable_shader_optimization);
         VkShaderModule display_fragment_shader
             = mi::examples::vk::create_shader_module_from_file(
-                m_device, "display.frag", EShLangFragment);
+                m_device, "display.frag", EShLangFragment, {}, m_options.enable_shader_optimization);
 
-        VkPipelineVertexInputStateCreateInfo vertex_input_state = {};
-        vertex_input_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-
-        VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {};
-        input_assembly_state.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-        input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        input_assembly_state.primitiveRestartEnable = false;
-
-        VkViewport viewport = { 0.0f, 0.0f, (float)m_image_width, (float)m_image_height, 0.0f, 1.0f };
-        VkRect2D scissor_rect = { {0, 0}, {m_image_width, m_image_height} };
-
-        VkPipelineViewportStateCreateInfo viewport_state = {};
-        viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-        viewport_state.viewportCount = 1;
-        viewport_state.pViewports = &viewport;
-        viewport_state.scissorCount = 1;
-        viewport_state.pScissors = &scissor_rect;
-
-        VkPipelineRasterizationStateCreateInfo rasterization_state = {};
-        rasterization_state.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-        rasterization_state.depthClampEnable = false;
-        rasterization_state.rasterizerDiscardEnable = false;
-        rasterization_state.polygonMode = VK_POLYGON_MODE_FILL;
-        rasterization_state.cullMode = VK_CULL_MODE_BACK_BIT;
-        rasterization_state.frontFace = VK_FRONT_FACE_CLOCKWISE;
-        rasterization_state.depthBiasEnable = false;
-        rasterization_state.lineWidth = 1.0f;
-
-        VkPipelineDepthStencilStateCreateInfo depth_stencil_state = {};
-        depth_stencil_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-        depth_stencil_state.depthTestEnable = false;
-        depth_stencil_state.depthWriteEnable = false;
-        depth_stencil_state.depthBoundsTestEnable = false;
-        depth_stencil_state.stencilTestEnable = false;
-
-        VkPipelineMultisampleStateCreateInfo multisample_state = {};
-        multisample_state.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-        multisample_state.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-        VkPipelineShaderStageCreateInfo vertex_shader_stage_info = {};
-        vertex_shader_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        vertex_shader_stage_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
-        vertex_shader_stage_info.module = fullscreen_triangle_vertex_shader;
-        vertex_shader_stage_info.pName = "main";
-
-        VkPipelineShaderStageCreateInfo fragment_shader_stage_info = {};
-        fragment_shader_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        fragment_shader_stage_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        fragment_shader_stage_info.module = display_fragment_shader;
-        fragment_shader_stage_info.pName = "main";
-
-        const VkPipelineShaderStageCreateInfo shader_stages[] = {
-            vertex_shader_stage_info,
-            fragment_shader_stage_info
-        };
-
-        VkPipelineColorBlendAttachmentState color_blend_attachment = {};
-        color_blend_attachment.blendEnable = false;
-        color_blend_attachment.colorWriteMask =
-            VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
-            | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-
-        VkPipelineColorBlendStateCreateInfo color_blend_state = {};
-        color_blend_state.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-        color_blend_state.logicOpEnable = false;
-        color_blend_state.attachmentCount = 1;
-        color_blend_state.pAttachments = &color_blend_attachment;
-
-        VkGraphicsPipelineCreateInfo pipeline_create_info = {};
-        pipeline_create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipeline_create_info.stageCount = std::size(shader_stages);
-        pipeline_create_info.pStages = shader_stages;
-        pipeline_create_info.pVertexInputState = &vertex_input_state;
-        pipeline_create_info.pInputAssemblyState = &input_assembly_state;
-        pipeline_create_info.pViewportState = &viewport_state;
-        pipeline_create_info.pRasterizationState = &rasterization_state;
-        pipeline_create_info.pDepthStencilState = &depth_stencil_state;
-        pipeline_create_info.pMultisampleState = &multisample_state;
-        pipeline_create_info.pColorBlendState = &color_blend_state;
-        pipeline_create_info.layout = m_display_pipeline_layout;
-        pipeline_create_info.renderPass = m_main_render_pass;
-        pipeline_create_info.subpass = 0;
-
-        VK_CHECK(vkCreateGraphicsPipelines(
-            m_device, nullptr, 1, &pipeline_create_info, nullptr, &m_display_pipeline));
+        m_display_pipeline = mi::examples::vk::create_fullscreen_triangle_graphics_pipeline(
+            m_device, m_display_pipeline_layout, fullscreen_triangle_vertex_shader,
+            display_fragment_shader, m_main_render_pass, 0, m_image_width, m_image_height, false);
 
         vkDestroyShaderModule(m_device, fullscreen_triangle_vertex_shader, nullptr);
         vkDestroyShaderModule(m_device, display_fragment_shader, nullptr);
@@ -1509,30 +1525,14 @@ void Df_vulkan_app::create_environment_map()
         mi::examples::vk::Temporary_command_buffer command_buffer(m_device, m_command_pool);
         command_buffer.begin();
 
-        {
-            VkImageMemoryBarrier image_memory_barrier = {};
-            image_memory_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            image_memory_barrier.srcAccessMask = 0;
-            image_memory_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            image_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            image_memory_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            image_memory_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            image_memory_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            image_memory_barrier.image = m_environment_map.image;
-            image_memory_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            image_memory_barrier.subresourceRange.baseMipLevel = 0;
-            image_memory_barrier.subresourceRange.levelCount = 1;
-            image_memory_barrier.subresourceRange.baseArrayLayer = 0;
-            image_memory_barrier.subresourceRange.layerCount = 1;
-
-            vkCmdPipelineBarrier(command_buffer.get(),
-                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT,
-                0,
-                0, nullptr,
-                0, nullptr,
-                1, &image_memory_barrier);
-        }
+        mi::examples::vk::transitionImageLayout(command_buffer.get(),
+            /*image=*/           m_environment_map.image,
+            /*src_access_mask=*/ 0,
+            /*dst_access_mask=*/ VK_ACCESS_TRANSFER_WRITE_BIT,
+            /*old_layout=*/      VK_IMAGE_LAYOUT_UNDEFINED,
+            /*new_layout=*/      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            /*src_stage_mask=*/  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            /*dst_stage_mask=*/  VK_PIPELINE_STAGE_TRANSFER_BIT);
 
         VkBufferImageCopy copy_region = {};
         copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -1543,30 +1543,14 @@ void Df_vulkan_app::create_environment_map()
             command_buffer.get(), staging_buffer.get(), m_environment_map.image,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
 
-        {
-            VkImageMemoryBarrier image_memory_barrier = {};
-            image_memory_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            image_memory_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            image_memory_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            image_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            image_memory_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            image_memory_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            image_memory_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            image_memory_barrier.image = m_environment_map.image;
-            image_memory_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            image_memory_barrier.subresourceRange.baseMipLevel = 0;
-            image_memory_barrier.subresourceRange.levelCount = 1;
-            image_memory_barrier.subresourceRange.baseArrayLayer = 0;
-            image_memory_barrier.subresourceRange.layerCount = 1;
-
-            vkCmdPipelineBarrier(command_buffer.get(),
-                VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                0,
-                0, nullptr,
-                0, nullptr,
-                1, &image_memory_barrier);
-        }
+        mi::examples::vk::transitionImageLayout(command_buffer.get(),
+            /*image=*/           m_environment_map.image,
+            /*src_access_mask=*/ VK_ACCESS_TRANSFER_WRITE_BIT,
+            /*dst_access_mask=*/ VK_ACCESS_SHADER_READ_BIT,
+            /*old_layout=*/      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            /*new_layout=*/      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            /*src_stage_mask=*/  VK_PIPELINE_STAGE_TRANSFER_BIT,
+            /*dst_stage_mask=*/  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
         command_buffer.end_and_submit(m_graphics_queue);
     }
@@ -1624,7 +1608,8 @@ void Df_vulkan_app::create_environment_map()
         const float area = (cos_theta0 - cos_theta1) * step_phi;
         cos_theta0 = cos_theta1;
 
-        for (uint32_t x = 0; x < res_x; x++) {
+        for (uint32_t x = 0; x < res_x; x++)
+        {
             const uint32_t idx = y * res_x + x;
             const uint32_t idx4 = idx * 4;
             const float max_channel
@@ -1660,34 +1645,19 @@ void Df_vulkan_app::create_descriptor_pool_and_sets()
 {
     // Reserve enough space. This is way too much, but sizing them perfectly
     // would make the code less readable.
-    VkDescriptorPoolSize uniform_buffer_pool_size;
-    uniform_buffer_pool_size.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    uniform_buffer_pool_size.descriptorCount = 100;
-
-    VkDescriptorPoolSize texture_pool_size;
-    texture_pool_size.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    texture_pool_size.descriptorCount = 100;
-
-    VkDescriptorPoolSize storage_buffer_pool_size;
-    storage_buffer_pool_size.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    storage_buffer_pool_size.descriptorCount = 100;
-
-    VkDescriptorPoolSize storage_image_pool_size;
-    storage_image_pool_size.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    storage_image_pool_size.descriptorCount = 100;
-
     const VkDescriptorPoolSize pool_sizes[] = {
-        uniform_buffer_pool_size,
-        texture_pool_size,
-        storage_buffer_pool_size,
-        storage_image_pool_size
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 100 },
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 100 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 100 }
     };
 
     VkDescriptorPoolCreateInfo descriptor_pool_create_info = {};
     descriptor_pool_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    descriptor_pool_create_info.maxSets = m_image_count + 1; // img_cnt for path_trace + 1 set for display
+    descriptor_pool_create_info.maxSets = m_image_count + 2; // img_cnt for path_trace + 1 set for display and imgui each
     descriptor_pool_create_info.poolSizeCount = std::size(pool_sizes);
     descriptor_pool_create_info.pPoolSizes = pool_sizes;
+    descriptor_pool_create_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT; // required for imgui
 
     VK_CHECK(vkCreateDescriptorPool(
         m_device, &descriptor_pool_create_info, nullptr, &m_descriptor_pool));
@@ -1727,7 +1697,7 @@ void Df_vulkan_app::create_descriptor_pool_and_sets()
     // Reserve enough space. This is way too much, but sizing them perfectly
     // would make the code less readable.
     descriptor_buffer_infos.reserve(100);
-    descriptor_image_infos.reserve(100);
+    descriptor_image_infos.reserve(1000);
 
     for (uint32_t i = 0; i < m_image_count; i++)
     {
@@ -1738,7 +1708,7 @@ void Df_vulkan_app::create_descriptor_pool_and_sets()
         { // Render params buffer
             VkDescriptorBufferInfo descriptor_buffer_info = {};
             descriptor_buffer_info.buffer = m_render_params_buffers[i].buffer;
-            descriptor_buffer_info.range = sizeof(Render_params);
+            descriptor_buffer_info.range = VK_WHOLE_SIZE;
             descriptor_buffer_infos.push_back(descriptor_buffer_info);
 
             VkWriteDescriptorSet descriptor_write = {};
@@ -1784,53 +1754,45 @@ void Df_vulkan_app::create_descriptor_pool_and_sets()
             descriptor_writes.push_back(descriptor_write);
         }
 
-        // Material textures index buffer
-        if (m_material_textures_index_buffer.buffer)
+        // Material textures
+        // 
+        // We rely on the partially bound bit when creating the descriptor set layout,
+        // so we can leave holes in the descriptor sets (or leave them empty).
+        // For each MDL texture index only one of the GLSL texture arrays is populated.
+        size_t texture_2d_index = 0;
+        size_t texture_3d_index = 0;
+
+        for (mi::Size tex = 1; tex < m_target_code->get_texture_count(); tex++)
         {
-            VkDescriptorBufferInfo descriptor_buffer_info = {};
-            descriptor_buffer_info.buffer = m_material_textures_index_buffer.buffer;
-            descriptor_buffer_info.range = VK_WHOLE_SIZE;
-            descriptor_buffer_infos.push_back(descriptor_buffer_info);
+            VkDescriptorImageInfo descriptor_image_info = {};
+            descriptor_image_info.sampler = m_linear_sampler;
+            descriptor_image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
             VkWriteDescriptorSet descriptor_write = {};
             descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             descriptor_write.dstSet = m_path_trace_descriptor_sets[i];
-            descriptor_write.dstBinding = g_binding_material_textures_indices;
+            descriptor_write.dstArrayElement = static_cast<uint32_t>(tex - 1);
             descriptor_write.descriptorCount = 1;
-            descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            descriptor_write.pBufferInfo = &descriptor_buffer_infos.back();
-            descriptor_writes.push_back(descriptor_write);
-        }
+            descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
-        // Material textures
-        const std::vector<Vulkan_texture>* material_textures_arrays[] = {
-            &m_material_textures_2d,
-            &m_material_textures_3d
-        };
-        const uint32_t material_textures_bindings[] = {
-            g_binding_material_textures_2d,
-            g_binding_material_textures_3d
-        };
-        for (size_t dim = 0; dim < 2; dim++)
-        {
-            const auto& textures = *material_textures_arrays[dim];
-            const uint32_t binding = material_textures_bindings[dim];
-
-            for (size_t tex = 0; tex < textures.size(); tex++)
+            mi::neuraylib::ITarget_code::Texture_shape shape
+                = m_target_code->get_texture_shape(tex);
+            if (shape == mi::neuraylib::ITarget_code::Texture_shape_2d)
             {
-                VkDescriptorImageInfo descriptor_image_info = {};
-                descriptor_image_info.sampler = m_linear_sampler;
-                descriptor_image_info.imageView = textures[tex].image_view;
-                descriptor_image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                descriptor_image_info.imageView = m_material_textures_2d[texture_2d_index++].image_view;
                 descriptor_image_infos.push_back(descriptor_image_info);
 
-                VkWriteDescriptorSet descriptor_write = {};
-                descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                descriptor_write.dstSet = m_path_trace_descriptor_sets[i];
-                descriptor_write.dstBinding = binding;
-                descriptor_write.dstArrayElement = tex;
-                descriptor_write.descriptorCount = 1;
-                descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                descriptor_write.dstBinding = g_binding_material_textures_2d;
+                descriptor_write.pImageInfo = &descriptor_image_infos.back();
+                descriptor_writes.push_back(descriptor_write);
+            }
+            else if (shape == mi::neuraylib::ITarget_code::Texture_shape_3d
+                || shape == mi::neuraylib::ITarget_code::Texture_shape_bsdf_data)
+            {
+                descriptor_image_info.imageView = m_material_textures_3d[texture_3d_index++].image_view;
+                descriptor_image_infos.push_back(descriptor_image_info);
+
+                descriptor_write.dstBinding = g_binding_material_textures_3d;
                 descriptor_write.pImageInfo = &descriptor_image_infos.back();
                 descriptor_writes.push_back(descriptor_write);
             }
@@ -1880,76 +1842,128 @@ void Df_vulkan_app::create_descriptor_pool_and_sets()
     update_accumulation_image_descriptors();
 }
 
+void Df_vulkan_app::create_query_pool()
+{
+    VkQueryPoolCreateInfo query_pool_create_info = {};
+    query_pool_create_info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+    query_pool_create_info.queryType = VK_QUERY_TYPE_TIMESTAMP;
+    query_pool_create_info.queryCount = m_image_count * 2;
+
+    VK_CHECK(vkCreateQueryPool(m_device, &query_pool_create_info, nullptr, &m_query_pool));
+
+    mi::examples::vk::Temporary_command_buffer command_buffer(m_device, m_command_pool);
+    command_buffer.begin();
+    vkCmdResetQueryPool(command_buffer.get(), m_query_pool, 0, query_pool_create_info.queryCount);
+    command_buffer.end_and_submit(m_graphics_queue);
+}
+
 void Df_vulkan_app::update_accumulation_image_descriptors()
 {
     std::vector<VkWriteDescriptorSet> descriptor_writes;
 
     std::vector<VkDescriptorImageInfo> descriptor_image_infos;
-    descriptor_image_infos.reserve(m_image_count * 3 + 3);
+    descriptor_image_infos.reserve(m_image_count * ACCUM_IMAGE_COUNT + ACCUM_IMAGE_COUNT);
+
+    const uint32_t accum_image_bindings[] = {
+        g_binding_beauty_buffer,
+        g_binding_aux_albedo_diffuse_buffer,
+        g_binding_aux_albedo_glossy_buffer,
+        g_binding_aux_normal_buffer,
+        g_binding_aux_roughness_buffer
+    };
 
     for (uint32_t i = 0; i < m_image_count; i++)
     {
         VkDescriptorImageInfo descriptor_image_info = {};
-        descriptor_image_info.imageView = m_beauty_texture.image_view;
         descriptor_image_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-        descriptor_image_infos.push_back(descriptor_image_info);
 
         VkWriteDescriptorSet descriptor_write = {};
         descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptor_write.dstSet = m_path_trace_descriptor_sets[i];
-        descriptor_write.dstBinding = g_binding_beauty_buffer;
         descriptor_write.descriptorCount = 1;
         descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-        descriptor_write.pImageInfo = &descriptor_image_infos.back();
-        descriptor_writes.push_back(descriptor_write);
 
-        descriptor_image_info.imageView = m_auxiliary_albedo_texture.image_view;
-        descriptor_image_infos.push_back(descriptor_image_info);
+        for (size_t j = 0; j < ACCUM_IMAGE_COUNT; j++)
+        {
+            descriptor_image_info.imageView = m_accum_images[j].image_view;
+            descriptor_image_infos.push_back(descriptor_image_info);
 
-        descriptor_write.dstBinding = g_binding_aux_albedo_buffer;
-        descriptor_write.pImageInfo = &descriptor_image_infos.back();
-        descriptor_writes.push_back(descriptor_write);
-
-        descriptor_image_info.imageView = m_auxiliary_normal_texture.image_view;
-        descriptor_image_infos.push_back(descriptor_image_info);
-
-        descriptor_write.dstBinding = g_binding_aux_normal_buffer;
-        descriptor_write.pImageInfo = &descriptor_image_infos.back();
-        descriptor_writes.push_back(descriptor_write);
+            descriptor_write.dstBinding = accum_image_bindings[j];
+            descriptor_write.pImageInfo = &descriptor_image_infos.back();
+            descriptor_writes.push_back(descriptor_write);
+        }
     }
 
     VkDescriptorImageInfo descriptor_info = {};
-    descriptor_info.imageView = m_beauty_texture.image_view;
     descriptor_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-    descriptor_image_infos.push_back(descriptor_info);
 
     VkWriteDescriptorSet descriptor_write = {};
     descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     descriptor_write.dstSet = m_display_descriptor_set;
-    descriptor_write.dstBinding = 0;
     descriptor_write.dstArrayElement = 0;
     descriptor_write.descriptorCount = 1;
     descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    descriptor_write.pImageInfo = &descriptor_image_infos.back();
-    descriptor_writes.push_back(descriptor_write);
 
-    descriptor_info.imageView = m_auxiliary_albedo_texture.image_view;
-    descriptor_image_infos.push_back(descriptor_info);
+    for (uint32_t i = 0; i < ACCUM_IMAGE_COUNT; i++)
+    {
+        descriptor_info.imageView = m_accum_images[i].image_view;
+        descriptor_image_infos.push_back(descriptor_info);
 
-    descriptor_write.dstBinding = 1;
-    descriptor_write.pImageInfo = &descriptor_image_infos.back();
-    descriptor_writes.push_back(descriptor_write);
-
-    descriptor_info.imageView = m_auxiliary_normal_texture.image_view;
-    descriptor_image_infos.push_back(descriptor_info);
-
-    descriptor_write.dstBinding = 2;
-    descriptor_write.pImageInfo = &descriptor_image_infos.back();
-    descriptor_writes.push_back(descriptor_write);
+        descriptor_write.dstBinding = i;
+        descriptor_write.pImageInfo = &descriptor_image_infos.back();
+        descriptor_writes.push_back(descriptor_write);
+    }
 
     vkUpdateDescriptorSets(
         m_device, static_cast<uint32_t>(descriptor_writes.size()),
         descriptor_writes.data(), 0, nullptr);
+}
+
+void Df_vulkan_app::write_accum_images_to_files()
+{
+    auto export_pixels_rgba32f = [&](const std::vector<uint8_t>& pixels, const std::string& filename)
+    {
+        mi::base::Handle<mi::neuraylib::ICanvas> canvas(
+            m_image_api->create_canvas("Color", m_image_width, m_image_height));
+        mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile());
+        std::memcpy(tile->get_data(), pixels.data(), pixels.size());
+        canvas = m_image_api->convert(canvas.get(), "Rgb_fp");
+        m_mdl_impexp_api->export_canvas(filename.c_str(), canvas.get());
+    };
+
+    uint32_t image_bpp = mi::examples::vk::get_image_format_bpp(g_accumulation_texture_format);
+    std::vector<uint8_t> image_pixels[ACCUM_IMAGE_COUNT];
+    for (uint32_t i = 0; i < ACCUM_IMAGE_COUNT; i++)
+    {
+        image_pixels[i] = mi::examples::vk::copy_image_to_buffer(
+            m_device, m_physical_device, m_command_pool, m_graphics_queue,
+            m_accum_images[i].image, m_image_width, m_image_height, image_bpp,
+            VK_IMAGE_LAYOUT_GENERAL, false);
+    }
+
+    std::vector<uint8_t> albedo_pixels(m_image_width * m_image_height * image_bpp);
+    float* albedo_ptr = reinterpret_cast<float*>(albedo_pixels.data());
+    float* albedo_diffuse_ptr = reinterpret_cast<float*>(image_pixels[ACCUM_IMAGE_AUX_ALBEDO_DIFFUSE].data());
+    float* albedo_glossy_ptr = reinterpret_cast<float*>(image_pixels[ACCUM_IMAGE_AUX_ALBEDO_GLOSSY].data());
+    for (size_t i = 0; i < albedo_pixels.size() / sizeof(float); i++)
+        albedo_ptr[i] = albedo_diffuse_ptr[i] + albedo_glossy_ptr[i];
+
+    std::string filename_base = m_options.output_file;
+    std::string filename_ext;
+
+    size_t dot_pos = m_options.output_file.rfind('.');
+    if (dot_pos != std::string::npos)
+    {
+        filename_base = m_options.output_file.substr(0, dot_pos);
+        filename_ext = m_options.output_file.substr(dot_pos);
+    }
+
+    export_pixels_rgba32f(image_pixels[ACCUM_IMAGE_BEAUTY], filename_base + filename_ext);
+    export_pixels_rgba32f(albedo_pixels, filename_base + "_albedo" + filename_ext);
+    export_pixels_rgba32f(image_pixels[ACCUM_IMAGE_AUX_ALBEDO_DIFFUSE], filename_base + "_albedo_diffuse" + filename_ext);
+    export_pixels_rgba32f(image_pixels[ACCUM_IMAGE_AUX_ALBEDO_GLOSSY], filename_base + "_albedo_glossy" + filename_ext);
+    export_pixels_rgba32f(image_pixels[ACCUM_IMAGE_AUX_NORMAL], filename_base + "_normal" + filename_ext);
+    export_pixels_rgba32f(image_pixels[ACCUM_IMAGE_AUX_ROUGHNESS], filename_base + "_roughness" + filename_ext);
 }
 
 
@@ -1961,7 +1975,8 @@ mi::neuraylib::IFunction_call* create_material_instance(
     mi::neuraylib::IMdl_factory* mdl_factory,
     mi::neuraylib::ITransaction* transaction,
     mi::neuraylib::IMdl_execution_context* context,
-    const std::string& material_name)
+    const std::string& material_name,
+    mi::base::Handle<const mi::neuraylib::IAnnotation_list>& material_parameter_annotations)
 {
     // Split material name into module and simple material name
     std::string module_name, material_simple_name;
@@ -2001,6 +2016,8 @@ mi::neuraylib::IFunction_call* create_material_instance(
     if (result != 0)
         exit_failure("Failed to instantiate material '%s'.", material_db_name.c_str());
 
+    material_parameter_annotations = material_definition->get_parameter_annotations();
+
     material_instance->retain();
     return material_instance.get();
 }
@@ -2039,7 +2056,7 @@ const mi::neuraylib::ITarget_code* generate_glsl_code(
     mi::neuraylib::IMdl_backend_api* mdl_backend_api,
     mi::neuraylib::ITransaction* transaction,
     mi::neuraylib::IMdl_execution_context* context,
-    bool enable_bsdf_flags,
+    const Options& options,
     mi::Size& argument_block_index)
 {
     // Add compiled material to link unit
@@ -2047,31 +2064,42 @@ const mi::neuraylib::ITarget_code* generate_glsl_code(
         mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_GLSL));
 
     check_success(be_glsl->set_option("glsl_version", "450") == 0);
-    check_success(be_glsl->set_option("glsl_place_uniforms_into_ssbo", "on") == 0);
-    check_success(be_glsl->set_option("glsl_max_const_data", "0") == 0);
-    check_success(be_glsl->set_option("glsl_uniform_ssbo_binding",
-        std::to_string(g_binding_ro_data_buffer).c_str()) == 0);
-    check_success(be_glsl->set_option("glsl_uniform_ssbo_set",
-        std::to_string(g_set_ro_data_buffer).c_str()) == 0);
+    if (!options.disable_ssbo && !options.enable_ro_segment)
+    {
+        check_success(be_glsl->set_option("glsl_place_uniforms_into_ssbo", "on") == 0);
+        check_success(be_glsl->set_option("glsl_uniform_ssbo_binding",
+            std::to_string(g_binding_ro_data_buffer).c_str()) == 0);
+        check_success(be_glsl->set_option("glsl_uniform_ssbo_set",
+            std::to_string(g_set_ro_data_buffer).c_str()) == 0);
+        check_success(be_glsl->set_option("glsl_max_const_data",
+            std::to_string(options.max_const_data).c_str()) == 0);
+    }
+    if (options.enable_ro_segment)
+    {
+        check_success(be_glsl->set_option("enable_ro_segment", "on") == 0);
+        check_success(be_glsl->set_option("max_const_data",
+            std::to_string(options.max_const_data).c_str()) == 0);
+    }
     check_success(be_glsl->set_option("num_texture_spaces", "1") == 0);
-    check_success(be_glsl->set_option("num_texture_results", "16") == 0);
+    check_success(be_glsl->set_option("num_texture_results",
+        std::to_string(options.tex_results_cache_size).c_str()) == 0);
     check_success(be_glsl->set_option("enable_auxiliary", "on") == 0);
     check_success(be_glsl->set_option("df_handle_slot_mode", "none") == 0);
     check_success(be_glsl->set_option("libbsdf_flags_in_bsdf_data",
-        enable_bsdf_flags ? "on" : "off") == 0);
+        options.enable_bsdf_flags ? "on" : "off") == 0);
 
     mi::base::Handle<mi::neuraylib::ILink_unit> link_unit(
         be_glsl->create_link_unit(transaction, context));
 
     // Specify which functions to generate
     std::vector<mi::neuraylib::Target_function_description> function_descs;
+    function_descs.emplace_back("init", "mdl_init");
     function_descs.emplace_back("thin_walled", "mdl_thin_walled");
     function_descs.emplace_back("surface.scattering", "mdl_bsdf");
     function_descs.emplace_back("surface.emission.emission", "mdl_edf");
     function_descs.emplace_back("surface.emission.intensity", "mdl_emission_intensity");
     function_descs.emplace_back("volume.absorption_coefficient", "mdl_absorption_coefficient");
-    function_descs.emplace_back("geometry.cutout_opacity", "mdl_cutout_opacity");
-
+    
     // Try to determine if the material is thin walled so we can check
     // if backface functions need to be generated.
     bool is_thin_walled_function = true;
@@ -2096,7 +2124,7 @@ const mi::neuraylib::ITarget_code* generate_glsl_code(
 
     if (is_thin_walled_function || thin_walled_value)
     {
-        // First, backfacs DFs are only considered for thin_walled materials
+        // First, backface DFs are only considered for thin_walled materials
 
         // Second, we only need to generate new code if surface and backface are different
         need_backface_bsdf =
@@ -2151,6 +2179,15 @@ const mi::neuraylib::ITarget_code* generate_glsl_code(
         compiled_material, function_descs.data(), function_descs.size(), context);
     check_success(print_messages(context));
 
+    // Compile cutout_opacity also as standalone version to be used in the anyhit programs
+    // to avoid costly precalculation of expressions only used by other expressions.
+    // This can be especially useful for anyhit shaders in ray tracing pipelines.
+    mi::neuraylib::Target_function_description cutout_opacity_function_desc(
+        "geometry.cutout_opacity", "mdl_standalone_cutout_opacity");
+    link_unit->add_material(
+        compiled_material, &cutout_opacity_function_desc, 1, context);
+    check_success(print_messages(context));
+
     // In class compilation mode each material has an argument block which contains the dynamic parameters.
     // We need the material's argument block index later when creating the matching Vulkan buffer for
     // querying the correct argument block from the target code. The target code contains an argument block
@@ -2159,10 +2196,13 @@ const mi::neuraylib::ITarget_code* generate_glsl_code(
     argument_block_index = function_descs[0].argument_block_index;
 
     // Generate GLSL code
+    auto t0 = std::chrono::steady_clock::now();
     mi::base::Handle<const mi::neuraylib::ITarget_code> target_code(
         be_glsl->translate_link_unit(link_unit.get(), context));
+    auto t1 = std::chrono::steady_clock::now();
     check_success(print_messages(context));
     check_success(target_code);
+    std::cout << "Generate GLSL target code: " << std::chrono::duration<float>(t1 - t0).count() << "s\n";
 
     target_code->retain();
     return target_code.get();
@@ -2182,6 +2222,7 @@ void print_usage(char const* prog_name)
         << "  --nowin                     don't show interactive display\n"
         << "  --res <res_x> <res_y>       resolution (default: 1024x768)\n"
         << "  --numimg <n>                swapchain image count (default: 3)\n"
+        << "  --device <id>               run on supported GPU <id>\n"
         << "  -o|--output <outputfile>    image file to write result in nowin mode (default: output.exr)\n"
         << "  --spp <num>                 samples per pixel, only used for --nowin (default: 4096)\n"
         << "  --spi <num>                 samples per render loop iteration (default: 8)\n"
@@ -2195,9 +2236,17 @@ void print_usage(char const* prog_name)
         << "                              (default: nvidia/sdk_examples/resources/environment.hdr)\n"
         << "  --hdr_intensity <value>     intensity of the environment map (default: 1.0)\n"
         << "  --nocc                      don't compile the material using class compilation\n"
+        << "  --tex_res <num>             size of the texture results cache\n"
+        << "  --enable_ro_segment         enable the read-only data segment\n"
+        << "  --disable_ssbo              disable use of an ssbo for constants\n"
+        << "  --max_const_data <size>     set the maximum size of constants in bytes in the\n"
+        << "                              generated code (requires read-only data segment or\n"
+        << "                              ssbo, default 1024)\n"
         << "  -p|--mdl_path <path>        additional MDL search path, can occur multiple times\n"
         << "  --vkdebug                   enable the Vulkan validation layers\n"
+        << "  --no_shader_opt             disables shader SPIR-V optimization\n"
         << "  --dump_glsl                 outputs the generated GLSL target code to a file\n"
+        << "  --hide_gui                  hide the settings gui. Can be toggled with SPACE\n"
         << "  --allowed_scatter_mode <m>  limits the allowed scatter mode to \"none\", \"reflect\",\n"
         << "                              \"transmit\" or \"reflect_and_transmit\"\n"
         << "                              (default: restriction disabled)"
@@ -2225,6 +2274,8 @@ void parse_command_line(int argc, char* argv[], Options& options,
             }
             else if (arg == "--numimg" && i < argc - 1)
                 options.num_images = std::max(atoi(argv[++i]), 2);
+            else if (arg == "--device" && i < argc - 1)
+                options.device_index = std::max(atoi(argv[++i]), -1);
             else if (arg == "-o" && i < argc - 1)
                 options.output_file = argv[++i];
             else if (arg == "--spp" && i < argc - 1)
@@ -2249,6 +2300,7 @@ void parse_command_line(int argc, char* argv[], Options& options,
                 options.light_intensity.x = static_cast<float>(std::atof(argv[++i]));
                 options.light_intensity.y = static_cast<float>(std::atof(argv[++i]));
                 options.light_intensity.z = static_cast<float>(std::atof(argv[++i]));
+                options.light_enabled = true;
             }
             else if (arg == "--hdr" && i < argc - 1)
                 options.hdr_file = argv[++i];
@@ -2258,10 +2310,22 @@ void parse_command_line(int argc, char* argv[], Options& options,
                 mdl_configure_options.additional_mdl_paths.push_back(argv[++i]);
             else if (arg == "--nocc")
                 options.use_class_compilation = false;
+            else if (arg == "--tex_res" && i < argc - 1)
+                options.tex_results_cache_size = uint32_t(std::atoi(argv[++i]));
+            else if (arg == "--enable_ro_segment")
+                options.enable_ro_segment = true;
+            else if (arg == "--disable_ssbo")
+                options.disable_ssbo = true;
+            else if (arg == "--max_const_data")
+                options.max_const_data = uint32_t(std::atoi(argv[++i]));
             else if (arg == "--vkdebug")
                 options.enable_validation_layers = true;
+            else if (arg == "--no_shader_opt")
+                options.enable_shader_optimization = false;
             else if (arg == "--dump_glsl")
                 options.dump_glsl = true;
+            else if (arg == "--hide_gui")
+                options.hide_gui = true;
             else if (arg == "--allowed_scatter_mode" && i < argc - 1)
             {
                 options.enable_bsdf_flags = true;
@@ -2362,20 +2426,19 @@ int MAIN_UTF8(int argc, char* argv[])
         
         {
             // Load and compile material, and generate GLSL code
+            mi::base::Handle<const mi::neuraylib::IAnnotation_list> material_parameter_annotations;
             mi::base::Handle<mi::neuraylib::IFunction_call> material_instance(
                 create_material_instance(mdl_impexp_api.get(), mdl_factory.get(),
-                    transaction.get(), context.get(), options.material_name));
+                    transaction.get(), context.get(), options.material_name, material_parameter_annotations));
 
             mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
                 compile_material_instance(mdl_factory.get(), transaction.get(),
-                    material_instance.get(), context.get(),
-                    options.use_class_compilation));
+                    material_instance.get(), context.get(), options.use_class_compilation));
 
             mi::Size argument_block_index;
             mi::base::Handle<const mi::neuraylib::ITarget_code> target_code(
                 generate_glsl_code(compiled_material.get(), mdl_backend_api.get(),
-                    transaction.get(), context.get(), options.enable_bsdf_flags,
-                    argument_block_index));
+                    transaction.get(), context.get(), options, argument_block_index));
 
             if (options.dump_glsl)
             {
@@ -2392,9 +2455,14 @@ int MAIN_UTF8(int argc, char* argv[])
             app_config.image_count = options.num_images;
             app_config.headless = options.no_window;
             app_config.iteration_count = options.samples_per_pixel / options.samples_per_iteration;
+            app_config.device_index = options.device_index;
             app_config.enable_validation_layers = options.enable_validation_layers;
+            app_config.enable_descriptor_indexing = true;
 
-            Df_vulkan_app app(transaction, mdl_impexp_api, image_api, target_code, argument_block_index, options);
+            Df_vulkan_app app(
+                transaction, mdl_impexp_api, image_api, target_code,
+                compiled_material, material_parameter_annotations,
+                argument_block_index, options);
             app.run(app_config);
         }
 

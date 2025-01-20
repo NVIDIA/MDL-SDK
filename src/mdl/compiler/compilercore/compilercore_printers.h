@@ -358,9 +358,17 @@ public:
     ///  \param  b  The boolean to print.
     void print(bool b) MDL_FINAL;
 
-    /// Print long.
+    /// Print unsigned.
+    ///  \param  n  The unsigned integer to print.
+    void print(unsigned n) MDL_FINAL;
+
+    /// Print signed.
     ///  \param  n  The integer to print.
-    void print(long n) MDL_FINAL;
+    void print(int n) MDL_FINAL;
+
+    /// Print size_t.
+    ///  \param n   The unsigned integer to print.
+    void print(size_t n) MDL_FINAL;
 
     /// Print double.
     ///  \param  d  The double to print.

@@ -316,8 +316,6 @@ private:
     mi::mdl::IMDL* m_mdl;
 
     mi::mdl::IMDL::MDL_version m_from_version;
-    int m_from_major = 1;
-    int m_from_minor = 0;
 
     mi::mdl::IMDL::MDL_version m_to_version;
     int m_to_major = 1;
@@ -334,8 +332,7 @@ Version_upgrader::Version_upgrader(
   : Base( module),
     m_mdl( mdl)
 {
-    m_module->get_version( m_from_major, m_from_minor);
-    m_from_version = combine_mdl_version( m_from_major, m_from_minor);
+    m_from_version = m_module->get_mdl_version();
     m_to_version = convert_mdl_version( to_version);
     std::tie( m_to_major, m_to_minor) = split_mdl_version( m_to_version);
 
@@ -346,11 +343,10 @@ void Version_upgrader::run()
 {
     // Update the MDL version first (queried by Module_inliner::promote_call_reference())
     m_module->set_version(
-        impl_cast<mi::mdl::MDL>( m_mdl),
         m_to_major,
         m_to_minor,
-        /*enable_mdl_next*/ true,
-        /*enable_experimental*/ false);
+        /*enable_mdl_next*/ true,       // allow version upgrade to MDL next, ...
+        /*enable_experimental*/ false); // ... but not to experimental
 
     // Promote call expressions and its arguments.
     visit( m_module);
@@ -368,7 +364,7 @@ mi::mdl::IExpression* Version_upgrader::post_visit( mi::mdl::IExpression_call* e
 
     mi::Uint32 rules = mi::mdl::Module::PR_NO_CHANGE;
     ref = mi::mdl::Module_inliner::promote_call_reference(
-        *m_module, m_from_major, m_from_minor, ref, this, rules);
+        *m_module, m_from_version, ref, this, rules);
     if( rules == mi::mdl::Module::PR_NO_CHANGE)
         return expr;
 
@@ -381,7 +377,7 @@ mi::mdl::IExpression* Version_upgrader::post_visit( mi::mdl::IExpression_call* e
     for( int i = 0, j = 0, n = expr->get_argument_count(); i < n; ++i, ++j) {
         const mi::mdl::IArgument* arg = m_module->clone_arg( expr->get_argument( i), this);
         call->add_argument( arg);
-        j = m_module->promote_call_arguments( call, arg, j, rules);
+        j = m_module->promote_call_arguments( call, arg, j, rules, /*creator=*/nullptr);
     }
     return call;
 }
@@ -1711,8 +1707,26 @@ private:
 } // namespace
 
 Mdl_module_transformer::Mdl_module_transformer(
-    DB::Transaction* transaction,
-    const mi::mdl::IModule* module)
+    DB::Transaction* transaction, mi::mdl::IModule* module)
+  : m_transaction( transaction)
+{
+    m_transaction->pin();
+
+    m_mdlc_module.set();
+    m_mdl = m_mdlc_module->get_mdl();
+
+    // No cloning/serialization of module.
+    m_module = make_handle_dup( impl_cast<mi::mdl::Module>( module));
+
+    const mi::mdl::IQualified_name* name = m_module->get_qualified_name();
+    for( mi::Uint32 i = 0, n = name->get_component_count(); i < n; ++i) {
+        const mi::mdl::ISimple_name* simple = name->get_component( i);
+        m_module_name.emplace_back( simple->get_symbol()->get_name());
+    }
+}
+
+Mdl_module_transformer::Mdl_module_transformer(
+    DB::Transaction* transaction, const mi::mdl::IModule* module)
   : m_transaction( transaction)
 {
     m_transaction->pin();

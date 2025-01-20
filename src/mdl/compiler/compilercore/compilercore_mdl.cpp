@@ -970,6 +970,10 @@ void MDL::create_builtin_semantics()
         IDefinition::DS_INTRINSIC_DF_CHIANG_HAIR_BSDF;
     m_builtin_semantics["::df::sheen_bsdf"] =
         IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF;
+    m_builtin_semantics["::df::microflake_sheen_bsdf"] =
+        IDefinition::DS_INTRINSIC_DF_MICROFLAKE_SHEEN_BSDF;
+    m_builtin_semantics["::df::coat_absorption_factor"] =
+        IDefinition::DS_INTRINSIC_DF_COAT_ABSORPTION_FACTOR;
     m_builtin_semantics["::df::unbounded_mix"] =
         IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX;
     m_builtin_semantics["::df::color_unbounded_mix"] =
@@ -2392,6 +2396,9 @@ bool MDL::check_version(
         case 9:
             version = MDL_VERSION_1_9;
             return true;
+        case 10:
+            version = MDL_VERSION_1_10;
+            return true;
         default:
             // unsupported yet
             return false;
@@ -2423,10 +2430,10 @@ void MDL::register_builtin_module(Module const *module)
     m_builtin_module_indexes[mod_name] = id;
 }
 
-// Find a builtin module by name.
-Module const *MDL::find_builtin_module(string const &name) const
+// Find a builtin module by its absolute name.
+Module const *MDL::find_builtin_module(string const &abs_name) const
 {
-    Module_map::const_iterator it = m_builtin_module_indexes.find(name);
+    Module_map::const_iterator it = m_builtin_module_indexes.find(abs_name);
 
     if (it != m_builtin_module_indexes.end()) {
         size_t id = it->second;

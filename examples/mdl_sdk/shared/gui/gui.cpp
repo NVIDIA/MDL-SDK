@@ -86,7 +86,7 @@ bool Event::is_valid() const
 
 // ------------------------------------------------------------------------------------------------
 
-Base_element* const Event::get_sender() const
+Base_element* Event::get_sender() const
 {
     return m_sender;
 }
@@ -650,14 +650,14 @@ const std::string& Menu_item::get_name() const
 
 // ------------------------------------------------------------------------------------------------
 
-const Menu_item::Kind Menu_item::get_kind() const
+Menu_item::Kind Menu_item::get_kind() const
 {
     return m_kind;
 }
 
 // ------------------------------------------------------------------------------------------------
 
-const size_t Menu_item::get_child_count() const
+size_t Menu_item::get_child_count() const
 {
     return m_children.size();
 }

@@ -55,7 +55,7 @@ struct PostingListItem
 template<class T_document>
 struct ResultListItem
 {
-    ResultListItem<T_document>(const T_document* document, float ranking) 
+    ResultListItem(const T_document* document, float ranking) 
         : Document(document)
         , Ranking(ranking)
     {  }

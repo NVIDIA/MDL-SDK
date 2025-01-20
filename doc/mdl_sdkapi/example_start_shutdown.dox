@@ -34,7 +34,7 @@
 </div>
 
 This example accesses the main \neurayAdjectiveName interface, queries the version interface,
-prints some version information and then starts and shuts down the \neurayApiName. See the \ref 
+prints some version information and then starts and shuts down the \neurayApiName. See the \ref
 mi_neuray_getting_started Section for a description of how the example programs can be compiled.
 
 \section example_start_shutdown_new New Topics
@@ -74,7 +74,7 @@ mi_neuray_getting_started Section for a description of how the example programs 
         data structures in the API (see \ref mi_neuray_design for an explanation why).
         To obtain a pointer to the main interface #mi::neuraylib::INeuray, call this function
         with the #mi::neuraylib::INeuray::IID() as its \c iid parameter. If no compatible
-        interface can be found in the library, a \c NULL pointer is returned. In this case,
+        interface can be found in the library, a \c nullptr pointer is returned. In this case,
         you can use #mi::neuraylib::IVersion::IID() to request a #mi::neuraylib::IVersion
         interface from the #mi_factory() for diagnostics.
         The #mi::neuraylib::INeuray interface can only be accessed once per process.

@@ -81,8 +81,8 @@ function(FIND_OPENGL_EXT)
     set(MDL_DEPENDENCY_GL_SHARED ${_GL_SHARED} CACHE INTERNAL "gl libs")
 
     if(MDL_LOG_DEPENDENCIES)
-        message(STATUS "[INFO] MDL_DEPENDENCY_GL_INCLUDE:            ${MDL_DEPENDENCY_GL_INCLUDE}")
-        message(STATUS "[INFO] MDL_DEPENDENCY_GL_SHARED:             ${MDL_DEPENDENCY_GL_SHARED}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_GL_INCLUDE:                ${MDL_DEPENDENCY_GL_INCLUDE}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_GL_SHARED:                 ${MDL_DEPENDENCY_GL_SHARED}")
     endif()
 
     #-----------------------------------------------------------------------------------------------
@@ -103,8 +103,8 @@ function(FIND_OPENGL_EXT)
     set(MDL_DEPENDENCY_GLEW_LIBS ${_GLEW_LIB} CACHE INTERNAL "glew libs")
 
     if(MDL_LOG_DEPENDENCIES)
-        message(STATUS "[INFO] MDL_DEPENDENCY_GLEW_INCLUDE:          ${MDL_DEPENDENCY_GLEW_INCLUDE}")
-        message(STATUS "[INFO] MDL_DEPENDENCY_GLEW_LIBS:             ${MDL_DEPENDENCY_GLEW_LIBS}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_GLEW_INCLUDE:              ${MDL_DEPENDENCY_GLEW_INCLUDE}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_GLEW_LIBS:                 ${MDL_DEPENDENCY_GLEW_LIBS}")
     endif()
 
 endfunction()

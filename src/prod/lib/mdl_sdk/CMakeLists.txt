@@ -82,18 +82,18 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
 if(NOT WINDOWS)
 
         target_add_rpath(TARGET ${PROJECT_NAME}
-            RPATHS
+            BUILD_RPATHS
                 ${CMAKE_BINARY_DIR}/src/shaders/plugin/dds/${CMAKE_BUILD_TYPE}
                 ${CMAKE_BINARY_DIR}/src/shaders/plugin/openimageio/${CMAKE_BUILD_TYPE}
                 ${CMAKE_BINARY_DIR}/src/shaders/plugin/mdl_distiller/${CMAKE_BUILD_TYPE}
-                ${CMAKE_BINARY_DIR}/examples/mdl_sdk/distilling_target_plugin/${CMAKE_BUILD_TYPE}
+                ${CMAKE_BINARY_DIR}/examples/mdl_sdk/distilling_target/${CMAKE_BUILD_TYPE}
+            INSTALL_RPATHS
+                "."
             )
 
 endif()
 
-# -------------------------------------------------------------------------------------------------
-# Create installation rules to copy the build directory
-# -------------------------------------------------------------------------------------------------
+# create installation rules
 add_target_install(
     TARGET ${PROJECT_NAME}
     )

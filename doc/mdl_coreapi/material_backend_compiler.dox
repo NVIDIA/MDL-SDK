@@ -46,7 +46,7 @@ This page explains the Material_backend_compiler helper class.
   - Resource management
   - Adding material subexpressions to the link unit
   - Adding distribution functions to the link unit
-  - Generating the CUDA PTX code
+  - Generating the target code
 
 \section example_cuda_shared_descr Detailed Description
 
@@ -62,7 +62,7 @@ The compilation from the DAG representation to the different targets codes is ha
 <dd>
 The options of the JIT backend can be accessed via ICode_generator_jit::access_options().
 For the example, the following options are set:
- - \c MDL_JIT_OPTION_ENABLE_RO_SEGMENT: This option is enabled to avoid large arrays to be dumped as PTX code, slowing down the compilation.
+ - \c MDL_JIT_OPTION_ENABLE_RO_SEGMENT: This option is enabled to avoid large arrays to be dumped as code, slowing down the compilation.
  - \c MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE: Instead of using the default \c "vtable" mode, that employs a table of function pointers to the user provided texture runtime, the \c "direct_call" mode is used, where the texture runtime functions are called by name.
    As this avoids a pointer indirection, it is slightly faster.
  - \c MDL_JIT_OPTION_MAP_STRINGS_TO_IDS: this options is enabled to allow changing string material parameters at runtime without knowing the pointers of the strings on the GPU.

@@ -179,7 +179,7 @@ public:
     ///
     /// Also used by Mdl_module_transformer_impl to handle the export.
     ///
-    /// \param filename   The filename used by the writer, or \c NULL for string-based exports.
+    /// \param filename   The filename used by the writer, or \c nullptr for string-based exports.
     static mi::Sint32 export_module_common(
         mi::neuraylib::ITransaction* transaction,
         const char* module_name,

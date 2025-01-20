@@ -496,7 +496,7 @@ int Mdlc::run(int argc, char *argv[])
     if (show_version) {
         fprintf(
             stderr,
-            "mdlc version 1.8, build %s.\n",
+            "mdlc version 1.10, build %s.\n",
             MI::VERSION::get_platform_version());
         return EXIT_SUCCESS;
     }

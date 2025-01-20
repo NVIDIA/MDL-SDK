@@ -96,12 +96,12 @@ float compute_opacity(gltf_alpha_mode mode, float alpha, float cutoff) {
     }
 }
 
-float4 gltf_prepare_tex_float4(gltf_texture_lookup_value sample) {
-    return sample.valid ? sample.value : float4(1.0);
+float4 gltf_prepare_tex_float4(gltf_texture_lookup_value sample, float4 default_value = float4(1.0)) {
+    return sample.valid ? sample.value : default_value;
 }
 
-float3 gltf_prepare_tex_float3(gltf_texture_lookup_value sample) {
-    return sample.valid ? float3(sample.value.x, sample.value.y, sample.value.z) : float3(1.0);
+float3 gltf_prepare_tex_float3(gltf_texture_lookup_value sample, float3 default_value = float3(1.0)) {
+    return sample.valid ? float3(sample.value.x, sample.value.y, sample.value.z) : default_value;
 }
 
 float3 gltf_prepare_normal(gltf_normal_texture_lookup_value sample) {
@@ -162,8 +162,8 @@ export gltf_texture_lookup_value gltf_texture_lookup(
         anno::display_name("Texture"),
         anno::description("Texture File")
     ]],
-    uniform int tex_coord_index = 0 
-    [[ 
+    uniform int tex_coord_index = 0
+    [[
         anno::in_group("Source"),
         anno::display_name("Coordinate Set"),
         anno::description("Texture coordinate set (UV-Set). KHR_texture_transform overrides the textureInfo texCoord value if supplied."),
@@ -194,7 +194,7 @@ export gltf_texture_lookup_value gltf_texture_lookup(
     ]],
 
     uniform gltf_wrapping_mode wrap_s = repeat
-    [[ 
+    [[
         anno::in_group("Sampler"),
         anno::display_name("Wrap S"),
         anno::description("S (U) wrapping mode."),
@@ -224,7 +224,7 @@ export gltf_texture_lookup_value gltf_texture_lookup(
         offset: offset,
         rotation: rotation,
         scale: scale);
-    
+
     tex_ret.value = tex::lookup_float4(
         tex: texture,
         coord: tex_coord,
@@ -233,7 +233,6 @@ export gltf_texture_lookup_value gltf_texture_lookup(
     tex_ret.valid = true;
     return tex_ret;
 }
-
 
 export gltf_normal_texture_lookup_value gltf_normal_texture_lookup(
     uniform texture_2d texture = texture_2d()
@@ -250,14 +249,14 @@ export gltf_normal_texture_lookup_value gltf_normal_texture_lookup(
         anno::description("Strength of the base layer normal mapping."),
         anno::enable_if("::tex::texture_isvalid(texture)")
     ]],
-    uniform int tex_coord_index = 0 
+    uniform int tex_coord_index = 0
     [[
         anno::in_group("Source"),
         anno::display_name("Coordinate Set"),
         anno::description("Texture coordinate set (UV-Set). KHR_texture_transform overrides the textureInfo texCoord value if supplied."),
         anno::enable_if("::tex::texture_isvalid(texture) && normal_scale_factor>0.0")
     ]],
-    uniform int tex_tangent_index = 0 
+    uniform int tex_tangent_index = 0
     [[
         anno::hidden(),
         anno::in_group("Source"),
@@ -314,20 +313,21 @@ export gltf_normal_texture_lookup_value gltf_normal_texture_lookup(
     if (!::tex::texture_isvalid(texture))
         return tex_ret;
 
-    float3 tex_coord3 = state::texture_coordinate(tex_coord_index);
-    float2 tex_coord = khr_texture_transform_apply(
-        coord: float2(tex_coord3.x, tex_coord3.y),
-        offset: offset,
-        rotation: rotation,
-        scale: scale);
-
     tex_ret.value = base::tangent_space_normal_texture(
         texture: texture,
         factor: normal_scale_factor,
-        uvw: base::texture_coordinate_info(
-            position: float3(tex_coord.x, tex_coord.y, tex_coord3.z),
-            tangent_u: state::texture_tangent_u(tex_tangent_index),
-            tangent_v: state::texture_tangent_v(tex_tangent_index)),
+        uvw: base::transform_coordinate(
+            transform: base::rotation_translation_scale(
+                rotation: float3(0, 0, rotation),
+                translation: float3(offset.x, offset.y, 0),
+                scaling: float3(scale.x, scale.y, 1)
+            ),
+            coordinate: base::texture_coordinate_info(
+                position: state::texture_coordinate(tex_coord_index),
+                tangent_u: state::texture_tangent_u(tex_tangent_index),
+                tangent_v: state::texture_tangent_v(tex_tangent_index)
+            )
+        ),
         wrap_u: convert_wrap_mode(wrap_s),
         wrap_v: convert_wrap_mode(wrap_t));
     tex_ret.valid = true;
@@ -342,6 +342,7 @@ export material gltf_material(
         anno::display_name("Base Color Factor"),
         anno::description("The base color of the material. Multiplied to the 'Base Color Texture' if available.")
     ]],
+
     gltf_texture_lookup_value base_color_texture = gltf_texture_lookup()
     [[
         anno::in_group("Metallic Roughness"),
@@ -363,7 +364,7 @@ export material gltf_material(
         anno::display_name("Specular Texture"),
         anno::description("A texture that defines the strength of the specular reflection, stored in the alpha (A) channel. This will be multiplied by the 'Specular Factor'.")
     ]],
-        uniform color specular_color_factor = color(1.0)
+    uniform color specular_color_factor = color(1.0)
     [[
         anno::in_group("Specular"),
         anno::display_name("Specular Color Factor"),
@@ -400,10 +401,32 @@ export material gltf_material(
         anno::enable_if("metallic_factor>0.0 || roughness_factor>0.0")
     ]],
 
+    // KHR_materials_anisotropy
+    uniform float anisotropy_strength = 0.0
+    [[
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("Anisotropy"),
+        anno::display_name("Anisotropy Strength"),
+        anno::description("The anisotropy strength. When the anisotropy texture is present, this value is multiplied by the texture's blue channel.")
+    ]],
+    uniform float anisotropy_rotation = 0.0
+    [[
+        anno::hard_range(0.0, 2*::math::PI),
+        anno::in_group("Anisotropy"),
+        anno::display_name("Anisotropy Rotation"),
+        anno::description("The rotation of the anisotropy in tangent, bitangent space, measured in radians counter-clockwise from the tangent. When the anisotropy texture is present, this value provides additional rotation to the vectors in the texture.")
+    ]],
+    gltf_texture_lookup_value anisotropy_texture = gltf_texture_lookup()
+    [[
+        anno::in_group("Anisotropy"),
+        anno::display_name("Anisotropy Texture"),
+        anno::description("The anisotropy texture. Red and green channels represent the anisotropy direction in [− 1, 1] tangent, bitangent space to be rotated by the anisotropy rotation. The blue channel contains strength as [0, 1] to be multiplied by the anisotropy strength.")
+    ]],
+
     // KHR_materials_ior
     uniform float ior = 1.5
     [[
-        anno::soft_range(1.0, 5.0),
+        anno::hard_range(1.0, 5.0),
         anno::in_group("Metallic Roughness"),
         anno::display_name("IOR"),
         anno::description("The index of refraction.")
@@ -559,7 +582,7 @@ export material gltf_material(
     // KHR_materials_emissive_strength
     uniform float emissive_strength = 1.0
     [[
-        anno::hard_range(0.0, ::limits::FLOAT_MAX),
+        anno::soft_range(0.0, 10000),
         anno::in_group("Emission"),
         anno::display_name("Emissive Strength"),
         anno::description("The maximum strength of the emissive texture. Multiplied to the 'Emissive Factor'."),
@@ -571,14 +594,14 @@ export material gltf_material(
     [[
         anno::in_group("Volume"),
         anno::display_name("Thin-walled"),
-        anno::description("If true the material is thin-walled. Otherwise the material is a volume boundary. The doubleSided property has no effect on volume boundaries. Note, the thickness parameters are ignored since ray-tracing is used to compute the travelled distance within the volume.")
+        anno::description("If true the material is thin-walled. Otherwise the material is a volume boundary. The doubleSided property has no effect on volume boundaries. Note, the thickness parameters are ignored since ray-tracing is used to compute the traveled distance within the volume.")
     ]],
     uniform float attenuation_distance = ::limits::FLOAT_MAX
     [[
-        anno::soft_range(0.0, 10.0),
+        anno::soft_range(0.0, ::limits::FLOAT_MAX),
         anno::in_group("Volume"),
         anno::display_name("Attenuation Distance"),
-        anno::description("Density of the medium given as the average distance that light travels in the medium before interacting with a particle. The value is given in world space.")
+        anno::description("Density of the medium given as the average distance that light travels in the medium before interacting with a particle. The value is given in world space. Range is (0, +inf).")
     ]],
     uniform color attenuation_color = color(1.0)
     [[
@@ -634,8 +657,10 @@ export material gltf_material(
 
     // handling GLTF parameters
     // ------------------------------------------------------------------------
+
     float4 base_float4 = gltf_prepare_tex_float4(base_color_texture) * scene::data_lookup_float4("COLOR_0", float4(1.0)); // apply vertex color
     color base_color = base_color_factor * color(base_float4.x, base_float4.y, base_float4.z);
+
     float alpha = base_alpha * base_float4.w;
 
     float3 metallic_roughness = gltf_prepare_tex_float3(metallic_roughness_texture);
@@ -673,13 +698,25 @@ export material gltf_material(
     float iridescence_strength = gltf_prepare_tex_float3(iridescence_texture).x * iridescence_factor;
     float iridescence_thickness = math::lerp(iridescence_thickness_minimum, iridescence_thickness_maximum, gltf_prepare_tex_float3(iridescence_thickness_texture).x);
 
+    // KHR_materials_anisotropy
+    // ------------------------------------------------------------------------
+    float3 anisotropy_tex = gltf_prepare_tex_float3(anisotropy_texture, float3(1.0, 0.5, 1.0));
+    float2 anisotropy_tex_dir = float2(anisotropy_tex.x * 2.0 - 1.0, anisotropy_tex.y * 2.0 - 1.0);
+    float2 anisotropy_rot = float2(math::cos(anisotropy_rotation), math::sin(anisotropy_rotation));
+    float2 anisotropy_dir = float2x2(anisotropy_rot.x, anisotropy_rot.y, -anisotropy_rot.y, anisotropy_rot.x) * math::normalize(anisotropy_tex_dir);
+    float3 anisotropy_tangent_u = state::texture_tangent_u(0) * anisotropy_dir.x + state::texture_tangent_v(0) * anisotropy_dir.y;
+    float anisotropy = anisotropy_strength * anisotropy_tex.z;
+
     // metallic roughness model
     // ------------------------------------------------------------------------
 
-    // compute final roughness by squaring the "roughness" parameter 
+    // compute final roughness by squaring the "roughness" parameter
     float roughness2 = roughness * roughness;
 
-    // reduce the reflectivity at grazing angles to avoid "dark edges" 
+    float anisotropy_roughness_u = math::lerp(roughness2, 1.0, anisotropy * anisotropy);
+    float anisotropy_roughness_v = roughness2;
+
+    // reduce the reflectivity at grazing angles to avoid "dark edges"
     // for high roughness due to the layering
     float grazing_refl = math::max((1.0 - roughness), 0.0);
 
@@ -692,7 +729,10 @@ export material gltf_material(
         weight: color(1.0), // roughness is used to weight between diffuse and glossy
         normal_reflectivity: math::min(f0 * specular_color, color(1.0)) * specular,
         grazing_reflectivity: color(grazing_refl * specular),
-        layer: df::microfacet_ggx_vcavities_bsdf(roughness_u: roughness2),
+        layer: df::microfacet_ggx_vcavities_bsdf(
+            roughness_u: anisotropy_roughness_u,
+            roughness_v: anisotropy_roughness_v,
+            tangent_u: anisotropy_tangent_u),
         base: df::weighted_layer(
             weight: transmission,
             base: df::diffuse_reflection_bsdf(tint: base_color * occlusion),
@@ -703,7 +743,7 @@ export material gltf_material(
         normal: normal
         );
 
-    // apply iridescence and make the strength adjustable using a weighted layer 
+    // apply iridescence and make the strength adjustable using a weighted layer
     bsdf dielectric_component_with_thin_film = df::weighted_layer(
         weight: iridescence_strength,
         base: dielectric_component,
@@ -718,9 +758,11 @@ export material gltf_material(
     // its only glossy base_color is applied to tint it
     bsdf metallic_component = df::microfacet_ggx_vcavities_bsdf(
         tint: base_color * occlusion,
-        roughness_u: roughness2);
+        roughness_u: anisotropy_roughness_u,
+        roughness_v: anisotropy_roughness_v,
+        tangent_u: anisotropy_tangent_u);
 
-    // apply iridescence and make the strength adjustable using a weighted layer 
+    // apply iridescence and make the strength adjustable using a weighted layer
     // according to KHR_materials_iridescence spec: using dielectric thin film fresnel for metals, too
     color base_color_sqrt = math::min(math::sqrt(math::saturate(base_color * occlusion)), color(0.99f));
     color dielectric_ior = (color(1.0f) + base_color_sqrt) / (color(1.0f) - base_color_sqrt);
@@ -738,10 +780,10 @@ export material gltf_material(
     );
 
     // apply sheen to the dielectric component
-    // add the sheen_color as weight in an outer layer to be able to blend and disable on default 
+    // add the sheen_color as weight in an outer layer to be able to blend and disable on default
     // otherwise, sheen would be applied and tinted black
     bsdf dielectric_sheen_component = df::color_weighted_layer(
-        weight: sheen_color, 
+        weight: sheen_color,
         layer: df::sheen_bsdf(
             roughness: sheen_roughness * sheen_roughness,
             tint:  color(1.0),
@@ -781,11 +823,13 @@ export material gltf_material(
         )
     ),
     volume: material_volume(
-        absorption_coefficient: thin_walled ? color(0.0) : -math::log(attenuation_color) / attenuation_distance
+        absorption_coefficient: thin_walled
+            ? color(0.0)
+            : (-math::log(attenuation_color) / attenuation_distance)
     ),
     ior: color(ior),
     geometry: material_geometry(
-        cutout_opacity: compute_opacity(alpha_mode, alpha, alpha_cutoff) 
+        cutout_opacity: compute_opacity(alpha_mode, alpha, alpha_cutoff)
     )
 );
 
@@ -833,7 +877,7 @@ export material gltf_material_khr_specular_glossiness(
         anno::display_name("Normal Texture"),
         anno::description("Base layer normal map.")
     ]],
-    
+
     // emission
     uniform color emissive_factor = color(0.0)
     [[
@@ -851,7 +895,7 @@ export material gltf_material_khr_specular_glossiness(
     // KHR_materials_emissive_strength
     uniform float emissive_strength = 1.0
     [[
-        anno::hard_range(0.0, ::limits::FLOAT_MAX),
+        anno::soft_range(0.0, 10000),
         anno::in_group("Emission"),
         anno::display_name("Emissive Strength"),
         anno::description("The maximum strength of the emissive texture. Multiplied to the 'Emissive Factor'."),
@@ -888,8 +932,9 @@ export material gltf_material_khr_specular_glossiness(
         anno::description("Select between transparent (0.0) and opaque (1.0). Multiplied to the base color texture alpha channel if available."),
         anno::enable_if("alpha_mode!=opaque")
     ]],
+
     // alpha for gltf_alpha_mode::mask
-    uniform float alpha_cutoff  = 0.5
+    uniform float alpha_cutoff = 0.5
     [[
         anno::hard_range(0.0, 1.0),
         anno::in_group("Opacity"),
@@ -922,30 +967,30 @@ export material gltf_material_khr_specular_glossiness(
 
     //color c_diff = diffuse * (1.0 - math::maxvalue(specular));
     float F_0 = math::max_value(specular);
-    color F_0_tint = F_0==0.0? color(0.0) : (specular/F_0); 
+    color F_0_tint = F_0==0.0? color(0.0) : (specular/F_0);
 
     float a = (1.0 - glossiness) * (1.0 - glossiness);
 
-        // diffuse BRDF
-        bsdf diffuse_brdf = df::diffuse_reflection_bsdf(
-        tint: diffuse * occlusion, 
+    // diffuse BRDF
+    bsdf diffuse_brdf = df::diffuse_reflection_bsdf(
+        tint: diffuse * occlusion,
         roughness: 0.0);
 
-        // specular BRDF
-        bsdf specular_brdf = df::microfacet_ggx_smith_bsdf(
+    // specular BRDF
+    bsdf specular_brdf = df::microfacet_ggx_smith_bsdf(
         tint: color(occlusion),
-            roughness_u: a, 
-        roughness_v: a, 
+        roughness_u: a,
+        roughness_v: a,
         tangent_u: state::texture_tangent_u(0));
-        bsdf tinted_specular =  df::directional_factor(normal_tint: F_0_tint, grazing_tint: color(1.0), exponent: 5.0, base: specular_brdf);
-        //- Custom curve for specular/diffuse angular mix
-        bsdf diffuse_specular_mix = df::custom_curve_layer(
-        normal_reflectivity: F_0, 
-        grazing_reflectivity: 1.0, 
-        exponent: 5.0, 
-                weight: 1.0, 
-        layer: tinted_specular, 
-        base: diffuse_brdf, 
+    bsdf tinted_specular =  df::directional_factor(normal_tint: F_0_tint, grazing_tint: color(1.0), exponent: 5.0, base: specular_brdf);
+    //- Custom curve for specular/diffuse angular mix
+    bsdf diffuse_specular_mix = df::custom_curve_layer(
+        normal_reflectivity: F_0,
+        grazing_reflectivity: 1.0,
+        exponent: 5.0,
+        weight: 1.0,
+        layer: tinted_specular,
+        base: diffuse_brdf,
         normal: normal);
 
 } in material(
@@ -958,6 +1003,6 @@ export material gltf_material_khr_specular_glossiness(
     ),
     geometry: material_geometry(
         normal: normal,
-        cutout_opacity: compute_opacity(alpha_mode, alpha, alpha_cutoff) 
+        cutout_opacity: compute_opacity(alpha_mode, alpha, alpha_cutoff)
     )
 );

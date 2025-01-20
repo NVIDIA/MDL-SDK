@@ -63,7 +63,7 @@ public:
     ///
     /// \return
     ///                             -  0: The modules are compatible.
-    ///                             - -1: Invalid parameters (\c NULL pointer).
+    ///                             - -1: Invalid parameters (\c nullptr).
     ///                             - -2: An error occurred during module comparison.
     ///                                   Please check the context for details.
     virtual Sint32 compare_modules(
@@ -71,7 +71,7 @@ public:
         const char*             repl_file_name,
         const IArray*           search_paths,
         IMdl_execution_context* context) const = 0;
-        
+
     /// Compares two archives for compatibility.
     ///
     /// \param[in]  archive_fname1  Path to first archive.
@@ -83,7 +83,7 @@ public:
     ///
     /// \return
     ///                             -  0: The archives are compatible.
-    ///                             - -1: Invalid parameters (\c NULL pointer).
+    ///                             - -1: Invalid parameters (\c nullptr).
     ///                             - -2: An error occurred during archive comparison.
     ///                                   Please check the context for details.
     virtual Sint32 compare_archives(

@@ -163,38 +163,38 @@ void test_interface_IData_collection(
 
     // check get_value() via index
     m_iinterface = data_collection->get_value<T>( zero_size);
-    MI_CHECK( m_iinterface.is_valid_interface() ^ untyped);
+    MI_CHECK( !!m_iinterface ^ untyped);
     m_iinterface = data_collection->get_value<T>( N-1);
-    MI_CHECK( m_iinterface.is_valid_interface() ^ untyped);
+    MI_CHECK( !!m_iinterface ^ untyped);
     MI_CHECK( !data_collection->get_value<T>( N));
 
     c_iinterface = const_data_collection->get_value<T>( zero_size);
-    MI_CHECK( c_iinterface.is_valid_interface() ^ untyped);
+    MI_CHECK( !!c_iinterface ^ untyped);
     c_iinterface = const_data_collection->get_value<T>( N-1);
-    MI_CHECK( c_iinterface.is_valid_interface() ^ untyped);
+    MI_CHECK( !!c_iinterface ^ untyped);
     MI_CHECK( !const_data_collection->get_value<T>( N));
 
     // check get_value() via key
     m_iinterface = data_collection->get_value<T>( "0");
-    MI_CHECK( m_iinterface.is_valid_interface() ^ untyped);
+    MI_CHECK( !!m_iinterface ^ untyped);
     m_iinterface = data_collection->get_value<T>( N_minus_1_string.c_str());
-    MI_CHECK( m_iinterface.is_valid_interface() ^ untyped);
+    MI_CHECK( !!m_iinterface ^ untyped);
     MI_CHECK( !data_collection->get_value<T>( "-1"));
     MI_CHECK( !data_collection->get_value<T>( N_string.c_str()));
     MI_CHECK( !data_collection->get_value<T>( zero_string));
     MI_CHECK( !data_collection->get_value<T>( "no_number"));
 
     c_iinterface = const_data_collection->get_value<T>( "0");
-    MI_CHECK( c_iinterface.is_valid_interface() ^ untyped);
+    MI_CHECK( !!c_iinterface ^ untyped);
     c_iinterface = const_data_collection->get_value<T>( N_minus_1_string.c_str());
-    MI_CHECK( c_iinterface.is_valid_interface() ^ untyped);
+    MI_CHECK( !!c_iinterface ^ untyped);
     MI_CHECK( !const_data_collection->get_value<T>( "-1"));
     MI_CHECK( !const_data_collection->get_value<T>( N_string.c_str()));
     MI_CHECK( !const_data_collection->get_value<T>( zero_string));
     MI_CHECK( !const_data_collection->get_value<T>( "no_number"));
 
     mi::base::Handle<mi::IVoid> void_( transaction->create<mi::IVoid>( "Void"));
-    MI_CHECK( void_.is_valid_interface());
+    MI_CHECK( void_);
     MI_CHECK_EQUAL( 1, GET_REFCOUNT( void_.get()));
 
     // check set_value() via index
@@ -249,7 +249,7 @@ void test_interface_IArray(
     // check that all elements get initialized for typed arrays
     for( mi::Size i=0; i < N; ++i) {
         mi::base::Handle<mi::base::IInterface> element( array->get_element( i));
-        MI_CHECK( element.is_valid_interface());
+        MI_CHECK( element);
     }
 
     // check that out-of-bound read access returns 0
@@ -308,7 +308,7 @@ void test_interface_IArray(
         return;
 
     mi::base::Handle<mi::IVoid> void_( transaction->create<mi::IVoid>( "Void"));
-    MI_CHECK( void_.is_valid_interface());
+    MI_CHECK( void_);
     MI_CHECK_EQUAL( 1, GET_REFCOUNT( void_.get()));
     if( untyped) {
         // check that untyped arrays accept any types
@@ -350,7 +350,7 @@ void test_interface_IDynamic_array(
     // check that additional elements get initialized for typed arrays
     for( mi::Size i = N/2 + 1; i < N; ++i) {
         mi::base::Handle<mi::base::IInterface> element( array->get_element( i));
-        MI_CHECK( element.is_valid_interface());
+        MI_CHECK( element);
     }
 
     // set length to 0
@@ -360,7 +360,7 @@ void test_interface_IDynamic_array(
 
     mi::base::Handle<T> element( transaction->create<T>( element_type_name));
     set_element_property( element.get(), 42);
-    MI_CHECK( element.is_valid_interface());
+    MI_CHECK( element);
     MI_CHECK_EQUAL( 1, GET_REFCOUNT( element.get()));
 
     // push back element
@@ -494,7 +494,7 @@ void test_interface_IDynamic_array(
     MI_CHECK_EQUAL( 1, GET_REFCOUNT( element.get()));
 
     mi::base::Handle<mi::IVoid> void_( transaction->create<mi::IVoid>( "Void"));
-    MI_CHECK( void_.is_valid_interface());
+    MI_CHECK( void_);
     MI_CHECK_EQUAL( 1, GET_REFCOUNT( void_.get()));
     if( untyped) {
         // check that untyped arrays accept any types
@@ -526,7 +526,7 @@ void test(
     const char* element_type_name)
 {
     mi::base::Handle<mi::IData> data( transaction->create<mi::IData>( element_type_name));
-    bool untyped = !data.is_valid_interface();
+    bool untyped = !data;
     std::string type_name_prefix = untyped ? "Interface" : element_type_name;
 
     // test static array of size N
@@ -535,7 +535,7 @@ void test(
     std::string type_name1 = s1.str();
     mi::base::Handle<mi::IArray> array(
         transaction->create<mi::IArray>( type_name1.c_str()));
-    MI_CHECK( array.is_valid_interface());
+    MI_CHECK( array);
     test_interface_IData_collection<T>(
         transaction, array.get(), N, type_name1.c_str(), element_type_name, untyped, false);
     test_interface_IArray<T>(
@@ -546,7 +546,7 @@ void test(
     type_name2 += "[]";
     mi::base::Handle<mi::IDynamic_array> dynamic_array(
         transaction->create<mi::IDynamic_array>( type_name2.c_str()));
-    MI_CHECK( dynamic_array.is_valid_interface());
+    MI_CHECK( dynamic_array);
     dynamic_array->set_length( N);
     test_interface_IData_collection<T>(
         transaction, dynamic_array.get(), N, type_name2.c_str(), element_type_name, untyped, false);
@@ -559,7 +559,7 @@ void test(
     std::string type_name4 = type_name_prefix;
     type_name4 += "[-42]";
     mi::base::Handle<mi::IArray> array4( transaction->create<mi::IArray>( type_name4.c_str()));
-    MI_CHECK( !array4.is_valid_interface());
+    MI_CHECK( !array4);
 }
 
 
@@ -591,7 +591,7 @@ void run_tests( mi::neuraylib::INeuray* neuray)
 MI_TEST_AUTO_FUNCTION( test_types_array )
 {
     mi::base::Handle<mi::neuraylib::INeuray> neuray( load_and_get_ineuray());
-    MI_CHECK( neuray.is_valid_interface());
+    MI_CHECK( neuray);
 
     {
         mi::base::Handle<mi::neuraylib::IDebug_configuration> debug_configuration(

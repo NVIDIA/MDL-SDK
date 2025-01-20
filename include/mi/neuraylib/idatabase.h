@@ -324,8 +324,8 @@ public:
     /// \note A scope continues to exist if the pointer returned by this method is released. Use
     ///       #remove_scope() to remove a scope.
     ///
-    /// \param parent         The parent scope for this scope. If the value is \c NULL the created
-    ///                       scope will be a child of the global scope.
+    /// \param parent         The parent scope for this scope. If the value is \c nullptr the
+    ///                       created scope will be a child of the global scope.
     /// \param privacy_level  The privacy level of the scope. This must be higher than the
     ///                       privacy level of the parent scope. The privacy level of the global
     ///                       scope is 0 (and the global scope is the only scope with privacy level
@@ -337,7 +337,7 @@ public:
     ///                       will be removed. If the scope is not temporary, the default,
     ///                       then when the creating host is removed from the cluster the
     ///                       scope and all contained data will remain in the database.
-    /// \return               The created scope or \c NULL if something went wrong.
+    /// \return               The created scope or \c nullptr if something went wrong.
     virtual IScope* create_scope( IScope* parent, Uint8 privacy_level = 0, bool temp = false) = 0;
 
     /// Creates or retrieves a new named scope at the given privacy level with the given parent
@@ -347,27 +347,27 @@ public:
     ///                       If a scope with the same name exists already then it will be returned
     ///                       if the parent and privacy level are identical. Otherwise
     ///                       creating the scope will fail.
-    /// \param parent         The parent scope for this scope. If the value is \c NULL the created
-    ///                       scope will be a child of the global scope.
+    /// \param parent         The parent scope for this scope. If the value is \c nullptr the
+    ///                       created scope will be a child of the global scope.
     /// \param privacy_level  The privacy level of the scope. This must be higher than the
     ///                       privacy level of the parent scope. The privacy level of the global
     ///                       scope is 0 (and the global scope is the only scope with privacy level
     ///                       0). The default value of 0 indicates the privacy level of the parent
     ///                       scope plus 1.
-    /// \return               The created scope or \c NULL if something went wrong.
+    /// \return               The created scope or \c nullptr if something went wrong.
     virtual IScope* create_or_get_named_scope(
-        const char* name, IScope* parent = 0,  Uint8 privacy_level = 0) = 0;
+        const char* name, IScope* parent = nullptr,  Uint8 privacy_level = 0) = 0;
 
     /// Looks up and returns a scope with a given ID.
     ///
     /// \param id             The ID of the scope as returned by #mi::neuraylib::IScope::get_id().
-    /// \return               The found scope or \c NULL if no such scope exists.
+    /// \return               The found scope or \c nullptr if no such scope exists.
     virtual IScope* get_scope( const char* id) const = 0;
 
     /// Looks up and returns a scope with a given name.
     ///
     /// \param name           The name of the scope
-    /// \return               The found scope or \c NULL if no such scope exists.
+    /// \return               The found scope or \c nullptr if no such scope exists.
     virtual IScope* get_named_scope( const char* name) const = 0;
 
     /// Removes a scope with the specified ID.

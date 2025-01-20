@@ -32,6 +32,7 @@
 #include <mi/mdl/mdl_expressions.h>
 #include <mi/mdl/mdl_generated_dag.h>
 #include "mdl/compiler/compilercore/compilercore_allocator.h"
+#include "mdl/compiler/compilercore/compilercore_cstring_hash.h"
 
 namespace mi {
 namespace mdl {
@@ -53,6 +54,44 @@ class IValue_resource;
 class Symbol_table;
 class Type_factory;
 class Value_factory;
+
+/// Helper struct to map (local) AST file IDs to (global) DAG file IDs.
+struct File_id_table {
+    size_t module_id;   ///< the ID of the module that "produces" this table
+    size_t len;         ///< number of entries in this table
+    size_t map[1];      ///< the table itself
+
+public:
+    /// Constructor.
+    File_id_table(
+        size_t module_id,
+        size_t len)
+        : module_id(module_id)
+        , len(len)
+    {
+        memset(map, 0, sizeof(map[0]) * len);
+    }
+
+    /// Get DAG id for an AST id.
+    size_t get_dag_id(size_t ast_id) const {
+        if (ast_id < len) {
+            return map[ast_id];
+        }
+        MDL_ASSERT(!"cannot map unknown file ID");
+        return 0;
+    }
+
+    /// Set a DAG_id for an AST_id.
+    void set_dag_id(size_t ast_id, size_t dag_id)
+    {
+        if (ast_id < len) {
+            map[ast_id] = dag_id;
+            return;
+        } else {
+            MDL_ASSERT(!"cannot map unknown file ID");
+        }
+    }
+};
 
 /// Builder from AST-nodes to DAG nodes.
 class DAG_builder {
@@ -291,7 +330,28 @@ public:
     ///
     /// \note Does NOT increase the reference count of the returned
     ///       module, do NOT decrease it just because of this call.
-    IModule const *tos_module() const;
+    Module const *tos_module() const;
+
+    /// Get the unique file ID for the given file name.
+    ///
+    /// \param fname  a file name
+    ///
+    /// \return  the unique ID for this file name inside the current builder
+    size_t get_unique_file_id(char const *fname);
+
+    /// Get the unique file ID for the given module.
+    ///
+    /// \param mod  an MDL module
+    ///
+    /// \return  the unique ID for this file name inside the current builder
+    size_t get_unique_file_id(Module const *mod);
+
+    /// Get the file ID mapping table for a given module.
+    ///
+    /// \param mod  the module
+    ///
+    /// \return the File ID table for this module, creating one if it does not exists
+    File_id_table const *get_file_id_table(Module const *mod);
 
     /// Try to inline the given call.
     ///
@@ -338,13 +398,19 @@ public:
     /// Returns true if a conditional operator on *df types was created.
     bool cond_df_created() const { return m_conditional_df_created; }
 
-    /// Push a module on the module stack.
-    void push_module(IModule const *mod);
+    /// Push a module on the module stack and process debug info of the module.
+    ///
+    /// \param  the module to push
+    ///
+    /// \Note: Should not be called directly, use \c Module_scope
+    void push_module(Module const *mod);
 
     /// Pop a module from the module stack.
+    ///
+    /// \Note: Should not be called directly, use \c Module_scope
     void pop_module();
 
-    /// Returns true if error were detected (and clear the flag).
+    /// Returns true if errors were detected (and clear the flag).
     bool error_state()
     {
         bool res = m_error_detected;
@@ -366,10 +432,12 @@ public:
     /// \param compound  the compound value
     /// \param field     the name of the field
     /// \param f_type    the type of the field
+    /// \param dbg_info  the debug info for this field select if any
     DAG_node const *create_field_select(
         DAG_node const *compound,
         char const     *field,
-        IType const    *f_type);
+        IType const    *f_type,
+        DAG_DbgInfo    dbg_info);
 
 private:
     /// Get the allocator.
@@ -386,6 +454,17 @@ private:
         IDeclaration_function const *decl,
         int                         index);
 
+    /// Convert an AST position into a DAG debug info.
+    ///
+    /// \param pos  the AST position if any
+    DAG_DbgInfo get_dbg_info(Position const *pos);
+
+    /// Convert an AST position into a DAG debug info.
+    ///
+    /// \param ast  an AST entity
+    template<typename AST>
+    DAG_DbgInfo get_dbg_info(AST ast) { return this->get_dbg_info(&ast->access_position()); }
+
     /// Set array size variable for size-deferred arrays, if necessary.
     ///
     /// \param decl         The declaration of the function/material.
@@ -398,17 +477,19 @@ private:
 
     /// Run local optimizations for a binary expression.
     ///
-    /// \param op    The opcode of the binary expression.
-    /// \param l     The left argument.
-    /// \param r     The right argument.
-    /// \param type  The type of the binary expression.
+    /// \param op        The opcode of the binary expression.
+    /// \param l         The left argument.
+    /// \param r         The right argument.
+    /// \param type      The type of the binary expression.
+    /// \param dbg_info  The debug info for this expression if any.
     ///
     /// \returns   The DAG IR node representing the requested expression.
     DAG_node const *optimize_binary_operator(
         IExpression_binary::Operator op,
         DAG_node const               *l,
         DAG_node const               *r,
-        IType const                  *type);
+        IType const                  *type,
+        DAG_DbgInfo                  dbg_info);
 
     /// Convert an MDL literal expression to a DAG constant.
     ///
@@ -440,11 +521,13 @@ private:
     /// \param index   the index of the element that will be inserted
     /// \param c_node  the node representing the compound value
     /// \param e_node  the node representing the element value that will be inserted at index
+    /// \param pos     the source position for this instruction if any
     DAG_node const *create_struct_insert(
         IType_struct const *s_type,
         int                index,
         DAG_node const     *c_val,
-        DAG_node const     *e_val);
+        DAG_node const     *e_val,
+        Position const     *pos);
 
     /// Creates a insert pseudo-instruction on a vector value.
     ///
@@ -452,11 +535,13 @@ private:
     /// \param index   the index of the element that will be inserted
     /// \param c_node  the node representing the compound value
     /// \param e_node  the node representing the element value that will be inserted at index
+    /// \param pos     the source position for this instruction if any
     DAG_node const *create_vector_insert(
         IType_vector const *v_type,
         int                index,
         DAG_node const     *c_val,
-        DAG_node const     *e_val);
+        DAG_node const     *e_val,
+        Position const     *pos);
 
     /// Convert a node to a destination type.
     ///
@@ -564,7 +649,7 @@ private:
     Definition_temporary_map m_tmp_value_map;
 
     /// The type of the module stack.
-    typedef vector<mi::base::Handle<const IModule> >::Type Module_stack;
+    typedef vector<mi::base::Handle<Module const> >::Type Module_stack;
 
     /// The module stack.
     Module_stack m_module_stack;
@@ -574,6 +659,9 @@ private:
 
     /// Helper: Accessible parameters when translating an expression.
     Definition_vector m_accesible_parameters;
+
+    /// The current file ID table.
+    File_id_table const *m_curr_file_id_table;
 
     enum Inline_skip_flag
     {
@@ -590,6 +678,19 @@ private:
 
     /// If non-empty, the list of all called forbidden functions.
     Ref_vector m_error_calls;
+
+    /// The Arena we allocate file tables on.
+    Memory_arena m_file_table_arena;
+
+    typedef ptr_hash_map<Module const, File_id_table const *>::Type  File_ID_table_map;
+
+    /// Map modules to its file ID table.
+    File_ID_table_map m_module_2_file_id_map;
+
+    typedef hash_map<char const *, size_t, cstring_hash, cstring_equal_to>::Type  File_2_ID_map;
+
+    /// Map source file names to file ID's.
+    File_2_ID_map m_file_2_id_map;
 
     /// If true, local calls are forbidden in materials.
     bool m_forbid_local_calls;
@@ -614,12 +715,13 @@ public:
     ///
     /// \param builder  the DAG_builder
     /// \param mod  the module to push
-    Module_scope(DAG_builder &builder, IModule const *mod)
+    Module_scope(DAG_builder &builder, Module const *mod)
     : m_builder(builder)
     {
         builder.push_module(mod);
     }
 
+    /// Destructor.
     ~Module_scope() { m_builder.pop_module(); }
 
 private:

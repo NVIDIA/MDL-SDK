@@ -34,23 +34,23 @@ function(FIND_BOOST_EXT)
         set(Boost_NO_SYSTEM_PATHS ON CACHE INTERNAL "")
     endif()
 
-    set(Boost_NO_BOOST_CMAKE ON CACHE INTERNAL "")
-    set(Boost_NO_WARN_NEW_VERSIONS ON CACHE INTERNAL "")
     #set(Boost_DEBUG ON)
 
-    if(MDL_BUILD_OPENIMAGEIO_PLUGIN OR MDL_BUILD_CORE_EXAMPLES)
-        # OpenImageIO needs Boost::filesystem and Boost::thread.
-        find_package(Boost COMPONENTS filesystem thread)
-    else()
-        # Otherwise the Boost headers are sufficient.
-        find_package(Boost)
-    endif()
+    find_package(Boost)
 
     set(Boost_FOUND ${Boost_FOUND} CACHE INTERNAL "Dependency boost has been resolved.")
 
     if(NOT Boost_FOUND)
         message(FATAL_ERROR "The dependency \"boost\" could not be resolved. "
             "Please specify 'CMAKE_TOOLCHAIN_FILE'.")
+    else()
+        set(MDL_DEPENDENCY_BOOST_INCLUDE ${Boost_INCLUDE_DIRS} CACHE INTERNAL
+            "Boost header directory")
+        set(MDL_BOOST_FOUND ON CACHE INTERNAL "")
+
+        if(MDL_LOG_DEPENDENCIES)
+            message(STATUS "[INFO] MDL_DEPENDENCY_BOOST_INCLUDE:             ${MDL_DEPENDENCY_BOOST_INCLUDE}")
+        endif()
     endif()
-    
+
 endfunction()

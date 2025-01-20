@@ -34,6 +34,106 @@
 #include "mdltlc_pprint.h"
 #include "mdltlc_types.h"
 
+/// Table mapping symbols to types, signatures, semantics, etc.
+///
+/// This table is used to store all the bindings that are
+/// - builtin (known to the MDL compiler)
+/// - loaded from stdlib MDL modules (state, df, etc.)
+/// - declared as distiller node types (from distiller definitions)
+class Def_table {
+public:
+    class Def_entry {
+        Symbol const *m_symbol;
+        Symbol const *m_qualified_symbol;
+        Type const *m_type;
+        char const *m_signature;
+        mi::mdl::IDefinition::Semantics m_semantics;
+        mi::mdl::IType const *m_mdl_type;
+
+    public:
+        Def_entry(
+            Symbol const *symbol,
+            Symbol const *qualified_symbol,
+            Type const *type,
+            char const *signature,
+            mi::mdl::IDefinition::Semantics semantics,
+            mi::mdl::IType const *mdl_type)
+        : m_symbol(symbol)
+        , m_qualified_symbol(qualified_symbol)
+        , m_type(type)
+        , m_signature(signature)
+        , m_semantics(semantics)
+        , m_mdl_type(mdl_type) {}
+
+        Symbol const *get_symbol() const { return m_symbol; }
+        Symbol const *get_qualified_symbol() const { return m_qualified_symbol; }
+        Type const *get_type() const { return m_type; }
+        char const *get_signature() const { return m_signature; }
+        mi::mdl::IDefinition::Semantics get_semantics() const { return m_semantics; }
+        mi::mdl::IType const *get_mdl_type() const { return m_mdl_type; }
+    };
+
+    typedef mi::mdl::vector<Def_entry>::Type Def_entry_list;
+    typedef mi::mdl::ptr_hash_map<Symbol const, Def_entry_list>::Type Def_entry_map;
+
+    /// Add a binding for the given symbol.
+    /// The signature is copied into the definition table's arena.
+    void add(
+        Symbol const *symbol,
+        Symbol const *qualified_symbol,
+        Type const *type,
+        char const *signature,
+        mi::mdl::IDefinition::Semantics semantics,
+        mi::mdl::IType const *mdl_type) {
+        Def_entry e(symbol, qualified_symbol, type, 
+            Arena_strdup(m_arena, signature), semantics,
+            mdl_type);
+        Def_entry_map::iterator it = m_entries.find(symbol);
+        if (it == m_entries.end()) {
+            Def_entry_list defs(m_arena.get_allocator());
+            defs.push_back(std::move(e));
+            m_entries.insert({ symbol, std::move(defs) });
+        } else {
+            it->second.push_back(std::move(e));
+        }
+    }
+
+    Def_entry_map::const_iterator find(Symbol const *symbol) const {
+        return m_entries.find(symbol);
+    }
+
+    void dump(pp::Pretty_print &p) {
+        p.string("Definition table");
+        for (auto &pr : m_entries) {
+            for (auto &e : pr.second) {
+                p.string(e.get_qualified_symbol()->get_name());
+                p.space();
+                p.colon();
+                p.space();
+                p.with_indent([&](pp::Pretty_print &p) {
+                    e.get_type()->pp(p);
+                    auto sig = e.get_signature();
+                    if (sig) {
+                        p.space();
+                        p.string(sig);
+                    }
+                    });
+                p.nl();
+            }
+        }
+    }
+
+    Def_table(mi::mdl::Memory_arena &arena)
+    : m_arena(arena)
+    , m_entries(arena.get_allocator()) {}
+
+    Def_entry_map const &get_entries() const { return m_entries; }
+
+private:
+
+    mi::mdl::Memory_arena &m_arena;
+    Def_entry_map m_entries;
+};
 class Environment {
 public:
     enum Kind {
@@ -46,7 +146,7 @@ public:
     //
     // Type in the following is not const because type variables are
     // bound during type inference.
-    typedef mi::mdl::vector<Type *>::Type Type_list;
+    typedef mi::mdl::vector<std::pair<Type const*, char const *> >::Type Type_list;
 
     // Map from symbols (names) to type lists.
     typedef mi::mdl::ptr_hash_map<Symbol const, Type_list >::Type Type_map;
@@ -71,7 +171,10 @@ public:
     /// \return true if this is the first binding for `name` in the
     ///         environment, return false if there already were
     ///         bindings
-    bool bind(Symbol const *name, Type *type);
+    bool bind(
+        Symbol const *name, 
+        Type const *type,
+        char const *signature);
 
     /// Look up a symbol in the environments and it's enclosing
     /// environments.

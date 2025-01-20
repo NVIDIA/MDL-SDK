@@ -63,6 +63,7 @@ namespace MI {
 
 namespace DBLIGHT {
 
+/// Dumps the global accumulated statistics and the given tag to the stream.
 void dump_statistics( std::ostream& s, mi::Uint32 next_tag);
 
 struct Statistics_data
@@ -104,9 +105,15 @@ extern Statistics_data g_get_tag_reference_count;
 extern Statistics_data g_get_tag_version;
 extern Statistics_data g_can_reference_tag;
 extern Statistics_data g_get_tag_is_removed;
+extern Statistics_data g_block_commit_or_abort;
+extern Statistics_data g_unblock_commit_or_abort;
+extern Statistics_data g_scope_get_journal;
+extern Statistics_data g_transaction_get_journal;
+
 extern Statistics_data g_lookup_info_by_tag;
 extern Statistics_data g_lookup_info_by_name;
 extern Statistics_data g_garbage_collection;
+
 
 } // namespace DBLIGHT
 

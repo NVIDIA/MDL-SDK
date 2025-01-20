@@ -50,8 +50,8 @@ function(FIND_GLFW_EXT)
     set(MDL_GLFW_FOUND ON CACHE INTERNAL "")
 
     if(MDL_LOG_DEPENDENCIES)
-        message(STATUS "[INFO] MDL_DEPENDENCY_GLFW_INCLUDE:          ${MDL_DEPENDENCY_GLFW_INCLUDE}")
-        message(STATUS "[INFO] MDL_DEPENDENCY_GLFW_LIBS:             ${MDL_DEPENDENCY_GLFW_LIBS}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_GLFW_INCLUDE:              ${MDL_DEPENDENCY_GLFW_INCLUDE}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_GLFW_LIBS:                 ${MDL_DEPENDENCY_GLFW_LIBS}")
     endif()
 
 endfunction()

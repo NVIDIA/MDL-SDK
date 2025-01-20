@@ -63,8 +63,11 @@ if(NOT __TARGET_ADD_DEPENDENCY_NO_RUNTIME_COPY)
             # instead of copying, we set the rpath for the MDL core in the executables
             # the rpath for plugins is set in the MDL core library itself
             target_add_rpath(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
-                RPATHS
+                BUILD_RPATHS
                     ${CMAKE_BINARY_DIR}/src/prod/lib/mdl_core/${CMAKE_BUILD_TYPE}
+                INSTALL_RPATHS
+                    "../${CMAKE_INSTALL_LIBDIR}"       # tools
+                    "../../../${CMAKE_INSTALL_LIBDIR}" # examples
                 )
 
     endif()

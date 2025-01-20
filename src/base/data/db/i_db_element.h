@@ -47,7 +47,7 @@ class Transaction;
 /// Base class for all database elements.
 ///
 /// Database elements are not reference-counted. Storing them in the database passes ownership from
-/// the creator to the corresponding Info.
+/// the creator to the database.
 class Element_base : public SERIAL::Serializable
 {
 public:

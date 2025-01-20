@@ -4,6 +4,6 @@
 
 rules Numbers topdown {
     import df;
-    bsdf() --> diffuse_reflection_bsdf( color(23.23), 24.24, "test");
+    bsdf() --> diffuse_reflection_bsdf( color(23.23), 24.24, color(0.0), "test");
     diffuse_reflection_bsdf(_) --> diffuse_reflection_bsdf(color(1.0 * 3.0, 2.0, 3.0) + 5.0);
 }

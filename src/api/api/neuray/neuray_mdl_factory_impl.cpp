@@ -125,10 +125,10 @@ mi::neuraylib::IValue_texture* Mdl_factory_impl::create_texture(
     mi::neuraylib::IMdl_execution_context* context)
 {
     MDL::Execution_context default_context;
-    MDL::Execution_context* mdl_context = unwrap_context( context, default_context);
+    MDL::Execution_context* mdl_context = unwrap_and_clear_context( context, default_context);
 
     if( !transaction) {
-        add_error_message( mdl_context, "Invalid parameters (NULL pointer).", -1);
+        add_error_message( mdl_context, "Invalid parameters (nullptr).", -1);
         return nullptr;
     }
 
@@ -152,10 +152,10 @@ mi::neuraylib::IValue_light_profile* Mdl_factory_impl::create_light_profile(
     mi::neuraylib::IMdl_execution_context* context)
 {
     MDL::Execution_context default_context;
-    MDL::Execution_context* mdl_context = unwrap_context( context, default_context);
+    MDL::Execution_context* mdl_context = unwrap_and_clear_context( context, default_context);
 
     if( !transaction) {
-        add_error_message( mdl_context, "Invalid parameters (NULL pointer).", -1);
+        add_error_message( mdl_context, "Invalid parameters (nullptr).", -1);
         return nullptr;
     }
 
@@ -178,10 +178,10 @@ mi::neuraylib::IValue_bsdf_measurement* Mdl_factory_impl::create_bsdf_measuremen
     mi::neuraylib::IMdl_execution_context* context)
 {
     MDL::Execution_context default_context;
-    MDL::Execution_context* mdl_context = unwrap_context( context, default_context);
+    MDL::Execution_context* mdl_context = unwrap_and_clear_context( context, default_context);
 
     if( !transaction) {
-        add_error_message( mdl_context, "Invalid parameters (NULL pointer).", -1);
+        add_error_message( mdl_context, "Invalid parameters (nullptr).", -1);
         return nullptr;
     }
 
@@ -208,7 +208,7 @@ mi::neuraylib::IMdl_module_builder* Mdl_factory_impl::create_module_builder(
     MDL::Execution_context* mdl_context = unwrap_and_clear_context( context, default_context);
 
     if( !transaction || !module_name) {
-        add_error_message( mdl_context, "Invalid parameters (NULL pointer).", -1);
+        add_error_message( mdl_context, "Invalid parameters (nullptr).", -1);
         return nullptr;
     }
 
@@ -225,7 +225,7 @@ mi::neuraylib::IMdl_module_transformer* Mdl_factory_impl::create_module_transfor
     MDL::Execution_context* mdl_context = unwrap_and_clear_context( context, default_context);
 
     if( !transaction || !module_name) {
-        add_error_message( mdl_context, "Invalid parameters (NULL pointer).", -1);
+        add_error_message( mdl_context, "Invalid parameters (nullptr).", -1);
         return nullptr;
     }
 
@@ -304,7 +304,7 @@ void Mdl_factory_impl::analyze_uniform(
         error_path->set_c_str( "");
 
     if( !transaction || !root_name) {
-        add_error_message( context_impl, "Invalid parameters (NULL pointer).", -1);
+        add_error_message( context_impl, "Invalid parameters (nullptr).", -1);
         return;
     }
 

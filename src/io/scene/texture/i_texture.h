@@ -67,7 +67,7 @@ public:
 
     /// Default constructor.
     ///
-    /// The reference is set to a NULL tag.
+    /// The reference is set to the invalid tag.
     Texture();
 
     /// Copy constructor.
@@ -181,7 +181,7 @@ private:
 /// \param gamma                 The gamma value of the texture.
 /// \param[out] result
 ///                              -   0: Success.
-///                              -  -1: Invalid parameters (\c NULL pointer or empty image set).
+///                              -  -1: Invalid parameters (\c nullptr pointer or empty image set).
 ///                              -  -3: No image plugin found to handle the data.
 ///                              -  -5: Failure to open the file.
 ///                              -  -6: The reader does not support absolute access.

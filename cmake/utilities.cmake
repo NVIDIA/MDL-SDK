@@ -46,22 +46,6 @@ function(TARGET_BUILD_SETUP)
     set(multiValueArgs)
     cmake_parse_arguments(TARGET_BUILD_SETUP "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
 
-    # options depending on the target type
-    get_target_property(_TARGET_TYPE ${TARGET_BUILD_SETUP_TARGET} TYPE)
-
-    # very simple set of flags depending on the compiler instead of the combination of compiler, OS, ...
-    # for more complex scenarios, replace that
-
-    if(WINDOWS AND TARGET_BUILD_SETUP_WINDOWS_UNICODE)
-        set(_ADDITIONAL_COMPILER_DEFINES
-            "_UNICODE"
-            "UNICODE"
-        )
-        if(MDL_LOG_FILE_DEPENDENCIES)
-            MESSAGE(STATUS "- add defines:    '_UNICODE' and 'UNICODE'")
-        endif()
-    endif()
-
     # GENERAL
     #---------------------------------------------------------------------------------------
 
@@ -75,9 +59,17 @@ function(TARGET_BUILD_SETUP)
             "$<$<CONFIG:DEBUG>:_DEBUG>"
             "BIT64=1"
             "X86=1"
-            ${_ADDITIONAL_COMPILER_DEFINES}      # additional build defines
             ${MDL_ADDITIONAL_COMPILER_DEFINES}   # additional user defines
         )
+
+    # setup specific to shared libraries
+    get_target_property(_TARGET_TYPE ${TARGET_BUILD_SETUP_TARGET} TYPE)
+    if (_TARGET_TYPE STREQUAL "SHARED_LIBRARY" OR _TARGET_TYPE STREQUAL "MODULE_LIBRARY")
+        target_compile_definitions(${TARGET_BUILD_SETUP_TARGET}
+            PRIVATE
+                "MI_DLL_BUILD"                   # export/import macro
+            )
+    endif()
 
 
     target_compile_options(${TARGET_BUILD_SETUP_TARGET}
@@ -89,19 +81,33 @@ function(TARGET_BUILD_SETUP)
     #---------------------------------------------------------------------------------------
     if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 
-        target_compile_options(${TARGET_BUILD_SETUP_TARGET}
-        PRIVATE
-            "/Zc:__cplusplus"                    # make visual studio report the correct __cplusplus
-        )
-
         target_compile_definitions(${TARGET_BUILD_SETUP_TARGET}
-            PUBLIC
+            PRIVATE
                 "MI_PLATFORM_WINDOWS"
                 "WIN_NT"
-            PRIVATE
                 "_MSC_VER=${MSVC_VERSION}"
                 "_CRT_SECURE_NO_WARNINGS"
                 "_SCL_SECURE_NO_WARNINGS"
+                "_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING"  # std::iterator is used by LLVM 12 as base classes
+            )
+
+        if(TARGET_BUILD_SETUP_WINDOWS_UNICODE)
+            target_compile_definitions(${TARGET_BUILD_SETUP_TARGET}
+                PRIVATE
+                    "_UNICODE"
+                    "UNICODE"
+                )
+            if(MDL_LOG_FILE_DEPENDENCIES)
+                MESSAGE(STATUS "- add defines:    '_UNICODE' and 'UNICODE'")
+            endif()
+        endif()
+
+        target_compile_options(${TARGET_BUILD_SETUP_TARGET}
+            PRIVATE
+                "/Zc:__cplusplus" # make visual studio report the correct __cplusplus
+                "/MP"
+                "/wd4267"         # suppress Warning C4267 'argument': conversion from 'size_t' to 'int', possible loss of data
+                "/permissive-"    # show more errors
             )
 
         # set static or dynamic runtime
@@ -120,25 +126,14 @@ function(TARGET_BUILD_SETUP)
             endif()
         endif()
 
-        target_compile_options(${TARGET_BUILD_SETUP_TARGET}
-            PRIVATE
-                "/MP"
-                "/wd4267"   # Suppress Warning C4267 'argument': conversion from 'size_t' to 'int', possible loss of data
-            )
-
-        if(MSVC_VERSION GREATER 1900)
-            target_compile_options(${TARGET_BUILD_SETUP_TARGET}
-                PRIVATE
-                    "/permissive-"  # show more errors
-                )
-        endif()
     endif()
 
     # LINUX
     #---------------------------------------------------------------------------------------
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+
         target_compile_definitions(${TARGET_BUILD_SETUP_TARGET}
-            PUBLIC
+            PRIVATE
                 "MI_PLATFORM_UNIX"
                 "$<$<STREQUAL:${MI_PLATFORM_NAME},linux-aarch64>:AARCH64>"
                 "$<$<STREQUAL:${MI_PLATFORM_NAME},linux-x86-64>:HAS_SSE>"
@@ -150,11 +145,8 @@ function(TARGET_BUILD_SETUP)
                 "-fPIC"   # position independent code since we will build a shared object
                 "-fno-strict-aliasing"
                 "$<$<STREQUAL:${MI_PLATFORM_NAME},linux-x86-64>:-march=nocona>"
-
-                # enable additional warnings
                 "-Wall"
                 "-Wvla"
-
                 "$<$<COMPILE_LANGUAGE:CXX>:-Wno-init-list-lifetime>"
                 "$<$<COMPILE_LANGUAGE:CXX>:-Wno-placement-new>"
                 "-Wno-parentheses"
@@ -164,19 +156,23 @@ function(TARGET_BUILD_SETUP)
                 "-Wno-unused-local-typedefs"
                 "-Wno-deprecated-declarations"
                 "-Wno-unknown-pragmas"
+                "$<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-enum-enum-conversion>"
             )
+
         target_link_libraries(${TARGET_BUILD_SETUP_TARGET}
             PRIVATE
                 "-static-libstdc++"
                 "-static-libgcc"
             )
+
     endif()
 
     # MACOSX
     #---------------------------------------------------------------------------------------
     if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+
         target_compile_definitions(${TARGET_BUILD_SETUP_TARGET}
-            PUBLIC
+            PRIVATE
                 "MI_PLATFORM_MACOSX"
                 "$<$<STREQUAL:${MI_PLATFORM_NAME},macosx-aarch64>:AARCH64>"
                 "MACOSX"
@@ -203,23 +199,6 @@ function(TARGET_BUILD_SETUP)
                 "-Wno-unusable-partial-specialization"
             )
 
-        # set the library paths
-        set(CMAKE_SKIP_BUILD_RPATH FALSE)
-        set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
-        set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
-        set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
-
-        set_target_properties(${TARGET_BUILD_SETUP_TARGET} PROPERTIES
-            MACOSX_RPATH TRUE
-            )
-    endif()
-
-    # setup specific to shared libraries
-    if (_TARGET_TYPE STREQUAL "SHARED_LIBRARY" OR _TARGET_TYPE STREQUAL "MODULE_LIBRARY")
-        target_compile_definitions(${TARGET_BUILD_SETUP_TARGET}
-            PRIVATE
-                "MI_DLL_BUILD"            # export/import macro
-            )
     endif()
 endfunction()
 
@@ -759,7 +738,7 @@ function(CREATE_FROM_BASE_PRESET)
         #set_target_properties(${CREATE_FROM_BASE_PRESET_TARGET} PROPERTIES WIN32_EXECUTABLE ON)
         # inject compile constant that contains the binary name
         target_compile_definitions(${PROJECT_NAME}
-            PUBLIC
+            PRIVATE
                 "BINARY_NAME=\"${CREATE_FROM_BASE_PRESET_OUTPUT_NAME}\""
             )
         if(CREATE_FROM_BASE_PRESET_TYPE STREQUAL "WIN_EXECUTABLE")
@@ -1258,51 +1237,78 @@ function(TARGET_CREATE_VS_USER_SETTINGS)
 endfunction()
 
 # -------------------------------------------------------------------------------------------------
-# add RPATH to locate references libraries
+# add RPATH to locate referenced libraries
 
 function(TARGET_ADD_RPATH)
     set(options)
     set(oneValueArgs TARGET)
-    set(multiValueArgs RPATHS)
+    set(multiValueArgs BUILD_RPATHS INSTALL_RPATHS)
     cmake_parse_arguments(TARGET_ADD_RPATH "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
     # provides the following variables:
     # - TARGET_ADD_RPATH_TARGET
-    # - TARGET_ADD_RPATH_RPATHS
+    # - TARGET_ADD_RPATH_BUILD_RPATHS
+    # - TARGET_ADD_RPATH_INSTALL_RPATHS
 
     # no RPATHs on windows
     if(WINDOWS)
         return()
     endif()
 
-    foreach(_PATH ${TARGET_ADD_RPATH_RPATHS})
-        if(_PATHS)
-            string(APPEND _PATHS ";")
-            string(APPEND _PATHS "${_PATH}")
-        else()
-            set(_PATHS "${_PATH}")
-        endif()
-        if(MDL_LOG_DEPENDENCIES)
-            message(STATUS "- rpath added:    " ${_PATH})
-        endif()
-    endforeach()
-
-    # append the rpaths to the build rpath
-    get_target_property(CURRENT_BUILD_RPATH ${TARGET_ADD_RPATH_TARGET} BUILD_RPATH)
-    if(CURRENT_BUILD_RPATH)
-        string(PREPEND _PATHS ";")
-        string(PREPEND _PATHS "${CURRENT_BUILD_RPATH}")
+    # log build rpath
+    if(MDL_LOG_DEPENDENCIES)
+      foreach(_PATH ${TARGET_ADD_RPATH_BUILD_RPATHS})
+        message(STATUS "- build RPATH:    " ${_PATH})
+      endforeach()
     endif()
-    set_target_properties(${TARGET_ADD_RPATH_TARGET} PROPERTIES
-        BUILD_RPATH "${_PATHS}"
-    )
+
+    # append the build rpath
+    get_target_property(_PROPERTY1 ${TARGET_ADD_RPATH_TARGET} BUILD_RPATH)
+    if(_PROPERTY1 STREQUAL "_PROPERTY1-NOTFOUND")
+        set(_PROPERTY1 "")
+    endif()
+    list(APPEND _PROPERTY1 ${TARGET_ADD_RPATH_BUILD_RPATHS})
+    set_target_properties(${TARGET_ADD_RPATH_TARGET} PROPERTIES BUILD_RPATH "${_PROPERTY1}")
 
     # check
-    # get_target_property(CURRENT_BUILD_RPATH ${TARGET_ADD_RPATH_TARGET} BUILD_RPATH)
-    # foreach(_PATH ${CURRENT_BUILD_RPATH})
-    #     message(STATUS " - RPATH: ${_PATH}")
+    # get_target_property(_PROPERTY2 ${TARGET_ADD_RPATH_TARGET} BUILD_RPATH)
+    # foreach(_PATH ${_PROPERTY2})
+    #     message(STATUS "- build RPATH:    ${_PATH}")
     # endforeach()
 
-    # TODO set the install rpath
+    # prepend non-absolute rpaths by $ORIGIN/@executable_path/@loader_path
+    if(LINUX)
+        set(_PREFIX "$ORIGIN/")
+    else()
+        get_target_property(_TYPE ${TARGET_ADD_RPATH_TARGET} TYPE)
+        if(_TYPE STREQUAL EXECUTABLE)
+            set(_PREFIX "@executable_path/")
+        else()
+            set(_PREFIX "@loader_path/")
+        endif()
+    endif()
+    list(TRANSFORM TARGET_ADD_RPATH_INSTALL_RPATHS PREPEND ${_PREFIX} REGEX "^[^/]")
+    list(TRANSFORM TARGET_ADD_RPATH_INSTALL_RPATHS REPLACE "/\.$" "" REGEX "^[^/]")
+
+    # log install rpath
+    if(MDL_LOG_DEPENDENCIES)
+      foreach(_PATH ${TARGET_ADD_RPATH_INSTALL_RPATHS})
+        message(STATUS "- install RPATH:  " ${_PATH})
+      endforeach()
+    endif()
+
+    # append the install rpath
+    get_target_property(_PROPERTY3 ${TARGET_ADD_RPATH_TARGET} INSTALL_RPATH)
+    if(_PROPERTY3 STREQUAL "_PROPERTY3-NOTFOUND")
+        set(_PROPERTY3 "")
+    endif()
+    list(APPEND _PROPERTY3 ${TARGET_ADD_RPATH_INSTALL_RPATHS})
+    set_target_properties(${TARGET_ADD_RPATH_TARGET} PROPERTIES INSTALL_RPATH "${_PROPERTY3}")
+
+    # check
+    # get_target_property(_PROPERTY4 ${TARGET_ADD_RPATH_TARGET} INSTALL_RPATH)
+    # foreach(_PATH ${_PROPERTY4})
+    #     message(STATUS "- install RPATH:  ${_PATH}")
+    # endforeach()
 
 endfunction()
 
@@ -1318,13 +1324,25 @@ function(ADD_TARGET_INSTALL)
     # - ADD_TARGET_INSTALL_TARGET
     # - ADD_TARGET_INSTALL_DESTINATION
 
+    # The if-case is meant for examples, which are not added to the list of exported targets. The
+    # else-case if meant for libraries and tools, which are added to the list of exported targets.
+    # TODO: Do not misuse the DESTINATION as distinction for that.
     if(ADD_TARGET_INSTALL_DESTINATION)
-        install(DIRECTORY $<TARGET_FILE_DIR:${ADD_TARGET_INSTALL_TARGET}>/
+        install(
+            DIRECTORY $<TARGET_FILE_DIR:${ADD_TARGET_INSTALL_TARGET}>/
             DESTINATION ${ADD_TARGET_INSTALL_DESTINATION}
             USE_SOURCE_PERMISSIONS
             FILES_MATCHING
             PATTERN "*"
             PATTERN "*.d" EXCLUDE
+            PATTERN "linkerscript.txt" EXCLUDE
+        )
+        # Install the target file itself (again) via a separate call using TARGETS in order to
+        # support RPATH changes. Excluding it above would be cleaner, but the patterns do not
+        # support generator expressions.
+        install(
+            TARGETS ${ADD_TARGET_INSTALL_TARGET}
+            DESTINATION ${ADD_TARGET_INSTALL_DESTINATION}
         )
     else()
         install(
@@ -1530,7 +1548,11 @@ function(CREATE_UNIT_TEST)
 
     # Defaults
     if(NOT CREATE_UNIT_TEST_NAME)
-        set(CREATE_UNIT_TEST_NAME test)
+        # Avoid default name "test" which is a reserved target for the Ninja generator. Use "test_"
+        # plus last directory component instead (or second-last component if last one is "tests").
+        string(REGEX REPLACE "/tests$" "" _DIR ${CMAKE_CURRENT_SOURCE_DIR})
+        string(REGEX REPLACE ".*/" "" _DIR ${_DIR})
+        set(CREATE_UNIT_TEST_NAME test_${_DIR})
     endif()
     if(NOT CREATE_UNIT_TEST_SOURCES)
         set(CREATE_UNIT_TEST_SOURCES test.cpp)

@@ -149,7 +149,8 @@ public:
     /// not contain enough information to convert it into an API attribute type name).
     ///
     /// \param type_code   An ATTR type code.
-    /// \return            The corresponding API attribute type name, or \c NULL in case of errors.
+    /// \return            The corresponding API attribute type name, or \c nullptr in case of
+    ///                    errors.
     static const char* convert_type_code_to_attribute_type_name( ATTR::Type_code type_code);
 
     /// Returns the element type name of an attribute array type name.
@@ -190,7 +191,7 @@ public:
     /// Checks that the passed type is a valid API type name (if assertions are enabled).
     ///
     /// \param transaction   Transaction used to create an instance of the type name.
-    /// \param type_name     The type name to check. In this context \c NULL is considered as a
+    /// \param type_name     The type name to check. In this context \c nullptr is considered as a
     ///                      valid type name.
     static void check_type_name( mi::neuraylib::ITransaction* transaction, const char* type_name)
 #ifdef ENABLE_ASSERT
@@ -221,7 +222,7 @@ private:
     /// Converts an ATTR type code into an API type name.
     ///
     /// \param type_code   An ATTR type code.
-    /// \return            The corresponding API type name, or \c NULL in case of errors.
+    /// \return            The corresponding API type name, or \c nullptr in case of errors.
     static const char* convert_type_code_to_type_name( ATTR::Type_code type_code);
 
     //@}

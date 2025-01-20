@@ -114,6 +114,48 @@ bool is_floating_point_based_type(IType const *type)
 }
 
 
+// Checks if the given MDL type is or contains a floating point type.
+bool contains_floating_point_type(IType const *type)
+{
+    type = type->skip_type_alias();
+    switch (type->get_kind()) {
+    case IType::TK_FLOAT:
+    case IType::TK_DOUBLE:
+    case IType::TK_COLOR:
+    case IType::TK_MATRIX:  // there are only float and double matrix types
+        return true;
+
+    case IType::TK_VECTOR:
+        {
+            IType_vector const *vec_type = as<IType_vector>(type);
+            IType_atomic const *elem_type = vec_type->get_element_type();
+            IType::Kind elem_kind = elem_type->get_kind();
+            return elem_kind == IType::TK_FLOAT || elem_kind == IType::TK_DOUBLE;
+        }
+
+    case IType::TK_ARRAY:
+        {
+            IType_array const *array_type = as<IType_array>(type);
+            IType const *elem_type = array_type->get_element_type();
+            return contains_floating_point_type(elem_type);
+        }
+
+    case IType::TK_STRUCT:
+        {
+            IType_struct const *struct_type = as<IType_struct>(type);
+            for (int i = 0, n = struct_type->get_compound_size(); i < n; ++i) {
+                if (contains_floating_point_type(struct_type->get_compound_type(i)))
+                    return true;
+            }
+            return false;
+        }
+
+    default:
+        return false;
+    }
+}
+
+
 /// Helper class analyzing derivative information for functions.
 class Function_processor : public Module_visitor
 {
@@ -205,15 +247,15 @@ public:
                     def = m_module->get_original_definition(def, owner);
                 }
 
-                mi::base::Handle<IModule const> i_owner(owner, mi::base::DUP_INTERFACE);
-                def = skip_presets(def, i_owner);
+                mi::base::Handle<Module const> h_owner(owner, mi::base::DUP_INTERFACE);
+                def = skip_presets(def, h_owner);
 
                 // get derivative information for called function
                 Function_instance::Array_instances array_insts(m_alloc);
                 Function_instance::Parameter_storage_modifiers param_mods(m_alloc);
                 Function_instance func_inst(def, array_insts, param_mods, workitem.second, false);
                 Func_deriv_info *infos = m_deriv_infos.get_or_calc_function_derivative_infos(
-                    impl_cast<Module>(i_owner.get()), func_inst);
+                    h_owner.get(), func_inst);
 
                 // visit all arguments and set want-derivatives according to the derivative info
                 for (size_t i = 1, n = infos->args_want_derivatives.get_size(); i < n; ++i) {
@@ -411,8 +453,21 @@ public:
                 // all arguments already visited
                 return false;
 
-            case IDefinition::DS_COPY_CONSTRUCTOR:
             case IDefinition::DS_ELEM_CONSTRUCTOR:
+                // want-derivatives only applies to floating point based or containing arguments
+                for (int i = 0, n = call->get_argument_count(); i < n; ++i) {
+                    bool supports_derivatives = contains_floating_point_type(
+                        call->get_argument(i)->get_argument_expr()->get_type());
+
+                    Flag_scope flag_scope(
+                        m_want_derivatives, m_want_derivatives && supports_derivatives);
+                    visit(call->get_argument(i));
+                }
+
+                // all arguments already visited
+                return false;
+
+            case IDefinition::DS_COPY_CONSTRUCTOR:
             case IDefinition::DS_COLOR_SPECTRUM_CONSTRUCTOR:
             case IDefinition::DS_MATRIX_ELEM_CONSTRUCTOR:
             case IDefinition::DS_MATRIX_DIAG_CONSTRUCTOR:
@@ -698,8 +753,8 @@ void set_known_function_argument_derivs(
 
     // special handling of operators
     if (semantic_is_operator(sema)) {
-        // for float or double based operators, return_derivs also applies to arguments
-        if (is_floating_point_based_type(ret_tp)) {
+        // for operators involving floating point types, return_derivs also applies to arguments
+        if (contains_floating_point_type(ret_tp)) {
             switch (semantic_to_operator(sema)) {
             case IExpression::OK_SEQUENCE:
                 // return_derivs only applies to the last argument
@@ -842,12 +897,12 @@ Bitset Derivative_infos::call_wants_arg_derivatives(DAG_call const *call, bool w
     }
 
     char const *signature = call->get_name();
-    mi::base::Handle<IModule const> mod(m_resolver->get_owner_module(signature));
+    mi::base::Handle<Module const> mod(impl_cast<Module>(m_resolver->get_owner_module(signature)));
     if (!mod) {
         return arg_derivs;  // unknown -> no derivs requested
     }
 
-    Module const *module = impl_cast<Module>(mod.get());
+    Module const *module = mod.get();
     IDefinition const *def = module->find_signature(signature, /*only_exported=*/ false);
     if (def == NULL) {
         return arg_derivs;  // unknown -> no derivs requested
@@ -1049,7 +1104,8 @@ DAG_node const *Deriv_DAG_builder::rebuild(DAG_node const *expr, bool want_deriv
                 "make_deriv()",
                 IDefinition::DS_INTRINSIC_DAG_MAKE_DERIV,
                 wrap_args, 1,
-                get_deriv_type(expr->get_type()));
+                get_deriv_type(expr->get_type()),
+                expr->get_dbg_info());
         }
         break;
 
@@ -1080,25 +1136,9 @@ DAG_node const *Deriv_DAG_builder::rebuild(DAG_node const *expr, bool want_deriv
             res = m_lambda.create_call(
                 call_name.c_str(),
                 sema,
-                args.data(), n_args,
-                want_derivatives ? get_deriv_type(call->get_type()) : call->get_type());
-
-            // function always returns derivatives, but we don't want them?
-            if (!want_derivatives &&
-                (
-                    sema == IDefinition::DS_INTRINSIC_STATE_TEXTURE_COORDINATE ||
-                    sema == IDefinition::DS_INTRINSIC_STATE_POSITION
-                ))
-            {
-                // wrap it in a get_deriv_val() call
-                DAG_call::Call_argument wrap_args[1] = {
-                    DAG_call::Call_argument(res, "deriv") };
-                res = m_lambda.create_call(
-                    "get_deriv_val()",
-                    IDefinition::DS_INTRINSIC_DAG_GET_DERIV_VALUE,
-                    wrap_args, 1,
-                    call->get_type());
-            }
+                args.data(), args.size(),
+                want_derivatives ? get_deriv_type(call->get_type()) : call->get_type(),
+                call->get_dbg_info());
         }
         break;
     default:

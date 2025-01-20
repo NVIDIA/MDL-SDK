@@ -170,7 +170,7 @@ public:
     /// Create a reference expression for a qualified name.
     ///
     /// \param qname  the qualified name
-    /// \param type   if non-NULL, the core type
+    /// \param type   if non-\c nullptr, the core type
     mi::mdl::IExpression_reference* to_reference(
         mi::mdl::IQualified_name* qname,
         const mi::mdl::IType* type = nullptr);

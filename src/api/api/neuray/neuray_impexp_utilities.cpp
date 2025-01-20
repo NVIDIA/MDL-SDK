@@ -66,6 +66,7 @@
 
 #include <memory>
 #include <regex>
+#include <set>
 
 namespace MI {
 
@@ -424,7 +425,7 @@ std::vector<DB::Tag> Impexp_utilities::convert_names_to_tags(
     for( mi::Uint32 i = 0; i < names->get_length(); ++i) {
 
         mi::base::Handle<const mi::IString> name( names->get_element<mi::IString>( i));
-        if( !name.is_valid_interface())
+        if( !name)
             return {};
         const char* name_c_str = name->get_c_str();
         DB::Tag tag = db_transaction->name_to_tag( name_c_str);
@@ -515,13 +516,15 @@ void Impexp_utilities::get_export_elements_internal(
     if( recurse && (!shortcuts_mdl || class_id != MDL::ID_MDL_MODULE)) {
 
         // get references of tag (optimization: consider only MDL module for MDL definitions)
-        DB::Tag_set references;
+        std::set<DB::Tag> references;
         if( shortcuts_mdl && class_id == MDL::ID_MDL_FUNCTION_DEFINITION) {
             DB::Access<MDL::Mdl_function_definition> element( tag, db_transaction);
             references.insert( element->get_module( db_transaction));
         } else {
             DB::Access<DB::Element_base> element( tag, db_transaction);
-            element->get_references( &references);
+            DB::Tag_set unordered_references;
+            element->get_references( &unordered_references);
+            references.insert( unordered_references.begin(), unordered_references.end());
         }
 
         // call recursively for all references not yet in tags_seen

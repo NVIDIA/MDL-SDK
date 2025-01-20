@@ -252,6 +252,7 @@ private:
         case IDefinition::DS_INTRINSIC_DF_BACKSCATTERING_GLOSSY_REFLECTION_BSDF:
         case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
         case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
+        case IDefinition::DS_INTRINSIC_DF_MICROFLAKE_SHEEN_BSDF:
             break;
 
         default:
@@ -302,6 +303,7 @@ private:
         case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
         case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
         case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
+        case IDefinition::DS_INTRINSIC_DF_MICROFLAKE_SHEEN_BSDF:
 
             return analyze_glossy_bsdf(bsdf);
 
@@ -370,6 +372,7 @@ private:
         case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR:
         case IDefinition::DS_INTRINSIC_DF_FRESNEL_FACTOR:
         case IDefinition::DS_INTRINSIC_DF_MEASURED_FACTOR:
+        case IDefinition::DS_INTRINSIC_DF_COAT_ABSORPTION_FACTOR:
             return analyze_bsdf_modifier(bsdf);
 
         case IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF:
@@ -385,6 +388,7 @@ private:
         case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
         case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
         case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
+        case IDefinition::DS_INTRINSIC_DF_MICROFLAKE_SHEEN_BSDF:
 
             return analyze_elemental_bsdf(bsdf);
 

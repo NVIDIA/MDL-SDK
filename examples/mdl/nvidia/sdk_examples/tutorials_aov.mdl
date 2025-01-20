@@ -161,9 +161,3 @@ export aov_material merge5(
     example: (1.0f - mix) * a.example +  mix * b2.example,
     magic: int(math::lerp(float(a.magic), float(b2.magic), mix))
 );
-
-// Example of an empty material.
-// FIXME: assertion fails.
-export struct empty_material in material_category {
-};
-export empty_material empty() = empty_material();

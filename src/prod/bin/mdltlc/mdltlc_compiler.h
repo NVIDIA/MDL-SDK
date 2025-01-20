@@ -112,22 +112,39 @@ private:
     explicit Compiler(
         mi::mdl::IMDL *imdl);
 
-    /// Add a node (loaded from the standard library) to the internal
+    void add_builtin(
+        Symbol *symbol,
+        Symbol *fq_symbol,
+        Type const *type,
+        mi::mdl::IDefinition::Semantics sema,
+        char const *signature,
+        mi::mdl::IType const *mdl_type);
+        
+        /// Add a node (loaded from the standard library) to the internal
     /// map that is used in type checking and code generation.
     ///
     /// \param symbol    symbol (used for lookup) of the node
     /// \param fq_symbol fully qualified version of `symbol` (can be the same)
     /// \param mdl_type  type of the symbol in the MDL type system
-    /// \oaram sema      MDL semantics of the symbol
-    void add_builtin(Symbol *symbol,
-                     Symbol *fq_symbol,
-                     mi::mdl::IType const *mdl_type,
-                     mi::mdl::IDefinition::Semantics sema);
+    /// \param sema      MDL semantics of the symbol
+    /// \param signature MDL signature of the symbol for functions, nullptr otherwise.
+    void add_builtin(
+        Symbol *symbol,
+        Symbol *fq_symbol,
+        mi::mdl::IType const *mdl_type,
+        mi::mdl::IDefinition::Semantics sema,
+        char const *signature);
 
     /// Load the builting definitions from a builtin MDL module.
     ///
     /// \param name    fully qualified identifier of the builtin module to load.
     void load_builtin_module(const char *name);
+
+    /// Declare all types internal to the distiller.
+    void declare_dist_nodes();
+
+    /// Declare all types built into the MDL compiler.
+    void declare_builtins();
 
     /// Load the builtin definitions from all supported builtin MDL modules.
     void load_builtins();
@@ -174,17 +191,19 @@ private:
     /// Compilation options in effect for this compiler instance.
     Compiler_options m_comp_options;
 
-    /// Map from names to builtin BSDF nodes.
-    Builtin_type_map m_builtin_type_map;
-
-    /// The symbol table of this module.
+    /// The symbol table for all compilations.
     Symbol_table m_symbol_table;
+
+    /// The type factory for all internal types.
+    Type_factory m_type_factory;
 
     /// Compiler message collector.
     Message_list m_messages;
 
     /// Type cache for accessing MDL core types.
     mi::mdl::Type_cache m_mdl_type_cache;
+
+    Def_table m_def_table;
 };
 
 #endif

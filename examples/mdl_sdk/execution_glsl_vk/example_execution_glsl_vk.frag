@@ -43,6 +43,13 @@ layout(push_constant) uniform User_data
 // Array containing all 2D texture samplers of all used materials.
 layout(set = 0, binding = 0) uniform sampler2D material_texture_samplers_2d[NUM_TEXTURES];
 
+// Only used if the read-only data segment is enabled
+layout(std430, set = 0, binding = 1)
+readonly restrict buffer material_ro_data_segment_buffer
+{
+    uint material_ro_data_segment[];
+};
+
 
 // The input variables coming from the vertex shader.
 layout(location = 0) in vec3 vPosition;
@@ -98,6 +105,17 @@ vec4 tex_texel_2d(int tex, ivec2 coord, ivec2 uv_tile)
 {
     if (tex == 0) return vec4(0);
     return texelFetch(material_texture_samplers_2d[tex - 1], coord, 0);
+}
+
+// Required if the read-only data segment is enabled
+float mdl_read_rodata_as_float(int offs)
+{
+    return uintBitsToFloat(material_ro_data_segment[offs >> 2]);
+}
+
+int mdl_read_rodata_as_int(int offs)
+{
+    return int(material_ro_data_segment[offs >> 2]);
 }
 
 

@@ -75,7 +75,7 @@ public:
         , m_hidden(false)
         , m_hidden_valid(false)
     { }
-    virtual ~Mdl_cache_item<T_item>() = default;
+    virtual ~Mdl_cache_item() = default;
 
     const char* get_entity_name() const override { return m_entity_name.c_str(); }
     const char* get_simple_name() const override { return m_simple_name.c_str(); }
@@ -133,11 +133,11 @@ public:
         IMdl_cache_item*,
         IMdl_cache_node::Child_map_key_hash> Child_map;
 
-    explicit Mdl_cache_node<T_node>() 
+    explicit Mdl_cache_node() 
         : m_timestamp(0)
     {
     }
-    virtual ~Mdl_cache_node<T_node>()
+    virtual ~Mdl_cache_node()
     {
         for (auto& kv : m_children)
             Base::get_cache()->erase(kv.second);
@@ -177,10 +177,10 @@ class Mdl_cache_element :
     public Mdl_cache_item<T_element> // expected to implement (at least) IMdl_cache_element
 {
 public:
-    explicit Mdl_cache_element<T_element>()
+    explicit Mdl_cache_element()
         : m_module("")
     { }
-    virtual ~Mdl_cache_element<T_element>() = default;
+    virtual ~Mdl_cache_element() = default;
 
     const char* get_module() const override;
 

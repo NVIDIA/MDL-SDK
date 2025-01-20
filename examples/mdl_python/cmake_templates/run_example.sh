@@ -51,8 +51,8 @@ REPORT_DIR=coverage_report
 if [[ "${CREATE_COVERAGE_REPORT}" == "TRUE" ]]; then 
     rm -rf ${REPORT_DIR}
     mkdir -p ${REPORT_DIR}
-    ${PYTHON_BINARY} -m coverage run --data-file ${REPORT_DIR}/.coverage @CMAKE_CURRENT_SOURCE_DIR@/@CREATE_FROM_PYTHON_PRESET_MAIN@ %*
+    ${PYTHON_BINARY} -m coverage run --data-file ${REPORT_DIR}/.coverage @CMAKE_CURRENT_SOURCE_DIR@/@CREATE_FROM_PYTHON_PRESET_MAIN@ "$@"
     ${PYTHON_BINARY} -m coverage html --data-file ${REPORT_DIR}/.coverage --directory ${REPORT_DIR}
 else
-    ${PYTHON_BINARY} @CMAKE_CURRENT_SOURCE_DIR@/@CREATE_FROM_PYTHON_PRESET_MAIN@ %*
+    ${PYTHON_BINARY} @CMAKE_CURRENT_SOURCE_DIR@/@CREATE_FROM_PYTHON_PRESET_MAIN@ "$@"
 fi

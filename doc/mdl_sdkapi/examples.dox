@@ -28,91 +28,182 @@
 
 /*! \page mi_neuray_examples Tutorial and Example Programs
 
-We provide several examples for the use of the \neurayApiName
-that illustrate -- in a tutorial manner -- the important
-interfaces and concepts. See the \ref mi_neuray_getting_started
-Section for a description of how the example programs can be compiled.
+To help you get up to speed quickly, the \neurayProductName provides many example programs 
+that you can use as a starting point for the integration of MDL into your application. The example programs presented in 
+\ref mi_basics cover concepts and implementation details that all software developers need to understand. 
+The example programs presented in \ref mi_integrating_into_renderer cover important concepts and implementation details to consider for this task.
 
-\section mi_neuray_examples_getting_started Getting Started with \neurayProductName
+<i>Note:</i> For a description of how the example programs can be compiled, see \ref mi_neuray_getting_started.
 
-- \subpage mi_neuray_example_start_shutdown <br>
-  Starts and shuts down the \neurayApiName.
+\section mi_basics The Basics
 
-- \subpage mi_neuray_example_modules <br>
-  Loads an MDL module and inspects its contents.
+The programs listed in this section illustrate standard workflow tasks: loading, instantiating, 
+and compiling materials, and generating target code for a compiled material.
 
-- \subpage mi_neuray_example_instantiation <br>
-  Instantiates material and function definitions.
+- **Basic SDK concepts:**
 
-- \subpage mi_neuray_example_calls <br>
-  Creates a textured material via a series of function calls.
+  \subpage mi_neuray_example_start_shutdown 
+  shows how to start and shutdown the \neurayApiName
 
-- \subpage mi_neuray_example_compilation <br>
-  Class and instance compilation of material instances.
+- **Loading a module and inspecting materials and functions exported from the module:**
 
-- \subpage mi_neuray_example_code_gen <br>
-  Generating HLSL, GLSL, or PTX code for a compiled material.
+  \subpage mi_neuray_example_modules 
+  shows how to load an MDL module and inspect its contents
 
-- \subpage mi_neuray_example_execution_native <br>
-  Executes material sub-expressions of a compiled MDL material for the native (CPU) backend.
+  \subpage mi_neuray_example_instantiation
+  shows hot to instantiate material and function definitions
 
-- \subpage mi_neuray_example_execution_ptx <br>
-  Executes material sub-expressions of a compiled MDL material for the PTX backend with CUDA.
+- **Creating call graphs and attaching functions to material parameters:**
 
-- \subpage mi_neuray_example_execution_glsl <br>
-  Executes material sub-expressions of a compiled MDL material for the GLSL backend with OpenGL.
+  \subpage mi_neuray_example_calls 
+  shows how to create a textured material by using a series of function calls
 
-- \subpage mi_neuray_example_execution_glsl_vk <br>
-  Executes material sub-expressions of a compiled MDL material for the GLSL backend with Vulkan.
+- **Compiled materials -- creating a compact and optimized representation of your material instance:**
 
-- \subpage mi_neuray_example_df_cuda <br>
-  Uses compiled material distribution functions in a CUDA based renderer.
+  \subpage mi_neuray_example_compilation 
+  shows how to perform class and instance compilation of material instances
+
+- **Overview of target code generation -- common steps for all renderers:**
+
+  \subpage mi_neuray_example_code_gen 
+  shows how to generate HLSL, GLSL, or PTX code for a compiled material
+
+
+\section mi_integrating_into_renderer Integrating MDL into a Renderer
+
+The example programs listed in the following sections take you through the following steps:
+
+1. Compiling and executing functions and materials \n
+2. Distilling and baking, which is intended for game engines and renderers with limited capabilities
+
+\subsection mi_compiling_executing_functions Compiling and Executing Functions
+
+The example programs listed in this section describe the execution of code generated 
+for various backends and execution of material expressions:
+
+- **CPU baking:**
+
+  \subpage mi_neuray_example_execution_native
+  shows how to execute material sub-expressions of a compiled MDL material for the native (CPU) backend
+
+- **CUDA baking:**
+
+  \subpage mi_neuray_example_execution_ptx 
+  shows how to execute material sub-expressions of a compiled MDL material for the PTX backend with CUDA
+
+
+- **OpenGL baking:**
   
-- \subpage mi_neuray_example_df_native <br>
-  CPU based renderer using compiled materials and MDL native backend.
+  \subpage mi_neuray_example_execution_glsl 
+  shows how to execute material sub-expressions of a compiled MDL material for the GLSL backend with OpenGL
 
-- \subpage mi_neuray_example_df_vulkan <br>
-  Vulkan based renderer using compiled materials and the GLSL backend.
+- **Vulcan baking:**
+
+  \subpage mi_neuray_example_execution_glsl_vk 
+  shows how to execute material sub-expressions of a compiled MDL material for the GLSL backend with Vulkan
+
+\subsection mi_compiling_executing_materials Compiling and Executing Materials
+
+The example programs listed in this section take you through the following steps: 
+
+1. Compiling and executing code for various backends \n
+2. Compiling and executing distribution functions \n 
+3. Rendering with simple path tracers 
+
+- **CUDA renderer -- using compiled BSDFs:**
+
+  \subpage mi_neuray_example_df_cuda 
+  shows how to use compiled material distribution functions in a CUDA based renderer
+
+- **CPU renderer:**
   
-- \subpage mi_neuray_example_derivatives <br>
-  Enable automatic derivatives for texture filtering.
+  \subpage mi_neuray_example_df_native
+  shows how to use compiled materials and an MDL native backend in a CPU-based renderer
 
-- \subpage mi_neuray_example_distilling <br>
+- **Vulcan renderer:**
+
+  \subpage mi_neuray_example_df_vulkan 
+  shows how to use compiled materials and the GLSL backend in a Vulkan-based renderer
+  
+- **CUDA renderer -- enabling automatic derivatives:** 
+
+  \subpage mi_neuray_example_derivatives 
+  shows how to enable automatic derivatives for texture filtering.
+  <i>Note:</i> This example is useful for all renderers.
+
+- **DirectX renderer:**
+
+  \subpage mi_neuray_example_dxr
+  shows how to use MDL materials to render glTF scenes.
+  <i>Note:</i> This is the most complete rendering example and it illustrates how to interface 
+  with MaterialX and glTF.
+
+- **OptiX framework:**
+
+  \subpage mi_neuray_example_optix7 
+  shows how to optimize the evaluation of MDL materials for OptiX 7.
+  <a href="https://raytracing-docs.nvidia.com/optix8/index.html"> OptiX</a>  is a scalable framework for building ray tracing based applications. (It is not a renderer.) 
+
+\subsection mi_distilling_baking Distilling and Baking
+
+Distilling and baking enable you to optimize MDL materials for game engines and renderers with limited capabilities. The following examples provide an introduction to the MDL distilling mechanism and how to use it.
+
+- **General introduction to distilling and baking:**
+ 
+  \subpage mi_neuray_example_distilling 
   Distilling of compiled materials and baking of material sub-expressions.
 
-- \subpage mi_neuray_example_distilling_unity <br>
-  Distilling of compiled materials and baking of material sub-expressions for Unity
+- **Unity game engine -- distilling and baking:**
 
-- \subpage mi_neuray_example_distilling_glsl <br>
-  Mapping distilled materials to a GLSL shader.
+  \subpage mi_neuray_example_distilling_unity 
+  shows how to distill compiled materials and bake material sub-expressions for Unity
 
-- \subpage mi_neuray_example_distilling_target <br>
-  Custom Distiller target implementation
+- **Simple GLSL rasterizer -- using baked textures or GLSL code generation:**
 
-- \subpage mi_neuray_example_traversal <br>
-  Traversing compiled MDL materials and reconstructing compilable MDL code.
+  \subpage mi_neuray_example_distilling_glsl
+  shows how to map distilled materials to a GLSL shader
 
-- \subpage mi_neuray_example_create_module <br>
-  Builds a new MDL module.
+  \subpage mi_neuray_example_distilling_target 
+  shows how to implement a custom distiller target
 
-- \subpage mi_neuray_example_discovery <br>
-  Discovers MDL modules in the specified search paths and lists them.
+\subsection mi_other_topics Other Topics
 
-- \subpage mi_neuray_example_mdl_browser <br>
-  Example for a material selection dialogue.
+The following examples cover topics and use cases that may be important to your particular MDL integration.
 
-- \subpage mi_neuray_example_mdle <br>
-  Export and load materials or functions using the MDL encapsulated format.
+- **Traversing a compiled material:**
 
-- \subpage mi_neuray_example_dxr <br>
-  Rendering glTF scenes using MDL materials.
+  \subpage mi_neuray_example_traversal
+  shows how to traverse compiled MDL materials to reconstruct compilable MDL code
 
-- \subpage mi_neuray_example_optix7 <br>
-  Optimize evaluation of materials.
+- **Building a new MDL module:**
+
+  \subpage mi_neuray_example_create_module 
+  shows how to build a new MDL module
+
+- **Exploring the MDL module namespace:**
+
+  \subpage mi_neuray_example_discovery 
+  shows how to discover MDL modules in specified search paths and list them
+
+- **Presenting discovered modules to a user:**
+
+  \subpage mi_neuray_example_mdl_browser
+  shows how to implement a material selection dialog for a material library
+
+- **Encapsulating an MDL material in MDLE:**
+
+  \subpage mi_neuray_example_mdle
+  shows how to export and load materials or functions using the MDL encapsulated format.
+  <i>Note:</i> MDLE enables you to inline all external MDL dependencies. All textures and resources are stored in the package.
+
+- **Converting an AxF file to MDL:**
   
-- \subpage mi_neuray_example_axf_to_mdl <br>
-  Converts a AxF file to MDL.
+  \subpage mi_neuray_example_axf_to_mdl 
+  shows how to convert an <a href="https://www.xrite.com/axf"> X-Rite AxF</a> file to MDL
 
 \subpage mi_neuray_example_topics
 
 */
+
+
+

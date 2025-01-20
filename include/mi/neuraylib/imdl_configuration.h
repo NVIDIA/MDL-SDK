@@ -66,7 +66,7 @@ public:
     /// \param path                The path to be added.
     /// \return
     ///                            -  0: Success.
-    ///                            - -1: Invalid parameters ( \c NULL pointer).
+    ///                            - -1: Invalid parameters ( \c nullptr).
     ///                            - -2: Invalid path.
     virtual Sint32 add_mdl_path( const char* path) = 0;
 
@@ -78,7 +78,7 @@ public:
     /// \param path                The path to be removed.
     /// \return
     ///                            -  0: Success.
-    ///                            - -1: Invalid parameters ( \c NULL pointer).
+    ///                            - -1: Invalid parameters ( \c nullptr).
     ///                            - -2: There is no such path in the path list.
     virtual Sint32 remove_mdl_path( const char* path) = 0;
 
@@ -101,7 +101,8 @@ public:
     /// This search path is also used for resources referenced in MDL modules. By default, the list
     /// of MDL paths is empty.
     ///
-    /// \return                    The \p index -th path, or \c NULL if \p index is out of bounds.
+    /// \return                    The \p index -th path, or \c nullptr if \p index is out of
+    ///                            bounds.
     virtual const IString* get_mdl_path( Size index) const = 0;
 
     /// Returns the number of MDL system paths.
@@ -118,7 +119,7 @@ public:
     /// environment variable can contain multiple paths which are separated by semicolons (on
     /// Windows) or colons (on Linux and Mac OS), respectively.
     ///
-    /// \return The \p index -th path, or \c NULL if \p index is out of bounds.
+    /// \return The \p index -th path, or \c nullptr if \p index is out of bounds.
     virtual const char* get_mdl_system_path( Size index) const = 0;
 
     /// Adds the MDL system paths to the MDL search path.
@@ -144,7 +145,7 @@ public:
     /// environment variable can contain multiple paths which are separated by semicolons (on
     /// Windows) or colons (on Linux and Mac OS), respectively.
     ///
-    /// \return The \p index -th path, or \c NULL if \p index is out of bounds.
+    /// \return The \p index -th path, or \c nullptr if \p index is out of bounds.
     virtual const char* get_mdl_user_path( Size index) const = 0;
 
     /// Adds the MDL user paths to the MDL search path.
@@ -167,7 +168,7 @@ public:
     /// \param path                The path to be added.
     /// \return
     ///                            -  0: Success.
-    ///                            - -1: Invalid parameters ( \c NULL pointer).
+    ///                            - -1: Invalid parameters ( \c nullptr).
     ///                            - -2: Invalid path.
     virtual Sint32 add_resource_path( const char* path) = 0;
 
@@ -180,7 +181,7 @@ public:
     /// \param path                The path to be removed.
     /// \return
     ///                            -  0: Success.
-    ///                            - -1: Invalid parameters ( \c NULL pointer).
+    ///                            - -1: Invalid parameters ( \c nullptr).
     ///                            - -2: There is no such path in the path list.
     virtual Sint32 remove_resource_path( const char* path) = 0;
 
@@ -206,7 +207,8 @@ public:
     /// Note that for MDL resources referenced in .\c mdl files the MDL search paths are considered,
     /// not the resource search path. By default, the list of resource paths is empty.
     ///
-    /// \return                    The \p index -th path, or \c NULL if \p index is out of bounds.
+    /// \return                    The \p index -th path, or \c nullptr if \p index is out of
+    ///                            bounds.
     virtual const IString* get_resource_path( Size index) const = 0;
 
     //@}
@@ -290,7 +292,7 @@ public:
     /// Installs an external entity resolver.
     ///
     /// \param resolver   The external entity resolver to be used instead of the built-in entity
-    ///                   resolver. Pass \c NULL to uninstall a previously installed external
+    ///                   resolver. Pass \c nullptr to uninstall a previously installed external
     ///                   entity resolver.
     ///
     /// \note MDL archive creation is not supported with an external entity resolver ( see

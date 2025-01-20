@@ -61,6 +61,7 @@ bool has_stderr();
 /// Perform a fatal exit -- this should only be called to terminate the app
 /// based on really fatal errors
 /// \param exit_code exit code to return
+[[noreturn]]
 void fatal_exit(
     int exit_code);
 

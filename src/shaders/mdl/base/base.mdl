@@ -757,10 +757,6 @@ export texture_coordinate_info transform_coordinate(
     anno::noinline()
 ]]
 {
-    /*
-    float4 r_position = transform * float4(coordinate.position.x,coordinate.position.y,coordinate.position.z,1);
-    coordinate.position = float3(r_position.x, r_position.y, r_position.z);
-    */
     coordinate.position =
         float3(transform[0].x, transform[0].y, transform[0].z) * coordinate.position.x +
         float3(transform[1].x, transform[1].y, transform[1].z) * coordinate.position.y +
@@ -769,48 +765,45 @@ export texture_coordinate_info transform_coordinate(
 
     int source = (coordinate.source_flags & 3);
     if (source == int(texture_coordinate_uvw)) {
-
         // tangents in transformed space are canonical directions, we can bring them
         // to untransformed space by applying the inverse transform
         // (simplified to using transpose instead of inverse here, assuming orthogonal transform)
-        /*
-        float4 tmp_u4 = float4(1.0f, 0.0f, 0.0f, 0.0f) * transform;
-        float4 tmp_v4 = float4(0.0f, 1.0f, 0.0f, 0.0f) * transform;
-        float3 tangent_u = float3(tmp_u4.x, tmp_u4.y, tmp_u4.z);
-        float3 tangent_v = float3(tmp_v4.x, tmp_v4.y, tmp_v4.z);
-        */
         float3 tangent_u = float3(transform[0].x, transform[1].x, transform[2].x);
         float3 tangent_v = float3(transform[0].y, transform[1].y, transform[2].y);
 
-        // ortho-normalize
-        /*
-        float3 tmp_u = tangent_u;
-        float3 tangent_u_n = math::normalize(math::cross(tangent_v, float3(0.0f, 0.0f, 1.0f)));
-        float3 tangent_v_n = math::normalize(math::cross(float3(0.0f, 0.0f, 1.0f), tangent_u_n));
-        if (math::dot(tangent_u, tangent_u_n) < 0.0f)
-            tangent_u_n = -tangent_u_n;
-        */
-        float2 tangent_u_n = math::normalize(float2(tangent_v.y, -tangent_v.x));
-        float2 tangent_v_n = float2(-tangent_u_n.y, tangent_u_n.x);
-        if ((tangent_u.x * tangent_u_n.x + tangent_u.y * tangent_u_n.y) < 0.0f)
-            tangent_u_n = -tangent_u_n;
+        // only change the tangents if they will be valid
+        if (tangent_v.x != 0.0f || tangent_v.y != 0.0f) {
+            // ortho-normalize
+            float2 tangent_u_n = math::normalize(float2(tangent_v.y, -tangent_v.x));
+            float2 tangent_v_n = float2(-tangent_u_n.y, tangent_u_n.x);
+            if ((tangent_u.x * tangent_u_n.x + tangent_u.y * tangent_u_n.y) < 0.0f)
+                tangent_u_n = -tangent_u_n;
 
-        // transform to internal space
-        float3 tu = coordinate.tangent_u;
-        float3 tv = coordinate.tangent_v;
-        coordinate.tangent_u = tangent_u_n.x * tu + tangent_u_n.y * tv;
-        coordinate.tangent_v = tangent_v_n.x * tu + tangent_v_n.y * tv;
-
+            // transform to internal space
+            float3 tu = coordinate.tangent_u;
+            float3 tv = coordinate.tangent_v;
+            coordinate.tangent_u = tangent_u_n.x * tu + tangent_u_n.y * tv;
+            coordinate.tangent_v = tangent_v_n.x * tu + tangent_v_n.y * tv;
+        }
     } else {
         // 3d source, track transformed tangents to compute deriviative in apply_bump()
-        coordinate.tangent_u = math::normalize(
+        float3 new_tangent_u =
             float3(transform[0].x, transform[0].y, transform[0].z) * coordinate.tangent_u.x +
             float3(transform[1].x, transform[1].y, transform[1].z) * coordinate.tangent_u.y +
-            float3(transform[2].x, transform[2].y, transform[2].z) * coordinate.tangent_u.z);
-        coordinate.tangent_v = math::normalize(
+            float3(transform[2].x, transform[2].y, transform[2].z) * coordinate.tangent_u.z;
+        float new_tangent_u_len = math::length(new_tangent_u);
+
+        float3 new_tangent_v =
             float3(transform[0].x, transform[0].y, transform[0].z) * coordinate.tangent_v.x +
             float3(transform[1].x, transform[1].y, transform[1].z) * coordinate.tangent_v.y +
-            float3(transform[2].x, transform[2].y, transform[2].z) * coordinate.tangent_v.z);
+            float3(transform[2].x, transform[2].y, transform[2].z) * coordinate.tangent_v.z;
+        float new_tangent_v_len = math::length(new_tangent_v);
+
+        // only change the tangents if they will be valid
+        if (new_tangent_u_len != 0.0 && new_tangent_v_len != 0.0) {
+            coordinate.tangent_u = new_tangent_u / new_tangent_u_len;
+            coordinate.tangent_v = new_tangent_v / new_tangent_v_len;
+        }
     }
 
     return coordinate;

@@ -112,7 +112,7 @@ protected:
     /// Returns a const pointer to the wrapped DB class.
     ///
     /// Provides a unified way to access the wrapped DB class, independent of the state of "this".
-    /// Returns \c NULL if the DB element is in state STATE_INVALID.
+    /// Returns \c nullptr if the DB element is in state STATE_INVALID.
     ///
     /// \note This method does \em not increase the reference count of the return value.
     const DB::Element_base* get_db_element_base() const;
@@ -120,7 +120,7 @@ protected:
     /// Returns a mutable pointer to the wrapped DB class.
     ///
     /// Provides a unified way to access the wrapped DB class, independent of the state of "this".
-    /// Returns \c NULL if the DB element is in state STATE_INVALID or STATE_ACCESS.
+    /// Returns \c nullptr if the DB element is in state STATE_INVALID or STATE_ACCESS.
     ///
     /// \note This method does \em not increase the reference count of the return value.
     DB::Element_base* get_db_element_base();
@@ -181,7 +181,7 @@ public:
     /// Returns a const pointer to the wrapped DB class.
     ///
     /// Provides a unified way to access the wrapped class D, independent of the state of "this".
-    /// Returns \c NULL if the DB element is in state STATE_INVALID.
+    /// Returns \c nullptr if the DB element is in state STATE_INVALID.
     ///
     /// \note This method does \em not increase the reference count of the return value.
     const D* get_db_element() const;
@@ -189,7 +189,7 @@ public:
     /// Returns a mutable pointer to the wrapped DB class.
     ///
     /// Provides a unified way to access the wrapped class D, independent of the state of "this".
-    /// Returns \c NULL if the DB element is in state STATE_INVALID or STATE_ACCESS.
+    /// Returns \c nullptr if the DB element is in state STATE_INVALID or STATE_ACCESS.
     ///
     /// \note This method does \em not increase the reference count of the return value.
     D* get_db_element();
@@ -199,9 +199,12 @@ template <typename I, typename D>
 const D* Db_element_impl<I,D>::get_db_element() const
 {
     const DB::Element_base* pointer = this->get_db_element_base();
-    if( !pointer)
+    if( !pointer) {
+        ASSERT( M_NEURAY_API,  this->get_state() == STATE_INVALID);
         LOG::mod_log->error( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
             "Invalid use of DB element after ITransaction::store().");
+    }
+
     return static_cast<const D*>( pointer);
 }
 
@@ -209,9 +212,17 @@ template <typename I, typename D>
 D* Db_element_impl<I,D>::get_db_element()
 {
     DB::Element_base* pointer = this->get_db_element_base();
-    if( !pointer)
-        LOG::mod_log->error( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
-            "Invalid use of DB element after ITransaction::store() (or invalid const_cast).");
+    if( !pointer) {
+        if( this->get_state() == STATE_ACCESS)
+            LOG::mod_log->error( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
+                "Invalid use of DB element after const_cast (possibly via the Python binding).");
+        else {
+            ASSERT( M_NEURAY_API,  this->get_state() == STATE_INVALID);
+            LOG::mod_log->error( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
+                "Invalid use of DB element after ITransaction::store().");
+        }
+    }
+
     return static_cast<D*>( pointer);
 }
 

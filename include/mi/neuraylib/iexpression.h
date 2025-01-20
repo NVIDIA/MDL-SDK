@@ -60,8 +60,9 @@ enum Mdl_version {
     MDL_VERSION_1_7,                       ///< MDL version 1.7
     MDL_VERSION_1_8,                       ///< MDL version 1.8
     MDL_VERSION_1_9,                       ///< MDL version 1.9
+    MDL_VERSION_1_10,                      ///< MDL version 1.10
     MDL_VERSION_EXP,                       ///< MDL experimental features.
-    MDL_VERSION_LATEST = MDL_VERSION_1_9,  ///< Latest MDL version
+    MDL_VERSION_LATEST = MDL_VERSION_1_10, ///< Latest MDL version
     MDL_VERSION_INVALID = 0xffffffffU,     ///< Invalid MDL version
     MDL_VERSION_FORCE_32_BIT = 0xffffffffU // Undocumented, for alignment only
 };
@@ -131,7 +132,7 @@ public:
     {
         const IValue* ptr_value = get_value();
         if( !ptr_value)
-            return 0;
+            return nullptr;
         const T* ptr_T = static_cast<const T*>( ptr_value->get_interface( typename T::IID()));
         ptr_value->release();
         return ptr_T;
@@ -146,7 +147,7 @@ public:
     {
         IValue* ptr_value = get_value();
         if( !ptr_value)
-            return 0;
+            return nullptr;
         T* ptr_T = static_cast<T*>( ptr_value->get_interface( typename T::IID()));
         ptr_value->release();
         return ptr_T;
@@ -156,7 +157,7 @@ public:
     ///
     /// \return
     ///           -  0: Success.
-    ///           - -1: Invalid parameter (\c NULL pointer).
+    ///           - -1: Invalid parameter (\c nullptr).
     ///           - -2: The type of \p value does not match the type of the constant.
     virtual Sint32 set_value( IValue* value) = 0;
 };
@@ -209,7 +210,7 @@ public:
     /// \param name    The DB name of the function call or material instance.
     /// \return
     ///                -  0: Success.
-    ///                - -1: Invalid parameter (\c NULL pointer).
+    ///                - -1: Invalid parameter (\c nullptr).
     ///                - -2: There is no DB element with that name.
     ///                - -3: The DB element has not the correct type.
     ///                - -4: The return type of the DB element does not match the type of this
@@ -316,7 +317,8 @@ public:
 /// indices up to i-1.
 ///
 /// Temporary reference expressions appear in fields (and temporaries) of compiled materials, and in
-/// the bodies (and temporaries) of function and material definitions.
+/// the bodies (and temporaries) of function and material definitions,  and in bodies (and
+/// temporaries) in the module builder.
 class IExpression_temporary : public
     mi::base::Interface_declare<0xd91f484b,0xdbf8,0x4585,0x9d,0xab,0xba,0xd9,0x91,0x7f,0xe1,0x4c,
                                 neuraylib::IExpression>
@@ -346,10 +348,10 @@ public:
     /// Returns the index for the given name, or -1 if there is no such expression.
     virtual Size get_index( const char* name) const = 0;
 
-    /// Returns the name for the given index, or \c NULL if there is no such expression.
+    /// Returns the name for the given index, or \c nullptr if there is no such expression.
     virtual const char* get_name( Size index) const = 0;
 
-    /// Returns the expression for \p index, or \c NULL if there is no such expression.
+    /// Returns the expression for \p index, or \c nullptr if there is no such expression.
     ///
     /// This index-based overload is faster than the name-based overload
     /// #get_expression(const char*)const and should be preferred if the index is known.
@@ -359,7 +361,7 @@ public:
     ///       guaranteed to match the parameter indices.
     virtual const IExpression* get_expression( Size index) const = 0;
 
-    /// Returns the expression for \p index, or \c NULL if there is no such expression.
+    /// Returns the expression for \p index, or \c nullptr if there is no such expression.
     ///
     /// This index-based overload is faster than the name-based overload
     /// #get_expression<T>(const char*)const and should be preferred if the index is known.
@@ -372,19 +374,19 @@ public:
     {
         const IExpression* ptr_expression = get_expression( index);
         if( !ptr_expression)
-            return 0;
+            return nullptr;
         const T* ptr_T = static_cast<const T*>( ptr_expression->get_interface( typename T::IID()));
         ptr_expression->release();
         return ptr_T;
     }
 
-    /// Returns the expression for \p name, or \c NULL if there is no such expression.
+    /// Returns the expression for \p name, or \c nullptr if there is no such expression.
     ///
     /// The index-based overload #get_expression(const char*)const is faster than this name-based
     /// overload and should be preferred if the index is known.
     virtual const IExpression* get_expression( const char* name) const = 0;
 
-    /// Returns the expression for \p name, or \c NULL if there is no such expression.
+    /// Returns the expression for \p name, or \c nullptr if there is no such expression.
     ///
     /// The index-based overload #get_expression<T>(const char*)const is faster than this name-based
     /// overload and should be preferred if the index is known.
@@ -393,7 +395,7 @@ public:
     {
         const IExpression* ptr_expression = get_expression( name);
         if( !ptr_expression)
-            return 0;
+            return nullptr;
         const T* ptr_T = static_cast<const T*>( ptr_expression->get_interface( typename T::IID()));
         ptr_expression->release();
         return ptr_T;
@@ -405,8 +407,9 @@ public:
     /// #set_expression(const char*,const IExpression*) and should be preferred if the index is
     /// known.
     ///
-    /// \return   -  0: Success.
-    ///           - -1: Invalid parameter (\c NULL pointer).
+    /// \return
+    ///           -  0: Success.
+    ///           - -1: Invalid parameter (\c nullptr).
     ///           - -2: \p index is out of bounds.
     virtual Sint32 set_expression( Size index, const IExpression* expression) = 0;
 
@@ -415,15 +418,17 @@ public:
     /// The index-based overload #set_expression(const char*,const IExpression*) is faster than
     /// this name-based overload and should be preferred if the index is known.
     ///
-    /// \return   -  0: Success.
-    ///           - -1: Invalid parameter (\c NULL pointer).
+    /// \return
+    ///           -  0: Success.
+    ///           - -1: Invalid parameter (\c nullptr).
     ///           - -2: There is no expression mapped to \p name in the list.
     virtual Sint32 set_expression( const char* name, const IExpression* expression) = 0;
 
     /// Adds an expression at the end of the list.
     ///
-    /// \return   -  0: Success.
-    ///           - -1: Invalid parameter (\c NULL pointer).
+    /// \return
+    ///           -  0: Success.
+    ///           - -1: Invalid parameter (\c nullptr).
     ///           - -2: There is already an expression mapped to \p name in the list.
     virtual Sint32 add_expression( const char* name, const IExpression* expression) = 0;
 };
@@ -509,7 +514,7 @@ public:
     ///       for most use cases it is strongly recommended to use #get_parameter_types() instead.
     ///
     /// \param index    The index of the parameter.
-    /// \return         The type name of the parameter, or \c NULL if \p index is out of range.
+    /// \return         The type name of the parameter, or \c nullptr if \p index is out of range.
     virtual const char* get_mdl_parameter_type_name( Size index) const = 0;
 
     /// Returns the semantic of this annotation definition.
@@ -534,7 +539,7 @@ public:
     /// Returns the parameter name of the given index.
     ///
     /// \param index    The parameter index.
-    /// \return         The name of the parameter or \c NULL if index
+    /// \return         The name of the parameter or \c nullptr if index
     ///                 is out of range.
     virtual const char* get_parameter_name( Size index) const = 0;
 
@@ -551,14 +556,14 @@ public:
     /// Returns the parameter defaults of the annotation definition.
     virtual const IExpression_list* get_defaults() const = 0;
 
-    /// Returns the annotations of this definition or \c NULL if no
+    /// Returns the annotations of this definition or \c nullptr if no
     /// annotations exist.
     virtual const IAnnotation_block* get_annotations() const = 0;
 
     /// Creates an annotation.
     ///
     /// \param arguments    The arguments for new annotation.
-    /// \return             The created annotation or \c NULL if one of the arguments
+    /// \return             The created annotation or \c nullptr if one of the arguments
     ///                     does not correspond to an actual parameter of the annotation or
     ///                     is not a constant expression.
     virtual const IAnnotation* create_annotation( const IExpression_list* arguments) const = 0;
@@ -601,20 +606,22 @@ public:
     /// Returns the number of annotations in this block.
     virtual Size get_size() const = 0;
 
-    /// Returns the annotation for \p index, or \c NULL if index is out of bounds.
+    /// Returns the annotation for \p index, or \c nullptr if index is out of bounds.
     virtual const IAnnotation* get_annotation( Size index) const = 0;
 
     /// Sets an annotation block at a given index.
     ///
-    /// \return   -  0: Success.
-    ///           - -1: Invalid parameter (\c NULL pointer).
+    /// \return
+    ///           -  0: Success.
+    ///           - -1: Invalid parameter (\c nullptr).
     ///           - -2: \p index is out of bounds.
     virtual Sint32 set_annotation( Size index, const IAnnotation* annotation) = 0;
 
     /// Adds an annotation at the end of the annotation block.
     ///
-    /// \return   -  0: Success.
-    ///           - -1: Invalid parameter (\c NULL pointer).
+    /// \return
+    ///           -  0: Success.
+    ///           - -1: Invalid parameter (\c nullptr).
     virtual Sint32 add_annotation( IAnnotation* annotation) = 0;
 };
 
@@ -632,33 +639,36 @@ public:
     /// Returns the index for the given name, or -1 if there is no such block.
     virtual Size get_index( const char* name) const = 0;
 
-    /// Returns the name for the given index, or \c NULL if there is no such block.
+    /// Returns the name for the given index, or \c nullptr if there is no such block.
     virtual const char* get_name( Size index) const = 0;
 
-    /// Returns the annotation block for \p index, or \c NULL if there is no such block.
+    /// Returns the annotation block for \p index, or \c nullptr if there is no such block.
     virtual const IAnnotation_block* get_annotation_block( Size index) const = 0;
 
-    /// Returns the annotation block for \p name, or \c NULL if there is no such block.
+    /// Returns the annotation block for \p name, or \c nullptr if there is no such block.
     virtual const IAnnotation_block* get_annotation_block( const char* name) const = 0;
 
     /// Sets an annotation block at a given index.
     ///
-    /// \return   -  0: Success.
-    ///           - -1: Invalid parameter (\c NULL pointer).
+    /// \return
+    ///           -  0: Success.
+    ///           - -1: Invalid parameter (\c nullptr).
     ///           - -2: \p index is out of bounds.
     virtual Sint32 set_annotation_block( Size index, const IAnnotation_block* block) = 0;
 
     /// Sets an annotation block identified by name.
     ///
-    /// \return   -  0: Success.
-    ///           - -1: Invalid parameter (\c NULL pointer).
+    /// \return
+    ///           -  0: Success.
+    ///           - -1: Invalid parameter (\c nullptr).
     ///           - -2: There is no annotation block mapped to \p name in the list.
     virtual Sint32 set_annotation_block( const char* name, const IAnnotation_block* block) = 0;
 
     /// Adds an annotation block at the end of the list.
     ///
-    /// \return   -  0: Success.
-    ///           - -1: Invalid parameter (\c NULL pointer).
+    /// \return
+    ///           -  0: Success.
+    ///           - -1: Invalid parameter (\c nullptr).
     ///           - -2: There is already an annotation block mapped to \p name in the list.
     virtual Sint32 add_annotation_block( const char* name, const IAnnotation_block* block) = 0;
 };
@@ -686,7 +696,7 @@ public:
     /// Creates a constant (mutable).
     ///
     /// \param value        The value of the constant.
-    /// \return             The created constant, or \c NULL in case of errors.
+    /// \return             The created constant, or \c nullptr in case of errors.
     virtual IExpression_constant* create_constant( IValue* value) const = 0;
 
     /// Creates a constant (const).
@@ -698,14 +708,14 @@ public:
     /// Creates a call.
     ///
     /// \param name         The DB name of the referenced function call or material instance.
-    /// \return             The created call, or \c NULL in case of errors.
+    /// \return             The created call, or \c nullptr in case of errors.
     virtual IExpression_call* create_call( const char* name) const = 0;
 
     /// Creates a parameter reference.
     ///
     /// \param type         The type of the parameter.
     /// \param index        The index of the parameter.
-    /// \return             The created parameter reference, or \c NULL in case of errors.
+    /// \return             The created parameter reference, or \c nullptr in case of errors.
     virtual IExpression_parameter* create_parameter( const IType* type, Size index) const = 0;
 
     /// Creates a direct call.
@@ -717,10 +727,10 @@ public:
     ///                     type. Any argument missing in \p arguments will be set to the default of
     ///                     the corresponding parameter. \n
     ///                     Note that the expressions in \p arguments are copied. Valid
-    ///                     subexpressions are constants, direct calls, and parameter references.
-    ///                     operation is a deep copy, e.g., DB elements referenced in call
-    ///                     expressions are also copied. \n
-    ///                     \c NULL is a valid argument which is handled like an empty expression
+    ///                     subexpressions are constants, direct calls, parameter and temporary
+    ///                     references. This copy operation is a deep copy, e.g., DB elements
+    ///                     referenced in call expressions are also copied. \n
+    ///                     \c nullptr is a valid argument which is handled like an empty expression
     ///                     list.
     /// \param[out] errors  An optional pointer to an #mi::Sint32 to which an error code will be
     ///                     written. The error codes have the following meaning:
@@ -735,7 +745,7 @@ public:
     ///                           varying return type.
     ///                     - -6: An argument expression is not a constant, a direct call, nor a
     ///                           parameter.
-    ///                     - -7: Invalid parameters (\c NULL pointer) or \p name is not a valid
+    ///                     - -7: Invalid parameters (\c nullptr) or \p name is not a valid
     ///                           DB name of a function or material definition.
     ///                     - -8: One of the parameter types is uniform, but the corresponding
     ///                           argument or default is a call expression and the return type of
@@ -743,15 +753,15 @@ public:
     ///                           since the function or material definition itself is varying.
     ///                     - -9: The function or material definition is invalid due to a module
     ///                           reload.
-    /// \return             The created call, or \c NULL in case of errors.
+    /// \return             The created call, or \c nullptr in case of errors.
     virtual IExpression_direct_call* create_direct_call(
-        const char* name, IExpression_list* arguments, Sint32* errors = 0) const = 0;
+        const char* name, IExpression_list* arguments, Sint32* errors = nullptr) const = 0;
 
     /// Creates a temporary reference.
     ///
     /// \param type         The type of the temporary.
     /// \param index        The index of the temporary.
-    /// \return             The created temporary reference, or \c NULL in case of errors.
+    /// \return             The created temporary reference, or \c nullptr in case of errors.
     virtual IExpression_temporary* create_temporary( const IType* type, Size index) const = 0;
 
     /// Creates a new expression list.
@@ -763,7 +773,7 @@ public:
 
     /// Creates a new annotation.
     ///
-    /// Returns \c NULL if one of the arguments is not a constant expression.
+    /// Returns \c nullptr if one of the arguments is not a constant expression.
     virtual IAnnotation* create_annotation(
         const char* name, const IExpression_list* arguments) const = 0;
 
@@ -835,7 +845,7 @@ public:
     /// Compares two instances of #mi::neuraylib::IExpression.
     ///
     /// The comparison operator for instances of #mi::neuraylib::IExpression is defined as follows:
-    /// - If \p lhs or \p rhs is \c NULL, the result is the lexicographic comparison of
+    /// - If \p lhs or \p rhs is \c nullptr, the result is the lexicographic comparison of
     ///   the pointer addresses themselves.
     /// - Otherwise, the types of \p lhs and \p rhs are compared. If they are different, the result
     ///   is determined by that comparison.
@@ -873,7 +883,7 @@ public:
     ///
     /// The comparison operator for instances of #mi::neuraylib::IExpression_list is defined as
     /// follows:
-    /// - If \p lhs or \p rhs is \c NULL, the result is the lexicographic comparison of
+    /// - If \p lhs or \p rhs is \c nullptr, the result is the lexicographic comparison of
     ///   the pointer addresses themselves.
     /// - Next, the list sizes are compared using \c operator<().
     /// - Next, the lists are traversed by increasing index and the names are compared using
@@ -980,7 +990,7 @@ public:
     /// \param cast_db_name   This name is used when storing the instance of the cast operator
     ///                       in the database. If the name is already taken by another DB element,
     ///                       this string will be used as the base for generating a unique name. If
-    ///                       \c NULL, a unique name is generated.
+    ///                       \c nullptr, a unique name is generated.
     /// \param force_cast     This flag has only an effect if the type of the source expression is
     ///                       identical to the target type. If \c true, then the cast
     ///                       expression will still be created. If \c false, then \p src_expr itself
@@ -989,17 +999,17 @@ public:
     ///                       call expression.
     /// \param errors         An optional pointer to an #mi::Sint32 to which an error code will be
     ///                       written. The error codes have the following meaning:
-    ///                       - 0: Success.
-    ///                       - 1: Invalid parameters (\c NULL pointer).
-    ///                       - 2: The type of \p src_expr cannot be cast to \p target_type.
-    /// \return               The resulting expression or \c NULL in case of failure.
+    ///                       -  0: Success.
+    ///                       - -1: Invalid parameters (\c nullptr).
+    ///                       - -2: The type of \p src_expr cannot be cast to \p target_type.
+    /// \return               The resulting expression or \c nullptr in case of failure.
     virtual IExpression* create_cast(
         IExpression* src_expr,
         const IType* target_type,
         const char* cast_db_name,
         bool force_cast,
         bool direct_call,
-        Sint32* errors = 0) const = 0;
+        Sint32* errors = nullptr) const = 0;
 
 #ifdef MI_NEURAYLIB_DEPRECATED_15_0
     inline IExpression* create_cast(
@@ -1031,7 +1041,7 @@ public:
     /// \param cast_db_name   This name is used when storing the instance of the decl_cast operator
     ///                       in the database. If the name is already taken by another DB element,
     ///                       this string will be used as the base for generating a unique name. If
-    ///                       \c NULL, a unique name is generated.
+    ///                       \c nullptr, a unique name is generated.
     /// \param force_cast     This flag has only an effect if the type of the source expression is
     ///                       identical to the target type. If \c true, then the decl_cast
     ///                       expression will still be created. If \c false, then \p src_expr itself
@@ -1040,17 +1050,17 @@ public:
     ///                       call expression.
     /// \param errors         An optional pointer to an #mi::Sint32 to which an error code will be
     ///                       written. The error codes have the following meaning:
-    ///                       - 0: Success.
-    ///                       - 1: Invalid parameters (\c NULL pointer).
-    ///                       - 2: The type of \p src_expr cannot be cast to \p target_type.
-    /// \return               The resulting expression or \c NULL in case of failure.
+    ///                       -  0: Success.
+    ///                       - -1: Invalid parameters (\c nullptr).
+    ///                       - -2: The type of \p src_expr cannot be cast to \p target_type.
+    /// \return               The resulting expression or \c nullptr in case of failure.
     virtual IExpression* create_decl_cast(
         IExpression* src_expr,
         const IType_struct* target_type,
         const char* cast_db_name,
         bool force_cast,
         bool direct_call,
-        Sint32* errors = 0) const = 0;
+        Sint32* errors = nullptr) const = 0;
 
     //@}
 };

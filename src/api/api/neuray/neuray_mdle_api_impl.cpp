@@ -451,150 +451,104 @@ mi::Sint32 Mdle_api_impl::export_mdle(
     MDL::Execution_context default_context;
     MDL::Execution_context* mdl_context = unwrap_and_clear_context(context, default_context);
 
-    if (!file_name || !mdle_data || !transaction) {
-        add_error_message(mdl_context, "Invalid parameters (NULL pointer).", -1);
-        return -1;
-    }
+    if( !transaction || !file_name || !mdle_data)
+        return add_error_message( mdl_context, "Invalid parameters (nullptr).", -1);
 
-    auto* transaction_impl = static_cast<Transaction_impl*>(transaction);
+    auto* transaction_impl = static_cast<Transaction_impl*>( transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
-    mi::base::Handle<MDL::IValue_factory> vf( MDL::get_value_factory());
-    mi::base::Handle<MDL::IExpression_factory> ef( MDL::get_expression_factory());
 
     // get the prototype
     mi::base::Handle<const mi::IString> prototype_name(
         mdle_data->get_value<mi::IString>("prototype_name"));
-    if (!prototype_name) {
-        add_error_message(mdl_context, "Invalid parameters (NULL pointer).", -1);
-        return -1;
-    }
-    DB::Tag prototype_tag = db_transaction->name_to_tag(prototype_name->get_c_str());
-    if (prototype_tag.is_invalid()) {
-        add_error_message(
-            mdl_context,
-            "Prototype name cannot be found in database.", -1);
-        return -1;
-    }
-    SERIAL::Class_id class_id = db_transaction->get_class_id(prototype_tag);
-    if (class_id != MDL::ID_MDL_FUNCTION_DEFINITION &&
-        class_id != MDL::ID_MDL_FUNCTION_CALL) {
-        add_error_message(
-            mdl_context,
-            "Prototype is neither a function definition "
-            "nor a function call.", -1);
-        return -1;
-    }
+    if( !prototype_name)
+        return add_error_message( mdl_context, "Invalid parameters (nullptr).", -1);
+
+    DB::Tag prototype_tag = db_transaction->name_to_tag( prototype_name->get_c_str());
+    if( !prototype_tag)
+        return add_error_message( mdl_context, "Prototype name cannot be found in database.", -1);
+
+    SERIAL::Class_id class_id = db_transaction->get_class_id( prototype_tag);
+    if(    class_id != MDL::ID_MDL_FUNCTION_DEFINITION
+        && class_id != MDL::ID_MDL_FUNCTION_CALL)
+        return add_error_message( mdl_context,
+            "Prototype is neither a function definition nor a function call.", -1);
+
+    // Get the defaults and annotations.
     mi::base::Handle<const mi::neuraylib::IExpression_list> defaults(
-        mdle_data->get_value<mi::neuraylib::IExpression_list>("defaults"));
+        mdle_data->get_value<mi::neuraylib::IExpression_list>( "defaults"));
     mi::base::Handle<const MDL::IExpression_list> defaults_int(
-        get_internal_expression_list(defaults.get()));
+        get_internal_expression_list( defaults.get()));
 
     mi::base::Handle<const mi::neuraylib::IAnnotation_block> annotations(
-        mdle_data->get_value<mi::neuraylib::IAnnotation_block>("annotations"));
-
+        mdle_data->get_value<mi::neuraylib::IAnnotation_block>( "annotations"));
     mi::base::Handle<const MDL::IAnnotation_block> annotations_int(
-        get_internal_annotation_block(annotations.get()));
+        get_internal_annotation_block( annotations.get()));
 
-    mi::base::Handle<mi::mdl::IMDL> imdl(m_mdlc_module->get_mdl());
+    // If the prototype is a call, replace it with its definition, but use the defaults of the call
+    // if none were provided.
+    if( class_id == MDL::ID_MDL_FUNCTION_CALL) {
 
-    switch (class_id)
-    {
-        case MDL::ID_MDL_FUNCTION_CALL:
-        {
-            DB::Access<MDL::Mdl_function_call> func_call(prototype_tag, db_transaction);
-            prototype_tag = func_call->get_function_definition(db_transaction);
-            if (!prototype_tag.is_valid()) {
-                add_error_message(
-                    mdl_context,
-                    "Function call is invalid.", -1);
-                return -1;
-            }
-
-            DB::Access<MDL::Mdl_function_definition> func_def(prototype_tag, db_transaction);
-            // skip presets
-            DB::Tag def_prototype = func_def->get_prototype();
-            if (def_prototype.is_valid())
-                prototype_tag = def_prototype;
-
-            if (!defaults_int)
-                defaults_int = func_call->get_arguments();
-
-            if (!annotations_int)
-                annotations_int = func_def->get_annotations();
-            break;
-        }
-
-        case MDL::ID_MDL_FUNCTION_DEFINITION:
-        {
-            DB::Access<MDL::Mdl_function_definition> func_def(prototype_tag, db_transaction);
-            // skip presets
-            DB::Tag def_prototype = func_def->get_prototype();
-            if (def_prototype.is_valid())
-                prototype_tag = def_prototype;
-
-            if (!defaults_int)
-                defaults_int = func_def->get_defaults();
-
-            if (!annotations_int)
-                annotations_int = func_def->get_annotations();
-            break;
-        }
-
-        default:
-            assert(false); // handled above
+        DB::Access<MDL::Mdl_function_call> func_call( prototype_tag, db_transaction);
+        prototype_tag = func_call->get_function_definition( db_transaction);
+        if( !prototype_tag.is_valid())
+            return add_error_message( mdl_context, "Function call is invalid.", -1);
+        if( !defaults_int)
+            defaults_int = func_call->get_arguments();
     }
 
-    // collect files that will be included in the mdle
-    std::vector<const char*> additional_file_source_paths;
-    std::vector<const char*> additional_file_target_paths;
+    // Compute prototype of a potential variant in prototype_of_prototype_tag. Get defaults and
+    // annotations if none were provided.
+    DB::Access<MDL::Mdl_function_definition> func_def( prototype_tag, db_transaction);
+    std::string func_def_mdl_name = func_def->get_mdl_name();
+    DB::Tag prototype_of_prototype_tag = func_def->get_prototype();
+    if( !prototype_of_prototype_tag)
+        prototype_of_prototype_tag = prototype_tag;
+    if( !defaults_int)
+        defaults_int = func_def->get_defaults();
+    if( !annotations_int)
+        annotations_int = func_def->get_annotations();
 
-
-    // compute (filtered) annotations
-    //---------------------------------------------------------------------------------------------
+    // Compute filtered annotations (skip hidden and thumbnail, track origin).
     bool has_origin = false;
     mi::Size n = annotations_int ? annotations_int->get_size() : 0;
-    mi::base::Handle<MDL::IAnnotation_block> new_annotations_int(ef->create_annotation_block( n));
-    for(size_t a = 0; a < n; ++a) {
-
-        mi::base::Handle<const MDL::IAnnotation> anno(annotations_int->get_annotation(a));
-
-        // skip hidden as we want the main material be visible in any case
-        if (strcmp(anno->get_name(), "::anno::hidden()") == 0)
+    mi::base::Handle<MDL::IValue_factory> vf( MDL::get_value_factory());
+    mi::base::Handle<MDL::IExpression_factory> ef( MDL::get_expression_factory());
+    mi::base::Handle<MDL::IAnnotation_block> new_annotations_int( ef->create_annotation_block( n));
+    for( mi::Size i = 0; i < n; ++i) {
+        mi::base::Handle<const MDL::IAnnotation> anno( annotations_int->get_annotation( i));
+        // We want the main material be visible in any case.
+        if( strcmp( anno->get_name(), "::anno::hidden()") == 0)
             continue;
-
-        // has to be set manually on Mdle_data struct
-        if (strcmp(anno->get_name(), "::anno::thumbnail(string)") == 0) {
+        // Thumbnails have to bet set manually on \p mdle_data
+        if( strcmp( anno->get_name(), "::anno::thumbnail(string)") == 0)
             continue;
-        }
-
-        if (strcmp(anno->get_name(), "::anno::origin(string)") == 0) {
+        // Keep track of origin annotation.
+        if (strcmp(anno->get_name(), "::anno::origin(string)") == 0)
             has_origin = true;
-        }
-
-        new_annotations_int->add_annotation(anno.get());
+        new_annotations_int->add_annotation( anno.get());
     }
-    if (!has_origin) {
-        // add origin annotation
-        std::string definiton_name = db_transaction->tag_to_name(prototype_tag);
-        // strip mdl::/mdle:: prefix
-        definiton_name = definiton_name.substr(definiton_name.find("::"));
-        // strip signature
-        definiton_name = definiton_name.substr(0, definiton_name.rfind('('));
 
-        mi::base::Handle<MDL::IValue> anno_value(
-            vf->create_string(definiton_name.c_str()));
-        mi::base::Handle<MDL::IExpression> anno_expr(ef->create_constant(anno_value.get()));
+    // Add origin annotation if it was not provided in the parameters or the prototype.
+    if( !has_origin) {
+        std::string mdl_name = func_def->get_mdl_name();
+        mdl_name = mdl_name.substr( 0, mdl_name.rfind( '('));
+
+        mi::base::Handle<MDL::IValue> anno_value( vf->create_string( mdl_name.c_str()));
+        mi::base::Handle<MDL::IExpression> anno_expr( ef->create_constant( anno_value.get()));
         mi::base::Handle<MDL::IExpression_list> anno_expr_list(
             ef->create_expression_list( /*initial_capacity*/ 1));
-        anno_expr_list->add_expression("name", anno_expr.get());
-
-        mi::base::Handle<MDL::IAnnotation> anno(ef->create_annotation(
+        anno_expr_list->add_expression( "name", anno_expr.get());
+        mi::base::Handle<MDL::IAnnotation> anno( ef->create_annotation(
             db_transaction, "::anno::origin(string)", anno_expr_list.get()));
-        new_annotations_int->add_annotation(anno.get());
+        new_annotations_int->add_annotation( anno.get());
     }
 
     // add thumbnail
     //---------------------------------------------------------------------------------------------
+
+    // collect files that will be included in the mdle
+    std::vector<const char*> additional_file_source_paths;
+    std::vector<const char*> additional_file_target_paths;
 
     // user specified thumbnail overrides the existing one
     mi::base::Handle<const mi::IString> thumbnail(
@@ -637,14 +591,14 @@ mi::Sint32 Mdle_api_impl::export_mdle(
     mi::base::Handle<MDL::IAnnotation_block> empty_block(ef->create_annotation_block( 0));
     mi::base::Handle<MDL::IAnnotation_list> empty_list(ef->create_annotation_list( 0));
     builder.add_function(
-        "main",                    // function/material name is "main"
-        prototype_tag,             // stored in the database with this tag
-        defaults_int.get(),        // use the following defaults
-        empty_list.get(),          // delete all parameter annotations
-        new_annotations_int.get(), // origin and thumbnail
-        empty_block.get(),         // delete all return annotations
-        /*is_exported*/ true,      // let the module export this function
-        /*is_declarative*/false,   // no need to enforce the declarative flag
+        "main",                      // function/material name is "main"
+        prototype_of_prototype_tag,  // stored in the database with this tag
+        defaults_int.get(),          // use the following defaults
+        empty_list.get(),            // delete all parameter annotations
+        new_annotations_int.get(),   // origin and thumbnail
+        empty_block.get(),           // delete all return annotations
+        /*is_exported*/ true,        // let the module export this function
+        /*is_declarative*/false,     // no need to enforce the declarative flag
         MDL::IType::MK_NONE,
         mdl_context);
     if (mdl_context->get_error_messages_count() != 0)
@@ -655,6 +609,7 @@ mi::Sint32 Mdle_api_impl::export_mdle(
 
     // in-line the temp-module
     //---------------------------------------------------------------------------------------------
+    mi::base::Handle<mi::mdl::IMDL> imdl(m_mdlc_module->get_mdl());
     mi::base::Handle<mi::mdl::IMDL_module_transformer> module_transformer(
         imdl->create_module_transformer());
     mi::base::Handle<mi::mdl::IModule const> inlined_module;
@@ -670,7 +625,7 @@ mi::Sint32 Mdle_api_impl::export_mdle(
         inlined_module = mi::base::make_handle(
             module_transformer->inline_imports(tmp_module.get()));
 
-        if (!inlined_module.is_valid_interface()) {
+        if (!inlined_module) {
 
             MDL::convert_and_log_messages(module_transformer->access_messages(), mdl_context);
             return -1;
@@ -681,7 +636,7 @@ mi::Sint32 Mdle_api_impl::export_mdle(
     //---------------------------------------------------------------------------------------------
     mi::base::Handle<const mi::IArray> user_files(mdle_data->get_value<mi::IArray>("user_files"));
 
-    if (user_files.is_valid_interface()) {
+    if (user_files) {
 
         size_t n = user_files->get_length();
         for (mi::Size i = 0; i < n; ++i) {

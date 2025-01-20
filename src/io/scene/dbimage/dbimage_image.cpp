@@ -39,7 +39,6 @@
 
 #include <boost/core/ignore_unused.hpp>
 
-#include <base/hal/hal/i_hal_ospath.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/path/i_path.h>
 #include <base/data/serial/i_serializer.h>
@@ -800,7 +799,7 @@ const SERIAL::Serializable* Image::serialize( SERIAL::Serializer* serializer) co
 
     Scene_element_base::serialize( serializer);
 
-    SERIAL::write( serializer, HAL::Ospath::sep());
+    SERIAL::write( serializer, static_cast<mi::Uint8>( fs::path::preferred_separator));
 
     SERIAL::write( serializer, remote ? "" : m_original_filename);
     SERIAL::write( serializer, remote ? "" : m_mdl_file_path);
@@ -860,9 +859,9 @@ SERIAL::Serializable* Image::deserialize( SERIAL::Deserializer* deserializer)
 
     Scene_element_base::deserialize( deserializer);
 
-    std::string serializer_sep;
+    mi::Uint8 serializer_sep;
     SERIAL::read( deserializer, &serializer_sep);
-    const bool convert_path =  serializer_sep != HAL::Ospath::sep();
+    const bool convert_path =  serializer_sep != fs::path::preferred_separator;
 
     SERIAL::read( deserializer, &m_original_filename);
     SERIAL::read( deserializer, &m_mdl_file_path);
@@ -921,18 +920,14 @@ SERIAL::Serializable* Image::deserialize( SERIAL::Deserializer* deserializer)
     // Adjust filenames for this host
     if( convert_path) {
 
-        m_original_filename
-            = HAL::Ospath::convert_to_platform_specific_path( m_original_filename);
-        m_resolved_container_filename
-            = HAL::Ospath::convert_to_platform_specific_path( m_resolved_container_filename);
+        m_original_filename = fs::u8path( m_original_filename).u8string();
+        m_resolved_container_filename = fs::u8path( m_resolved_container_filename).u8string();
 
         for( auto& frame_filenames: m_frames_filenames)
             for( auto& uvfn: frame_filenames) {
 
-                uvfn.m_resolved_filename
-                    = HAL::Ospath::convert_to_platform_specific_path( uvfn.m_resolved_filename);
-                uvfn.m_container_membername
-                    = HAL::Ospath::convert_to_platform_specific_path( uvfn.m_container_membername);
+                uvfn.m_resolved_filename = fs::u8path( uvfn.m_resolved_filename).u8string();
+                uvfn.m_container_membername = fs::u8path( uvfn.m_container_membername).u8string();
                 uvfn.m_resolved_container_membername = m_resolved_container_filename.empty()
                     ? "" : m_resolved_container_filename + ':' + uvfn.m_container_membername;
         }
@@ -1309,7 +1304,8 @@ Image_set* Image::resolve_filename( const std::string& filename, const char* sel
     SYSTEM::Access_module<PATH::Path_module> path_module( false);
 
     // Get regular expression for filename.
-    std::string basename = HAL::Ospath::basename( filename);
+    fs::path filename_path = fs::u8path( filename);
+    std::string basename = filename_path.filename().u8string();
     size_t mode_index = 0;
     size_t frames_index = 0;
     Uvtile_mode mode = MODE_OFF;
@@ -1334,7 +1330,7 @@ Image_set* Image::resolve_filename( const std::string& filename, const char* sel
             // have to be at the top-level of the search paths. Member name is not checked.
             // No support for uvtiles nor animated textures.
             std::string archive_path = filename.substr( 0, p + 4);
-            std::string archive_name = HAL::Ospath::basename( archive_path);
+            std::string archive_name = fs::u8path( archive_path).filename().u8string();
             std::string resolved_archive_filename
                 = path_module->search( PATH::MDL, archive_name);
             std::string member_name = filename.substr( p + 5);
@@ -1363,7 +1359,7 @@ Image_set* Image::resolve_filename( const std::string& filename, const char* sel
 
         // Obtain paths to consider
         std::vector<fs::path> paths;
-        fs::path tmp( fs::u8path( filename).parent_path());
+        fs::path tmp = filename_path.parent_path();
         if( tmp.is_absolute()) {
             paths.push_back( tmp);
         } else {

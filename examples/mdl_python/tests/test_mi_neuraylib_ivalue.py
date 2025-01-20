@@ -24,7 +24,7 @@ class MainIValue(UnittestBase):
     def setUpClass(self):
         print(f"Running tests in {__file__} in process with id: {os.getpid()}")
         self.sdk = SDK()
-        self.sdk.load(addExampleSearchPath=False, loadImagePlugins=False, locale="de")
+        self.sdk.load(addExampleSearchPath=True, loadImagePlugins=False, locale="de")
         self.tf = self.sdk.mdlFactory.create_type_factory(self.sdk.transaction)
         self.vf = self.sdk.mdlFactory.create_value_factory(self.sdk.transaction)
         self.imp_exp = self.sdk.neuray.get_api_component(pymdlsdk.IMdl_impexp_api)
@@ -485,9 +485,7 @@ class MainIValue(UnittestBase):
         systemLocale: str = i18n.get_system_locale()
 
         dbName: str = self.load_module("::nvidia::core_definitions")
-        if not dbName:
-            return 
-
+        self.assertNotNullOrEmpty(dbName)
         mod: pymdlsdk.IModule = self.sdk.transaction.access_as(pymdlsdk.IModule, dbName)
         self.assertIsValidInterface(mod)
         overloads: pymdlsdk.IArray = mod.get_function_overloads("worley_noise_texture")

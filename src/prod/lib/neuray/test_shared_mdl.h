@@ -96,28 +96,30 @@ namespace fs = std::filesystem;
 
 std::string mdle_path = MI::TEST::mi_src_path( "prod/lib/neuray") + "/test.mdle";
 
-const std::string name_hoelzer = u8"H\u00f6lzer";
-const std::string name_eiche   = u8"Eiche";
-const std::string name_foehre  = u8"F\u00f6hre";
-const std::string name_buche   = u8"Buche";
-const std::string name_mdl     = u8"mdl";
-const std::string name_keyword = u8"keyword";
+const std::string name_hoelzer = reinterpret_cast<const char*>( u8"H\u00f6lzer");
+const std::string name_eiche   = reinterpret_cast<const char*>( u8"Eiche");
+const std::string name_foehre  = reinterpret_cast<const char*>( u8"F\u00f6hre");
+const std::string name_buche   = reinterpret_cast<const char*>( u8"Buche");
+const std::string name_mdl     = reinterpret_cast<const char*>( u8"mdl");
+const std::string name_keyword = reinterpret_cast<const char*>( u8"keyword");
+const std::string name_rus     = reinterpret_cast<const char*>(
+    u8"\u0422\u0435\u0441\u0442\u041d\u043e\u043c\u0435\u0440\u041e\u0434\u0438\u043d\u0451");
 
-#define TEST_NO_1_RUS \
-    u8"\u0422\u0435\u0441\u0442\u041d\u043e\u043c\u0435\u0440\u041e\u0434\u0438\u043d\u0451"
-
-const char* src_keyword = u8"mdl 1.8;\nexport material mat() = material();\n\n";
-const char* src_eiche   = u8"mdl 1.8;\nexport material eichen_material() = material();\n";
-const char* src_foehre  = u8"mdl 1.8;\nexport material kiefern_material() = material();\n";
-const char* src_buche   = u8"mdl 1.8;\n"
+const char* src_eiche   = reinterpret_cast<const char*>( u8"mdl 1.8;\n"
+    "export material eichen_material() = material();\n");
+const char* src_foehre  = reinterpret_cast<const char*>( u8"mdl 1.8;\n"
+    "export material kiefern_material() = material();\n");
+const char* src_buche   = reinterpret_cast<const char*>( u8"mdl 1.8;\n"
     "import ::'H\u00f6lzer'::Eiche::eichen_material;\n"
     "import 'F\u00f6hre'::kiefern_material;\n"
     "import 'mdl'::keyword::mat;\n"
     "export material eiche() = ::'H\\U000000f6lzer'::'\\x45iche'::eichen_material();\n"
     "export material kiefer() = 'F\\u00f6hre'::kiefern_material();\n"
     "export material buche() = material();\n"
-    "export material mat() = 'mdl'::keyword::mat();\n";
-const char* src_rus = u8"mdl 1.6;\n"
+    "export material mat() = 'mdl'::keyword::mat();\n");
+const char* src_keyword = reinterpret_cast<const char*>( u8"mdl 1.8;\n"
+    "export material mat() = material();\n\n");
+const char* src_rus = reinterpret_cast<const char*>( u8"mdl 1.6;\n"
     "import::state::*;\n"
     "import::df::*;\n"
     "export color fd_test(float a = 1.0) {\n"
@@ -126,7 +128,7 @@ const char* src_rus = u8"mdl 1.6;\n"
     "export material md_test(float a = 1.0) = material(\n"
     "    surface: material_surface(\n"
     "        scattering : df::diffuse_reflection_bsdf(tint : color(a)))\n"
-    ");\n";
+    ");\n");
 
 // === General utilities ===========================================================================
 
@@ -636,14 +638,14 @@ void create_function_calls(
             "mdl::" TEST_MDL "::mi_light_profile",
         "mdl::" TEST_MDL "::md_bsdf_measurement(bsdf_measurement)",
             "mdl::" TEST_MDL "::mi_bsdf_measurement",
-        "mdl::" TEST_MDL "::md_baking()",
+        "mdl::" TEST_MDL "::md_baking(float,::" TEST_MDL "::top_struct)",
             "mdl::" TEST_MDL "::mi_baking",
-        "mdl::" TEST_MDL "::md_class_baking(float,::" TEST_MDL "::top_struct)",
-            "mdl::" TEST_MDL "::mi_class_baking",
         "mdl::" TEST_MDL "::fd_bar_struct_to_int(::" TEST_MDL "::bar_struct)",
             "mdl::" TEST_MDL "::fc_bar_struct_to_int",
         "mdl::" TEST_MDL "::md_aov(float,float)",
-            "mdl::" TEST_MDL "::mi_aov"
+            "mdl::" TEST_MDL "::mi_aov",
+        "mdl::" TEST_MDL "::md_baking_const()",
+            "mdl::" TEST_MDL "::mi_baking_const",
     };
 
     for( mi::Size i = 0; i < sizeof( materials) / sizeof( const char*); i+=2)
@@ -654,7 +656,7 @@ void create_unicode_modules()
 {
     std::string dirname     = std::string( DIR_PREFIX) + "/" + name_hoelzer;
     std::string dirname_mdl = dirname + "/" + name_mdl;
-    std::string dirname_rus = std::string( DIR_PREFIX) + "/" + TEST_NO_1_RUS;
+    std::string dirname_rus = std::string( DIR_PREFIX) + "/" + name_rus;
 
     std::string filename_eiche   = dirname + "/" + name_eiche + ".mdl";
     std::string filename_buche   = dirname + "/" + name_buche + ".mdl";
@@ -772,13 +774,15 @@ void load_secondary_modules(
         create_unicode_modules();
 
         // load module with unicode package/module names
-        import_mdl_module( transaction, neuray, "::" TEST_NO_1_RUS "::1_module", 0);
-        MI_CHECK_EQUAL( 0, transaction->get_privacy_level( "mdl::" TEST_NO_1_RUS "::1_module"));
+        std::string mdl_name1 = std::string(  "::") + name_rus + "::1_module";
+        import_mdl_module( transaction, neuray, mdl_name1.c_str(), 0);
+        std::string db_name1 = std::string(  "mdl::") + name_rus + "::1_module";
+        MI_CHECK_EQUAL( 0, transaction->get_privacy_level( db_name1.c_str()));
 
-        std::string mdl_name =    "::" + name_hoelzer + "::" + name_buche;
-        std::string db_name  = "mdl::" + name_hoelzer + "::" + name_buche;
-        import_mdl_module( transaction, neuray, mdl_name.c_str(), 0);
-        MI_CHECK_EQUAL( 0, transaction->get_privacy_level( db_name.c_str()));
+        std::string mdl_name2 =    "::" + name_hoelzer + "::" + name_buche;
+        std::string db_name2  = "mdl::" + name_hoelzer + "::" + name_buche;
+        import_mdl_module( transaction, neuray, mdl_name2.c_str(), 0);
+        MI_CHECK_EQUAL( 0, transaction->get_privacy_level( db_name2.c_str()));
     }
     {
         // prepare for mdl reload test
@@ -817,8 +821,8 @@ struct Exreimp_data
 
     // MDL module name of the exported module.
     //
-    // The suffix "_export" is used for added for file-based exports.
-    // The suffix "_export_string" is used for for string-based exports.
+    // The suffix "_export" is added for file-based exports.
+    // The suffix "_export_string" is added for for string-based exports.
     std::string export_mdl_name;
 
     mi::Sint32 error_number_file = 0;
@@ -833,6 +837,9 @@ struct Exreimp_data
 void do_check_mdl_export_reimport(
     mi::neuraylib::ITransaction* transaction, mi::neuraylib::INeuray* neuray, const Exreimp_data& d)
 {
+    // ::imports_from_string requires the module cache
+    bool use_entity_resolver = d.module_db_name != "mdl::imports_from_string";
+
     mi::base::Handle<mi::neuraylib::IMdl_configuration> mdl_configuration(
         neuray->get_api_component<mi::neuraylib::IMdl_configuration>());
     mi::base::Handle<mi::neuraylib::IMdl_impexp_api> mdl_impexp_api(
@@ -840,8 +847,7 @@ void do_check_mdl_export_reimport(
     mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
         neuray->get_api_component<mi::neuraylib::IMdl_factory>());
 
-    // ::imports_from_string requires the module cache
-    if( d.module_db_name == "mdl::imports_from_string")
+    if( !use_entity_resolver)
         uninstall_external_resolver( neuray);
 
     std::string file_name = decode( d.export_mdl_name.substr( 2)) + "_export.mdl";
@@ -862,9 +868,11 @@ void do_check_mdl_export_reimport(
     if( d.modify_mdl_paths) {
         mdl_paths = get_mdl_paths( neuray);
         mdl_configuration->clear_mdl_paths();
+        // add only path for export directory
         MI_CHECK_EQUAL( 0, mdl_configuration->add_mdl_path( DIR_PREFIX));
-        std::string path = MI::TEST::mi_src_path( "prod/lib/neuray");
-        MI_CHECK_EQUAL( 0, mdl_configuration->add_mdl_path( path.c_str()));
+        // reinstall entity resolver after path changes
+        if( use_entity_resolver)
+            install_external_resolver( neuray);
     }
 
     // file-based export
@@ -876,6 +884,18 @@ void do_check_mdl_export_reimport(
 
     // re-import from file
     if( d.error_number_file == 0) {
+
+        if( d.modify_mdl_paths) {
+            // add paths required for imported entities
+            std::string path1 = MI::TEST::mi_src_path( "prod/lib/neuray");
+            MI_CHECK_EQUAL( 0, mdl_configuration->add_mdl_path( path1.c_str()));
+            std::string path2 = MI::TEST::mi_src_path( "io/scene");
+            MI_CHECK_EQUAL( 0, mdl_configuration->add_mdl_path( path2.c_str()));
+            // reinstall entity resolver after path changes
+            if( use_entity_resolver)
+                install_external_resolver( neuray);
+        }
+
         std::string mdl_module_name_from_file = "::exported::";
         mdl_module_name_from_file += encode( file_name);
         mdl_module_name_from_file.resize( mdl_module_name_from_file.size()-4); // remove ".mdl"
@@ -886,6 +906,15 @@ void do_check_mdl_export_reimport(
     }
 
 #ifndef RESOLVE_RESOURCES_FALSE
+    if( d.modify_mdl_paths) {
+        mdl_configuration->clear_mdl_paths();
+        // add only path for export directory
+        MI_CHECK_EQUAL( 0, mdl_configuration->add_mdl_path( DIR_PREFIX));
+        // reinstall entity resolver after path changes
+        if( use_entity_resolver)
+            install_external_resolver( neuray);
+    }
+
     // string-based export
     mi::base::Handle<mi::IString> exported_module(
         transaction->create<mi::IString>( "String"));
@@ -897,6 +926,18 @@ void do_check_mdl_export_reimport(
 
     // re-import from string
     if( d.error_number_string == 0) {
+
+        if( d.modify_mdl_paths) {
+            // add paths required for imported entities
+            std::string path1 = MI::TEST::mi_src_path( "prod/lib/neuray");
+            MI_CHECK_EQUAL( 0, mdl_configuration->add_mdl_path( path1.c_str()));
+            std::string path2 = MI::TEST::mi_src_path( "io/scene");
+            MI_CHECK_EQUAL( 0, mdl_configuration->add_mdl_path( path2.c_str()));
+            // reinstall entity resolver after path changes
+            if( use_entity_resolver)
+                install_external_resolver( neuray);
+        }
+
         std::string mdl_module_name_from_string = d.export_mdl_name + "_export_string";
         result = mdl_impexp_api->load_module_from_string( transaction,
             mdl_module_name_from_string.c_str(), exported_module->get_c_str(), context.get());
@@ -908,9 +949,8 @@ void do_check_mdl_export_reimport(
     if( d.modify_mdl_paths)
         set_mdl_paths( neuray, mdl_paths);
 
-    // ::imports_from_string requires the module cache
-    if( d.module_db_name == "mdl::imports_from_string")
-        install_external_resolver( neuray);
+    // reinstall entity resolver after path changes/temporary deinstallation
+    install_external_resolver( neuray);
 }
 
 // Exports a canvas.

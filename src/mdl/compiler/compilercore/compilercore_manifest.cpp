@@ -665,17 +665,18 @@ void Manifest_printer::print(Printer *printer, mi::base::IInterface const *iface
 
     char const *s = "1.0";
     switch (manifest->get_mdl_version()) {
-    case IMDL::MDL_VERSION_1_0: s = "1.0"; break;
-    case IMDL::MDL_VERSION_1_1: s = "1.1"; break;
-    case IMDL::MDL_VERSION_1_2: s = "1.2"; break;
-    case IMDL::MDL_VERSION_1_3: s = "1.3"; break;
-    case IMDL::MDL_VERSION_1_4: s = "1.4"; break;
-    case IMDL::MDL_VERSION_1_5: s = "1.5"; break;
-    case IMDL::MDL_VERSION_1_6: s = "1.6"; break;
-    case IMDL::MDL_VERSION_1_7: s = "1.7"; break;
-    case IMDL::MDL_VERSION_1_8: s = "1.8"; break;
-    case IMDL::MDL_VERSION_1_9: s = "1.9"; break;
-    case IMDL::MDL_VERSION_EXP: s = "99.99"; break;
+    case IMDL::MDL_VERSION_1_0:  s = "1.0"; break;
+    case IMDL::MDL_VERSION_1_1:  s = "1.1"; break;
+    case IMDL::MDL_VERSION_1_2:  s = "1.2"; break;
+    case IMDL::MDL_VERSION_1_3:  s = "1.3"; break;
+    case IMDL::MDL_VERSION_1_4:  s = "1.4"; break;
+    case IMDL::MDL_VERSION_1_5:  s = "1.5"; break;
+    case IMDL::MDL_VERSION_1_6:  s = "1.6"; break;
+    case IMDL::MDL_VERSION_1_7:  s = "1.7"; break;
+    case IMDL::MDL_VERSION_1_8:  s = "1.8"; break;
+    case IMDL::MDL_VERSION_1_9:  s = "1.9"; break;
+    case IMDL::MDL_VERSION_1_10: s = "1.10"; break;
+    case IMDL::MDL_VERSION_EXP:  s = "99.99"; break;
     }
     printer->printf("%s = \"%s\"\n", manifest->get_key(IArchive_manifest::PK_MDL), s);
 

@@ -343,7 +343,9 @@ bool Mdl_generator::generate(Mdl_sdk& mdl_sdk, Mdl_generator_result& inout_resul
     generator_context.clearUserData();
 
 // Specify the MDL target version, for MaterialX 1.38.9
-#if (MATERIALX_MAJOR_VERSION >= 1 && MATERIALX_MINOR_VERSION >= 38 && MATERIALX_BUILD_VERSION >= 9)
+#if ((MATERIALX_MAJOR_VERSION > 1) || \
+    (MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION > 38) || \
+    (MATERIALX_MAJOR_VERSION == 1 && MATERIALX_MINOR_VERSION == 38 && MATERIALX_BUILD_VERSION >= 9))
     mx::GenMdlOptionsPtr genMdlOptions = std::make_shared<mx::GenMdlOptions>();
 
     if (m_mdl_version == "1.6")
@@ -457,7 +459,9 @@ bool Mdl_generator::generate(Mdl_sdk& mdl_sdk, Mdl_generator_result& inout_resul
 
     inout_result.materialx_file_name = m_mtlx_source;
     inout_result.materialx_material_name = material_name;
-    inout_result.generated_mdl_code = generated;
+    inout_result.generated_mdl_code = 
+        std::string("// generated from MaterialX using the SDK version ") + MaterialX::getVersionString() + "\n\n" +
+        generated;
     inout_result.generated_mdl_name = shader->getStage("pixel").getFunctionName();
     return true;
 }

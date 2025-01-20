@@ -33,7 +33,6 @@
 #include <sstream>
 
 #include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/replace.hpp>
 #include <boost/tokenizer.hpp>
 
 #include "i_mdl_elements_utilities.h"
@@ -160,28 +159,12 @@ const IExpression* Mdl_compiled_material::get_temporary(
     return converter->core_dag_node_to_int_expr( temporary, /*type_int*/ nullptr);
 }
 
-namespace {
-
-/// Converts path from the SDK representation (dots and array index brackets) to the MDL core
-/// representation (dots only).
-///
-/// The simple search-and-replace fails to reject some invalid input like "foo[bar".
-std::string convert_path( const char* path)
-{
-    std::string result = path;
-    boost::replace_all( result, "[", ".");
-    boost::erase_all( result, "]");
-    return result;
-}
-
-} // namespace
-
 const IExpression* Mdl_compiled_material::lookup_sub_expression(
     DB::Transaction* transaction, const char* path) const
 {
     ASSERT( M_SCENE, path);
 
-    std::string core_path = convert_path( path);
+    std::string core_path = int_path_to_core_path( path);
 
     const mi::mdl::DAG_node* sub_expr_dag_node;
     const mi::mdl::IValue* sub_expr_value;
@@ -381,7 +364,7 @@ mi::base::Uuid  Mdl_compiled_material::get_sub_expression_hash( const char* path
 {
     ASSERT( M_SCENE, path);
 
-    std::string core_path = convert_path( path);
+    std::string core_path = int_path_to_core_path( path);
     mi::mdl::DAG_hash hash = m_core_material_instance->get_sub_expression_hash( core_path.c_str());
     return convert_hash( hash);
 }

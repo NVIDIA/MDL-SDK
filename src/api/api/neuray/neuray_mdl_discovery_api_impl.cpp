@@ -972,6 +972,10 @@ const mi::neuraylib::IMdl_discovery_result* Mdl_discovery_api_impl::discover(
             fs_path = fs::absolute(fs_path);
         fs_path = fs_path.lexically_normal();
 
+        // strip trailing OS separator, if present
+        if (!fs_path.has_filename())
+            fs_path = fs_path.parent_path();
+
         std::map<std::string, bool> archives;
         for (const auto& entry: fs::directory_iterator(fs_path))
             if (fs::is_regular_file(entry) && entry.path().extension().u8string() == ".mdr")
@@ -981,13 +985,13 @@ const mi::neuraylib::IMdl_discovery_result* Mdl_discovery_api_impl::discover(
         std::vector<std::string> invalid_directories;
         for (auto& archive : archives) {
             if (validate_archive(archive, archives, invalid_directories, fs_path.u8string())) {
-                    std::string resolved_path = (fs_path / (archive.first + ".mdr")).u8string();
-                    discover_archive(
-                        root_package,
-                        fs_path.u8string().c_str(),
-                        i,
-                        resolved_path.c_str(),
-                        filter);
+                std::string resolved_path = (fs_path / (archive.first + ".mdr")).u8string();
+                discover_archive(
+                    root_package,
+                    fs_path.u8string().c_str(),
+                    i,
+                    resolved_path.c_str(),
+                    filter);
             }
         }
 

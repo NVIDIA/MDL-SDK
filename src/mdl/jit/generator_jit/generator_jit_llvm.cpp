@@ -520,7 +520,7 @@ Exc_location::Exc_location(
 , m_pos(NULL)
 {
     if (pos != NULL) {
-        mi::mdl::IModule const *mod = code_gen.tos_module();
+        mi::mdl::Module const *mod = code_gen.tos_module();
         m_mod  = mod;
         m_pos  = pos;
     }
@@ -591,8 +591,8 @@ public:
     /// \param      code_gen   the LLVM code generator
     /// \param[out] owner_mod  out parameter for the owner module of the definition
     mi::mdl::IDefinition const *get_callee_definition_and_owner(
-        LLVM_code_generator &code_gen,
-        mi::base::Handle<mi::mdl::IModule const> &owner) const
+        LLVM_code_generator                     &code_gen,
+        mi::base::Handle<mi::mdl::Module const> &owner) const
     {
         mi::mdl::IExpression_reference const *ref =
             cast<mi::mdl::IExpression_reference>(m_call->get_reference());
@@ -600,7 +600,7 @@ public:
             return NULL;
         }
         mi::mdl::IDefinition const *ref_def = ref->get_definition();
-        mi::mdl::IModule const *mod = code_gen.tos_module();
+        mi::mdl::Module const      *mod = code_gen.tos_module();
         mi::mdl::IDefinition const *def = mod->get_original_definition(ref_def);
 
         owner = mod->get_owner_module(ref_def);
@@ -617,7 +617,7 @@ public:
     mi::mdl::IDefinition const *get_callee_definition(
         LLVM_code_generator &code_gen) const MDL_FINAL
     {
-        mi::base::Handle<mi::mdl::IModule const> owner;
+        mi::base::Handle<mi::mdl::Module const> owner;
         return get_callee_definition_and_owner(code_gen, owner);
     }
 
@@ -650,7 +650,7 @@ public:
         LLVM_code_generator     &code_gen,
         Function_instance const &inst) const MDL_FINAL
     {
-        mi::base::Handle<mi::mdl::IModule const> owner;
+        mi::base::Handle<mi::mdl::Module const> owner;
         get_callee_definition_and_owner(code_gen, owner);
 
         return code_gen.get_or_create_context_data(owner.get(), inst);
@@ -769,6 +769,13 @@ public:
         return &m_call->access_position();
     }
 
+    /// Get the DAG source position of this call itself if exists.
+    bool get_dag_dbg_info(DAG_DbgInfo &dbg_info) const MDL_FINAL
+    {
+        // none on AST
+        return false;
+    }
+
     /// Returns true, if the call should return derivatives.
     bool returns_derivatives(LLVM_code_generator &code_gen) const MDL_FINAL
     {
@@ -807,7 +814,7 @@ public:
     ///
     /// \param[out] owner_mod  out parameter for the owner module of the definition
     mi::mdl::IDefinition const *get_callee_definition_and_owner(
-        mi::base::Handle<mi::mdl::IModule const> &owner) const
+        mi::base::Handle<mi::mdl::Module const> &owner) const
     {
         char const *signature = m_call->get_name();
         if (signature[0] == '#') {
@@ -815,11 +822,11 @@ public:
             ++signature;
         }
 
-        owner = m_resolver->get_owner_module(signature);
+        owner = mi::mdl::impl_cast<mi::mdl::Module>(m_resolver->get_owner_module(signature));
         if (!owner.is_valid_interface()) {
             return NULL;
         }
-        mi::mdl::Module const *module = impl_cast<mi::mdl::Module>(owner.get());
+        mi::mdl::Module const *module = owner.get();
 
         IDefinition const *def = module->find_signature(signature, /*only_exported=*/false);
         if (def != NULL) {
@@ -834,7 +841,7 @@ public:
     mi::mdl::IDefinition const *get_callee_definition(
         LLVM_code_generator &) const MDL_FINAL
     {
-        mi::base::Handle<mi::mdl::IModule const> owner;
+        mi::base::Handle<mi::mdl::Module const> owner;
         return get_callee_definition_and_owner(owner);
     }
 
@@ -870,7 +877,7 @@ public:
         LLVM_code_generator     &code_gen,
         Function_instance const &inst) const MDL_FINAL
     {
-        mi::base::Handle<mi::mdl::IModule const> owner;
+        mi::base::Handle<mi::mdl::Module const> owner;
         if (get_callee_definition_and_owner(owner) == NULL) {
             return NULL;
         }
@@ -1058,11 +1065,18 @@ public:
     /// If possible, convert into an AST expression.
     mi::mdl::IExpression_call const *as_expr_call() const MDL_FINAL { return NULL; }
 
-    /// Get the source position of this call itself.
+    /// Get the AST source position of this call itself.
     mi::mdl::Position const *get_position() const MDL_FINAL
     {
         // DAGs have no position yet
         return NULL;
+    }
+
+    /// Get the DAG source position of this call itself if exists.
+    bool get_dag_dbg_info(DAG_DbgInfo &dbg_info) const MDL_FINAL
+    {
+        dbg_info = m_call->get_dbg_info();
+        return true;
     }
 
     /// Returns true, if the call should return derivatives.
@@ -1111,6 +1125,28 @@ void State_usage_analysis::register_function(llvm::Function *func)
     Function_state_usage_info *info =
         m_arena_builder.create<Function_state_usage_info>(&m_arena);
     m_func_state_usage_info_map[func] = info;
+}
+
+// Register a function to take part in the analysis, which has been cloned from an
+// already registered function. The state usage is initialized with the usage of the
+// original function.
+void State_usage_analysis::register_cloned_function(
+    llvm::Function *cloned_func,
+    llvm::Function *orig_func)
+{
+    Function_state_usage_info *info =
+        m_arena_builder.create<Function_state_usage_info>(&m_arena);
+    m_func_state_usage_info_map[cloned_func] = info;
+
+    Function_state_usage_info_map::iterator it = m_func_state_usage_info_map.find(orig_func);
+    if (it == m_func_state_usage_info_map.end()) {
+        MDL_ASSERT(!"Function not registered for state usage info");
+        return;
+    }
+
+    Function_state_usage_info *orig_info = it->second;
+    info->state_usage = orig_info->state_usage;
+    info->called_funcs.insert(orig_info->called_funcs.cbegin(), orig_info->called_funcs.cend());
 }
 
 // Register a mapped function to set the "expected" usage.
@@ -1326,6 +1362,8 @@ LLVM_code_generator::LLVM_code_generator(
 , m_fast_math(get_math_options_from_options(options, &m_finite_math, &m_reciprocal_math))
 , m_enable_ro_segment(
     options.get_bool_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT))
+, m_max_const_size(
+    size_t(options.get_int_option(MDL_JIT_OPTION_MAX_CONST_DATA)))
 , m_always_inline(options.get_bool_option(MDL_JIT_OPTION_INLINE_AGGRESSIVELY))
 , m_eval_dag_ternary_strictly(options.get_bool_option(MDL_JIT_OPTION_EVAL_DAG_TERNARY_STRICTLY))
 , m_sl_use_resource_data(options.get_bool_option(MDL_JIT_OPTION_SL_USE_RESOURCE_DATA))
@@ -1355,8 +1393,13 @@ LLVM_code_generator::LLVM_code_generator(
 , m_object_id(0)
 , m_context_data(0, Context_data_map::hasher(), Context_data_map::key_equal(), get_allocator())
 , m_opt_level(get_opt_level_from_options(target_lang, options))
+, m_enable_full_debug(get_enable_full_debug(enable_debug))
+, m_enable_type_debug(target_is_structured_language(target_lang))
 , m_sm_version(target_lang == ICode_generator::TL_PTX ? sm_version : 0)
-, m_min_ptx_version(40)
+, m_min_ptx_version(
+    // LLVM uses "labels1 - labels2 expression in .section" which requires PTX ISA 7.5 or higher.
+    // We use 7.8 because it already is supported in LLVM
+    m_enable_full_debug ? 78 : 40)
 , m_ptx_target_machine(
     target_lang == ICode_generator::TL_PTX
         ? create_ptx_target_machine()
@@ -1412,8 +1455,6 @@ LLVM_code_generator::LLVM_code_generator(
 , m_num_texture_spaces(num_texture_spaces)
 , m_num_texture_results(num_texture_results)
 , m_state_usage_analysis(*this)
-, m_enable_full_debug(enable_debug)
-, m_enable_type_debug(target_is_structured_language(target_lang))
 , m_enable_noinline(false)
 , m_exported_funcs_are_entries(false)
 , m_state_functions_no_bounds_exception(true)
@@ -1518,11 +1559,6 @@ LLVM_code_generator::LLVM_code_generator(
 
     char const *s;
 
-    s = getenv("MI_MDL_JIT_DEBUG_INFO");
-    if (s != NULL) {
-        m_enable_full_debug = true;
-    }
-
     s = getenv("MI_MDL_JIT_NOINLINE");
     if (s != NULL) {
         m_enable_noinline = true;
@@ -1557,6 +1593,18 @@ LLVM_code_generator::LLVM_code_generator(
         = TARGET_BIT(PTX);
 
     #undef TARGET_BIT
+}
+
+// Returns true if full debug information should be enabled.
+bool LLVM_code_generator::get_enable_full_debug(bool enable_debug)
+{
+    // Allow to overwrite via environment variable
+    char const *s = getenv("MI_MDL_JIT_DEBUG_INFO");
+    if (s != NULL) {
+        return true;
+    }
+
+    return enable_debug;
 }
 
 // Get the optimization level from the options and environment.
@@ -2184,6 +2232,8 @@ void LLVM_code_generator::create_resource_tables(Lambda_function const &lambda)
             case Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
             case Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
             case Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
+            case Resource_tag_tuple::RK_MICROFLAKE_SHEEN_GENERAL:
+            case Resource_tag_tuple::RK_MICROFLAKE_SHEEN_MULTISCATTER:
                 {
                     IValue_texture::Bsdf_data_kind bsdf_data_kind =
                         bsdf_data_kind_from_kind(k.m_kind);
@@ -2224,6 +2274,8 @@ void LLVM_code_generator::create_resource_tables(Lambda_function const &lambda)
         case Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
         case Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
         case Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
+        case Resource_tag_tuple::RK_MICROFLAKE_SHEEN_GENERAL:
+        case Resource_tag_tuple::RK_MICROFLAKE_SHEEN_MULTISCATTER:
             {
                 // ... and BSDF data textures
                 if (tex_entries.size() < e.index + 1)
@@ -2272,7 +2324,7 @@ void LLVM_code_generator::create_resource_tables(Lambda_function const &lambda)
 
 // Compile all functions of a module.
 llvm::Module *LLVM_code_generator::compile_module(
-    mi::mdl::IModule const *module)
+    mi::mdl::Module const *module)
 {
     LLVM_code_generator::MDL_module_scope scope(*this, module);
 
@@ -2329,8 +2381,9 @@ llvm::Module *LLVM_code_generator::compile_module(
 
             if (func_decl != NULL) {
                 // skip presets: this will insert the "real" body
-                mi::base::Handle<IModule const> owner = mi::base::make_handle_dup(module);
-                func_decl = skip_presets(func_decl, owner);
+                mi::base::Handle<Module const> owner = mi::base::make_handle_dup(module);
+                func_decl = cast<IDeclaration_function>(
+                    skip_presets(func_decl, owner)->get_declaration());
 
                 // check if instantiation is needed at top level
                 IType_function const *ftype = cast<IType_function>(def->get_type());
@@ -2994,7 +3047,7 @@ void LLVM_code_generator::set_llvm_function_attributes(
 
 // Declares an LLVM function from a MDL function instance.
 LLVM_context_data *LLVM_code_generator::declare_function(
-    mi::mdl::IModule const  *owner,
+    mi::mdl::Module const   *owner,
     Function_instance const &inst,
     char const              *name_prefix,
     bool                    is_prototype)
@@ -3056,6 +3109,17 @@ LLVM_context_data *LLVM_code_generator::declare_function(
         // functions
         if (def->get_semantics() == IDefinition::DS_UNKNOWN) {
             need_render_state_param = true;
+        }
+    }
+
+    // check if any parameter uses a storage mode which needs state access
+    size_t n_params = func_type->get_parameter_count();
+    if (target_supports_storage_spaces()) {
+        for (size_t i = 0; i < n_params; ++i) {
+            if (inst.get_parameter_storage_modifier(i) != SM_NORMAL) {
+                need_render_state_param = true;
+                break;
+            }
         }
     }
 
@@ -3144,8 +3208,6 @@ LLVM_context_data *LLVM_code_generator::declare_function(
     if (m_deriv_infos != nullptr) {
         func_deriv_info = m_deriv_infos->get_function_derivative_infos(inst);
     }
-
-    size_t n_params = func_type->get_parameter_count();
 
     for (size_t i = 0; i < n_params; ++i) {
         mi::mdl::IType const   *p_type;
@@ -3335,7 +3397,7 @@ LLVM_context_data *LLVM_code_generator::declare_lambda(
     bool is_entry_point = lambda->is_entry_point();
 
     // we support function entries with and without state
-    if (m_lambda_force_render_state || lambda->uses_render_state()) {
+    if (m_lambda_force_render_state || lambda->uses_varying_state()) {
         // add a hidden state parameter
         arg_types.push_back(m_type_mapper.get_state_ptr_type(m_state_mode));
 
@@ -3666,7 +3728,7 @@ LLVM_context_data *LLVM_code_generator::declare_internal_function(
 
 // Retrieve the LLVM context data for a MDL function instance, create it if not available.
 LLVM_context_data *LLVM_code_generator::get_or_create_context_data(
-    mi::mdl::IModule const  *owner,
+    mi::mdl::Module const   *owner,
     Function_instance const &inst,
     char const              *module_name,
     bool                    is_prototype)
@@ -3821,14 +3883,18 @@ void LLVM_code_generator::compile_function_instance(
     llvm::Function::arg_iterator arg_it = get_first_parameter(func, ctx_data);
 
     for (size_t i = 0, n = func_decl->get_parameter_count(); i < n; ++i, ++arg_it) {
-        mi::mdl::IParameter const  *param   = func_decl->get_parameter(i);
-        mi::mdl::IDefinition const *p_def   = param->get_name()->get_definition();
-        mi::mdl::IType const       *p_type  = p_def->get_type();
-        int                        arr_size = inst.instantiate_type_size(p_type);
-        bool                       by_ref   = is_passed_by_reference(p_type, arr_size) ||
-            (target_supports_pointers() &&
-                m_cur_func_deriv_info != NULL &&
-                m_cur_func_deriv_info->args_want_derivatives.test_bit(i + 1));
+        mi::mdl::IParameter const  *param      = func_decl->get_parameter(i);
+        mi::mdl::IDefinition const *p_def      = param->get_name()->get_definition();
+        mi::mdl::IType const       *p_type     = p_def->get_type();
+        int                        arr_size    = inst.instantiate_type_size(p_type);
+        Storage_modifier           storage_mod = inst.get_parameter_storage_modifier(i);
+        bool arg_is_deriv =
+            m_cur_func_deriv_info != NULL &&
+            m_cur_func_deriv_info->args_want_derivatives.test_bit(i + 1);
+
+        bool                       by_ref   = storage_mod == SM_NORMAL && (
+            is_passed_by_reference(p_type, arr_size) ||
+            (target_supports_pointers() && arg_is_deriv));
         LLVM_context_data          *p_data;
 
         if (need_storage_for_var(p_def)) {
@@ -3837,7 +3903,7 @@ void LLVM_code_generator::compile_function_instance(
             p_data = context.get_context_data(p_def);
 
             llvm::Value *init = NULL;
-            switch (inst.get_parameter_storage_modifier(i)) {
+            switch (storage_mod) {
             case SM_NORMAL:
                 // copy value into shadow copy
                 init = by_ref ?
@@ -3845,25 +3911,31 @@ void LLVM_code_generator::compile_function_instance(
                     llvm::cast<llvm::Value>(arg_it);
                 break;
             case SM_PARAMETER:
-                init = Expression_result::offset(
-                    arg_it,
-                    Expression_result::OK_RO_DATA_SEGMENT,
-                    lookup_type(p_type, arr_size),
-                    p_type).as_value(context);
-                break;
             case SM_RODATA:
-                init = Expression_result::offset(
-                    arg_it,
-                    Expression_result::OK_ARG_BLOCK,
-                    lookup_type(p_type, arr_size),
-                    p_type).as_value(context);
+                {
+                    Expression_result init_res = Expression_result::offset(
+                        arg_it,
+                        storage_mod == SM_PARAMETER
+                            ? Expression_result::OK_ARG_BLOCK
+                            : Expression_result::OK_RO_DATA_SEGMENT,
+                        lookup_type(p_type, arr_size),
+                        p_type);
+
+                    // material parameters and constants are never stored with derivatives,
+                    // so expand to derivative value if needed
+                    if (arg_is_deriv) {
+                        init_res.ensure_deriv_result(context, true);
+                    }
+
+                    init = init_res.as_value(context);
+                }
                 break;
             }
             p_data->set_var_value(init);
         } else {
             // this parameter will never be written
             p_data = context.create_context_data(
-                p_def, arg_it, by_ref, inst.get_parameter_storage_modifier(i));
+                p_def, arg_it, by_ref, storage_mod);
         }
         context.make_accessible(param);
     }
@@ -3888,20 +3960,20 @@ void LLVM_code_generator::compile_function_instance(
 }
 
 // Get the top level module on the stack.
-mi::mdl::IModule const *LLVM_code_generator::tos_module() const
+mi::mdl::Module const *LLVM_code_generator::tos_module() const
 {
     MDL_ASSERT(m_module_stack.begin() != m_module_stack.end());
     return m_module_stack.back();
 }
 
 // Push a module on the stack.
-void LLVM_code_generator::push_module(mi::mdl::IModule const *module)
+void LLVM_code_generator::push_module(mi::mdl::Module const *module)
 {
     // Note: inside a distribution function, other lambdas are called. these lambdas do not have
     // a MDL source module, hence NULL can happen here
     if (module != NULL) {
         // ensure that all modules ON the stack have their import entries restored
-        mi::mdl::impl_cast<mi::mdl::Module>(module)->restore_import_entries(m_module_cache);
+        module->restore_import_entries(m_module_cache);
     }
     m_module_stack.push_back(module);
 }
@@ -3911,9 +3983,9 @@ void LLVM_code_generator::pop_module()
 {
     // Note: inside a distribution function, other lambdas are called. these lambdas do not have
     // a MDL source module, hence NULL can happen here
-    if (mi::mdl::IModule const *module = m_module_stack.back()) {
+    if (mi::mdl::Module const *module = m_module_stack.back()) {
         // drop the import entries again once removed from the stack
-        mi::mdl::impl_cast<mi::mdl::Module>(module)->drop_import_entries();
+        module->drop_import_entries();
     }
     m_module_stack.pop_back();
 }
@@ -4834,6 +4906,9 @@ llvm::Value *LLVM_code_generator::translate_lval_expression(
             case mi::mdl::IDefinition::DK_PARAMETER:
             case mi::mdl::IDefinition::DK_VARIABLE:
                 if (LLVM_context_data *data = ctx.lookup_context_data(def)) {
+                    // l-values cannot be in argblock or read-only data
+                    MDL_ASSERT(data->get_var_storage_modifier() == SM_NORMAL);
+
                     return data->get_var_address();
                 }
                 break;
@@ -4911,6 +4986,9 @@ void LLVM_code_generator::translate_lval_expression_dual(
             case mi::mdl::IDefinition::DK_PARAMETER:
             case mi::mdl::IDefinition::DK_VARIABLE:
                 if (LLVM_context_data *data = ctx.lookup_context_data(def)) {
+                    // l-values cannot be in argblock or read-only data
+                    MDL_ASSERT(data->get_var_storage_modifier() == SM_NORMAL);
+
                     llvm::Value *var_addr = data->get_var_address();
                     adr_val = ctx.create_simple_gep_in_bounds(var_addr, 0u);
                     adr_dx  = ctx.create_simple_gep_in_bounds(var_addr, 1u);
@@ -5017,32 +5095,31 @@ Expression_result LLVM_code_generator::translate_expression(
             case mi::mdl::IDefinition::DK_PARAMETER:
             case mi::mdl::IDefinition::DK_VARIABLE:
                 if (LLVM_context_data *data = ctx.lookup_context_data(def)) {
-                    if (llvm::Value *v = data->get_var_address()) {
-                        switch (data->get_var_storage_modifier()) {
-                        case SM_NORMAL:
+                    switch (data->get_var_storage_modifier()) {
+                    case SM_NORMAL:
+                        if (llvm::Value *v = data->get_var_address()) {
                             res = Expression_result::ptr(v);
-                            break;
-                        case SM_PARAMETER:
-                        case SM_RODATA:
-                            {
-                                IType const *mdl_type = def->get_type();
-                                llvm::Type *llvm_type =
-                                    lookup_type(mdl_type, ctx.instantiate_type_size(mdl_type));
-
-                                res = Expression_result::offset(
-                                    v,
-                                    data->get_var_storage_modifier() == SM_PARAMETER
-                                        ? Expression_result::OK_ARG_BLOCK
-                                        : Expression_result::OK_RO_DATA_SEGMENT,
-                                    llvm_type,
-                                    mdl_type);
-                            }
-                            break;
+                        } else {
+                            // variable is never changed, only a value
+                            res = Expression_result::value(data->get_var_value());
                         }
-                    } else {
-                        // variable is never changed, only a value
+                        break;
+                    case SM_PARAMETER:
+                    case SM_RODATA:
+                        {
+                            IType const *mdl_type = def->get_type();
+                            llvm::Type *llvm_type =
+                                lookup_type(mdl_type, ctx.instantiate_type_size(mdl_type));
 
-                        res = Expression_result::value(data->get_var_value());
+                            res = Expression_result::offset(
+                                data->get_var_value(),
+                                data->get_var_storage_modifier() == SM_PARAMETER
+                                    ? Expression_result::OK_ARG_BLOCK
+                                    : Expression_result::OK_RO_DATA_SEGMENT,
+                                llvm_type,
+                                mdl_type);
+                        }
+                        break;
                     }
                 }
                 break;
@@ -5272,22 +5349,33 @@ bool LLVM_code_generator::is_stored_in_ro_data_segment(mi::mdl::IType const *typ
 {
     // Big data arrays slow down PTXAS and the JIT linker. Move them into a read-only
     // segment that we manage ourself.
-    return size > 1024 && can_be_stored_in_ro_segment(type);
+    return size > m_max_const_size && can_be_stored_in_ro_segment(type);
 }
 
 // Returns true, if the given value will be stored in the RO data segment.
 bool LLVM_code_generator::is_stored_in_ro_data_segment(mi::mdl::IValue const *v)
 {
-    if (!m_use_ro_data_segment || !is<mi::mdl::IValue_compound>(v))
+    if (!m_use_ro_data_segment)
         return false;
 
-    mi::mdl::IType const *v_type = v->get_type();
-    llvm::Type *tp  = m_type_mapper.lookup_type(m_llvm_context, v_type);
+    // for derivative values, strip off the derivative part, which is always zero
+    mi::mdl::IValue const *non_deriv_v = v;
+    bool is_deriv = m_type_mapper.is_deriv_type(v->get_type());
+    if (is_deriv) {
+        non_deriv_v = as<mi::mdl::IValue_struct>(v)->get_value(0);
+    }
+
+    // we only consider arrays and structs for the RO data segment
+    if (!is<mi::mdl::IValue_array>(non_deriv_v) && !is<mi::mdl::IValue_struct>(non_deriv_v))
+        return false;
+
+    mi::mdl::IType const *non_deriv_v_type = non_deriv_v->get_type();
+    llvm::Type *tp  = m_type_mapper.lookup_type(m_llvm_context, non_deriv_v_type);
 
     llvm::DataLayout const *dl = get_target_layout_data();
 
     uint64_t size = dl->getTypeAllocSize(tp);
-    return is_stored_in_ro_data_segment(v_type, size);
+    return is_stored_in_ro_data_segment(non_deriv_v_type, size);
 }
 
 // Creates a global constant for a value in the LLVM IR.
@@ -5337,7 +5425,15 @@ Expression_result LLVM_code_generator::translate_value(
         res = ctx.get_constant(int(idx));
     } else {
         // non-resource value
-        mi::mdl::IValue::Kind value_kind = v->get_kind();
+
+        // for derivative values, strip off the derivative part, which is always zero
+        mi::mdl::IValue const *non_deriv_v = v;
+        bool is_deriv = m_type_mapper.is_deriv_type(v->get_type());
+        if (is_deriv) {
+            non_deriv_v = as<mi::mdl::IValue_struct>(v)->get_value(0);
+        }
+
+        mi::mdl::IValue::Kind value_kind = non_deriv_v->get_kind();
         if (value_kind == mi::mdl::IValue::VK_ARRAY || value_kind == mi::mdl::IValue::VK_STRUCT) {
             // If arrays are handled as values, we generate currently
             // bad code because they are stored every time to access elements by index.
@@ -5345,14 +5441,14 @@ Expression_result LLVM_code_generator::translate_value(
             // handle them also this way here.
 
             bool is_ofs = false;
-            Global_const_map::iterator it = m_global_const_map.find(v);
+            Global_const_map::iterator it = m_global_const_map.find(non_deriv_v);
             if (it == m_global_const_map.end()) {
                 // first time we see this constant, create it
                 llvm::Value *cv = create_global_const(
-                    ctx, cast<mi::mdl::IValue_compound>(v), is_ofs);
+                    ctx, cast<mi::mdl::IValue_compound>(non_deriv_v), is_ofs);
 
                 // cache it
-                m_global_const_map[v] = Value_offset_pair(cv, is_ofs);
+                m_global_const_map[non_deriv_v] = Value_offset_pair(cv, is_ofs);
                 res = cv;
             } else {
                 // was already created, get it from cache
@@ -5363,8 +5459,8 @@ Expression_result LLVM_code_generator::translate_value(
 
             if (is_ofs) {
                 // get from the RO segment
-                mi::mdl::IType const *v_type = v->get_type();
-                llvm::Type *tp  = m_type_mapper.lookup_type(m_llvm_context, v_type);
+                mi::mdl::IType const *non_deriv_v_type = non_deriv_v->get_type();
+                llvm::Type *tp = m_type_mapper.lookup_type(m_llvm_context, non_deriv_v_type);
 
                 // for HLSL and GLSL we use user provided functions to read the value
                 if (target_is_structured_language()) {
@@ -5374,7 +5470,7 @@ Expression_result LLVM_code_generator::translate_value(
                         ctx.get_constant(cur_offs),
                         Expression_result::OK_RO_DATA_SEGMENT,
                         tp,
-                        v_type);
+                        non_deriv_v_type);
                 }
 
                 llvm::Value *ro_seg = get_ro_data_segment(ctx);
@@ -5386,7 +5482,14 @@ Expression_result LLVM_code_generator::translate_value(
             }
 
             // this is an address
-            return Expression_result::ptr(res);
+            Expression_result expr_res = Expression_result::ptr(res);
+
+            // constants are never stored with derivatives,
+            // so expand to derivative value if needed
+            if (is_deriv) {
+                expr_res.ensure_deriv_result(ctx, true);
+            }
+            return expr_res;
         }
 
         // non-array/struct
@@ -6045,6 +6148,8 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
                 bin_expr->translate_argument_value(*this, ctx, 1, /*wants_derivs=*/ false);
             mi::mdl::Position    *index_pos = NULL;
 
+            ctx.set_curr_pos(bin_expr);
+
             Expression_result res = translate_index_expression(
                 ctx, comp_type, comp, index, index_pos);
             return res.as_value(ctx);
@@ -6057,6 +6162,8 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
 
             mi::mdl::IType const *r_type = bin_expr->get_argument_type(1);
             llvm::Value          *r = bin_expr->translate_argument_value(*this, ctx, 1, derivs);
+
+            ctx.set_curr_pos(bin_expr);
 
             return translate_multiply(
                 ctx, lookup_type_or_deriv_type(ctx, bin_expr), l_type, l, r_type, r);
@@ -6113,6 +6220,8 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
             mi::mdl::IType const *l_type = bin_expr->get_argument_type(0);
             mi::mdl::IType const *r_type = bin_expr->get_argument_type(1);
 
+            ctx.set_curr_pos(bin_expr);
+
             return translate_compare(ctx, op, l_type, l, r_type, r).as_value(ctx);
         }
 
@@ -6146,6 +6255,8 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
                 if (r_is_arr) {
                     r_elem = ctx.extract_dual(r, unsigned(i));
                 }
+
+                ctx.set_curr_pos(bin_expr);
 
                 llvm::Value *tmp = translate_binary_basic(ctx, op, l_elem, r_elem, bin_expr_pos);
                 if (tmp == NULL) {
@@ -6182,6 +6293,8 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
                 r_elem = ctx->CreateExtractValue(r, idxes);
             }
 
+            ctx.set_curr_pos(bin_expr);
+
             llvm::Value *tmp = translate_binary_basic(ctx, op, l_elem, r_elem, bin_expr_pos);
             if (tmp == NULL) {
                 res = NULL;
@@ -6191,6 +6304,8 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
         }
     } else {
         // not array typed
+        ctx.set_curr_pos(bin_expr);
+
         res = translate_binary_basic(ctx, op, l, r, bin_expr_pos);
     }
 
@@ -6341,35 +6456,49 @@ llvm::Value *LLVM_code_generator::translate_binary_basic(
 
     case mi::mdl::IExpression_binary::OK_MODULO:
     case mi::mdl::IExpression_binary::OK_MODULO_ASSIGN:
-        // only on integer and integer vectors
-        if (!maybe_zero(r)) {
-            // no exception possible
-            res = ctx->CreateSRem(l, r);
-        } else if (m_divzero_check_exception_disabled) {
-            llvm::BasicBlock *ok_bb   = ctx.create_bb("mod_by_non_zero");
-            llvm::BasicBlock *fail_bb = ctx.create_bb("mod_by_zerol");
-            llvm::BasicBlock *end_bb  = ctx.create_bb("mod_end");
-            llvm::Value      *tmp     = ctx.create_local(l_type, "res");
+        {
+            auto create_modulo = [&](llvm::Value *l, llvm::Value *r) {
+                // Modulo is undefined for negative values in GLSL, so implement as l - (l / r) * r
+                if (m_target_lang == ICode_generator::TL_GLSL) {
+                    return ctx->CreateSub(l,
+                        ctx->CreateMul(
+                            ctx->CreateSDiv(l, r),
+                            r));
+                } else {
+                    return ctx->CreateSRem(l, r);
+                }
+            };
 
-            ctx.create_non_zero_check_cmp(rhs, ok_bb, fail_bb);
-            ctx->SetInsertPoint(ok_bb);
-            {
-                res = ctx->CreateSRem(l, r);
-                ctx->CreateStore(res, tmp);
-                ctx->CreateBr(end_bb);
+            // only on integer and integer vectors
+            if (!maybe_zero(r)) {
+                // no exception possible
+                res = create_modulo(l, r);
+            } else if (m_divzero_check_exception_disabled) {
+                llvm::BasicBlock *ok_bb   = ctx.create_bb("mod_by_non_zero");
+                llvm::BasicBlock *fail_bb = ctx.create_bb("mod_by_zerol");
+                llvm::BasicBlock *end_bb  = ctx.create_bb("mod_end");
+                llvm::Value      *tmp     = ctx.create_local(l_type, "res");
+
+                ctx.create_non_zero_check_cmp(rhs, ok_bb, fail_bb);
+                ctx->SetInsertPoint(ok_bb);
+                {
+                    res = create_modulo(l, r);
+                    ctx->CreateStore(res, tmp);
+                    ctx->CreateBr(end_bb);
+                }
+                ctx->SetInsertPoint(fail_bb);
+                {
+                    ctx->CreateStore(llvm::Constant::getNullValue(l_type), tmp);
+                    ctx->CreateBr(end_bb);
+                }
+                ctx->SetInsertPoint(end_bb);
+                {
+                    res = ctx->CreateLoad(tmp);
+                }
+            } else {
+                ctx.create_div_check_with_exception(rhs, Exc_location(*this, expr_pos));
+                res = create_modulo(l, r);
             }
-            ctx->SetInsertPoint(fail_bb);
-            {
-                ctx->CreateStore(llvm::Constant::getNullValue(l_type), tmp);
-                ctx->CreateBr(end_bb);
-            }
-            ctx->SetInsertPoint(end_bb);
-            {
-                res = ctx->CreateLoad(tmp);
-            }
-        } else {
-            ctx.create_div_check_with_exception(rhs, Exc_location(*this, expr_pos));
-            res = ctx->CreateSRem(l, r);
         }
         break;
 
@@ -7121,13 +7250,6 @@ Expression_result LLVM_code_generator::translate_dag_intrinsic(
             return call_expr->translate_argument(*this, ctx, 2, derivs);
         }
         break;
-    case mi::mdl::IDefinition::DS_INTRINSIC_DAG_GET_DERIV_VALUE:
-        {
-            Expression_result res = call_expr->translate_argument(
-                *this, ctx, 0, /*wants_derivs=*/ false);  // for DAG wants_derivs is ignored
-            res.ensure_deriv_result(ctx, false);  // always ensure they are removed
-            return res;
-        }
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_MAKE_DERIV:
         {
             Expression_result res = call_expr->translate_argument(
@@ -7395,7 +7517,6 @@ Expression_result LLVM_code_generator::translate_call(
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_LENGTH:
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_SET_OBJECT_ID:
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_SET_TRANSFORMS:
-    case mi::mdl::IDefinition::DS_INTRINSIC_DAG_GET_DERIV_VALUE:
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_MAKE_DERIV:
         return translate_dag_intrinsic(ctx, call_expr);
 
@@ -7481,8 +7602,8 @@ Expression_result LLVM_code_generator::translate_call(
         return Expression_result::value(ctx.get_constant(int(0)));
 
     case IDefinition::DS_INTRINSIC_TEX_GRID_TO_OBJECT_SPACE:
-        return Expression_result::value(
-            llvm::ConstantAggregateZero::get(lookup_type(call_expr->get_type())));
+        // TODO: for now, just return the identity matrix
+        return Expression_result::value(create_identity_matrix(ctx));
 
     default:
         // try compiler known intrinsic function
@@ -7692,9 +7813,6 @@ Expression_result LLVM_code_generator::translate_call_user_defined_function(
 
         Expression_result expr_res = call_expr->translate_argument(*this, ctx, i, arg_is_deriv);
 
-        // make sure, the argument is a derivative if needed
-        expr_res.ensure_deriv_result(ctx, arg_is_deriv);
-
         IType const   *p_type;
         ISymbol const *dummy;
         f_type->get_parameter(i, p_type, dummy);
@@ -7712,6 +7830,9 @@ Expression_result LLVM_code_generator::translate_call_user_defined_function(
             }
             continue;
         }
+
+        // make sure, the argument is a derivative if needed, after offsets have been handled
+        expr_res.ensure_deriv_result(ctx, arg_is_deriv);
 
         int param_imm_size = instantiate_call_param_type_size(p_type, inst.get_array_instances());
 
@@ -7747,6 +7868,8 @@ Expression_result LLVM_code_generator::translate_call_user_defined_function(
             args.push_back(expr_res.as_value(ctx));
         }
     }
+
+    ctx.set_curr_pos(call_expr);
 
     // call it
     llvm::Value *res = ctx->CreateCall(callee, args);
@@ -9249,7 +9372,8 @@ Expression_result LLVM_code_generator::translate_node(
                     // skip prefix for derivative variants
                     ++signature;
                 }
-                mi::base::Handle<mi::mdl::IModule const> mod(resolver->get_owner_module(signature));
+                mi::base::Handle<mi::mdl::Module const> mod(
+                    impl_cast<mi::mdl::Module>(resolver->get_owner_module(signature)));
                 MDL_module_scope scope(*this, mod.get());
 
                 res = translate_call(ctx, &call);
@@ -9535,7 +9659,7 @@ void LLVM_code_generator::compile_waiting_functions()
     while (!m_functions_q.empty()) {
         Wait_entry const &entry = m_functions_q.front();
         Function_instance const &func_inst = entry.get_instance();
-        mi::mdl::IModule const  *owner     = entry.get_owner();
+        mi::mdl::Module const  *owner      = entry.get_owner();
 
         LLVM_context_data *p_data = get_context_data(func_inst);
         llvm::Function    *func   = p_data->get_function();

@@ -65,26 +65,35 @@ DAG_node const* Dependent_where_clauses::matcher(
     IDistiller_plugin_api &e,
     DAG_node const *node,
     const mi::mdl::Distiller_options *options,
-    Rule_result_code &result_code)const
+    Rule_result_code &result_code) const
 {
-    switch (e.get_selector(node)) {
-    case mi::mdl::IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF: // match for diffuse_reflection_bsdf(x)
+    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+
 // 016_dependent_where.mdltl:6
 //RUID 134887
-        if (true) {
-            const DAG_node* v_x = e.get_compound_argument(node, 0);
-            DAG_node const* v_a = v_x;
-            DAG_node const* v__b = v_a;
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 0);
-            return e.create_bsdf_constant();
-        }
-        break;
-    default:
-        break;
-    }
+    auto match_rule0 = [&] (DAG_node const *node0, IDistiller_plugin_api::Match_properties &node_props0) -> const DAG_node * {
 
-    return node;
+        // match for diffuse_reflection_bsdf(x)
+        if (node_props0.sema != IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node2 = e.get_compound_argument(node0, 0);
+        DAG_node const *v_x = node2; (void)v_x;
+        DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
+        (void) root_dbg_info;
+        DAG_node const* v_a = v_x;
+        DAG_node const* v__b = v_a;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 0);
+        return e.create_bsdf_constant();
+    };
+    (void)match_rule0;
+
+    IDistiller_plugin_api::Match_properties node_props;
+    e.get_match_properties(node, node_props);
+    return match_rule0(node, node_props);
+
 }
 
 bool Dependent_where_clauses::postcond(

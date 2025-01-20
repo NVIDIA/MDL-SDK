@@ -183,7 +183,10 @@ namespace mdl {
     def  = m_def_tab.enter_definition(kind, sym, func_type, NULL); \
     if (has_initializers) set_initializers(def, num_args);      \
     def->set_flag(Definition::DEF_IS_PREDEFINED);               \
-    def->set_version_flags(VERSION(flags));
+    def->set_version_flags(VERSION(flags));                     \
+    if ((flags & 0xFF00) != 0) {                                \
+        def->set_flag(Definition::DEF_IS_VERSIONED);            \
+    }
 
 // compilercore_known_defs.h is too big to be compiled in one function, use this class to split
 // things up.

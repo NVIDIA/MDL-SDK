@@ -174,7 +174,7 @@ add_custom_command(
         ${_GENERATED_DIR}/mdl_python_swig.cpp
     COMMAND ${CMAKE_COMMAND} -E echo "SWIG binding code generation ..."
     COMMAND ${swig_PATH}
-        -c++ -python -py3 -doxygen
+        -c++ -python -doxygen
         -w564
         -DSWIGWORDSIZE64
         ${_SWIG_MDL_SOURCE_RELEASE_OPTIONS}

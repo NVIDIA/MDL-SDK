@@ -552,7 +552,7 @@ void DAG_code_printer::print_mdl_type(
 
             push_color(ISyntax_coloring::C_KEYWORD);
             print_mdl_type(e_type);
-            print(long(v_type->get_size()));
+            print(v_type->get_size());
             pop_color();
             break;
         }
@@ -564,9 +564,9 @@ void DAG_code_printer::print_mdl_type(
 
             push_color(ISyntax_coloring::C_KEYWORD);
             print_mdl_type(a_type);
-            print(long(m_type->get_columns()));
+            print(m_type->get_columns());
             print("x");
-            print(long(e_type->get_size()));
+            print(e_type->get_size());
             pop_color();
             break;
         }
@@ -579,7 +579,7 @@ void DAG_code_printer::print_mdl_type(
             print("[");
             if (a_type->is_immediate_sized()) {
                 push_color(ISyntax_coloring::C_LITERAL);
-                print(long(a_type->get_size()));
+                print(a_type->get_size());
                 pop_color();
             } else {
                 print(a_type->get_deferred_size()->get_size_symbol());
@@ -1291,13 +1291,13 @@ void Material_instance_printer::print(Printer *printer, mi::base::IInterface con
     for (size_t i = 0; i < instance->get_resource_tag_map_entries_count(); ++i) {
         auto rt = instance->get_resource_tag_map_entry(i);
         print("//  #");
-        print<long>(i);
+        print(i);
         print(": kind: ");
-        print<long>(rt->m_kind);
+        print(rt->m_kind);
         print(" url: ");
         print(rt->m_url);
         print(" tag: ");
-        print<long>(rt->m_tag);
+        print(rt->m_tag);
         print("\n");
     }
 

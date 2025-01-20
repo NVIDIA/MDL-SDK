@@ -193,11 +193,11 @@ public:
     ///
     /// \return a new empty code DAG
     Generated_code_dag *create_code_dag(
-        IAllocator    *alloc,
-        MDL           *mdl,
-        IModule const *module,
-        char const    *internal_space,
-        char const    *context_name);
+        IAllocator   *alloc,
+        MDL          *mdl,
+        Module const *module,
+        char const   *internal_space,
+        char const   *context_name);
 
     /// Creates a new (empty) material instance for deserialization.
     ///
@@ -207,7 +207,7 @@ public:
     /// \param internal_space            The internal space for which this instance was compiled.
     /// \param unsafe_math_optimizations Optimization settings for match for which
     ///                                  the instance was compiled.
-    /// \param context_name              The name of the context (used for error messages).
+    /// \param enable_debug_info         True if debug info for this instance is enabled.
     ///
     /// \return a new empty material instance
     Generated_code_dag::Material_instance *create_material_instance(
@@ -216,7 +216,7 @@ public:
         size_t      material_index,
         char const *internal_space,
         bool        unsafe_math_optimizations,
-        char const *context_name);
+        bool        enable_debug_info);
 
     /// Constructor.
     ///
@@ -360,6 +360,15 @@ template<>
 inline Resource_tag_tuple::Kind DAG_deserializer::read_encoded() {
     unsigned k = read_unsigned();
     return Resource_tag_tuple::Kind(k);
+}
+
+/// Read a DAG debug info.
+template<>
+inline DAG_DbgInfo DAG_deserializer::read_encoded() {
+    unsigned id     = read_unsigned();
+    unsigned line   = read_unsigned();
+    unsigned column = read_unsigned();
+    return DAG_DbgInfo(id, line, column);
 }
 
 } // mdl

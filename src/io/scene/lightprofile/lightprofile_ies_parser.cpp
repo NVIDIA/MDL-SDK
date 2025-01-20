@@ -374,13 +374,14 @@ void Lightprofile_ies_parser::parse_lamp_data()
     m_lumens_per_lamp       = STRING::lexicographic_cast_s<MI::Scalar, std::string>(tokens[1]).value();
     m_candela_multiplier    = STRING::lexicographic_cast_s<MI::Scalar, std::string>(tokens[2]).value();
     m_nb_vertical_angles    = STRING::lexicographic_cast_s<MI::Uint, std::string>(tokens[3]).value();
-    m_vertical_angles.resize(m_nb_vertical_angles);
+    m_vertical_angles.resize(m_nb_vertical_angles); // see abused usage below, too, in case of changing this
     m_nb_horizontal_angles  = STRING::lexicographic_cast_s<MI::Uint, std::string>(tokens[4]).value();
     m_horizontal_angles.resize(m_nb_horizontal_angles);
+    m_candela_values.reserve(m_nb_horizontal_angles);
     for(Uint i=0; i<m_nb_horizontal_angles; i++)
     {
-        std::vector<Scalar> vertical_candela_values(m_nb_vertical_angles);
-        m_candela_values.push_back(vertical_candela_values);
+        //std::vector<Scalar> vertical_candela_values(m_nb_vertical_angles); // just reuse the same "empty" vector again and again
+        m_candela_values.push_back(/*vertical_candela_values*/m_vertical_angles);
     }
     Uint photometric_type   = STRING::lexicographic_cast_s<MI::Uint, std::string>(tokens[5]).value();
     switch(photometric_type)
@@ -1113,8 +1114,8 @@ static void add_boundary(
     }
 
     // Add boundary columns in both horizontal directions
-    grid.insert(grid.begin(), std::vector<Scalar>(nb_vertical_angles+2, -1));
-    grid.emplace_back(nb_vertical_angles+2, -1);
+    grid.insert(grid.begin(), std::vector<Scalar>(nb_vertical_angles+2, -1.0f));
+    grid.emplace_back(nb_vertical_angles+2, -1.0f);
 
     std::vector<Scalar>& col_left             = grid[0];
     std::vector<Scalar>& col_left_plus_two    = grid[2];
@@ -1578,7 +1579,7 @@ bool Lightprofile_ies_parser::setup_lightprofile(
         // Theta in interval [0, M_PI], 0 on the north pole, i.e., vertical reverse for type C
         for(Uint i=0; i<m_nb_vertical_angles; i++)
             vertical_angles[m_nb_vertical_angles-1-i] =
-                Scalar(M_PI-mi::math::radians(m_vertical_angles[i]));
+                (Scalar)M_PI-mi::math::radians(m_vertical_angles[i]);
 
         // cp. IESNA spec. 3.18
         if((first_angle == 0.f)

@@ -287,6 +287,13 @@ public:
     Symbol const* get_name();
     Symbol const* get_name() const;
 
+    void set_signature(char const *signature) {
+        m_signature = signature;
+    }
+    char const *get_signature() const {
+        return m_signature;
+    }
+
     /// Pretty-print the expression using the given pretty-printer.
     void pp(pp::Pretty_print &p) const;
 
@@ -302,6 +309,7 @@ private:
 private:
     /// The name of the reference.
     Symbol *m_symbol;
+    char const *m_signature;
 };
 
 /// An type annotation expression.

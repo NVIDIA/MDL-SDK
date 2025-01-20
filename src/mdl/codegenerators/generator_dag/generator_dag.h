@@ -35,6 +35,8 @@
 #include <mdl/compiler/compilercore/compilercore_allocator.h>
 #include <mdl/codegenerators/generator_code/generator_code.h>
 
+#include "generator_dag_lambda_function.h"
+
 namespace mi {
 namespace mdl {
 
@@ -63,13 +65,13 @@ public:
     /// \param context  the execution context for this lambda function.
     ///
     /// \returns  a new lambda function.
-    ILambda_function *create_lambda_function(
+    Lambda_function *create_lambda_function(
         ILambda_function::Lambda_execution_context context) MDL_FINAL;
 
     /// Create a new MDL distribution function.
     ///
     /// \returns  a new distribution function.
-    IDistribution_function *create_distribution_function() MDL_FINAL;
+    Distribution_function *create_distribution_function() MDL_FINAL;
 
     /// Serialize a lambda function to the given serializer.
     ///
@@ -84,7 +86,7 @@ public:
     /// \param ds  the deserializer data is read from
     ///
     /// \return the lambda function
-    ILambda_function *deserialize_lambda(IDeserializer *ds) MDL_FINAL;
+    Lambda_function *deserialize_lambda(IDeserializer *ds) MDL_FINAL;
 
 private:
     /// Constructor.

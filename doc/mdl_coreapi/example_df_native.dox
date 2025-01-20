@@ -1,0 +1,215 @@
+/******************************************************************************
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+namespace mi {
+namespace mdl {
+
+/*! \page mi_mdl_core_example_df_native CPU based renderer using a compiled material and MDL native backend.
+
+<div align="right">
+    [\link mi_mdl_core_example_code_gen Previous\endlink]
+    [\link mi_mdl_core_examples Up\endlink]
+    [\link mi_mdl_core_example_df_vulkan Next\endlink]
+</div>
+
+This example demonstrates how to generate target code for the native backend (CPU) from an MDL material and use the generated BSDF functions in a CPU based renderer to account for the \c surface.scattering, \c emission expressions of the material.
+The example implements a physically based path-tracer technique for rendering a single sphere with MDL materials. The sphere is illuminated by a point light and/or an HDR environment map as seen from a perspective camera. The MDL material is loaded from a module and compiled for native backend (CPU) in order to execute different BSDF target functions during renderings. The renderer takes advantage of multi-threading by assigning different spans of the framebuffer to the available logical cores.
+
+\section example_df_native_new New Topics
+  - Generating target code for BSDF functions (CPU).
+  - Using generated BSDF functions (CPU).
+\section example_df_native_descr Detailed Description
+
+<dl>
+<dt><b>Generating target code for BSDF functions (CPU)</b></dt>
+<dd><br>
+In order to create target code for the native backend (CPU), the example makes use of the helper class \c Material_backend_compiler. Please refer to \ref mi_mdl_core_example_cuda_shared for further information.
+
+When instancing this class, the constructor initializes the material compiler for the native backend (\c mi::mdl::ICode_generator::TL_NATIVE), sets some user defined backend options like enabling derivatives and initializes the link-unit to be used later to translate selected material sub-expressions.
+
+\code
+    // Configure compiler backend options
+    mi::Uint32 backend_options =
+        options.enable_derivatives ? BACKEND_OPTIONS_ENABLE_DERIVATIVES : BACKEND_OPTIONS_NONE;
+
+    // Use bsdf flags in BSDF data struct
+    if (options.enable_bsdf_flags)
+    {
+        backend_options |= BACKEND_OPTIONS_ENABLE_BSDF_FLAGS;
+        rc.bsdf_data_flags = options.allowed_scatter_mode;
+    }
+
+    Material_backend_compiler mc(
+        mdl_compiler.get(),
+        /*target_backend*/ mi::mdl::ICode_generator::TL_NATIVE,
+        /*num_texture_results*/ 16,
+        backend_options,
+        /*df_handle_mode=*/ "none",
+        /*lambda_return_mode=*/ "sret");
+
+\endcode
+
+Next, \c Material_backend_compiler::add_material(...) is called. This function creates a material instance and pass all material distribution functions and expressions to the link-unit:
+
+\code
+
+    // Select some functions to translate
+    std::vector<Target_function_description> descs;
+    descs.push_back(
+        Target_function_description("init"));
+    descs.push_back(
+        Target_function_description("surface.scattering"));
+    descs.push_back(
+        Target_function_description("surface.emission.emission"));
+    descs.push_back(
+        Target_function_description("surface.emission.intensity"));
+
+    // Generate code for the material
+    std::cout << "Adding material \"" << options.material_name << "\"..." << std::endl;
+
+    // Add functions of the material to the link unit
+    if (!mc.add_material(
+        options.material_name,
+        descs.data(), descs.size(),
+        options.use_class_compilation))
+    {
+        std::cout << "Failed!" << std::endl;
+        // Print any compiler messages, if available
+        mc.print_messages();
+        exit(EXIT_FAILURE);
+    }
+
+\endcode
+
+where \c descs, of type \c Target_function_description, serves to collect all sub-expressions required later during rendering. The special expression path "init" enables the single-init mode, where for all added sub-expressions, a common init function is generated to allow evaluation results to be reused among all sub-expressions.
+
+Note that the renderer has to keep track of the indices of the sub-expressions in the array \c descs in order to lookup the functions later during rendering when executing any function. In the example, the struct \c render_context is used for that:
+
+\code
+
+    rc.init_function_index = descs[0].function_index;
+    rc.surface_bsdf_function_index = descs[1].function_index;
+    rc.surface_edf_function_index = descs[2].function_index;
+    rc.surface_emission_intensity_function_index = descs[3].function_index;
+
+\endcode
+
+Finally, the target code for the native backend (CPU) is generated:
+
+\code
+
+    Target_code* target_code = mc.generate_target_code();
+    rc.exe_code = target_code->get_code_lambda();
+
+\endcode
+
+Here the function \c generate_target_code() compiles the link-unit into native code, creates the argument blocks for the class compilation mode and builds the resource tables that are all available through the struct \c Target_code.
+
+For the rendering phase, the example uses \c rc.exe_code, of type #mi::mdl::IGenerated_code_lambda_function. For the native backend, this class contains some convenient methods to run code for the compiled material distribution functions.
+
+</dd>
+</dl>
+
+<dl>
+<dt><b>Using generated BSDF functions (CPU)</b></dt>
+<dd><br>
+At this point the target code for the native backend is available for the renderer and it can be used to query material properties and evaluate material distribution functions. For a hit point, first, the \c run_init() function has to be called, so following calls to the generated code can reuse the calculated expressions:
+
+\code
+
+    // shader initialization for the current hit point
+    ret_code = rc.exe_code->run_init(
+        rc.init_function_index,
+        shading_state,
+        tex_handler,
+        rc.argument_block ? rc.argument_block->get_data() : nullptr);
+    assert(ret_code && "execute_bsdf_init failed");
+
+\endcode
+
+Then for example, to evaluate the material emission contribution for the current \c shading_state, the renderer calls the function \c run_generic():
+- To evaluate the material emission distribution function for the current view direction \c eval_data.k1 and the function index \c (edf_function_index + 1).
+- To obtain the emission \c intensity with the function index \c emission_intensity_function_index.
+
+\code
+
+    // Evaluate material surface emission contribution
+    {
+        uint64_t edf_function_index = rc.surface_edf_function_index;
+
+        mi::mdl::Edf_evaluate_data<mi::mdl::DF_HSM_NONE> eval_data;
+        eval_data.k1 = -ray.dir;
+
+        ret_code = rc.exe_code->run_generic(
+            edf_function_index + 1, // edf_function_index corresponds to 'sample'
+                                    // edf_function_index + 1 corresponds to 'evaluate'
+            &eval_data,
+            shading_state,
+            tex_handler,
+            rc.argument_block ? rc.argument_block->get_data() : nullptr);
+        assert(ret_code && "execute_edf_evaluate failed");
+
+
+        // Emission contribution is only valid for positive pdf
+        if (eval_data.pdf > 1.e-6f)
+        {
+            uint64_t emission_intensity_function_index = rc.surface_emission_intensity_function_index;
+
+            mi::mdl::tct_float3 intensity({ 1.f, 1.f, 1.f });
+            ret_code = rc.exe_code->run_generic(
+                emission_intensity_function_index,
+                &intensity,
+                shading_state,
+                tex_handler,
+                rc.argument_block ? rc.argument_block->get_data() : nullptr);
+            assert(ret_code && "execute emission intensity function failed");
+
+            vp_sample[VPCH_ILLUM] += eval_data.edf * intensity * ray.weight;
+        }
+    }
+
+\endcode
+
+\section example_df_native Example Source
+To compile the source code, GLFW and GLEW are required.
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_core/df_native/example_df_native.cpp</tt>
+
+\include df_native/example_df_native.cpp
+
+<div align="right">
+    [\link mi_mdl_core_example_code_gen Previous\endlink]
+    [\link mi_mdl_core_examples Up\endlink]
+    [\link mi_mdl_core_example_df_vulkan Next\endlink]
+</div>
+
+*/
+
+}
+}

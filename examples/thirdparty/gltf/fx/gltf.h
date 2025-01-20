@@ -1,5 +1,5 @@
 // ------------------------------------------------------------
-// Copyright(c) 2019 Jesse Yurkovich
+// Copyright(c) 2018-2022 Jesse Yurkovich
 // Licensed under the MIT License <http://opensource.org/licenses/MIT>.
 // See the LICENSE file in the repo root for full license information.
 // ------------------------------------------------------------
@@ -8,18 +8,50 @@
 #include <array>
 #include <cstring>
 #include <fstream>
+#include <istream>
+#include <ostream>
 #include <stdexcept>
 #include <string>
 #include <system_error>
 #include <unordered_map>
 #include <vector>
+
+// BEGIN NVIDIA MODIFICATION
 #include <limits>
+// END NVIDIA MODIFICATION
 
 #include <nlohmann/json.hpp>
 
 #if (defined(__cplusplus) && __cplusplus >= 201703L) || (defined(_MSVC_LANG) && (_MSVC_LANG >= 201703L) && (_MSC_VER >= 1911))
-#define FX_GLTF_HAS_CPP_17
-#include <string_view>
+    #define FX_GLTF_HAS_CPP_17
+    #define FX_GLTF_NODISCARD [[nodiscard]]
+    #define FX_GLTF_INLINE_CONSTEXPR inline constexpr
+    #include <string_view>
+#else
+    #define FX_GLTF_NODISCARD
+    #define FX_GLTF_INLINE_CONSTEXPR constexpr
+#endif
+
+#if defined(__clang__)
+    #if __clang_major__ < 7 || (defined(__cplusplus) && __cplusplus < 201703L)
+        #define FX_GLTF_EXPERIMENTAL_FILESYSTEM
+    #endif
+#elif defined(__GNUC__)
+    #if __GNUC__ < 8 || (defined(__cplusplus) && __cplusplus < 201703L)
+        #define FX_GLTF_EXPERIMENTAL_FILESYSTEM
+    #endif
+#elif defined(_MSC_VER)
+    #if _MSC_VER < 1914 || (!defined(_HAS_CXX17) || (defined(_HAS_CXX17) && _HAS_CXX17 == 0))
+        #define FX_GLTF_EXPERIMENTAL_FILESYSTEM
+    #endif
+#endif
+
+#ifdef FX_GLTF_EXPERIMENTAL_FILESYSTEM
+    #include <experimental/filesystem>
+    #define FX_GLTF_FILESYSTEM std::experimental::filesystem::v1
+#else
+    #include <filesystem>
+    #define FX_GLTF_FILESYSTEM std::filesystem
 #endif
 
 namespace fx
@@ -29,7 +61,7 @@ namespace base64
     namespace detail
     {
         // clang-format off
-        constexpr std::array<char, 64> EncodeMap =
+        FX_GLTF_INLINE_CONSTEXPR std::array<char, 64> EncodeMap =
         {
             'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
             'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
@@ -37,7 +69,7 @@ namespace base64
             'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/'
         };
 
-        constexpr std::array<char, 256> DecodeMap =
+        FX_GLTF_INLINE_CONSTEXPR std::array<char, 256> DecodeMap =
         {
             -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
             -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
@@ -180,7 +212,7 @@ namespace gltf
         }
 
     private:
-        std::string CreateMessage(char const * message, std::string const & extra)
+        static std::string CreateMessage(char const * message, std::string const & extra)
         {
             return std::string(message).append(" : ").append(extra);
         }
@@ -264,18 +296,12 @@ namespace gltf
             }
         }
 
-        inline std::string GetDocumentRootPath(std::string const & documentFilePath)
+        inline FX_GLTF_FILESYSTEM::path GetDocumentRootPath(FX_GLTF_FILESYSTEM::path const & documentFilePath)
         {
-            const std::size_t pos = documentFilePath.find_last_of("/\\");
-            if (pos != std::string::npos)
-            {
-                return documentFilePath.substr(0, pos);
-            }
-
-            return {};
+            return documentFilePath.parent_path();
         }
 
-        inline std::string CreateBufferUriPath(std::string const & documentRootPath, std::string const & bufferUri)
+        inline FX_GLTF_FILESYSTEM::path CreateBufferUriPath(FX_GLTF_FILESYSTEM::path const & documentRootPath, std::string const & bufferUri)
         {
             // Prevent simple forms of path traversal from malicious uri references...
             if (bufferUri.empty() || bufferUri.find("..") != std::string::npos || bufferUri.front() == '/' || bufferUri.front() == '\\')
@@ -283,70 +309,65 @@ namespace gltf
                 throw invalid_gltf_document("Invalid buffer.uri value", bufferUri);
             }
 
-            std::string documentRoot = documentRootPath;
-            if (documentRoot.length() > 0)
-            {
-                if (documentRoot.back() != '/')
-                {
-                    documentRoot.push_back('/');
-                }
-            }
-
-            return documentRoot + bufferUri;
+            return documentRootPath / bufferUri;
         }
 
         struct ChunkHeader
         {
-            uint32_t chunkLength;
-            uint32_t chunkType;
+            uint32_t chunkLength{};
+            uint32_t chunkType{};
         };
 
         struct GLBHeader
         {
-            uint32_t magic;
-            uint32_t version;
-            uint32_t length;
+            uint32_t magic{};
+            uint32_t version{};
+            uint32_t length{};
 
-            ChunkHeader jsonHeader;
+            ChunkHeader jsonHeader{};
         };
 
-        constexpr uint32_t DefaultMaxBufferCount = 8;
-        constexpr uint32_t DefaultMaxMemoryAllocation = 32 * 1024 * 1024;
-        constexpr std::size_t HeaderSize{ sizeof(GLBHeader) };
-        constexpr std::size_t ChunkHeaderSize{ sizeof(ChunkHeader) };
-        constexpr uint32_t GLBHeaderMagic = 0x46546c67u;
-        constexpr uint32_t GLBChunkJSON = 0x4e4f534au;
-        constexpr uint32_t GLBChunkBIN = 0x004e4942u;
+        FX_GLTF_INLINE_CONSTEXPR uint32_t DefaultMaxBufferCount = 8;
+        FX_GLTF_INLINE_CONSTEXPR uint32_t DefaultMaxMemoryAllocation = 32 * 1024 * 1024;
+        FX_GLTF_INLINE_CONSTEXPR std::size_t HeaderSize{ sizeof(GLBHeader) };
+        FX_GLTF_INLINE_CONSTEXPR std::size_t ChunkHeaderSize{ sizeof(ChunkHeader) };
+        FX_GLTF_INLINE_CONSTEXPR uint32_t GLBHeaderMagic = 0x46546c67u;
+        FX_GLTF_INLINE_CONSTEXPR uint32_t GLBChunkJSON = 0x4e4f534au;
+        FX_GLTF_INLINE_CONSTEXPR uint32_t GLBChunkBIN = 0x004e4942u;
 
-        constexpr char const * const MimetypeApplicationOctet = "data:application/octet-stream;base64";
-        constexpr char const * const MimetypeImagePNG = "data:image/png;base64";
-        constexpr char const * const MimetypeImageJPG = "data:image/jpeg;base64";
+        FX_GLTF_INLINE_CONSTEXPR char const * const MimetypeApplicationOctet = "data:application/octet-stream;base64";
+        FX_GLTF_INLINE_CONSTEXPR char const * const MimetypeGLTFBuffer = "data:application/gltf-buffer;base64";
+        FX_GLTF_INLINE_CONSTEXPR char const * const MimetypeImagePNG = "data:image/png;base64";
+        FX_GLTF_INLINE_CONSTEXPR char const * const MimetypeImageJPG = "data:image/jpeg;base64";
     } // namespace detail
 
     namespace defaults
     {
-        constexpr std::array<float, 16> IdentityMatrix{ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
-        constexpr std::array<float, 4> IdentityRotation{ 0, 0, 0, 1 };
-        constexpr std::array<float, 4> IdentityVec4{ 1, 1, 1, 1 };
-        constexpr std::array<float, 3> IdentityVec3{ 1, 1, 1 };
-        constexpr std::array<float, 3> NullVec3{ 0, 0, 0 };
-        constexpr std::array<float, 2> IdentityVec2{ 1, 1 };
-        constexpr std::array<float, 2> NullVec2{ 0, 0 };
-        constexpr float IdentityScalar = 1;
-        constexpr float FloatSentinel = 10000;
-        constexpr float FloatMaxValue = std::numeric_limits<float>::max();
+        FX_GLTF_INLINE_CONSTEXPR std::array<float, 16> IdentityMatrix{ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+        FX_GLTF_INLINE_CONSTEXPR std::array<float, 4> IdentityRotation{ 0, 0, 0, 1 };
+        FX_GLTF_INLINE_CONSTEXPR std::array<float, 4> IdentityVec4{ 1, 1, 1, 1 };
+        FX_GLTF_INLINE_CONSTEXPR std::array<float, 3> IdentityVec3{ 1, 1, 1 };
+        FX_GLTF_INLINE_CONSTEXPR std::array<float, 3> NullVec3{ 0, 0, 0 };
+        FX_GLTF_INLINE_CONSTEXPR float IdentityScalar = 1;
+        FX_GLTF_INLINE_CONSTEXPR float FloatSentinel = 10000;
 
-        constexpr bool AccessorNormalized = false;
+        // BEGIN NVIDIA MODIFICATION
+        FX_GLTF_INLINE_CONSTEXPR std::array<float, 2> IdentityVec2{ 1, 1 };
+        FX_GLTF_INLINE_CONSTEXPR std::array<float, 2> NullVec2{ 0, 0 };
+        FX_GLTF_INLINE_CONSTEXPR float FloatMaxValue = std::numeric_limits<float>::max();
+        // END NVIDIA MODIFICATION
 
-        constexpr float MaterialAlphaCutoff = 0.5f;
-        constexpr bool MaterialDoubleSided = false;
+        FX_GLTF_INLINE_CONSTEXPR bool AccessorNormalized = false;
+
+        FX_GLTF_INLINE_CONSTEXPR float MaterialAlphaCutoff = 0.5f;
+        FX_GLTF_INLINE_CONSTEXPR bool MaterialDoubleSided = false;
     } // namespace defaults
 
     using Attributes = std::unordered_map<std::string, uint32_t>;
 
     struct NeverEmpty
     {
-        bool empty() const noexcept
+        FX_GLTF_NODISCARD static bool empty() noexcept
         {
             return false;
         }
@@ -402,7 +423,7 @@ namespace gltf
 
             nlohmann::json extensionsAndExtras{};
 
-            bool empty() const noexcept
+            FX_GLTF_NODISCARD bool empty() const noexcept
             {
                 return count == 0;
             }
@@ -415,7 +436,7 @@ namespace gltf
 
         ComponentType componentType{ ComponentType::None };
         Type type{ Type::None };
-        Sparse sparse{};
+        Sparse sparse;
 
         std::string name;
         std::vector<float> max{};
@@ -487,9 +508,9 @@ namespace gltf
 
         std::vector<uint8_t> data{};
 
-        bool IsEmbeddedResource() const noexcept
+        FX_GLTF_NODISCARD bool IsEmbeddedResource() const noexcept
         {
-            return uri.find(detail::MimetypeApplicationOctet) == 0;
+            return uri.find(detail::MimetypeApplicationOctet) == 0 || uri.find(detail::MimetypeGLTFBuffer) == 0;
         }
 
         void SetEmbeddedResource()
@@ -567,7 +588,7 @@ namespace gltf
 
         nlohmann::json extensionsAndExtras{};
 
-        bool IsEmbeddedResource() const noexcept
+        FX_GLTF_NODISCARD bool IsEmbeddedResource() const noexcept
         {
             return uri.find(detail::MimetypeImagePNG) == 0 || uri.find(detail::MimetypeImageJPG) == 0;
         }
@@ -599,6 +620,7 @@ namespace gltf
             Blend
         };
 
+        // BEGIN NVIDIA MODIFICATION
         struct KHR_TextureTransform
         {
             std::array<float, 2> offset = { defaults::NullVec2 };
@@ -608,16 +630,19 @@ namespace gltf
 
             nlohmann::json extensionsAndExtras{};
         };
+        // END NVIDIA MODIFICATION
 
         struct Texture
         {
             int32_t index{ -1 };
-            int32_t texCoord{ 0 };
+            int32_t texCoord{};
+            // BEGIN NVIDIA MODIFICATION
             KHR_TextureTransform transform{};
+            //END NVIDIA MODIFICATION
 
             nlohmann::json extensionsAndExtras{};
 
-            bool empty() const noexcept
+            FX_GLTF_NODISCARD bool empty() const noexcept
             {
                 return index == -1;
             }
@@ -644,12 +669,13 @@ namespace gltf
 
             nlohmann::json extensionsAndExtras{};
 
-            bool empty() const
+            FX_GLTF_NODISCARD bool empty() const
             {
                 return baseColorTexture.empty() && metallicRoughnessTexture.empty() && metallicFactor == 1.0f && roughnessFactor == 1.0f && baseColorFactor == defaults::IdentityVec4;
             }
         };
 
+        // BEGIN NVIDIA MODIFICATION
         struct KHR_PBRSpecularGlossiness
         {
             std::array<float, 4> diffuseFactor = {defaults::IdentityVec4};
@@ -661,7 +687,7 @@ namespace gltf
 
             nlohmann::json extensionsAndExtras{};
 
-            bool empty() const
+            FX_GLTF_NODISCARD bool empty() const noexcept
             {
                 return diffuseTexture.empty() &&
                        specularGlossinessTexture.empty() &&
@@ -678,7 +704,7 @@ namespace gltf
 
             nlohmann::json extensionsAndExtras{};
 
-            bool empty() const
+            FX_GLTF_NODISCARD bool empty() const noexcept
             {
                 return
                     transmissionFactor == 0.0f &&
@@ -697,7 +723,7 @@ namespace gltf
 
             nlohmann::json extensionsAndExtras{};
 
-            bool empty() const
+            FX_GLTF_NODISCARD bool empty() const noexcept
             {
                 return
                     clearcoatFactor == 0.0f &&
@@ -717,7 +743,7 @@ namespace gltf
 
             nlohmann::json extensionsAndExtras{};
 
-            bool empty() const
+            FX_GLTF_NODISCARD bool empty() const noexcept
             {
                 return
                     sheenColorFactor == defaults::NullVec3 &&
@@ -736,7 +762,7 @@ namespace gltf
 
             nlohmann::json extensionsAndExtras{};
 
-            bool empty() const
+            FX_GLTF_NODISCARD bool empty() const noexcept
             {
                 return
                     specularFactor == 1.0f &&
@@ -752,7 +778,7 @@ namespace gltf
 
             nlohmann::json extensionsAndExtras{};
 
-            bool empty() const
+            FX_GLTF_NODISCARD bool empty() const noexcept
             {
                 return ior == 1.5f;
             }
@@ -767,7 +793,7 @@ namespace gltf
             nlohmann::json extensionsAndExtras{};
             bool present = false; // interacts with the doubleSided property
 
-            bool empty() const
+            FX_GLTF_NODISCARD bool empty() const noexcept
             {
                 return
                     thicknessFactor == 0.0f &&
@@ -782,7 +808,7 @@ namespace gltf
 
             nlohmann::json extensionsAndExtras{};
 
-            bool empty() const
+            FX_GLTF_NODISCARD bool empty() const noexcept
             {
                 return emissiveStrength == 1.0f;
             }
@@ -799,11 +825,26 @@ namespace gltf
 
             nlohmann::json extensionsAndExtras{};
 
-            bool empty() const
+            FX_GLTF_NODISCARD bool empty() const noexcept
             {
                 return iridescenceFactor == 0.0f;
             }
         };
+
+        struct KHR_MaterialsAnisotropy
+        {
+            float anisotropyStrength = 0.0f;
+            float anisotropyRotation = 0.0f;
+            Texture anisotropyTexture = {};
+
+            nlohmann::json extensionsAndExtras{};
+
+            FX_GLTF_NODISCARD bool empty() const noexcept
+            {
+                return anisotropyStrength == 0.0f;
+            }
+        };
+        // END NVIDIA MODIFICATION
 
         float alphaCutoff{ defaults::MaterialAlphaCutoff };
         AlphaMode alphaMode{ AlphaMode::Opaque };
@@ -813,6 +854,8 @@ namespace gltf
         NormalTexture normalTexture;
         OcclusionTexture occlusionTexture;
         PBRMetallicRoughness pbrMetallicRoughness;
+
+        // BEGIN NVIDIA MODIFICATION
         KHR_PBRSpecularGlossiness pbrSpecularGlossiness;
         KHR_MaterialsTransmission materialsTransmission;
         KHR_MaterialsClearcoat materialsClearcoat;
@@ -822,12 +865,13 @@ namespace gltf
         KHR_MaterialsVolume materialsVolume;
         KHR_MaterialsEmissiveStrength materialEmissiveStrength;
         KHR_MaterialsIridescence materialsIridescence;
+        KHR_MaterialsAnisotropy materialsAnisotropy;
+        // END NVIDIA MODIFICATION
 
         Texture emissiveTexture;
         std::array<float, 3> emissiveFactor = { defaults::NullVec3 };
 
         std::string name;
-
         nlohmann::json extensionsAndExtras{};
     };
 
@@ -916,14 +960,14 @@ namespace gltf
         MagFilter magFilter{ MagFilter::None };
         MinFilter minFilter{ MinFilter::None };
 
-        WrappingMode wrap_s{ WrappingMode::Repeat };
-        WrappingMode wrap_t{ WrappingMode::Repeat };
+        WrappingMode wrapS{ WrappingMode::Repeat };
+        WrappingMode wrapT{ WrappingMode::Repeat };
 
         nlohmann::json extensionsAndExtras{};
 
-        bool empty() const noexcept
+        FX_GLTF_NODISCARD bool empty() const noexcept
         {
-            return name.empty() && magFilter == MagFilter::None && minFilter == MinFilter::None && wrap_s == WrappingMode::Repeat && wrap_t == WrappingMode::Repeat && extensionsAndExtras.empty();
+            return name.empty() && magFilter == MagFilter::None && minFilter == MinFilter::None && wrapS == WrappingMode::Repeat && wrapT == WrappingMode::Repeat && extensionsAndExtras.empty();
         }
     };
 
@@ -1254,12 +1298,13 @@ namespace gltf
         detail::ReadRequiredField("index", json, materialTexture.index);
         detail::ReadOptionalField("texCoord", json, materialTexture.texCoord);
 
-
+        // BEGIN NVIDIA MODIFICATION
         const nlohmann::json::const_iterator iterExtensions = json.find("extensions");
         if (iterExtensions != json.end())
         {
             detail::ReadOptionalField("KHR_texture_transform", *iterExtensions, materialTexture.transform);
         }
+        // END NVIDIA MODIFICATION
 
         detail::ReadExtensionsAndExtras(json, materialTexture.extensionsAndExtras);
     }
@@ -1291,6 +1336,7 @@ namespace gltf
         detail::ReadExtensionsAndExtras(json, pbrMetallicRoughness.extensionsAndExtras);
     }
 
+    // BEGIN NVIDIA MODIFICATION
     inline void from_json(nlohmann::json const & json, Material::KHR_PBRSpecularGlossiness& pbrSpecularGlossiness)
     {
         detail::ReadOptionalField("diffuseFactor", json, pbrSpecularGlossiness.diffuseFactor);
@@ -1387,6 +1433,16 @@ namespace gltf
         detail::ReadExtensionsAndExtras(json, materialsIridescence.extensionsAndExtras);
     }
 
+    inline void from_json(nlohmann::json const& json, Material::KHR_MaterialsAnisotropy& materialsAnisotropy)
+    {
+        detail::ReadOptionalField("anisotropyStrength", json, materialsAnisotropy.anisotropyStrength);
+        detail::ReadOptionalField("anisotropyRotation", json, materialsAnisotropy.anisotropyRotation);
+        detail::ReadOptionalField("anisotropyTexture", json, materialsAnisotropy.anisotropyTexture);
+
+        detail::ReadExtensionsAndExtras(json, materialsAnisotropy.extensionsAndExtras);
+    }
+    // END NVIDIA MODIFICATION
+
     inline void from_json(nlohmann::json const & json, Material & material)
     {
         detail::ReadOptionalField("alphaMode", json, material.alphaMode);
@@ -1399,6 +1455,7 @@ namespace gltf
         detail::ReadOptionalField("occlusionTexture", json, material.occlusionTexture);
         detail::ReadOptionalField("pbrMetallicRoughness", json, material.pbrMetallicRoughness);
 
+        // BEGIN NVIDIA MODIFICATION
         const nlohmann::json::const_iterator iterExtensions = json.find("extensions");
         if (iterExtensions != json.end())
         {
@@ -1411,7 +1468,9 @@ namespace gltf
             detail::ReadOptionalField("KHR_materials_volume", *iterExtensions, material.materialsVolume);
             detail::ReadOptionalField("KHR_materials_emissive_strength", *iterExtensions, material.materialEmissiveStrength);
             detail::ReadOptionalField("KHR_materials_iridescence", *iterExtensions, material.materialsIridescence);
+            detail::ReadOptionalField("KHR_materials_anisotropy", *iterExtensions, material.materialsAnisotropy);
         }
+        // END NVIDIA MODIFICATION
 
         detail::ReadExtensionsAndExtras(json, material.extensionsAndExtras);
     }
@@ -1458,8 +1517,8 @@ namespace gltf
         detail::ReadOptionalField("magFilter", json, sampler.magFilter);
         detail::ReadOptionalField("minFilter", json, sampler.minFilter);
         detail::ReadOptionalField("name", json, sampler.name);
-        detail::ReadOptionalField("wrapS", json, sampler.wrap_s);
-        detail::ReadOptionalField("wrapT", json, sampler.wrap_t);
+        detail::ReadOptionalField("wrapS", json, sampler.wrapS);
+        detail::ReadOptionalField("wrapT", json, sampler.wrapT);
 
         detail::ReadExtensionsAndExtras(json, sampler.extensionsAndExtras);
     }
@@ -1579,14 +1638,69 @@ namespace gltf
         detail::WriteExtensions(json, sparse.extensionsAndExtras);
     }
 
+    namespace detail
+    {
+        template <typename TType>
+        inline void WriteMinMaxConvert(nlohmann::json & json, Accessor const & accessor)
+        {
+            if (!accessor.min.empty())
+            {
+                auto & item = json["min"];
+                for (float v : accessor.min)
+                {
+                    item.push_back(static_cast<TType>(v));
+                }
+            }
+
+            if (!accessor.max.empty())
+            {
+                auto & item = json["max"];
+                for (float v : accessor.max)
+                {
+                    item.push_back(static_cast<TType>(v));
+                }
+            }
+        }
+
+        inline void WriteAccessorMinMax(nlohmann::json & json, Accessor const & accessor)
+        {
+            switch (accessor.componentType)
+            {
+            // fast path
+            case Accessor::ComponentType::Float:
+                detail::WriteField("max", json, accessor.max);
+                detail::WriteField("min", json, accessor.min);
+                break;
+
+            // slow path conversions...
+            case Accessor::ComponentType::Byte:
+                WriteMinMaxConvert<int8_t>(json, accessor);
+                break;
+            case Accessor::ComponentType::UnsignedByte:
+                WriteMinMaxConvert<uint8_t>(json, accessor);
+                break;
+            case Accessor::ComponentType::Short:
+                WriteMinMaxConvert<int16_t>(json, accessor);
+                break;
+            case Accessor::ComponentType::UnsignedShort:
+                WriteMinMaxConvert<uint16_t>(json, accessor);
+                break;
+            case Accessor::ComponentType::UnsignedInt:
+                WriteMinMaxConvert<uint32_t>(json, accessor);
+                break;
+            case Accessor::ComponentType::None:
+                break;
+            }
+        }
+    } // namespace detail
+
     inline void to_json(nlohmann::json & json, Accessor const & accessor)
     {
         detail::WriteField("bufferView", json, accessor.bufferView, -1);
         detail::WriteField("byteOffset", json, accessor.byteOffset, {});
         detail::WriteField("componentType", json, accessor.componentType, Accessor::ComponentType::None);
         detail::WriteField("count", json, accessor.count, {});
-        detail::WriteField("max", json, accessor.max);
-        detail::WriteField("min", json, accessor.min);
+        detail::WriteAccessorMinMax(json, accessor);
         detail::WriteField("name", json, accessor.name);
         detail::WriteField("normalized", json, accessor.normalized, false);
         detail::WriteField("sparse", json, accessor.sparse);
@@ -1828,8 +1942,8 @@ namespace gltf
             detail::WriteField("name", json, sampler.name);
             detail::WriteField("magFilter", json, sampler.magFilter, Sampler::MagFilter::None);
             detail::WriteField("minFilter", json, sampler.minFilter, Sampler::MinFilter::None);
-            detail::WriteField("wrapS", json, sampler.wrap_s, Sampler::WrappingMode::Repeat);
-            detail::WriteField("wrapT", json, sampler.wrap_t, Sampler::WrappingMode::Repeat);
+            detail::WriteField("wrapS", json, sampler.wrapS, Sampler::WrappingMode::Repeat);
+            detail::WriteField("wrapT", json, sampler.wrapT, Sampler::WrappingMode::Repeat);
             detail::WriteExtensions(json, sampler.extensionsAndExtras);
         }
         else
@@ -1890,33 +2004,35 @@ namespace gltf
     {
         struct DataContext
         {
-            std::string bufferRootPath;
+            FX_GLTF_FILESYSTEM::path bufferRootPath{};
             ReadQuotas readQuotas;
 
-            std::vector<uint8_t> * binaryData;
-            std::size_t binaryOffset;
+            std::vector<uint8_t> * binaryData{};
         };
 
-        inline std::size_t GetFileSize(std::ifstream & file)
+        inline void ThrowIfBad(std::ios const & io)
         {
-            file.seekg(0, std::ifstream::end);
-            const std::streampos fileSize = file.tellg();
-            file.seekg(0, std::ifstream::beg);
-
-            if (fileSize < 0)
+            if (!io.good())
             {
                 throw std::system_error(std::make_error_code(std::errc::io_error));
             }
-
-            return static_cast<std::size_t>(fileSize);
         }
 
         inline void MaterializeData(Buffer & buffer)
         {
-            const std::size_t startPos = std::char_traits<char>::length(detail::MimetypeApplicationOctet) + 1;
+            std::size_t startPos = 0;
+            if (buffer.uri.find(detail::MimetypeApplicationOctet) == 0)
+            {
+                startPos = std::char_traits<char>::length(detail::MimetypeApplicationOctet) + 1;
+            }
+            else if (buffer.uri.find(detail::MimetypeGLTFBuffer) == 0)
+            {
+                startPos = std::char_traits<char>::length(detail::MimetypeGLTFBuffer) + 1;
+            }
+
             const std::size_t base64Length = buffer.uri.length() - startPos;
             const std::size_t decodedEstimate = base64Length / 4 * 3;
-            if ((decodedEstimate - 2) > buffer.byteLength) // we need to give room for padding...
+            if (startPos == 0 || (decodedEstimate - 2) > buffer.byteLength) // we need to give room for padding...
             {
                 throw invalid_gltf_document("Invalid buffer.uri value", "malformed base64");
             }
@@ -1973,18 +2089,14 @@ namespace gltf
                 }
                 else if (dataContext.binaryData != nullptr)
                 {
-                    detail::ChunkHeader header;
-
                     std::vector<uint8_t> & binary = *dataContext.binaryData;
-                    std::memcpy(&header, &binary[dataContext.binaryOffset], detail::ChunkHeaderSize);
-
-                    if (header.chunkType != detail::GLBChunkBIN || header.chunkLength < buffer.byteLength)
+                    if (binary.size() < buffer.byteLength)
                     {
                         throw invalid_gltf_document("Invalid GLB buffer data");
                     }
 
                     buffer.data.resize(buffer.byteLength);
-                    std::memcpy(&buffer.data[0], &binary[dataContext.binaryOffset + detail::ChunkHeaderSize], buffer.byteLength);
+                    std::memcpy(&buffer.data[0], &binary[0], buffer.byteLength);
                 }
             }
 
@@ -2028,8 +2140,12 @@ namespace gltf
             }
         }
 
-        inline void Save(Document const & document, std::string const & documentFilePath, bool useBinaryFormat)
+        inline void Save(Document const & document, std::ostream & output, FX_GLTF_FILESYSTEM::path const & documentRootPath, bool useBinaryFormat)
         {
+            // There is no way to check if an ostream has been opened in binary mode or not. Just checking
+            // if it's "good" is the best we can do from here...
+            detail::ThrowIfBad(output);
+
             nlohmann::json json = document;
 
             std::size_t externalBufferIndex = 0;
@@ -2049,38 +2165,25 @@ namespace gltf
                 const uint32_t headerPadding = static_cast<uint32_t>(header.jsonHeader.chunkLength - jsonText.length());
                 header.length = detail::HeaderSize + header.jsonHeader.chunkLength + detail::ChunkHeaderSize + binHeader.chunkLength;
 
-                std::ofstream fileData(documentFilePath, std::ios::binary);
-                if (!fileData.good())
-                {
-                    throw std::system_error(std::make_error_code(std::errc::io_error));
-                }
+                constexpr std::array<char, 3> spaces = { ' ', ' ', ' ' };
+                constexpr std::array<char, 3> nulls = { 0, 0, 0 };
 
-                const char spaces[3] = { ' ', ' ', ' ' };
-                const char nulls[3] = { 0, 0, 0 };
-
-                fileData.write(reinterpret_cast<char *>(&header), detail::HeaderSize);
-                fileData.write(jsonText.c_str(), jsonText.length());
-                fileData.write(&spaces[0], headerPadding);
-                fileData.write(reinterpret_cast<char *>(&binHeader), detail::ChunkHeaderSize);
-                fileData.write(reinterpret_cast<char const *>(&binBuffer.data[0]), binBuffer.byteLength);
-                fileData.write(&nulls[0], binPadding);
+                output.write(reinterpret_cast<char *>(&header), detail::HeaderSize);
+                output.write(jsonText.c_str(), jsonText.length());
+                output.write(&spaces[0], headerPadding);
+                output.write(reinterpret_cast<char *>(&binHeader), detail::ChunkHeaderSize);
+                output.write(reinterpret_cast<char const *>(&binBuffer.data[0]), binBuffer.byteLength);
+                output.write(&nulls[0], binPadding);
 
                 externalBufferIndex = 1;
             }
             else
             {
-                std::ofstream file(documentFilePath);
-                if (!file.is_open())
-                {
-                    throw std::system_error(std::make_error_code(std::errc::io_error));
-                }
-
-                file << json.dump(2);
+                output << json.dump(2);
             }
 
             // The glTF 2.0 spec allows a document to have more than 1 buffer. However, only the first one will be included in the .glb
             // All others must be considered as External/Embedded resources. Process them if necessary...
-            std::string documentRootPath = detail::GetDocumentRootPath(documentFilePath);
             for (; externalBufferIndex < document.buffers.size(); externalBufferIndex++)
             {
                 Buffer const & buffer = document.buffers[externalBufferIndex];
@@ -2098,30 +2201,24 @@ namespace gltf
         }
     } // namespace detail
 
-    inline Document LoadFromText(std::string const & documentFilePath, ReadQuotas const & readQuotas = {})
+    inline Document LoadFromText(std::istream & input, FX_GLTF_FILESYSTEM::path const & documentRootPath, ReadQuotas const & readQuotas = {})
     {
         try
         {
+            detail::ThrowIfBad(input);
+
             nlohmann::json json;
-            {
-                std::ifstream file(documentFilePath);
-                if (!file.is_open())
-                {
-                    throw std::system_error(std::make_error_code(std::errc::no_such_file_or_directory));
-                }
+            input >> json;
 
-                file >> json;
-            }
-
-            return detail::Create(json, { detail::GetDocumentRootPath(documentFilePath), readQuotas });
+            return detail::Create(json, { documentRootPath, readQuotas });
         }
-        catch (invalid_gltf_document &ex)
+        catch (invalid_gltf_document &)
         {
-            throw(ex);
+            throw;
         }
-        catch (std::system_error &ex)
+        catch (std::system_error &)
         {
-            throw(ex);
+            throw;
         }
         catch (...)
         {
@@ -2129,35 +2226,23 @@ namespace gltf
         }
     }
 
-    inline Document LoadFromBinary(std::string const & documentFilePath, ReadQuotas const & readQuotas = {})
+    inline Document LoadFromText(FX_GLTF_FILESYSTEM::path const & documentFilePath, ReadQuotas const & readQuotas = {})
+    {
+        std::ifstream input(documentFilePath);
+        if (!input.is_open())
+        {
+            throw std::system_error(std::make_error_code(std::errc::no_such_file_or_directory));
+        }
+
+        return LoadFromText(input, detail::GetDocumentRootPath(documentFilePath), readQuotas);
+    }
+
+    inline Document LoadFromBinary(std::istream & input, FX_GLTF_FILESYSTEM::path const & documentRootPath, ReadQuotas const & readQuotas = {})
     {
         try
         {
-            std::vector<uint8_t> binary{};
-            {
-                std::ifstream file(documentFilePath, std::ios::binary);
-                if (!file.is_open())
-                {
-                    throw std::system_error(std::make_error_code(std::errc::no_such_file_or_directory));
-                }
-
-                const std::size_t fileSize = detail::GetFileSize(file);
-                if (fileSize < detail::HeaderSize)
-                {
-                    throw invalid_gltf_document("Invalid GLB file");
-                }
-
-                if (fileSize > readQuotas.MaxFileSize)
-                {
-                    throw invalid_gltf_document("Quota exceeded : file size > MaxFileSize");
-                }
-
-                binary.resize(fileSize);
-                file.read(reinterpret_cast<char *>(&binary[0]), fileSize);
-            }
-
-            detail::GLBHeader header;
-            std::memcpy(&header, &binary[0], detail::HeaderSize);
+            detail::GLBHeader header{};
+            detail::ThrowIfBad(input.read(reinterpret_cast<char *>(&header), detail::HeaderSize));
             if (header.magic != detail::GLBHeaderMagic ||
                 header.jsonHeader.chunkType != detail::GLBChunkJSON ||
                 header.jsonHeader.chunkLength + detail::HeaderSize > header.length)
@@ -2165,23 +2250,44 @@ namespace gltf
                 throw invalid_gltf_document("Invalid GLB header");
             }
 
-            detail::DataContext dc = {
-                detail::GetDocumentRootPath(documentFilePath),
-                readQuotas,
-                &binary,
-                header.jsonHeader.chunkLength + detail::HeaderSize
-            };
+            std::vector<uint8_t> json{};
+            json.resize(header.jsonHeader.chunkLength);
+            detail::ThrowIfBad(input.read(reinterpret_cast<char *>(&json[0]), header.jsonHeader.chunkLength));
+
+            std::size_t totalSize = detail::HeaderSize + header.jsonHeader.chunkLength;
+            if (totalSize > readQuotas.MaxFileSize)
+            {
+                throw invalid_gltf_document("Quota exceeded : file size > MaxFileSize");
+            }
+
+            detail::ChunkHeader binHeader{};
+            detail::ThrowIfBad(input.read(reinterpret_cast<char *>(&binHeader), detail::ChunkHeaderSize));
+            if (binHeader.chunkType != detail::GLBChunkBIN)
+            {
+                throw invalid_gltf_document("Invalid GLB header");
+            }
+
+            totalSize += detail::ChunkHeaderSize + binHeader.chunkLength;
+            if (totalSize > readQuotas.MaxFileSize)
+            {
+                throw invalid_gltf_document("Quota exceeded : file size > MaxFileSize");
+            }
+
+            std::vector<uint8_t> binary{};
+            binary.resize(binHeader.chunkLength);
+            detail::ThrowIfBad(input.read(reinterpret_cast<char *>(&binary[0]), binHeader.chunkLength));
+
             return detail::Create(
-                nlohmann::json::parse({ &binary[detail::HeaderSize], header.jsonHeader.chunkLength }),
-                dc);
+                nlohmann::json::parse(json.begin(), json.end()),
+                { documentRootPath, readQuotas, &binary });
         }
-        catch (invalid_gltf_document &ex)
+        catch (invalid_gltf_document &)
         {
-            throw(ex);
+            throw;
         }
-        catch (std::system_error &ex)
+        catch (std::system_error &)
         {
-            throw(ex);
+            throw;
         }
         catch (...)
         {
@@ -2189,26 +2295,43 @@ namespace gltf
         }
     }
 
-    inline void Save(Document const & document, std::string const & documentFilePath, bool useBinaryFormat)
+    inline Document LoadFromBinary(FX_GLTF_FILESYSTEM::path const & documentFilePath, ReadQuotas const & readQuotas = {})
+    {
+        std::ifstream input(documentFilePath, std::ios::binary);
+        if (!input.is_open())
+        {
+            throw std::system_error(std::make_error_code(std::errc::no_such_file_or_directory));
+        }
+
+        return LoadFromBinary(input, detail::GetDocumentRootPath(documentFilePath), readQuotas);
+    }
+
+    inline void Save(Document const & document, std::ostream & output, FX_GLTF_FILESYSTEM::path const & documentRootPath, bool useBinaryFormat)
     {
         try
         {
             detail::ValidateBuffers(document, useBinaryFormat);
 
-            detail::Save(document, documentFilePath, useBinaryFormat);
+            detail::Save(document, output, documentRootPath, useBinaryFormat);
         }
-        catch (invalid_gltf_document &ex)
+        catch (invalid_gltf_document &)
         {
-            throw(ex);
+            throw;
         }
-        catch (std::system_error &ex)
+        catch (std::system_error &)
         {
-            throw(ex);
+            throw;
         }
         catch (...)
         {
             std::throw_with_nested(invalid_gltf_document("Invalid glTF document. See nested exception for details."));
         }
+    }
+
+    inline void Save(Document const & document, FX_GLTF_FILESYSTEM::path const & documentFilePath, bool useBinaryFormat)
+    {
+        std::ofstream output(documentFilePath, useBinaryFormat ? std::ios::binary : std::ios::out);
+        Save(document, output, detail::GetDocumentRootPath(documentFilePath), useBinaryFormat);
     }
 } // namespace gltf
 
@@ -2229,3 +2352,7 @@ inline void FormatException(std::string & output, std::exception const & ex, int
 } // namespace fx
 
 #undef FX_GLTF_HAS_CPP_17
+#undef FX_GLTF_NODISCARD
+#undef FX_GLTF_INLINE_CONSTEXPR
+#undef FX_GLTF_EXPERIMENTAL_FILESYSTEM
+#undef FX_GLTF_FILESYSTEM

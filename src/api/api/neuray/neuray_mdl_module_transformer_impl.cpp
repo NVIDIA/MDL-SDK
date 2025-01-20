@@ -140,7 +140,7 @@ mi::Sint32 Mdl_module_transformer_impl::export_module(
     MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
 
     if( !filename)
-        return add_error_message( context_impl, "Invalid parameters (NULL pointer).", -1);
+        return add_error_message( context_impl, "Invalid parameters (nullptr).", -1);
 
     if( !m_impl->is_module_valid( context_impl))
         return -1;
@@ -178,7 +178,7 @@ mi::Sint32 Mdl_module_transformer_impl::export_module_to_string(
     MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
 
     if( !exported_module)
-        return add_error_message( context_impl, "Invalid parameters (NULL pointer).", -1);
+        return add_error_message( context_impl, "Invalid parameters (nullptr).", -1);
 
     if( !m_impl->is_module_valid( context_impl))
         return -1;

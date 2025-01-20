@@ -60,7 +60,8 @@ Unified_database_access::Unified_database_access()
     m_log_module.set();
     // For IMDL::is_valid_mdl_identifier() in IType_factory::create_deferred_sized_array().
     m_mdlc_module.set();
-    m_database = MI::DBLIGHT::factory();
+    m_database = MI::DBLIGHT::factory(
+        /*thread_pool*/ nullptr, /*deserialization_manager*/ nullptr, /*enable_journal*/ false);
     m_scene_module.set();
     m_scene_module->register_db_elements( m_database);
 }

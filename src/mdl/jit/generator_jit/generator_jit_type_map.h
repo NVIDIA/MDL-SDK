@@ -624,7 +624,7 @@ public:
         llvm::DIScope        *scope,
         mi::mdl::IType const *type) const;
 
-    /// Get the debug info type for an MDL function type type.
+    /// Get the debug info type for an MDL function type.
     ///
     /// \param diBuilder   the debug info builder
     /// \param file        the file of this function type
@@ -633,6 +633,28 @@ public:
         llvm::DIBuilder               *diBuilder,
         llvm::DIFile                  *file,
         mi::mdl::IType_function const *type) const;
+
+    /// Get the debug info type for an LLVM type.
+    ///
+    /// \param diBuilder   the debug info builder
+    /// \param file        the file of this type
+    /// \param scope       the scope for this type
+    /// \param type        the LLVM type
+    llvm::DIType *get_debug_info_type(
+        llvm::DIBuilder  *diBuilder,
+        llvm::DIFile     *file,
+        llvm::DIScope    *scope,
+        llvm::Type       *type) const;
+
+    /// Get the debug info type for an LLVM function type.
+    ///
+    /// \param diBuilder   the debug info builder
+    /// \param file        the file of this function type
+    /// \param type        the LLVM function type
+    llvm::DISubroutineType *get_debug_info_type(
+        llvm::DIBuilder     *diBuilder,
+        llvm::DIFile        *file,
+        llvm::FunctionType  *type) const;
 
 private:
     /// Construct the State type for the environment context.

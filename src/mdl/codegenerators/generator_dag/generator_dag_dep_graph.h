@@ -141,7 +141,7 @@ public:
     IDefinition const *get_definition() const { return m_def; }
 
     /// Get the owner of this definition if any (does not increase ref count).
-    IModule const *get_owner_module() const { return m_owner; }
+    Module const *get_owner_module() const { return m_owner; }
 
     /// Add a dependency edge.
     ///
@@ -249,7 +249,7 @@ private:
     Dependence_node(
         Memory_arena      *arena,
         size_t            id,
-        IModule const     *owner,
+        Module const     *owner,
         IDefinition const *def,
         char const        *dag_name,
         char const        *dag_simple_name,
@@ -286,7 +286,7 @@ private:
 
 private:
     /// The owner module of the definition (if valid).
-    IModule const *m_owner;
+    Module const *m_owner;
 
     /// The owner definition of this node if any.
     IDefinition const *m_def;

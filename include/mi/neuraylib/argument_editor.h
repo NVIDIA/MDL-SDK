@@ -89,7 +89,7 @@ public:
     /// \param transaction       The transaction to be used.
     /// \param name              The name of the wrapped material instance or function call.
     /// \param mdl_factory       A pointer to the API component #mi::neuraylib::IMdl_factory.
-    ///                          Needed by all mutable methods, can be \c NULL if only const
+    ///                          Needed by all mutable methods, can be \c nullptr if only const
     ///                          methods are used.
     /// \param intent_to_edit    For best performance, the parameter should be set to \c true iff
     ///                          the intention is to edit the material instance or function call.
@@ -116,7 +116,7 @@ public:
     /// to its arguments point to a valid definition.
     ///
     /// \param context  Execution context that can be queried for error messages
-    ///                 after the operation has finished. Can be \c NULL.
+    ///                 after the operation has finished. Can be \c nullptr.
     ///
     /// \return \c True, if the instance is valid, \c false otherwise.
     bool is_valid_instance( IMdl_execution_context* context) const;
@@ -125,7 +125,7 @@ public:
     ///
     /// \param flags    Repair options, see #mi::neuraylib::Mdl_repair_options.
     /// \param context  Execution context that can be queried for error messages
-    ///                 after the operation has finished. Can be \c NULL.
+    ///                 after the operation has finished. Can be \c nullptr.
     /// \return
     ///     -   0:   Success.
     ///     -  -1:   Repair failed. Check the \c context for details.
@@ -164,7 +164,7 @@ public:
     /// Returns the name of the parameter at \p index.
     ///
     /// \param index    The index of the parameter.
-    /// \return         The name of the parameter, or \c NULL if \p index is out of range.
+    /// \return         The name of the parameter, or \c nullptr if \p index is out of range.
     const char* get_parameter_name( Size index) const;
 
     /// Returns the index position of a parameter.
@@ -232,7 +232,7 @@ public:
     /// \param name         The name of the parameter.
     /// \return
     ///                     -   0: Success.
-    ///                     -  -1: Invalid parameters (\c NULL pointer).
+    ///                     -  -1: Invalid parameters (\c nullptr).
     ///                     -  -2: Parameter \p name does not exist.
     ///                     -  -4: The function call or material instance is immutable (because it
     ///                            appears in a default of a function or material definition).
@@ -691,14 +691,14 @@ public:
     /// explicitly cast the value to #mi::Size.
     ///
     /// \param parameter_index  The index of the argument in question.
-    /// \return                 The name of the call, or \c NULL if \p parameter_index is out of
+    /// \return                 The name of the call, or \c nullptr if \p parameter_index is out of
     ///                         bounds or the argument expression is not a call.
     const char* get_call( Size parameter_index) const;
 
     /// Returns an argument (call expressions only).
     ///
     /// \param parameter_name   The name of the argument in question.
-    /// \return                 The name of the call, or \c NULL if \p parameter_name is invalid
+    /// \return                 The name of the call, or \c nullptr if \p parameter_name is invalid
     ///                         or the argument expression is not a call.
     const char* get_call( const char* parameter_name) const;
 
@@ -799,9 +799,9 @@ inline Argument_editor::Argument_editor(
     m_name = name;
     m_mdl_factory = make_handle_dup( mdl_factory);
     m_value_factory
-        = m_mdl_factory ? m_mdl_factory->create_value_factory( m_transaction.get()) : 0;
+        = m_mdl_factory ? m_mdl_factory->create_value_factory( m_transaction.get()) : nullptr;
     m_expression_factory
-        = m_mdl_factory ? m_mdl_factory->create_expression_factory( m_transaction.get()) : 0;
+        = m_mdl_factory ? m_mdl_factory->create_expression_factory( m_transaction.get()) : nullptr;
 
     if( intent_to_edit) {
         m_edit = transaction->edit<IFunction_call>( name);
@@ -845,7 +845,7 @@ inline Element_type Argument_editor::get_type() const
 inline const char* Argument_editor::get_definition() const
 {
     if( !is_valid())
-        return 0;
+        return nullptr;
 
     return m_access->get_function_definition();
 }
@@ -853,7 +853,7 @@ inline const char* Argument_editor::get_definition() const
 inline const char* Argument_editor::get_mdl_definition() const
 {
     if( !is_valid())
-        return 0;
+        return nullptr;
 
     return m_access->get_mdl_function_definition();
 }
@@ -893,7 +893,7 @@ inline Size Argument_editor::get_parameter_count() const
 inline const char* Argument_editor::get_parameter_name( Size parameter_index) const
 {
     if( !is_valid())
-        return 0;
+        return nullptr;
 
     return m_access->get_parameter_name( parameter_index);
 }
@@ -909,7 +909,7 @@ inline Size Argument_editor::get_parameter_index( const char* name) const
 inline const IType* Argument_editor::get_return_type() const
 {
     if( !is_valid())
-        return 0;
+        return nullptr;
 
     return m_access->get_return_type();
 }
@@ -917,7 +917,7 @@ inline const IType* Argument_editor::get_return_type() const
 inline const IType_list* Argument_editor::get_parameter_types() const
 {
     if( !is_valid())
-        return 0;
+        return nullptr;
 
     return m_access->get_parameter_types();
 }
@@ -931,7 +931,7 @@ inline bool Argument_editor::is_parameter_enabled( Size index, IMdl_evaluator_ap
         return true;
 
     base::Handle<const IValue_bool> b( evaluator->is_function_parameter_enabled(
-        m_transaction.get(), m_value_factory.get(), m_access.get(), index, /*errors*/ 0));
+        m_transaction.get(), m_value_factory.get(), m_access.get(), index, /*errors*/ nullptr));
     if( !b)
         return true;
     return b->get_value();
@@ -961,7 +961,7 @@ inline Sint32 Argument_editor::reset_argument( const char* name)
 inline const IExpression_list* Argument_editor::get_arguments() const
 {
     if( !is_valid())
-        return 0;
+        return nullptr;
 
     return m_access->get_arguments();
 }
@@ -1553,26 +1553,26 @@ inline Sint32 Argument_editor::set_array_size( const char* parameter_name, Size 
 inline const char* Argument_editor::get_call( Size parameter_index) const
 {
     if( !is_valid())
-        return 0;
+        return nullptr;
 
     base::Handle<const IExpression_list> arguments( m_access->get_arguments());
     base::Handle<const IExpression_call> argument(
         arguments->get_expression<IExpression_call>( parameter_index));
     if( !argument)
-        return 0;
+        return nullptr;
     return argument->get_call();
 }
 
 inline const char* Argument_editor::get_call( const char* parameter_name) const
 {
     if( !is_valid())
-        return 0;
+        return nullptr;
 
     base::Handle<const IExpression_list> arguments( m_access->get_arguments());
     base::Handle<const IExpression_call> argument(
         arguments->get_expression<IExpression_call>( parameter_name));
     if( !argument)
-        return 0;
+        return nullptr;
     return argument->get_call();
 }
 

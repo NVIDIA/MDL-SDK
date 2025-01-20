@@ -99,7 +99,7 @@ public:
     ///                                #get_module() to get access to the built module and process
     ///                                it themselves, e.g., for MDLE creation.
     /// \param context                 The execution context can be used to pass options and to
-    ///                                retrieve error and/or warning messages. Can be \c NULL.
+    ///                                retrieve error and/or warning messages. Can be \c nullptr.
     Mdl_module_builder(
         DB::Transaction* transaction,
         const char* db_module_name,
@@ -211,7 +211,7 @@ public:
         IType::Modifier frequency_qualifier,
         Execution_context* context);
 
-    /// Returns the current module (or \c NULL if there is no valid module).
+    /// Returns the current module (or \c nullptr if there is no valid module).
     const mi::mdl::IModule* get_module() const;
 
     /// Analyzes which parameters or query expressions need to be uniform.
@@ -228,12 +228,13 @@ public:
     ///                                  even makes sense to pass constant expressions (which by
     ///                                  themselves are always uniform) to determine whether a
     ///                                  to-be-connected call expression has to be uniform. Can be
-    ///                                  \c NULL.
+    ///                                  \c nullptr.
     /// \param[out] uniform_parameters   Indicates which parameters need to be uniform. The vector
     ///                                  might be shorter than expected if trailing parameters are
     ///                                  not referenced by \p root_expr.
     /// \param[out] uniform_query_expr   Indicates whether \p query_expr needs to be uniform (or \c
-    ///                                  false if \p query_expr is \c NULL, or in case of errors).
+    ///                                  false if \p query_expr is \c nullptr, or in case of
+    ///                                  errors).
     /// \param[out] error_path           Path to a node of the graph that violates the uniform
     ///                                  constraints (or the empty string if there is no such node,
     ///                                  or in case of errors). Parameters do \em not count as
@@ -281,25 +282,36 @@ private:
 
     /// Converts an IAnnotation to an mi::mdl::IAnnotation.
     ///
-    /// Returns \c NULL in case of errors.
+    /// Returns \c nullptr in case of errors.
     mi::mdl::IAnnotation* int_anno_to_core_anno(
         const IAnnotation* annotation, Execution_context* context);
 
     /// Converts an IAnnotation_block to an mi::mdl::IAnnotation_block.
     ///
-    /// Returns \c NULL in case of errors, or if \p annotation_block is \c NULL.
+    /// Returns \c nullptr in case of errors, or if \p annotation_block is \c nullptr.
     mi::mdl::IAnnotation_block* int_anno_block_to_core_anno_block(
         const IAnnotation_block* annotation_block,
         bool skip_anno_unused,
         Execution_context* context);
 
-    /// Populates \c m_module.
+    /// Populates \c m_module (all cases).
     void create_module( Execution_context* context);
+
+    /// Populates \c m_module from the DB (tag derived from \c m_db_module_name).
+    void sync_from_db();
+
+    /// Populates \c m_module from the DB (tag known).
+    ///
+    /// Used by create_module() after construction, and possibly by public API methods if the
+    /// builder needs to be re-initialized after export to the DB.
+    void sync_from_db( DB::Tag tag);
 
     /// Updates various members bound to the module.
     void update_module();
 
     /// Analyses the module (and inlines it if \c m_inline_mdle is set).
+    ///
+    /// Also exports it to the DB depending on \c m_export_to_db.
     void analyze_module( Execution_context* context);
 
     /// Checks that the given name is a valid MDL identifier.
@@ -380,6 +392,9 @@ private:
     /// Cached setting from the MDL configuration.
     bool m_implicit_cast_enabled;
 
+    /// Indicates whether the module being worked on needs to be re-initialized from the DB.
+    bool m_needs_sync_from_db = false;
+
     std::unique_ptr<Symbol_importer> m_symbol_importer;
     std::unique_ptr<Name_mangler> m_name_mangler;
 
@@ -395,7 +410,7 @@ private:
     mi::base::Handle<IType_factory>       m_int_tf;
     mi::base::Handle<IExpression_factory> m_int_ef;
 
-    /// Empty lists/blocks as replacement for \c NULL pointers.
+    /// Empty lists/blocks as replacement for \c nullptr pointers.
     mi::base::Handle<const IType_list>        m_empty_type_list;
     mi::base::Handle<const IExpression_list>  m_empty_expression_list;
     mi::base::Handle<const IAnnotation_list>  m_empty_annotation_list;

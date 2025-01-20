@@ -35,6 +35,7 @@ set(_GENERATED_SOURCES
     ${_GENERATED_DIR}/libmdlrt_bitcode.h
     ${_GENERATED_DIR}/glue_libdevice.h
     ${_GENERATED_DIR}/generator_jit_intrinsic_func.i
+    ${_GENERATED_DIR}/libbsdf_general_tables.cpp
     ${_GENERATED_DIR}/libbsdf_multiscatter_tables.cpp
     )
 
@@ -42,6 +43,7 @@ set(DF_HANDLE_SLOT_MODES "hsmp" "hsmn" "hsm1" "hsm2" "hsm4" "hsm8")
 foreach(HS ${DF_HANDLE_SLOT_MODES})
     list(APPEND _GENERATED_SOURCES
         ${_GENERATED_DIR}/libbsdf_bitcode_${HS}.h
+        ${_GENERATED_DIR}/libbsdf_bitcode_${HS}_debug.h
     )
 endforeach()
 
@@ -49,7 +51,7 @@ endforeach()
 set(_GENERATOR_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/gen_intrinsic_func.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf.py
-    ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf_multiscatter_tables.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf_data_tables.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gen_libdevice.py
     ${CMAKE_CURRENT_SOURCE_DIR}/gen_libmdlrt.py
     )
@@ -221,9 +223,18 @@ foreach(HS ${DF_HANDLE_SLOT_MODES})
         OUTPUT ${_GENERATED_DIR}/libbsdf_bitcode_${HS}.h
         COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
         COMMAND ${python_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf.py ${CMAKE_CURRENT_BINARY_DIR}/../libbsdf/generated/libbsdf_${HS}.bc ${_GENERATED_DIR}
-        DEPENDS 
+        DEPENDS
             ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf.py
             ${CMAKE_CURRENT_BINARY_DIR}/../libbsdf/generated/libbsdf_${HS}.bc
+        VERBATIM
+        )
+    add_custom_command(
+        OUTPUT ${_GENERATED_DIR}/libbsdf_bitcode_${HS}_debug.h
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
+        COMMAND ${python_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf.py ${CMAKE_CURRENT_BINARY_DIR}/../libbsdf/generated/libbsdf_${HS}_debug.bc ${_GENERATED_DIR}
+        DEPENDS
+            ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf.py
+            ${CMAKE_CURRENT_BINARY_DIR}/../libbsdf/generated/libbsdf_${HS}_debug.bc
         VERBATIM
         )
 endforeach()
@@ -250,7 +261,7 @@ add_custom_command(
     VERBATIM
     )
 
-set(_TABLES
+set(_MULTISCATTER_TABLES
     ${CMAKE_CURRENT_SOURCE_DIR}/../libbsdf/multiscatter_tables/beckmann_smith.bin
     ${CMAKE_CURRENT_SOURCE_DIR}/../libbsdf/multiscatter_tables/beckmann_vc.bin
     ${CMAKE_CURRENT_SOURCE_DIR}/../libbsdf/multiscatter_tables/phong_vc.bin
@@ -259,15 +270,32 @@ set(_TABLES
     ${CMAKE_CURRENT_SOURCE_DIR}/../libbsdf/multiscatter_tables/ggx_vc.bin
     ${CMAKE_CURRENT_SOURCE_DIR}/../libbsdf/multiscatter_tables/sink_vc.bin
     ${CMAKE_CURRENT_SOURCE_DIR}/../libbsdf/multiscatter_tables/ward_gm.bin
+    ${CMAKE_CURRENT_SOURCE_DIR}/../libbsdf/multiscatter_tables/microflake_sheen.bin
     )
 
 add_custom_command(
     OUTPUT ${_GENERATED_DIR}/libbsdf_multiscatter_tables.cpp
     COMMAND ${CMAKE_COMMAND} -E echo "Generating libbsdf_multiscatter_tables.cpp ..."
     COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
-    COMMAND ${python_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf_multiscatter_tables.py ${_GENERATED_DIR}/libbsdf_multiscatter_tables.cpp ${_TABLES}
+    COMMAND ${python_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf_data_tables.py "multiscatter" ${_GENERATED_DIR}/libbsdf_multiscatter_tables.cpp ${_MULTISCATTER_TABLES}
     DEPENDS
-        ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf_multiscatter_tables.py
-        ${_TABLES}
+        ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf_data_tables.py
+        ${_MULTISCATTER_TABLES}
+    VERBATIM
+    )
+    
+
+set(_GENERAL_TABLES
+    ${CMAKE_CURRENT_SOURCE_DIR}/../libbsdf/general_tables/microflake_sheen.bin
+    )
+
+add_custom_command(
+    OUTPUT ${_GENERATED_DIR}/libbsdf_general_tables.cpp
+    COMMAND ${CMAKE_COMMAND} -E echo "Generating libbsdf_general_tables.cpp ..."
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
+    COMMAND ${python_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf_data_tables.py "general" ${_GENERATED_DIR}/libbsdf_general_tables.cpp ${_GENERAL_TABLES}
+    DEPENDS
+        ${CMAKE_CURRENT_SOURCE_DIR}/gen_libbsdf_data_tables.py
+        ${_GENERAL_TABLES}
     VERBATIM
     )

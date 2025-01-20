@@ -48,7 +48,7 @@ if(MDL_ENABLE_CUDA_EXAMPLES)
     # - CUDA 9.0 supports _MSC_VER up to 1911 which equals to VS2017, version 15.3 & 15.4 (tools version 14.11)
     # - CUDA 9.2 supports _MSC_VER up to 1913 which equals to VS2017, version 15.6 (tools version 14.13)
     #
-    # since CMake 3.12.1 you can specify the minor versions using -T version=14.11,cuda=9.0 
+    # since CMake 3.12.1 you can specify the minor versions using -T version=14.11,cuda=9.0
     # before, only the major version was available using -T v140,cuda=9.0 (which uses the VS 2015 tools with CUDA 9.0)
 endif()
 
@@ -58,7 +58,7 @@ function(FIND_CUDA_EXT)
         message(FATAL_ERROR "Failed enable CUDA. Please install the CUDA SDK or disable 'MDL_ENABLE_CUDA_EXAMPLES'.")
         return()
     endif()
-    
+
     set(_DEFAULT_ERROR_MESSAGE "The dependency \"cuda\" could not be resolved. Please install the CUDA SDK on your system or deactivate the option 'MDL_ENABLE_CUDA_EXAMPLES'")
 
     # we don't use findCUDA here, we assume we can find all our dependencies relative to nvcc
@@ -91,11 +91,9 @@ function(FIND_CUDA_EXT)
     list(APPEND _CUDA_INCLUDE "${_CUDA_SDK_DIR}/curand_dev/include")
 
     if(WINDOWS)
-        # add static libs (only required on Windows)
-        # .dlls are supposed to be in the system PATH
         set(_CUDA_LIB_DIRECTORY ${_CUDA_SDK_DIR}/lib/x64)
         set(_CUDA_LIB "${_CUDA_LIB_DIRECTORY}/cuda.lib")
-        set(_CUDART_LIB "${_CUDA_LIB_DIRECTORY}/cudart.lib")
+        set(_CUDART_LIB "${_CUDA_LIB_DIRECTORY}/cudart_static.lib")
 
         # error if dependencies can not be resolved
         if(NOT EXISTS ${_CUDA_LIB} OR NOT EXISTS ${_CUDART_LIB})
@@ -109,7 +107,6 @@ function(FIND_CUDA_EXT)
         list(APPEND _CUDA_LIBS ${_CUDART_LIB})
 
     else() # Linux and MacOSX
-        # find shared libraries on Linux and MAC
         find_file(_CUDA_SO
             NAMES
                 ${CMAKE_SHARED_LIBRARY_PREFIX}cuda${CMAKE_SHARED_LIBRARY_SUFFIX}
@@ -121,9 +118,9 @@ function(FIND_CUDA_EXT)
                 /usr/local/cuda/lib
                 ${_CUDA_SDK_DIR}/lib
             )
-        find_file(_CUDART_SO
+        find_file(_CUDART_A
             NAMES
-                ${CMAKE_SHARED_LIBRARY_PREFIX}cudart${CMAKE_SHARED_LIBRARY_SUFFIX}
+                ${CMAKE_STATIC_LIBRARY_PREFIX}cudart_static${CMAKE_STATIC_LIBRARY_SUFFIX}
             HINTS
                 # linux
                 ${_CUDA_SDK_DIR}/lib64
@@ -133,15 +130,16 @@ function(FIND_CUDA_EXT)
             )
 
         # error if dependencies can not be resolved
-        if(NOT EXISTS ${_CUDA_SO} OR NOT EXISTS ${_CUDART_SO})
+        if(NOT EXISTS ${_CUDA_SO} OR NOT EXISTS ${_CUDART_A})
             message(STATUS "_CUDA_SDK_DIR: ${_CUDA_SDK_DIR}")
             message(STATUS "_CUDA_SO: ${_CUDA_SO}")
-            message(STATUS "_CUDART_SO: ${_CUDART_SO}")
+            message(STATUS "_CUDART_A: ${_CUDART_A}")
             message(FATAL_ERROR ${_DEFAULT_ERROR_MESSAGE})
         endif()
 
-        list(APPEND _CUDA_SHARED ${_CUDA_SO})
-        list(APPEND _CUDA_SHARED ${_CUDART_SO})
+        list(APPEND _CUDA_LIBS ${_CUDA_SO})
+        list(APPEND _CUDA_LIBS ${_CUDART_A})
+        list(APPEND _CUDA_LIBS -lrt)
 
         if(MACOSX)
             list(APPEND _CUDA_LIBS "-F${_CUDA_SDK_DIR}/lib/stubs -Xlinker -framework -Xlinker CUDA")
@@ -151,12 +149,10 @@ function(FIND_CUDA_EXT)
     # store paths that are later used in the add_cuda.cmake
     set(MDL_DEPENDENCY_CUDA_INCLUDE ${_CUDA_INCLUDE} CACHE INTERNAL "cuda headers")
     set(MDL_DEPENDENCY_CUDA_LIBS ${_CUDA_LIBS} CACHE INTERNAL "cuda libs")
-    set(MDL_DEPENDENCY_CUDA_SHARED ${_CUDA_SHARED} CACHE INTERNAL "cuda shared libs")
 
     if(MDL_LOG_DEPENDENCIES)
-        message(STATUS "[INFO] MDL_DEPENDENCY_CUDA_INCLUDE:          ${MDL_DEPENDENCY_CUDA_INCLUDE}")
-        message(STATUS "[INFO] MDL_DEPENDENCY_CUDA_LIBS:             ${MDL_DEPENDENCY_CUDA_LIBS}")
-        message(STATUS "[INFO] MDL_DEPENDENCY_CUDA_SHARED:           ${MDL_DEPENDENCY_CUDA_SHARED}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_CUDA_INCLUDE:              ${MDL_DEPENDENCY_CUDA_INCLUDE}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_CUDA_LIBS:                 ${MDL_DEPENDENCY_CUDA_LIBS}")
     endif()
 
 endfunction()

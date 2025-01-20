@@ -117,7 +117,7 @@ or written as a PTX prototype:
 
 The \c res_data parameter is used to provide access to resources like textures
 depending on the way how those resources are accessed (see "Texture access functions" below).
-If it is not used, the pointers inside the structure may be NULL:
+If it is not used, the pointers inside the structure may be nullptr:
 
 \code
     struct Resource_data {
@@ -128,7 +128,7 @@ If it is not used, the pointers inside the structure may be NULL:
 
 The \c exception_state parameter allows to provide handlers for out-of-bounds
 array access exceptions and division-by-zero exceptions. But for the PTX backend, this is not
-supported and the parameter should be set to NULL.
+supported and the parameter should be set to nullptr.
 
 The \c captured_args parameter is used to provide the data of the
 #mi::neuraylib::ITarget_argument_block object for class-compiled materials.
@@ -136,7 +136,7 @@ The data can either be manually created using the information from
 #mi::neuraylib::ITarget_value_layout or by using
 #mi::neuraylib::ITarget_code::get_argument_block() or
 #mi::neuraylib::ITarget_code::create_argument_block().
-For instance-compiled materials, this parameter should be set to NULL.
+For instance-compiled materials, this parameter should be set to nullptr.
 See \ref mi_neuray_compilation_modes for more details about instance and class compilation.
 
 To make the generated functions available to our CUDA kernel, we have to link them with

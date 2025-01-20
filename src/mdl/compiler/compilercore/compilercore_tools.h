@@ -236,6 +236,17 @@ static inline bool is_material_type_or_sub_type(IType const *type)
     return false;
 }
 
+/// Check if the given type is the material_emission type.
+///
+/// \param type  the type to check
+static inline bool is_material_emission_type(IType const *type)
+{
+    if (IType_struct const *s_type = as<IType_struct>(type)) {
+        return s_type->get_predefined_id() == IType_struct::SID_MATERIAL_EMISSION;
+    }
+    return false;
+}
+
 /// Check if the given type is the material_volume type.
 ///
 /// \param type  the type to check
@@ -340,6 +351,44 @@ static inline bool bit_equal_float(double a, double b)
 
     return u1.z[0] == u2.z[0] && u1.z[1] == u2.z[1];
 }
+
+/// Skip all presets returning the original function declaration.
+///
+/// \param[in]    func_decl  a function declaration
+/// \param[inout] owner_mod  the owner module of the function declaration
+///
+/// \return func_decl's definition if this is not a preset, the original definition otherwise
+IDefinition const *skip_presets(
+    IDeclaration_function const   *func_decl,
+    mi::base::Handle<Module const> &owner_mod);
+
+/// Skip all presets returning the original function definition.
+///
+/// \param[in]    func_def   a function definition
+/// \param[inout] owner_mod  the owner module of the function definition
+///
+/// \return func_decl itself if this is not a preset, the original definition otherwise
+IDefinition const *skip_presets(
+    IDefinition const              *func_def,
+    mi::base::Handle<Module const> &owner_mod);
+
+/// Copy the position from one AST element to another.
+/// \tparam IAst   type of the AST element
+/// \param dst     the destination
+/// \param src     the original element the position is copied
+template<typename IAst>
+static void copy_position(
+    IAst       *dst,
+    IAst const *src)
+{
+    Position const &s_pos = src->access_position();
+    Position &d_pos = dst->access_position();
+    d_pos.set_start_line(s_pos.get_start_line());
+    d_pos.set_start_column(s_pos.get_start_column());
+    d_pos.set_end_line(s_pos.get_end_line());
+    d_pos.set_end_column(s_pos.get_end_column());
+}
+
 }  // mdl
 }  // mi
 

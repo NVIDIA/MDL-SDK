@@ -37,8 +37,8 @@
 namespace mi {
 
 namespace neuraylib {
-    
-/** 
+
+/**
 \addtogroup mi_neuray_impexp
 @{
 */
@@ -72,7 +72,7 @@ public:
     /// If the scene file has a scene root (like a \c render or \c root statement in a \c .%mi
     /// file), the method returns the name of the root element. For most other files, this is the
     /// name of a group that was created by the importer and that contains the top-level scene
-    /// elements. Returns \c NULL for \c .mdl files.
+    /// elements. Returns \c nullptr for \c .mdl files.
     virtual const char* get_rootgroup() const = 0;
 
     /// Returns the name of the camera instance.
@@ -112,7 +112,7 @@ public:
     ///
     /// It is possible to query the all messages, see #get_messages_length() and
     /// #get_message(mi::Size)const. This method just reports the the first message of severity
-    /// #mi::base::details::MESSAGE_SEVERITY_ERROR or above, or \c NULL if there is no such
+    /// #mi::base::details::MESSAGE_SEVERITY_ERROR or above, or \c nullptr if there is no such
     /// message.
     virtual const char* get_error_message() const = 0;
 
@@ -146,7 +146,7 @@ public:
 ///       explicit message with message number 0. If there are no other importer-specific messages,
 ///       messages, the message array should then just be empty, such that
 ///       #mi::neuraylib::IImport_result::get_error_number() returns 0 and
-///       #mi::neuraylib::IImport_result::get_error_message() returns \c NULL.
+///       #mi::neuraylib::IImport_result::get_error_message() returns \c nullptr.
 class IImport_result_ext :
     public base::Interface_declare<0xe43ae7a3,0x7816,0x4915,0xb1,0x98,0x42,0x12,0x1d,0x1b,0xe2,0x09,
                                    neuraylib::IImport_result>
@@ -156,21 +156,21 @@ public:
     ///
     /// \return
     ///                 -  0: Success.
-    ///                 - -1: Invalid parameters (\c NULL pointer).
+    ///                 - -1: Invalid parameters (\c nullptr).
     virtual Sint32 set_rootgroup( const char* group) = 0;
 
     /// Sets the name of the camera instance.
     ///
     /// \return
     ///                 -  0: Success.
-    ///                 - -1: Invalid parameters (\c NULL pointer).
+    ///                 - -1: Invalid parameters (\c nullptr).
     virtual Sint32 set_camera_inst( const char* camera) = 0;
 
     /// Sets the name of the options.
     ///
     /// \return
     ///                 -  0: Success.
-    ///                 - -1: Invalid parameters (\c NULL pointer).
+    ///                 - -1: Invalid parameters (\c nullptr).
     virtual Sint32 set_options( const char* options) = 0;
 
     /// Appends an element to the array of recorded elements.
@@ -178,7 +178,7 @@ public:
     /// \param element  The name of the element to append.
     /// \return
     ///                 -  0: Success.
-    ///                 - -1: Invalid parameters (\c NULL pointer).
+    ///                 - -1: Invalid parameters (\c nullptr).
     virtual Sint32 element_push_back( const char* element) = 0;
 
     /// Replaces an element in the array of recorded elements.
@@ -189,7 +189,7 @@ public:
     /// \param element  The name of the element element to be replaced.
     /// \return
     ///                 -  0: Success.
-    ///                 - -1: Invalid parameters (\c NULL pointer).
+    ///                 - -1: Invalid parameters (\c nullptr).
     ///                 - -2: \p index is out of bounds.
     virtual Sint32 set_element( Size index, const char* element) = 0;
 
@@ -202,7 +202,7 @@ public:
     ///
     /// \return
     ///                 -  0: Success.
-    ///                 - -1: Invalid parameters (\c NULL pointer).
+    ///                 - -1: Invalid parameters (\c nullptr).
     ///
     /// \see #mi::neuraylib::IImport_result_ext for valid message numbers
     virtual Sint32 set_message(
@@ -216,7 +216,7 @@ public:
     /// \param message  The message to append.
     /// \return
     ///                 -  0: Success.
-    ///                 - -1: Invalid parameters (\c NULL pointer).
+    ///                 - -1: Invalid parameters (\c nullptr).
     ///
     /// \see #mi::neuraylib::IImport_result_ext for valid message numbers
     virtual Sint32 message_push_back(
@@ -231,7 +231,7 @@ public:
     /// \param message  The message to append.
     /// \return
     ///                 -  0: Success.
-    ///                 - -1: Invalid parameters (\c NULL pointer).
+    ///                 - -1: Invalid parameters (\c nullptr).
     ///                 - -2: \p index is out of bounds.
     ///
     /// \see #mi::neuraylib::IImport_result_ext for valid message numbers
@@ -245,14 +245,14 @@ public:
     ///
     /// \return
     ///                 -  0: Success.
-    ///                 - -1: Invalid parameters (\c NULL pointer).
+    ///                 - -1: Invalid parameters (\c nullptr).
     virtual Sint32 append_elements( const IImport_result* import_result) = 0;
 
     /// Appends all messages in \p import_result to this instance.
     ///
     /// \return
     ///                 -  0: Success.
-    ///                 - -1: Invalid parameters (\c NULL pointer).
+    ///                 - -1: Invalid parameters (\c nullptr).
     virtual Sint32 append_messages( const IImport_result* import_result) = 0;
 };
 

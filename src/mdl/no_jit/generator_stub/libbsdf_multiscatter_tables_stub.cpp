@@ -34,53 +34,63 @@ namespace mi {
 namespace mdl {
 namespace libbsdf_data {
 
-// Automatically generated from beckmann_smith.bin
+// note, the constants defined here need to match the ones generated in `generator_jit`
+// and the extern constants in `generator_jit_libbsdf_data.h`
+
+// corresponds to beckmann_smith.bin
 unsigned const libbsdf_multiscatter_res_theta_beckmann_smith = 64;
 unsigned const libbsdf_multiscatter_res_roughness_beckmann_smith = 64;
 unsigned const libbsdf_multiscatter_res_ior_beckmann_smith = 16;
 unsigned char const libbsdf_multiscatter_data_beckmann_smith[] = { 0 };
 
-// Automatically generated from beckmann_vc.bin
+// corresponds to beckmann_vc.bin
 unsigned const libbsdf_multiscatter_res_theta_beckmann_vc = 64;
 unsigned const libbsdf_multiscatter_res_roughness_beckmann_vc = 64;
 unsigned const libbsdf_multiscatter_res_ior_beckmann_vc = 16;
 unsigned char const libbsdf_multiscatter_data_beckmann_vc[] = { 0 };
 
-// Automatically generated from phong_vc.bin
+// corresponds to phong_vc.bin
 unsigned const libbsdf_multiscatter_res_theta_phong_vc = 64;
 unsigned const libbsdf_multiscatter_res_roughness_phong_vc = 64;
 unsigned const libbsdf_multiscatter_res_ior_phong_vc = 16;
 unsigned char const libbsdf_multiscatter_data_phong_vc[] = { 0 };
 
-// Automatically generated from disk_bs.bin
+// corresponds to disk_bs.bin
 unsigned const libbsdf_multiscatter_res_theta_disk_bs = 64;
 unsigned const libbsdf_multiscatter_res_roughness_disk_bs = 64;
 unsigned const libbsdf_multiscatter_res_ior_disk_bs = 0;
 unsigned char const libbsdf_multiscatter_data_disk_bs[] = { 0 };
 
-// Automatically generated from ggx_smith.bin
+// corresponds to ggx_smith.bin
 unsigned const libbsdf_multiscatter_res_theta_ggx_smith = 64;
 unsigned const libbsdf_multiscatter_res_roughness_ggx_smith = 64;
 unsigned const libbsdf_multiscatter_res_ior_ggx_smith = 16;
 unsigned char const libbsdf_multiscatter_data_ggx_smith[] = { 0 };
 
-// Automatically generated from ggx_vc.bin
+// corresponds to ggx_vc.bin
 unsigned const libbsdf_multiscatter_res_theta_ggx_vc = 64;
 unsigned const libbsdf_multiscatter_res_roughness_ggx_vc = 64;
 unsigned const libbsdf_multiscatter_res_ior_ggx_vc = 16;
 unsigned char const libbsdf_multiscatter_data_ggx_vc[] = { 0 };
 
-// Automatically generated from sink_vc.bin
+// corresponds to sink_vc.bin
 unsigned const libbsdf_multiscatter_res_theta_sink_vc = 64;
 unsigned const libbsdf_multiscatter_res_roughness_sink_vc = 64;
 unsigned const libbsdf_multiscatter_res_ior_sink_vc = 0;
 unsigned char const libbsdf_multiscatter_data_sink_vc[] = { 0 };
 
-// Automatically generated from ward_gm.bin
+// corresponds to ward_gm.bin
 unsigned const libbsdf_multiscatter_res_theta_ward_gm = 64;
 unsigned const libbsdf_multiscatter_res_roughness_ward_gm = 64;
 unsigned const libbsdf_multiscatter_res_ior_ward_gm = 0;
 unsigned char const libbsdf_multiscatter_data_ward_gm[] = { 0 };
+
+// corresponds to microflake_sheen.bin
+unsigned const libbsdf_multiscatter_res_theta_microflake_sheen = 64;
+unsigned const libbsdf_multiscatter_res_roughness_microflake_sheen = 64;
+unsigned const libbsdf_multiscatter_res_ior_microflake_sheen = 0;
+unsigned char const libbsdf_multiscatter_data_microflake_sheen[] = { 0 };
+
 }
 }
 }

@@ -39,6 +39,7 @@
 namespace mi {
 namespace mdl {
 
+class DAG_unit;
 class IDag_builder;
 class IModule;
 class IModule_cache;
@@ -372,6 +373,12 @@ public:
     };
 
 public:
+    /// Get the DAG_unit of this lambda function.
+    virtual DAG_unit &get_dag_unit() = 0;
+
+    /// Get the DAG_unit of this lambda function.
+    virtual DAG_unit const &get_dag_unit() const = 0;
+
     /// Get the type factory of this function.
     virtual IType_factory *get_type_factory() = 0;
 
@@ -380,8 +387,10 @@ public:
 
     /// Create a constant.
     /// \param  value       The value of the constant.
+    ///
     /// \returns            The created constant.
-    virtual DAG_constant const *create_constant(IValue const *value) = 0;
+    virtual DAG_constant const *create_constant(
+        IValue const *value) = 0;
 
     /// Create a call.
     /// \param  name            The absolute name of the called function.
@@ -389,21 +398,27 @@ public:
     /// \param  call_args       The call arguments of the called function.
     /// \param  num_call_args   The number of call arguments.
     /// \param  ret_type        The return type of the called function.
+    /// \param dbg_info         The debug info for this call if any.
+    ///
     /// \returns                The created call.
     virtual DAG_node const *create_call(
         char const                    *name,
         IDefinition::Semantics        sema,
         DAG_call::Call_argument const call_args[],
         int                           num_call_args,
-        IType const                   *ret_type) = 0;
+        IType const                   *ret_type,
+        DAG_DbgInfo                   dbg_info) = 0;
 
     /// Create a parameter reference.
     /// \param  type        The type of the parameter
     /// \param  index       The index of the parameter.
+    /// \param dbg_info     The debug info for this parameter if any.
+    ///
     /// \returns            The created parameter reference.
     virtual DAG_parameter const *create_parameter(
         IType const *type,
-        int         index) = 0;
+        int         index,
+        DAG_DbgInfo dbg_info) = 0;
 
     /// Enable common subexpression elimination.
     ///
@@ -440,10 +455,13 @@ public:
     /// Any parameters must have been added and mapped via #mi::mdl::ILambda_function::add_parameter
     /// and #mi::mdl::ILambda_function::set_parameter_mapping before calling this function.
     ///
-    /// \param expr  the DAG expression to import
+    /// \param owner  the DAG_unit that owns the expression to import
+    /// \param expr   the DAG expression to import
     ///
     /// \return the imported expression
-    virtual DAG_node const *import_expr(DAG_node const *expr) = 0;
+    virtual DAG_node const *import_expr(
+        DAG_unit const &owner,
+        DAG_node const *expr) = 0;
 
     /// Store a DAG (root) expression and returns an index for it.
     ///
@@ -694,8 +712,6 @@ public:
 ///  - If class compilation was used, add and map all material parameters of the material
 ///    instance to the root lambda via #mi::mdl::ILambda_function::add_parameter() and
 ///    #mi::mdl::ILambda_function::set_parameter_mapping().
-///  - Import the material constructor of the material instance into the root lambda
-///    via #mi::mdl::ILambda_function::import_expr().
 ///  - Create a list of #mi::mdl::IDistribution_function::Requested_function elements referring
 ///    to the expressions, which shall be generated, and specifying the names / base-names of the
 ///    functions. These will be registered as main functions.
@@ -752,13 +768,12 @@ public:
         Error_code  error_code;    ///< An error code in case of an error
     };
 
-    /// Initialize this distribution function object for the given material
+    /// Initialize this distribution function object for the given material instance
     /// with the given requested functions.
     /// Any additionally required expressions from the material will also be handled.
     /// Any material parameters must already be registered in the root lambda at this point.
-    /// The DAG nodes must already be owned by the root lambda.
     ///
-    /// \param material_constructor       the DAG node of the material constructor
+    /// \param mat_instance               the material instance
     /// \param requested_functions        the expressions for which functions will be generated
     /// \param num_functions              the number of requested functions
     /// \param include_geometry_normal    if true, the geometry normal will be handled
@@ -769,7 +784,7 @@ public:
     ///
     /// \returns EC_NONE, if initialization was successful, an error code otherwise.
     virtual Error_code initialize(
-        DAG_node const            *material_constructor,
+        IMaterial_instance const  *mat_instance,
         Requested_function        *requested_functions,
         size_t                     num_functions,
         bool                       include_geometry_normal,
@@ -1092,6 +1107,10 @@ class ICode_generator_jit : public
     /// constant segment.
     #define MDL_JIT_OPTION_ENABLE_RO_SEGMENT "jit_enable_ro_segment"
 
+    /// The name of the option that limits the maximum size of constants in a
+    /// compiled module in the JIT code generator.
+    #define MDL_JIT_OPTION_MAX_CONST_DATA "jit_max_const_data"
+
     /// The name of the option to set the fast-math optimization of the JIT code generator.
     #define MDL_JIT_OPTION_FAST_MATH "jit_fast_math"
 
@@ -1271,7 +1290,7 @@ class ICode_generator_jit : public
     /// compiled module in the GLSL backend.
     #define MDL_JIT_OPTION_GLSL_REQUIRED_EXTENSIONS "jit_glsl_required_extensions"
 
-    /// The name of the option that limits the maximum size of constant data in a
+    /// The name of the option that limits the maximum size of constants in a
     /// compiled module in the GLSL backend.
     #define MDL_JIT_OPTION_GLSL_MAX_CONST_DATA "jit_glsl_max_const_data"
 
@@ -1561,25 +1580,53 @@ public:
 
     /// Get the resolution of the libbsdf multi-scattering lookup table data.
     ///
-    /// \param bsdf_data_kind   the kind of the BSDF data, has to be a multiscatter kind
+    /// \param bsdf_data_kind   the kind of the BSDF data, has to be a multi-scatter kind
     /// \param[out] theta       will contain the number of IOR values when data is available
     /// \param[out] roughness   will contain the number of roughness values when data is available
     /// \param[out] ior         will contain the number of theta values when data is available
+    /// \param[out] pixel_type  will contain the pixel type when data is available
     ///
     /// \returns                true if there is data for this semantic (BSDF)
     virtual bool get_libbsdf_multiscatter_data_resolution(
         IValue_texture::Bsdf_data_kind bsdf_data_kind,
         size_t                         &theta,
         size_t                         &roughness,
-        size_t                         &ior) const = 0;
+        size_t                         &ior,
+        const char                     *&pixel_type) const = 0;
 
     /// Get access to the libbsdf multi-scattering lookup table data.
     ///
-    /// \param bsdf_data_kind  the kind of the BSDF data, has to be a multiscatter kind
+    /// \param bsdf_data_kind  the kind of the BSDF data, has to be a multi-scatter kind
     /// \param[out] size       the size of the data
     ///
     /// \returns               the lookup data if available for this semantic (BSDF), NULL otherwise
     virtual unsigned char const *get_libbsdf_multiscatter_data(
+        IValue_texture::Bsdf_data_kind bsdf_data_kind,
+        size_t                         &size) const = 0;
+
+    /// Get the resolution of the libbsdf general lookup table data.
+    ///
+    /// \param bsdf_data_kind   the kind of the BSDF data, has to be a general kind
+    /// \param[out] u           will contain the number of values in u direction when data is available
+    /// \param[out] v           will contain the number of values in v direction when data is available
+    /// \param[out] w           will contain the number of values in w direction when data is available
+    /// \param[out] pixel_type  will contain the pixel type when data is available
+    ///
+    /// \returns                true if there is data for this semantic (BSDF)
+    virtual bool get_libbsdf_general_data_resolution(
+        IValue_texture::Bsdf_data_kind bsdf_data_kind,
+        size_t                         &u,
+        size_t                         &v,
+        size_t                         &w,
+        const char                     *&pixel_type) const = 0;
+
+    /// Get access to the libbsdf general lookup table data.
+    ///
+    /// \param bsdf_data_kind  the kind of the BSDF data, has to be a general kind
+    /// \param[out] size       the size of the data
+    ///
+    /// \returns               the lookup data if available for this semantic (BSDF), NULL otherwise
+    virtual unsigned char const *get_libbsdf_general_data(
         IValue_texture::Bsdf_data_kind bsdf_data_kind,
         size_t                         &size) const = 0;
 
@@ -1644,6 +1691,7 @@ These options are specific to the MDL JIT code generator:
 
 - \ref mdl_option_jit_disable_exceptions         "jit_disable_exceptions"
 - \ref mdl_option_jit_enable_ro_segment          "jit_enable_ro_segment"
+- \ref mdl_option_jit_max_const_data             "jit_max_const_data"
 - \ref mdl_option_jit_fast_math                  "jit_fast_math"
 - \ref mdl_option_jit_include_uniform_state      "jit_include_uniform_state"
 - \ref mdl_option_jit_inline_aggressively        "jit_inline_aggressively"
@@ -1718,6 +1766,13 @@ These options are specific to the MDL JIT code generator:
 - <b>jit_enable_ro_segment</b>: If set to \c "true", a read-only constant data segment may be
   created to reduce the amount of constant data in source code output.
   Default: \c "false"
+
+\anchor mdl_option_jit_max_const_data
+- <b>max_const_data:</b> Specifies the maximum size of a constant in bytes to be put into
+                         the generated code, if the \c "jit_enable_ro_segment" option
+                         is enabled. Bigger constants will be moved into the read-only data segment.
+                         If the \c "glsl_max_const_data" option is also used, the read-only data
+                         segment has priority.
 
 \anchor mdl_option_jit_fast_math
 - <b>jit_fast_math</b>: If set to \c "true", the JIT code generator enables unsafe

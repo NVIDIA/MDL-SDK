@@ -76,6 +76,9 @@ class IMdl_factory : public
     mi::base::Interface_declare<0xba936279,0x4b71,0x42a4,0x95,0x37,0x98,0x69,0x97,0xb3,0x47,0x72>
 {
 public:
+    /// \name Creation of factories and builders
+    //@{
+
     /// Returns an MDL type factory for the given transaction.
     virtual IType_factory* create_type_factory( ITransaction* transaction) = 0;
 
@@ -90,12 +93,16 @@ public:
 
     /// Clones an execution context.
     ///
-    /// Creates a new execution context if \p context is \c NULL (as in
+    /// Creates a new execution context if \p context is \c nullptr (as in
     /// #create_execution_context()). There is \em no deep copy of option values of type
     /// #mi::base::IInterface, they are shared by both instances.
     ///
     /// Useful to change options temporarily.
     virtual IMdl_execution_context* clone( const IMdl_execution_context* context) = 0;
+    
+    //@}
+    /// \name Creation of resource values
+    //@{
 
     /// Creates a value referencing a texture identified by an MDL file path.
     ///
@@ -108,7 +115,7 @@ public:
     ///                      to the return value.
     /// \param gamma         The value that is returned by #mi::neuraylib::ITexture::get_gamma()
     ///                      on the DB element referenced by the return value.
-    /// \param selector      The selector, or \c NULL. See section 2.3.1 in [\ref MDLLS] for
+    /// \param selector      The selector, or \c nullptr. See section 2.3.1 in [\ref MDLLS] for
     ///                      details.
     /// \param shared        Indicates whether you want to re-use the DB elements for that texture
     ///                      if it has already been loaded, or if you want to create new DB elements
@@ -117,10 +124,10 @@ public:
     ///                      have not explicitly been loaded via this method, e.g., textures in
     ///                      defaults.
     /// \param context       An execution context which can be queried for detailed error messages
-    ///                      after the operation has finished. Can be \c NULL. The error codes have
-    ///                      the following meaning:
+    ///                      after the operation has finished. Can be \c nullptr. The error codes
+    ///                      have the following meaning:
     ///                      -   0: Success.
-    ///                      -  -1: Invalid parameters (\c NULL pointer).
+    ///                      -  -1: Invalid parameters (\c nullptr).
     ///                      -  -2: The file path is not an absolute MDL file path.
     ///                      -  -3: No image plugin found to handle the file.
     ///                      -  -4: Failure to resolve the given filename, e.g., the file does
@@ -128,7 +135,7 @@ public:
     ///                      -  -5: Failure to open the resolved file.
     ///                      -  -7: The image plugin failed to import the data.
     ///                      - -10: Failure to apply the given selector.
-    /// \return              The value referencing the texture, or \c NULL in case of failure.
+    /// \return              The value referencing the texture, or \c nullptr in case of failure.
     ///
     /// \see #mi::neuraylib::IImage::reset_file() \if IRAY_API or
     ///      #mi::neuraylib::IVolume_data::reset_file() \endif if you are given a plain filename
@@ -176,17 +183,18 @@ public:
     ///                      instances that have not explicitly been loaded via this method, e.g.,
     ///                      light profiles in defaults.
     /// \param context       An execution context which can be queried for detailed error messages
-    ///                      after the operation has finished. Can be \c NULL. The error codes have
-    ///                      the following meaning:
+    ///                      after the operation has finished. Can be \c nullptr. The error codes
+    ///                      have the following meaning:
     ///                      -   0: Success.
-    ///                      -  -1: Invalid parameters (\c NULL pointer).
+    ///                      -  -1: Invalid parameters (\c nullptr).
     ///                      -  -2: The file path is not an absolute MDL file path.
     ///                      -  -3: Invalid filename extension (only \c .ies is supported).
     ///                      -  -4: Failure to resolve the given filename, e.g., the file does
     ///                             not exist.
     ///                      -  -5: Failure to open the resolved file.
     ///                      -  -7: File format error.
-    /// \return              The value referencing the light profile, or \c NULL in case of failure.
+    /// \return              The value referencing the light profile, or \c nullptr in case of
+    ///                      failure.
     ///
     /// \see #mi::neuraylib::ILightprofile::reset_file() if you are given a plain filename instead
     ///      of an MDL file path.
@@ -227,17 +235,17 @@ public:
     ///                      instances that have not explicitly been loaded via this method, e.g.,
     ///                      BSDF measurements in defaults.
     /// \param context       An execution context which can be queried for detailed error messages
-    ///                      after the operation has finished. Can be \c NULL. The error codes have
-    ///                      the following meaning:
+    ///                      after the operation has finished. Can be \c nullptr. The error codes
+    ///                      have the following meaning:
     ///                      -  0: Success.
-    ///                      - -1: Invalid parameters (\c NULL pointer).
+    ///                      - -1: Invalid parameters (\c nullptr).
     ///                      - -2: The file path is not an absolute MDL file path.
     ///                      - -3: Invalid filename extension (only \c .mbsdf is supported).
     ///                      - -4: Failure to resolve the given filename, e.g., the file does not
     ///                            exist.
     ///                      - -5: Failure to open the resolved file.
     ///                      - -7: Invalid file format.
-    /// \return              The value referencing the BSDF measurement, or \c NULL in case of
+    /// \return              The value referencing the BSDF measurement, or \c nullptr in case of
     ///                      failure.
     ///
     /// \see #mi::neuraylib::IBsdf_measurement::reset_file() if you are given a plain filename
@@ -266,6 +274,10 @@ public:
     }
 #endif // MI_NEURAYLIB_DEPRECATED_14_0
 
+    //@}
+    /// \name Creation of factories and builders
+    //@{
+
     /// Creates a module builder for a given module.
     ///
     /// \param transaction          The transaction to be used.
@@ -281,8 +293,8 @@ public:
     ///                             will upgrade the MDL version as necessary to handle requests
     ///                             requiring newer features.
     /// \param context              An execution context which can be queried for detailed error
-    ///                             messages after the operation has finished. Can be \c NULL.
-    /// \return                     The module builder for the given module, or \c NULL in
+    ///                             messages after the operation has finished. Can be \c nullptr.
+    /// \return                     The module builder for the given module, or \c nullptr in
     ///                             case of errors.
     virtual IMdl_module_builder* create_module_builder(
         ITransaction* transaction,
@@ -297,11 +309,15 @@ public:
     /// \param module_name   The DB name of the MDL module to transform. Builtin modules cannot be
     ///                      transformed.
     /// \param context       An execution context which can be queried for detailed error messages
-    ///                      after the operation has finished. Can be \c NULL.
-    /// \return              The module transformer for the given module, or \c NULL in case of
+    ///                      after the operation has finished. Can be \c nullptr.
+    /// \return              The module transformer for the given module, or \c nullptr in case of
     ///                      errors.
     virtual IMdl_module_transformer* create_module_transformer(
         ITransaction* transaction, const char* module_name, IMdl_execution_context* context) = 0;
+
+    //@}
+    /// \name Name conversions
+    //@{
 
     /// Returns the DB name for the MDL name of a module (or file path for MDLE modules).
     ///
@@ -316,8 +332,8 @@ public:
     ///
     /// \param mdl_name      The MDL name of the module (non-MDLE and MDLE module), or the file path
     ///                      of an MDLE module.
-    /// \return              The DB name of that module, or \c NULL if \p mdl_name was detected as
-    ///                      invalid.
+    /// \return              The DB name of that module, or \c nullptr if \p mdl_name was detected
+    ///                      as invalid.
     virtual const IString* get_db_module_name( const char* mdl_name) = 0;
 
     /// Returns the DB name for the MDL name of an material or function definition.
@@ -333,9 +349,13 @@ public:
     ///       future.
     ///
     /// \param mdl_name      The MDL name of the material or function definition.
-    /// \return              The DB name of that material or function definition, or \c NULL if
+    /// \return              The DB name of that material or function definition, or \c nullptr if
     ///                      \p mdl_name was detected as invalid.
     virtual const IString* get_db_definition_name( const char* mdl_name) = 0;
+
+    //@}
+    /// \name Miscellaneous methods
+    //@{
 
     /// Analyzes whether an expression graph violates the uniform constraints.
     ///
@@ -346,10 +366,10 @@ public:
     ///       replaced. If the call returns with \p query_result set to \c false (and no errors in
     ///       the context), then any (valid) subgraph can be connected. Otherwise, invoke the
     ///       method again with the root of the to-be-connected subgraph, \p root_uniform set to \c
-    ///       true, and \p query_expr set to \c NULL. If there are no errors, then the subgraph
+    ///       true, and \p query_expr set to \c nullptr. If there are no errors, then the subgraph
     ///       can be connected.
     ///
-    /// \note Make sure that \p query_expr (if not \c NULL) can be reached from \p root_name,
+    /// \note Make sure that \p query_expr (if not \c nullptr) can be reached from \p root_name,
     ///       otherwise \p query_result is always \c false. In particular, arguments passed during
     ///       call creation (or later for argument changes) are cloned, and the expression that is
     ///       part of the graph is different from the one that was used to construct the graph
@@ -364,15 +384,16 @@ public:
     ///                                the corresponding node in the graph, i.e., it even makes
     ///                                sense to pass constant expressions (which by themselves are
     ///                                always uniform) to determine whether a to-be-connected call
-    ///                                expression has to be uniform. Can be \c NULL.
+    ///                                expression has to be uniform. Can be \c nullptr.
     /// \param[out] query_result       Indicates whether \p query_expr needs to be uniform (or
-    ///                                \c false if \p query_expr is \c NULL, or in case of errors).
+    ///                                \c false if \p query_expr is \c nullptr, or in case of
+    ///                                errors).
     /// \param[out] error_path         A path to a node of the graph that violates the uniform
     ///                                constraints, or the empty string if there is no such node
     ///                                (or in case of errors). Such violations are also reported
-    ///                                via \p context. Can be \c NULL.
+    ///                                via \p context. Can be \c nullptr.
     /// \param context                 The execution context can be used to pass options and to
-    ///                                retrieve error and/or warning messages. Can be \c NULL.
+    ///                                retrieve error and/or warning messages. Can be \c nullptr.
     virtual void analyze_uniform(
         ITransaction* transaction,
         const char* root_name,
@@ -382,10 +403,14 @@ public:
         IString* error_path,
         IMdl_execution_context* context) const = 0;
 
+    //@}
+    /// \name Name conversions
+    //@{
+
     /// Decodes a DB or MDL name.
     ///
     /// \param name   The encoded DB or MDL name to be decoded.
-    /// \return       The decoded DB or MDL name, or \c NULL if \p name is \c NULL.
+    /// \return       The decoded DB or MDL name, or \c nullptr if \p name is \c nullptr.
     ///
     /// \note This method should only be used for display purposes. Do \em not use the returned
     ///       name to identify functions or materials since this representation is ambiguous. For
@@ -401,7 +426,7 @@ public:
     /// Encodes a DB or MDL module name.
     ///
     /// \param name    The decoded DB or MDL module name to be encoded.
-    /// \return        The encoded DB or MDL module name, or \c NULL if \p name is \c NULL.
+    /// \return        The encoded DB or MDL module name, or \c nullptr if \p name is \c nullptr.
     ///
     /// \note This method does not require the corresponding module to be loaded. The method does
     ///       not check whether the given name is valid.
@@ -416,10 +441,10 @@ public:
     ///                         \em without signature.
     /// \param parameter_types  A static or dynamic array with elements of type #mi::IString
     ///                         representing decoded positional parameter type names. The value
-    ///                         \c NULL can be used for functions or materials without parameters
+    ///                         \c nullptr can be used for functions or materials without parameters
     ///                         (treated like an empty array).
-    /// \return                 The encoded function or material definition name, or \c NULL if
-    ///                         \p name or one of the array elements is \c NULL.
+    /// \return                 The encoded function or material definition name, or \c nullptr if
+    ///                         \p name or one of the array elements is \c nullptr.
     ///
     /// \note This method does not require the corresponding module to be loaded. The method does
     ///       not check whether the given name is valid, nor whether it is defined in the
@@ -433,7 +458,8 @@ public:
     /// Encodes an MDL type name.
     ///
     /// \param name             The decoded MDL name of a type.
-    /// \return                 The encoded MDL name of the type, or \c NULL if \p name is \c NULL.
+    /// \return                 The encoded MDL name of the type, or \c nullptr if \p name is
+    ///                         \c nullptr.
     ///
     /// \note This method does not require the corresponding module to be loaded. The method does
     ///       not check whether the given name is valid, nor whether it is defined in the
@@ -443,8 +469,14 @@ public:
     ///      #mi::neuraylib::IMdl_factory::encode_module_name()
     virtual const IString* encode_type_name( const char* name) const = 0;
 
+    //@}
+    /// \name Miscellaneous methods
+    //@{
+
     /// Indicates whether the given string is a valid MDL identifier.
     virtual bool is_valid_mdl_identifier( const char* name) const = 0;
+
+    //@}
 };
 
 /**@}*/ // end group mi_neuray_mdl_misc

@@ -62,21 +62,24 @@ public:
     ///
     /// \param name                    The simple name of the material or function variant.
     /// \param prototype_name          The DB name of the prototype of the new variant.
-    /// \param defaults                Default values to set. If \c NULL, the defaults of the
-    ///                                original material or function are used. Feasible
-    ///                                sub-expression kinds: constants and calls.
-    /// \param annotations             Annotations to set. If \c NULL, the annotations of the
+    /// \param defaults                Additional/new default expressions to set. These defaults
+    ///                                are used as arguments in the call expression that defines
+    ///                                the variant. An empty expression list implicitly uses the
+    ///                                existing defaults, whereas \c nullptr explicitly replicates
+    ///                                the existing defaults of the original material or function.
+    ///                                Feasible sub-expression kinds: constants and calls.
+    /// \param annotations             Annotations to set. If \c nullptr, the annotations of the
     ///                                original material or function are used. Pass an empty block
     ///                                to remove all annotations.
-    /// \param return_annotations      Return annotations to set. If \c NULL, the annotations of
+    /// \param return_annotations      Return annotations to set. If \c nullptr, the annotations of
     ///                                the original material or function are used. Pass an empty
-    ///                                block to remove all annotations. Materials require \c NULL or
-    ///                                an empty annotation block here.
+    ///                                block to remove all annotations. Materials require \c
+    ///                                nullptr or an empty annotation block here.
     /// \param is_exported             Indicates whether the variant will have the 'export' keyword.
     /// \param is_declarative          Indicates whether the variant will have the 'declarative'
     ///                                keyword.
     /// \param context                 The execution context can be used to pass options and to
-    ///                                retrieve error and/or warning messages. Can be \c NULL.
+    ///                                retrieve error and/or warning messages. Can be \c nullptr.
     /// \return                        0 in case of success, or -1 in case of failure.
     virtual Sint32 add_variant(
         const char* name,
@@ -119,18 +122,18 @@ public:
     ///                                temporary references.
     /// \param temporaries             Temporaries referenced by the body. Feasible sub-expression
     ///                                kinds: constants, direct calls, parameter references, and
-    ///                                temporary references with smaller index. The names associated
-    ///                                with the expressions in the expressions list are not relevant
-    ///                                (but need to unique as usual). Can be \c NULL (treated like
-    ///                                an empty expression list).
-    /// \param parameters              Types and names of the parameters. Can be \c NULL (treated
+    ///                                temporary references with smaller index. The names
+    ///                                associated with the expressions in the expressions list are
+    ///                                not relevant (but need to unique as usual). Can be
+    ///                                \c nullptr (treated like an empty expression list).
+    /// \param parameters              Types and names of the parameters. Can be \c nullptr (treated
     ///                                like an empty parameter list).
-    /// \param defaults                Default values. Can be \c NULL or incomplete. Feasible
+    /// \param defaults                Default values. Can be \c nullptr or incomplete. Feasible
     ///                                sub-expression kinds: constants, calls, and direct calls.
-    /// \param parameter_annotations   Parameter annotations. Can be \c NULL or incomplete.
-    /// \param annotations             Annotations of the material or function. Can be \c NULL.
-    /// \param return_annotations      Return annotations of the function. Can be \c NULL for
-    ///                                functions, must be \c NULL for materials.
+    /// \param parameter_annotations   Parameter annotations. Can be \c nullptr or incomplete.
+    /// \param annotations             Annotations of the material or function. Can be \c nullptr.
+    /// \param return_annotations      Return annotations of the function. Can be \c nullptr for
+    ///                                functions, must be \c nullptr for materials.
     /// \param is_exported             Indicates whether the material or function will have the
     ///                                'export' keyword.
     /// \param is_declarative          Indicates whether the material or function will have the
@@ -138,7 +141,7 @@ public:
     /// \param frequency_qualifier     The frequency qualifier for functions, or
     ///                                #mi::neuraylib::IType::MK_NONE for materials.
     /// \param context                 The execution context can be used to pass options and to
-    ///                                retrieve error and/or warning messages. Can be \c NULL.
+    ///                                retrieve error and/or warning messages. Can be \c nullptr.
     virtual Sint32 add_function(
         const char* name,
         const IExpression* body,
@@ -175,16 +178,16 @@ public:
     /// Adds an annotation to the module.
     ///
     /// \param name                    The simple name of the annotation.
-    /// \param parameters              Types and names of the parameters. Can be \c NULL (treated
+    /// \param parameters              Types and names of the parameters. Can be \c nullptr (treated
     ///                                like an empty parameter list).
-    /// \param defaults                Default values. Can be \c NULL or incomplete. Feasible
+    /// \param defaults                Default values. Can be \c nullptr or incomplete. Feasible
     ///                                sub-expression kinds: constants, calls, and direct calls.
-    /// \param parameter_annotations   Parameter annotations. Can be \c NULL or incomplete.
-    /// \param annotations             Annotations of the annotation. Can be \c NULL.
+    /// \param parameter_annotations   Parameter annotations. Can be \c nullptr or incomplete.
+    /// \param annotations             Annotations of the annotation. Can be \c nullptr.
     /// \param is_exported             Indicates whether the annotation will have the 'export'
     ///                                keyword.
     /// \param context                 The execution context can be used to pass options and to
-    ///                                retrieve error and/or warning messages. Can be \c NULL.
+    ///                                retrieve error and/or warning messages. Can be \c nullptr.
     virtual Sint32 add_annotation(
         const char* name,
         const IType_list* parameters,
@@ -197,11 +200,11 @@ public:
     /// Adds a struct category the module.
     ///
     /// \param name                    The simple name of the struct category.
-    /// \param annotations             Annotations of the struct category. Can be \c NULL.
+    /// \param annotations             Annotations of the struct category. Can be \c nullptr.
     /// \param is_exported             Indicates whether the struct category will have the 'export'
     ///                                keyword.
     /// \param context                 The execution context can be used to pass options and to
-    ///                                retrieve error and/or warning messages. Can be \c NULL.
+    ///                                retrieve error and/or warning messages. Can be \c nullptr.
     virtual Sint32 add_struct_category(
         const char* name,
         const IAnnotation_block* annotations,
@@ -216,12 +219,12 @@ public:
     /// \param name                    The simple name of the enum type.
     /// \param enumerators             Enumerators of the enum type. Must not be empty. Feasible
     ///                                sub-expression kinds: constants and direct calls.
-    /// \param enumerator_annotations  Enumerator annotations. Can be \c NULL or incomplete.
-    /// \param annotations             Annotations of the enum type. Can be \c NULL.
+    /// \param enumerator_annotations  Enumerator annotations. Can be \c nullptr or incomplete.
+    /// \param annotations             Annotations of the enum type. Can be \c nullptr.
     /// \param is_exported             Indicates whether the enum type will have the 'export'
     ///                                keyword.
     /// \param context                 The execution context can be used to pass options and to
-    ///                                retrieve error and/or warning messages. Can be \c NULL.
+    ///                                retrieve error and/or warning messages. Can be \c nullptr.
     virtual Sint32 add_enum_type(
         const char* name,
         const IExpression_list* enumerators,
@@ -237,18 +240,19 @@ public:
     ///
     /// \param name                    The simple name of the enum type.
     /// \param fields                  Fields of the struct type. Must not be empty.
-    /// \param field_defaults          Defaults of the struct fields. Can be \c NULL or incomplete.
-    ///                                Feasible sub-expression kinds: constants and direct calls.
-    /// \param field_annotations       Field annotations of the struct type. Can be \c NULL or
+    /// \param field_defaults          Defaults of the struct fields. Can be \c nullptr or
+    ///                                incomplete. Feasible sub-expression kinds: constants and
+    ///                                direct calls.
+    /// \param field_annotations       Field annotations of the struct type. Can be \c nullptr or
     ///                                incomplete.
-    /// \param annotations             Annotations of the struct type. Can be \c NULL.
+    /// \param annotations             Annotations of the struct type. Can be \c nullptr.
     /// \param is_exported             Indicates whether the struct type will have the 'export'
     ///                                keyword.
     /// \param is_declarative          Indicates whether the struct type will have the 'declarative'
     ///                                keyword.
-    /// \param struct_category         The corresponding struct category. Can be \c NULL.
+    /// \param struct_category         The corresponding struct category. Can be \c nullptr.
     /// \param context                 The execution context can be used to pass options and to
-    ///                                retrieve error and/or warning messages. Can be \c NULL.
+    ///                                retrieve error and/or warning messages. Can be \c nullptr.
     virtual Sint32 add_struct_type(
         const char* name,
         const IType_list* fields,
@@ -288,11 +292,11 @@ public:
     /// \param name                    The simple name of the constant.
     /// \param expr                    The value of the constant.
     ///                                Feasible sub-expression kinds: constants and direct calls.
-    /// \param annotations             Annotations of the constant. Can be \c NULL.
+    /// \param annotations             Annotations of the constant. Can be \c nullptr.
     /// \param is_exported             Indicates whether the constant will have the 'export'
     ///                                keyword.
     /// \param context                 The execution context can be used to pass options and to
-    ///                                retrieve error and/or warning messages. Can be \c NULL.
+    ///                                retrieve error and/or warning messages. Can be \c nullptr.
     virtual Sint32 add_constant(
         const char* name,
         const IExpression* expr,
@@ -302,10 +306,10 @@ public:
 
     /// Sets the annotations of the module itself.
     ///
-    /// \param annotations             Annotations of the module. Pass \c NULL to remove existing
+    /// \param annotations             Annotations of the module. Pass \c nullptr to remove existing
     ///                                annotations.
     /// \param context                 The execution context can be used to pass options and to
-    ///                                retrieve error and/or warning messages. Can be \c NULL.
+    ///                                retrieve error and/or warning messages. Can be \c nullptr.
     virtual Sint32 set_module_annotations(
         const IAnnotation_block* annotations, IMdl_execution_context* context) = 0;
 
@@ -317,7 +321,7 @@ public:
     ///                                Used to distinguish overloads of functions. Zero for
     ///                                materials, enum or struct types.
     /// \param context                 The execution context can be used to pass options and to
-    ///                                retrieve error and/or warning messages. Can be \c NULL.
+    ///                                retrieve error and/or warning messages. Can be \c nullptr.
     virtual Sint32 remove_entity(
         const char* name, Size index, IMdl_execution_context* context) = 0;
 
@@ -352,9 +356,9 @@ public:
     ///                                constants, direct calls, and parameter references.
     /// \param root_expr_uniform       Indicates whether the root expression should be uniform.
     /// \param context                 The execution context can be used to pass options and to
-    ///                                retrieve error and/or warning messages. Can be \c NULL.
+    ///                                retrieve error and/or warning messages. Can be \c nullptr.
     /// \return                        Returns an array of boolean values indicating which
-    ///                                parameters need to be uniform (or \c NULL in case of
+    ///                                parameters need to be uniform (or \c nullptr in case of
     ///                                errors). The array indices match the indices of the
     ///                                parameter references. The array might be shorter than
     ///                                expected if trailing parameters are not referenced by \p

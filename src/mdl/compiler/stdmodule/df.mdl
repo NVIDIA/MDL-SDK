@@ -25,7 +25,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  ******************************************************************************/
-mdl 1.8;
+mdl 1.10;
 
 using ::anno import hard_range, soft_range;
 using ::state import texture_tangent_u, normal, transform_vector, coordinate_space;
@@ -41,7 +41,15 @@ export bsdf diffuse_reflection_bsdf(
     color          tint      = color(1.0),
     float          roughness = 0.0 [[ hard_range(0.0, 1.0) ]],
     uniform string handle    = ""
-) [[ intrinsic() ]];
+) [[ intrinsic(), removed(1,10) ]];
+
+// Oren-Nayar diffuse reflection with optional energy compensation
+export bsdf diffuse_reflection_bsdf(
+    color          tint              = color(1.0),
+    float          roughness         = 0.0 [[ hard_range(0.0, 1.0) ]],
+    color          multiscatter_tint = color(0.0),
+    uniform string handle            = ""
+) [[ intrinsic(), since(1,10) ]];
 
 export bsdf dusty_diffuse_reflection_bsdf(
     color          tint   = color( 1.0),
@@ -196,7 +204,6 @@ export bsdf ward_geisler_moroder_bsdf(
     uniform string       handle            = ""
 ) [[ intrinsic(), since(1,6) ]];
 
-
 export bsdf sheen_bsdf(
     float roughness                      [[ hard_range(0.0, +1.0/0.0) ]],
     color tint              = color(1.0),
@@ -208,9 +215,33 @@ export bsdf sheen_bsdf(
     float roughness                      [[ hard_range(0.0, +1.0/0.0) ]],
     color tint              = color(1.0),
     color multiscatter_tint = color(0.0),
-    bsdf multiscatter       = diffuse_reflection_bsdf(),
+    bsdf multiscatter       = diffuse_reflection_bsdf(color(1.0), 0.0, ""),
     uniform string handle   = ""
-) [[ intrinsic(), since(1,7) ]];
+) [[ intrinsic(), since(1,7), removed(1,10) ]];
+
+export bsdf sheen_bsdf(
+    float roughness                      [[ hard_range(0.0, +1.0/0.0) ]],
+    color tint              = color(1.0),
+    color multiscatter_tint = color(0.0),
+    bsdf multiscatter       = diffuse_reflection_bsdf(color(1.0), 0.0, color(0.0), ""),
+    uniform string handle   = ""
+) [[ intrinsic(), since(1,10) ]];
+
+export bsdf microflake_sheen_bsdf(
+    float                   roughness            [[ hard_range(0.0, 1.0) ]],
+    color                   tint               = color(1.0f),
+    color                   multiscatter_tint  = color(0.0),
+    bsdf                    multiscatter       = diffuse_reflection_bsdf(
+                                                     color(1.0), 0.0, color(0.0), ""),
+    uniform string          handle             = ""
+) [[ intrinsic(), since(1,10) ]];
+
+export bsdf coat_absorption_factor(
+    color                    ior           = color(1.0),
+    color                    absorption_coefficient = color(0.0),
+    float                    thickness     = 0.0,
+    bsdf                     base          = bsdf()
+) [[ intrinsic(), since(1,10) ]];
 
 export edf diffuse_edf (
     uniform string handle = ""
@@ -299,7 +330,15 @@ export bsdf directional_factor(
     color  grazing_tint = color(1.0),
     float  exponent     = 5.0,
     bsdf   base         = bsdf()
-) [[ intrinsic() ]];
+) [[ intrinsic(), removed(1,10) ]];
+
+export bsdf directional_factor(
+    color  normal_tint   = color(1.0),
+    color  grazing_tint  = color(1.0),
+    color  f82_factor    = color(1.0),
+    float  exponent      = 5.0,
+    bsdf   base          = bsdf()
+) [[ intrinsic(), since(1,10) ]];
 
 export edf directional_factor(
     color  normal_tint  = color(1.0),
@@ -443,7 +482,18 @@ export bsdf color_custom_curve_layer(
     bsdf   layer                = bsdf(),
     bsdf   base                 = bsdf(),
     float3 normal               = state::normal()
-) [[ intrinsic(), since(1,4) ]];
+) [[ intrinsic(), since(1,4), removed(1,10) ]];
+
+export bsdf color_custom_curve_layer(
+    color  normal_reflectivity,
+    color  grazing_reflectivity = color(1.0),
+    color  f82_factor           = color(1.0),
+    float  exponent             = 5.0,
+    color  weight               = color(1.0) [[ hard_range(color(0.0), color(1.0)) ]],
+    bsdf   layer                = bsdf(),
+    bsdf   base                 = bsdf(),
+    float3 normal               = state::normal()
+) [[ intrinsic(), since(1,10) ]];
 
 export bsdf color_measured_curve_layer(
     color[<N>] curve_values,

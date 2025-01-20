@@ -83,13 +83,13 @@ void check_bsdf_measurement(
 {
     mi::base::Handle<const mi::neuraylib::IBsdf_isotropic_data> reflection(
         bsdf_measurement->get_reflection<mi::neuraylib::IBsdf_isotropic_data>( transaction));
-    MI_CHECK( !has_reflection || reflection.is_valid_interface());
+    MI_CHECK( !has_reflection || reflection);
     if( has_reflection)
         check_bsdf_data( reflection.get(),
             reflection_type, reflection_resolution_theta, reflection_resolution_phi);
     mi::base::Handle<const mi::neuraylib::IBsdf_isotropic_data> transmission(
         bsdf_measurement->get_transmission<mi::neuraylib::IBsdf_isotropic_data>( transaction));
-    MI_CHECK( !has_transmission || transmission.is_valid_interface());
+    MI_CHECK( !has_transmission || transmission);
     if( has_transmission)
         check_bsdf_data( transmission.get(),
             transmission_type, transmission_resolution_theta, transmission_resolution_phi);

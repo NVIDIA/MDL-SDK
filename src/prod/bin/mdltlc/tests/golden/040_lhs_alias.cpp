@@ -65,24 +65,31 @@ DAG_node const* Lhs_alias::matcher(
     IDistiller_plugin_api &e,
     DAG_node const *node,
     const mi::mdl::Distiller_options *options,
-    Rule_result_code &result_code)const
+    Rule_result_code &result_code) const
 {
-    switch (e.get_selector(node)) {
-    case mi::mdl::IDefinition::Semantics::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER: // match for custom_curve_layer(_, _, _, _, _, _, _)
+    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+
 // 040_lhs_alias.mdltl:7
 //RUID 245040
-        if (true) {
-            const DAG_node* v_a = node;
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 0);
-            return v_a;
+    auto match_rule0 = [&] (DAG_node const *node0, IDistiller_plugin_api::Match_properties &node_props0) -> const DAG_node * {
+        DAG_node const *v_a = node0;
+        // match for custom_curve_layer(_, _, _, _, _, _, _)
+        if (node_props0.sema != IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER) {
+            return match_rule1(node0, node_props0);
         }
-        break;
-    default:
-        break;
-    }
+        DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
+        (void) root_dbg_info;
 
-    return node;
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 0);
+        return v_a;
+    };
+    (void)match_rule0;
+
+    IDistiller_plugin_api::Match_properties node_props;
+    e.get_match_properties(node, node_props);
+    return match_rule0(node, node_props);
+
 }
 
 bool Lhs_alias::postcond(

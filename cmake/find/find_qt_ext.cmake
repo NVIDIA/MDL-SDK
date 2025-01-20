@@ -68,7 +68,7 @@ function(FIND_QT_EXT)
     endif()
 
     if(MDL_LOG_DEPENDENCIES)
-        message(STATUS "[INFO] Qt5_DIR:                              ${Qt5_DIR}")
+        message(STATUS "[INFO] Qt5_DIR:                                  ${Qt5_DIR}")
     endif()
 
 endfunction()

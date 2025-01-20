@@ -23,6 +23,11 @@
 #include "llvm/Support/Casting.h"
 #include <cstddef>
 
+#if (_MSC_VER >= 1900)
+#pragma warning( push )
+#pragma warning( disable : 4624 )  // deleted destructor
+#endif
+
 namespace llvm {
 
 /// This is a utility class that provides an abstraction for the common
@@ -540,9 +545,9 @@ public:
   }
 
   unsigned countNonConstantIndices() const {
-    return count_if(make_range(idx_begin(), idx_end()), [](const Use& use) {
+    return unsigned(count_if(make_range(idx_begin(), idx_end()), [](const Use& use) {
         return !isa<ConstantInt>(*use);
-      });
+      }));
   }
 
   /// Compute the maximum alignment that this GEP is garranteed to preserve.
@@ -638,5 +643,9 @@ public:
 };
 
 } // end namespace llvm
+
+#if (_MSC_VER >= 1900)
+#pragma warning( pop )
+#endif
 
 #endif // LLVM_IR_OPERATOR_H

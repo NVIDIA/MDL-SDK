@@ -28,11 +28,12 @@ might work as well.
 <a name="thirdparty-dependencies-libs"></a>
 The following third-party libraries and tools are required to build the MDL SDK:
 
--   <a name="vcpkg">**vcpkg**</a> *(git commit ID 5d675c7e5)*  
+-   <a name="vcpkg">**vcpkg**</a> *(git commit ID 821100d96)*  
     [Vcpkg](https://vcpkg.io/en/getting-started.html) is the recommended way to
-    install other dependencies like Boost, OpenImageIO, GLEW, and GLFW. The
-    vcpkg version mentioned above corresponds to the versions mentioned for
-    these dependencies below.  
+    install other dependencies like Boost, OpenImageIO, GLEW, GLFW, and Vulkan.
+    The vcpkg version mentioned above corresponds to the versions mentioned for
+    these dependencies below. Manifest mode is supported by the provided
+    *vcpkg.json* file.  
     Windows: It is strongly recommended to select the same toolset that is used
     later to build the MDL SDK, e.g., by adding
     *set(VCPKG_PLATFORM_TOOLSET v143)* (or similar) to
@@ -41,11 +42,14 @@ The following third-party libraries and tools are required to build the MDL SDK:
     for further details. Add the vcpkg option *--triplet=x64-windows-static* to
     the *install* command. There is no need to run the *integrate* command.
 
--   **Boost** *(1.84.0)*  
+-   **Boost** *(1.85.0)*  
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
-    package *boost-headers*.  
+    packages *boost-algorithm*, *boost-core*, *boost-dynamic-bitset*,
+    *boost-functional*, *boost-intrusive*, *boost-tokenizer*, and
+    *boost-unordered*. Alternatively, you can also install all Boost modules
+    with the *boost* package.
 
--   **OpenImageIO** *(2.5.8.0)*  
+-   **OpenImageIO** *(2.5.12.0)*  
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
     packages *openimageio[gif,openjpeg,tools,webp]*.  
 
@@ -89,7 +93,7 @@ dependencies are required:
     * [numpy](https://pypi.org/search/?q=numpy) for high-level bindings
     * [typing_extensions](https://pypi.org/project/typing-extensions/) in case the bindings are generated for Python 3.9 (or earlier)
 
--   **SWIG** *(4.0.2)*  
+-   **SWIG** *(4.2.1)*  
     Follow the instructions for downloading or building on
     [swig.org](http://www.swig.org/download.html).
 
@@ -99,7 +103,7 @@ of examples is of no interest to you.
 
 -   **DirectX Raytracing support** *(Windows only)*  
     Building the DXR example requires Windows 10 version 1909 and the
-    corresponding SDK 10.0.18362.0. Additionally the optional *Graphic Tools*
+    corresponding SDK 10.0.22621.0. Additionally the optional *Graphic Tools*
     feature has to be installed.
 
 -   **DirectX Shader Compiler support** *(July 2022)* *(Windows only)*  
@@ -123,12 +127,11 @@ of examples is of no interest to you.
     Please follow the instructions on the
     [CUDA Developer Website](https://developer.nvidia.com/cuda-toolkit).
 
--   **Vulkan SDK** *(Windows: 1.3.275.0, Linux: 1.2.198.1)*  
-    This dependency is required for all Vulkan-based examples.  
-    Please follow the instructions on the
-    [Vulkan SDK Website](https://vulkan.lunarg.com/sdk/home).  
-    For debug builds on Windows, the debug libraries are required to be installed.  
-    Note that the prebuilt binaries for version 1.3.275.0 do not work on CentOS 7.x.
+-   **Vulkan SDK** *(1.3.280.0)*  
+    Building the Vulkan examples requires the Vulkan headers and validation layers,
+    volk, and glslang.  
+    Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
+    packages *glslang*, *volk*, and *vulkan-validationlayers*.
 
 The following third-party dependencies are only used by fewer or single
 examples, or add additional features to other examples. Installation can be
@@ -232,13 +235,10 @@ features.
         for example: *C:/projects/thirdparty/python_3_8_0/bin/python.exe*  
 
     -   **swig_PATH** in Ungrouped Entries (only if not found in the PATH),  
-        for example: *C:/projects/thirdparty/swigwin-4.0.2/swig.exe*
+        for example: *C:/projects/thirdparty/swigwin-4.2.1/swig.exe*
 
     -   **Qt5_DIR** in Ungrouped Entries,  
         for example: *C:/Qt/5.10.1/msvc2017_64*
-
-    -   **VULKAN_SDK_DIR** in Ungrouped Entries (only if the environment variable VULKAN_SDK is not set),  
-        for example: *C:/VulkanSDK/1.3.275.0*
 
     -   **PANTORA_AXF_DIR** in Ungrouped Entries,  
         for example: *C:/projects/thirdparty/pantora-axf-1.9.0*
@@ -357,14 +357,11 @@ features.
         You can also use the flags to point CMake to custom installation
         directories for third-party libraries. Please refer to
         [Windows build](#thirdparty-dependencies-options) for a list of
-        supported flags. On Unix-like systems, it is assumed that the
-        specified paths contain a directory named *include* for headers
-        files and subdirectories named `lib64` or `lib` that contains shared
-        libraries. For the Vulkan SDK for example, the call to CMake could look
-        as follows:
+        supported flags. For the vcpkg installation, the call to CMake
+        could look as follows:
 
         ```bash
-        cmake -DVULKAN_SDK_DIR=$HOME/projects/thirdparty/vulkansdk-linux-x86_64-1.2.198.1/1.2.198.1/x86_64 ..
+        cmake -DCMAKE_TOOLCHAIN_FILE=$HOME/projects/thirdparty/vcpkg/scripts/buildsystems/vcpkg.cmake ..
         ```
 
         When a different clang compiler is installed on your system, you
@@ -564,6 +561,11 @@ The following options affect how various components are built:
     dependencies. Enabling this option results in slightly slower builds, but
     is safer for users not familiar with the runtime dependencies between
     examples, libraries, and plugins.
+
+-   **MDL_BUILD_WITHOUT_CUDA_DRIVER**
+    [ON/OFF] enable/disable building without a CUDA driver. Enabling this
+    option essentially disables the undefined symbol check for CUDA-based
+    examples on Linux, which requires the CUDA driver being installed.
 
 -   **MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES**  
     [ON/OFF] links the MSVC dynamic runtime (/MD) instead of static (/MT) when

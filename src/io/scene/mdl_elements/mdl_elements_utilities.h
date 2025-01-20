@@ -72,7 +72,7 @@ class Mdl_function_call;
 class Mdl_module_wait_queue;
 class Name_mangler;
 
-// **********  Name parsing/splitting **************************************************************
+// ********** Name parsing/splitting ***************************************************************
 
 // These functions are supposed to centralize all parsing/splitting of strings.
 //
@@ -296,8 +296,8 @@ using Core_annotation_block_vector = std::vector<std::vector<const mi::mdl::DAG_
 /// Converts mi::mdl::IStruct_category to MI::MDL::IStruct_category.
 ///
 /// \param tf                   The type factory to use.
-/// \param struct_category      The struct_category to convert. Can be \c NULL.
-/// \param annotations          The annotations of the struct category. Can be \c NULL.
+/// \param struct_category      The struct_category to convert. Can be \c nullptr.
+/// \param annotations          The annotations of the struct category. Can be \c nullptr.
 const IStruct_category* core_struct_category_to_int_struct_category(
     IType_factory* tf,
     const mi::mdl::IStruct_category* struct_category,
@@ -308,9 +308,9 @@ const IStruct_category* core_struct_category_to_int_struct_category(
 /// \param tf                   The type factory to use.
 /// \param type                 The type to convert.
 /// \param annotations          For enums and structs the annotations of the enum/struct itself,
-///                             otherwise \c NULL.
+///                             otherwise \c nullptr.
 /// \param member_annotations   For enums and structs the annotations of the values/fields,
-///                             otherwise \c NULL.
+///                             otherwise \c nullptr.
 const IType* core_type_to_int_type(
     IType_factory* tf,
     const mi::mdl::IType* type,
@@ -376,7 +376,7 @@ public:
     /// \param module_mdl_name        The MDL module name. Optional, used for localization only.
     /// \param prototype_tag          The prototype tag. Optional, used for localization only.
     /// \param resolve_resources      \c true, if resources are supposed to be loaded into the DB
-    /// \param user_modules_seen      If non - \c NULL, visited user module tags and identifiers
+    /// \param user_modules_seen      If non - \c nullptr, visited user module tags and identifiers
     ///                               are put here.
     Mdl_dag_converter(
         IExpression_factory* ef,
@@ -397,9 +397,9 @@ public:
     ///
     /// \param type                 The type to convert.
     /// \param annotations          For enums and structs the annotations of the enum/struct itself,
-    ///                             otherwise \c NULL.
+    ///                             otherwise \c nullptr.
     /// \param member_annotations   For enums and structs the annotations of the values/fields,
-    ///                             otherwise \c NULL.
+    ///                             otherwise \c nullptr.
     const IType* core_type_to_int_type(
         const mi::mdl::IType* type,
         const Core_annotation_block* annotations = nullptr,
@@ -425,9 +425,9 @@ public:
     ///
     /// \param type_int   The expected type of the return value. Used to control whether array
     ///                   arguments are converted to immediate-sized or deferred-sized arrays. If
-    ///                   \c NULL, the type of \p value is used.
+    ///                   \c nullptr, the type of \p value is used.
     /// \param value      The value to convert.
-    /// \return           The converted value, or \c NULL in case of failures.
+    /// \return           The converted value, or \c nullptr in case of failures.
     IValue* core_value_to_int_value(
         const IType* type_int,
         const mi::mdl::IValue* value) const;
@@ -437,8 +437,8 @@ public:
     /// \param node       The DAG node to convert.
     /// \param type_int   The expected type of the return value. Used to control whether array
     ///                   arguments are converted to immediate-sized or deferred-sized arrays. If
-    ///                   \c NULL, the type of \p value is used.
-    /// \return           The converted expression, or \c NULL in case of failures.
+    ///                   \c nullptr, the type of \p value is used.
+    /// \return           The converted expression, or \c nullptr in case of failures.
     IExpression* core_dag_node_to_int_expr(
         const mi::mdl::DAG_node* node,
         const IType* type_int) const;
@@ -538,70 +538,6 @@ private:
 
     /// The referenced user modules.
     std::set<Mdl_tag_ident>* m_user_modules_seen;
-};
-
-/// Wrapper around mi::mdl::IGenerated_code_dag that dispatches between functions and materials.
-class Code_dag
-{
-public:
-    Code_dag( const mi::mdl::IGenerated_code_dag* code_dag, bool is_material)
-      : m_code_dag( code_dag), m_is_material( is_material) { }
-
-    /// Names (cloned and original might be nullptr)
-    const char* get_name( mi::Size index);
-    const char* get_simple_name( mi::Size index);
-    const char* get_cloned_name( mi::Size index);
-    const char* get_original_name( mi::Size index);
-
-    /// Properties
-    mi::mdl::IDefinition::Semantics get_semantics( mi::Size index);
-    bool get_exported( mi::Size index);
-    bool get_declarative( mi::Size index);
-    bool get_uniform( mi::Size index);
-
-    /// Return type (nullptr for materials)
-    const mi::mdl::IType* get_return_type( mi::Size index);
-
-    /// Parameters
-    mi::Size get_parameter_count( mi::Size index);
-    const mi::mdl::IType* get_parameter_type( mi::Size index, mi::Size parameter_index);
-    const char* get_parameter_type_name( mi::Size index, mi::Size parameter_index);
-    const char* get_parameter_name( mi::Size index, mi::Size parameter_index);
-    mi::Size get_parameter_index( mi::Size index, const char* parameter_name);
-    const mi::mdl::DAG_node* get_parameter_default( mi::Size index, mi::Size parameter_index);
-
-    /// Parameters enabled_if()
-    const mi::mdl::DAG_node* get_parameter_enable_if_condition(
-        mi::Size index, mi::Size parameter_index);
-    mi::Size get_parameter_enable_if_condition_users( mi::Size index, mi::Size parameter_index);
-    mi::Size get_parameter_enable_if_condition_user(
-        mi::Size index, mi::Size parameter_index, mi::Size user_index);
-
-    /// Parameter annotations
-    mi::Size get_parameter_annotation_count( mi::Size index, mi::Size parameter_index);
-    const mi::mdl::DAG_node* get_parameter_annotation(
-        mi::Size index, mi::Size parameter_index, mi::Size annotation_index);
-
-    /// Temporaries
-    mi::Size get_temporary_count( mi::Size index);
-    const mi::mdl::DAG_node* get_temporary( mi::Size index, mi::Size temporary_index);
-    const char* get_temporary_name( mi::Size index, mi::Size temporary_index);
-
-    /// Annotations
-    mi::Size get_annotation_count( mi::Size index);
-    const mi::mdl::DAG_node* get_annotation( mi::Size index, mi::Size annotation_index);
-    mi::Size get_return_annotation_count( mi::Size index);
-    const mi::mdl::DAG_node* get_return_annotation( mi::Size index, mi::Size annotation_index);
-
-    /// Body
-    const mi::mdl::DAG_node* get_body( mi::Size index);
-
-    /// Hash (might be nullptr)
-    const mi::mdl::DAG_hash* get_hash( mi::Size index);
-
-private:
-    const mi::mdl::IGenerated_code_dag* m_code_dag;
-    bool m_is_material;
 };
 
 // ********** Conversion from MI::MDL to MI::MDL ***************************************************
@@ -730,19 +666,19 @@ mi::neuraylib::Mdl_version get_min_required_mdl_version(
 
 /// Returns the minimal required MDL version for a given value.
 ///
-/// Returns mi::mdl::IMDL::MDL_VERSION_1_0 for \c NULL arguments.
+/// Returns mi::mdl::IMDL::MDL_VERSION_1_0 for \c nullptr arguments.
 mi::neuraylib::Mdl_version get_min_required_mdl_version(
     DB::Transaction* transaction, const IValue* value);
 
 /// Returns the minimal required MDL version for a given expression.
 ///
-/// Returns mi::mdl::IMDL::MDL_VERSION_1_0 for \c NULL arguments.
+/// Returns mi::mdl::IMDL::MDL_VERSION_1_0 for \c nullptr arguments.
 mi::neuraylib::Mdl_version get_min_required_mdl_version(
     DB::Transaction* transaction, const IExpression* expr);
 
 /// Returns the minimal required MDL version for a given expression list.
 ///
-/// Returns mi::mdl::IMDL::MDL_VERSION_1_0 for \c NULL arguments.
+/// Returns mi::mdl::IMDL::MDL_VERSION_1_0 for \c nullptr arguments.
 mi::neuraylib::Mdl_version get_min_required_mdl_version(
     DB::Transaction* transaction, const IExpression_list* expr_list);
 
@@ -752,13 +688,13 @@ mi::neuraylib::Mdl_version get_min_required_mdl_version(
 
 /// Returns the minimal required MDL version for a given annotation block.
 ///
-/// Returns mi::mdl::IMDL::MDL_VERSION_1_0 for \c NULL arguments.
+/// Returns mi::mdl::IMDL::MDL_VERSION_1_0 for \c nullptr arguments.
 mi::neuraylib::Mdl_version get_min_required_mdl_version(
     DB::Transaction* transaction, const IAnnotation_block* block);
 
 /// Returns the minimal required MDL version for a given annotation list.
 ///
-/// Returns mi::mdl::IMDL::MDL_VERSION_1_0 for \c NULL arguments.
+/// Returns mi::mdl::IMDL::MDL_VERSION_1_0 for \c nullptr arguments.
 mi::neuraylib::Mdl_version get_min_required_mdl_version(
     DB::Transaction* transaction, const IAnnotation_list* list);
 
@@ -799,7 +735,7 @@ private:
 /// as well.
 void load_neuray_module( DB::Transaction* transaction);
 
-// **********  Traversal of types, values, and expressions *****************************************
+// ********** Traversal of types, values, and expressions ******************************************
 
 /// Looks up a sub value according to path.
 ///
@@ -807,7 +743,7 @@ void load_neuray_module( DB::Transaction* transaction);
 /// \param path            The path to follow in \p value. The path may contain dots or bracket
 ///                        pairs as separators. The path component up to the next separator is used
 ///                        to select struct fields by name or other compound elements by index.
-/// \return                A sub-value for \p value according to \p path, or \c NULL in case of
+/// \return                A sub-value for \p value according to \p path, or \c nullptr in case of
 ///                        errors.
 const IValue* lookup_sub_value( const IValue* value, const char* path);
 
@@ -816,13 +752,13 @@ const IValue* lookup_sub_value( const IValue* value, const char* path);
 /// \param ef              The expression factory used to wrap values as expressions.
 /// \param temporaries     Used to resolve temporary expressions.
 /// \param expr            The expression. Calls and parameter references are not supported.
-///                        Temporaries are only supported if \p temporaries is not \c NULL.
+///                        Temporaries are only supported if \p temporaries is not \c nullptr.
 /// \param path            The path to follow in \p expr. The path may contain dots or bracket pairs
 ///                        as separators. The path component up to the next separator is used to
 ///                        select struct fields or direct call arguments by name or other compound
 ///                        elements by index.
-/// \return                A sub-expression for \p expr according to \p path, or \c NULL in case of
-///                        errors.
+/// \return                A sub-expression for \p expr according to \p path, or \c nullptr in case
+///                        of errors.
 const IExpression* lookup_sub_expression(
     const IExpression_factory* ef,
     const IExpression_list* temporaries,
@@ -1032,7 +968,7 @@ mi::base::Uuid get_hash( const mi::mdl::IMDL_resource_set* set);
 mi::Uint64 generate_unique_id();
 
 /// Returns in instance of mi::IString holding the string \p s (or the empty string if \p s is
-/// \c NULL).
+/// \c nullptr).
 mi::IString* create_istring( const char* s);
 
 } // namespace MDL

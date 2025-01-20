@@ -135,7 +135,7 @@ private:
     /// See #dump(IData,const char*,Size) and #dump(ITransaction,IData,const char*,Size) for
     /// details.
     ///
-    /// \param transaction   Might be \c NULL. Only to be used for nested non-IData interfaces.
+    /// \param transaction   Might be \c nullptr. Only to be used for nested non-IData interfaces.
     /// \param[out] s        Dumped representation of \p data.
     void dump(
         mi::neuraylib::ITransaction* transaction,
@@ -148,7 +148,7 @@ private:
     ///
     /// Supports MDL types, values, and expressions, and lists thereof.
     ///
-    /// \param transaction   Might be \c NULL. A \c NULL transaction might affect or prevent
+    /// \param transaction   Might be \c nullptr. A \c nullptr transaction might affect or prevent
     ///                      successful dumping for some interfaces.
     /// \param[out] s        Dumped representation of \p data.
     void dump_non_idata(

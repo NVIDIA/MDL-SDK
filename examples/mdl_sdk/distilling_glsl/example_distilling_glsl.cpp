@@ -1015,60 +1015,60 @@ static void handle_glfw_error(int error_code, const char* description)
 // Initialize OpenGL and create a window with an associated OpenGL context.
 static GLFWwindow *init_opengl(unsigned int w, unsigned int h, bool show_window)
 {
-    printf("Setting GLFW err callback ...\n");
+    fprintf(stderr, "Setting GLFW err callback ...\n");
     glfwSetErrorCallback(handle_glfw_error);
 
-    printf("Initializing GLFW ...\n");
+    fprintf(stderr, "Initializing GLFW ...\n");
     // Initialize GLFW
     check_success(glfwInit());
 
 #ifdef USE_SSBO
-    printf("Setting GLSL 4.3 version hint ...\n");
+    fprintf(stderr, "Setting GLSL 4.3 version hint ...\n");
     // SSBO requires GLSL 4.30
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 #else
-    printf("Setting GLSL 3.3 version hint ...\n");
+    fprintf(stderr, "Setting GLSL 3.3 version hint ...\n");
     // else GLSL 3.30 is sufficient
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 #endif
-    printf("Setting OpenGL profile hint ...\n");
+    fprintf(stderr, "Setting OpenGL profile hint ...\n");
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    printf("Setting OpenGL forward compatibility hint ...\n");
+    fprintf(stderr, "Setting OpenGL forward compatibility hint ...\n");
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-    printf("Setting window visibility hint ...\n");
+    fprintf(stderr, "Setting window visibility hint ...\n");
     glfwWindowHint(GLFW_VISIBLE, show_window);
     // Create an OpenGL window and a context
-    printf("Creating GLFW window ...\n");
+    fprintf(stderr, "Creating GLFW window ...\n");
     GLFWwindow *window = glfwCreateWindow(
         w, h, "MDL Distilling Example", nullptr, nullptr);
     if (!window) {
         std::cerr << "Error creating OpenGL window!" << std::endl;
         terminate();
     }
-    printf("Attach context to window ...\n");
+    fprintf(stderr, "Attach context to window ...\n");
     // Attach context to window
     glfwMakeContextCurrent(window);
 
   // Initialize GLEW to get OpenGL extensions
-    printf("Initializing GLEW ...\n");
+    fprintf(stderr, "Initializing GLEW ...\n");
     GLenum res = glewInit();
     if (res != GLEW_OK) {
         std::cerr << "GLEW error: " << glewGetErrorString(res) << std::endl;
         terminate();
     }
 
-    printf("Enabling depth test ...\n");
+    fprintf(stderr, "Enabling depth test ...\n");
     glEnable(GL_DEPTH_TEST);
-    printf("Setting texture cube map seamless ...\n");
+    fprintf(stderr, "Setting texture cube map seamless ...\n");
     glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 
     // Enable VSync
-    printf("Enable vsync ...\n");
+    fprintf(stderr, "Enable vsync ...\n");
     glfwSwapInterval(1);
 
-    printf("Checking for OpenGL errors ...\n");
+    fprintf(stderr, "Checking for OpenGL errors ...\n");
     check_gl_success();
 
     return window;
@@ -2162,33 +2162,33 @@ void render_scene(
 
     // Init OpenGL window and setup event callbacks
 
-    printf("Initializing OpenGL ...\n");
+    fprintf(stderr, "Initializing OpenGL ...\n");
     GLFWwindow *window = init_opengl(
         window_context.width, window_context.height, options.show_window);
 
     if (options.show_window)
     {
-        printf("Setting window user pointer ...\n");
+        fprintf(stderr, "Setting window user pointer ...\n");
         glfwSetWindowUserPointer(window, &window_context);
-        printf("Setting key callback ...\n");
+        fprintf(stderr, "Setting key callback ...\n");
         glfwSetKeyCallback(window, handle_key);
-        printf("Setting framebuffer size callback ...\n");
+        fprintf(stderr, "Setting framebuffer size callback ...\n");
         glfwSetFramebufferSizeCallback(window, handle_framebuffer_size);
-        printf("Setting scroll callback ...\n");
+        fprintf(stderr, "Setting scroll callback ...\n");
         glfwSetScrollCallback(window, handle_scroll);
-        printf("Setting cursor position callback ...\n");
+        fprintf(stderr, "Setting cursor position callback ...\n");
         glfwSetCursorPosCallback(window, handle_mouse_pos);
-        printf("Setting mouse button callback ...\n");
+        fprintf(stderr, "Setting mouse button callback ...\n");
         glfwSetMouseButtonCallback(window, handle_mouse_button);
     }
-    printf("Initializing OpenGL done.\n");
+    fprintf(stderr, "Initializing OpenGL done.\n");
 
     // Get image API
     mi::base::Handle<mi::neuraylib::IImage_api> image_api(
         state.mdl_sdk->get_api_component<mi::neuraylib::IImage_api>());
 
     // Load environment texture and compute IBL maps
-    printf("Generating maps ...\n");
+    fprintf(stderr, "Generating maps ...\n");
 
     mi::base::Handle<const mi::neuraylib::ICanvas> env_tex_canvas =
         load_image_from_file(image_api.get(), state.transaction.get(), options.hdrfile.c_str());
@@ -2204,7 +2204,7 @@ void render_scene(
     env_tex_canvas = 0;
     glDeleteTextures(1, &env_accel_tex_id);
 
-    printf("Generating maps done.\n");
+    fprintf(stderr, "Generating maps done.\n");
 
     glViewport(0, 0, window_context.width, window_context.height);
     {
@@ -2586,14 +2586,14 @@ int MAIN_UTF8(int argc, char* argv[])
                         options.material_names[i]));
                 check_success(cm.is_valid_interface());
 
-                printf("Distilling material %s ...\n", options.material_names[i].c_str());
+                fprintf(stderr, "Distilling material %s ...\n", options.material_names[i].c_str());
 
                 // Distill to UE4 target
                 mi::base::Handle<const mi::neuraylib::ICompiled_material> dm(
                     distill_material(sdk_state, "ue4", cm.get()));
                 check_success(dm.is_valid_interface());
 
-                printf("Distilling material %s ... done.\n", options.material_names[i].c_str());
+                fprintf(stderr, "Distilling material %s ... done.\n", options.material_names[i].c_str());
 
                 distilled_materials.push_back(dm);
             }

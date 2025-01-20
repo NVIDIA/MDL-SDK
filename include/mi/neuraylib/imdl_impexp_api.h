@@ -91,13 +91,13 @@ public:
     ///                        (default = "coordinate_world")
     ///                      .
     ///                      During module loading, compiler messages
-    ///                      like errors or warnings are stored in the context. Can be \c NULL.
+    ///                      like errors or warnings are stored in the context. Can be \c nullptr.
     /// \return
     ///                      -  1: Success (module exists already, loading from file was skipped).
     ///                      -  0: Success (module was actually loaded from file or is a builtin
     ///                            module).
     ///                      - -1: The MDL module name/MDLE file path \p argument is
-    ///                            invalid or a \c NULL pointer.
+    ///                            invalid or a \c nullptr.
     ///                      - -2: Failed to find or to compile the module \p argument.
     ///                      - -3: The DB name for an imported module is already in use but is not
     ///                            an MDL module, or the DB name for a definition in this module is
@@ -106,7 +106,9 @@ public:
     ///
     /// \see #mi::neuraylib::IMdl_impexp_api::get_mdl_module_name()
     virtual Sint32 load_module(
-        ITransaction* transaction, const char* argument, IMdl_execution_context* context = 0) = 0;
+        ITransaction* transaction,
+        const char* argument,
+        IMdl_execution_context* context = nullptr) = 0;
 
     /// Loads an MDL module from memory into the database.
     ///
@@ -129,13 +131,13 @@ public:
     ///                        (default = "coordinate_world")
     ///                      .
     ///                      During module loading, compiler messages
-    ///                      like errors or warnings are stored in the context. Can be \c NULL.
+    ///                      like errors or warnings are stored in the context. Can be \c nullptr.
     /// \return
     ///                      -  1: Success (module exists already, creating from \p module_source
     ///                            was skipped).
     ///                      -  0: Success (module was actually created from \p module_source).
     ///                      - -1: The module name \p module_name is invalid, or \p module_name or
-    ///                            \p module_source is a \c NULL pointer.
+    ///                            \p module_source is a \c nullptr.
     ///                      - -2: Shadows a file-based module or failed to compile the module \p
     ///                            module_name.
     ///                      - -3: The DB name for an imported module is already in use but is not
@@ -148,7 +150,7 @@ public:
         ITransaction* transaction,
         const char* module_name,
         const char* module_source,
-        IMdl_execution_context* context = 0) = 0;
+        IMdl_execution_context* context = nullptr) = 0;
 
     //@}
     /// \name Export
@@ -169,10 +171,10 @@ public:
     /// \param context           The execution context can be used to pass options to control the
     ///                          behavior of the MDL compiler. During module loading, compiler
     ///                          messages like errors or warnings are stored in the context.
-    ///                          Can be \c NULL.
+    ///                          Can be \c nullptr.
     /// \return
     ///                          -     0: Success.
-    ///                          -    -1: Invalid parameters (\c NULL pointer).
+    ///                          -    -1: Invalid parameters (\c nullptr).
     ///                          -    -2: Failed to open \p filename for write operations.
     ///                          - -6002: There is no MDL module in the database of the given name.
     ///                          - -6003: The export failed for unknown reasons.
@@ -188,7 +190,7 @@ public:
         ITransaction* transaction,
         const char* module_name,
         const char* filename,
-        IMdl_execution_context* context = 0) = 0;
+        IMdl_execution_context* context = nullptr) = 0;
 
     /// Exports an MDL module from the database to string.
     ///
@@ -200,10 +202,10 @@ public:
     /// \param context           The execution context can be used to pass options to control the
     ///                          behavior of the MDL compiler. During module loading, compiler
     ///                          messages like errors or warnings are stored in the context.
-    ///                          Can be \c NULL.
+    ///                          Can be \c nullptr.
     /// \return
     ///                          -     0: Success.
-    ///                          -    -1: Invalid parameters (\c NULL pointer).
+    ///                          -    -1: Invalid parameters (\c nullptr).
     ///                          - -6002: There is no MDL module in the database of the given name.
     ///                          - -6003: The export failed for unknown reasons.
     ///                          - -6004: The MDL module can not be exported since it is a builtin
@@ -224,7 +226,7 @@ public:
         ITransaction* transaction,
         const char* module_name,
         IString* exported_module,
-        IMdl_execution_context* context = 0) = 0;
+        IMdl_execution_context* context = nullptr) = 0;
 
     /// Exports a canvas to a file on disk.
     ///
@@ -258,7 +260,7 @@ public:
     virtual Sint32 export_canvas(
         const char* filename,
         const ICanvas* canvas,
-        const IMap* export_options = 0) const = 0;
+        const IMap* export_options = nullptr) const = 0;
 
     /// Exports a light profile to disk.
     ///
@@ -275,8 +277,8 @@ public:
     /// Exports BSDF data to a file on disk.
     ///
     /// \param filename          The file name of the resource to export the BSDF measurement to.
-    /// \param reflection        The BSDF data for reflection to export. Can be \c NULL.
-    /// \param transmission      The BSDF data for transmission to export. Can be \c NULL.
+    /// \param reflection        The BSDF data for reflection to export. Can be \c nullptr.
+    /// \param transmission      The BSDF data for transmission to export. Can be \c nullptr.
     /// \return
     ///                          -  0: Success.
     ///                          - -1: Invalid file name.
@@ -316,7 +318,7 @@ public:
     /// \param filename   The filename of an MDL module (excluding MDLE modules).
     /// \param option     Controls the algorithm's behavior if several overlapping search paths
     ///                   contain the given filename.
-    /// \return           The MDL name of the given module, or \c NULL in case of failures.
+    /// \return           The MDL name of the given module, or \c nullptr in case of failures.
     virtual const IString* get_mdl_module_name(
         const char* filename, Search_option option = SEARCH_OPTION_USE_FIRST) const = 0;
 
@@ -327,7 +329,7 @@ public:
     /// \param u        The u-coordinate of the uv-tile.
     /// \param v        The v-coordinate of the uv-tile.
     /// \return         String with the frame and/or uv-tile marker replaced by the coordinates of
-    ///                 the uv-tile, or \c NULL in case of errors.
+    ///                 the uv-tile, or \c nullptr in case of errors.
     virtual const IString* frame_uvtile_marker_to_string(
         const char* marker, Size f, Sint32 u, Sint32 v) const = 0;
 
@@ -342,16 +344,16 @@ public:
     /// \param definition_name   The DB name of the function or material definition.
     /// \param argument_types    The arguments of the corresponding function call or material
     ///                          instance. Required for template-like functions, ignored (can be
-    ///                          \c NULL) in all other cases.
+    ///                          \c nullptr) in all other cases.
     /// \param return_type       The arguments of the corresponding function call or material
     ///                          instance. Required for the cast operator, ignored (can be
-    ///                          \c NULL) in all other cases.
+    ///                          \c nullptr) in all other cases.
     /// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
-    ///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
-    ///                          implementing the identity transformation).
+    ///                          non-MDLE modules. Can be \c nullptr (which is treated like a
+    ///                          callback implementing the identity transformation).
     /// \param context           The execution context can be used to pass options and to retrieve
-    ///                          error and/or warning messages. Can be \c NULL.
-    /// \return                  The serialized function name, or \c NULL in case of errors.
+    ///                          error and/or warning messages. Can be \c nullptr.
+    /// \return                  The serialized function name, or \c nullptr in case of errors.
     virtual const ISerialized_function_name* serialize_function_name(
         const char* definition_name,
         const IType_list* argument_types,
@@ -366,11 +368,11 @@ public:
     /// \param transaction       The transaction to be used.
     /// \param function_name     The serialized name of a function or material definition.
     /// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
-    ///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
-    ///                          implementing the identity transformation).
+    ///                          non-MDLE modules. Can be \c nullptr (which is treated like a
+    ///                          callback implementing the identity transformation).
     /// \param context           The execution context can be used to pass options and to retrieve
-    ///                          error and/or warning messages. Can be \c NULL.
-    /// \return                  The deserialized function name, or \c NULL in case of errors.
+    ///                          error and/or warning messages. Can be \c nullptr.
+    /// \return                  The deserialized function name, or \c nullptr in case of errors.
     virtual const IDeserialized_function_name* deserialize_function_name(
         ITransaction* transaction,
         const char* function_name,
@@ -393,11 +395,11 @@ public:
     ///                                             (as returned by
     ///         #mi::neuraylib::ISerialized_function_name::get_function_name_without_module_name()).
     /// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
-    ///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
-    ///                          implementing the identity transformation).
+    ///                          non-MDLE modules. Can be \c nullptr (which is treated like a
+    ///                          callback implementing the identity transformation).
     /// \param context           The execution context can be used to pass options and to retrieve
-    ///                          error and/or warning messages. Can be \c NULL.
-    /// \return                  The deserialized function name, or \c NULL in case of errors.
+    ///                          error and/or warning messages. Can be \c nullptr.
+    /// \return                  The deserialized function name, or \c nullptr in case of errors.
     virtual const IDeserialized_function_name* deserialize_function_name(
         ITransaction* transaction,
         const char* module_name,
@@ -416,11 +418,11 @@ public:
     ///
     /// \param module_name       The serialized name of a module.
     /// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
-    ///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
-    ///                          implementing the identity transformation).
+    ///                          non-MDLE modules. Can be \c nullptr (which is treated like a
+    ///                          callback implementing the identity transformation).
     /// \param context           The execution context can be used to pass options and to retrieve
-    ///                          error and/or warning messages. Can be \c NULL.
-    /// \return                  The deserialized module name, or \c NULL in case of errors.
+    ///                          error and/or warning messages. Can be \c nullptr.
+    /// \return                  The deserialized module name, or \c nullptr in case of errors.
     virtual const IDeserialized_module_name* deserialize_module_name(
         const char* module_name,
         IMdle_deserialization_callback* mdle_callback,
@@ -436,14 +438,14 @@ public:
     /// Returns a random-access reader for a given file.
     ///
     /// \param filename   The filename of the file to get the reader for.
-    /// \return           A reader that can be used to read the file, or \c NULL in case of
+    /// \return           A reader that can be used to read the file, or \c nullptr in case of
     ///                   failures (e.g., there is no such file).
     virtual IReader* create_reader( const char* filename) const = 0;
 
     /// Returns a random-access writer for a given file.
     ///
     /// \param filename   The filename of the file to get the writer for.
-    /// \return           A writer that can be used to write to that file, or \c NULL in case of
+    /// \return           A writer that can be used to write to that file, or \c nullptr in case of
     ///                   failures (e.g., insufficient permissions).
     virtual IWriter* create_writer( const char* filename) const = 0;
 

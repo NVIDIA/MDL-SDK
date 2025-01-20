@@ -47,38 +47,24 @@ else()
     target_include_directories(${__TARGET_ADD_DEPENDENCY_TARGET} 
         PRIVATE
             ${MDL_DEPENDENCY_VULKAN_INCLUDE}
+            ${MDL_DEPENDENCY_VOLK_INCLUDE}
             ${MDL_DEPENDENCY_GLSLANG_INCLUDE}
+            ${MDL_DEPENDENCY_SPIRV_TOOLS_INCLUDE}
         )
 
     # static library
-    if(WIN32)
-        target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET} 
-            PRIVATE
-                ${MDL_DEPENDENCY_VULKAN_LIBS}
-            )
-        foreach (_LIB ${MDL_DEPENDENCY_GLSLANG_LIBS})
-            target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET} PRIVATE optimized ${_LIB})
-        endforeach()
-        foreach (_LIB ${MDL_DEPENDENCY_GLSLANG_LIBS_DEBUG})
-            target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET} PRIVATE debug ${_LIB})
-        endforeach()
-
-        # The glslang libs don't include pdb files causing linker warnings
-        set_target_properties(${__TARGET_ADD_DEPENDENCY_TARGET} PROPERTIES LINK_FLAGS "/ignore:4099")
-    else()
-        target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET} 
-            PRIVATE
-                ${MDL_DEPENDENCY_VULKAN_LIBS}
-                ${MDL_DEPENDENCY_GLSLANG_LIBS}
-            )
-    endif()
+    target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET} 
+        PRIVATE
+            ${MDL_DEPENDENCY_GLSLANG_LIBS}
+            ${MDL_DEPENDENCY_SPIRV_TOOLS_LIBS}
+        )
 
     # runtime dependencies
-    if(MDL_DEPENDENCY_VULKAN_BIN)
+    if(MDL_DEPENDENCY_VULKAN_LAYERS_DIR)
         if(WIN32)
             target_add_vs_debugger_env_var(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
                 VARS
-                    "VK_LAYER_PATH=${MDL_DEPENDENCY_VULKAN_BIN}"
+                    "VK_LAYER_PATH=${MDL_DEPENDENCY_VULKAN_LAYERS_DIR}"
                 )
         endif()
 

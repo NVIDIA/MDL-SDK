@@ -94,9 +94,9 @@ std::string lookup_thumbnail(
 /// \param transaction             The DB transaction to use.
 /// \param value                   The MDL resource to convert into a tag.
 /// \param module_filename         Absolute filename of the MDL module (using OS-specific
-///                                separators), or \c NULL for string-based modules.
-/// \param module_name             The MDL module name, or \c NULL for import of resources (absolute
-///                                file paths only) without module context.
+///                                separators), or \c nullptr for string-based modules.
+/// \param module_name             The MDL module name, or \c nullptr for import of resources
+///                                (absolute file paths only) without module context.
 /// \param errors_are_warnings     Report errors only as warnings.
 /// \return                        The tag for the MDL resource (invalid in case of failures).
 DB::Tag core_resource_to_tag(
@@ -425,8 +425,8 @@ public:
     /// Primarily used to get the bound type for the return type.
     ///
     /// \param a_type   An deferred size array type.
-    /// \return         Returns the immediate size array type bound to \p a_type, or \c NULL if not
-    ///                 bound.
+    /// \return         Returns the immediate size array type bound to \p a_type, or \c nullptr if
+    ///                 not bound.
     const mi::mdl::IType_array* get_bound_type( const mi::mdl::IType_array* a_type);
 
 private:

@@ -1939,6 +1939,15 @@ void Mdl_material_description::parameterize_gltf_support_material(
                 iridescence.iridescence_thickness_texture, 1.0f);
         };
 
+        // helper to add anisotropy
+        auto add_anisotropy = [&](
+            const mdl_d3d12::IScene_loader::Material::Model_data_materials_anisotropy& anisotropy)
+        {
+            add_float(m_parameter_list.get(), "anisotropy_strength", anisotropy.anisotropy_strength);
+            add_float(m_parameter_list.get(), "anisotropy_rotation", anisotropy.anisotropy_rotation);
+            add_texture(m_parameter_list.get(), "anisotropy_texture", anisotropy.anisotropy_texture, 1.0f);
+        };
+
         // add the actual parameters to the parameter list
         add_texture(m_parameter_list.get(), "normal_texture",
             m_scene_material.normal_texture, 1.0f, true, m_scene_material.normal_scale_factor);
@@ -2019,6 +2028,7 @@ void Mdl_material_description::parameterize_gltf_support_material(
                 add_float(m_parameter_list.get(), "ior", m_scene_material.metallic_roughness.ior.ior);
                 add_volume(m_scene_material.metallic_roughness.volume);
                 add_iridescence(m_scene_material.metallic_roughness.iridescence);
+                add_anisotropy(m_scene_material.metallic_roughness.anisotropy);
                 return;
             }
         }
@@ -2081,6 +2091,60 @@ bool Mdl_material_description::load_material_definition_loader(
     mi::base::Handle<const mi::neuraylib::IModule> module(
         sdk.get_transaction().access<const mi::neuraylib::IModule>(
             module_db_name->get_c_str()));
+
+    // dump the mdl for debugging only
+    if (!loader->get_options().generated_mdl_path.empty())
+    {
+        // if the specified path points to an .mdl file, use it
+        // otherwise assume that it is a folder path to be used with generated names
+        std::string output_path = loader->get_options().generated_mdl_path;
+        bool skip = false;
+        if (!mi::examples::strings::ends_with(output_path, ".mdl"))
+        {
+            if (mi::examples::io::file_exists(output_path))
+            {
+                log_warning("Writing out generated file skipped. Specified path points to "
+                    "an existing file that is not an mdl: " + output_path);
+                skip = true;
+            }
+            else
+            {
+                if (!mi::examples::io::mkdir(output_path, true))
+                {
+                    log_warning("Writing out generated file skipped. "
+                        "Specified path can not be created: " + output_path);
+                    skip = true;
+                }
+                else
+                {
+                    std::string mtlx_material_file = mi::examples::io::is_absolute_path(gltf_name)
+                        ? gltf_name
+                        : scene_directory + "/" + gltf_name;
+
+                    // drop the query from the file name
+                    size_t pos = mtlx_material_file.find_first_of('?');
+                    mtlx_material_file = mtlx_material_file.substr(0, pos);
+
+                    std::string basename = mi::examples::io::basename(mtlx_material_file, false);
+                    std::string material_name = mi::examples::strings::replace(function_name, '/', '_');
+                    output_path = output_path + "/" + basename + "." + material_name + ".mdl";
+                }
+            }
+        }
+
+        // print the generated file
+        auto file = std::ofstream();
+        file.open(output_path, std::ofstream::out | std::ofstream::trunc);
+        if (file.is_open())
+        {
+            file << m_source_code;
+            file.close();
+        }
+
+        // export for better readability
+        std::string export_path = output_path.substr(0, output_path.length() - 4) + ".formated.mdl";
+        sdk.get_impexp_api().export_module(sdk.get_transaction().get(), module_db_name->get_c_str(), export_path.c_str());
+    }
 
     if (module->get_material_count() == 0)
     {

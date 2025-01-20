@@ -48,7 +48,7 @@ public:
 
     /// Constructor
     ///
-    /// \param context   Wraps (and takes ownership) of the given context, or \p NULL.
+    /// \param context   Wraps (and takes ownership) of the given context, or \p nulptr.
     Mdl_execution_context_impl( MDL::Execution_context* context);
 
     virtual ~Mdl_execution_context_impl();
@@ -108,14 +108,14 @@ private:
 
 /// Unwraps the passed execution context, i.e., casts to the implementation class.
 ///
-/// Returns address of \p default_context if \p context is \c NULL.
+/// Returns address of \p default_context if \p context is \c nullptr.
 MDL::Execution_context* unwrap_context(
     mi::neuraylib::IMdl_execution_context* context,
     MDL::Execution_context& default_context);
 
 /// Unwraps the passed execution context, i.e., casts to the implementation class.
 ///
-/// Returns address of \p default_context if \p context is \c NULL.
+/// Returns address of \p default_context if \p context is \c nullptr.
 const MDL::Execution_context* unwrap_context(
     const mi::neuraylib::IMdl_execution_context* context,
     const MDL::Execution_context& default_context);
@@ -123,7 +123,7 @@ const MDL::Execution_context* unwrap_context(
 /// Unwraps the passed execution context, i.e., casts to the implementation class, clears
 /// all messages and sets the result to 0.
 ///
-/// Uses \p default_context if \p context is \c NULL.
+/// Uses \p default_context if \p context is \c nullptr.
 MDL::Execution_context* unwrap_and_clear_context(
     mi::neuraylib::IMdl_execution_context* context,
     MDL::Execution_context& default_context);

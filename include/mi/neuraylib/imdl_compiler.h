@@ -59,7 +59,7 @@ public:
     /// \param module_source   The MDL source code of the module.
     /// \return
     ///                        -  0: Success.
-    ///                        - -1: Possible failure reasons: invalid parameters (\c NULL pointer),
+    ///                        - -1: Possible failure reasons: invalid parameters (\c nullptr),
     ///                              \p module_name is not a valid module name, failure to compile
     ///                              the module, or a regular module has already been loaded.
     virtual Sint32 add_builtin_module( const char* module_name, const char* module_source) = 0;

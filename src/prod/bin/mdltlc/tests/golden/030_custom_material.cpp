@@ -68,27 +68,64 @@ DAG_node const* Custom_material::matcher(
     IDistiller_plugin_api &e,
     DAG_node const *node,
     const mi::mdl::Distiller_options *options,
-    Rule_result_code &result_code)const
+    Rule_result_code &result_code) const
 {
-    switch (e.get_selector(node)) {
-    case mi::mdl::DS_DIST_STRUCT_MATERIAL: // match for material(_thin_walled, material_surface(diffuse_reflection_bsdf(t, _r), _em), _backface, _ior, _volume, _geometry, _hair)
+    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+
 // 030_custom_material.mdltl:13
 //RUID 418076
-        if (true
-        && (e.get_selector(e.get_compound_argument(node, 1)) == mi::mdl::DS_DIST_STRUCT_MATERIAL_SURFACE)
-        && (e.get_selector(e.get_compound_argument(e.get_compound_argument(node, 1), 0)) == mi::mdl::IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF)) {
-            const DAG_node* v_t = e.get_compound_argument(e.get_compound_argument(e.get_compound_argument(node, 1), 0), 0);
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 0);
-            return e.create_function_call("::Custom_material::Custom_material", Nodes_wrapper<1>(v_t).data(),
-                1);
-        }
-        break;
-    default:
-        break;
-    }
+    auto match_rule0 = [&] (DAG_node const *node0, IDistiller_plugin_api::Match_properties &node_props0) -> const DAG_node * {
 
-    return node;
+        // match for material(_thin_walled, material_surface(diffuse_reflection_bsdf(t, _r), _em), _backface, _ior, _volume, _geometry, _hair)
+        if (node_props0.sema != IDefinition::DS_ELEM_CONSTRUCTOR || node_props0.type_kind != IType::TK_STRUCT || node_props0.struct_id != IType_struct::SID_MATERIAL) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node2 = e.get_compound_argument(node0, 0);
+        DAG_node const *v__thin_walled = node2; (void)v__thin_walled;
+        DAG_node const *node4 = e.get_compound_argument(node0, 1);
+        IDistiller_plugin_api::Match_properties node_props4;
+        e.get_match_properties(node4, node_props4); 
+        // match for material_surface(diffuse_reflection_bsdf(t, _r), _em)
+        if (node_props4.sema != IDefinition::DS_ELEM_CONSTRUCTOR || node_props4.type_kind != IType::TK_STRUCT || node_props4.struct_id != IType_struct::SID_MATERIAL_SURFACE) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node5 = e.get_compound_argument(node4, 0);
+        IDistiller_plugin_api::Match_properties node_props5;
+        e.get_match_properties(node5, node_props5); 
+        // match for diffuse_reflection_bsdf(t, _r)
+        if (node_props5.sema != IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node6 = e.get_compound_argument(node5, 0);
+        DAG_node const *v_t = node6; (void)v_t;
+        DAG_node const *node8 = e.get_compound_argument(node5, 1);
+        DAG_node const *v__r = node8; (void)v__r;
+        DAG_node const *node11 = e.get_compound_argument(node4, 1);
+        DAG_node const *v__em = node11; (void)v__em;
+        DAG_node const *node14 = e.get_compound_argument(node0, 2);
+        DAG_node const *v__backface = node14; (void)v__backface;
+        DAG_node const *node16 = e.get_compound_argument(node0, 3);
+        DAG_node const *v__ior = node16; (void)v__ior;
+        DAG_node const *node18 = e.get_compound_argument(node0, 4);
+        DAG_node const *v__volume = node18; (void)v__volume;
+        DAG_node const *node20 = e.get_compound_argument(node0, 5);
+        DAG_node const *v__geometry = node20; (void)v__geometry;
+        DAG_node const *node22 = e.get_compound_argument(node0, 6);
+        DAG_node const *v__hair = node22; (void)v__hair;
+        DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 0);
+        return e.create_function_call("::Custom_material::Custom_material", Nodes_wrapper<1>(v_t).data(),
+            1, root_dbg_info);
+    };
+    (void)match_rule0;
+
+    IDistiller_plugin_api::Match_properties node_props;
+    e.get_match_properties(node, node_props);
+    return match_rule0(node, node_props);
+
 }
 
 bool Custom_material::postcond(

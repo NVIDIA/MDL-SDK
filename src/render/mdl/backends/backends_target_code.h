@@ -66,7 +66,7 @@ namespace BACKENDS {
 class Target_value_layout;
 
 /// Structure containing information about a callable function.
-class Callable_function_info : public MI::SERIAL::Serializable
+class Callable_function_info : public SERIAL::Serializable
 {
 public:
     /// Constructor.
@@ -115,18 +115,18 @@ public:
     mi::neuraylib::ITarget_code::State_usage m_state_usage;
 
     /// Required for serialization.
-    MI::SERIAL::Class_id get_class_id() const override
+    SERIAL::Class_id get_class_id() const override
     {
-        return MI::SERIAL::class_id_unknown;
+        return SERIAL::class_id_unknown;
     }
 
     /// Serialize the fields of this structure.
-    const MI::SERIAL::Serializable* serialize(
-        MI::SERIAL::Serializer* serializer) const override;
+    const SERIAL::Serializable* serialize(
+        SERIAL::Serializer* serializer) const override;
 
     /// Deserialize the fields of this structure.
-    MI::SERIAL::Serializable* deserialize(
-        MI::SERIAL::Deserializer* deserializer) override;
+    SERIAL::Serializable* deserialize(
+        SERIAL::Deserializer* deserializer) override;
 };
 
 /// Implementation of #mi::neuraylib::ITarget_code.
@@ -150,7 +150,7 @@ public:
     /// \param be_kind     Kind of back-end that created this target code object.
     Target_code(
         mi::mdl::IGenerated_code_executable* code,
-        MI::DB::Transaction* transaction,
+        DB::Transaction* transaction,
         bool string_ids,
         bool use_derivatives,
         bool use_builtin_resource_handler,
@@ -167,7 +167,7 @@ public:
 
     /// Finalization method for link mode for executable code.
     void finalize( mi::mdl::IGenerated_code_executable* code,
-        MI::DB::Transaction* transaction,
+        DB::Transaction* transaction,
         bool use_derivatives);
 
     // API methods
@@ -255,17 +255,19 @@ public:
 
     /// Returns the distribution function data this texture refers to.
     ///
-    /// \param index      The index of the texture resource.
-    /// \param [out] rx   The resolution of the texture in x.
-    /// \param [out] ry   The resolution of the texture in y.
-    /// \param [out] rz   The resolution of the texture in z.
-    /// \return           A pointer to the texture data, if the texture is a  distribution function
-    ///                   data texture, \c NULL otherwise.
+    /// \param index            The index of the texture resource.
+    /// \param [out] rx         The resolution of the texture in x.
+    /// \param [out] ry         The resolution of the texture in y.
+    /// \param [out] rz         The resolution of the texture in z.
+    /// \param [out] pixel_type The type of the data elements.
+    /// \return                 A pointer to the texture data, if the texture is a  distribution
+    ///                         function data texture, \c NULL otherwise.
     const mi::Float32* get_texture_df_data(
         mi::Size index,
         mi::Size &rx,
         mi::Size &ry,
-        mi::Size &rz) const override;
+        mi::Size &rz,
+        const char *&pixel_type) const override;
 
     /// Returns the distribution function data kind of a given texture resource used by the target
     /// code.
@@ -843,7 +845,7 @@ public:
     /// \return              The generated target argument block
     void init_argument_block(
         mi::Size index,
-        MI::DB::Transaction* transaction,
+        DB::Transaction* transaction,
         const MDL::IValue_list* args);
 
     /// Returns the resource index for use in an \c ITarget_argument_block of resources already
@@ -852,8 +854,8 @@ public:
     /// \param transaction  Transaction to retrieve resource names from tags.
     /// \param resource     The resource value.
     mi::Uint32 get_known_resource_index(
-        MI::DB::Transaction* transaction,
-        MI::MDL::IValue_resource const *resource) const;
+        DB::Transaction* transaction,
+        MDL::IValue_resource const *resource) const;
 
     /// Add a target argument block layout to this target code.
     ///
@@ -873,7 +875,8 @@ public:
         mi::mdl::IValue_texture::Bsdf_data_kind kind,
         mi::Size &rx,
         mi::Size &ry,
-        mi::Size &rz);
+        mi::Size &rz,
+        const char *&pixel_type);
 
     /// Called from the back-end to restore an instance of this class.
     bool deserialize(
@@ -906,7 +909,7 @@ private:
     std::vector<Callable_function_info> m_callable_function_infos;
 
     /// Helper value type for resource entries.
-    struct Resource_info : public MI::SERIAL::Serializable {
+    struct Resource_info : public SERIAL::Serializable {
         /// Constructor.
         Resource_info(
             std::string const &db_name,
@@ -954,18 +957,18 @@ private:
         }
 
         /// Required for serialization.
-        MI::SERIAL::Class_id get_class_id() const final
+        SERIAL::Class_id get_class_id() const final
         {
-            return MI::SERIAL::class_id_unknown;
+            return SERIAL::class_id_unknown;
         }
 
         /// Serialize the fields of this structure.
-        const MI::SERIAL::Serializable* serialize(
-            MI::SERIAL::Serializer* serializer) const override;
+        const SERIAL::Serializable* serialize(
+            SERIAL::Serializer* serializer) const override;
 
         /// Deserialize the fields of this structure.
-        MI::SERIAL::Serializable* deserialize(
-            MI::SERIAL::Deserializer* deserializer) override;
+        SERIAL::Serializable* deserialize(
+            SERIAL::Deserializer* deserializer) override;
 
     private:
         /// The db name of the resource.
@@ -1023,11 +1026,11 @@ private:
         /// Get the semantic of the texture.
         mi::mdl::IValue_texture::Bsdf_data_kind get_df_data_kind() const { return m_df_data_kind; }
 
-        const MI::SERIAL::Serializable* serialize(
-            MI::SERIAL::Serializer* serializer) const override;
+        const SERIAL::Serializable* serialize(
+            SERIAL::Serializer* serializer) const override;
 
-        MI::SERIAL::Serializable* deserialize(
-            MI::SERIAL::Deserializer* deserializer) override;
+        SERIAL::Serializable* deserialize(
+            SERIAL::Deserializer* deserializer) override;
 
         /// Variant of the above. If a transaction is available, used DF textures are created in the
         /// DB one-the-fly.
@@ -1091,7 +1094,7 @@ private:
     std::vector<std::string> m_string_constant_table;
 
     /// Helper class for handling segments.
-    class Segment : public MI::SERIAL::Serializable {
+    class Segment : public SERIAL::Serializable {
     public:
         /// Constructor.
         ///
@@ -1126,18 +1129,18 @@ private:
         mi::Size get_size() const { return m_data.size(); }
 
         /// Required for serialization.
-        MI::SERIAL::Class_id get_class_id() const final
+        SERIAL::Class_id get_class_id() const final
         {
-            return MI::SERIAL::class_id_unknown;
+            return SERIAL::class_id_unknown;
         }
 
         /// Serialize the fields of this structure.
-        const MI::SERIAL::Serializable* serialize(
-            MI::SERIAL::Serializer* serializer) const final;
+        const SERIAL::Serializable* serialize(
+            SERIAL::Serializer* serializer) const final;
 
         /// Deserialize the fields of this structure.
-        MI::SERIAL::Serializable* deserialize(
-            MI::SERIAL::Deserializer* deserializer) final;
+        SERIAL::Serializable* deserialize(
+            SERIAL::Deserializer* deserializer) final;
 
     private:
         std::string m_name;
@@ -1148,7 +1151,7 @@ private:
     std::vector<Segment> m_data_segments;
 
     /// The layouts of the captured arguments blocks.
-    std::vector<mi::base::Handle<MI::BACKENDS::Target_value_layout const> > m_cap_arg_layouts;
+    std::vector<mi::base::Handle<BACKENDS::Target_value_layout const> > m_cap_arg_layouts;
 
     /// The captured arguments blocks.
     std::vector<mi::base::Handle<mi::neuraylib::ITarget_argument_block> > m_cap_arg_blocks;

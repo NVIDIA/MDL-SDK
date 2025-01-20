@@ -33,129 +33,73 @@ function(FIND_VULKAN_EXT)
         return()
     endif()
 
-    # if no specific Vulkan SDK is specified then try finding an installed SDK
-    if(NOT VULKAN_SDK_DIR)
-        set(VULKAN_SDK_DIR $ENV{VULKAN_SDK} CACHE PATH "")
-    endif()
-
-    if(NOT EXISTS ${VULKAN_SDK_DIR})
-        message(FATAL_ERROR "The dependency \"Vulkan SDK\" could not be resolved. Please specify 'VULKAN_SDK_DIR' or disable 'MDL_ENABLE_VULKAN_EXAMPLES'")
-        return()
-    endif()
-
-    if(WIN32)
-        find_path(_VULKAN_INCLUDE
-            NAMES vulkan/vulkan.h
-            PATHS
-                "${VULKAN_SDK_DIR}/Include"
-            NO_DEFAULT_PATH
-            )
-        find_library(_VULKAN_LIB
-            NAMES vulkan-1
-            PATHS
-                "${VULKAN_SDK_DIR}/Lib"
-                "${VULKAN_SDK_DIR}/Bin"
-            NO_DEFAULT_PATH
-            )
-        
-        set(_VULKAN_BIN ${VULKAN_SDK_DIR}/Bin)
+    find_package(VulkanHeaders QUIET CONFIG)
+    if(VulkanHeaders_FOUND)
+        get_target_property(_VULKAN_INCLUDE Vulkan::Headers INTERFACE_INCLUDE_DIRECTORIES)
     else()
-        find_path(_VULKAN_INCLUDE
-            NAMES vulkan/vulkan.h
-            PATHS
-                "${VULKAN_SDK_DIR}/include"
-            NO_DEFAULT_PATH
-            )
-        find_library(_VULKAN_LIB
-            NAMES vulkan
-            PATHS
-                "${VULKAN_SDK_DIR}/lib"
-            NO_DEFAULT_PATH
-            )
+        message(STATUS "_VULKAN_INCLUDE: ${_VULKAN_INCLUDE}")
+        message(FATAL_ERROR "The dependency \"VulkanHeaders\" could not be resolved. Please specify "
+            "'CMAKE_TOOLCHAIN_FILE'. Alternatively, you can disable the option 'MDL_ENABLE_VULKAN_EXAMPLES'.")
     endif()
 
-    # detect Vulkan SDK patch version
-    if(_VULKAN_INCLUDE)
-        set(_VULKAN_CORE_H ${_VULKAN_INCLUDE}/vulkan/vulkan_core.h)
-        if(EXISTS ${_VULKAN_CORE_H})
-            file(STRINGS  ${_VULKAN_CORE_H} _VULKAN_HEADER_LINE REGEX "^#define VK_HEADER_VERSION ")
-            string(REGEX MATCHALL "[0-9]+" _VULKAN_VERSION_PATCH "${_VULKAN_HEADER_LINE}")
-        endif()
+    find_package(volk QUIET CONFIG)
+    if(volk_FOUND)
+        get_target_property(_VOLK_INCLUDE volk::volk INTERFACE_INCLUDE_DIRECTORIES)
+    else()
+        message(STATUS "_VOLK_INCLUDE: ${_VOLK_INCLUDE}")
+        message(FATAL_ERROR "The dependency \"volk\" could not be resolved. Please specify "
+            "'CMAKE_TOOLCHAIN_FILE'. Alternatively, you can disable the option 'MDL_ENABLE_VULKAN_EXAMPLES'.")
     endif()
 
+    find_path(_VULKAN_LAYERS_DIR
+        NAMES VkLayer_khronos_validation.json
+        PATHS "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin"
+        NO_DEFAULT_PATH
+        )
+
+    find_package(glslang QUIET CONFIG)
+    if(glslang_FOUND)
+        get_target_property(_GLSLANG_INCLUDE glslang::glslang INTERFACE_INCLUDE_DIRECTORIES)
+        set(_GLSLANG_LIB glslang::glslang glslang::glslang-default-resource-limits glslang::SPIRV)
+    else()
+        message(STATUS "_GLSLANG_INCLUDE: ${_GLSLANG_INCLUDE}")
+        message(STATUS "_GLSLANG_LIB: ${_GLSLANG_LIB}")
+        message(FATAL_ERROR "The dependency \"glslang\" could not be resolved. Please specify "
+            "'CMAKE_TOOLCHAIN_FILE'. Alternatively, you can disable the option 'MDL_ENABLE_VULKAN_EXAMPLES'.")
+    endif()
+
+    find_package(SPIRV-Tools-opt QUIET CONFIG)
+    if(SPIRV-Tools-opt_FOUND)
+        get_target_property(_SPIRV_TOOLS_OPT_INCLUDE SPIRV-Tools-opt INTERFACE_INCLUDE_DIRECTORIES)
+        set(_SPIRV_TOOLS_OPT_LIB SPIRV-Tools-opt)
+    else()
+        message(STATUS "_SPIRV_TOOLS_OPT_INCLUDE: ${_SPIRV_TOOLS_OPT_INCLUDE}")
+        message(STATUS "_SPIRV_TOOLS_OPT_LIB: ${_SPIRV_TOOLS_OPT_LIB}")
+        message(FATAL_ERROR "The dependency \"SPIRV-Tools-opt\" could not be resolved. Please specify "
+            "'CMAKE_TOOLCHAIN_FILE'. Alternatively, you can disable the option 'MDL_ENABLE_VULKAN_EXAMPLES'.")
+    endif()
+    
     # store paths that are later used in add_vulkan.cmake
     set(MDL_DEPENDENCY_VULKAN_INCLUDE ${_VULKAN_INCLUDE} CACHE INTERNAL "vulkan headers")
-    set(MDL_DEPENDENCY_VULKAN_LIBS ${_VULKAN_LIB} CACHE INTERNAL "vulkan libs")
+    set(MDL_DEPENDENCY_VOLK_INCLUDE ${_VOLK_INCLUDE} CACHE INTERNAL "volk headers")
     if(WIN32)
-        set(MDL_DEPENDENCY_VULKAN_BIN ${_VULKAN_BIN} CACHE INTERNAL "vulkan bin")
+        set(MDL_DEPENDENCY_VULKAN_LAYERS_DIR ${_VULKAN_LAYERS_DIR} CACHE INTERNAL "vulkan layers dir")
     endif()
-
-    if(MDL_LOG_DEPENDENCIES)
-        message(STATUS "[INFO] MDL_DEPENDENCY_VULKAN_INCLUDE:        ${MDL_DEPENDENCY_VULKAN_INCLUDE}")
-        message(STATUS "[INFO] MDL_DEPENDENCY_VULKAN_LIBS:           ${MDL_DEPENDENCY_VULKAN_LIBS}")
-        if(WIN32)
-            message(STATUS "[INFO] MDL_DEPENDENCY_VULKAN_BIN:            ${MDL_DEPENDENCY_VULKAN_BIN}")
-        endif()
-    endif()
-    #-----------------------------------------------------------------------------------------------
-
-
-    # find the Khronos reference compiler glslang
-    if(_VULKAN_INCLUDE)
-        if(WIN32)
-            set(_VULKAN_LIB_DIR "${VULKAN_SDK_DIR}/Lib")
-        else()
-            set(_VULKAN_LIB_DIR "${VULKAN_SDK_DIR}/lib")
-        endif()
-
-        # The previously found Vulkan SDK contains the glslang compiler
-        set(_GLSLANG_INCLUDE ${Vulkan_INCLUDE_DIR})
-
-        set(_GLSLANG_LIB
-            "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}glslang${CMAKE_STATIC_LIBRARY_SUFFIX}"
-            "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}SPIRV${CMAKE_STATIC_LIBRARY_SUFFIX}"
-            "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}SPIRV-Tools-opt${CMAKE_STATIC_LIBRARY_SUFFIX}"
-            "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}SPIRV-Tools${CMAKE_STATIC_LIBRARY_SUFFIX}"
-            "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}MachineIndependent${CMAKE_STATIC_LIBRARY_SUFFIX}"
-            "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}OSDependent${CMAKE_STATIC_LIBRARY_SUFFIX}"
-            "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}GenericCodeGen${CMAKE_STATIC_LIBRARY_SUFFIX}"
-            )
-
-        # Windows has debug versions
-        if(WIN32)
-            set(_GLSLANG_LIB_DEBUG
-                "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}glslangd${CMAKE_STATIC_LIBRARY_SUFFIX}"
-                "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}SPIRVd${CMAKE_STATIC_LIBRARY_SUFFIX}"
-                "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}SPIRV-Tools-optd${CMAKE_STATIC_LIBRARY_SUFFIX}"
-                "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}SPIRV-Toolsd${CMAKE_STATIC_LIBRARY_SUFFIX}"
-                "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}MachineIndependentd${CMAKE_STATIC_LIBRARY_SUFFIX}"
-                "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}OSDependentd${CMAKE_STATIC_LIBRARY_SUFFIX}"
-                "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}GenericCodeGend${CMAKE_STATIC_LIBRARY_SUFFIX}"
-                )
-        endif()
-
-        # since Vulkan SDK version 1.3.275 the OGLCompiler library is not included anymore for glslang
-        if(_VULKAN_VERSION_PATCH LESS 275)
-            list(APPEND _GLSLANG_LIB "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}OGLCompiler${CMAKE_STATIC_LIBRARY_SUFFIX}")
-            if(WIN32)
-                list(APPEND _GLSLANG_LIB_DEBUG "${_VULKAN_LIB_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}OGLCompilerd${CMAKE_STATIC_LIBRARY_SUFFIX}")
-            endif()
-        endif()
-    endif()
-
-    # store paths that are later used in the add_vulkan.cmake
     set(MDL_DEPENDENCY_GLSLANG_INCLUDE ${_GLSLANG_INCLUDE} CACHE INTERNAL "glslang headers")
     set(MDL_DEPENDENCY_GLSLANG_LIBS ${_GLSLANG_LIB} CACHE INTERNAL "glslang libs")
-    if(WIN32)
-        set(MDL_DEPENDENCY_GLSLANG_LIBS_DEBUG ${_GLSLANG_LIB_DEBUG} CACHE INTERNAL "glslang libs")
-    endif()
+    set(MDL_DEPENDENCY_SPIRV_TOOLS_INCLUDE ${_SPIRV_TOOLS_OPT_INCLUDE} CACHE INTERNAL "SPIRV-Tools-opt headers")
+    set(MDL_DEPENDENCY_SPIRV_TOOLS_LIBS ${_SPIRV_TOOLS_OPT_LIB} CACHE INTERNAL "SPIRV-Tools-opt libs")
 
     if(MDL_LOG_DEPENDENCIES)
-        message(STATUS "[INFO] MDL_DEPENDENCY_GLSLANG_INCLUDE:       ${MDL_DEPENDENCY_GLSLANG_INCLUDE}")
-        message(STATUS "[INFO] MDL_DEPENDENCY_GLSLANG_LIBS:          ${MDL_DEPENDENCY_GLSLANG_LIBS}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_VULKAN_INCLUDE:            ${MDL_DEPENDENCY_VULKAN_INCLUDE}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_VOLK_INCLUDE:              ${MDL_DEPENDENCY_VOLK_INCLUDE}")
         if(WIN32)
-            message(STATUS "[INFO] MDL_DEPENDENCY_GLSLANG_LIBS_DEBUG:    ${MDL_DEPENDENCY_GLSLANG_LIBS_DEBUG}")
+           message(STATUS "[INFO] MDL_DEPENDENCY_VULKAN_LAYERS_DIR:         ${MDL_DEPENDENCY_VULKAN_LAYERS_DIR}")
         endif()
+        message(STATUS "[INFO] MDL_DEPENDENCY_GLSLANG_INCLUDE:           ${MDL_DEPENDENCY_GLSLANG_INCLUDE}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_GLSLANG_LIBS:              ${MDL_DEPENDENCY_GLSLANG_LIBS}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_SPIRV_TOOLS_INCLUDE:       ${MDL_DEPENDENCY_SPIRV_TOOLS_INCLUDE}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_SPIRV_TOOLS_LIBS:          ${MDL_DEPENDENCY_SPIRV_TOOLS_LIBS}")
     endif()
 
 endfunction()

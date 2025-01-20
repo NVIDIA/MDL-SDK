@@ -87,8 +87,8 @@ public:
 
     /// Returns the annotations of the struct category type.
     ///
-    /// \return              The annotations of the struct category type, or \c NULL if there are no
-    ///                      annotations for the struct category type.
+    /// \return              The annotations of the struct category type, or \c nullptr if there
+    ///                      are no annotations for the struct category type.
     virtual const IAnnotation_block* get_annotations() const = 0;
 };
 
@@ -108,13 +108,13 @@ public:
     /// Returns the index for the given name, or -1 if there is no such struct category.
     virtual Size get_index( const char* name) const = 0;
 
-    /// Returns the name for the given index, or \c NULL if there is no such struct category.
+    /// Returns the name for the given index, or \c nullptr if there is no such struct category.
     virtual const char* get_name( Size index) const = 0;
 
-    /// Returns the struct category for \p index, or \c NULL if there is no such struct category.
+    /// Returns the struct category for \p index, or \c nullptr if there is no such struct category.
     virtual const IStruct_category* get_struct_category( Size index) const = 0;
 
-    /// Returns the struct category for \p index, or \c NULL if there is no such struct category.
+    /// Returns the struct category for \p index, or \c nullptr if there is no such struct category.
     template <class T>
     const T* get_struct_category( Size index) const
     {
@@ -127,10 +127,10 @@ public:
         return ptr_T;
     }
 
-    /// Returns the struct category for \p name, or \c NULL if there is no such struct category.
+    /// Returns the struct category for \p name, or \c nullptr if there is no such struct category.
     virtual const IStruct_category* get_struct_category( const char* name) const = 0;
 
-    /// Returns the struct category for \p name, or \c NULL if there is no such struct category.
+    /// Returns the struct category for \p name, or \c nullptr if there is no such struct category.
     template <class T>
     const T* get_struct_category( const char* name) const
     {
@@ -145,23 +145,26 @@ public:
 
     /// Sets a struct category at a given index.
     ///
-    /// \return   -  0: Success.
-    ///           - -1: Invalid parameters (\c NULL pointer).
+    /// \return
+    ///           -  0: Success.
+    ///           - -1: Invalid parameters (\c nullptr).
     ///           - -2: \p index is out of bounds.
     virtual Sint32 set_struct_category( Size index, const IStruct_category* struct_category) = 0;
 
     /// Sets a struct category identified by name.
     ///
-    /// \return   -  0: Success.
-    ///           - -1: Invalid parameters (\c NULL pointer).
+    /// \return
+    ///           -  0: Success.
+    ///           - -1: Invalid parameters (\c nullptr).
     ///           - -2: There is no struct category mapped to \p name in the list.
     virtual Sint32 set_struct_category(
         const char* name, const IStruct_category* struct_category) = 0;
 
     /// Adds a struct category at the end of the list.
     ///
-    /// \return   -  0: Success.
-    ///           - -1: Invalid parameters (\c NULL pointer).
+    /// \return
+    ///           -  0: Success.
+    ///           - -1: Invalid parameters (\c nullptr).
     ///           - -2: There is already a struct category mapped to \p name in the list.
     virtual Sint32 add_struct_category(
         const char* name, const IStruct_category* struct_category) = 0;
@@ -270,7 +273,7 @@ public:
     /// Returns the modifiers of this type.
     virtual Uint32 get_type_modifiers() const = 0;
 
-    /// Returns the qualified name of the type, or \c NULL if no such name exists.
+    /// Returns the qualified name of the type, or \c nullptr if no such name exists.
     virtual const char* get_symbol() const = 0;
 };
 
@@ -327,7 +330,8 @@ public:
     /// Returns the name of a value.
     ///
     /// \param index         The index of the value.
-    /// \return              The unqualified name of the value, or \c NULL if \p index is invalid.
+    /// \return              The unqualified name of the value, or \c nullptr if \p index is
+    ///                      invalid.
     virtual const char* get_value_name( Size index) const = 0;
 
     /// Returns the code of a value.
@@ -337,7 +341,7 @@ public:
     ///                      -  0: Success.
     ///                      - -1: \p index is invalid.
     /// \return              The code of the value, or 0 in case of errors.
-    virtual Sint32 get_value_code( Size index, Sint32* errors = 0) const = 0;
+    virtual Sint32 get_value_code( Size index, Sint32* errors = nullptr) const = 0;
 
     /// Returns the index of a value in linear time.
     ///
@@ -356,15 +360,15 @@ public:
 
     /// Returns the annotations of the enum type.
     ///
-    /// \return              The annotations of the enum type, or \c NULL if there are no
+    /// \return              The annotations of the enum type, or \c nullptr if there are no
     ///                      annotations for the enum type.
     virtual const IAnnotation_block* get_annotations() const = 0;
 
     /// Returns the annotations of a value.
     ///
     /// \param index         The index of the value.
-    /// \return              The annotation of that value, or \c NULL if \p index is out of bounds,
-    ///                      or there are no annotations for that value.
+    /// \return              The annotation of that value, or \c nullptr if \p index is out of
+    ///                      bounds, or there are no annotations for that value.
     virtual const IAnnotation_block* get_value_annotations( Size index) const = 0;
 };
 
@@ -487,7 +491,7 @@ public:
     /// Returns the size of the array in case of immediate-sized arrays, and -1 otherwise.
     virtual Size get_size() const = 0;
 
-    /// Returns the abstract size of the array in case of deferred-sized arrays, and \c NULL
+    /// Returns the abstract size of the array in case of deferred-sized arrays, and \c nullptr
     /// otherwise.
     virtual const char* get_deferred_size() const = 0;
 };
@@ -538,18 +542,18 @@ public:
 
     /// Returns the annotations of the struct type.
     ///
-    /// \return              The annotations of the struct type, or \c NULL if there are no
+    /// \return              The annotations of the struct type, or \c nullptr if there are no
     ///                      annotations for the struct type.
     virtual const IAnnotation_block* get_annotations() const = 0;
 
     /// Returns the annotations of a field.
     ///
     /// \param index         The index of the field.
-    /// \return              The annotation of that field, or \c NULL if \p index is out of bounds,
-    ///                      or there are no annotations for that field.
+    /// \return              The annotation of that field, or \c nullptr if \p index is out of
+    ///                      bounds, or there are no annotations for that field.
     virtual const IAnnotation_block* get_field_annotations( Size index) const = 0;
 
-    /// Returns the corresponding struct category (or \c NULL if there is none).
+    /// Returns the corresponding struct category (or \c nullptr if there is none).
     virtual const IStruct_category* get_struct_category() const = 0;
 };
 
@@ -675,13 +679,13 @@ public:
     /// Returns the index for the given name, or -1 if there is no such type.
     virtual Size get_index( const char* name) const = 0;
 
-    /// Returns the name for the given index, or \c NULL if there is no such type.
+    /// Returns the name for the given index, or \c nullptr if there is no such type.
     virtual const char* get_name( Size index) const = 0;
 
-    /// Returns the type for \p index, or \c NULL if there is no such type.
+    /// Returns the type for \p index, or \c nullptr if there is no such type.
     virtual const IType* get_type( Size index) const = 0;
 
-    /// Returns the type for \p index, or \c NULL if there is no such type.
+    /// Returns the type for \p index, or \c nullptr if there is no such type.
     template <class T>
     const T* get_type( Size index) const
     {
@@ -693,10 +697,10 @@ public:
         return ptr_T;
     }
 
-    /// Returns the type for \p name, or \c NULL if there is no such type.
+    /// Returns the type for \p name, or \c nullptr if there is no such type.
     virtual const IType* get_type( const char* name) const = 0;
 
-    /// Returns the type for \p name, or \c NULL if there is no such type.
+    /// Returns the type for \p name, or \c nullptr if there is no such type.
     template <class T>
     const T* get_type( const char* name) const
     {
@@ -710,22 +714,25 @@ public:
 
     /// Sets a type at a given index.
     ///
-    /// \return   -  0: Success.
-    ///           - -1: Invalid parameters (\c NULL pointer).
+    /// \return
+    ///           -  0: Success.
+    ///           - -1: Invalid parameters (\c nullptr).
     ///           - -2: \p index is out of bounds.
     virtual Sint32 set_type( Size index, const IType* type) = 0;
 
     /// Sets a type identified by name.
     ///
-    /// \return   -  0: Success.
-    ///           - -1: Invalid parameters (\c NULL pointer).
+    /// \return
+    ///           -  0: Success.
+    ///           - -1: Invalid parameters (\c nullptr).
     ///           - -2: There is no type mapped to \p name in the list.
     virtual Sint32 set_type( const char* name, const IType* type) = 0;
 
     /// Adds a type at the end of the list.
     ///
-    /// \return   -  0: Success.
-    ///           - -1: Invalid parameters (\c NULL pointer).
+    /// \return
+    ///           -  0: Success.
+    ///           - -1: Invalid parameters (\c nullptr).
     ///           - -2: There is already a type mapped to \p name in the list.
     virtual Sint32 add_type( const char* name, const IType* type) = 0;
 };
@@ -742,13 +749,13 @@ public:
     /// \name Struct categories
     //@{
 
-    /// Returns a registered struct category, or \c NULL if \p symbol is invalid or unknown.
+    /// Returns a registered struct category, or \c nullptr if \p symbol is invalid or unknown.
     virtual const IStruct_category* create_struct_category( const char* symbol) const = 0;
 
     /// Creates a new struct category list.
     virtual IStruct_category_list* create_struct_category_list() const = 0;
 
-    /// Returns a registered struct category, or \c NULL if \p id is unknown.
+    /// Returns a registered struct category, or \c nullptr if \p id is unknown.
     virtual const IStruct_category* get_predefined_struct_category(
         IStruct_category::Predefined_id id) const = 0;
 
@@ -773,7 +780,7 @@ public:
     ///
     /// The comparison operator for instances of #mi::neuraylib::IStruct_category_list is defined as
     /// follows:
-    /// - If \p lhs or \p rhs is \c NULL, the result is the lexicographic comparison of
+    /// - If \p lhs or \p rhs is \c nullptr, the result is the lexicographic comparison of
     ///   the pointer addresses themselves.
     /// - Next, the list sizes are compared using \c operator<().
     /// - Next, the lists are traversed by increasing index and the names are compared using
@@ -819,7 +826,7 @@ public:
     /// Creates a new instance of the type int.
     virtual const IType_int* create_int() const = 0;
 
-    /// Returns a registered enum type, or \c NULL if \p symbol is invalid or unknown.
+    /// Returns a registered enum type, or \c nullptr if \p symbol is invalid or unknown.
     virtual const IType_enum* create_enum( const char* symbol) const = 0;
 
     /// Creates a new instance of the float type.
@@ -837,7 +844,7 @@ public:
     ///                       #mi::neuraylib::IType_int, #mi::neuraylib::IType_float, or
     ///                       #mi::neuraylib::IType_double.
     /// \param size           The number of elements, either 2, 3, or 4.
-    /// \return               The corresponding vector type, or \c NULL in case of errors.
+    /// \return               The corresponding vector type, or \c nullptr in case of errors.
     virtual const IType_vector* create_vector(
         const IType_atomic* element_type, Size size) const = 0;
 
@@ -846,7 +853,7 @@ public:
     /// \param column_type    The column type needs to be a vector of either
     ///                       #mi::neuraylib::IType_float or #mi::neuraylib::IType_double.
     /// \param columns        The number of columns, either 2, 3, or 4.
-    /// \return               The corresponding matrix type, or \c NULL in case of errors.
+    /// \return               The corresponding matrix type, or \c nullptr in case of errors.
     virtual const IType_matrix* create_matrix(
         const IType_vector* column_type, Size columns) const = 0;
 
@@ -864,11 +871,11 @@ public:
     ///                       does \em not matter in most cases, e.g., for arguments. It \em does
     ///                       matter when constructing new functions and materials using the module
     ///                       builder (see #mi::neuraylib::IMdl_module_builder).
-    /// \return               The corresponding array type, or \c NULL in case of errors.
+    /// \return               The corresponding array type, or \c nullptr in case of errors.
     virtual const IType_array* create_deferred_sized_array(
         const IType* element_type, const char* size) const = 0;
 
-    /// Returns a registered struct type, or \c NULL if \p symbol is invalid or unknown.
+    /// Returns a registered struct type, or \c nullptr if \p symbol is invalid or unknown.
     virtual const IType_struct* create_struct( const char* symbol) const = 0;
 
     /// Creates a new instance of the type texture.
@@ -895,10 +902,10 @@ public:
     /// Creates a new type list.
     virtual IType_list* create_type_list() const = 0;
 
-    /// Returns a registered enum type, or \c NULL if \p id is unknown.
+    /// Returns a registered enum type, or \c nullptr if \p id is unknown.
     virtual const IType_enum* get_predefined_enum( IType_enum::Predefined_id id) const = 0;
 
-    /// Returns a registered struct type, or \c NULL if \p id is unknown.
+    /// Returns a registered struct type, or \c nullptr if \p id is unknown.
     virtual const IType_struct* get_predefined_struct( IType_struct::Predefined_id id) const = 0;
 
     /// Creates a type based on its MDL type name.
@@ -945,7 +952,7 @@ public:
     /// Compares two instances of #mi::neuraylib::IType.
     ///
     /// The comparison operator for instances of #mi::neuraylib::IType is defined as follows:
-    /// - If \p lhs or \p rhs is \c NULL, the result is the lexicographic comparison of
+    /// - If \p lhs or \p rhs is \c nullptr, the result is the lexicographic comparison of
     ///   the pointer addresses themselves.
     /// - Otherwise, the kind of the types are compared. If they are different, the result is
     ///   determined by \c operator< on the #mi::neuraylib::IType::Kind values.
@@ -971,7 +978,7 @@ public:
     /// Compares two instances of #mi::neuraylib::IType_list.
     ///
     /// The comparison operator for instances of #mi::neuraylib::IType_list is defined as follows:
-    /// - If \p lhs or \p rhs is \c NULL, the result is the lexicographic comparison of
+    /// - If \p lhs or \p rhs is \c nullptr, the result is the lexicographic comparison of
     ///   the pointer addresses themselves.
     /// - Next, the list sizes are compared using \c operator<().
     /// - Next, the lists are traversed by increasing index and the names are compared using

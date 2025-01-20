@@ -41,7 +41,6 @@
 #include <base/system/main/access_module.h>
 #include <base/system/main/module_registration.h>
 #include <base/hal/disk/disk_utils.h>
-#include <base/hal/hal/i_hal_ospath.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/config/config.h>
 #include <base/util/registry/i_config_registry.h>

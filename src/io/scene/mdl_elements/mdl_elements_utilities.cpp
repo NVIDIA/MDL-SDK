@@ -46,8 +46,10 @@
 #include <regex>
 #include <utility>
 
-#include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/erase.hpp>
+#include <boost/algorithm/string/replace.hpp>
+#include <boost/algorithm/string/split.hpp>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/functional/hash.hpp>
 
@@ -336,6 +338,8 @@ mi::neuraylib::IFunction_definition::Semantics core_semantics_to_ext_semantics(
         CASE_DS( INTRINSIC_DF_MEASURED_FACTOR);
         CASE_DS( INTRINSIC_DF_CHIANG_HAIR_BSDF);
         CASE_DS( INTRINSIC_DF_SHEEN_BSDF);
+        CASE_DS( INTRINSIC_DF_MICROFLAKE_SHEEN_BSDF);
+        CASE_DS( INTRINSIC_DF_COAT_ABSORPTION_FACTOR);
         CASE_DS( INTRINSIC_DF_UNBOUNDED_MIX);
         CASE_DS( INTRINSIC_DF_COLOR_UNBOUNDED_MIX);
         CASE_DS( INTRINSIC_SCENE_DATA_ISVALID);
@@ -415,7 +419,6 @@ mi::neuraylib::IFunction_definition::Semantics core_semantics_to_ext_semantics(
         case mi::mdl::IDefinition::DS_INTRINSIC_DAG_SET_OBJECT_ID:
         case mi::mdl::IDefinition::DS_INTRINSIC_DAG_SET_TRANSFORMS:
         case mi::mdl::IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA:
-        case mi::mdl::IDefinition::DS_INTRINSIC_DAG_GET_DERIV_VALUE:
         case mi::mdl::IDefinition::DS_INTRINSIC_DAG_MAKE_DERIV:
         case mi::mdl::IDefinition::DS_INTRINSIC_JIT_LOOKUP:
             ASSERT( M_SCENE, false);
@@ -668,6 +671,8 @@ mi::mdl::IDefinition::Semantics ext_semantics_to_core_semantics(
         CASE_DS( INTRINSIC_DF_MEASURED_BSDF);
         CASE_DS( INTRINSIC_DF_CHIANG_HAIR_BSDF);
         CASE_DS( INTRINSIC_DF_SHEEN_BSDF);
+        CASE_DS( INTRINSIC_DF_MICROFLAKE_SHEEN_BSDF);
+        CASE_DS( INTRINSIC_DF_COAT_ABSORPTION_FACTOR);
         CASE_DS( INTRINSIC_DF_DIFFUSE_EDF);
         CASE_DS( INTRINSIC_DF_MEASURED_EDF);
         CASE_DS( INTRINSIC_DF_SPOT_EDF);
@@ -810,7 +815,7 @@ mi::mdl::IMaterial_instance::Slot ext_slot_to_core_lost(
     return {};
 }
 
-// **********  Computation of references to other DB element ***************************************
+// ********** Computation of references to other DB element ****************************************
 
 void collect_references( const IValue* value, DB::Tag_set* result)
 {
@@ -946,7 +951,7 @@ void collect_references( const IAnnotation_list* list, DB::Tag_set* result)
 }
 
 
-// **********  Misc utility functions **************************************************************
+// ********** Misc utility functions ***************************************************************
 
 const char* get_array_constructor_db_name() { return "mdl::T[](...)"; }
 
@@ -1589,7 +1594,7 @@ std::string serialize_mdle_module_name(
         mdle_callback->get_serialized_filename( filename.c_str()));
     if( !tmp) {
         add_error_message( context,
-            "Invalid result (NULL pointer) from MDLE callback.", -5);
+            "Invalid result (nullptr) from MDLE callback.", -5);
         return {};
     }
 
@@ -1883,7 +1888,7 @@ std::string deserialize_mdle_module_name(
         mdle_callback->get_deserialized_filename( filename.c_str()));
     if( !tmp) {
         add_error_message( context,
-            "Invalid result (NULL pointer) from MDLE callback.", -10);
+            "Invalid result (nullptr) from MDLE callback.", -10);
         return {};
     }
 
@@ -2512,7 +2517,7 @@ std::string get_mdl_module_name( const IType* type)
 }
 
 
-// **********  Traversal of types, values, and expressions *****************************************
+// ********** Traversal of types, values, and expressions ******************************************
 
 const IValue* lookup_sub_value( const IValue* value, const char* path)
 {
@@ -2629,7 +2634,7 @@ const IExpression* lookup_sub_expression(
 }
 
 
-// **********  Resource-related attributes *********************************************************
+// ********** Resource-related attributes **********************************************************
 
 void get_texture_attributes(
     DB::Transaction* transaction,
@@ -2753,33 +2758,111 @@ void get_bsdf_measurement_attributes(
     valid = true;
 }
 
-// **********  Mdl_dag_builder *********************************************************************
+// ********** Dag_cloner ***************************************************************************
+
+Dag_importer::Dag_importer( mi::mdl::IDag_builder* dag_builder)
+  : m_dag_builder( dag_builder),
+    m_type_factory( dag_builder->get_type_factory()),
+    m_value_factory( dag_builder->get_value_factory()),
+    m_enable_opt( dag_builder->enable_opt( true))
+{
+    // reset the flag of the builder
+    dag_builder->enable_opt( m_enable_opt);
+}
+
+const mi::mdl::DAG_node* Dag_importer::import( const mi::mdl::DAG_node* node)
+{
+    switch( node->get_kind())
+    {
+        case mi::mdl::DAG_node::EK_CONSTANT: {
+            const auto* constant = cast<mi::mdl::DAG_constant>( node);
+            const mi::mdl::IValue* value = constant->get_value();
+            const mi::mdl::IValue* cloned_value = m_value_factory->import( value);
+            return m_dag_builder->create_constant( cloned_value);
+        }
+        case mi::mdl::DAG_node::EK_CALL: {
+            const auto* call = cast<mi::mdl::DAG_call>( node);
+            int n = call->get_argument_count();
+            std::vector<mi::mdl::DAG_call::Call_argument> cloned_args;
+            cloned_args.reserve( n);
+            for( int i = 0; i < n; ++i) {
+                const mi::mdl::DAG_node* cloned_arg = import( call->get_argument( i));
+                const char* param_name = call->get_parameter_name( i);
+                cloned_args.emplace_back( cloned_arg, param_name);
+            }
+            const mi::mdl::IType* cloned_return_type = m_type_factory->import( call->get_type());
+            return m_dag_builder->create_call(
+                call->get_name(),
+                call->get_semantic(),
+                cloned_args.data(),
+                n,
+                cloned_return_type,
+                call->get_dbg_info());
+        }
+        case mi::mdl::DAG_node::EK_PARAMETER: {
+            const auto* parameter = cast<mi::mdl::DAG_parameter>( node);
+            const mi::mdl::IType* cloned_type = m_type_factory->import( parameter->get_type());
+            return m_dag_builder->create_parameter(
+                cloned_type,
+                parameter->get_index(),
+                parameter->get_dbg_info());
+        }
+        case mi::mdl::DAG_node::EK_TEMPORARY: {
+            const auto* temporary = cast<mi::mdl::DAG_temporary>( node);
+            size_t index = temporary->get_index();
+            if( index < m_temporaries.size() && m_temporaries[index])
+                return m_temporaries[index];
+
+            const mi::mdl::DAG_node* temporary_value = temporary->get_expr();
+            const mi::mdl::DAG_node* cloned_temporary_value = import( temporary_value);
+            if( !cloned_temporary_value)
+                return error_node();
+
+            if( index >= m_temporaries.size())
+                m_temporaries.resize( index+1);
+            m_temporaries[index] = cloned_temporary_value;
+            return cloned_temporary_value;
+        }
+    }
+
+    ASSERT( M_SCENE, false);
+    return nullptr;
+}
+
+const mi::mdl::IValue* Dag_importer::import( const mi::mdl::IValue* value)
+{
+    return m_value_factory->import( value);
+}
+
+const mi::mdl::IType* Dag_importer::import( const mi::mdl::IType* type)
+{
+    return m_type_factory->import( type);
+}
+
+const mi::mdl::DAG_node* Dag_importer::error_node()
+{
+    return nullptr;
+}
+
+// ********** Mdl_dag_builder **********************************************************************
 
 Mdl_dag_builder::Mdl_dag_builder(
     DB::Transaction* transaction,
     mi::mdl::IDag_builder* dag_builder,
     const Mdl_compiled_material* compiled_material)
-  : m_transaction( transaction),
-    m_dag_builder( dag_builder),
-    m_type_factory( dag_builder->get_type_factory()),
-    m_value_factory( dag_builder->get_value_factory()),
-    m_compiled_material( compiled_material),
-    m_enable_opt( dag_builder->enable_opt( true))
+  : Dag_importer( dag_builder),
+    m_transaction( transaction)
 {
-    // reset the flag of the builder
-    dag_builder->enable_opt( m_enable_opt);
-
     if( !compiled_material)
        return;
 
-    mi::base::Handle<const mi::mdl::IMaterial_instance> core_material_instance(
-        compiled_material->get_core_material_instance());
-    m_temporaries.resize( core_material_instance->get_temporary_count());
+    m_core_material_instance = compiled_material->get_core_material_instance();
 
-    mi::Size n = core_material_instance->get_parameter_count();
+    mi::Size n = m_core_material_instance->get_parameter_count();
     m_parameter_types.resize( n);
     for( mi::Size i = 0; i < n; i++) {
-        const mi::mdl::IType* type = core_material_instance->get_parameter_default( i)->get_type();
+        const mi::mdl::IType* type
+            = m_core_material_instance->get_parameter_default( i)->get_type();
         m_parameter_types[i] = m_type_factory->import( type);
     }
 }
@@ -2933,10 +3016,11 @@ const mi::mdl::DAG_node* Mdl_dag_builder::int_expr_parameter_to_core_dag_node(
     mi::Size index = expr->get_index();
 
     if( index >= m_parameter_types.size() || !m_parameter_types[index]) {
-        // Dynamic adjustment of m_paramter_types should only be necessary if no compiled material
-        // is available, e.g., for functions. Note that unused parameters remain uninitialized
-        // then. TODO Use Mdl_function_call/definition to obtain that information.
-        ASSERT( M_SCENE, !m_compiled_material);
+        // Dynamic adjustment of m_paramter_types should only be necessary if no compiled material/
+        // core material instance is available, e.g., for functions. Note that unused parameters
+        // remain uninitialized then. TODO Use Mdl_function_call/definition to obtain that
+        // information.
+        ASSERT( M_SCENE, !m_core_material_instance);
         if( index >= m_parameter_types.size())
             m_parameter_types.resize( index+1);
         m_parameter_types[index] = core_type;
@@ -2944,31 +3028,28 @@ const mi::mdl::DAG_node* Mdl_dag_builder::int_expr_parameter_to_core_dag_node(
 
     ASSERT( M_SCENE, index < m_parameter_types.size() && m_parameter_types[index]);
     ASSERT( M_SCENE, m_parameter_types[index] == core_type);
-    return m_dag_builder->create_parameter( core_type, int( index));
+    return m_dag_builder->create_parameter( core_type, int( index), mi::mdl::DAG_DbgInfo());
 }
 
 const mi::mdl::DAG_node* Mdl_dag_builder::int_expr_temporary_to_core_dag_node(
     const mi::mdl::IType* core_type, const IExpression_temporary* expr)
 {
-    mi::Size index = expr->get_index();
+    ASSERT( M_SCENE, m_core_material_instance);
 
-    if( index >= m_temporaries.size() || !m_temporaries[index]) {
-        ASSERT( M_SCENE, m_compiled_material);
-        // TODO simplify by cloning the internal representation
-        mi::base::Handle<const IExpression> referenced_expr(
-            m_compiled_material->get_temporary( m_transaction, index));
-        ASSERT( M_SCENE, referenced_expr);
-        const mi::mdl::DAG_node* result
-            = int_expr_to_core_dag_node( core_type, referenced_expr.get());
-        if( !result)
-            return error_node();
-        if( index >= m_temporaries.size())
-            m_temporaries.resize( index+1);
-        m_temporaries[index] = result;
-    }
-    // IDag_builder has no create_temporary(), but we don't need to create it again, we *know*
-    // it is the same code
-    return m_temporaries[index];
+    mi::Size index = expr->get_index();
+    if( index < m_temporaries.size() && m_temporaries[index])
+        return m_temporaries[index];
+
+    const mi::mdl::DAG_node* core_temporary
+        = m_core_material_instance->get_temporary_value( index);
+    const mi::mdl::DAG_node* result = import( core_temporary);
+    if( !result)
+        return error_node();
+
+    if( index >= m_temporaries.size())
+        m_temporaries.resize( index+1);
+    m_temporaries[index] = result;
+    return result;
 }
 
 const mi::mdl::DAG_node* Mdl_dag_builder::int_expr_call_to_core_dag_node_shared(
@@ -3093,24 +3174,20 @@ const mi::mdl::DAG_node* Mdl_dag_builder::int_expr_call_to_core_dag_node_shared(
         definition_core_name,
         sema,
         core_arguments.data(),
-        static_cast<mi::Uint32>( core_arguments.size()),
-        return_type);
+        core_arguments.size(),
+        return_type,
+        mi::mdl::DAG_DbgInfo());
 }
 
 const mi::mdl::DAG_node* Mdl_dag_builder::add_cache_entry(
-    DB::Tag tag, const mi::mdl::DAG_node* value)
+    DB::Tag tag, const mi::mdl::DAG_node* node)
 {
     ASSERT( M_SCENE, m_converted_call_expressions.count( tag) == 0);
-    m_converted_call_expressions[tag] = value;
-    return value;
+    m_converted_call_expressions[tag] = node;
+    return node;
 }
 
-const mi::mdl::DAG_node* Mdl_dag_builder::error_node()
-{
-    return nullptr;
-}
-
-// **********  Mdl_call_resolver *******************************************************************
+// ********** Mdl_call_resolver ********************************************************************
 
 Mdl_call_resolver::~Mdl_call_resolver()
 {
@@ -3403,7 +3480,7 @@ bool core_type_enum_to_int_type_test(
     mi::base::Handle<const IType_enum> test_enum( create_enum(
         tf, prefixed_symbol_name.c_str(), type, annotations, member_annotations,
         /*can_fail*/ true));
-    return test_enum.is_valid_interface();
+    return !!test_enum;
 }
 
 bool core_type_struct_to_int_type_test(
@@ -3419,7 +3496,7 @@ bool core_type_struct_to_int_type_test(
     mi::base::Handle<const IType_struct> test_struct( create_struct(
         tf, prefixed_symbol_name.c_str(), type, annotations, member_annotations,
         /*can_fail*/ true));
-    return test_struct.is_valid_interface();
+    return !!test_struct;
 }
 
 const IType* core_type_to_int_type(
@@ -4281,7 +4358,7 @@ IExpression* Mdl_dag_converter::core_dag_node_to_int_expr_localized(
     return core_dag_node_to_int_expr(argument, /*type_int*/ nullptr);
 }
 
-// **********  Mdl_dag_converter_light *************************************************************
+// ********** Mdl_dag_converter_light **************************************************************
 
 Mdl_dag_converter_light::Mdl_dag_converter_light(
     DB::Transaction* transaction,
@@ -4317,8 +4394,8 @@ void Mdl_dag_converter_light::process_value( const mi::mdl::IValue* value)
         case mi::mdl::IValue::VK_RGB_COLOR:
         case mi::mdl::IValue::VK_STRUCT: {
             const auto* value_compound = cast<mi::mdl::IValue_compound>( value);
-            mi::Size n = value_compound->get_component_count();
-            for( mi::Size i = 0; i < n; ++i) {
+            int n = value_compound->get_component_count();
+            for( int i = 0; i < n; ++i) {
                 const mi::mdl::IValue* component = value_compound->get_value( i);
                 process_value( component);
             }
@@ -4396,37 +4473,37 @@ void Mdl_dag_converter_light::process_dag_node( const mi::mdl::DAG_node* node)
     }
 }
 
-// **********  Code_dag ****************************************************************************
+// ********** Code_dag *****************************************************************************
 
-const char* Code_dag::get_name( mi::Size index)
+const char* Code_dag::get_name( mi::Size index) const
 {
     return m_is_material
         ? m_code_dag->get_material_name( index)
         : m_code_dag->get_function_name( index);
 }
 
-const char* Code_dag::get_simple_name( mi::Size index)
+const char* Code_dag::get_simple_name( mi::Size index) const
 {
     return m_is_material
         ? m_code_dag->get_simple_material_name( index)
         : m_code_dag->get_simple_function_name( index);
 }
 
-mi::mdl::IDefinition::Semantics Code_dag::get_semantics( mi::Size index)
+mi::mdl::IDefinition::Semantics Code_dag::get_semantics( mi::Size index) const
 {
     return m_is_material
         ? m_code_dag->get_material_semantics( index)
         : m_code_dag->get_function_semantics( index);
 }
 
-bool Code_dag::get_exported( mi::Size index)
+bool Code_dag::get_exported( mi::Size index) const
 {
     return m_is_material
         ? m_code_dag->get_material_property( index, mi::mdl::IGenerated_code_dag::FP_IS_EXPORTED)
         : m_code_dag->get_function_property( index, mi::mdl::IGenerated_code_dag::FP_IS_EXPORTED);
 }
 
-bool Code_dag::get_declarative( mi::Size index)
+bool Code_dag::get_declarative( mi::Size index) const
 {
     return m_is_material
         ? m_code_dag->get_material_property(
@@ -4435,63 +4512,63 @@ bool Code_dag::get_declarative( mi::Size index)
             index, mi::mdl::IGenerated_code_dag::FP_IS_DECLARATIVE);
 }
 
-bool Code_dag::get_uniform( mi::Size index)
+bool Code_dag::get_uniform( mi::Size index) const
 {
     return m_is_material
         ? m_code_dag->get_material_property( index, mi::mdl::IGenerated_code_dag::FP_IS_UNIFORM)
         : m_code_dag->get_function_property( index, mi::mdl::IGenerated_code_dag::FP_IS_UNIFORM);
 }
 
-const char* Code_dag::get_cloned_name( mi::Size index)
+const char* Code_dag::get_cloned_name( mi::Size index) const
 {
     return m_is_material
         ? m_code_dag->get_cloned_material_name( index)
         : m_code_dag->get_cloned_function_name( index);
     }
 
-const char* Code_dag::get_original_name( mi::Size index)
+const char* Code_dag::get_original_name( mi::Size index) const
 {
     return m_is_material
         ? m_code_dag->get_original_material_name( index)
         : m_code_dag->get_original_function_name( index);
 }
 
-const mi::mdl::IType* Code_dag::get_return_type( mi::Size index)
+const mi::mdl::IType* Code_dag::get_return_type( mi::Size index) const
 {
     return m_is_material
         ? m_code_dag->get_material_return_type( index)
         : m_code_dag->get_function_return_type( index);
 }
 
-mi::Size Code_dag::get_parameter_count( mi::Size index)
+mi::Size Code_dag::get_parameter_count( mi::Size index) const
 {
     return m_is_material
         ? m_code_dag->get_material_parameter_count( index)
         : m_code_dag->get_function_parameter_count( index);
 }
 
-const mi::mdl::IType* Code_dag::get_parameter_type( mi::Size index, mi::Size parameter_index)
+const mi::mdl::IType* Code_dag::get_parameter_type( mi::Size index, mi::Size parameter_index) const
 {
     return m_is_material
         ? m_code_dag->get_material_parameter_type( index, parameter_index)
         : m_code_dag->get_function_parameter_type( index, parameter_index);
 }
 
-const char* Code_dag::get_parameter_type_name( mi::Size index, mi::Size parameter_index)
+const char* Code_dag::get_parameter_type_name( mi::Size index, mi::Size parameter_index) const
 {
     return m_is_material
         ? m_code_dag->get_material_parameter_type_name( index, parameter_index)
         : m_code_dag->get_function_parameter_type_name( index, parameter_index);
 }
 
-const char* Code_dag::get_parameter_name( mi::Size index, mi::Size parameter_index)
+const char* Code_dag::get_parameter_name( mi::Size index, mi::Size parameter_index) const
 {
     return m_is_material
         ? m_code_dag->get_material_parameter_name( index, parameter_index)
         : m_code_dag->get_function_parameter_name( index, parameter_index);
 }
 
-mi::Size Code_dag::get_parameter_index( mi::Size index, const char* parameter_name)
+mi::Size Code_dag::get_parameter_index( mi::Size index, const char* parameter_name) const
 {
     return m_is_material
         ? m_code_dag->get_material_parameter_index( index, parameter_name)
@@ -4499,7 +4576,7 @@ mi::Size Code_dag::get_parameter_index( mi::Size index, const char* parameter_na
 }
 
 const mi::mdl::DAG_node* Code_dag::get_parameter_enable_if_condition(
-    mi::Size index, mi::Size parameter_index)
+    mi::Size index, mi::Size parameter_index) const
 {
     return m_is_material
         ? m_code_dag->get_material_parameter_enable_if_condition(
@@ -4509,7 +4586,7 @@ const mi::mdl::DAG_node* Code_dag::get_parameter_enable_if_condition(
 }
 
 mi::Size Code_dag::get_parameter_enable_if_condition_users(
-    mi::Size index, mi::Size parameter_index)
+    mi::Size index, mi::Size parameter_index) const
 {
     return m_is_material
         ? m_code_dag->get_material_parameter_enable_if_condition_users(
@@ -4519,7 +4596,7 @@ mi::Size Code_dag::get_parameter_enable_if_condition_users(
 }
 
 mi::Size Code_dag::get_parameter_enable_if_condition_user(
-    mi::Size index, mi::Size parameter_index, mi::Size user_index)
+    mi::Size index, mi::Size parameter_index, mi::Size user_index) const
 {
     return m_is_material
         ? m_code_dag->get_material_parameter_enable_if_condition_user(
@@ -4528,14 +4605,15 @@ mi::Size Code_dag::get_parameter_enable_if_condition_user(
             index, parameter_index, user_index);
 }
 
-const mi::mdl::DAG_node* Code_dag::get_parameter_default( mi::Size index, mi::Size parameter_index)
+const mi::mdl::DAG_node* Code_dag::get_parameter_default(
+    mi::Size index, mi::Size parameter_index) const
 {
     return m_is_material
         ? m_code_dag->get_material_parameter_default( index, parameter_index)
         : m_code_dag->get_function_parameter_default( index, parameter_index);
 }
 
-mi::Size Code_dag::get_parameter_annotation_count( mi::Size index, mi::Size parameter_index)
+mi::Size Code_dag::get_parameter_annotation_count( mi::Size index, mi::Size parameter_index) const
 {
     return m_is_material
         ? m_code_dag->get_material_parameter_annotation_count(
@@ -4545,7 +4623,7 @@ mi::Size Code_dag::get_parameter_annotation_count( mi::Size index, mi::Size para
 }
 
 const mi::mdl::DAG_node* Code_dag::get_parameter_annotation(
-    mi::Size index, mi::Size parameter_index, mi::Size annotation_index)
+    mi::Size index, mi::Size parameter_index, mi::Size annotation_index) const
 {
     return m_is_material
         ? m_code_dag->get_material_parameter_annotation(
@@ -4554,63 +4632,64 @@ const mi::mdl::DAG_node* Code_dag::get_parameter_annotation(
             index, parameter_index, annotation_index);
 }
 
-mi::Size Code_dag::get_temporary_count( mi::Size index)
+mi::Size Code_dag::get_temporary_count( mi::Size index) const
 {
     return m_is_material
         ? m_code_dag->get_material_temporary_count( index)
         : m_code_dag->get_function_temporary_count( index);
 }
 
-const mi::mdl::DAG_node* Code_dag::get_temporary( mi::Size index, mi::Size temporary_index)
+const mi::mdl::DAG_node* Code_dag::get_temporary( mi::Size index, mi::Size temporary_index) const
 {
     return m_is_material
         ? m_code_dag->get_material_temporary( index, temporary_index)
         : m_code_dag->get_function_temporary( index, temporary_index);
 }
 
-const char* Code_dag::get_temporary_name( mi::Size index, mi::Size temporary_index)
+const char* Code_dag::get_temporary_name( mi::Size index, mi::Size temporary_index) const
 {
     return m_is_material
         ? m_code_dag->get_material_temporary_name( index, temporary_index)
         : m_code_dag->get_function_temporary_name( index, temporary_index);
 }
 
-mi::Size Code_dag::get_annotation_count( mi::Size index)
+mi::Size Code_dag::get_annotation_count( mi::Size index) const
 {
     return m_is_material
         ? m_code_dag->get_material_annotation_count( index)
         : m_code_dag->get_function_annotation_count( index);
 }
 
-const mi::mdl::DAG_node* Code_dag::get_annotation( mi::Size index, mi::Size annotation_index)
+const mi::mdl::DAG_node* Code_dag::get_annotation( mi::Size index, mi::Size annotation_index) const
 {
     return m_is_material
         ? m_code_dag->get_material_annotation( index, annotation_index)
         : m_code_dag->get_function_annotation( index, annotation_index);
 }
 
-mi::Size Code_dag::get_return_annotation_count( mi::Size index)
+mi::Size Code_dag::get_return_annotation_count( mi::Size index) const
 {
     return m_is_material
         ? m_code_dag->get_material_return_annotation_count( index)
         : m_code_dag->get_function_return_annotation_count( index);
 }
 
-const mi::mdl::DAG_node* Code_dag::get_return_annotation( mi::Size index, mi::Size annotation_index)
+const mi::mdl::DAG_node* Code_dag::get_return_annotation(
+    mi::Size index, mi::Size annotation_index) const
 {
     return m_is_material
         ? m_code_dag->get_material_return_annotation( index, annotation_index)
         : m_code_dag->get_function_return_annotation( index, annotation_index);
 }
 
-const mi::mdl::DAG_node* Code_dag::get_body( mi::Size index)
+const mi::mdl::DAG_node* Code_dag::get_body( mi::Size index) const
 {
     return m_is_material
         ? m_code_dag->get_material_body( index)
         : m_code_dag->get_function_body( index);
 }
 
-const mi::mdl::DAG_hash* Code_dag::get_hash( mi::Size index)
+const mi::mdl::DAG_hash* Code_dag::get_hash( mi::Size index) const
 {
     return m_is_material
         ? m_code_dag->get_material_hash( index)
@@ -5110,15 +5189,12 @@ const mi::mdl::IType* int_type_to_core_type( const IType* type, mi::mdl::IType_f
     return tf.create_error();
 }
 
-const mi::mdl::DAG_node* int_expr_to_core_dag_node(
-    DB::Transaction* transaction,
-    mi::mdl::IDag_builder* builder,
-    const mi::mdl::IType* type,
-    const IExpression* expr)
+std::string int_path_to_core_path( const char* path)
 {
-    return Mdl_dag_builder(
-        transaction, builder, /*compiled_material*/ nullptr)
-        .int_expr_to_core_dag_node( type, expr);
+    std::string result = path;
+    boost::replace_all( result, "[", ".");
+    boost::erase_all( result, "]");
+    return result;
 }
 
 // ********** Conversion from MI::MDL to MI::MDL ***************************************************
@@ -5374,7 +5450,8 @@ bool is_declarative_call( DB::Transaction* transaction, const IExpression* expr)
             return false;
 
         case IExpression::EK_TEMPORARY:
-            ASSERT( M_SCENE, !"temporaries are not supported");
+            // The temporary that is referenced here is not yet available. Allow the call for now,
+            // a potential violation can only be diagnosed later.
             return false;
 
         case IExpression::EK_PARAMETER:
@@ -5920,7 +5997,7 @@ void Resource_updater::update_resource_literals()
         }
 
         // traverse body
-        const mi::mdl::DAG_node* body = m_code_dag->get_material_value( i);
+        const mi::mdl::DAG_node* body = m_code_dag->get_material_body( i);
         update_resource_literals( body);
 
         // traverse temporaries
@@ -5942,6 +6019,21 @@ void Resource_updater::update_resource_literals()
             const mi::mdl::DAG_node* parameter_default
                 = m_code_dag->get_function_parameter_default( i, j);
             update_resource_literals( parameter_default);
+        }
+
+        // traverse body (if representable as DAG node)
+        const mi::mdl::DAG_node* body = m_code_dag->get_function_body( i);
+        if( !body)
+            continue;
+        update_resource_literals( body);
+
+        // traverse temporaries (if representable as DAG node)
+        mi::Size temporary_count = m_code_dag->get_function_temporary_count( i);
+        for( mi::Size j = 0; j < temporary_count; ++j) {
+            const mi::mdl::DAG_node* temporary = m_code_dag->get_function_temporary( i, j);
+            if( !temporary)
+                continue;
+            update_resource_literals( temporary);
         }
     }
 }
@@ -6153,9 +6245,9 @@ void convert_messages( const mi::mdl::Messages& in_messages, Execution_context* 
     }
 }
 
-void log_messages( const Execution_context* context)
+void log_messages( const Execution_context* context, mi::Size start_index)
 {
-    for( mi::Size i = 0, n = context->get_messages_count(); i < n; ++i) {
+    for( mi::Size i = start_index, n = context->get_messages_count(); i < n; ++i) {
 
         const Message& message = context->get_message( i);
 
@@ -6184,8 +6276,9 @@ void convert_and_log_messages( const mi::mdl::Messages& in_messages, Execution_c
     if( !context)
         context = &dummy_execution_context;
 
+    mi::Size start_index = context->get_messages_count();
     convert_messages( in_messages, context);
-    log_messages( context);
+    log_messages( context, start_index);
 }
 
 void convert_messages( const Execution_context* context, mi::mdl::Messages& out_messages)
@@ -6737,7 +6830,7 @@ std::string Symbol_importer::stringify( const mi::mdl::IQualified_name* name)
     return result;
 }
 
-// **********  Mdl_module_wait_queue  **************************************************************
+// ********** Mdl_module_wait_queue  ***************************************************************
 
 Mdl_module_wait_queue::Entry::Entry(
     std::string name,
@@ -6984,7 +7077,7 @@ void Mdl_module_wait_queue::cleanup_table(size_t transaction)
     }
 }
 
-// ********** Module_cache_lookup_handle***********************************************************
+// ********** Module_cache_lookup_handle************************************************************
 
 Module_cache_lookup_handle::Module_cache_lookup_handle()
   : m_is_processing(false)
@@ -7011,7 +7104,7 @@ void Module_cache_lookup_handle::set_is_processing(bool value)
     m_is_processing = value;
 }
 
-// ********** Module_cache ************************************************************************
+// ********** Module_cache *************************************************************************
 
 Module_cache::Wait_handle::Wait_handle()
     : m_processed(false)
@@ -7408,11 +7501,22 @@ const mi::mdl::IValue* Call_evaluator<T>::fold_tex_width(
         return value_factory->create_int( 0);
 
     const auto* tex = as<mi::mdl::IValue_texture>( argument);
-    if( tex->get_bsdf_data_kind() != mi::mdl::IValue_texture::BDK_NONE) {
+    mi::mdl::IValue_texture::Bsdf_data_kind bdk = tex->get_bsdf_data_kind();
+    if( bdk != mi::mdl::IValue_texture::BDK_NONE) {
         size_t rx = 0, ry = 0, rz = 0;
-        mi::mdl::libbsdf_data::get_libbsdf_multiscatter_data_resolution(
-            tex->get_bsdf_data_kind(), rx, ry, rz);
-        return value_factory->create_int( rx);
+        const char* pixel_type;
+        bool success = false;
+        switch( bdk) {
+            case mi::mdl::IValue_texture::BDK_MICROFLAKE_SHEEN_GENERAL:
+                success = mi::mdl::libbsdf_data::get_libbsdf_general_data_resolution(
+                    bdk, rx, ry, ry, pixel_type);
+                break;
+            default:  // all other data textures are multiscatter data
+                success = mi::mdl::libbsdf_data::get_libbsdf_multiscatter_data_resolution(
+                    bdk, rx, ry, rz, pixel_type);
+                break;
+        }
+        return value_factory->create_int( success ? rx : 0);
     }
 
     DB::Tag tag( m_owner->get_resource_tag( tex));
@@ -7456,11 +7560,22 @@ const mi::mdl::IValue* Call_evaluator<T>::fold_tex_height(
         return value_factory->create_int( 0);
 
     const auto* tex = as<mi::mdl::IValue_texture>( argument);
-    if( tex->get_bsdf_data_kind() != mi::mdl::IValue_texture::BDK_NONE) {
+    mi::mdl::IValue_texture::Bsdf_data_kind bdk = tex->get_bsdf_data_kind();
+    if( bdk != mi::mdl::IValue_texture::BDK_NONE) {
         size_t rx = 0, ry = 0, rz = 0;
-        mi::mdl::libbsdf_data::get_libbsdf_multiscatter_data_resolution(
-            tex->get_bsdf_data_kind(), rx, ry, rz);
-        return value_factory->create_int( ry);
+        const char* pixel_type;
+        bool success = false;
+        switch( bdk) {
+            case mi::mdl::IValue_texture::BDK_MICROFLAKE_SHEEN_GENERAL:
+                success = mi::mdl::libbsdf_data::get_libbsdf_general_data_resolution(
+                    bdk, rx, ry, ry, pixel_type);
+                break;
+            default:  // all other data textures are multiscatter data
+                success = mi::mdl::libbsdf_data::get_libbsdf_multiscatter_data_resolution(
+                    bdk, rx, ry, rz, pixel_type);
+                break;
+        }
+        return value_factory->create_int( success ? ry : 0);
     }
 
     DB::Tag tag( m_owner->get_resource_tag( tex));
@@ -7503,11 +7618,22 @@ const mi::mdl::IValue* Call_evaluator<T>::fold_tex_depth(
         return value_factory->create_int( 0);
 
     const auto* tex = as<mi::mdl::IValue_texture>( argument);
-    if( tex->get_bsdf_data_kind() != mi::mdl::IValue_texture::BDK_NONE) {
+    mi::mdl::IValue_texture::Bsdf_data_kind bdk = tex->get_bsdf_data_kind();
+    if( bdk != mi::mdl::IValue_texture::BDK_NONE) {
         size_t rx = 0, ry = 0, rz = 0;
-        mi::mdl::libbsdf_data::get_libbsdf_multiscatter_data_resolution(
-            tex->get_bsdf_data_kind(), rx, ry, rz);
-        return value_factory->create_int( rz);
+        const char* pixel_type;
+        bool success = false;
+        switch( bdk) {
+            case mi::mdl::IValue_texture::BDK_MICROFLAKE_SHEEN_GENERAL:
+                success = mi::mdl::libbsdf_data::get_libbsdf_general_data_resolution(
+                    bdk, rx, ry, ry, pixel_type);
+                break;
+            default:  // all other data textures are multiscatter data
+                success = mi::mdl::libbsdf_data::get_libbsdf_multiscatter_data_resolution(
+                    bdk, rx, ry, rz, pixel_type);
+                break;
+        }
+        return value_factory->create_int( success ? rz : 0);
     }
 
     DB::Tag tag( m_owner->get_resource_tag( tex));
@@ -8147,17 +8273,18 @@ mi::Uint64 generate_unique_id()
 mi::neuraylib::Mdl_version convert_mdl_version( mi::mdl::IMDL::MDL_version version)
 {
     switch( version) {
-        case mi::mdl::IMDL::MDL_VERSION_1_0: return mi::neuraylib::MDL_VERSION_1_0;
-        case mi::mdl::IMDL::MDL_VERSION_1_1: return mi::neuraylib::MDL_VERSION_1_1;
-        case mi::mdl::IMDL::MDL_VERSION_1_2: return mi::neuraylib::MDL_VERSION_1_2;
-        case mi::mdl::IMDL::MDL_VERSION_1_3: return mi::neuraylib::MDL_VERSION_1_3;
-        case mi::mdl::IMDL::MDL_VERSION_1_4: return mi::neuraylib::MDL_VERSION_1_4;
-        case mi::mdl::IMDL::MDL_VERSION_1_5: return mi::neuraylib::MDL_VERSION_1_5;
-        case mi::mdl::IMDL::MDL_VERSION_1_6: return mi::neuraylib::MDL_VERSION_1_6;
-        case mi::mdl::IMDL::MDL_VERSION_1_7: return mi::neuraylib::MDL_VERSION_1_7;
-        case mi::mdl::IMDL::MDL_VERSION_1_8: return mi::neuraylib::MDL_VERSION_1_8;
-        case mi::mdl::IMDL::MDL_VERSION_1_9: return mi::neuraylib::MDL_VERSION_1_9;
-        case mi::mdl::IMDL::MDL_VERSION_EXP: return mi::neuraylib::MDL_VERSION_EXP;
+        case mi::mdl::IMDL::MDL_VERSION_1_0:  return mi::neuraylib::MDL_VERSION_1_0;
+        case mi::mdl::IMDL::MDL_VERSION_1_1:  return mi::neuraylib::MDL_VERSION_1_1;
+        case mi::mdl::IMDL::MDL_VERSION_1_2:  return mi::neuraylib::MDL_VERSION_1_2;
+        case mi::mdl::IMDL::MDL_VERSION_1_3:  return mi::neuraylib::MDL_VERSION_1_3;
+        case mi::mdl::IMDL::MDL_VERSION_1_4:  return mi::neuraylib::MDL_VERSION_1_4;
+        case mi::mdl::IMDL::MDL_VERSION_1_5:  return mi::neuraylib::MDL_VERSION_1_5;
+        case mi::mdl::IMDL::MDL_VERSION_1_6:  return mi::neuraylib::MDL_VERSION_1_6;
+        case mi::mdl::IMDL::MDL_VERSION_1_7:  return mi::neuraylib::MDL_VERSION_1_7;
+        case mi::mdl::IMDL::MDL_VERSION_1_8:  return mi::neuraylib::MDL_VERSION_1_8;
+        case mi::mdl::IMDL::MDL_VERSION_1_9:  return mi::neuraylib::MDL_VERSION_1_9;
+        case mi::mdl::IMDL::MDL_VERSION_1_10: return mi::neuraylib::MDL_VERSION_1_10;
+        case mi::mdl::IMDL::MDL_VERSION_EXP:  return mi::neuraylib::MDL_VERSION_EXP;
             // Adapt check in strip_deprecated_suffix() when new versions are added.
     }
 
@@ -8186,6 +8313,7 @@ mi::mdl::IMDL::MDL_version convert_mdl_version( mi::neuraylib::Mdl_version versi
         case mi::neuraylib::MDL_VERSION_1_7:     return mi::mdl::IMDL::MDL_VERSION_1_7;
         case mi::neuraylib::MDL_VERSION_1_8:     return mi::mdl::IMDL::MDL_VERSION_1_8;
         case mi::neuraylib::MDL_VERSION_1_9:     return mi::mdl::IMDL::MDL_VERSION_1_9;
+        case mi::neuraylib::MDL_VERSION_1_10:    return mi::mdl::IMDL::MDL_VERSION_1_10;
         case mi::neuraylib::MDL_VERSION_EXP:     return mi::mdl::IMDL::MDL_VERSION_EXP;
         case mi::neuraylib::MDL_VERSION_INVALID: ASSERT( M_SCENE, false);
                                                  return mi_mdl_IMDL_MDL_VERSION_INVALID;
@@ -8198,17 +8326,18 @@ mi::mdl::IMDL::MDL_version convert_mdl_version( mi::neuraylib::Mdl_version versi
 const char* stringify_mdl_version( mi::mdl::IMDL::MDL_version version)
 {
     switch( version) {
-        case mi::mdl::IMDL::MDL_VERSION_1_0: return "1.0";
-        case mi::mdl::IMDL::MDL_VERSION_1_1: return "1.1";
-        case mi::mdl::IMDL::MDL_VERSION_1_2: return "1.2";
-        case mi::mdl::IMDL::MDL_VERSION_1_3: return "1.3";
-        case mi::mdl::IMDL::MDL_VERSION_1_4: return "1.4";
-        case mi::mdl::IMDL::MDL_VERSION_1_5: return "1.5";
-        case mi::mdl::IMDL::MDL_VERSION_1_6: return "1.6";
-        case mi::mdl::IMDL::MDL_VERSION_1_7: return "1.7";
-        case mi::mdl::IMDL::MDL_VERSION_1_8: return "1.8";
-        case mi::mdl::IMDL::MDL_VERSION_1_9: return "1.9";
-        case mi::mdl::IMDL::MDL_VERSION_EXP: return "99.99";
+        case mi::mdl::IMDL::MDL_VERSION_1_0:  return "1.0";
+        case mi::mdl::IMDL::MDL_VERSION_1_1:  return "1.1";
+        case mi::mdl::IMDL::MDL_VERSION_1_2:  return "1.2";
+        case mi::mdl::IMDL::MDL_VERSION_1_3:  return "1.3";
+        case mi::mdl::IMDL::MDL_VERSION_1_4:  return "1.4";
+        case mi::mdl::IMDL::MDL_VERSION_1_5:  return "1.5";
+        case mi::mdl::IMDL::MDL_VERSION_1_6:  return "1.6";
+        case mi::mdl::IMDL::MDL_VERSION_1_7:  return "1.7";
+        case mi::mdl::IMDL::MDL_VERSION_1_8:  return "1.8";
+        case mi::mdl::IMDL::MDL_VERSION_1_9:  return "1.9";
+        case mi::mdl::IMDL::MDL_VERSION_1_10: return "1.10";
+        case mi::mdl::IMDL::MDL_VERSION_EXP:  return "99.99";
     }
 
     ASSERT( M_SCENE, false);
@@ -8230,16 +8359,17 @@ mi::mdl::IMDL::MDL_version combine_mdl_version( int major, int minor)
     }
 
     switch( minor) {
-        case 0: return mi::mdl::IMDL::MDL_VERSION_1_0;
-        case 1: return mi::mdl::IMDL::MDL_VERSION_1_1;
-        case 2: return mi::mdl::IMDL::MDL_VERSION_1_2;
-        case 3: return mi::mdl::IMDL::MDL_VERSION_1_3;
-        case 4: return mi::mdl::IMDL::MDL_VERSION_1_4;
-        case 5: return mi::mdl::IMDL::MDL_VERSION_1_5;
-        case 6: return mi::mdl::IMDL::MDL_VERSION_1_6;
-        case 7: return mi::mdl::IMDL::MDL_VERSION_1_7;
-        case 8: return mi::mdl::IMDL::MDL_VERSION_1_8;
-        case 9: return mi::mdl::IMDL::MDL_VERSION_1_9;
+        case  0: return mi::mdl::IMDL::MDL_VERSION_1_0;
+        case  1: return mi::mdl::IMDL::MDL_VERSION_1_1;
+        case  2: return mi::mdl::IMDL::MDL_VERSION_1_2;
+        case  3: return mi::mdl::IMDL::MDL_VERSION_1_3;
+        case  4: return mi::mdl::IMDL::MDL_VERSION_1_4;
+        case  5: return mi::mdl::IMDL::MDL_VERSION_1_5;
+        case  6: return mi::mdl::IMDL::MDL_VERSION_1_6;
+        case  7: return mi::mdl::IMDL::MDL_VERSION_1_7;
+        case  8: return mi::mdl::IMDL::MDL_VERSION_1_8;
+        case  9: return mi::mdl::IMDL::MDL_VERSION_1_9;
+        case 10: return mi::mdl::IMDL::MDL_VERSION_1_10;
         default:
             ASSERT( M_SCENE, false);
             return mi_mdl_IMDL_MDL_VERSION_INVALID;
@@ -8267,7 +8397,7 @@ mi::mdl::IValue_texture::gamma_mode convert_gamma_float_to_enum( mi::Float32 gam
    return mi::mdl::IValue_texture::gamma_default;
 }
 
-// **********  Name parsing/splitting **************************************************************
+// ********** Name parsing/splitting ***************************************************************
 
 bool is_valid_simple_package_or_module_name( const std::string& name)
 {
@@ -8875,7 +9005,7 @@ IValue_texture* create_texture(
     ASSERT( M_SCENE, context);
 
     if( !transaction || !file_path) {
-        add_error_message( context, "Invalid parameters (NULL pointer).", -1);
+        add_error_message( context, "Invalid parameters (nullptr).", -1);
         return nullptr;
     }
 
@@ -8929,7 +9059,7 @@ IValue_light_profile* create_light_profile(
     DB::Transaction* transaction, const char* file_path, bool shared, Execution_context* context)
 {
     if( !transaction || !file_path) {
-        add_error_message( context, "Invalid parameters (NULL pointer).", -1);
+        add_error_message( context, "Invalid parameters (nullptr).", -1);
         return nullptr;
     }
 
@@ -8975,7 +9105,7 @@ IValue_bsdf_measurement* create_bsdf_measurement(
     DB::Transaction* transaction, const char* file_path, bool shared, Execution_context* context)
 {
     if( !transaction || !file_path) {
-        add_error_message( context, "Invalid parameters (NULL pointer).", -1);
+        add_error_message( context, "Invalid parameters (nullptr).", -1);
         return nullptr;
     }
 

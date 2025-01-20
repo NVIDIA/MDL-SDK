@@ -115,7 +115,7 @@ public:
     /// \param transaction          The transaction in which the instance is created.
     /// \param argc                 The size of the \p argv array.
     /// \param argv                 An array of optional constructor arguments.
-    /// \return                     An instance of the class, or \c NULL on failure (incl.
+    /// \return                     An instance of the class, or \c nullptr on failure (incl.
     ///                             invalid arguments).
     using Api_class_factory = mi::base::IInterface*(*)(
         mi::neuraylib::ITransaction*, mi::Uint32, const mi::base::IInterface**);
@@ -123,13 +123,13 @@ public:
     /// The type of factory methods for DB elements.
     ///
     /// Each class factory is free to decide which values and types of \p argc and \p argv are
-    /// valid. However, it must handle the case \p transaction = \c NULL, \p argc = 0, and
-    /// \p argv = \c NULL which is needed for deserialization.
+    /// valid. However, it must handle the case \p transaction = \c nullptr, \p argc = 0, and
+    /// \p argv = \c nullptr which is needed for deserialization.
     ///
     /// \param transaction          The transaction in which the instance is created.
     /// \param argc                 The size of the \p argv array.
     /// \param argv                 An array of optional constructor arguments.
-    /// \return                     An instance of the class, or \c NULL on failure (incl.
+    /// \return                     An instance of the class, or \c nullptr on failure (incl.
     ///                             invalid arguments).
     using Db_element_factory = DB::Element_base*(*)(
         mi::neuraylib::ITransaction*, mi::Uint32, const mi::base::IInterface**);
@@ -242,8 +242,8 @@ public:
     /// Returns a registered structure declaration.
     ///
     /// \param structure_name   The name of the structure declaration to return.
-    /// \return                 The structure declaration for \p structure_name, or \c NULL if there
-    ///                         is no structure declaration for that name.
+    /// \return                 The structure declaration for \p structure_name, or \c nullptr if
+    ///                         there is no structure declaration for that name.
     const mi::IStructure_decl* get_structure_decl( const char* structure_name) const;
 
     /// Registers an enum declaration with the \neurayApiName.
@@ -274,7 +274,7 @@ public:
     /// Returns a registered enum declaration.
     ///
     /// \param enum_name        The name of the enum declaration to return.
-    /// \return                 The enum declaration for \p enum_name, or \c NULL if there is no
+    /// \return                 The enum declaration for \p enum_name, or \c nullptr if there is no
     ///                         enum declaration for that name.
     const mi::IEnum_decl* get_enum_decl( const char* enum_name) const;
 
@@ -314,7 +314,7 @@ public:
     /// \param is_edit              Indicates whether the DB element should get accessed via an
     ///                             Access or Edit. The caller is responsible not to hand out
     ///                             mutable pointers of the return value if \p is_edit is \c false.
-    /// \return                     An instance of the requested class, or \c NULL on failure.
+    /// \return                     An instance of the requested class, or \c nullptr on failure.
     mi::base::IInterface* create_class_instance(
         Transaction_impl* transaction,
         DB::Tag tag,
@@ -330,7 +330,7 @@ public:
     /// \param argc                 The size of the \p argv array.
     /// \param argv                 An array of optional arguments that is passed to the class
     ///                             factories.
-    /// \return                     An instance of the requested type, or \c NULL on failure.
+    /// \return                     An instance of the requested type, or \c nullptr on failure.
     mi::base::IInterface* create_type_instance(
         Transaction_impl* transaction,
         const char* type_name,
@@ -353,7 +353,7 @@ public:
     /// \param argc                 The size of the \p argv array.
     /// \param argv                 An array of optional arguments that is passed to the class
     ///                             factories.
-    /// \return                     An instance of the requested type, or \c NULL on failure.
+    /// \return                     An instance of the requested type, or \c nullptr on failure.
     template<class T>
     T* create_type_instance(
         Transaction_impl* transaction,
@@ -373,7 +373,7 @@ public:
     /// Creates an instance of a user-defined class.
     ///
     /// \param uuid                 The UUID of the class to create.
-    /// \return                     An instance of the requested class, or \c NULL on failure.
+    /// \return                     An instance of the requested class, or \c nullptr on failure.
     mi::base::IInterface* create_class_instance( const mi::base::Uuid& uuid) const;
 
     /// Creates an instance of a user-defined class.
@@ -385,7 +385,7 @@ public:
     /// specified as template parameter.
     ///
     /// \param uuid                 The UUID of the class to create.
-    /// \return                     An instance of the requested class, or \c NULL on failure.
+    /// \return                     An instance of the requested class, or \c nullptr on failure.
     template<class T>
     T* create_class_instance( const mi::base::Uuid& uuid) const
     {
@@ -424,7 +424,7 @@ private:
     /// \param argc                 The size of the \p argv array.
     /// \param argv                 An array of optional arguments that gets passed to the class
     ///                             factories.
-    /// \return                     An instance of the requested class, or \c NULL on failure.
+    /// \return                     An instance of the requested class, or \c nullptr on failure.
     mi::base::IInterface* create_class_instance(
         Transaction_impl* transaction,
         const char* class_name,
@@ -448,7 +448,7 @@ private:
     /// \param argc                 The size of the \p argv array.
     /// \param argv                 An array of optional arguments that gets passed to the class
     ///                             factories.
-    /// \return                     An instance of the requested class, or \c NULL on failure.
+    /// \return                     An instance of the requested class, or \c nullptr on failure.
     template<class T>
     T* create_class_instance(
         Transaction_impl* transaction,
@@ -475,7 +475,7 @@ private:
     /// \param is_edit              Indicates whether the DB element should get accessed via an
     ///                             Access or Edit. The caller is responsible not to hand out
     ///                             mutable pointers of the return value if \p is_edit is \c false.
-    /// \return                     The actual user class, or \c NULL on failure.
+    /// \return                     The actual user class, or \c nullptr on failure.
     mi::base::IInterface* extract_user_class(
         IDb_element* idb_element,
         bool is_edit) const;
@@ -490,7 +490,7 @@ private:
     /// \param is_edit              Indicates whether the DB element should get accessed via an
     ///                             Access or Edit. The caller is responsible not to hand out
     ///                             mutable pointers of the return value if \p is_edit is \c false.
-    /// \return                     The actual DiCE element, or \c NULL on failure.
+    /// \return                     The actual DiCE element, or \c nullptr on failure.
     mi::base::IInterface* extract_element(
         IDb_element* db_element,
         bool is_edit) const;
@@ -502,7 +502,7 @@ private:
     ///
     /// \param transaction          The transaction.
     /// \param class_id             The class ID of the (DB element corresponding to the) API class.
-    /// \return                     An instance of the requested class, or \c NULL on failure.
+    /// \return                     An instance of the requested class, or \c nullptr on failure.
     mi::base::IInterface* invoke_api_class_factory(
         Transaction_impl* transaction,
         SERIAL::Class_id class_id) const;
@@ -514,7 +514,7 @@ private:
     /// \param argc                 The size of the \p argv array.
     /// \param argv                 An array of optional arguments that is passed to the class
     ///                             factory.
-    /// \return                     An instance of the requested class, or \c NULL on failure.
+    /// \return                     An instance of the requested class, or \c nullptr on failure.
     mi::base::IInterface* invoke_api_or_user_class_factory(
         Transaction_impl* transaction,
         const char* class_name,
@@ -528,7 +528,7 @@ private:
     /// \param argc                 The size of the \p argv array.
     /// \param argv                 An array of optional arguments that is passed to the class
     ///                             factory.
-    /// \return                     An instance of the requested class, or \c NULL on failure.
+    /// \return                     An instance of the requested class, or \c nullptr on failure.
     DB::Element_base* invoke_db_element_factory(
         Transaction_impl* transaction,
         const char* class_name,
@@ -541,7 +541,7 @@ private:
     /// calling context.
     ///
     /// \param uuid                 The UUID of the class to create.
-    /// \return                     An instance of the requested class, or \c NULL on failure.
+    /// \return                     An instance of the requested class, or \c nullptr on failure.
     mi::base::IInterface* invoke_user_class_factory( const mi::base::Uuid& uuid) const;
 
     /// A callback passed to #m_idata_factory to implement the support for #mi::IRef.

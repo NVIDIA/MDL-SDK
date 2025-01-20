@@ -45,6 +45,12 @@
 #include "libbsdf_bitcode_hsm2.h"
 #include "libbsdf_bitcode_hsm4.h"
 #include "libbsdf_bitcode_hsm8.h"
+#include "libbsdf_bitcode_hsmp_debug.h"
+#include "libbsdf_bitcode_hsmn_debug.h"
+#include "libbsdf_bitcode_hsm1_debug.h"
+#include "libbsdf_bitcode_hsm2_debug.h"
+#include "libbsdf_bitcode_hsm4_debug.h"
+#include "libbsdf_bitcode_hsm8_debug.h"
 
 namespace mi {
 namespace mdl {
@@ -57,33 +63,63 @@ std::unique_ptr<llvm::Module> LLVM_code_generator::load_libbsdf(
     size_t bitcode_size;
     switch (hsm) {
     case DF_HSM_POINTER:
-        bitcode = libbsdf_bitcode_hsmp;
-        bitcode_size = dimension_of(libbsdf_bitcode_hsmp);
+        if (m_enable_full_debug) {
+            bitcode = libbsdf_bitcode_hsmp_debug;
+            bitcode_size = dimension_of(libbsdf_bitcode_hsmp_debug);
+        } else {
+            bitcode = libbsdf_bitcode_hsmp;
+            bitcode_size = dimension_of(libbsdf_bitcode_hsmp);
+        }
         break;
 
     case DF_HSM_NONE:
-        bitcode = libbsdf_bitcode_hsmn;
-        bitcode_size = dimension_of(libbsdf_bitcode_hsmn);
+        if (m_enable_full_debug) {
+            bitcode = libbsdf_bitcode_hsmn_debug;
+            bitcode_size = dimension_of(libbsdf_bitcode_hsmn_debug);
+        } else {
+            bitcode = libbsdf_bitcode_hsmn;
+            bitcode_size = dimension_of(libbsdf_bitcode_hsmn);
+        }
         break;
 
     case DF_HSM_FIXED_1:
-        bitcode = libbsdf_bitcode_hsm1;
-        bitcode_size = dimension_of(libbsdf_bitcode_hsm1);
+        if (m_enable_full_debug) {
+            bitcode = libbsdf_bitcode_hsm1_debug;
+            bitcode_size = dimension_of(libbsdf_bitcode_hsm1_debug);
+        } else {
+            bitcode = libbsdf_bitcode_hsm1;
+            bitcode_size = dimension_of(libbsdf_bitcode_hsm1);
+        }
         break;
 
     case DF_HSM_FIXED_2:
-        bitcode = libbsdf_bitcode_hsm2;
-        bitcode_size = dimension_of(libbsdf_bitcode_hsm2);
+        if (m_enable_full_debug) {
+            bitcode = libbsdf_bitcode_hsm2_debug;
+            bitcode_size = dimension_of(libbsdf_bitcode_hsm2_debug);
+        } else {
+            bitcode = libbsdf_bitcode_hsm2;
+            bitcode_size = dimension_of(libbsdf_bitcode_hsm2);
+        }
         break;
 
     case DF_HSM_FIXED_4:
-        bitcode = libbsdf_bitcode_hsm4;
-        bitcode_size = dimension_of(libbsdf_bitcode_hsm4);
+        if (m_enable_full_debug) {
+            bitcode = libbsdf_bitcode_hsm4_debug;
+            bitcode_size = dimension_of(libbsdf_bitcode_hsm4_debug);
+        } else {
+            bitcode = libbsdf_bitcode_hsm4;
+            bitcode_size = dimension_of(libbsdf_bitcode_hsm4);
+        }
         break;
 
     case DF_HSM_FIXED_8:
-        bitcode = libbsdf_bitcode_hsm8;
-        bitcode_size = dimension_of(libbsdf_bitcode_hsm8);
+        if (m_enable_full_debug) {
+            bitcode = libbsdf_bitcode_hsm8_debug;
+            bitcode_size = dimension_of(libbsdf_bitcode_hsm8_debug);
+        } else {
+            bitcode = libbsdf_bitcode_hsm8;
+            bitcode_size = dimension_of(libbsdf_bitcode_hsm8);
+        }
         break;
 
     default:

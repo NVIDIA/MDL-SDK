@@ -98,9 +98,9 @@ namespace mi { namespace examples { namespace gui
             Render_context_dx12* context_dx12 = static_cast<Render_context_dx12*>(context);
             ID3D12GraphicsCommandList4* command_list = context_dx12->command_list;
 
-            std::vector<ID3D12DescriptorHeap*> heaps = { m_ui_heap.Get() };
+            ID3D12DescriptorHeap* heaps[] = { m_ui_heap.Get() };
             command_list->SetDescriptorHeaps(
-                static_cast<UINT>(heaps.size()), heaps.data());
+                static_cast<UINT>(1), heaps);
 
             ImGui::Render();
             ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), command_list);

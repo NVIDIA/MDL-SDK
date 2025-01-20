@@ -1,0 +1,53 @@
+mdl 1.9;
+
+import ::df::*;
+
+export material test_diffuse_reflection_bsdf_old(
+  color tint = color(1),
+  float roughness = 0.2
+) = material(
+	surface: material_surface(
+		scattering: df::diffuse_reflection_bsdf(tint, roughness)
+	)
+);
+
+export material test_directional_factor_old(
+  color normal_tint = color(0.5),
+  color grazing_tint = color(1),
+  float exponent = 5
+) = material(
+	surface: material_surface(
+		scattering: df::directional_factor(normal_tint, grazing_tint, exponent, df::specular_bsdf())
+	)
+);
+
+export material test_color_custom_curve_layer_old(
+	color normal_reflectivity = color(0.5),
+	color grazing_reflectivity = color(1),
+	float exponent = 5,
+	color weight = color(1)
+) = material(
+	surface: material_surface(
+		scattering: df::color_custom_curve_layer(
+			normal_reflectivity,
+			grazing_reflectivity,
+			exponent,
+			weight,
+			df::specular_bsdf(),
+			df::diffuse_reflection_bsdf(color(1, 0.5, 0.5))
+		)
+	)
+);
+
+export material test_edf_directional_factor_not_broken(
+  color normal_tint = color(0.5), 
+  color grazing_tint = color(1), 
+  float exponent = 5
+) = material(
+	surface: material_surface(
+		emission: material_emission(
+			emission: df::directional_factor(normal_tint, grazing_tint, exponent, df::diffuse_edf()),
+			intensity: color(100)
+		)
+	)
+);

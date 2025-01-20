@@ -32,7 +32,7 @@ namespace mdl {
 /*! \page mi_mdl_core_example_execution_ptx Example for Execution of Compiled MDL Materials (PTX)
 
 <div align="right">
-    [\link mi_mdl_core_example_code_gen Previous\endlink]
+    [\link mi_mdl_core_example_df_vulkan Previous\endlink]
     [\link mi_mdl_core_examples Up\endlink]
     [\link mi_mdl_core_example_df_cuda Next\endlink]
 </div>
@@ -227,7 +227,7 @@ For Linux and Mac OS X, you have to provide the path to the CUDA Toolkit install
 \include execution_cuda/example_execution_cuda.cu
 
 <div align="right">
-    [\link mi_mdl_core_example_code_gen Previous\endlink]
+    [\link mi_mdl_core_example_df_vulkan Previous\endlink]
     [\link mi_mdl_core_examples Up\endlink]
     [\link mi_mdl_core_example_df_cuda Next\endlink]
 </div>

@@ -62,12 +62,12 @@ public:
     virtual const MDL::IExpression* get_internal_expression() const = 0;
 };
 
-/// Returns the internal expression wrapped by \p expr (or \c NULL if expr is \c NULL or not a
-/// wrapper).
+/// Returns the internal expression wrapped by \p expr (or \c nullptr if \p expr is \c nullptr or
+/// not a wrapper).
 MDL::IExpression* get_internal_expression( mi::neuraylib::IExpression* expr);
 
-/// Returns the internal expression wrapped by \p expr (or \c NULL if expr is \c NULL or not a
-/// wrapper).
+/// Returns the internal expression wrapped by \p expr (or \c nullptr if \p expr is \c nullptr or
+/// not a wrapper).
 template <class T>
 T* get_internal_expression( mi::neuraylib::IExpression* expr)
 {
@@ -77,12 +77,12 @@ T* get_internal_expression( mi::neuraylib::IExpression* expr)
     return static_cast<T*>( ptr_expr->get_interface( typename T::IID()));
 }
 
-/// Returns the internal expression wrapped by \p expr (or \c NULL if expr is \c NULL or not a
-/// wrapper).
+/// Returns the internal expression wrapped by \p expr (or \c nullptr if \p expr is \c nullptr or
+/// not a wrapper).
 const MDL::IExpression* get_internal_expression( const mi::neuraylib::IExpression* expr);
 
-/// Returns the internal expression wrapped by \p expr (or \c NULL if expr is \c NULL or not a
-/// wrapper).
+/// Returns the internal expression wrapped by \p expr (or \c nullptr if \p expr is \c nullptr or
+/// not a wrapper).
 template <class T>
 const T* get_internal_expression( const mi::neuraylib::IExpression* expr)
 {
@@ -105,38 +105,38 @@ public:
     virtual const MDL::IExpression_list* get_internal_expression_list() const = 0;
 };
 
-/// Returns the internal expression list wrapped by \p expr_list (or \c NULL if expr_list is \c NULL
-/// or not a wrapper).
+/// Returns the internal expression list wrapped by \p expr_list (or \c nullptr if \p expr_list is
+/// \c nullptr or not a wrapper).
 MDL::IExpression_list* get_internal_expression_list( mi::neuraylib::IExpression_list* expr_list);
 
-/// Returns the internal expression list wrapped by \p expr_list (or \c NULL if expr_list is \c NULL
-/// or not a wrapper).
+/// Returns the internal expression list wrapped by \p expr_list (or \c nullptr if \p expr_list is
+/// \c nullptr or not a wrapper).
 const MDL::IExpression_list* get_internal_expression_list(
     const mi::neuraylib::IExpression_list* expr_list);
 
-/// Returns the internal annotation wrapped by \p anno (or \c NULL if anno is \c NULL or
+/// Returns the internal annotation wrapped by \p anno (or \c nullptr if \p anno is \c nullptr or
 /// not a wrapper).
 MDL::IAnnotation* get_internal_annotation( mi::neuraylib::IAnnotation* anno);
 
-/// Returns the internal annotation wrapped by \p anno (or \c NULL if anno is \c NULL or
+/// Returns the internal annotation wrapped by \p anno (or \c nullptr if \p anno is \c nullptr or
 /// not a wrapper).
 const MDL::IAnnotation* get_internal_annotation( const mi::neuraylib::IAnnotation* anno);
 
-/// Returns the internal annotation block wrapped by \p block (or \c NULL if block is \c NULL or
-/// not a wrapper).
+/// Returns the internal annotation block wrapped by \p block (or \c nullptr if \p block is
+/// \c nullptr or not a wrapper).
 MDL::IAnnotation_block* get_internal_annotation_block( mi::neuraylib::IAnnotation_block* block);
 
-/// Returns the internal annotation block wrapped by \p block (or \c NULL if block is \c NULL or
-/// not a wrapper).
+/// Returns the internal annotation block wrapped by \p block (or \c nullptr if \p block is
+/// \c nullptr or not a wrapper).
 const MDL::IAnnotation_block* get_internal_annotation_block(
     const mi::neuraylib::IAnnotation_block* block);
 
-/// Returns the internal annotation list wrapped by \p list (or \c NULL if list is \c NULL or
-/// not a wrapper).
+/// Returns the internal annotation list wrapped by \p list (or \c nullptr if \p list is
+/// \c nullptr or not a wrapper).
 MDL::IAnnotation_list* get_internal_annotation_list( mi::neuraylib::IAnnotation_list* list);
 
-/// Returns the internal annotation list wrapped by \p list (or \c NULL if list is \c NULL or
-/// not a wrapper).
+/// Returns the internal annotation list wrapped by \p list (or \c nullptr if \p list is
+/// \c nullptr or not a wrapper).
 const MDL::IAnnotation_list* get_internal_annotation_list(
     const mi::neuraylib::IAnnotation_list* list);
 

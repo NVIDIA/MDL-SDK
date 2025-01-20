@@ -27,4 +27,5 @@
  *****************************************************************************/
  
 #include "pch.h"
+#include "libbsdf_general_tables.cpp"
 #include "libbsdf_multiscatter_tables.cpp"

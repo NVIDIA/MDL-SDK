@@ -62,11 +62,11 @@ public:
     virtual const MDL::IValue* get_internal_value() const = 0;
 };
 
-/// Returns the internal value wrapped by \p value (or \c NULL if \p value is \c NULL or not a
+/// Returns the internal value wrapped by \p value (or \c nullptr if \p value is \c nullptr or not a
 /// wrapper).
 MDL::IValue* get_internal_value( mi::neuraylib::IValue* value);
 
-/// Returns the internal value wrapped by \p value (or \c NULL if \p value is \c NULL or not a
+/// Returns the internal value wrapped by \p value (or \c nullptr if \p value is \c nullptr or not a
 /// wrapper).
 template <class T>
 T* get_internal_value( mi::neuraylib::IValue* value)
@@ -77,11 +77,11 @@ T* get_internal_value( mi::neuraylib::IValue* value)
     return static_cast<T*>( ptr_value->get_interface( typename T::IID()));
 }
 
-/// Returns the internal value wrapped by \p value (or \c NULL if \p value is \c NULL or not a
+/// Returns the internal value wrapped by \p value (or \c nullptr if \p value is \c nullptr or not a
 /// wrapper).
 const MDL::IValue* get_internal_value( const mi::neuraylib::IValue* value);
 
-/// Returns the internal value wrapped by \p value (or \c NULL if \p value is \c NULL or not a
+/// Returns the internal value wrapped by \p value (or \c nullptr if \p value is \c nullptr or not a
 /// wrapper).
 template <class T>
 const T* get_internal_value( const mi::neuraylib::IValue* value)
@@ -105,12 +105,12 @@ public:
     virtual const MDL::IValue_list* get_internal_value_list() const = 0;
 };
 
-/// Returns the internal value_list wrapped by \p value_list (or \c NULL if \p value_list is \c NULL
-/// or not a wrapper).
+/// Returns the internal value_list wrapped by \p value_list (or \c nullptr if \p value_list is
+/// \c nullptr or not a wrapper).
 MDL::IValue_list* get_internal_value_list( mi::neuraylib::IValue_list* value_list);
 
-/// Returns the internal value_list wrapped by \p value_list (or \c NULL if \p value_list is \c NULL
-/// or not a wrapper).
+/// Returns the internal value_list wrapped by \p value_list (or \c nullptr if \p value_list is
+/// \c nullptr or not a wrapper).
 const MDL::IValue_list* get_internal_value_list( const mi::neuraylib::IValue_list* value_list);
 
 /// Wrapper that implements an external value interface by wrapping an internal one.

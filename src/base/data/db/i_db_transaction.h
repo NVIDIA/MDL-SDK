@@ -44,7 +44,7 @@
 
 namespace MI {
 
-namespace SCHED { class Job; }
+namespace SCHED { class Job_base; }
 
 namespace DB {
 
@@ -53,10 +53,6 @@ class Fragmented_job;
 class IExecution_listener;
 class Info;
 class Scope;
-
-/// The result of journal query is a vector of tags with corresponding journal types describing
-/// the kind of changes.
-using Journal_query_result = std::vector<std::pair<Tag, Journal_type>>;
 
 /// A transaction provides a consistent view on the database.
 ///
@@ -145,8 +141,9 @@ public:
     /// \note The transaction must no longer be used in any way after a call to this method
     ///       \em without explicitly pinning it beforehand.
     ///
-    /// \return   \c true in case of success, \c false otherwise, e.g., if a host contributing to
-    ///           the transaction failed, before the transaction was committed.
+    /// \return   \c true in case of success, \c false otherwise, e.g., if the transaction was not
+    ///           open, or a host contributing to the transaction failed before the transaction was
+    ///           committed.
     virtual bool commit() = 0;
 
     /// Aborts the transaction.
@@ -172,7 +169,7 @@ public:
     /// call #commit() or #abort() will block until the counter drops to 0.
     ///
     /// \return   \c true if the counter was increased (i.e., the transaction was open), or
-    ///           \c false the transaction was already committed or aborted.
+    ///           \c false the transaction was already closing, committed, or aborted.
     virtual bool block_commit_or_abort() = 0;
 
     /// Unblocks the transaction from committing or aborting.
@@ -180,9 +177,8 @@ public:
     /// This call decrements a counter. As long as the counter is larger than 0, an attempt to
     /// call #commit() or #abort() will block until the counter drops to 0.
     ///
-    /// \return   \c true if the counter was decreased (i.e., the transaction was open and the
-    ///           counter was larger than 0), or \c false the transaction was already committed or
-    ///           aborted, or was not blocked,
+    /// \return   \c true if the counter was decreased (i.e., the transaction was open or closing
+    ///           and the counter was larger than 0), or \c false otherwise.
     virtual bool unblock_commit_or_abort() = 0;
 
     //@}
@@ -305,7 +301,7 @@ public:
     /// This functions the same as the overloads but yields a typed tag.
     template <typename T,
               typename = std::enable_if_t<   std::is_convertible_v<T*,Element_base*>
-                                          || std::is_convertible_v<T*,SCHED::Job*>>>
+                                          || std::is_convertible_v<T*,SCHED::Job_base*>>>
     Typed_tag<T> store(
             T* element_or_job,
             Privacy_level privacy_level = 0,
@@ -320,7 +316,7 @@ public:
     /// This functions the same as the overloads but yields a typed tag.
     template <typename T,
               typename = std::enable_if_t<   std::is_convertible_v<T*,Element_base*>
-                                          || std::is_convertible_v<T*,SCHED::Job*>>>
+                                          || std::is_convertible_v<T*,SCHED::Job_base*>>>
     Typed_tag<T> store_for_reference_counting(
             T* element_or_job,
             Privacy_level privacy_level = 0,
@@ -346,7 +342,7 @@ public:
     /// \param store_level              Store level of the DB job.
     /// \return                         The assigned tag.
     virtual Tag store(
-        SCHED::Job* job,
+        SCHED::Job_base* job,
         const char* name = nullptr,
         Privacy_level privacy_level = 0,
         Privacy_level store_level = 255) = 0;
@@ -366,7 +362,7 @@ public:
     /// \return                         The assigned tag.
     virtual void store(
         Tag tag,
-        SCHED::Job* job,
+        SCHED::Job_base* job,
         const char* name = nullptr,
         Privacy_level privacy_level = 0,
         Journal_type journal_type = JOURNAL_NONE,
@@ -376,7 +372,7 @@ public:
     ///
     /// Same as #store(Job,...) above, but with an additional call to #remove().
     virtual Tag store_for_reference_counting(
-        SCHED::Job* job,
+        SCHED::Job_base* job,
         const char* name = nullptr,
         Privacy_level privacy_level = 0,
         Privacy_level store_level = 255) = 0;
@@ -386,7 +382,7 @@ public:
     /// Same as #store(Tag,Job,...) above, but with an additional call to #remove().
     virtual void store_for_reference_counting(
         Tag tag,
-        SCHED::Job* job,
+        SCHED::Job_base* job,
         const char* name = nullptr,
         Privacy_level privacy_level = 0,
         Journal_type journal_type = JOURNAL_NONE,
@@ -452,7 +448,7 @@ public:
     ///       original tag.
     ///
     /// \param tag   The tag to look up.
-    /// \return      The corresponding name, or \c NULL if the tag has no associated name.
+    /// \return      The corresponding name, or \c nullptr if the tag has no associated name.
     virtual const char* tag_to_name( Tag tag) = 0;
 
     /// Looks up the tag for a name (within the context of this transaction).
@@ -550,17 +546,17 @@ public:
 
     /// Returns a list of database changes since some point in time.
     ///
-    /// This is meant to be used e.g. for preprocessing. The transaction ID is the one in which the
-    /// last preprocessing was done. The list of tags returned will contain all tags touched since
-    /// then, if the change to the tag is actually visible to this transaction. The bitmask content
-    /// is user defined. Each change can be associated with some value in the bitmask. Only those
-    /// journal entries which have a value which is in the bitmask are returned.
+    /// The start of the query range is given by the pair of \p last_transaction_id and
+    /// \p last_transaction_change_version (which usually matches the last call of this function,
+    /// hence the parameter names). The end of the query range is implicitly defined by the
+    /// current sequence number (see #get_next_sequence_number()) of the current transaction.
     ///
-    /// \param last_transaction_id               The ID of the transaction when the journal was
-    ///                                          queried the last time.
-    /// \param last_transaction_change_version   The sequence number (see
-    ///                                          #get_next_sequence_number()) of the transaction
-    ///                                          when the journal was queried the last time.
+    /// \note This variant includes changes from the current transaction, in contrast to
+    ///       #DB::IScope::get_journal().
+    ///
+    /// \param last_transaction_id               The transaction ID of start of the query range.
+    /// \param last_transaction_change_version   The sequence number of the start of the query
+    ///                                          range.
     /// \param journal_type                      A filter for the journal type. Only changes with
     ///                                          a non-zero intersection with \p journal_type will
     ///                                          be reported. Use #JOURNAL_ALL to not filter based
@@ -569,9 +565,12 @@ public:
     ///                                          considered, too.
     /// \return                                  A vector of tag/journal type pairs describing the
     ///                                          changes in the relevant range matching the filter.
-    ///                                          Returns \c NULL if the queried range is too large
-    ///                                          for the journal capacity. The caller should assume
-    ///                                          that all relevant database elements have changed.
+    ///                                          Returns \c nullptr if the queried range is too
+    ///                                          large for the journal capacity. In this case the
+    ///                                          caller should assume that all relevant database
+    ///                                          elements have changed. \n
+    ///                                          The same tag might occur multiple times, with
+    ///                                          identical or different journal types.
     virtual std::unique_ptr<Journal_query_result> get_journal(
         Transaction_id last_transaction_id,
         mi::Uint32 last_transaction_change_version,
@@ -598,9 +597,10 @@ public:
     ///                                 the number of hosts.
     /// \return
     ///                                 -  0: Success.
-    ///                                 - -1: Invalid parameters (\p job is \c NULL, or \c count is
-    ///                                       zero but the scheduling is not ONCE_PER_HOST).
+    ///                                 - -1: Invalid parameters (\p job is \c nullptr, or \c count
+    ///                                       is zero but the scheduling is not ONCE_PER_HOST).
     ///                                 - -3: Invalid job priority (negative value).
+    ///                                 - -4: The transaction is no longer open.
     virtual mi::Sint32 execute_fragmented(
         Fragmented_job* job, size_t count) = 0;
 
@@ -615,11 +615,12 @@ public:
     /// \param listener                 Provides a callback to be called when the job is done.
     /// \return
     ///                                 -  0: Success.
-    ///                                 - -1: Invalid parameters (\p job is \c NULL or \c count is
-    ///                                       zero).
+    ///                                 - -1: Invalid parameters (\p job is \c nullptr or \c count
+    ///                                       is zero).
     ///                                 - -2: Invalid scheduling mode (asynchronous execution is
     ///                                       restricted to local jobs).
     ///                                 - -3: Invalid job priority (negative value).
+    ///                                 - -4: The transaction is no longer open.
     virtual mi::Sint32 execute_fragmented_async(
         Fragmented_job* job, size_t count, IExecution_listener* listener) = 0;
 

@@ -65,747 +65,678 @@ DAG_node const* Local_normal::matcher(
     IDistiller_plugin_api &e,
     DAG_node const *node,
     const mi::mdl::Distiller_options *options,
-    Rule_result_code &result_code)const
+    Rule_result_code &result_code) const
 {
-    switch (e.get_selector(node)) {
-    case mi::mdl::DS_DIST_DEFAULT_BSDF: // match for bsdf()
-// 025_local_normal.mdltl:12
-//RUID 144237
-        if (true) {
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 0);
-            DAG_node const *node_result_1 = e.create_bsdf_constant();
-            DAG_node const *node_result_1_w = e.create_float_constant(0.0f);
-            e.set_attribute(node_result_1, "w",node_result_1_w);
-            DAG_node const *node_result_1_normal = e.create_function_call("::state::normal",
-                    Nodes_wrapper<0>().data(), 0);
-            e.set_attribute(node_result_1, "normal",node_result_1_normal);
-            return node_result_1;
+    auto match_rule24 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+
+// 025_local_normal.mdltl:69
+//RUID 283983
+    auto match_rule23 = [&] (DAG_node const *node23, IDistiller_plugin_api::Match_properties &node_props23) -> const DAG_node * {
+
+        // continued match for weighted_layer(this_w, local_normal(nw1, nl1), local_normal(nw2, nl2), n)
+        DAG_node const *node25 = e.get_compound_argument(node23, 0);
+        DAG_node const *v_this_w = node25; (void)v_this_w;
+        DAG_node const *node27 = e.get_compound_argument(node23, 1);
+        IDistiller_plugin_api::Match_properties node_props27;
+        e.get_match_properties(node27, node_props27); 
+        // match for local_normal(nw1, nl1)
+        if (node_props27.sema != 69632/* unhandled */) {
+            return match_rule24(node23, node_props23);
         }
-        break;
-    case mi::mdl::DS_DIST_BSDF_COLOR_MIX_1: // match for bsdf_color_mix_1(w1, b [[ w ~ nw, normal ~ nl ]])
-// 025_local_normal.mdltl:21
-//RUID 508272
-        if (true
-        && (e.attribute_exists(e.get_remapped_argument(node, 1), "w"))
-        && (e.attribute_exists(e.get_remapped_argument(node, 1), "normal"))) {
-            const DAG_node* v_w1 = e.get_remapped_argument(node, 0);
-            const DAG_node* v_b = e.get_remapped_argument(node, 1);
-            const DAG_node *vv_0_w = e.get_attribute(e.get_remapped_argument(node, 1), "w");
-            const DAG_node* v_nw = vv_0_w;
-            const DAG_node *vv_1_normal = e.get_attribute(e.get_remapped_argument(node, 1), "normal");
-            const DAG_node* v_nl = vv_1_normal;
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 1);
-            DAG_node const *node_result_9 = e.create_color_mixer_call(Args_wrapper<2>::mk_args(e,m_node_types,
-                        node_null, v_w1, v_b).args,
-                    2);
-            DAG_node const *node_result_9_w = e.create_binary(
-                IDistiller_plugin_api::OK_MULTIPLY,
-                    e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w1).data(),
-                        1),
-                    v_nw);
-            e.set_attribute(node_result_9, "w",node_result_9_w);
-            DAG_node const *node_result_9_normal = v_nl;
-            e.set_attribute(node_result_9, "normal",node_result_9_normal);
-            return node_result_9;
+        DAG_node const *node28 = e.get_compound_argument(node27, 0);
+        DAG_node const *v_nw1 = node28; (void)v_nw1;
+        DAG_node const *node30 = e.get_compound_argument(node27, 1);
+        DAG_node const *v_nl1 = node30; (void)v_nl1;
+        DAG_node const *node33 = e.get_compound_argument(node23, 2);
+        IDistiller_plugin_api::Match_properties node_props33;
+        e.get_match_properties(node33, node_props33); 
+        // match for local_normal(nw2, nl2)
+        if (node_props33.sema != 69632/* unhandled */) {
+            return match_rule24(node23, node_props23);
         }
-        break;
-    case mi::mdl::DS_DIST_BSDF_COLOR_MIX_2: // match for bsdf_color_mix_2(w1, local_normal(nw1, nl1), w2, local_normal(nw2, nl2))
-// 025_local_normal.mdltl:32
-//RUID 145615
-        if (true
-        && (e.get_selector(e.get_remapped_argument(node, 1)) == mi::mdl::DS_DIST_LOCAL_NORMAL)
-        && (e.get_selector(e.get_remapped_argument(node, 3)) == mi::mdl::DS_DIST_LOCAL_NORMAL)) {
-            const DAG_node* v_w1 = e.get_remapped_argument(node, 0);
-            const DAG_node* v_nw1 = e.get_compound_argument(e.get_remapped_argument(node, 1), 0);
-            const DAG_node* v_nl1 = e.get_compound_argument(e.get_remapped_argument(node, 1), 1);
-            const DAG_node* v_w2 = e.get_remapped_argument(node, 2);
-            const DAG_node* v_nw2 = e.get_compound_argument(e.get_remapped_argument(node, 3), 0);
-            const DAG_node* v_nl2 = e.get_compound_argument(e.get_remapped_argument(node, 3), 1);
-            if (e.eval_if(e.create_binary(
-                IDistiller_plugin_api::OK_EQUAL,
-                    v_nl1,
-                    v_nl2))) {
-                if (event_handler != nullptr)
-                    fire_match_event(*event_handler, 2);
-                return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
-                    IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e,m_node_types,
-                        local_normal, e.create_binary(
-                        IDistiller_plugin_api::OK_PLUS,
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w1).data(),
-                                    1),
-                                v_nw1),
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w2).data(),
-                                    1),
-                                v_nw2)), v_nl1).args, 2, e.get_type_factory()->create_color());
-            }
-        }
-// 025_local_normal.mdltl:35
-//RUID 25734
-        if (true
-        && (e.get_selector(e.get_remapped_argument(node, 1)) == mi::mdl::DS_DIST_LOCAL_NORMAL)
-        && (e.get_selector(e.get_remapped_argument(node, 3)) == mi::mdl::DS_DIST_LOCAL_NORMAL)) {
-            const DAG_node* v_w1 = e.get_remapped_argument(node, 0);
-            const DAG_node* v_nw1 = e.get_compound_argument(e.get_remapped_argument(node, 1), 0);
-            const DAG_node* v_nl1 = e.get_compound_argument(e.get_remapped_argument(node, 1), 1);
-            const DAG_node* v_w2 = e.get_remapped_argument(node, 2);
-            const DAG_node* v_nw2 = e.get_compound_argument(e.get_remapped_argument(node, 3), 0);
-            const DAG_node* v_nl2 = e.get_compound_argument(e.get_remapped_argument(node, 3), 1);
-            DAG_node const* v_w2p = e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w2).data(),
-                1);
-            DAG_node const* v_w1p = e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w1).data(),
-                1);
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 3);
-            return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
-                IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e,m_node_types,
-                    local_normal, e.create_binary(
-                    IDistiller_plugin_api::OK_PLUS,
-                        e.create_binary(
-                        IDistiller_plugin_api::OK_MULTIPLY,
-                            v_w1p,
-                            v_nw1),
-                        e.create_binary(
-                        IDistiller_plugin_api::OK_MULTIPLY,
-                            v_w2p,
-                            v_nw2)), e.create_function_call("::nvidia::distilling_support::affine_normal_sum",
-                        Nodes_wrapper<4>(e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_w1p,
-                                v_nw1), v_nl1, e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_w2p,
-                                v_nw2), v_nl2).data(), 4)).args, 2, e.get_type_factory()->create_color());
-        }
-        break;
-    case mi::mdl::DS_DIST_BSDF_COLOR_MIX_3: // match for bsdf_color_mix_3(w1, local_normal(nw1, nl1), w2, local_normal(nw2, nl2), w3, local_normal(nw3, nl3))
-// 025_local_normal.mdltl:53
-//RUID 101806
-        if (true
-        && (e.get_selector(e.get_remapped_argument(node, 1)) == mi::mdl::DS_DIST_LOCAL_NORMAL)
-        && (e.get_selector(e.get_remapped_argument(node, 3)) == mi::mdl::DS_DIST_LOCAL_NORMAL)
-        && (e.get_selector(e.get_remapped_argument(node, 5)) == mi::mdl::DS_DIST_LOCAL_NORMAL)) {
-            const DAG_node* v_w1 = e.get_remapped_argument(node, 0);
-            const DAG_node* v_nw1 = e.get_compound_argument(e.get_remapped_argument(node, 1), 0);
-            const DAG_node* v_nl1 = e.get_compound_argument(e.get_remapped_argument(node, 1), 1);
-            const DAG_node* v_w2 = e.get_remapped_argument(node, 2);
-            const DAG_node* v_nw2 = e.get_compound_argument(e.get_remapped_argument(node, 3), 0);
-            const DAG_node* v_nl2 = e.get_compound_argument(e.get_remapped_argument(node, 3), 1);
-            const DAG_node* v_w3 = e.get_remapped_argument(node, 4);
-            const DAG_node* v_nw3 = e.get_compound_argument(e.get_remapped_argument(node, 5), 0);
-            const DAG_node* v_nl3 = e.get_compound_argument(e.get_remapped_argument(node, 5), 1);
-            if (e.eval_if(e.create_binary(
-                IDistiller_plugin_api::OK_LOGICAL_AND,
-                    e.create_binary(
-                    IDistiller_plugin_api::OK_EQUAL,
-                        v_nl1,
-                        v_nl2),
-                    e.create_binary(
-                    IDistiller_plugin_api::OK_EQUAL,
-                        v_nl1,
-                        v_nl3)))) {
-                if (event_handler != nullptr)
-                    fire_match_event(*event_handler, 4);
-                return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
-                    IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e,m_node_types,
-                        local_normal, e.create_binary(
-                        IDistiller_plugin_api::OK_PLUS,
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_PLUS,
-                                e.create_binary(
-                                IDistiller_plugin_api::OK_MULTIPLY,
-                                    e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w1).data(),
-                                        1),
-                                    v_nw1),
-                                e.create_binary(
-                                IDistiller_plugin_api::OK_MULTIPLY,
-                                    e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w2).data(),
-                                        1),
-                                    v_nw2)),
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w3).data(),
-                                    1),
-                                v_nw3)), v_nl1).args, 2, e.get_type_factory()->create_color());
-            }
-        }
-// 025_local_normal.mdltl:59
-//RUID 964281
-        if (true
-        && (e.get_selector(e.get_remapped_argument(node, 1)) == mi::mdl::DS_DIST_LOCAL_NORMAL)
-        && (e.get_selector(e.get_remapped_argument(node, 3)) == mi::mdl::DS_DIST_LOCAL_NORMAL)
-        && (e.get_selector(e.get_remapped_argument(node, 5)) == mi::mdl::DS_DIST_LOCAL_NORMAL)) {
-            const DAG_node* v_w1 = e.get_remapped_argument(node, 0);
-            const DAG_node* v_nw1 = e.get_compound_argument(e.get_remapped_argument(node, 1), 0);
-            const DAG_node* v_nl1 = e.get_compound_argument(e.get_remapped_argument(node, 1), 1);
-            const DAG_node* v_w2 = e.get_remapped_argument(node, 2);
-            const DAG_node* v_nw2 = e.get_compound_argument(e.get_remapped_argument(node, 3), 0);
-            const DAG_node* v_nl2 = e.get_compound_argument(e.get_remapped_argument(node, 3), 1);
-            const DAG_node* v_w3 = e.get_remapped_argument(node, 4);
-            const DAG_node* v_nw3 = e.get_compound_argument(e.get_remapped_argument(node, 5), 0);
-            const DAG_node* v_nl3 = e.get_compound_argument(e.get_remapped_argument(node, 5), 1);
-            DAG_node const* v_w3p = e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w3).data(),
-                1);
-            DAG_node const* v_w2p = e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w2).data(),
-                1);
-            DAG_node const* v_w1p = e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w1).data(),
-                1);
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 5);
-            return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
-                IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e,m_node_types,
-                    local_normal, e.create_binary(
-                    IDistiller_plugin_api::OK_PLUS,
-                        e.create_binary(
-                        IDistiller_plugin_api::OK_PLUS,
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_w1p,
-                                v_nw1),
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_w2p,
-                                v_nw2)),
-                        e.create_binary(
-                        IDistiller_plugin_api::OK_MULTIPLY,
-                            v_w3p,
-                            v_nw3)), e.create_function_call("::nvidia::distilling_support::affine_normal_sum",
-                        Nodes_wrapper<6>(e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_w1p,
-                                v_nw1), v_nl1, e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_w2p,
-                                v_nw2), v_nl2, e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_w3p,
-                                v_nw3), v_nl3).data(), 6)).args, 2, e.get_type_factory()->create_color());
-        }
-        break;
-    case mi::mdl::DS_DIST_BSDF_MIX_1: // match for bsdf_mix_1(w1, b [[ w ~ nw, normal ~ nl ]])
-// 025_local_normal.mdltl:18
-//RUID 3826
-        if (true
-        && (e.attribute_exists(e.get_remapped_argument(node, 1), "w"))
-        && (e.attribute_exists(e.get_remapped_argument(node, 1), "normal"))) {
-            const DAG_node* v_w1 = e.get_remapped_argument(node, 0);
-            const DAG_node* v_b = e.get_remapped_argument(node, 1);
-            const DAG_node *vv_0_w = e.get_attribute(e.get_remapped_argument(node, 1), "w");
-            const DAG_node* v_nw = vv_0_w;
-            const DAG_node *vv_1_normal = e.get_attribute(e.get_remapped_argument(node, 1), "normal");
-            const DAG_node* v_nl = vv_1_normal;
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 6);
-            DAG_node const *node_result_7 = e.create_mixer_call(Args_wrapper<2>::mk_args(e,m_node_types,
-                        node_null, v_w1, v_b).args,
-                    2);
-            DAG_node const *node_result_7_w = e.create_binary(
-                IDistiller_plugin_api::OK_MULTIPLY,
-                    v_w1,
-                    v_nw);
-            e.set_attribute(node_result_7, "w",node_result_7_w);
-            DAG_node const *node_result_7_normal = v_nl;
-            e.set_attribute(node_result_7, "normal",node_result_7_normal);
-            return node_result_7;
-        }
-        break;
-    case mi::mdl::DS_DIST_BSDF_MIX_2: // match for bsdf_mix_2(w1, b1 [[ w ~ nw1, normal ~ nl1 ]], w2, b2 [[ w ~ nw2, normal ~ nl2 ]])
-// 025_local_normal.mdltl:24
-//RUID 453886
-        if (true
-        && (e.attribute_exists(e.get_remapped_argument(node, 1), "w"))
-        && (e.attribute_exists(e.get_remapped_argument(node, 1), "normal"))
-        && (e.attribute_exists(e.get_remapped_argument(node, 3), "w"))
-        && (e.attribute_exists(e.get_remapped_argument(node, 3), "normal"))) {
-            const DAG_node* v_w1 = e.get_remapped_argument(node, 0);
-            const DAG_node* v_b1 = e.get_remapped_argument(node, 1);
-            const DAG_node *vv_0_w = e.get_attribute(e.get_remapped_argument(node, 1), "w");
-            const DAG_node* v_nw1 = vv_0_w;
-            const DAG_node *vv_1_normal = e.get_attribute(e.get_remapped_argument(node, 1), "normal");
-            const DAG_node* v_nl1 = vv_1_normal;
-            const DAG_node* v_w2 = e.get_remapped_argument(node, 2);
-            const DAG_node* v_b2 = e.get_remapped_argument(node, 3);
-            const DAG_node *vv_2_w = e.get_attribute(e.get_remapped_argument(node, 3), "w");
-            const DAG_node* v_nw2 = vv_2_w;
-            const DAG_node *vv_3_normal = e.get_attribute(e.get_remapped_argument(node, 3), "normal");
-            const DAG_node* v_nl2 = vv_3_normal;
-            if (e.eval_if(e.create_binary(
-                IDistiller_plugin_api::OK_EQUAL,
-                    v_nl1,
-                    v_nl2))) {
-                if (event_handler != nullptr)
-                    fire_match_event(*event_handler, 7);
-                DAG_node const *node_result_12 = e.create_mixer_call(Args_wrapper<4>::mk_args(e,m_node_types,
-                            node_null, v_w1, v_b1, v_w2, v_b2).args,
-                        4);
-                DAG_node const *node_result_12_w = e.create_binary(
-                    IDistiller_plugin_api::OK_PLUS,
-                        e.create_binary(
-                        IDistiller_plugin_api::OK_MULTIPLY,
-                            v_w1,
-                            v_nw1),
-                        e.create_binary(
-                        IDistiller_plugin_api::OK_MULTIPLY,
-                            v_w2,
-                            v_nw2));
-                e.set_attribute(node_result_12, "w",node_result_12_w);
-                DAG_node const *node_result_12_normal = v_nl1;
-                e.set_attribute(node_result_12, "normal",node_result_12_normal);
-                return node_result_12;
-            }
-        }
-// 025_local_normal.mdltl:27
-//RUID 581897
-        if (true
-        && (e.attribute_exists(e.get_remapped_argument(node, 1), "w"))
-        && (e.attribute_exists(e.get_remapped_argument(node, 1), "normal"))
-        && (e.attribute_exists(e.get_remapped_argument(node, 3), "w"))
-        && (e.attribute_exists(e.get_remapped_argument(node, 3), "normal"))) {
-            const DAG_node* v_w1 = e.get_remapped_argument(node, 0);
-            const DAG_node* v_b1 = e.get_remapped_argument(node, 1);
-            const DAG_node *vv_0_w = e.get_attribute(e.get_remapped_argument(node, 1), "w");
-            const DAG_node* v_nw1 = vv_0_w;
-            const DAG_node *vv_1_normal = e.get_attribute(e.get_remapped_argument(node, 1), "normal");
-            const DAG_node* v_nl1 = vv_1_normal;
-            const DAG_node* v_w2 = e.get_remapped_argument(node, 2);
-            const DAG_node* v_b2 = e.get_remapped_argument(node, 3);
-            const DAG_node *vv_2_w = e.get_attribute(e.get_remapped_argument(node, 3), "w");
-            const DAG_node* v_nw2 = vv_2_w;
-            const DAG_node *vv_3_normal = e.get_attribute(e.get_remapped_argument(node, 3), "normal");
-            const DAG_node* v_nl2 = vv_3_normal;
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 8);
-            DAG_node const *node_result_15 = e.create_mixer_call(Args_wrapper<4>::mk_args(e,m_node_types,
-                        node_null, v_w1, v_b1, v_w2, v_b2).args,
-                    4);
-            DAG_node const *node_result_15_w = e.create_binary(
+        DAG_node const *node34 = e.get_compound_argument(node33, 0);
+        DAG_node const *v_nw2 = node34; (void)v_nw2;
+        DAG_node const *node36 = e.get_compound_argument(node33, 1);
+        DAG_node const *v_nl2 = node36; (void)v_nl2;
+        DAG_node const *node39 = e.get_compound_argument(node23, 3);
+        DAG_node const *v_n = node39; (void)v_n;
+        DAG_DbgInfo root_dbg_info = node23->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 23);
+        return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
+            IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e, m_node_types, local_normal,
+                e.create_binary(
                 IDistiller_plugin_api::OK_PLUS,
                     e.create_binary(
                     IDistiller_plugin_api::OK_MULTIPLY,
-                        v_w1,
-                        v_nw1),
+                        v_nw2,
+                        e.create_binary(
+                        IDistiller_plugin_api::OK_MINUS,
+                            e.create_float_constant(1.0f),
+                            v_this_w)),
+                    v_this_w), e.create_function_call("::nvidia::distilling_support::affine_normal_sum",
+                    Nodes_wrapper<6>(e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            e.create_binary(
+                            IDistiller_plugin_api::OK_MINUS,
+                                e.create_float_constant(1.0f),
+                                v_this_w),
+                            v_nw2), v_nl2, e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            v_this_w,
+                            e.create_binary(
+                            IDistiller_plugin_api::OK_MINUS,
+                                e.create_float_constant(1.0f),
+                                v_nw1)), v_n, e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            v_this_w,
+                            v_nw1), v_nl1).data(), 6, root_dbg_info)).args, 2, e.get_type_factory()->create_color(), root_dbg_info);
+    };
+    (void)match_rule23;
+
+// 025_local_normal.mdltl:66
+//RUID 316322
+    auto match_rule22 = [&] (DAG_node const *node22, IDistiller_plugin_api::Match_properties &node_props22) -> const DAG_node * {
+
+        // match for weighted_layer(this_w, local_normal(_, nl1), local_normal(nw2, nl2), n)
+        if (node_props22.sema != IDefinition::DS_INTRINSIC_DF_WEIGHTED_LAYER) {
+            return match_rule24(node22, node_props22);
+        }
+        DAG_node const *node24 = e.get_compound_argument(node22, 0);
+        DAG_node const *v_this_w = node24; (void)v_this_w;
+        DAG_node const *node26 = e.get_compound_argument(node22, 1);
+        IDistiller_plugin_api::Match_properties node_props26;
+        e.get_match_properties(node26, node_props26); 
+        // match for local_normal(_, nl1)
+        if (node_props26.sema != 69632/* unhandled */) {
+            return match_rule23(node22, node_props22);
+        }
+        DAG_node const *node27 = e.get_compound_argument(node26, 1);
+        DAG_node const *v_nl1 = node27; (void)v_nl1;
+        DAG_node const *node30 = e.get_compound_argument(node22, 2);
+        IDistiller_plugin_api::Match_properties node_props30;
+        e.get_match_properties(node30, node_props30); 
+        // match for local_normal(nw2, nl2)
+        if (node_props30.sema != 69632/* unhandled */) {
+            return match_rule23(node22, node_props22);
+        }
+        DAG_node const *node31 = e.get_compound_argument(node30, 0);
+        DAG_node const *v_nw2 = node31; (void)v_nw2;
+        DAG_node const *node33 = e.get_compound_argument(node30, 1);
+        DAG_node const *v_nl2 = node33; (void)v_nl2;
+        DAG_node const *node36 = e.get_compound_argument(node22, 3);
+        DAG_node const *v_n = node36; (void)v_n;
+        DAG_DbgInfo root_dbg_info = node22->get_dbg_info();
+        (void) root_dbg_info;
+        if (!e.eval_if(e.create_binary(
+            IDistiller_plugin_api::OK_LOGICAL_AND,
+                e.create_binary(
+                IDistiller_plugin_api::OK_EQUAL,
+                    v_n,
+                    v_nl1),
+                e.create_binary(
+                IDistiller_plugin_api::OK_EQUAL,
+                    v_n,
+                    v_nl2)))) {
+            return match_rule23(node22, node_props22);
+        }
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 22);
+        return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
+            IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e, m_node_types, local_normal,
+                e.create_binary(
+                IDistiller_plugin_api::OK_PLUS,
                     e.create_binary(
                     IDistiller_plugin_api::OK_MULTIPLY,
-                        v_w2,
-                        v_nw2));
-            e.set_attribute(node_result_15, "w",node_result_15_w);
-            DAG_node const *node_result_15_normal = e.create_function_call("::nvidia::distilling_support::affine_normal_sum",
-                    Nodes_wrapper<4>(e.create_binary(
-                        IDistiller_plugin_api::OK_MULTIPLY,
-                            v_w1,
-                            v_nw1), v_nl1, e.create_binary(
-                        IDistiller_plugin_api::OK_MULTIPLY,
-                            v_w2,
-                            v_nw2), v_nl2).data(), 4);
-            e.set_attribute(node_result_15, "normal",node_result_15_normal);
-            return node_result_15;
-        }
-        break;
-    case mi::mdl::DS_DIST_BSDF_MIX_3: // match for bsdf_mix_3(w1, local_normal(nw1, nl1), w2, local_normal(nw2, nl2), w3, local_normal(nw3, nl3))
-// 025_local_normal.mdltl:42
-//RUID 678443
-        if (true
-        && (e.get_selector(e.get_remapped_argument(node, 1)) == mi::mdl::DS_DIST_LOCAL_NORMAL)
-        && (e.get_selector(e.get_remapped_argument(node, 3)) == mi::mdl::DS_DIST_LOCAL_NORMAL)
-        && (e.get_selector(e.get_remapped_argument(node, 5)) == mi::mdl::DS_DIST_LOCAL_NORMAL)) {
-            const DAG_node* v_w1 = e.get_remapped_argument(node, 0);
-            const DAG_node* v_nw1 = e.get_compound_argument(e.get_remapped_argument(node, 1), 0);
-            const DAG_node* v_nl1 = e.get_compound_argument(e.get_remapped_argument(node, 1), 1);
-            const DAG_node* v_w2 = e.get_remapped_argument(node, 2);
-            const DAG_node* v_nw2 = e.get_compound_argument(e.get_remapped_argument(node, 3), 0);
-            const DAG_node* v_nl2 = e.get_compound_argument(e.get_remapped_argument(node, 3), 1);
-            const DAG_node* v_w3 = e.get_remapped_argument(node, 4);
-            const DAG_node* v_nw3 = e.get_compound_argument(e.get_remapped_argument(node, 5), 0);
-            const DAG_node* v_nl3 = e.get_compound_argument(e.get_remapped_argument(node, 5), 1);
-            if (e.eval_if(e.create_binary(
-                IDistiller_plugin_api::OK_LOGICAL_AND,
-                    e.create_binary(
-                    IDistiller_plugin_api::OK_EQUAL,
-                        v_nl1,
-                        v_nl2),
-                    e.create_binary(
-                    IDistiller_plugin_api::OK_EQUAL,
-                        v_nl1,
-                        v_nl3)))) {
-                if (event_handler != nullptr)
-                    fire_match_event(*event_handler, 9);
-                return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
-                    IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e,m_node_types,
-                        local_normal, e.create_binary(
-                        IDistiller_plugin_api::OK_PLUS,
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_PLUS,
-                                e.create_binary(
-                                IDistiller_plugin_api::OK_MULTIPLY,
-                                    v_w1,
-                                    v_nw1),
-                                e.create_binary(
-                                IDistiller_plugin_api::OK_MULTIPLY,
-                                    v_w2,
-                                    v_nw2)),
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_w3,
-                                v_nw3)), v_nl1).args, 2, e.get_type_factory()->create_color());
-            }
-        }
-// 025_local_normal.mdltl:47
-//RUID 122547
-        if (true
-        && (e.get_selector(e.get_remapped_argument(node, 1)) == mi::mdl::DS_DIST_LOCAL_NORMAL)
-        && (e.get_selector(e.get_remapped_argument(node, 3)) == mi::mdl::DS_DIST_LOCAL_NORMAL)
-        && (e.get_selector(e.get_remapped_argument(node, 5)) == mi::mdl::DS_DIST_LOCAL_NORMAL)) {
-            const DAG_node* v_w1 = e.get_remapped_argument(node, 0);
-            const DAG_node* v_nw1 = e.get_compound_argument(e.get_remapped_argument(node, 1), 0);
-            const DAG_node* v_nl1 = e.get_compound_argument(e.get_remapped_argument(node, 1), 1);
-            const DAG_node* v_w2 = e.get_remapped_argument(node, 2);
-            const DAG_node* v_nw2 = e.get_compound_argument(e.get_remapped_argument(node, 3), 0);
-            const DAG_node* v_nl2 = e.get_compound_argument(e.get_remapped_argument(node, 3), 1);
-            const DAG_node* v_w3 = e.get_remapped_argument(node, 4);
-            const DAG_node* v_nw3 = e.get_compound_argument(e.get_remapped_argument(node, 5), 0);
-            const DAG_node* v_nl3 = e.get_compound_argument(e.get_remapped_argument(node, 5), 1);
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 10);
-            return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
-                IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e,m_node_types,
-                    local_normal, e.create_binary(
-                    IDistiller_plugin_api::OK_PLUS,
+                        v_nw2,
                         e.create_binary(
-                        IDistiller_plugin_api::OK_PLUS,
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_w1,
-                                v_nw1),
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_w2,
-                                v_nw2)),
-                        e.create_binary(
-                        IDistiller_plugin_api::OK_MULTIPLY,
-                            v_w3,
-                            v_nw3)), e.create_function_call("::nvidia::distilling_support::affine_normal_sum",
-                        Nodes_wrapper<6>(e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_w1,
-                                v_nw1), v_nl1, e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_w2,
-                                v_nw2), v_nl2, e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_w3,
-                                v_nw3), v_nl3).data(), 6)).args, 2, e.get_type_factory()->create_color());
+                        IDistiller_plugin_api::OK_MINUS,
+                            e.create_float_constant(1.0f),
+                            v_this_w)),
+                    v_this_w), v_n).args, 2, e.get_type_factory()->create_color(), root_dbg_info);
+    };
+    (void)match_rule22;
+
+// 025_local_normal.mdltl:15
+//RUID 364569
+    auto match_rule21 = [&] (DAG_node const *node21, IDistiller_plugin_api::Match_properties &node_props21) -> const DAG_node * {
+
+        // match for specular_bsdf(c)
+        if (node_props21.sema != IDefinition::DS_INTRINSIC_DF_SPECULAR_BSDF) {
+            return match_rule22(node21, node_props21);
         }
-        break;
-    case mi::mdl::IDefinition::Semantics::DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER: // match for color_fresnel_layer(_, w0, local_normal(_, nl1), local_normal(nw2, nl2), n)
-// 025_local_normal.mdltl:91
-//RUID 80129
-        if (true
-        && (e.get_selector(e.get_compound_argument(node, 2)) == mi::mdl::DS_DIST_LOCAL_NORMAL)
-        && (e.get_selector(e.get_compound_argument(node, 3)) == mi::mdl::DS_DIST_LOCAL_NORMAL)) {
-            const DAG_node* v_w0 = e.get_compound_argument(node, 1);
-            const DAG_node* v_nl1 = e.get_compound_argument(e.get_compound_argument(node, 2), 1);
-            const DAG_node* v_nw2 = e.get_compound_argument(e.get_compound_argument(node, 3), 0);
-            const DAG_node* v_nl2 = e.get_compound_argument(e.get_compound_argument(node, 3), 1);
-            const DAG_node* v_n = e.get_compound_argument(node, 4);
-            DAG_node const* v_w = e.create_binary(
-            IDistiller_plugin_api::OK_MULTIPLY,
-                e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w0).data(),
-                    1),
-                e.create_float_constant(options->top_layer_weight));
-            if (e.eval_if(e.create_binary(
-                IDistiller_plugin_api::OK_LOGICAL_AND,
-                    e.create_binary(
-                    IDistiller_plugin_api::OK_EQUAL,
-                        v_n,
-                        v_nl1),
-                    e.create_binary(
-                    IDistiller_plugin_api::OK_EQUAL,
-                        v_n,
-                        v_nl2)))) {
-                if (event_handler != nullptr)
-                    fire_match_event(*event_handler, 11);
-                return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
-                    IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e,m_node_types,
-                        local_normal, e.create_binary(
-                        IDistiller_plugin_api::OK_PLUS,
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_nw2,
-                                e.create_binary(
-                                IDistiller_plugin_api::OK_MINUS,
-                                    e.create_float_constant(1.0f),
-                                    v_w)),
-                            v_w), v_n).args, 2, e.get_type_factory()->create_color());
-            }
+        DAG_node const *node23 = e.get_compound_argument(node21, 0);
+        DAG_node const *v_c = node23; (void)v_c;
+        DAG_DbgInfo root_dbg_info = node21->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 21);
+        DAG_node const *node_result_4 = e.create_call("::df::specular_bsdf(color,::df::scatter_mode,string)",
+                IDefinition::DS_INTRINSIC_DF_SPECULAR_BSDF, Args_wrapper<3>::mk_args(
+                    e, m_node_types, specular_bsdf, v_c).args, 3, e.get_type_factory()->create_bsdf(), root_dbg_info);
+        DAG_node const *node_result_4_w = e.create_float_constant(0.0f);
+        e.set_attribute(node_result_4, "w",node_result_4_w);
+        DAG_node const *node_result_4_normal = e.create_function_call("::state::normal",
+                Nodes_wrapper<0>().data(), 0, root_dbg_info);
+        e.set_attribute(node_result_4, "normal",node_result_4_normal);
+        return node_result_4;
+    };
+    (void)match_rule21;
+
+// 025_local_normal.mdltl:17
+//RUID 525261
+    auto match_rule20 = [&] (DAG_node const *node20, IDistiller_plugin_api::Match_properties &node_props20) -> const DAG_node * {
+
+        // match for simple_glossy_bsdf(a, b, c, d, e)
+        if (node_props20.sema != IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF) {
+            return match_rule21(node20, node_props20);
         }
-// 025_local_normal.mdltl:96
-//RUID 904231
-        if (true
-        && (e.get_selector(e.get_compound_argument(node, 2)) == mi::mdl::DS_DIST_LOCAL_NORMAL)
-        && (e.get_selector(e.get_compound_argument(node, 3)) == mi::mdl::DS_DIST_LOCAL_NORMAL)) {
-            const DAG_node* v_w0 = e.get_compound_argument(node, 1);
-            const DAG_node* v_nw1 = e.get_compound_argument(e.get_compound_argument(node, 2), 0);
-            const DAG_node* v_nl1 = e.get_compound_argument(e.get_compound_argument(node, 2), 1);
-            const DAG_node* v_nw2 = e.get_compound_argument(e.get_compound_argument(node, 3), 0);
-            const DAG_node* v_nl2 = e.get_compound_argument(e.get_compound_argument(node, 3), 1);
-            const DAG_node* v_n = e.get_compound_argument(node, 4);
-            DAG_node const* v_w = e.create_binary(
-            IDistiller_plugin_api::OK_MULTIPLY,
-                e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w0).data(),
-                    1),
-                e.create_float_constant(options->top_layer_weight));
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 12);
-            return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
-                IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e,m_node_types,
-                    local_normal, e.create_binary(
-                    IDistiller_plugin_api::OK_PLUS,
-                        e.create_binary(
-                        IDistiller_plugin_api::OK_MULTIPLY,
-                            v_nw2,
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_MINUS,
-                                e.create_float_constant(1.0f),
-                                v_w)),
-                        v_w), e.create_function_call("::nvidia::distilling_support::affine_normal_sum",
-                        Nodes_wrapper<6>(e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                e.create_binary(
-                                IDistiller_plugin_api::OK_MINUS,
-                                    e.create_float_constant(1.0f),
-                                    v_w),
-                                v_nw2), v_nl2, e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_w,
-                                e.create_binary(
-                                IDistiller_plugin_api::OK_MINUS,
-                                    e.create_float_constant(1.0f),
-                                    v_nw1)), v_n, e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_w,
-                                v_nw1), v_nl1).data(), 6)).args, 2, e.get_type_factory()->create_color());
+        DAG_node const *node22 = e.get_compound_argument(node20, 0);
+        DAG_node const *v_a = node22; (void)v_a;
+        DAG_node const *node24 = e.get_compound_argument(node20, 1);
+        DAG_node const *v_b = node24; (void)v_b;
+        DAG_node const *node26 = e.get_compound_argument(node20, 2);
+        DAG_node const *v_c = node26; (void)v_c;
+        DAG_node const *node28 = e.get_compound_argument(node20, 3);
+        DAG_node const *v_d = node28; (void)v_d;
+        DAG_node const *node30 = e.get_compound_argument(node20, 4);
+        DAG_node const *v_e = node30; (void)v_e;
+        DAG_DbgInfo root_dbg_info = node20->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 20);
+        DAG_node const *node_result_5 = e.create_call("::df::simple_glossy_bsdf(float,float,color,color,float3,::df::scatter_mode,string)",
+                IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF, Args_wrapper<7>::mk_args(
+                    e, m_node_types, simple_glossy_bsdf, v_a, v_b, v_c, v_d, v_e).args,
+                7, e.get_type_factory()->create_bsdf(), root_dbg_info);
+        DAG_node const *node_result_5_w = e.create_float_constant(0.0f);
+        e.set_attribute(node_result_5, "w",node_result_5_w);
+        DAG_node const *node_result_5_normal = e.create_function_call("::state::normal",
+                Nodes_wrapper<0>().data(), 0, root_dbg_info);
+        e.set_attribute(node_result_5, "normal",node_result_5_normal);
+        return node_result_5;
+    };
+    (void)match_rule20;
+
+// 025_local_normal.mdltl:8
+//RUID 535110
+    auto match_rule19 = [&] (DAG_node const *node19, IDistiller_plugin_api::Match_properties &node_props19) -> const DAG_node * {
+
+        // match for material(tw, sf, bf, ior, vol, material_geometry(d, cutout, n), hair)
+        if (node_props19.sema != IDefinition::DS_ELEM_CONSTRUCTOR || node_props19.type_kind != IType::TK_STRUCT || node_props19.struct_id != IType_struct::SID_MATERIAL) {
+            return match_rule20(node19, node_props19);
         }
-        break;
-    case mi::mdl::IDefinition::Semantics::DS_INTRINSIC_DF_COLOR_WEIGHTED_LAYER: // match for color_weighted_layer(this_w, local_normal(_, nl1), local_normal(nw2, nl2), n)
-// 025_local_normal.mdltl:73
-//RUID 534396
-        if (true
-        && (e.get_selector(e.get_compound_argument(node, 1)) == mi::mdl::DS_DIST_LOCAL_NORMAL)
-        && (e.get_selector(e.get_compound_argument(node, 2)) == mi::mdl::DS_DIST_LOCAL_NORMAL)) {
-            const DAG_node* v_this_w = e.get_compound_argument(node, 0);
-            const DAG_node* v_nl1 = e.get_compound_argument(e.get_compound_argument(node, 1), 1);
-            const DAG_node* v_nw2 = e.get_compound_argument(e.get_compound_argument(node, 2), 0);
-            const DAG_node* v_nl2 = e.get_compound_argument(e.get_compound_argument(node, 2), 1);
-            const DAG_node* v_n = e.get_compound_argument(node, 3);
-            if (e.eval_if(e.create_binary(
-                IDistiller_plugin_api::OK_LOGICAL_AND,
-                    e.create_binary(
-                    IDistiller_plugin_api::OK_EQUAL,
-                        v_n,
-                        v_nl1),
-                    e.create_binary(
-                    IDistiller_plugin_api::OK_EQUAL,
-                        v_n,
-                        v_nl2)))) {
-                if (event_handler != nullptr)
-                    fire_match_event(*event_handler, 13);
-                return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
-                    IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e,m_node_types,
-                        local_normal, e.create_binary(
-                        IDistiller_plugin_api::OK_PLUS,
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_nw2,
-                                e.create_binary(
-                                IDistiller_plugin_api::OK_MINUS,
-                                    e.create_float_constant(1.0f),
-                                    e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_this_w).data(),
-                                        1))),
-                            e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_this_w).data(),
-                                1)), v_n).args, 2, e.get_type_factory()->create_color());
-            }
+        DAG_node const *node21 = e.get_compound_argument(node19, 0);
+        DAG_node const *v_tw = node21; (void)v_tw;
+        DAG_node const *node23 = e.get_compound_argument(node19, 1);
+        DAG_node const *v_sf = node23; (void)v_sf;
+        DAG_node const *node25 = e.get_compound_argument(node19, 2);
+        DAG_node const *v_bf = node25; (void)v_bf;
+        DAG_node const *node27 = e.get_compound_argument(node19, 3);
+        DAG_node const *v_ior = node27; (void)v_ior;
+        DAG_node const *node29 = e.get_compound_argument(node19, 4);
+        DAG_node const *v_vol = node29; (void)v_vol;
+        DAG_node const *node31 = e.get_compound_argument(node19, 5);
+        IDistiller_plugin_api::Match_properties node_props31;
+        e.get_match_properties(node31, node_props31); 
+        // match for material_geometry(d, cutout, n)
+        if (node_props31.sema != IDefinition::DS_ELEM_CONSTRUCTOR || node_props31.type_kind != IType::TK_STRUCT || node_props31.struct_id != IType_struct::SID_MATERIAL_GEOMETRY) {
+            return match_rule20(node19, node_props19);
         }
-// 025_local_normal.mdltl:76
-//RUID 312088
-        if (true
-        && (e.get_selector(e.get_compound_argument(node, 1)) == mi::mdl::DS_DIST_LOCAL_NORMAL)
-        && (e.get_selector(e.get_compound_argument(node, 2)) == mi::mdl::DS_DIST_LOCAL_NORMAL)) {
-            const DAG_node* v_this_w = e.get_compound_argument(node, 0);
-            const DAG_node* v_nw1 = e.get_compound_argument(e.get_compound_argument(node, 1), 0);
-            const DAG_node* v_nl1 = e.get_compound_argument(e.get_compound_argument(node, 1), 1);
-            const DAG_node* v_nw2 = e.get_compound_argument(e.get_compound_argument(node, 2), 0);
-            const DAG_node* v_nl2 = e.get_compound_argument(e.get_compound_argument(node, 2), 1);
-            const DAG_node* v_n = e.get_compound_argument(node, 3);
-            DAG_node const* v_wp = e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_this_w).data(),
-                1);
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 14);
-            return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
-                IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e,m_node_types,
-                    local_normal, e.create_binary(
-                    IDistiller_plugin_api::OK_PLUS,
-                        e.create_binary(
-                        IDistiller_plugin_api::OK_MULTIPLY,
-                            v_nw2,
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_MINUS,
-                                e.create_float_constant(1.0f),
-                                v_wp)),
-                        v_wp), e.create_function_call("::nvidia::distilling_support::affine_normal_sum",
-                        Nodes_wrapper<6>(e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                e.create_binary(
-                                IDistiller_plugin_api::OK_MINUS,
-                                    e.create_float_constant(1.0f),
-                                    v_wp),
-                                v_nw2), v_nl2, e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_wp,
-                                e.create_binary(
-                                IDistiller_plugin_api::OK_MINUS,
-                                    e.create_float_constant(1.0f),
-                                    v_nw1)), v_n, e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_wp,
-                                v_nw1), v_nl1).data(), 6)).args, 2, e.get_type_factory()->create_color());
+        DAG_node const *node32 = e.get_compound_argument(node31, 0);
+        DAG_node const *v_d = node32; (void)v_d;
+        DAG_node const *node34 = e.get_compound_argument(node31, 1);
+        DAG_node const *v_cutout = node34; (void)v_cutout;
+        DAG_node const *node36 = e.get_compound_argument(node31, 2);
+        DAG_node const *v_n = node36; (void)v_n;
+        DAG_node const *node39 = e.get_compound_argument(node19, 6);
+        DAG_node const *v_hair = node39; (void)v_hair;
+        if (!e.attribute_exists(node19, "w")) {
+            return match_rule20(node19, node_props19);
         }
-        break;
-    case mi::mdl::IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF: // match for diffuse_reflection_bsdf(t, r)
-// 025_local_normal.mdltl:13
-//RUID 398125
-        if (true) {
-            const DAG_node* v_t = e.get_compound_argument(node, 0);
-            const DAG_node* v_r = e.get_compound_argument(node, 1);
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 15);
-            DAG_node const *node_result_2 = e.create_call("::df::diffuse_reflection_bsdf(color,float,string)",
-                    IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<3>::mk_args(
-                        e,m_node_types, diffuse_reflection_bsdf, v_t, v_r).args,
-                    3, e.get_type_factory()->create_bsdf());
-            DAG_node const *node_result_2_w = e.create_float_constant(0.0f);
-            e.set_attribute(node_result_2, "w",node_result_2_w);
-            DAG_node const *node_result_2_normal = e.create_function_call("::state::normal",
-                    Nodes_wrapper<0>().data(), 0);
-            e.set_attribute(node_result_2, "normal",node_result_2_normal);
-            return node_result_2;
+        const DAG_node *node41 = e.get_attribute(node19, "w"); (void)node41;
+        DAG_node const *v__w = node41; (void)v__w;
+        if (!e.attribute_exists(node19, "normal")) {
+            return match_rule20(node19, node_props19);
         }
-        break;
-    case mi::mdl::IDefinition::DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF: // match for diffuse_transmission_bsdf(t)
-// 025_local_normal.mdltl:14
-//RUID 586592
-        if (true) {
-            const DAG_node* v_t = e.get_compound_argument(node, 0);
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 16);
-            DAG_node const *node_result_3 = e.create_call("::df::diffuse_transmission_bsdf(color,string)",
-                    IDefinition::DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF, Args_wrapper<2>::mk_args(
-                        e,m_node_types, diffuse_transmission_bsdf, v_t).args, 2,
-                    e.get_type_factory()->create_bsdf());
-            DAG_node const *node_result_3_w = e.create_float_constant(0.0f);
-            e.set_attribute(node_result_3, "w",node_result_3_w);
-            DAG_node const *node_result_3_normal = e.create_function_call("::state::normal",
-                    Nodes_wrapper<0>().data(), 0);
-            e.set_attribute(node_result_3, "normal",node_result_3_normal);
-            return node_result_3;
+        const DAG_node *node43 = e.get_attribute(node19, "normal"); (void)node43;
+        DAG_node const *v_nl = node43; (void)v_nl;
+        DAG_DbgInfo root_dbg_info = node19->get_dbg_info();
+        (void) root_dbg_info;
+        DAG_node const* v_nprime = e.create_function_call("::nvidia::distilling_support::add_detail_normal",
+            Nodes_wrapper<2>(v_nl, v_n).data(), 2, root_dbg_info);
+        if (!e.eval_maybe_if(e.create_binary(
+            IDistiller_plugin_api::OK_NOT_EQUAL,
+                v_n,
+                v_nl))) {
+            return match_rule20(node19, node_props19);
         }
-        break;
-    case mi::mdl::IDefinition::Semantics::DS_INTRINSIC_DF_FRESNEL_LAYER: // match for fresnel_layer(ior, w0, layer [[ w ~ _, normal ~ nl1 ]], base [[ w ~ nw2, normal ~ nl2 ]], n)
-// 025_local_normal.mdltl:82
-//RUID 414430
-        if (true
-        && (e.get_selector(node) == mi::mdl::IDefinition::Semantics::DS_INTRINSIC_DF_FRESNEL_LAYER)
-        && (e.attribute_exists(e.get_compound_argument(node, 2), "w"))
-        && (e.attribute_exists(e.get_compound_argument(node, 2), "normal"))
-        && (e.attribute_exists(e.get_compound_argument(node, 3), "w"))
-        && (e.attribute_exists(e.get_compound_argument(node, 3), "normal"))
-        && (e.attribute_exists(node, "w"))
-        && (e.attribute_exists(node, "normal"))) {
-            const DAG_node* v_ior = e.get_compound_argument(node, 0);
-            const DAG_node* v_w0 = e.get_compound_argument(node, 1);
-            const DAG_node* v_layer = e.get_compound_argument(node, 2);
-            const DAG_node *vv_0_w = e.get_attribute(e.get_compound_argument(node, 2), "w");
-            const DAG_node *vv_1_normal = e.get_attribute(e.get_compound_argument(node, 2), "normal");
-            const DAG_node* v_nl1 = vv_1_normal;
-            const DAG_node* v_base = e.get_compound_argument(node, 3);
-            const DAG_node *vv_2_w = e.get_attribute(e.get_compound_argument(node, 3), "w");
-            const DAG_node* v_nw2 = vv_2_w;
-            const DAG_node *vv_3_normal = e.get_attribute(e.get_compound_argument(node, 3), "normal");
-            const DAG_node* v_nl2 = vv_3_normal;
-            const DAG_node* v_n = e.get_compound_argument(node, 4);
-            const DAG_node *vv_4_w = e.get_attribute(node, "w");
-            const DAG_node *vv_5_normal = e.get_attribute(node, "normal");
-            DAG_node const* v_wght = e.create_binary(
-            IDistiller_plugin_api::OK_MULTIPLY,
-                v_w0,
-                e.create_float_constant(options->top_layer_weight));
-            if (e.eval_if(e.create_binary(
-                IDistiller_plugin_api::OK_LOGICAL_AND,
-                    e.create_binary(
-                    IDistiller_plugin_api::OK_EQUAL,
-                        v_n,
-                        v_nl1),
-                    e.create_binary(
-                    IDistiller_plugin_api::OK_EQUAL,
-                        v_n,
-                        v_nl2)))) {
-                if (event_handler != nullptr)
-                    fire_match_event(*event_handler, 17);
-                DAG_node const *node_result_19 = e.create_call("::df::fresnel_layer(float,float,bsdf,bsdf,float3)",
-                        IDefinition::DS_INTRINSIC_DF_FRESNEL_LAYER, Args_wrapper<5>::mk_args(
-                            e,m_node_types, fresnel_layer, v_ior, v_w0, v_layer,
-                            v_base, v_n).args, 5, e.get_type_factory()->create_bsdf());
-                DAG_node const *node_result_19_w = e.create_binary(
-                    IDistiller_plugin_api::OK_PLUS,
-                        e.create_binary(
-                        IDistiller_plugin_api::OK_MULTIPLY,
-                            v_nw2,
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_MINUS,
-                                e.create_float_constant(1.0f),
-                                v_wght)),
-                        v_w);
-                e.set_attribute(node_result_19, "w",node_result_19_w);
-                DAG_node const *node_result_19_normal = v_n;
-                e.set_attribute(node_result_19, "normal",node_result_19_normal);
-                return node_result_19;
-            }
-        }
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 19);
+        return e.create_call("material(bool,material_surface,material_surface,color,material_volume,material_geometry,hair_bsdf)",
+            IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<7>::mk_args(e, m_node_types,
+                material, v_tw, v_sf, v_bf, v_ior, v_vol, e.create_call("material_geometry(float3,float,float3)",
+                    IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<3>::mk_args(e, m_node_types,
+                        material_geometry, v_d, v_cutout, v_nprime).args, 3, e.get_type_factory()->
+                    get_predefined_struct(IType_struct::SID_MATERIAL_GEOMETRY), root_dbg_info),
+                v_hair).args, 7, e.get_type_factory()->get_predefined_struct(IType_struct::SID_MATERIAL), root_dbg_info);
+    };
+    (void)match_rule19;
+
 // 025_local_normal.mdltl:86
 //RUID 465076
-        if (true
-        && (e.attribute_exists(e.get_compound_argument(node, 2), "w"))
-        && (e.attribute_exists(e.get_compound_argument(node, 2), "normal"))
-        && (e.attribute_exists(e.get_compound_argument(node, 3), "w"))
-        && (e.attribute_exists(e.get_compound_argument(node, 3), "normal"))) {
-            const DAG_node* v_ior = e.get_compound_argument(node, 0);
-            const DAG_node* v_w0 = e.get_compound_argument(node, 1);
-            const DAG_node* v_layer = e.get_compound_argument(node, 2);
-            const DAG_node *vv_0_w = e.get_attribute(e.get_compound_argument(node, 2), "w");
-            const DAG_node* v_nw1 = vv_0_w;
-            const DAG_node *vv_1_normal = e.get_attribute(e.get_compound_argument(node, 2), "normal");
-            const DAG_node* v_nl1 = vv_1_normal;
-            const DAG_node* v_base = e.get_compound_argument(node, 3);
-            const DAG_node *vv_2_w = e.get_attribute(e.get_compound_argument(node, 3), "w");
-            const DAG_node* v_nw2 = vv_2_w;
-            const DAG_node *vv_3_normal = e.get_attribute(e.get_compound_argument(node, 3), "normal");
-            const DAG_node* v_nl2 = vv_3_normal;
-            const DAG_node* v_n = e.get_compound_argument(node, 4);
-            DAG_node const* v_wght = e.create_binary(
-            IDistiller_plugin_api::OK_MULTIPLY,
-                v_w0,
-                e.create_float_constant(options->top_layer_weight));
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 18);
-            DAG_node const *node_result_22 = e.create_call("::df::fresnel_layer(float,float,bsdf,bsdf,float3)",
-                    IDefinition::DS_INTRINSIC_DF_FRESNEL_LAYER, Args_wrapper<5>::mk_args(
-                        e,m_node_types, fresnel_layer, v_ior, v_w0, v_layer, v_base,
-                        v_n).args, 5, e.get_type_factory()->create_bsdf());
-            DAG_node const *node_result_22_w = e.create_binary(
+    auto match_rule18 = [&] (DAG_node const *node18, IDistiller_plugin_api::Match_properties &node_props18) -> const DAG_node * {
+
+        // continued match for fresnel_layer(ior, w0, layer [[ w ~ nw1, normal ~ nl1 ]], base [[ w ~ nw2, normal ~ nl2 ]], n)
+        DAG_node const *node20 = e.get_compound_argument(node18, 0);
+        DAG_node const *v_ior = node20; (void)v_ior;
+        DAG_node const *node22 = e.get_compound_argument(node18, 1);
+        DAG_node const *v_w0 = node22; (void)v_w0;
+        DAG_node const *node24 = e.get_compound_argument(node18, 2);
+        IDistiller_plugin_api::Match_properties node_props24;
+        e.get_match_properties(node24, node_props24); 
+        DAG_node const *v_layer = node24; (void)v_layer;
+        if (!e.attribute_exists(node24, "w")) {
+            return match_rule19(node18, node_props18);
+        }
+        const DAG_node *node25 = e.get_attribute(node24, "w"); (void)node25;
+        DAG_node const *v_nw1 = node25; (void)v_nw1;
+        if (!e.attribute_exists(node24, "normal")) {
+            return match_rule19(node18, node_props18);
+        }
+        const DAG_node *node27 = e.get_attribute(node24, "normal"); (void)node27;
+        DAG_node const *v_nl1 = node27; (void)v_nl1;
+        DAG_node const *node30 = e.get_compound_argument(node18, 3);
+        IDistiller_plugin_api::Match_properties node_props30;
+        e.get_match_properties(node30, node_props30); 
+        DAG_node const *v_base = node30; (void)v_base;
+        if (!e.attribute_exists(node30, "w")) {
+            return match_rule19(node18, node_props18);
+        }
+        const DAG_node *node31 = e.get_attribute(node30, "w"); (void)node31;
+        DAG_node const *v_nw2 = node31; (void)v_nw2;
+        if (!e.attribute_exists(node30, "normal")) {
+            return match_rule19(node18, node_props18);
+        }
+        const DAG_node *node33 = e.get_attribute(node30, "normal"); (void)node33;
+        DAG_node const *v_nl2 = node33; (void)v_nl2;
+        DAG_node const *node36 = e.get_compound_argument(node18, 4);
+        DAG_node const *v_n = node36; (void)v_n;
+        DAG_DbgInfo root_dbg_info = node18->get_dbg_info();
+        (void) root_dbg_info;
+        DAG_node const* v_wght = e.create_binary(
+        IDistiller_plugin_api::OK_MULTIPLY,
+            v_w0,
+            e.create_float_constant(options->top_layer_weight));
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 18);
+        DAG_node const *node_result_22 = e.create_call("::df::fresnel_layer(float,float,bsdf,bsdf,float3)",
+                IDefinition::DS_INTRINSIC_DF_FRESNEL_LAYER, Args_wrapper<5>::mk_args(
+                    e, m_node_types, fresnel_layer, v_ior, v_w0, v_layer, v_base,
+                    v_n).args, 5, e.get_type_factory()->create_bsdf(), root_dbg_info);
+        DAG_node const *node_result_22_w = e.create_binary(
+            IDistiller_plugin_api::OK_PLUS,
+                e.create_binary(
+                IDistiller_plugin_api::OK_MULTIPLY,
+                    v_nw2,
+                    e.create_binary(
+                    IDistiller_plugin_api::OK_MINUS,
+                        e.create_float_constant(1.0f),
+                        v_w)),
+                v_w);
+        e.set_attribute(node_result_22, "w",node_result_22_w);
+        DAG_node const *node_result_22_normal = e.create_function_call("::nvidia::distilling_support::affine_normal_sum",
+                Nodes_wrapper<6>(e.create_binary(
+                    IDistiller_plugin_api::OK_MULTIPLY,
+                        e.create_binary(
+                        IDistiller_plugin_api::OK_MINUS,
+                            e.create_float_constant(1.0f),
+                            v_wght),
+                        v_nw2), v_nl2, e.create_binary(
+                    IDistiller_plugin_api::OK_MULTIPLY,
+                        v_wght,
+                        e.create_binary(
+                        IDistiller_plugin_api::OK_MINUS,
+                            e.create_float_constant(1.0f),
+                            v_nw1)), v_n, e.create_binary(
+                    IDistiller_plugin_api::OK_MULTIPLY,
+                        v_wght,
+                        v_nw1), v_nl1).data(), 6, root_dbg_info);
+        e.set_attribute(node_result_22, "normal",node_result_22_normal);
+        return node_result_22;
+    };
+    (void)match_rule18;
+
+// 025_local_normal.mdltl:82
+//RUID 414430
+    auto match_rule17 = [&] (DAG_node const *node17, IDistiller_plugin_api::Match_properties &node_props17) -> const DAG_node * {
+
+        // match for fresnel_layer(ior, w0, layer [[ w ~ _, normal ~ nl1 ]], base [[ w ~ nw2, normal ~ nl2 ]], n)
+        if (node_props17.sema != IDefinition::DS_INTRINSIC_DF_FRESNEL_LAYER) {
+            return match_rule19(node17, node_props17);
+        }
+        DAG_node const *node19 = e.get_compound_argument(node17, 0);
+        DAG_node const *v_ior = node19; (void)v_ior;
+        DAG_node const *node21 = e.get_compound_argument(node17, 1);
+        DAG_node const *v_w0 = node21; (void)v_w0;
+        DAG_node const *node23 = e.get_compound_argument(node17, 2);
+        IDistiller_plugin_api::Match_properties node_props23;
+        e.get_match_properties(node23, node_props23); 
+        DAG_node const *v_layer = node23; (void)v_layer;
+        if (!e.attribute_exists(node23, "w")) {
+            return match_rule18(node17, node_props17);
+        }
+        const DAG_node *node24 = e.get_attribute(node23, "w"); (void)node24;
+        if (!e.attribute_exists(node23, "normal")) {
+            return match_rule18(node17, node_props17);
+        }
+        const DAG_node *node26 = e.get_attribute(node23, "normal"); (void)node26;
+        DAG_node const *v_nl1 = node26; (void)v_nl1;
+        DAG_node const *node29 = e.get_compound_argument(node17, 3);
+        IDistiller_plugin_api::Match_properties node_props29;
+        e.get_match_properties(node29, node_props29); 
+        DAG_node const *v_base = node29; (void)v_base;
+        if (!e.attribute_exists(node29, "w")) {
+            return match_rule18(node17, node_props17);
+        }
+        const DAG_node *node30 = e.get_attribute(node29, "w"); (void)node30;
+        DAG_node const *v_nw2 = node30; (void)v_nw2;
+        if (!e.attribute_exists(node29, "normal")) {
+            return match_rule18(node17, node_props17);
+        }
+        const DAG_node *node32 = e.get_attribute(node29, "normal"); (void)node32;
+        DAG_node const *v_nl2 = node32; (void)v_nl2;
+        DAG_node const *node35 = e.get_compound_argument(node17, 4);
+        DAG_node const *v_n = node35; (void)v_n;
+        if (!e.attribute_exists(node17, "w")) {
+            return match_rule18(node17, node_props17);
+        }
+        const DAG_node *node37 = e.get_attribute(node17, "w"); (void)node37;
+        if (!e.attribute_exists(node17, "normal")) {
+            return match_rule18(node17, node_props17);
+        }
+        const DAG_node *node39 = e.get_attribute(node17, "normal"); (void)node39;
+        DAG_DbgInfo root_dbg_info = node17->get_dbg_info();
+        (void) root_dbg_info;
+        DAG_node const* v_wght = e.create_binary(
+        IDistiller_plugin_api::OK_MULTIPLY,
+            v_w0,
+            e.create_float_constant(options->top_layer_weight));
+        if (!e.eval_if(e.create_binary(
+            IDistiller_plugin_api::OK_LOGICAL_AND,
+                e.create_binary(
+                IDistiller_plugin_api::OK_EQUAL,
+                    v_n,
+                    v_nl1),
+                e.create_binary(
+                IDistiller_plugin_api::OK_EQUAL,
+                    v_n,
+                    v_nl2)))) {
+            return match_rule18(node17, node_props17);
+        }
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 17);
+        DAG_node const *node_result_19 = e.create_call("::df::fresnel_layer(float,float,bsdf,bsdf,float3)",
+                IDefinition::DS_INTRINSIC_DF_FRESNEL_LAYER, Args_wrapper<5>::mk_args(
+                    e, m_node_types, fresnel_layer, v_ior, v_w0, v_layer, v_base,
+                    v_n).args, 5, e.get_type_factory()->create_bsdf(), root_dbg_info);
+        DAG_node const *node_result_19_w = e.create_binary(
+            IDistiller_plugin_api::OK_PLUS,
+                e.create_binary(
+                IDistiller_plugin_api::OK_MULTIPLY,
+                    v_nw2,
+                    e.create_binary(
+                    IDistiller_plugin_api::OK_MINUS,
+                        e.create_float_constant(1.0f),
+                        v_wght)),
+                v_w);
+        e.set_attribute(node_result_19, "w",node_result_19_w);
+        DAG_node const *node_result_19_normal = v_n;
+        e.set_attribute(node_result_19, "normal",node_result_19_normal);
+        return node_result_19;
+    };
+    (void)match_rule17;
+
+// 025_local_normal.mdltl:14
+//RUID 586592
+    auto match_rule16 = [&] (DAG_node const *node16, IDistiller_plugin_api::Match_properties &node_props16) -> const DAG_node * {
+
+        // match for diffuse_transmission_bsdf(t)
+        if (node_props16.sema != IDefinition::DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF) {
+            return match_rule17(node16, node_props16);
+        }
+        DAG_node const *node18 = e.get_compound_argument(node16, 0);
+        DAG_node const *v_t = node18; (void)v_t;
+        DAG_DbgInfo root_dbg_info = node16->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 16);
+        DAG_node const *node_result_3 = e.create_call("::df::diffuse_transmission_bsdf(color,string)",
+                IDefinition::DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF, Args_wrapper<2>::mk_args(
+                    e, m_node_types, diffuse_transmission_bsdf, v_t).args, 2, e.get_type_factory()->create_bsdf(), root_dbg_info);
+        DAG_node const *node_result_3_w = e.create_float_constant(0.0f);
+        e.set_attribute(node_result_3, "w",node_result_3_w);
+        DAG_node const *node_result_3_normal = e.create_function_call("::state::normal",
+                Nodes_wrapper<0>().data(), 0, root_dbg_info);
+        e.set_attribute(node_result_3, "normal",node_result_3_normal);
+        return node_result_3;
+    };
+    (void)match_rule16;
+
+// 025_local_normal.mdltl:13
+//RUID 398125
+    auto match_rule15 = [&] (DAG_node const *node15, IDistiller_plugin_api::Match_properties &node_props15) -> const DAG_node * {
+
+        // match for diffuse_reflection_bsdf(t, r)
+        if (node_props15.sema != IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF) {
+            return match_rule16(node15, node_props15);
+        }
+        DAG_node const *node17 = e.get_compound_argument(node15, 0);
+        DAG_node const *v_t = node17; (void)v_t;
+        DAG_node const *node19 = e.get_compound_argument(node15, 1);
+        DAG_node const *v_r = node19; (void)v_r;
+        DAG_DbgInfo root_dbg_info = node15->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 15);
+        DAG_node const *node_result_2 = e.create_call("::df::diffuse_reflection_bsdf(color,float,string)",
+                IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF, Args_wrapper<3>::mk_args(
+                    e, m_node_types, diffuse_reflection_bsdf, v_t, v_r).args, 3,
+                e.get_type_factory()->create_bsdf(), root_dbg_info);
+        DAG_node const *node_result_2_w = e.create_float_constant(0.0f);
+        e.set_attribute(node_result_2, "w",node_result_2_w);
+        DAG_node const *node_result_2_normal = e.create_function_call("::state::normal",
+                Nodes_wrapper<0>().data(), 0, root_dbg_info);
+        e.set_attribute(node_result_2, "normal",node_result_2_normal);
+        return node_result_2;
+    };
+    (void)match_rule15;
+
+// 025_local_normal.mdltl:76
+//RUID 312088
+    auto match_rule14 = [&] (DAG_node const *node14, IDistiller_plugin_api::Match_properties &node_props14) -> const DAG_node * {
+
+        // continued match for color_weighted_layer(this_w, local_normal(nw1, nl1), local_normal(nw2, nl2), n)
+        DAG_node const *node16 = e.get_compound_argument(node14, 0);
+        DAG_node const *v_this_w = node16; (void)v_this_w;
+        DAG_node const *node18 = e.get_compound_argument(node14, 1);
+        IDistiller_plugin_api::Match_properties node_props18;
+        e.get_match_properties(node18, node_props18); 
+        // match for local_normal(nw1, nl1)
+        if (node_props18.sema != 69632/* unhandled */) {
+            return match_rule15(node14, node_props14);
+        }
+        DAG_node const *node19 = e.get_compound_argument(node18, 0);
+        DAG_node const *v_nw1 = node19; (void)v_nw1;
+        DAG_node const *node21 = e.get_compound_argument(node18, 1);
+        DAG_node const *v_nl1 = node21; (void)v_nl1;
+        DAG_node const *node24 = e.get_compound_argument(node14, 2);
+        IDistiller_plugin_api::Match_properties node_props24;
+        e.get_match_properties(node24, node_props24); 
+        // match for local_normal(nw2, nl2)
+        if (node_props24.sema != 69632/* unhandled */) {
+            return match_rule15(node14, node_props14);
+        }
+        DAG_node const *node25 = e.get_compound_argument(node24, 0);
+        DAG_node const *v_nw2 = node25; (void)v_nw2;
+        DAG_node const *node27 = e.get_compound_argument(node24, 1);
+        DAG_node const *v_nl2 = node27; (void)v_nl2;
+        DAG_node const *node30 = e.get_compound_argument(node14, 3);
+        DAG_node const *v_n = node30; (void)v_n;
+        DAG_DbgInfo root_dbg_info = node14->get_dbg_info();
+        (void) root_dbg_info;
+        DAG_node const* v_wp = e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_this_w).data(),
+            1, root_dbg_info);
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 14);
+        return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
+            IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e, m_node_types, local_normal,
+                e.create_binary(
+                IDistiller_plugin_api::OK_PLUS,
+                    e.create_binary(
+                    IDistiller_plugin_api::OK_MULTIPLY,
+                        v_nw2,
+                        e.create_binary(
+                        IDistiller_plugin_api::OK_MINUS,
+                            e.create_float_constant(1.0f),
+                            v_wp)),
+                    v_wp), e.create_function_call("::nvidia::distilling_support::affine_normal_sum",
+                    Nodes_wrapper<6>(e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            e.create_binary(
+                            IDistiller_plugin_api::OK_MINUS,
+                                e.create_float_constant(1.0f),
+                                v_wp),
+                            v_nw2), v_nl2, e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            v_wp,
+                            e.create_binary(
+                            IDistiller_plugin_api::OK_MINUS,
+                                e.create_float_constant(1.0f),
+                                v_nw1)), v_n, e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            v_wp,
+                            v_nw1), v_nl1).data(), 6, root_dbg_info)).args, 2, e.get_type_factory()->create_color(), root_dbg_info);
+    };
+    (void)match_rule14;
+
+// 025_local_normal.mdltl:73
+//RUID 534396
+    auto match_rule13 = [&] (DAG_node const *node13, IDistiller_plugin_api::Match_properties &node_props13) -> const DAG_node * {
+
+        // match for color_weighted_layer(this_w, local_normal(_, nl1), local_normal(nw2, nl2), n)
+        if (node_props13.sema != IDefinition::DS_INTRINSIC_DF_COLOR_WEIGHTED_LAYER) {
+            return match_rule15(node13, node_props13);
+        }
+        DAG_node const *node15 = e.get_compound_argument(node13, 0);
+        DAG_node const *v_this_w = node15; (void)v_this_w;
+        DAG_node const *node17 = e.get_compound_argument(node13, 1);
+        IDistiller_plugin_api::Match_properties node_props17;
+        e.get_match_properties(node17, node_props17); 
+        // match for local_normal(_, nl1)
+        if (node_props17.sema != 69632/* unhandled */) {
+            return match_rule14(node13, node_props13);
+        }
+        DAG_node const *node18 = e.get_compound_argument(node17, 1);
+        DAG_node const *v_nl1 = node18; (void)v_nl1;
+        DAG_node const *node21 = e.get_compound_argument(node13, 2);
+        IDistiller_plugin_api::Match_properties node_props21;
+        e.get_match_properties(node21, node_props21); 
+        // match for local_normal(nw2, nl2)
+        if (node_props21.sema != 69632/* unhandled */) {
+            return match_rule14(node13, node_props13);
+        }
+        DAG_node const *node22 = e.get_compound_argument(node21, 0);
+        DAG_node const *v_nw2 = node22; (void)v_nw2;
+        DAG_node const *node24 = e.get_compound_argument(node21, 1);
+        DAG_node const *v_nl2 = node24; (void)v_nl2;
+        DAG_node const *node27 = e.get_compound_argument(node13, 3);
+        DAG_node const *v_n = node27; (void)v_n;
+        DAG_DbgInfo root_dbg_info = node13->get_dbg_info();
+        (void) root_dbg_info;
+        if (!e.eval_if(e.create_binary(
+            IDistiller_plugin_api::OK_LOGICAL_AND,
+                e.create_binary(
+                IDistiller_plugin_api::OK_EQUAL,
+                    v_n,
+                    v_nl1),
+                e.create_binary(
+                IDistiller_plugin_api::OK_EQUAL,
+                    v_n,
+                    v_nl2)))) {
+            return match_rule14(node13, node_props13);
+        }
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 13);
+        return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
+            IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e, m_node_types, local_normal,
+                e.create_binary(
+                IDistiller_plugin_api::OK_PLUS,
+                    e.create_binary(
+                    IDistiller_plugin_api::OK_MULTIPLY,
+                        v_nw2,
+                        e.create_binary(
+                        IDistiller_plugin_api::OK_MINUS,
+                            e.create_float_constant(1.0f),
+                            e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_this_w).data(),
+                                1, root_dbg_info))),
+                    e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_this_w).data(),
+                        1, root_dbg_info)), v_n).args, 2, e.get_type_factory()->create_color(), root_dbg_info);
+    };
+    (void)match_rule13;
+
+// 025_local_normal.mdltl:96
+//RUID 904231
+    auto match_rule12 = [&] (DAG_node const *node12, IDistiller_plugin_api::Match_properties &node_props12) -> const DAG_node * {
+
+        // continued match for color_fresnel_layer(_, w0, local_normal(nw1, nl1), local_normal(nw2, nl2), n)
+        DAG_node const *node14 = e.get_compound_argument(node12, 1);
+        DAG_node const *v_w0 = node14; (void)v_w0;
+        DAG_node const *node16 = e.get_compound_argument(node12, 2);
+        IDistiller_plugin_api::Match_properties node_props16;
+        e.get_match_properties(node16, node_props16); 
+        // match for local_normal(nw1, nl1)
+        if (node_props16.sema != 69632/* unhandled */) {
+            return match_rule13(node12, node_props12);
+        }
+        DAG_node const *node17 = e.get_compound_argument(node16, 0);
+        DAG_node const *v_nw1 = node17; (void)v_nw1;
+        DAG_node const *node19 = e.get_compound_argument(node16, 1);
+        DAG_node const *v_nl1 = node19; (void)v_nl1;
+        DAG_node const *node22 = e.get_compound_argument(node12, 3);
+        IDistiller_plugin_api::Match_properties node_props22;
+        e.get_match_properties(node22, node_props22); 
+        // match for local_normal(nw2, nl2)
+        if (node_props22.sema != 69632/* unhandled */) {
+            return match_rule13(node12, node_props12);
+        }
+        DAG_node const *node23 = e.get_compound_argument(node22, 0);
+        DAG_node const *v_nw2 = node23; (void)v_nw2;
+        DAG_node const *node25 = e.get_compound_argument(node22, 1);
+        DAG_node const *v_nl2 = node25; (void)v_nl2;
+        DAG_node const *node28 = e.get_compound_argument(node12, 4);
+        DAG_node const *v_n = node28; (void)v_n;
+        DAG_DbgInfo root_dbg_info = node12->get_dbg_info();
+        (void) root_dbg_info;
+        DAG_node const* v_w = e.create_binary(
+        IDistiller_plugin_api::OK_MULTIPLY,
+            e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w0).data(),
+                1, root_dbg_info),
+            e.create_float_constant(options->top_layer_weight));
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 12);
+        return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
+            IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e, m_node_types, local_normal,
+                e.create_binary(
                 IDistiller_plugin_api::OK_PLUS,
                     e.create_binary(
                     IDistiller_plugin_api::OK_MULTIPLY,
@@ -814,194 +745,813 @@ DAG_node const* Local_normal::matcher(
                         IDistiller_plugin_api::OK_MINUS,
                             e.create_float_constant(1.0f),
                             v_w)),
-                    v_w);
-            e.set_attribute(node_result_22, "w",node_result_22_w);
-            DAG_node const *node_result_22_normal = e.create_function_call("::nvidia::distilling_support::affine_normal_sum",
+                    v_w), e.create_function_call("::nvidia::distilling_support::affine_normal_sum",
                     Nodes_wrapper<6>(e.create_binary(
                         IDistiller_plugin_api::OK_MULTIPLY,
                             e.create_binary(
                             IDistiller_plugin_api::OK_MINUS,
                                 e.create_float_constant(1.0f),
-                                v_wght),
+                                v_w),
                             v_nw2), v_nl2, e.create_binary(
                         IDistiller_plugin_api::OK_MULTIPLY,
-                            v_wght,
+                            v_w,
                             e.create_binary(
                             IDistiller_plugin_api::OK_MINUS,
                                 e.create_float_constant(1.0f),
                                 v_nw1)), v_n, e.create_binary(
                         IDistiller_plugin_api::OK_MULTIPLY,
-                            v_wght,
-                            v_nw1), v_nl1).data(), 6);
-            e.set_attribute(node_result_22, "normal",node_result_22_normal);
-            return node_result_22;
+                            v_w,
+                            v_nw1), v_nl1).data(), 6, root_dbg_info)).args, 2, e.get_type_factory()->create_color(), root_dbg_info);
+    };
+    (void)match_rule12;
+
+// 025_local_normal.mdltl:91
+//RUID 80129
+    auto match_rule11 = [&] (DAG_node const *node11, IDistiller_plugin_api::Match_properties &node_props11) -> const DAG_node * {
+
+        // match for color_fresnel_layer(_, w0, local_normal(_, nl1), local_normal(nw2, nl2), n)
+        if (node_props11.sema != IDefinition::DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER) {
+            return match_rule13(node11, node_props11);
         }
-        break;
-    case mi::mdl::DS_DIST_STRUCT_MATERIAL: // match for material(tw, sf, bf, ior, vol, material_geometry(d, cutout, n), hair)
-// 025_local_normal.mdltl:8
-//RUID 535110
-        if (true
-        && (e.get_selector(node) == mi::mdl::DS_DIST_STRUCT_MATERIAL)
-        && (e.get_selector(e.get_compound_argument(node, 5)) == mi::mdl::DS_DIST_STRUCT_MATERIAL_GEOMETRY)
-        && (e.attribute_exists(node, "w"))
-        && (e.attribute_exists(node, "normal"))) {
-            const DAG_node* v_tw = e.get_compound_argument(node, 0);
-            const DAG_node* v_sf = e.get_compound_argument(node, 1);
-            const DAG_node* v_bf = e.get_compound_argument(node, 2);
-            const DAG_node* v_ior = e.get_compound_argument(node, 3);
-            const DAG_node* v_vol = e.get_compound_argument(node, 4);
-            const DAG_node* v_d = e.get_compound_argument(e.get_compound_argument(node, 5), 0);
-            const DAG_node* v_cutout = e.get_compound_argument(e.get_compound_argument(node, 5), 1);
-            const DAG_node* v_n = e.get_compound_argument(e.get_compound_argument(node, 5), 2);
-            const DAG_node* v_hair = e.get_compound_argument(node, 6);
-            const DAG_node *vv_0_w = e.get_attribute(node, "w");
-            const DAG_node *vv_1_normal = e.get_attribute(node, "normal");
-            const DAG_node* v_nl = vv_1_normal;
-            DAG_node const* v_nprime = e.create_function_call("::nvidia::distilling_support::add_detail_normal",
-                Nodes_wrapper<2>(v_nl, v_n).data(), 2);
-            if (e.eval_maybe_if(e.create_binary(
-                IDistiller_plugin_api::OK_NOT_EQUAL,
+        DAG_node const *node13 = e.get_compound_argument(node11, 1);
+        DAG_node const *v_w0 = node13; (void)v_w0;
+        DAG_node const *node15 = e.get_compound_argument(node11, 2);
+        IDistiller_plugin_api::Match_properties node_props15;
+        e.get_match_properties(node15, node_props15); 
+        // match for local_normal(_, nl1)
+        if (node_props15.sema != 69632/* unhandled */) {
+            return match_rule12(node11, node_props11);
+        }
+        DAG_node const *node16 = e.get_compound_argument(node15, 1);
+        DAG_node const *v_nl1 = node16; (void)v_nl1;
+        DAG_node const *node19 = e.get_compound_argument(node11, 3);
+        IDistiller_plugin_api::Match_properties node_props19;
+        e.get_match_properties(node19, node_props19); 
+        // match for local_normal(nw2, nl2)
+        if (node_props19.sema != 69632/* unhandled */) {
+            return match_rule12(node11, node_props11);
+        }
+        DAG_node const *node20 = e.get_compound_argument(node19, 0);
+        DAG_node const *v_nw2 = node20; (void)v_nw2;
+        DAG_node const *node22 = e.get_compound_argument(node19, 1);
+        DAG_node const *v_nl2 = node22; (void)v_nl2;
+        DAG_node const *node25 = e.get_compound_argument(node11, 4);
+        DAG_node const *v_n = node25; (void)v_n;
+        DAG_DbgInfo root_dbg_info = node11->get_dbg_info();
+        (void) root_dbg_info;
+        DAG_node const* v_w = e.create_binary(
+        IDistiller_plugin_api::OK_MULTIPLY,
+            e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w0).data(),
+                1, root_dbg_info),
+            e.create_float_constant(options->top_layer_weight));
+        if (!e.eval_if(e.create_binary(
+            IDistiller_plugin_api::OK_LOGICAL_AND,
+                e.create_binary(
+                IDistiller_plugin_api::OK_EQUAL,
                     v_n,
-                    v_nl))) {
-                if (event_handler != nullptr)
-                    fire_match_event(*event_handler, 19);
-                return e.create_call("material(bool,material_surface,material_surface,color,material_volume,material_geometry,hair_bsdf)",
-                    IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<7>::mk_args(e,m_node_types,
-                        material, v_tw, v_sf, v_bf, v_ior, v_vol, e.create_call("material_geometry(float3,float,float3)",
-                            IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<3>::mk_args(
-                                e,m_node_types, material_geometry, v_d, v_cutout,
-                                v_nprime).args, 3, e.get_type_factory()->get_predefined_struct(
-                            IType_struct::SID_MATERIAL_GEOMETRY)), v_hair).args,
-                    7, e.get_type_factory()->get_predefined_struct(IType_struct::SID_MATERIAL));
-            }
+                    v_nl1),
+                e.create_binary(
+                IDistiller_plugin_api::OK_EQUAL,
+                    v_n,
+                    v_nl2)))) {
+            return match_rule12(node11, node_props11);
         }
-        break;
-    case mi::mdl::IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF: // match for simple_glossy_bsdf(a, b, c, d, e)
-// 025_local_normal.mdltl:17
-//RUID 525261
-        if (true) {
-            const DAG_node* v_a = e.get_compound_argument(node, 0);
-            const DAG_node* v_b = e.get_compound_argument(node, 1);
-            const DAG_node* v_c = e.get_compound_argument(node, 2);
-            const DAG_node* v_d = e.get_compound_argument(node, 3);
-            const DAG_node* v_e = e.get_compound_argument(node, 4);
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 20);
-            DAG_node const *node_result_5 = e.create_call("::df::simple_glossy_bsdf(float,float,color,color,float3,::df::scatter_mode,string)",
-                    IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF, Args_wrapper<7>::mk_args(
-                        e,m_node_types, simple_glossy_bsdf, v_a, v_b, v_c, v_d, v_e).args,
-                    7, e.get_type_factory()->create_bsdf());
-            DAG_node const *node_result_5_w = e.create_float_constant(0.0f);
-            e.set_attribute(node_result_5, "w",node_result_5_w);
-            DAG_node const *node_result_5_normal = e.create_function_call("::state::normal",
-                    Nodes_wrapper<0>().data(), 0);
-            e.set_attribute(node_result_5, "normal",node_result_5_normal);
-            return node_result_5;
-        }
-        break;
-    case mi::mdl::IDefinition::DS_INTRINSIC_DF_SPECULAR_BSDF: // match for specular_bsdf(c)
-// 025_local_normal.mdltl:15
-//RUID 364569
-        if (true) {
-            const DAG_node* v_c = e.get_compound_argument(node, 0);
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 21);
-            DAG_node const *node_result_4 = e.create_call("::df::specular_bsdf(color,::df::scatter_mode,string)",
-                    IDefinition::DS_INTRINSIC_DF_SPECULAR_BSDF, Args_wrapper<3>::mk_args(
-                        e,m_node_types, specular_bsdf, v_c).args, 3, e.get_type_factory()->create_bsdf());
-            DAG_node const *node_result_4_w = e.create_float_constant(0.0f);
-            e.set_attribute(node_result_4, "w",node_result_4_w);
-            DAG_node const *node_result_4_normal = e.create_function_call("::state::normal",
-                    Nodes_wrapper<0>().data(), 0);
-            e.set_attribute(node_result_4, "normal",node_result_4_normal);
-            return node_result_4;
-        }
-        break;
-    case mi::mdl::IDefinition::Semantics::DS_INTRINSIC_DF_WEIGHTED_LAYER: // match for weighted_layer(this_w, local_normal(_, nl1), local_normal(nw2, nl2), n)
-// 025_local_normal.mdltl:66
-//RUID 316322
-        if (true
-        && (e.get_selector(e.get_compound_argument(node, 1)) == mi::mdl::DS_DIST_LOCAL_NORMAL)
-        && (e.get_selector(e.get_compound_argument(node, 2)) == mi::mdl::DS_DIST_LOCAL_NORMAL)) {
-            const DAG_node* v_this_w = e.get_compound_argument(node, 0);
-            const DAG_node* v_nl1 = e.get_compound_argument(e.get_compound_argument(node, 1), 1);
-            const DAG_node* v_nw2 = e.get_compound_argument(e.get_compound_argument(node, 2), 0);
-            const DAG_node* v_nl2 = e.get_compound_argument(e.get_compound_argument(node, 2), 1);
-            const DAG_node* v_n = e.get_compound_argument(node, 3);
-            if (e.eval_if(e.create_binary(
-                IDistiller_plugin_api::OK_LOGICAL_AND,
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 11);
+        return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
+            IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e, m_node_types, local_normal,
+                e.create_binary(
+                IDistiller_plugin_api::OK_PLUS,
                     e.create_binary(
-                    IDistiller_plugin_api::OK_EQUAL,
-                        v_n,
-                        v_nl1),
-                    e.create_binary(
-                    IDistiller_plugin_api::OK_EQUAL,
-                        v_n,
-                        v_nl2)))) {
-                if (event_handler != nullptr)
-                    fire_match_event(*event_handler, 22);
-                return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
-                    IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e,m_node_types,
-                        local_normal, e.create_binary(
-                        IDistiller_plugin_api::OK_PLUS,
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_nw2,
-                                e.create_binary(
-                                IDistiller_plugin_api::OK_MINUS,
-                                    e.create_float_constant(1.0f),
-                                    v_this_w)),
-                            v_this_w), v_n).args, 2, e.get_type_factory()->create_color());
-            }
+                    IDistiller_plugin_api::OK_MULTIPLY,
+                        v_nw2,
+                        e.create_binary(
+                        IDistiller_plugin_api::OK_MINUS,
+                            e.create_float_constant(1.0f),
+                            v_w)),
+                    v_w), v_n).args, 2, e.get_type_factory()->create_color(), root_dbg_info);
+    };
+    (void)match_rule11;
+
+// 025_local_normal.mdltl:47
+//RUID 122547
+    auto match_rule10 = [&] (DAG_node const *node10, IDistiller_plugin_api::Match_properties &node_props10) -> const DAG_node * {
+
+        // continued match for bsdf_mix_3(w1, local_normal(nw1, nl1), w2, local_normal(nw2, nl2), w3, local_normal(nw3, nl3))
+        DAG_node const *node12 = e.get_remapped_argument(node10, 0);
+        DAG_node const *v_w1 = node12; (void)v_w1;
+        DAG_node const *node14 = e.get_remapped_argument(node10, 1);
+        IDistiller_plugin_api::Match_properties node_props14;
+        e.get_match_properties(node14, node_props14); 
+        // match for local_normal(nw1, nl1)
+        if (node_props14.sema != 69632/* unhandled */) {
+            return match_rule11(node10, node_props10);
         }
-// 025_local_normal.mdltl:69
-//RUID 283983
-        if (true
-        && (e.get_selector(e.get_compound_argument(node, 1)) == mi::mdl::DS_DIST_LOCAL_NORMAL)
-        && (e.get_selector(e.get_compound_argument(node, 2)) == mi::mdl::DS_DIST_LOCAL_NORMAL)) {
-            const DAG_node* v_this_w = e.get_compound_argument(node, 0);
-            const DAG_node* v_nw1 = e.get_compound_argument(e.get_compound_argument(node, 1), 0);
-            const DAG_node* v_nl1 = e.get_compound_argument(e.get_compound_argument(node, 1), 1);
-            const DAG_node* v_nw2 = e.get_compound_argument(e.get_compound_argument(node, 2), 0);
-            const DAG_node* v_nl2 = e.get_compound_argument(e.get_compound_argument(node, 2), 1);
-            const DAG_node* v_n = e.get_compound_argument(node, 3);
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 23);
-            return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
-                IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e,m_node_types,
-                    local_normal, e.create_binary(
+        DAG_node const *node15 = e.get_compound_argument(node14, 0);
+        DAG_node const *v_nw1 = node15; (void)v_nw1;
+        DAG_node const *node17 = e.get_compound_argument(node14, 1);
+        DAG_node const *v_nl1 = node17; (void)v_nl1;
+        DAG_node const *node20 = e.get_remapped_argument(node10, 2);
+        DAG_node const *v_w2 = node20; (void)v_w2;
+        DAG_node const *node22 = e.get_remapped_argument(node10, 3);
+        IDistiller_plugin_api::Match_properties node_props22;
+        e.get_match_properties(node22, node_props22); 
+        // match for local_normal(nw2, nl2)
+        if (node_props22.sema != 69632/* unhandled */) {
+            return match_rule11(node10, node_props10);
+        }
+        DAG_node const *node23 = e.get_compound_argument(node22, 0);
+        DAG_node const *v_nw2 = node23; (void)v_nw2;
+        DAG_node const *node25 = e.get_compound_argument(node22, 1);
+        DAG_node const *v_nl2 = node25; (void)v_nl2;
+        DAG_node const *node28 = e.get_remapped_argument(node10, 4);
+        DAG_node const *v_w3 = node28; (void)v_w3;
+        DAG_node const *node30 = e.get_remapped_argument(node10, 5);
+        IDistiller_plugin_api::Match_properties node_props30;
+        e.get_match_properties(node30, node_props30); 
+        // match for local_normal(nw3, nl3)
+        if (node_props30.sema != 69632/* unhandled */) {
+            return match_rule11(node10, node_props10);
+        }
+        DAG_node const *node31 = e.get_compound_argument(node30, 0);
+        DAG_node const *v_nw3 = node31; (void)v_nw3;
+        DAG_node const *node33 = e.get_compound_argument(node30, 1);
+        DAG_node const *v_nl3 = node33; (void)v_nl3;
+        DAG_DbgInfo root_dbg_info = node10->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 10);
+        return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
+            IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e, m_node_types, local_normal,
+                e.create_binary(
+                IDistiller_plugin_api::OK_PLUS,
+                    e.create_binary(
                     IDistiller_plugin_api::OK_PLUS,
                         e.create_binary(
                         IDistiller_plugin_api::OK_MULTIPLY,
-                            v_nw2,
-                            e.create_binary(
-                            IDistiller_plugin_api::OK_MINUS,
-                                e.create_float_constant(1.0f),
-                                v_this_w)),
-                        v_this_w), e.create_function_call("::nvidia::distilling_support::affine_normal_sum",
-                        Nodes_wrapper<6>(e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                e.create_binary(
-                                IDistiller_plugin_api::OK_MINUS,
-                                    e.create_float_constant(1.0f),
-                                    v_this_w),
-                                v_nw2), v_nl2, e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_this_w,
-                                e.create_binary(
-                                IDistiller_plugin_api::OK_MINUS,
-                                    e.create_float_constant(1.0f),
-                                    v_nw1)), v_n, e.create_binary(
-                            IDistiller_plugin_api::OK_MULTIPLY,
-                                v_this_w,
-                                v_nw1), v_nl1).data(), 6)).args, 2, e.get_type_factory()->create_color());
-        }
-        break;
-    default:
-        break;
-    }
+                            v_w1,
+                            v_nw1),
+                        e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            v_w2,
+                            v_nw2)),
+                    e.create_binary(
+                    IDistiller_plugin_api::OK_MULTIPLY,
+                        v_w3,
+                        v_nw3)), e.create_function_call("::nvidia::distilling_support::affine_normal_sum",
+                    Nodes_wrapper<6>(e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            v_w1,
+                            v_nw1), v_nl1, e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            v_w2,
+                            v_nw2), v_nl2, e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            v_w3,
+                            v_nw3), v_nl3).data(), 6, root_dbg_info)).args, 2, e.get_type_factory()->create_color(), root_dbg_info);
+    };
+    (void)match_rule10;
 
-    return node;
+// 025_local_normal.mdltl:42
+//RUID 678443
+    auto match_rule9 = [&] (DAG_node const *node9, IDistiller_plugin_api::Match_properties &node_props9) -> const DAG_node * {
+
+        // match for bsdf_mix_3(w1, local_normal(nw1, nl1), w2, local_normal(nw2, nl2), w3, local_normal(nw3, nl3))
+        if (node_props9.sema != IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX || node_props9.arity != 3
+         || node_props9.type_kind != IType::TK_BSDF) {
+            return match_rule11(node9, node_props9);
+        }
+        DAG_node const *node11 = e.get_remapped_argument(node9, 0);
+        DAG_node const *v_w1 = node11; (void)v_w1;
+        DAG_node const *node13 = e.get_remapped_argument(node9, 1);
+        IDistiller_plugin_api::Match_properties node_props13;
+        e.get_match_properties(node13, node_props13); 
+        // match for local_normal(nw1, nl1)
+        if (node_props13.sema != 69632/* unhandled */) {
+            return match_rule10(node9, node_props9);
+        }
+        DAG_node const *node14 = e.get_compound_argument(node13, 0);
+        DAG_node const *v_nw1 = node14; (void)v_nw1;
+        DAG_node const *node16 = e.get_compound_argument(node13, 1);
+        DAG_node const *v_nl1 = node16; (void)v_nl1;
+        DAG_node const *node19 = e.get_remapped_argument(node9, 2);
+        DAG_node const *v_w2 = node19; (void)v_w2;
+        DAG_node const *node21 = e.get_remapped_argument(node9, 3);
+        IDistiller_plugin_api::Match_properties node_props21;
+        e.get_match_properties(node21, node_props21); 
+        // match for local_normal(nw2, nl2)
+        if (node_props21.sema != 69632/* unhandled */) {
+            return match_rule10(node9, node_props9);
+        }
+        DAG_node const *node22 = e.get_compound_argument(node21, 0);
+        DAG_node const *v_nw2 = node22; (void)v_nw2;
+        DAG_node const *node24 = e.get_compound_argument(node21, 1);
+        DAG_node const *v_nl2 = node24; (void)v_nl2;
+        DAG_node const *node27 = e.get_remapped_argument(node9, 4);
+        DAG_node const *v_w3 = node27; (void)v_w3;
+        DAG_node const *node29 = e.get_remapped_argument(node9, 5);
+        IDistiller_plugin_api::Match_properties node_props29;
+        e.get_match_properties(node29, node_props29); 
+        // match for local_normal(nw3, nl3)
+        if (node_props29.sema != 69632/* unhandled */) {
+            return match_rule10(node9, node_props9);
+        }
+        DAG_node const *node30 = e.get_compound_argument(node29, 0);
+        DAG_node const *v_nw3 = node30; (void)v_nw3;
+        DAG_node const *node32 = e.get_compound_argument(node29, 1);
+        DAG_node const *v_nl3 = node32; (void)v_nl3;
+        DAG_DbgInfo root_dbg_info = node9->get_dbg_info();
+        (void) root_dbg_info;
+        if (!e.eval_if(e.create_binary(
+            IDistiller_plugin_api::OK_LOGICAL_AND,
+                e.create_binary(
+                IDistiller_plugin_api::OK_EQUAL,
+                    v_nl1,
+                    v_nl2),
+                e.create_binary(
+                IDistiller_plugin_api::OK_EQUAL,
+                    v_nl1,
+                    v_nl3)))) {
+            return match_rule10(node9, node_props9);
+        }
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 9);
+        return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
+            IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e, m_node_types, local_normal,
+                e.create_binary(
+                IDistiller_plugin_api::OK_PLUS,
+                    e.create_binary(
+                    IDistiller_plugin_api::OK_PLUS,
+                        e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            v_w1,
+                            v_nw1),
+                        e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            v_w2,
+                            v_nw2)),
+                    e.create_binary(
+                    IDistiller_plugin_api::OK_MULTIPLY,
+                        v_w3,
+                        v_nw3)), v_nl1).args, 2, e.get_type_factory()->create_color(), root_dbg_info);
+    };
+    (void)match_rule9;
+
+// 025_local_normal.mdltl:27
+//RUID 581897
+    auto match_rule8 = [&] (DAG_node const *node8, IDistiller_plugin_api::Match_properties &node_props8) -> const DAG_node * {
+
+        // continued match for bsdf_mix_2(w1, b1 [[ w ~ nw1, normal ~ nl1 ]], w2, b2 [[ w ~ nw2, normal ~ nl2 ]])
+        DAG_node const *node10 = e.get_remapped_argument(node8, 0);
+        DAG_node const *v_w1 = node10; (void)v_w1;
+        DAG_node const *node12 = e.get_remapped_argument(node8, 1);
+        IDistiller_plugin_api::Match_properties node_props12;
+        e.get_match_properties(node12, node_props12); 
+        DAG_node const *v_b1 = node12; (void)v_b1;
+        if (!e.attribute_exists(node12, "w")) {
+            return match_rule9(node8, node_props8);
+        }
+        const DAG_node *node13 = e.get_attribute(node12, "w"); (void)node13;
+        DAG_node const *v_nw1 = node13; (void)v_nw1;
+        if (!e.attribute_exists(node12, "normal")) {
+            return match_rule9(node8, node_props8);
+        }
+        const DAG_node *node15 = e.get_attribute(node12, "normal"); (void)node15;
+        DAG_node const *v_nl1 = node15; (void)v_nl1;
+        DAG_node const *node18 = e.get_remapped_argument(node8, 2);
+        DAG_node const *v_w2 = node18; (void)v_w2;
+        DAG_node const *node20 = e.get_remapped_argument(node8, 3);
+        IDistiller_plugin_api::Match_properties node_props20;
+        e.get_match_properties(node20, node_props20); 
+        DAG_node const *v_b2 = node20; (void)v_b2;
+        if (!e.attribute_exists(node20, "w")) {
+            return match_rule9(node8, node_props8);
+        }
+        const DAG_node *node21 = e.get_attribute(node20, "w"); (void)node21;
+        DAG_node const *v_nw2 = node21; (void)v_nw2;
+        if (!e.attribute_exists(node20, "normal")) {
+            return match_rule9(node8, node_props8);
+        }
+        const DAG_node *node23 = e.get_attribute(node20, "normal"); (void)node23;
+        DAG_node const *v_nl2 = node23; (void)v_nl2;
+        DAG_DbgInfo root_dbg_info = node8->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 8);
+        DAG_node const *node_result_15 = e.create_mixer_call(Args_wrapper<4>::mk_args(e, m_node_types,
+                    node_null, v_w1, v_b1, v_w2, v_b2).args,
+                4);
+        DAG_node const *node_result_15_w = e.create_binary(
+            IDistiller_plugin_api::OK_PLUS,
+                e.create_binary(
+                IDistiller_plugin_api::OK_MULTIPLY,
+                    v_w1,
+                    v_nw1),
+                e.create_binary(
+                IDistiller_plugin_api::OK_MULTIPLY,
+                    v_w2,
+                    v_nw2));
+        e.set_attribute(node_result_15, "w",node_result_15_w);
+        DAG_node const *node_result_15_normal = e.create_function_call("::nvidia::distilling_support::affine_normal_sum",
+                Nodes_wrapper<4>(e.create_binary(
+                    IDistiller_plugin_api::OK_MULTIPLY,
+                        v_w1,
+                        v_nw1), v_nl1, e.create_binary(
+                    IDistiller_plugin_api::OK_MULTIPLY,
+                        v_w2,
+                        v_nw2), v_nl2).data(), 4, root_dbg_info);
+        e.set_attribute(node_result_15, "normal",node_result_15_normal);
+        return node_result_15;
+    };
+    (void)match_rule8;
+
+// 025_local_normal.mdltl:24
+//RUID 453886
+    auto match_rule7 = [&] (DAG_node const *node7, IDistiller_plugin_api::Match_properties &node_props7) -> const DAG_node * {
+
+        // match for bsdf_mix_2(w1, b1 [[ w ~ nw1, normal ~ nl1 ]], w2, b2 [[ w ~ nw2, normal ~ nl2 ]])
+        if (node_props7.sema != IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX || node_props7.arity != 2
+         || node_props7.type_kind != IType::TK_BSDF) {
+            return match_rule9(node7, node_props7);
+        }
+        DAG_node const *node9 = e.get_remapped_argument(node7, 0);
+        DAG_node const *v_w1 = node9; (void)v_w1;
+        DAG_node const *node11 = e.get_remapped_argument(node7, 1);
+        IDistiller_plugin_api::Match_properties node_props11;
+        e.get_match_properties(node11, node_props11); 
+        DAG_node const *v_b1 = node11; (void)v_b1;
+        if (!e.attribute_exists(node11, "w")) {
+            return match_rule8(node7, node_props7);
+        }
+        const DAG_node *node12 = e.get_attribute(node11, "w"); (void)node12;
+        DAG_node const *v_nw1 = node12; (void)v_nw1;
+        if (!e.attribute_exists(node11, "normal")) {
+            return match_rule8(node7, node_props7);
+        }
+        const DAG_node *node14 = e.get_attribute(node11, "normal"); (void)node14;
+        DAG_node const *v_nl1 = node14; (void)v_nl1;
+        DAG_node const *node17 = e.get_remapped_argument(node7, 2);
+        DAG_node const *v_w2 = node17; (void)v_w2;
+        DAG_node const *node19 = e.get_remapped_argument(node7, 3);
+        IDistiller_plugin_api::Match_properties node_props19;
+        e.get_match_properties(node19, node_props19); 
+        DAG_node const *v_b2 = node19; (void)v_b2;
+        if (!e.attribute_exists(node19, "w")) {
+            return match_rule8(node7, node_props7);
+        }
+        const DAG_node *node20 = e.get_attribute(node19, "w"); (void)node20;
+        DAG_node const *v_nw2 = node20; (void)v_nw2;
+        if (!e.attribute_exists(node19, "normal")) {
+            return match_rule8(node7, node_props7);
+        }
+        const DAG_node *node22 = e.get_attribute(node19, "normal"); (void)node22;
+        DAG_node const *v_nl2 = node22; (void)v_nl2;
+        DAG_DbgInfo root_dbg_info = node7->get_dbg_info();
+        (void) root_dbg_info;
+        if (!e.eval_if(e.create_binary(
+            IDistiller_plugin_api::OK_EQUAL,
+                v_nl1,
+                v_nl2))) {
+            return match_rule8(node7, node_props7);
+        }
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 7);
+        DAG_node const *node_result_12 = e.create_mixer_call(Args_wrapper<4>::mk_args(e, m_node_types,
+                    node_null, v_w1, v_b1, v_w2, v_b2).args,
+                4);
+        DAG_node const *node_result_12_w = e.create_binary(
+            IDistiller_plugin_api::OK_PLUS,
+                e.create_binary(
+                IDistiller_plugin_api::OK_MULTIPLY,
+                    v_w1,
+                    v_nw1),
+                e.create_binary(
+                IDistiller_plugin_api::OK_MULTIPLY,
+                    v_w2,
+                    v_nw2));
+        e.set_attribute(node_result_12, "w",node_result_12_w);
+        DAG_node const *node_result_12_normal = v_nl1;
+        e.set_attribute(node_result_12, "normal",node_result_12_normal);
+        return node_result_12;
+    };
+    (void)match_rule7;
+
+// 025_local_normal.mdltl:18
+//RUID 3826
+    auto match_rule6 = [&] (DAG_node const *node6, IDistiller_plugin_api::Match_properties &node_props6) -> const DAG_node * {
+
+        // match for bsdf_mix_1(w1, b [[ w ~ nw, normal ~ nl ]])
+        if (node_props6.sema != IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX || node_props6.arity != 1
+         || node_props6.type_kind != IType::TK_BSDF) {
+            return match_rule7(node6, node_props6);
+        }
+        DAG_node const *node8 = e.get_remapped_argument(node6, 0);
+        DAG_node const *v_w1 = node8; (void)v_w1;
+        DAG_node const *node10 = e.get_remapped_argument(node6, 1);
+        IDistiller_plugin_api::Match_properties node_props10;
+        e.get_match_properties(node10, node_props10); 
+        DAG_node const *v_b = node10; (void)v_b;
+        if (!e.attribute_exists(node10, "w")) {
+            return match_rule7(node6, node_props6);
+        }
+        const DAG_node *node11 = e.get_attribute(node10, "w"); (void)node11;
+        DAG_node const *v_nw = node11; (void)v_nw;
+        if (!e.attribute_exists(node10, "normal")) {
+            return match_rule7(node6, node_props6);
+        }
+        const DAG_node *node13 = e.get_attribute(node10, "normal"); (void)node13;
+        DAG_node const *v_nl = node13; (void)v_nl;
+        DAG_DbgInfo root_dbg_info = node6->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 6);
+        DAG_node const *node_result_7 = e.create_mixer_call(Args_wrapper<2>::mk_args(e, m_node_types,
+                    node_null, v_w1, v_b).args,
+                2);
+        DAG_node const *node_result_7_w = e.create_binary(
+            IDistiller_plugin_api::OK_MULTIPLY,
+                v_w1,
+                v_nw);
+        e.set_attribute(node_result_7, "w",node_result_7_w);
+        DAG_node const *node_result_7_normal = v_nl;
+        e.set_attribute(node_result_7, "normal",node_result_7_normal);
+        return node_result_7;
+    };
+    (void)match_rule6;
+
+// 025_local_normal.mdltl:59
+//RUID 964281
+    auto match_rule5 = [&] (DAG_node const *node5, IDistiller_plugin_api::Match_properties &node_props5) -> const DAG_node * {
+
+        // continued match for bsdf_color_mix_3(w1, local_normal(nw1, nl1), w2, local_normal(nw2, nl2), w3, local_normal(nw3, nl3))
+        DAG_node const *node7 = e.get_remapped_argument(node5, 0);
+        DAG_node const *v_w1 = node7; (void)v_w1;
+        DAG_node const *node9 = e.get_remapped_argument(node5, 1);
+        IDistiller_plugin_api::Match_properties node_props9;
+        e.get_match_properties(node9, node_props9); 
+        // match for local_normal(nw1, nl1)
+        if (node_props9.sema != 69632/* unhandled */) {
+            return match_rule6(node5, node_props5);
+        }
+        DAG_node const *node10 = e.get_compound_argument(node9, 0);
+        DAG_node const *v_nw1 = node10; (void)v_nw1;
+        DAG_node const *node12 = e.get_compound_argument(node9, 1);
+        DAG_node const *v_nl1 = node12; (void)v_nl1;
+        DAG_node const *node15 = e.get_remapped_argument(node5, 2);
+        DAG_node const *v_w2 = node15; (void)v_w2;
+        DAG_node const *node17 = e.get_remapped_argument(node5, 3);
+        IDistiller_plugin_api::Match_properties node_props17;
+        e.get_match_properties(node17, node_props17); 
+        // match for local_normal(nw2, nl2)
+        if (node_props17.sema != 69632/* unhandled */) {
+            return match_rule6(node5, node_props5);
+        }
+        DAG_node const *node18 = e.get_compound_argument(node17, 0);
+        DAG_node const *v_nw2 = node18; (void)v_nw2;
+        DAG_node const *node20 = e.get_compound_argument(node17, 1);
+        DAG_node const *v_nl2 = node20; (void)v_nl2;
+        DAG_node const *node23 = e.get_remapped_argument(node5, 4);
+        DAG_node const *v_w3 = node23; (void)v_w3;
+        DAG_node const *node25 = e.get_remapped_argument(node5, 5);
+        IDistiller_plugin_api::Match_properties node_props25;
+        e.get_match_properties(node25, node_props25); 
+        // match for local_normal(nw3, nl3)
+        if (node_props25.sema != 69632/* unhandled */) {
+            return match_rule6(node5, node_props5);
+        }
+        DAG_node const *node26 = e.get_compound_argument(node25, 0);
+        DAG_node const *v_nw3 = node26; (void)v_nw3;
+        DAG_node const *node28 = e.get_compound_argument(node25, 1);
+        DAG_node const *v_nl3 = node28; (void)v_nl3;
+        DAG_DbgInfo root_dbg_info = node5->get_dbg_info();
+        (void) root_dbg_info;
+        DAG_node const* v_w3p = e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w3).data(),
+            1, root_dbg_info);
+        DAG_node const* v_w2p = e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w2).data(),
+            1, root_dbg_info);
+        DAG_node const* v_w1p = e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w1).data(),
+            1, root_dbg_info);
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 5);
+        return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
+            IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e, m_node_types, local_normal,
+                e.create_binary(
+                IDistiller_plugin_api::OK_PLUS,
+                    e.create_binary(
+                    IDistiller_plugin_api::OK_PLUS,
+                        e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            v_w1p,
+                            v_nw1),
+                        e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            v_w2p,
+                            v_nw2)),
+                    e.create_binary(
+                    IDistiller_plugin_api::OK_MULTIPLY,
+                        v_w3p,
+                        v_nw3)), e.create_function_call("::nvidia::distilling_support::affine_normal_sum",
+                    Nodes_wrapper<6>(e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            v_w1p,
+                            v_nw1), v_nl1, e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            v_w2p,
+                            v_nw2), v_nl2, e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            v_w3p,
+                            v_nw3), v_nl3).data(), 6, root_dbg_info)).args, 2, e.get_type_factory()->create_color(), root_dbg_info);
+    };
+    (void)match_rule5;
+
+// 025_local_normal.mdltl:53
+//RUID 101806
+    auto match_rule4 = [&] (DAG_node const *node4, IDistiller_plugin_api::Match_properties &node_props4) -> const DAG_node * {
+
+        // match for bsdf_color_mix_3(w1, local_normal(nw1, nl1), w2, local_normal(nw2, nl2), w3, local_normal(nw3, nl3))
+        if (node_props4.sema != IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX
+         || node_props4.arity != 3 || node_props4.type_kind != IType::TK_BSDF) {
+            return match_rule6(node4, node_props4);
+        }
+        DAG_node const *node6 = e.get_remapped_argument(node4, 0);
+        DAG_node const *v_w1 = node6; (void)v_w1;
+        DAG_node const *node8 = e.get_remapped_argument(node4, 1);
+        IDistiller_plugin_api::Match_properties node_props8;
+        e.get_match_properties(node8, node_props8); 
+        // match for local_normal(nw1, nl1)
+        if (node_props8.sema != 69632/* unhandled */) {
+            return match_rule5(node4, node_props4);
+        }
+        DAG_node const *node9 = e.get_compound_argument(node8, 0);
+        DAG_node const *v_nw1 = node9; (void)v_nw1;
+        DAG_node const *node11 = e.get_compound_argument(node8, 1);
+        DAG_node const *v_nl1 = node11; (void)v_nl1;
+        DAG_node const *node14 = e.get_remapped_argument(node4, 2);
+        DAG_node const *v_w2 = node14; (void)v_w2;
+        DAG_node const *node16 = e.get_remapped_argument(node4, 3);
+        IDistiller_plugin_api::Match_properties node_props16;
+        e.get_match_properties(node16, node_props16); 
+        // match for local_normal(nw2, nl2)
+        if (node_props16.sema != 69632/* unhandled */) {
+            return match_rule5(node4, node_props4);
+        }
+        DAG_node const *node17 = e.get_compound_argument(node16, 0);
+        DAG_node const *v_nw2 = node17; (void)v_nw2;
+        DAG_node const *node19 = e.get_compound_argument(node16, 1);
+        DAG_node const *v_nl2 = node19; (void)v_nl2;
+        DAG_node const *node22 = e.get_remapped_argument(node4, 4);
+        DAG_node const *v_w3 = node22; (void)v_w3;
+        DAG_node const *node24 = e.get_remapped_argument(node4, 5);
+        IDistiller_plugin_api::Match_properties node_props24;
+        e.get_match_properties(node24, node_props24); 
+        // match for local_normal(nw3, nl3)
+        if (node_props24.sema != 69632/* unhandled */) {
+            return match_rule5(node4, node_props4);
+        }
+        DAG_node const *node25 = e.get_compound_argument(node24, 0);
+        DAG_node const *v_nw3 = node25; (void)v_nw3;
+        DAG_node const *node27 = e.get_compound_argument(node24, 1);
+        DAG_node const *v_nl3 = node27; (void)v_nl3;
+        DAG_DbgInfo root_dbg_info = node4->get_dbg_info();
+        (void) root_dbg_info;
+        if (!e.eval_if(e.create_binary(
+            IDistiller_plugin_api::OK_LOGICAL_AND,
+                e.create_binary(
+                IDistiller_plugin_api::OK_EQUAL,
+                    v_nl1,
+                    v_nl2),
+                e.create_binary(
+                IDistiller_plugin_api::OK_EQUAL,
+                    v_nl1,
+                    v_nl3)))) {
+            return match_rule5(node4, node_props4);
+        }
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 4);
+        return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
+            IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e, m_node_types, local_normal,
+                e.create_binary(
+                IDistiller_plugin_api::OK_PLUS,
+                    e.create_binary(
+                    IDistiller_plugin_api::OK_PLUS,
+                        e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w1).data(),
+                                1, root_dbg_info),
+                            v_nw1),
+                        e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w2).data(),
+                                1, root_dbg_info),
+                            v_nw2)),
+                    e.create_binary(
+                    IDistiller_plugin_api::OK_MULTIPLY,
+                        e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w3).data(),
+                            1, root_dbg_info),
+                        v_nw3)), v_nl1).args, 2, e.get_type_factory()->create_color(), root_dbg_info);
+    };
+    (void)match_rule4;
+
+// 025_local_normal.mdltl:35
+//RUID 25734
+    auto match_rule3 = [&] (DAG_node const *node3, IDistiller_plugin_api::Match_properties &node_props3) -> const DAG_node * {
+
+        // continued match for bsdf_color_mix_2(w1, local_normal(nw1, nl1), w2, local_normal(nw2, nl2))
+        DAG_node const *node5 = e.get_remapped_argument(node3, 0);
+        DAG_node const *v_w1 = node5; (void)v_w1;
+        DAG_node const *node7 = e.get_remapped_argument(node3, 1);
+        IDistiller_plugin_api::Match_properties node_props7;
+        e.get_match_properties(node7, node_props7); 
+        // match for local_normal(nw1, nl1)
+        if (node_props7.sema != 69632/* unhandled */) {
+            return match_rule4(node3, node_props3);
+        }
+        DAG_node const *node8 = e.get_compound_argument(node7, 0);
+        DAG_node const *v_nw1 = node8; (void)v_nw1;
+        DAG_node const *node10 = e.get_compound_argument(node7, 1);
+        DAG_node const *v_nl1 = node10; (void)v_nl1;
+        DAG_node const *node13 = e.get_remapped_argument(node3, 2);
+        DAG_node const *v_w2 = node13; (void)v_w2;
+        DAG_node const *node15 = e.get_remapped_argument(node3, 3);
+        IDistiller_plugin_api::Match_properties node_props15;
+        e.get_match_properties(node15, node_props15); 
+        // match for local_normal(nw2, nl2)
+        if (node_props15.sema != 69632/* unhandled */) {
+            return match_rule4(node3, node_props3);
+        }
+        DAG_node const *node16 = e.get_compound_argument(node15, 0);
+        DAG_node const *v_nw2 = node16; (void)v_nw2;
+        DAG_node const *node18 = e.get_compound_argument(node15, 1);
+        DAG_node const *v_nl2 = node18; (void)v_nl2;
+        DAG_DbgInfo root_dbg_info = node3->get_dbg_info();
+        (void) root_dbg_info;
+        DAG_node const* v_w2p = e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w2).data(),
+            1, root_dbg_info);
+        DAG_node const* v_w1p = e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w1).data(),
+            1, root_dbg_info);
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 3);
+        return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
+            IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e, m_node_types, local_normal,
+                e.create_binary(
+                IDistiller_plugin_api::OK_PLUS,
+                    e.create_binary(
+                    IDistiller_plugin_api::OK_MULTIPLY,
+                        v_w1p,
+                        v_nw1),
+                    e.create_binary(
+                    IDistiller_plugin_api::OK_MULTIPLY,
+                        v_w2p,
+                        v_nw2)), e.create_function_call("::nvidia::distilling_support::affine_normal_sum",
+                    Nodes_wrapper<4>(e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            v_w1p,
+                            v_nw1), v_nl1, e.create_binary(
+                        IDistiller_plugin_api::OK_MULTIPLY,
+                            v_w2p,
+                            v_nw2), v_nl2).data(), 4, root_dbg_info)).args, 2, e.get_type_factory()->create_color(), root_dbg_info);
+    };
+    (void)match_rule3;
+
+// 025_local_normal.mdltl:32
+//RUID 145615
+    auto match_rule2 = [&] (DAG_node const *node2, IDistiller_plugin_api::Match_properties &node_props2) -> const DAG_node * {
+
+        // match for bsdf_color_mix_2(w1, local_normal(nw1, nl1), w2, local_normal(nw2, nl2))
+        if (node_props2.sema != IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX
+         || node_props2.arity != 2 || node_props2.type_kind != IType::TK_BSDF) {
+            return match_rule4(node2, node_props2);
+        }
+        DAG_node const *node4 = e.get_remapped_argument(node2, 0);
+        DAG_node const *v_w1 = node4; (void)v_w1;
+        DAG_node const *node6 = e.get_remapped_argument(node2, 1);
+        IDistiller_plugin_api::Match_properties node_props6;
+        e.get_match_properties(node6, node_props6); 
+        // match for local_normal(nw1, nl1)
+        if (node_props6.sema != 69632/* unhandled */) {
+            return match_rule3(node2, node_props2);
+        }
+        DAG_node const *node7 = e.get_compound_argument(node6, 0);
+        DAG_node const *v_nw1 = node7; (void)v_nw1;
+        DAG_node const *node9 = e.get_compound_argument(node6, 1);
+        DAG_node const *v_nl1 = node9; (void)v_nl1;
+        DAG_node const *node12 = e.get_remapped_argument(node2, 2);
+        DAG_node const *v_w2 = node12; (void)v_w2;
+        DAG_node const *node14 = e.get_remapped_argument(node2, 3);
+        IDistiller_plugin_api::Match_properties node_props14;
+        e.get_match_properties(node14, node_props14); 
+        // match for local_normal(nw2, nl2)
+        if (node_props14.sema != 69632/* unhandled */) {
+            return match_rule3(node2, node_props2);
+        }
+        DAG_node const *node15 = e.get_compound_argument(node14, 0);
+        DAG_node const *v_nw2 = node15; (void)v_nw2;
+        DAG_node const *node17 = e.get_compound_argument(node14, 1);
+        DAG_node const *v_nl2 = node17; (void)v_nl2;
+        DAG_DbgInfo root_dbg_info = node2->get_dbg_info();
+        (void) root_dbg_info;
+        if (!e.eval_if(e.create_binary(
+            IDistiller_plugin_api::OK_EQUAL,
+                v_nl1,
+                v_nl2))) {
+            return match_rule3(node2, node_props2);
+        }
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 2);
+        return e.create_call("::nvidia::distilling_support::local_normal(float,float3)",
+            IDefinition::DS_UNKNOWN, Args_wrapper<2>::mk_args(e, m_node_types, local_normal,
+                e.create_binary(
+                IDistiller_plugin_api::OK_PLUS,
+                    e.create_binary(
+                    IDistiller_plugin_api::OK_MULTIPLY,
+                        e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w1).data(),
+                            1, root_dbg_info),
+                        v_nw1),
+                    e.create_binary(
+                    IDistiller_plugin_api::OK_MULTIPLY,
+                        e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w2).data(),
+                            1, root_dbg_info),
+                        v_nw2)), v_nl1).args, 2, e.get_type_factory()->create_color(), root_dbg_info);
+    };
+    (void)match_rule2;
+
+// 025_local_normal.mdltl:21
+//RUID 508272
+    auto match_rule1 = [&] (DAG_node const *node1, IDistiller_plugin_api::Match_properties &node_props1) -> const DAG_node * {
+
+        // match for bsdf_color_mix_1(w1, b [[ w ~ nw, normal ~ nl ]])
+        if (node_props1.sema != IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX
+         || node_props1.arity != 1 || node_props1.type_kind != IType::TK_BSDF) {
+            return match_rule2(node1, node_props1);
+        }
+        DAG_node const *node3 = e.get_remapped_argument(node1, 0);
+        DAG_node const *v_w1 = node3; (void)v_w1;
+        DAG_node const *node5 = e.get_remapped_argument(node1, 1);
+        IDistiller_plugin_api::Match_properties node_props5;
+        e.get_match_properties(node5, node_props5); 
+        DAG_node const *v_b = node5; (void)v_b;
+        if (!e.attribute_exists(node5, "w")) {
+            return match_rule2(node1, node_props1);
+        }
+        const DAG_node *node6 = e.get_attribute(node5, "w"); (void)node6;
+        DAG_node const *v_nw = node6; (void)v_nw;
+        if (!e.attribute_exists(node5, "normal")) {
+            return match_rule2(node1, node_props1);
+        }
+        const DAG_node *node8 = e.get_attribute(node5, "normal"); (void)node8;
+        DAG_node const *v_nl = node8; (void)v_nl;
+        DAG_DbgInfo root_dbg_info = node1->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 1);
+        DAG_node const *node_result_9 = e.create_color_mixer_call(Args_wrapper<2>::mk_args(e, m_node_types,
+                    node_null, v_w1, v_b).args,
+                2);
+        DAG_node const *node_result_9_w = e.create_binary(
+            IDistiller_plugin_api::OK_MULTIPLY,
+                e.create_function_call("::math::luminance", Nodes_wrapper<1>(v_w1).data(),
+                    1, root_dbg_info),
+                v_nw);
+        e.set_attribute(node_result_9, "w",node_result_9_w);
+        DAG_node const *node_result_9_normal = v_nl;
+        e.set_attribute(node_result_9, "normal",node_result_9_normal);
+        return node_result_9;
+    };
+    (void)match_rule1;
+
+// 025_local_normal.mdltl:12
+//RUID 144237
+    auto match_rule0 = [&] (DAG_node const *node0, IDistiller_plugin_api::Match_properties &node_props0) -> const DAG_node * {
+
+        // match for bsdf()
+        if (node_props0.sema != IDefinition::DS_INVALID_REF_CONSTRUCTOR || node_props0.type_kind != IType::TK_BSDF) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 0);
+        DAG_node const *node_result_1 = e.create_bsdf_constant();
+        DAG_node const *node_result_1_w = e.create_float_constant(0.0f);
+        e.set_attribute(node_result_1, "w",node_result_1_w);
+        DAG_node const *node_result_1_normal = e.create_function_call("::state::normal",
+                Nodes_wrapper<0>().data(), 0, root_dbg_info);
+        e.set_attribute(node_result_1, "normal",node_result_1_normal);
+        return node_result_1;
+    };
+    (void)match_rule0;
+
+    IDistiller_plugin_api::Match_properties node_props;
+    e.get_match_properties(node, node_props);
+    return match_rule0(node, node_props);
+
 }
 
 bool Local_normal::postcond(

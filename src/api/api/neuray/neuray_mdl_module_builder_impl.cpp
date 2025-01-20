@@ -101,7 +101,7 @@ mi::Sint32 Mdl_module_builder_impl::add_variant(
     MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
 
     if( !name || !prototype_name) {
-        add_error_message( context_impl, "Invalid parameters (NULL pointer).", -1);
+        add_error_message( context_impl, "Invalid parameters (nullptr).", -1);
         return -1;
     }
 
@@ -148,7 +148,7 @@ mi::Sint32 Mdl_module_builder_impl::add_function(
     MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
 
     if( !name || !body) {
-        add_error_message( context_impl, "Invalid parameters (NULL pointer).", -1);
+        add_error_message( context_impl, "Invalid parameters (nullptr).", -1);
         return -1;
     }
 
@@ -197,7 +197,7 @@ mi::Sint32 Mdl_module_builder_impl::add_annotation(
     MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
 
     if( !name) {
-        add_error_message( context_impl, "Invalid parameters (NULL pointer).", -1);
+        add_error_message( context_impl, "Invalid parameters (nullptr).", -1);
         return -1;
     }
 
@@ -230,7 +230,7 @@ mi::Sint32 Mdl_module_builder_impl::add_struct_category(
     MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
 
     if( !name) {
-        add_error_message( context_impl, "Invalid parameters (NULL pointer).", -1);
+        add_error_message( context_impl, "Invalid parameters (nullptr).", -1);
         return -1;
     }
 
@@ -256,7 +256,7 @@ mi::Sint32 Mdl_module_builder_impl::add_enum_type(
     MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
 
     if( !name || !enumerators) {
-        add_error_message( context_impl, "Invalid parameters (NULL pointer).", -1);
+        add_error_message( context_impl, "Invalid parameters (nullptr).", -1);
         return -1;
     }
 
@@ -291,7 +291,7 @@ mi::Sint32 Mdl_module_builder_impl::add_struct_type(
     MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
 
     if( !name || !fields) {
-        add_error_message( context_impl, "Invalid parameters (NULL pointer).", -1);
+        add_error_message( context_impl, "Invalid parameters (nullptr).", -1);
         return -1;
     }
 
@@ -329,7 +329,7 @@ mi::Sint32 Mdl_module_builder_impl::add_constant(
     MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
 
     if( !name || !expr) {
-        add_error_message( context_impl, "Invalid parameters (NULL pointer).", -1);
+        add_error_message( context_impl, "Invalid parameters (nullptr).", -1);
         return -1;
     }
 
@@ -364,7 +364,7 @@ mi::Sint32 Mdl_module_builder_impl::remove_entity(
     MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
 
     if( !name) {
-        add_error_message( context_impl, "Invalid parameters (NULL pointer).", -1);
+        add_error_message( context_impl, "Invalid parameters (nullptr).", -1);
         return -1;
     }
 
@@ -389,7 +389,7 @@ const mi::IArray* Mdl_module_builder_impl::analyze_uniform(
     MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
 
     if( !root_expr || !context) {
-        add_error_message( context_impl, "Invalid parameters (NULL pointer).", -1);
+        add_error_message( context_impl, "Invalid parameters (nullptr).", -1);
         return nullptr;
     }
 

@@ -40,7 +40,6 @@
 #include <base/system/main/access_module.h>
 #include <base/hal/disk/disk_file_reader_writer_impl.h>
 #include <base/hal/disk/disk_memory_reader_writer_impl.h>
-#include <base/hal/hal/i_hal_ospath.h>
 #include <base/lib/config/config.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/log/i_log_assert.h>
@@ -268,7 +267,7 @@ const SERIAL::Serializable* Bsdf_measurement::serialize( SERIAL::Serializer* ser
     SERIAL::write( serializer, serializer->is_remote() ? "" : m_resolved_container_filename);
     SERIAL::write( serializer, serializer->is_remote() ? "" : m_resolved_container_membername);
     SERIAL::write( serializer, serializer->is_remote() ? "" : m_mdl_file_path);
-    SERIAL::write( serializer, HAL::Ospath::sep());
+    SERIAL::write( serializer, static_cast<mi::Uint8>( fs::path::preferred_separator));
 
     SERIAL::write( serializer, m_impl_tag);
     SERIAL::write( serializer, m_impl_hash);
@@ -287,7 +286,7 @@ SERIAL::Serializable* Bsdf_measurement::deserialize( SERIAL::Deserializer* deser
     SERIAL::read( deserializer, &m_resolved_container_filename);
     SERIAL::read( deserializer, &m_resolved_container_membername);
     SERIAL::read( deserializer, &m_mdl_file_path);
-    std::string serializer_sep;
+    mi::Uint8 serializer_sep;
     SERIAL::read( deserializer, &serializer_sep);
 
     SERIAL::read( deserializer, &m_impl_tag);
@@ -299,11 +298,9 @@ SERIAL::Serializable* Bsdf_measurement::deserialize( SERIAL::Deserializer* deser
     std::error_code ec;
     if( !m_original_filename.empty()) {
 
-        if( serializer_sep != HAL::Ospath::sep()) {
-            m_original_filename
-                = HAL::Ospath::convert_to_platform_specific_path( m_original_filename);
-            m_resolved_filename
-                = HAL::Ospath::convert_to_platform_specific_path( m_resolved_filename);
+        if( serializer_sep != fs::path::preferred_separator) {
+            m_original_filename = fs::u8path( m_original_filename).u8string();
+            m_resolved_filename = fs::u8path( m_resolved_filename).u8string();
         }
 
         // Re-resolve filename if it is not meaningful for this host. If unsuccessful, clear value
@@ -321,10 +318,8 @@ SERIAL::Serializable* Bsdf_measurement::deserialize( SERIAL::Deserializer* deser
     // Adjust m_resolved_container_filename and m_resolved_container_membername for this host.
     if( !m_resolved_container_filename.empty()) {
 
-        m_resolved_container_filename
-            = HAL::Ospath::convert_to_platform_specific_path( m_resolved_container_filename);
-        m_resolved_container_membername
-            = HAL::Ospath::convert_to_platform_specific_path( m_resolved_container_membername);
+        m_resolved_container_filename = fs::u8path( m_resolved_container_filename).u8string();
+        m_resolved_container_membername = fs::u8path( m_resolved_container_membername).u8string();
         if( !fs::is_regular_file( fs::u8path( m_resolved_container_filename), ec)) {
             m_resolved_container_filename.clear();
             m_resolved_container_membername.clear();
@@ -683,7 +678,7 @@ mi::Sint32 import_from_file(
     mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data>& reflection,
     mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data>& transmission)
 {
-    std::string extension = STRING::to_lower( HAL::Ospath::get_ext( filename));
+    std::string extension = STRING::to_lower( fs::u8path( filename).extension().u8string());
     if( extension != ".mbsdf")
         return -3;
 

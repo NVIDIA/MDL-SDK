@@ -32,6 +32,7 @@
 #include <base/data/db/i_db_scope.h>
 
 #include <atomic>
+#include <map>
 
 #include <boost/core/noncopyable.hpp>
 #include <boost/intrusive/set.hpp>
@@ -45,9 +46,34 @@ namespace DBLIGHT {
 
 class Database_impl;
 class Info_impl;
+class Transaction_journal_entry;
 class Scope_manager;
 
 namespace bi = boost::intrusive;
+
+/// A journal entry comprises a tag, version, creator transaction ID, and the journal type.
+class Scope_journal_entry
+{
+public:
+    /// Constructor.
+    Scope_journal_entry() = default;
+
+    /// Default constructor.
+    Scope_journal_entry(
+        DB::Tag tag,
+        mi::Uint32 version,
+        DB::Transaction_id transaction_id,
+        DB::Journal_type journal_type)
+      : m_tag( tag),
+        m_version( version),
+        m_transaction_id( transaction_id),
+        m_journal_type( journal_type) { }
+
+    DB::Tag m_tag;
+    mi::Uint32 m_version = 0;
+    DB::Transaction_id m_transaction_id;
+    DB::Journal_type m_journal_type = DB::JOURNAL_NONE;
+};
 
 /// A scope of the database.
 class Scope_impl : public DB::Scope
@@ -59,7 +85,7 @@ public:
     /// \param scope_manager   Manager that creates this scope.
     /// \param id              ID of this scope (0 for the global scope).
     /// \param name            Name of this scope (or the empty string).
-    /// \param parent          Parent scope (or \c NULL for the global scope).
+    /// \param parent          Parent scope (or \c nullptr for the global scope).
     /// \param level           Privacy level of the scope (0 for the global scope).
     Scope_impl(
         Database_impl* database,
@@ -92,6 +118,13 @@ public:
 
     DB::Transaction* start_transaction() override;
 
+    std::unique_ptr<DB::Journal_query_result> get_journal(
+        DB::Transaction_id last_transaction_id,
+        mi::Uint32 last_transaction_change_version,
+        DB::Transaction_id current_transaction_id,
+        DB::Journal_type journal_type,
+        bool lookup_parents) override;
+
     // internal methods
 
     /// Returns the current pin count.
@@ -118,6 +151,41 @@ public:
     /// \param info   The info to remove. RCS:NEU
     void erase_info( Info_impl* info);
 
+    /// Updates the journal with changes from a single transaction.
+    ///
+    /// \param transaction_id    The changes originate from this transaction.
+    /// \param visibility_id     The changes are visible in this transaction.
+    /// \param journal           The array of changes. The array is sorted by scope ID and the
+    ///                          scope ID of the first element matches the scope ID of this scope,
+    ///                          i.e., only the initial array segment with matching scope IDs needs
+    ///                          to be considered.
+    /// \param count             The array size.
+    /// \return                  The size of the initial array segment with matching scope IDs.
+    size_t update_journal(
+        DB::Transaction_id transaction_id,
+        DB::Transaction_id visibility_id,
+        const Transaction_journal_entry* journal,
+        size_t count);
+
+    /// Helper for DB::Transaction::get_journal().
+    bool get_journal(
+        DB::Transaction_id last_transaction_id,
+        mi::Uint32 last_transaction_change_version,
+        DB::Transaction_id current_transaction_id,
+        DB::Journal_type journal_type,
+        bool include_parent_scopes,
+        DB::Journal_query_result& result);
+
+    /// The type of the scope journal.
+    using Scope_journal = std::multimap<DB::Transaction_id, Scope_journal_entry>;
+
+    /// Returns the possibly pruned scope journal (for dumping).
+    const Scope_journal& get_journal() const { return m_journal; }
+
+    /// Returns the last pruned visibility ID of the journal (for dumping).
+    DB::Transaction_id get_journal_last_pruned_visibility() const
+    { return m_journal_last_pruned_visibility; }
+
 private:
     /// The database instance this scope belongs to.
     Database_impl* const m_database;
@@ -128,7 +196,7 @@ private:
     const DB::Scope_id m_id;
     /// The name of the scope.
     const std::string m_name;
-    /// The parent scope (or \c NULL for the global scope).
+    /// The parent scope (or \c nullptr for the global scope).
     Scope_impl* const m_parent;
     /// The privacy level of the scope.
     const DB::Privacy_level m_level;
@@ -144,6 +212,11 @@ private:
 
     /// List of all infos in this scope.
     Infos_list m_infos;
+
+    /// Possibly pruned journal of updates for this journal.
+    Scope_journal m_journal;
+    /// The visibility ID of the last pruned journal entry.
+    DB::Transaction_id m_journal_last_pruned_visibility{ ~0u};
 
 public:
     // Key for Scope_manager::m_scopes_by_id.
@@ -182,23 +255,23 @@ public:
     ///
     /// \param id     The ID of the scope as returned by #DB::Scope::get_id(). The global scope has
     ///               ID 0.
-    /// \return       The found scope or \c NULL if no such scope exists. RCS:NEU
+    /// \return       The found scope or \c nullptr if no such scope exists. RCS:NEU
     DB::Scope* lookup_scope( DB::Scope_id id);
 
     /// Looks up a named scope.
     ///
     /// \param name   The name of the scope as returned by #DB::Scope::get_name(). The global scope
     ///               has the empty string as name.
-    /// \return       The found scope or \c NULL if no such scope exists. RCS:NEU
+    /// \return       The found scope or \c nullptr if no such scope exists. RCS:NEU
     DB::Scope* lookup_scope( const std::string& name);
 
     /// Creates a new scope (or retrieves an already existing named scope).
     ///
     /// \param name     The name of the scope. The empty string creates an unnamed scope.
-    /// \param parent   The parent scope (or \c NULL for the global scope).
+    /// \param parent   The parent scope (or \c nullptr for the global scope).
     /// \param level    Privacy level for the new scope. Must be higher than the privacy level of
     ///                 the parent scope.
-    /// \return         The created child scope, or \c NULL in case of failure:
+    /// \return         The created child scope, or \c nullptr in case of failure:
     ///                 - Missing parent scope.
     ///                 - Privacy level not higher than that of the parent scope.
     ///                 - A scope with that name exists already, but with different parent scope

@@ -110,8 +110,8 @@ public:
     ///                     pixel types.
     /// \param width        The desired width.
     /// \param height       The desired height.
-    /// \return             The requested tile, or \c NULL in case of invalid pixel type, width, or
-    ///                     height, or memory allocation failures.
+    /// \return             The requested tile, or \c nullptr in case of invalid pixel type, width,
+    ///                     or height, or memory allocation failures.
     virtual ITile* create_tile(
         const char* pixel_type,
         Uint32 width,
@@ -133,8 +133,8 @@ public:
     /// \param is_cubemap   Flag that indicates whether this canvas represents a cubemap.
     /// \param gamma        The desired gamma value. The special value 0.0 represents the default
     ///                     gamma which is 1.0 for HDR pixel types and 2.2 for LDR pixel types.
-    /// \return             The requested canvas, or \c NULL in case of invalid pixel type, width,
-    ///                     height, layers, or cubemap flag, or memory allocation failures.
+    /// \return             The requested canvas, or \c nullptr in case of invalid pixel type,
+    ///                     width, height, layers, or cubemap flag, or memory allocation failures.
     virtual ICanvas* create_canvas(
         const char* pixel_type,
         Uint32 width,
@@ -160,7 +160,7 @@ public:
     /// \param layers       The desired number of layers.
     /// \param gamma        The desired gamma value. The special value 0.0 represents the default
     ///                     gamma which is 1.0 for HDR pixel types and 2.2 for LDR pixel types.
-    /// \return             The requested canvas, or \c NULL in case of invalid parameters or
+    /// \return             The requested canvas, or \c nullptr in case of invalid parameters or
     ///                     CUDA errors.
 #else // MI_SKIP_WITH_MDL_SDK_DOXYGEN
     /// Unused.
@@ -186,7 +186,7 @@ public:
     ///                         canvas gamma during mipmap creation.
     /// \return                 An array of type #mi::IPointer containing pointers to
     ///                         the miplevels of type #mi::neuraylib::ICanvas.
-    ///                         If no mipmap could be created, \c NULL is returned.
+    ///                         If no mipmap could be created, \c nullptr is returned.
     virtual IArray* create_mipmap(
         const ICanvas* canvas, Float32 gamma_override = 0.0f) const = 0;
 
@@ -225,7 +225,7 @@ public:
     /// \param buffer_padding      The padding between subsequent rows of the buffer in bytes.
     /// \return
     ///                            -  0: Success.
-    ///                            - -1: Invalid parameters (\c NULL pointer).
+    ///                            - -1: Invalid parameters (\c nullptr).
     ///                            - -2: \p width or \p height is zero.
     ///                            - -3: Invalid pixel type of the buffer.
     ///                            - -4: The rectangular area [\p canvas_x, \p canvas_x + \p width)
@@ -262,7 +262,7 @@ public:
     /// \param buffer_padding      The padding between subsequent rows of the buffer in bytes.
     /// \return
     ///                            -  0: Success.
-    ///                            - -1: Invalid parameters (\c NULL pointer).
+    ///                            - -1: Invalid parameters (\c nullptr).
     ///                            - -2: \p width or \p height is zero.
     ///                            - -3: Invalid pixel type of the buffer.
     ///                            - -4: The rectangular area [\p canvas_x, \p canvas_x + \p width)
@@ -296,12 +296,12 @@ public:
     ///                              argument is ignored and one of the supported formats is chosen
     ///                              instead.
     /// \param export_options        See \ref mi_image_export_options for supported options.
-    /// \return                      The created buffer, or \c NULL in case of failure.
+    /// \return                      The created buffer, or \c nullptr in case of failure.
     virtual IBuffer* create_buffer_from_canvas(
         const ICanvas* canvas,
         const char* image_format,
         const char* pixel_type,
-        const IMap* export_options = 0) const = 0;
+        const IMap* export_options = nullptr) const = 0;
 
     /// Decodes the pixel data of a memory buffer into a canvas.
     ///
@@ -309,11 +309,12 @@ public:
     /// \param image_format  The image format of the buffer, e.g., \c "jpg". Note that support for
     ///                      a given image format requires an image plugin capable of handling that
     ///                      format.
-    /// \param selector      The selector, or \c NULL. \ifnot DICE_API See section 2.3.1 in
+    /// \param selector      The selector, or \c nullptr. \ifnot DICE_API See section 2.3.1 in
     ///                      [\ref MDLLS] for details. \endif
-    /// \return              The canvas with the decoded pixel data, or \c NULL in case of failure.
+    /// \return              The canvas with the decoded pixel data, or \c nullptr in case of
+    ///                      failure.
     virtual ICanvas* create_canvas_from_buffer(
-        const IBuffer* buffer, const char* image_format, const char* selector = 0) const = 0;
+        const IBuffer* buffer, const char* image_format, const char* selector = nullptr) const = 0;
 
     /// Decodes the pixel data from a reader into a canvas.
     ///
@@ -322,11 +323,12 @@ public:
     /// \param image_format  The image format of the buffer, e.g., \c "jpg". Note that support for
     ///                      a given image format requires an image plugin capable of handling that
     ///                      format.
-    /// \param selector      The selector, or \c NULL. \ifnot DICE_API See section 2.3.1 in
+    /// \param selector      The selector, or \c nullptr. \ifnot DICE_API See section 2.3.1 in
     ///                      [\ref MDLLS] for details. \endif
-    /// \return              The canvas with the decoded pixel data, or \c NULL in case of failure.
+    /// \return              The canvas with the decoded pixel data, or \c nullptr in case of
+    ///                      failure.
     virtual ICanvas* create_canvas_from_reader(
-        IReader* reader, const char* image_format, const char* selector = 0) const = 0;
+        IReader* reader, const char* image_format, const char* selector = nullptr) const = 0;
 
     /// Indicates whether a particular image format is supported for decoding.
     ///
@@ -344,7 +346,7 @@ public:
     ///                       #mi::neuraylib::IImage_plugin::test(). \endif
     /// \return               \c true if the image format is supported, \c false otherwise
     virtual bool supports_format_for_decoding(
-        const char* image_format, IReader* reader = 0) const = 0;
+        const char* image_format, IReader* reader = nullptr) const = 0;
 
     /// Indicates whether a particular image format is supported for encoding.
     ///
@@ -378,8 +380,8 @@ public:
     /// \param pixel_type   The desired pixel type. See \ref mi_neuray_types for a list of supported
     ///                     pixel types. If this pixel type is the same as the pixel type of \p
     ///                     tile, then a copy of the tile is returned.
-    /// \return             A tile with the requested pixel type, or \c NULL in case of errors
-    ///                     (\p tile is \c NULL, or \p pixel_type is not valid).
+    /// \return             A tile with the requested pixel type, or \c nullptr in case of errors
+    ///                     (\p tile is \c nullptr, or \p pixel_type is not valid).
     virtual ITile* convert( const ITile* tile, const char* pixel_type) const = 0;
 
     /// Converts a canvas to a different pixel type.
@@ -415,8 +417,8 @@ public:
     /// \param pixel_type   The desired pixel type. See \ref mi_neuray_types for a list of supported
     ///                     pixel types. If this pixel type is the same as the pixel type of \p
     ///                     canvas, then a copy of the canvas is returned.
-    /// \return             A canvas with the requested pixel type, or \c NULL in case of errors
-    ///                     (\p canvas is \c NULL, or \p pixel_type is not valid).
+    /// \return             A canvas with the requested pixel type, or \c nullptr in case of errors
+    ///                     (\p canvas is \c nullptr, or \p pixel_type is not valid).
     virtual ICanvas* convert( const ICanvas* canvas, const char* pixel_type) const = 0;
 
     /// Sets the gamma value of a tile and adjusts the pixel data accordingly.
@@ -487,7 +489,7 @@ public:
     ///
     /// \param canvas           The canvas to extract a channel from.
     /// \param selector         The RGBA channel selector.
-    /// \return                 The extracted channel, or \c NULL in case of invalid pixel type/
+    /// \return                 The extracted channel, or \c nullptr in case of invalid pixel type/
     ///                         channel selector combinations (see #get_pixel_type_for_channel()).
     virtual ICanvas* extract_channel( const ICanvas* canvas, const char* selector) const = 0;
 
@@ -495,7 +497,7 @@ public:
     ///
     /// \param tile             The tile to extract a channel from.
     /// \param selector         The RGBA channel selector.
-    /// \return                 The extracted channel, or \c NULL in case of invalid pixel type/
+    /// \return                 The extracted channel, or \c nullptr in case of invalid pixel type/
     ///                         channel selector combinations (see #get_pixel_type_for_channel()).
     virtual ITile* extract_channel( const ITile* tile, const char* selector) const = 0;
 

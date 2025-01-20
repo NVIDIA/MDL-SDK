@@ -282,12 +282,13 @@ int MAIN_UTF8(int argc, char* argv[])
                 /*num_texture_results=*/ 0,
                 options.enable_derivatives,
                 options.fold_ternary_on_df,
-                /*enable_axuiliary_output*/ false,
-                /*enable_pdf*/ true,
-                /*use_adapt_normal*/ false,
-                /*enable_bsdf_flags*/ false,
-                /*df_handle_mode*/ "none",
-                /*lambda_return_mode*/ "sret");
+                /*enable_axuiliary_output=*/ false,
+                /*enable_pdf=*/ true,
+                /*use_adapt_normal=*/ false,
+                /*enable_bsdf_flags=*/ false,
+                /*enable_mdl_next=*/ false,
+                /*df_handle_mode=*/ "none",
+                /*lambda_return_mode=*/ "sret");
 
             for (std::size_t i = 0, n = options.material_names.size(); i < n; ++i) {
                 if ((options.material_pattern & (1 << i)) != 0) {

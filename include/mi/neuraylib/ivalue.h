@@ -120,7 +120,7 @@ class IValue_atomic : public
 {
 public:
     /// Returns the type of this value.
-    const IType_atomic* get_type() const = 0;
+    virtual const IType_atomic* get_type() const = 0;
 };
 
 /// A value of type boolean.
@@ -133,7 +133,7 @@ public:
     static const Kind s_kind = VK_BOOL;
 
     /// Returns the type of this value.
-    const IType_bool* get_type() const = 0;
+    virtual const IType_bool* get_type() const = 0;
 
     /// Returns the value.
     virtual bool get_value() const = 0;
@@ -152,7 +152,7 @@ public:
     static const Kind s_kind = VK_INT;
 
     /// Returns the type of this value.
-    const IType_int* get_type() const = 0;
+    virtual const IType_int* get_type() const = 0;
 
     /// Returns the value.
     virtual Sint32 get_value() const = 0;
@@ -210,7 +210,7 @@ public:
     static const Kind s_kind = VK_FLOAT;
 
     /// Returns the type of this value.
-    const IType_float* get_type() const = 0;
+    virtual const IType_float* get_type() const = 0;
 
     /// Returns the value.
     virtual Float32 get_value() const = 0;
@@ -229,7 +229,7 @@ public:
     static const Kind s_kind = VK_DOUBLE;
 
     /// Returns the type of this value.
-    const IType_double* get_type() const = 0;
+    virtual const IType_double* get_type() const = 0;
 
     /// Returns the value.
     virtual Float64 get_value() const = 0;
@@ -248,7 +248,7 @@ public:
     static const Kind s_kind = VK_STRING;
 
     /// Returns the type of this value.
-    const IType_string* get_type() const = 0;
+    virtual const IType_string* get_type() const = 0;
 
     /// Returns the value.
     virtual const char* get_value() const = 0;
@@ -281,10 +281,10 @@ public:
     /// Returns the number of components in this compound value.
     virtual Size get_size() const = 0;
 
-    /// Returns the value at \p index, or \c NULL if \p index is out of bounds.
+    /// Returns the value at \p index, or \c nullptr if \p index is out of bounds.
     virtual const IValue* get_value( Size index) const = 0;
 
-    /// Returns the value at \p index, or \c NULL if \p index is out of bounds.
+    /// Returns the value at \p index, or \c nullptr if \p index is out of bounds.
     template <class T>
     const T* get_value( Size index) const
     {
@@ -296,10 +296,10 @@ public:
         return ptr_T;
     }
 
-    /// Returns the value at \p index, or \c NULL if \p index is out of bounds.
+    /// Returns the value at \p index, or \c nullptr if \p index is out of bounds.
     virtual IValue* get_value( Size index) = 0;
 
-    /// Returns the value at \p index, or \c NULL if \p index is out of bounds.
+    /// Returns the value at \p index, or \c nullptr if \p index is out of bounds.
     template <class T>
     T* get_value( Size index)
     {
@@ -317,7 +317,7 @@ public:
     /// \param value   The new value of the field.
     /// \return
     ///                -  0: Success.
-    ///                - -1: Invalid parameter (\c NULL pointer).
+    ///                - -1: Invalid parameter (\c nullptr).
     ///                - -2: \p index is out of bounds.
     ///                - -3: Incorrect type of \p value.
     virtual Sint32 set_value( Size index, IValue* value) = 0;
@@ -338,10 +338,10 @@ public:
     /// Returns the type of this value.
     virtual const IType_vector* get_type() const = 0;
 
-    /// Returns the value at \p index, or \c NULL if \p index is out of bounds.
+    /// Returns the value at \p index, or \c nullptr if \p index is out of bounds.
     virtual const IValue_atomic* get_value( Size index) const = 0;
 
-    /// Returns the value at \p index, or \c NULL if \p index is out of bounds.
+    /// Returns the value at \p index, or \c nullptr if \p index is out of bounds.
     template <class T>
     const T* get_value( Size index) const
     {
@@ -353,10 +353,10 @@ public:
         return ptr_T;
     }
 
-    /// Returns the value at \p index, or \c NULL if \p index is out of bounds.
+    /// Returns the value at \p index, or \c nullptr if \p index is out of bounds.
     virtual IValue_atomic* get_value( Size index) = 0;
 
-    /// Returns the value at \p index, or \c NULL if \p index is out of bounds.
+    /// Returns the value at \p index, or \c nullptr if \p index is out of bounds.
     template <class T>
     T* get_value( Size index)
     {
@@ -384,10 +384,10 @@ public:
     /// Returns the type of this value.
     virtual const IType_matrix* get_type() const = 0;
 
-    /// Returns the value at \p index, or \c NULL if \p index is out of bounds.
+    /// Returns the value at \p index, or \c nullptr if \p index is out of bounds.
     virtual const IValue_vector* get_value( Size index) const = 0;
 
-    /// Returns the value at \p index, or \c NULL if \p index is out of bounds.
+    /// Returns the value at \p index, or \c nullptr if \p index is out of bounds.
     virtual IValue_vector* get_value( Size index) = 0;
 };
 
@@ -403,17 +403,17 @@ public:
     /// Returns the type of this value.
     virtual const IType_color* get_type() const = 0;
 
-    /// Returns the value at \p index, or \c NULL if \p index is out of bounds.
+    /// Returns the value at \p index, or \c nullptr if \p index is out of bounds.
     virtual const IValue_float* get_value( Size index) const = 0;
 
-    /// Returns the value at \p index, or \c NULL if \p index is out of bounds.
+    /// Returns the value at \p index, or \c nullptr if \p index is out of bounds.
     virtual IValue_float* get_value( Size index) = 0;
 
     /// Sets the value at \p index.
     ///
     /// \return
     ///                -  0: Success.
-    ///                - -1: Invalid parameter (\c NULL pointer).
+    ///                - -1: Invalid parameter (\c nullptr).
     ///                - -2: \p index is out of bounds.
     virtual Sint32 set_value( Size index, IValue_float* value) = 0;
 
@@ -456,13 +456,13 @@ public:
     /// Returns a field by name in linear time.
     ///
     /// \param name    The name of the field.
-    /// \return        The value of the field, or \c NULL if there is no such field.
+    /// \return        The value of the field, or \c nullptr if there is no such field.
     virtual const IValue* get_field( const char* name) const = 0;
 
     /// Returns a field by name in linear time.
     ///
     /// \param name    The name of the field.
-    /// \return        The value of the field, or \c NULL if there is no such field.
+    /// \return        The value of the field, or \c nullptr if there is no such field.
     template <class T>
     const T* get_field( const char* name) const
     {
@@ -477,13 +477,13 @@ public:
     /// Returns a field by name in linear time.
     ///
     /// \param name    The name of the field.
-    /// \return        The value of the field, or \c NULL if there is no such field.
+    /// \return        The value of the field, or \c nullptr if there is no such field.
     virtual IValue* get_field( const char* name) = 0;
 
     /// Returns a field by name in linear time.
     ///
     /// \param name    The name of the field.
-    /// \return        The value of the field, or \c NULL if there is no such field.
+    /// \return        The value of the field, or \c nullptr if there is no such field.
     template <class T>
     T* get_field( const char* name)
     {
@@ -501,7 +501,7 @@ public:
     /// \param value   The new value of the field.
     /// \return
     ///                -  0: Success.
-    ///                - -1: Invalid parameter (\c NULL pointer).
+    ///                - -1: Invalid parameter (\c nullptr).
     ///                - -2: There is no such field of the given name.
     ///                - -3: Incorrect type of \p value.
     virtual Sint32 set_field( const char* name, IValue* value) = 0;
@@ -518,7 +518,7 @@ public:
 
     /// Returns the name of the DB element representing this resource.
     ///
-    /// \return        The name of the DB element, or \c NULL if no valid resource is set.
+    /// \return        The name of the DB element, or \c nullptr if no valid resource is set.
     virtual const char* get_value() const = 0;
 
     /// Sets the name of the DB element representing this resource.
@@ -526,14 +526,14 @@ public:
     /// Pointing this instance to a different DB element resets the MDL file path returned by
     /// #get_file_path().
     ///
-    /// \param value   The name of the resource, or \c NULL to release the current resource.
+    /// \param value   The name of the resource, or \c nullptr to release the current resource.
     /// \return
     ///                -  0: Success.
     ///                - -1: There is no DB element with that name.
     ///                - -2: The DB element has not the correct type for this resource.
     virtual Sint32 set_value( const char* value) = 0;
 
-    /// Returns the absolute MDL file path of the resource, or \c NULL if not known.
+    /// Returns the absolute MDL file path of the resource, or \c nullptr if not known.
     ///
     /// \note The value returned here is not a property of this object, but a property of the
     ///       referenced resource.
@@ -560,7 +560,7 @@ public:
     ///        kind.
     virtual Float32 get_gamma() const = 0;
 
-    /// Returns the selector of this texture, or \c NULL.
+    /// Returns the selector of this texture, or \c nullptr.
     virtual const char* get_selector() const = 0;
 };
 
@@ -600,7 +600,7 @@ public:
     static const Kind s_kind = VK_INVALID_DF;
 
     /// Returns the type of this value.
-    const IType_reference* get_type() const = 0;
+    virtual const IType_reference* get_type() const = 0;
 };
 
 /// An ordered collection of values identified by name or index.
@@ -616,13 +616,13 @@ public:
     /// Returns the index for the given name, or -1 if there is no such value.
     virtual Size get_index( const char* name) const = 0;
 
-    /// Returns the name for the given index, or \c NULL if there is no such value.
+    /// Returns the name for the given index, or \c nullptr if there is no such value.
     virtual const char* get_name( Size index) const = 0;
 
-    /// Returns the value for \p index, or \c NULL if there is no such value.
+    /// Returns the value for \p index, or \c nullptr if there is no such value.
     virtual const IValue* get_value( Size index) const = 0;
 
-    /// Returns the value for \p index, or \c NULL if there is no such value.
+    /// Returns the value for \p index, or \c nullptr if there is no such value.
     template <class T>
     const T* get_value( Size index) const
     {
@@ -634,10 +634,10 @@ public:
         return ptr_T;
     }
 
-    /// Returns the value for \p name, or \c NULL if there is no such value.
+    /// Returns the value for \p name, or \c nullptr if there is no such value.
     virtual const IValue* get_value( const char* name) const = 0;
 
-    /// Returns the value for \p name, or \c NULL if there is no such value.
+    /// Returns the value for \p name, or \c nullptr if there is no such value.
     template <class T>
     const T* get_value( const char* name) const
     {
@@ -653,7 +653,7 @@ public:
     ///
     /// \return
     ///           -  0: Success.
-    ///           - -1: Invalid parameter (\c NULL pointer).
+    ///           - -1: Invalid parameter (\c nullptr).
     ///           - -2: \p index is out of bounds.
     virtual Sint32 set_value( Size index, const IValue* value) = 0;
 
@@ -661,7 +661,7 @@ public:
     ///
     /// \return
     ///           -  0: Success.
-    ///           - -1: Invalid parameter (\c NULL pointer).
+    ///           - -1: Invalid parameter (\c nullptr).
     ///           - -2: There is no value mapped to \p name in the list.
     virtual Sint32 set_value( const char* name, const IValue* value) = 0;
 
@@ -669,7 +669,7 @@ public:
     ///
     /// \return
     ///           -  0: Success.
-    ///           - -1: Invalid parameter (\c NULL pointer).
+    ///           - -1: Invalid parameter (\c nullptr).
     ///           - -2: There is already a value mapped to \p name in the list.
     virtual Sint32 add_value( const char* name, const IValue* value) = 0;
 };
@@ -699,7 +699,7 @@ public:
     /// Creates a new value of type integer.
     virtual IValue_int* create_int( Sint32 value = 0) const = 0;
 
-    /// Creates a new value of type enum, or returns \c NULL in case of errors.
+    /// Creates a new value of type enum, or returns \c nullptr in case of errors.
     virtual IValue_enum* create_enum( const IType_enum* type, Size index = 0) const = 0;
 
     /// Creates a new value of type float.
@@ -710,13 +710,13 @@ public:
 
     /// Creates a new value of type string.
     ///
-    /// \param value   The value \c NULL is handled like the empty string.
+    /// \param value   The value \c nullptr is handled like the empty string.
     virtual IValue_string* create_string( const char* value = "") const = 0;
 
-    /// Creates a new value of type vector, or returns \c NULL in case of errors.
+    /// Creates a new value of type vector, or returns \c nullptr in case of errors.
     virtual IValue_vector* create_vector( const IType_vector* type) const = 0;
 
-    /// Creates a new value of type matrix, or returns \c NULL in case of errors.
+    /// Creates a new value of type matrix, or returns \c nullptr in case of errors.
     virtual IValue_matrix* create_matrix( const IType_matrix* type) const = 0;
 
     /// Creates a new value of type color.
@@ -725,19 +725,19 @@ public:
         Float32 green = 0.0f,
         Float32 blue = 0.0f) const = 0;
 
-    /// Creates a new value of type array, or returns \c NULL in case of errors.
+    /// Creates a new value of type array, or returns \c nullptr in case of errors.
     virtual IValue_array* create_array( const IType_array* type) const = 0;
 
-    /// Creates a new value of type struct, or returns \c NULL in case of errors.
+    /// Creates a new value of type struct, or returns \c nullptr in case of errors.
     virtual IValue_struct* create_struct( const IType_struct* type) const = 0;
 
-    /// Creates a new texture value, or returns \c NULL in case of errors.
+    /// Creates a new texture value, or returns \c nullptr in case of errors.
     virtual IValue_texture* create_texture( const IType_texture* type, const char* value) const = 0;
 
-    /// Creates a new light profile value, or returns \c NULL in case of errors.
+    /// Creates a new light profile value, or returns \c nullptr in case of errors.
     virtual IValue_light_profile* create_light_profile( const char* value) const = 0;
 
-    /// Creates a new BSDF measurement value, or returns \c NULL in case of errors.
+    /// Creates a new BSDF measurement value, or returns \c nullptr in case of errors.
     virtual IValue_bsdf_measurement* create_bsdf_measurement( const char* value) const = 0;
 
     /// Creates a new invalid distribution function value.
@@ -752,7 +752,7 @@ public:
     {
         IValue* ptr_value = create( type);
         if( !ptr_value)
-            return 0;
+            return nullptr;
         T* ptr_T = static_cast<T*>( ptr_value->get_interface( typename T::IID()));
         ptr_value->release();
         return ptr_T;
@@ -846,7 +846,7 @@ public:
     /// Compares two instances of #mi::neuraylib::IValue.
     ///
     /// The comparison operator for instances of #mi::neuraylib::IValue is defined as follows:
-    /// - If \p lhs or \p rhs is \c NULL, the result is the lexicographic comparison of
+    /// - If \p lhs or \p rhs is \c nullptr, the result is the lexicographic comparison of
     ///   the pointer addresses themselves.
     /// - Otherwise, the types of \p lhs and \p rhs are compared. If they are different, the result
     ///   is determined by that comparison.
@@ -870,7 +870,7 @@ public:
     /// Compares two instances of #mi::neuraylib::IValue_list.
     ///
     /// The comparison operator for instances of #mi::neuraylib::IValue_list is defined as follows:
-    /// - If \p lhs or \p rhs is \c NULL, the result is the lexicographic comparison of
+    /// - If \p lhs or \p rhs is \c nullptr, the result is the lexicographic comparison of
     ///   the pointer addresses themselves.
     /// - Next, the list sizes are compared using \c operator<().
     /// - Next, the lists are traversed by increasing index and the names are compared
@@ -890,10 +890,11 @@ public:
 
     /// Returns a textual representation of a value.
     ///
-    /// The textual representation is of the form "type name = value" if \p name is not \c NULL, and
-    /// of the form "value" if \p name is \c NULL. The representation of the value might contain
-    /// line breaks, for example for structures, enums, and arrays. Subsequent lines have a suitable
-    /// indentation. The assumed indentation level of the first line is specified by \p depth.
+    /// The textual representation is of the form "type name = value" if \p name is not \c nullptr,
+    /// and of the form "value" if \p name is \c nullptr. The representation of the value might
+    /// contain line breaks, for example for structures, enums, and arrays. Subsequent lines have a
+    /// suitable indentation. The assumed indentation level of the first line is specified by
+    /// \p depth.
     ///
     /// \note The exact format of the textual representation is unspecified and might change in
     ///       future releases. The textual representation is primarily meant as a debugging aid. Do

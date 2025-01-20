@@ -44,6 +44,7 @@ namespace mdl {
 class MDL;
 class IModule;
 class Jitted_code;
+class MD5_hasher;
 
 ///
 /// Implementation of the Link unit for the JIT code generator
@@ -589,9 +590,9 @@ public:
     /// \param module_cache       The module cache if any.
     /// \param options            The backend options.
     Generated_code_source *compile_module_to_llvm(
-        mi::mdl::IModule const *module,
-        IModule_cache          *module_cache,
-        Options_impl const     &options);
+        mi::mdl::Module const *module,
+        IModule_cache         *module_cache,
+        Options_impl const    &options);
 
     /// Compile a whole MDL module into PTX.
     ///
@@ -599,9 +600,9 @@ public:
     /// \param module_cache       The module cache if any.
     /// \param options            The backend options.
     Generated_code_source *compile_module_to_ptx(
-        mi::mdl::IModule const *module,
-        IModule_cache          *module_cache,
-        Options_impl const     &options);
+        mi::mdl::Module const *module,
+        IModule_cache         *module_cache,
+        Options_impl const    &options);
 
     /// Compile a whole MDL module into HLSL or GLSL.
     ///
@@ -610,7 +611,7 @@ public:
     /// \param target             The target language, must be HLSL or GLSL.
     /// \param options            The backend options.
     Generated_code_source *compile_module_to_sl(
-        mi::mdl::IModule const           *mod,
+        mi::mdl::Module const            *mod,
         IModule_cache                    *module_cache,
         ICode_generator::Target_language target,
         Options_impl const               &options);
@@ -634,6 +635,14 @@ public:
         Generated_code_source *code,
         ICode_cache           *code_cache,
         unsigned char const   cache_key[16]);
+
+    /// Update the hasher with all options.
+    ///
+    /// \param hasher     the hasher to be updated
+    /// \param options    the options object
+    void hash_options(
+        MD5_hasher &hasher,
+        Options &options);
 
     /// Compile a lambda function into PTX or HLSL using the JIT.
     ///
@@ -726,24 +735,51 @@ public:
     
     /// Get the resolution of the libbsdf multi-scattering lookup table data.
     ///
-    /// \param bsdf_data_kind   the kind of the BSDF data, has to be a multiscatter kind
+    /// \param bsdf_data_kind   the kind of the BSDF data, has to be a multi-scatter kind
     /// \param out_theta        will contain the number of theta values when data is available
     /// \param out_roughness    will contain the number of roughness values when data is available
     /// \param out_ior          will contain the number of IOR values when data is available
+    /// \param out_pixel_type   will contain the pixel type when data is available
     /// \returns                true if there is data for this semantic (BSDF)
     bool get_libbsdf_multiscatter_data_resolution(
         IValue_texture::Bsdf_data_kind bsdf_data_kind,
         size_t                         &out_theta,
         size_t                         &out_roughness,
-        size_t                         &out_ior) const MDL_FINAL;
+        size_t                         &out_ior,
+        const char                     *&out_pixel_type) const MDL_FINAL;
 
     /// Get access to the libbsdf multi-scattering lookup table data.
     ///
-    /// \param bsdf_data_kind  the kind of the BSDF data, has to be a multiscatter kind
+    /// \param bsdf_data_kind  the kind of the BSDF data, has to be a multi-scatter kind
     /// \param[out] size       the size of the data
     ///
     /// \returns               the lookup data if available for this semantic (BSDF), NULL otherwise
     unsigned char const *get_libbsdf_multiscatter_data(
+        IValue_texture::Bsdf_data_kind bsdf_data_kind,
+        size_t                         &size) const MDL_FINAL;
+
+    /// Get the resolution of the libbsdf general lookup table data.
+    ///
+    /// \param bsdf_data_kind   the kind of the BSDF data, has to be a general kind
+    /// \param out_u            will contain the number of values in u direction when data is available
+    /// \param out_v            will contain the number of values in v direction data is available
+    /// \param out_w            will contain the number of values in w direction when data is available
+    /// \param out_pixel_type   will contain the pixel type when data is available
+    /// \returns                true if there is data for this semantic (BSDF)
+    bool get_libbsdf_general_data_resolution(
+        IValue_texture::Bsdf_data_kind bsdf_data_kind,
+        size_t                         &out_u,
+        size_t                         &out_v,
+        size_t                         &out_w,
+        const char                     *&out_pixel_type) const MDL_FINAL;
+
+    /// Get access to the libbsdf general lookup table data.
+    ///
+    /// \param bsdf_data_kind  the kind of the BSDF data, has to be a general kind
+    /// \param[out] size       the size of the data
+    ///
+    /// \returns               the lookup data if available for this semantic (BSDF), NULL otherwise
+    unsigned char const *get_libbsdf_general_data(
         IValue_texture::Bsdf_data_kind bsdf_data_kind,
         size_t                         &size) const MDL_FINAL;
 

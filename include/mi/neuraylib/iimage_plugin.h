@@ -62,7 +62,7 @@ class IWriter;
 */
 
 /// Type of image plugins
-#define MI_NEURAY_IMAGE_PLUGIN_TYPE "image v38"
+#define MI_NEURAY_IMAGE_PLUGIN_TYPE "image v39"
 
 /// Abstract interface for image plugins.
 ///
@@ -103,7 +103,7 @@ public:
     /// Returns the \p index -th supported file extension.
     ///
     /// \param index   The index of the file extensions to be returned.
-    /// \return        The \p index -th supported file extension, \c NULL if \p index is out of
+    /// \return        The \p index -th supported file extension, \c nullptr if \p index is out of
     ///                bounds.
     virtual const char* get_file_extension( Uint32 index) const = 0;
 
@@ -113,7 +113,7 @@ public:
     /// type. See \ref mi_neuray_types for a list of supported pixel types.
     ///
     /// \param index   The index of the pixel type to be returned.
-    /// \return        The \p index -th supported pixel type, \c NULL if \p index is out of
+    /// \return        The \p index -th supported pixel type, \c nullptr if \p index is out of
     ///                bounds.
     virtual const char* get_supported_type( Uint32 index) const = 0;
 
@@ -142,7 +142,7 @@ public:
     /// This method is called to start an image import operation.
     ///
     /// \param reader         A reader representing the stream to read from.
-    /// \param selector       The selector (or \c NULL).
+    /// \param selector       The selector (or \c nullptr).
     /// \return               The object that reads the image from the reader.
     virtual IImage_file* open_for_reading( IReader* reader, const char* selector) const = 0;
 
@@ -226,7 +226,7 @@ public:
     ///
     /// \param z     The z layer (for 3d textures or cubemaps).
     /// \param level The mipmap level (always 0 if the image is not a mipmap).
-    /// \return      The tile with the read data, or \c NULL in case of failures.
+    /// \return      The tile with the read data, or \c nullptr in case of failures.
     virtual ITile* read( Uint32 z, Uint32 level) const = 0;
 
     /// Write pixels from a tile into the image file.

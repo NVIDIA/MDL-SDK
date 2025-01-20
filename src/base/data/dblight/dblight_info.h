@@ -139,10 +139,10 @@ public:
 
     bool get_is_job() const override { return false; }
 
-    /// Returns \c NULL for removal infos.
+    /// Returns \c nullptr for removal infos.
     DB::Element_base* get_element() const override { return m_element; }
 
-    SCHED::Job* get_job() const override { return nullptr; }
+    SCHED::Job_base* get_job() const override { return nullptr; }
 
     DB::Tag get_tag() const override { return m_tag; }
 
@@ -184,7 +184,8 @@ public:
     /// Sets the pointer to the containing name set.
     void set_infos_per_name( Infos_per_name* infos_per_name);
 
-    /// Returns the scope this info belongs to (or \c NULL if the scope has been removed). RCS:NEU
+    /// Returns the scope this info belongs to (or \c nullptr if the scope has been removed).
+    /// RCS:NEU
     Scope_impl* get_scope() const { return m_scope; }
 
     /// Clears the scope (used when the scope is removed).
@@ -205,7 +206,7 @@ private:
     /// - the transaction pointer (reset only), and
     /// - the hooks for the intrusive sets.
 
-    /// The DB element managed (and owned) by this instance, \c NULL for removals.
+    /// The DB element managed (and owned) by this instance, \c nullptr for removals.
     DB::Element_base* /*almost const*/ m_element = nullptr;
 
     /// Pin count of this info.
@@ -216,11 +217,12 @@ private:
 
     /// The tag of this info (never invalid), same as in Infos_per_tag::m_tag.
     const DB::Tag m_tag;
-    /// The name of this info. Either \c NULL or points to m_infos_per_name->m_name.c_str().
+    /// The name of this info. Either \c nullptr or points to m_infos_per_name->m_name.c_str().
     const char* const m_name = nullptr;
-    /// The corresponding name set that contains this info (or \c NULL iff \c m_name is \c NULL).
+    /// The corresponding name set that contains this info (or \c nullptr iff \c m_name is
+    /// \c nullptr).
     Infos_per_name* m_infos_per_name = nullptr;
-    /// The scope this info belongs to (or \c NULL if the scope has been removed).
+    /// The scope this info belongs to (or \c nullptr if the scope has been removed).
     Scope_impl* m_scope;
 
     //@}
@@ -433,27 +435,27 @@ public:
 
     /// Sets the array element with index \p tag to \p element.
     ///
-    /// \pre The array element is currently \c NULL.
+    /// \pre The array element is currently \c nullptr.
     void insert( size_t index, Infos_per_tag* element);
 
     /// Clears the array element with index  \p tag.
     ///
-    /// \pre The array element is currently not \c NULL.
+    /// \pre The array element is currently not \c nullptr.
     void erase( size_t index);
 
-    /// Applies \p f to all non-\c NULL array elements.
+    /// Applies \p f to all non-\c nullptr array elements.
     void apply( std::function<void( Infos_per_tag*)> f) const;
 
-    /// Returns all indices with non-\c NULL array elements.
+    /// Returns all indices with non-\c nullptr array elements.
     void get_tags( std::vector<DB::Tag>& tags) const;
 
 private:
-    /// Returns the number of non-\c NULL array elements.
+    /// Returns the number of non-\c nullptr array elements.
     size_t get_local_size() const { return m_local_size; }
 
     /// The array of minor pages.
     Infos_per_tag* m_infos_per_tags[N];
-    /// The number of non-\c NULL array elements.
+    /// The number of non-\c nullptr array elements.
     size_t m_local_size = 0;
 };
 
@@ -486,18 +488,18 @@ public:
 
     /// Sets the array element with index \p tag to \p element.
     ///
-    /// \pre The array element is currently \c NULL.
+    /// \pre The array element is currently \c nullptr.
     void insert( size_t index, Infos_per_tag* element);
 
     /// Clears the array element with index  \p tag.
     ///
-    /// \pre The array element is currently not \c NULL.
+    /// \pre The array element is currently not \c nullptr.
     void erase( size_t index);
 
-    /// Applies \p f to all non-\c NULL array elements.
+    /// Applies \p f to all non-\c nullptr array elements.
     void apply( std::function<void( Infos_per_tag*)> f) const;
 
-    /// Returns all indices with non-\c NULL array elements.
+    /// Returns all indices with non-\c nullptr array elements.
     void get_tags( std::vector<DB::Tag>& tags) const;
 
 private:
@@ -543,24 +545,24 @@ public:
 
     /// Sets the array element with index \p tag to \p element.
     ///
-    /// \pre The array element is currently \c NULL.
+    /// \pre The array element is currently \c nullptr.
     void insert( DB::Tag tag, Infos_per_tag* element);
 
     /// Clears the array element with index  \p tag.
     ///
-    /// \pre The array element is currently not \c NULL.
+    /// \pre The array element is currently not \c nullptr.
     void erase( DB::Tag tag);
 
-    /// Applies \p f to all non-\c NULL array elements.
+    /// Applies \p f to all non-\c nullptr array elements.
     void apply( std::function<void( Infos_per_tag*)> f) const;
 
-    /// Returns all indices with non-\c NULL array elements.
+    /// Returns all indices with non-\c nullptr array elements.
     void get_tags( std::vector<DB::Tag>& tags) const;
 
-    /// Returns the number of non-\c NULL array elements.
+    /// Returns the number of non-\c nullptr array elements.
     size_t size() const { return m_total_size; }
 
-    /// Indicates whether there no non-\c NULL array elements.
+    /// Indicates whether there no non-\c nullptr array elements.
     bool empty() const { return m_total_size == 0; }
 
 private:
@@ -568,7 +570,7 @@ private:
     Major_page* m_major_pages[N];
     /// The number of allocated major pages.
     size_t m_local_size = 0;
-    /// The total number of non-\c NULL array elements.
+    /// The total number of non-\c nullptr array elements.
     size_t m_total_size = 0;
 };
 
@@ -792,6 +794,11 @@ private:
     ///
     /// Only used when #m_gc_method is #GC_GENERAL_CANDIDATES_THEN_PIN_COUNT_ZERO.
     DB::Tag_set m_gc_candidates_general;
+
+    /// Tracks the maximum size of \c m_gc_candidates_general since the last rehashing.
+    ///
+    /// Only used when #m_gc_method is #GC_GENERAL_CANDIDATES_THEN_PIN_COUNT_ZERO.
+    size_t m_gc_candidates_general_max_size = 0;
 
     /// Instances of Infos_per_tag whose pin count is zero.
     ///

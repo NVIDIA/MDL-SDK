@@ -26,9 +26,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_sdk/shared/example_vulkan_shared.h
- //
- // Code shared by all Vulkan examples.
+// examples/mdl_sdk/shared/example_vulkan_shared.h
+//
+// Code shared by all Vulkan examples.
 
 #ifndef EXAMPLE_VULKAN_SHARED_H
 #define EXAMPLE_VULKAN_SHARED_H
@@ -37,8 +37,9 @@
 #include <vector>
 #include <iostream>
 
-#include <vulkan/vulkan.h>
+#include <volk.h>
 #include <glslang/Public/ShaderLang.h>
+#include <GLFW/glfw3.h>
 
 #include "example_shared.h"
 
@@ -61,11 +62,6 @@
         }                                                 \
     } while (0)
 
-// Extensions
-extern PFN_vkCreateDebugUtilsMessengerEXT CreateDebugUtilsMessengerEXT;
-extern PFN_vkDestroyDebugUtilsMessengerEXT DestroyDebugUtilsMessengerEXT;
-
-struct GLFWwindow;
 
 namespace mi::examples::vk
 {
@@ -132,8 +128,11 @@ public:
         std::vector<VkFormat> preferred_image_formats
             = { VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8A8_UNORM };
         bool headless = false;
+        bool vsync = true;
         uint32_t iteration_count = 1; // Headless mode only
+        int32_t device_index = -1;
         bool enable_validation_layers = false;
+        bool enable_descriptor_indexing = false;
     };
 
 public:
@@ -174,7 +173,7 @@ protected:
     virtual void render(VkCommandBuffer command_buffer, uint32_t frame_index, uint32_t image_index) = 0;
 
     // Called when a keyboard key is pressed or released.
-    virtual void key_callback(int key, int action) {}
+    virtual void key_callback(int key, int action, int mods) {}
 
     // Called when a mouse button is pressed or released.
     virtual void mouse_button_callback(int button, int action) {}
@@ -193,6 +192,9 @@ protected:
 
     // Save the specified swapchain image to a file.
     void save_screenshot(uint32_t image_index, const char* filename) const;
+
+    // Enables or disables vsync. Triggers swapchain recreation if necessary.
+    void set_vsync_enabled(bool vsync_enabled);
 
 protected:
     // MDL image interfaces.
@@ -287,6 +289,40 @@ private:
 };
 
 
+struct Vulkan_texture
+{
+    VkImage image = nullptr;
+    VkImageView image_view = nullptr;
+    VkDeviceMemory device_memory = nullptr;
+
+    void destroy(VkDevice device)
+    {
+        vkDestroyImageView(device, image_view, nullptr);
+        vkDestroyImage(device, image, nullptr);
+        vkFreeMemory(device, device_memory, nullptr);
+    }
+};
+
+struct Vulkan_buffer
+{
+    VkBuffer buffer = nullptr;
+    VkDeviceMemory device_memory = nullptr;
+    void* mapped_data = nullptr; // unused for device-local buffers
+
+    void destroy(VkDevice device)
+    {
+        if (mapped_data)
+        {
+            vkUnmapMemory(device, device_memory);
+            mapped_data = nullptr;
+        }
+
+        vkDestroyBuffer(device, buffer, nullptr);
+        vkFreeMemory(device, device_memory, nullptr);
+    }
+};
+
+
 class Staging_buffer
 {
 public:
@@ -325,8 +361,6 @@ private:
 
 
 // Extension helpers
-bool load_debug_utils_extension(VkInstance instance);
-
 bool check_instance_extensions_support(
     const std::vector<const char*>& requested_extensions);
 
@@ -340,11 +374,11 @@ bool check_validation_layers_support(
 // Shader compilation helpers
 VkShaderModule create_shader_module_from_file(
     VkDevice device, const char* shader_filename, EShLanguage shader_type,
-    const std::vector<std::string>& defines = {});
+    const std::vector<std::string>& defines = {}, bool optimize = true);
 
 VkShaderModule create_shader_module_from_sources(
     VkDevice device, const std::vector<std::string_view> shader_sources, EShLanguage shader_type,
-    const std::vector<std::string>& defines = {});
+    const std::vector<std::string>& defines = {}, bool optimize = true);
 
 
 // Memory allocation helpers
@@ -374,6 +408,12 @@ bool has_stencil_component(VkFormat format);
 uint32_t get_image_format_bpp(VkFormat format);
 
 // Initialization helpers
+VkPipeline create_fullscreen_triangle_graphics_pipeline(
+    VkDevice device, VkPipelineLayout pipeline_layout,
+    VkShaderModule vertex_shader, VkShaderModule fragment_shader,
+    VkRenderPass render_pass, uint32_t subpass,
+    uint32_t image_width, uint32_t image_height, bool cull_ccw);
+
 VkRenderPass create_simple_color_only_render_pass(
     VkDevice device, VkFormat image_format, VkImageLayout final_layout);
 
@@ -385,6 +425,14 @@ VkSampler create_linear_sampler(VkDevice device);
 
 
 // Misc helpers
+void transitionImageLayout(
+    VkCommandBuffer command_buffer, VkImage image,
+    VkAccessFlags src_access_mask, VkAccessFlags dst_access_mask,
+    VkImageLayout old_layout, VkImageLayout new_layout,
+    VkPipelineStageFlags src_stage_mask, VkPipelineStageFlags dst_stage_mask,
+    VkImageAspectFlags aspect_mask = VK_IMAGE_ASPECT_COLOR_BIT,
+    uint32_t base_mip_level = 0, uint32_t mip_level_count = 1);
+
 std::vector<uint8_t> copy_image_to_buffer(
     VkDevice device, VkPhysicalDevice physical_device, VkCommandPool command_pool, VkQueue queue,
     VkImage image, uint32_t image_width, uint32_t image_height, uint32_t image_bpp,
@@ -394,9 +442,6 @@ const char* vkresult_to_str(VkResult result);
 
 // Convert some of the common formats to string.
 const char* vkformat_to_str(VkFormat format);
-
-// Default resource values for glslang.
-const TBuiltInResource* get_default_resource_limits();
 
 } // namespace mi::examples::vk
 

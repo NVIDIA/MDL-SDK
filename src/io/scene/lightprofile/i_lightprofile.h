@@ -235,10 +235,12 @@ public:
     /// Indicates whether this light profile is memory-based.
     bool is_memory_based() const { return !is_file_based() && !is_container_based(); }
 
-    /// Returns the container file name for container-based light profiles, and \c NULL otherwise.
+    /// Returns the container file name for container-based light profiles, and \c nullptr
+    /// otherwise.
     const std::string& get_container_filename() const { return m_resolved_container_filename; }
 
-    /// Returns the container member name for container-based light profiles, and \c NULL otherwise.
+    /// Returns the container member name for container-based light profiles, and \c nullptr
+    /// otherwise.
     const std::string& get_container_membername() const { return m_resolved_container_membername; }
 
     /// Returns the tag of the implementation class.
@@ -457,7 +459,7 @@ bool export_to_file(
 ///
 /// \param transaction    The DB transaction to be used.
 /// \param lightprofile   The light profile to export.
-/// \return               The buffer in case of success, NULL otherwise.
+/// \return               The buffer in case of success, \c nullptr otherwise.
 mi::neuraylib::IBuffer* create_buffer_from_lightprofile(
     DB::Transaction* transaction, const Lightprofile* lightprofile);
 
@@ -487,7 +489,7 @@ mi::neuraylib::IBuffer* create_buffer_from_lightprofile(
 ///                              has already been loaded.
 /// \param[out] result
 ///                              -  0: Success.
-///                              - -1: Invalid parameters (\c NULL pointer).
+///                              - -1: Invalid parameters (\c nullptr pointer).
 ///                              - -7: Invalid file format.
 /// \return                      The tag of that light profile (invalid in case of failures).
 DB::Tag load_mdl_lightprofile(

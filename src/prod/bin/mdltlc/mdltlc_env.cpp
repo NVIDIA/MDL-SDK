@@ -30,15 +30,19 @@
 
 #include "mdltlc_env.h"
 
-bool Environment::bind(Symbol const *name, Type *type) {
+bool Environment::bind(
+    Symbol const *name, 
+    Type const *type, 
+    char const *signature) 
+{
     Type_map::iterator it = m_type_map.find(name);
     if (it == m_type_map.end()) {
         Type_list types(m_arena.get_allocator());
-        types.push_back(type);
+        types.push_back({ type, signature });
         m_type_map.insert({name, types});
         return true;
     }
-    it->second.push_back(type);
+    it->second.push_back({ type, signature });
     return false;
 }
 
@@ -82,13 +86,14 @@ void Environment::pp(pp::Pretty_print &p) {
                         for (Type_list::iterator i = it->second.begin();
                              i != it->second.end();
                              ++i) {
+                            Type const *t = i->first;
                             if (first) {
                                 first = false;
                             } else {
                                 p.comma();
                                 p.space();
                             }
-                            (*i)->pp(p);
+                            t->pp(p);
                         };
                     });
                 p.nl();

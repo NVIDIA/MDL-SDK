@@ -36,7 +36,7 @@ plugins is documented in three parts:
   compiled rules created by the MDLTL compiler in a Distiller plugin.
 
 - \subpage mi_neuray_mdltl_spec <br>
-  Specification of MDLT, including a detailed description of the
+  Specification of MDLTL, including a detailed description of the
   language.
 
 - \subpage mi_neuray_mdltl_grammar <br>

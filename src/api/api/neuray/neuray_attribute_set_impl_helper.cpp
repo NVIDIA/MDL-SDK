@@ -543,7 +543,7 @@ std::string Attribute_set_impl_helper::get_attribute_type_name(
         if( !type_name.empty()) {
             mi::base::Handle<const mi::IStructure_decl> decl(
                 s_class_factory->get_structure_decl( type_name.c_str()));
-            if( decl.is_valid_interface() && type_matches_structure_decl( type, decl.get()))
+            if( decl && type_matches_structure_decl( type, decl.get()))
                 return type_name;
         }
         // none provided, not registered, or does not match declaration
@@ -571,7 +571,7 @@ std::string Attribute_set_impl_helper::get_attribute_type_name(
         if( !type_name.empty()) {
             mi::base::Handle<const mi::IEnum_decl> decl(
                 s_class_factory->get_enum_decl( type_name.c_str()));
-            if( decl.is_valid_interface() && type_matches_enum_decl( type, decl.get()))
+            if( decl && type_matches_enum_decl( type, decl.get()))
                 return type_name;
         }
         // none provided, not registered, or does not match declaration
@@ -625,7 +625,7 @@ ATTR::Type Attribute_set_impl_helper::get_attribute_type(
     } else if( type_code == ATTR::TYPE_STRUCT) {
         mi::base::Handle<const mi::IStructure_decl> decl(
             s_class_factory->get_structure_decl( type_name.c_str()));
-        if( !decl.is_valid_interface())
+        if( !decl)
             return ATTR::Type( ATTR::TYPE_UNDEF, nullptr, 1);
         // create ATTR::Type
         ATTR::Type structure_type( ATTR::TYPE_STRUCT, name.c_str(), 1);
@@ -654,13 +654,14 @@ ATTR::Type Attribute_set_impl_helper::get_attribute_type(
     } else if( type_code == ATTR::TYPE_ENUM) {
         mi::base::Handle<const mi::IEnum_decl> decl(
             s_class_factory->get_enum_decl( type_name.c_str()));
-        if( !decl.is_valid_interface())
+        if( !decl)
             return ATTR::Type( ATTR::TYPE_UNDEF, nullptr, 1);
         // create ATTR::Type
         ATTR::Type enum_type( ATTR::TYPE_ENUM, name.c_str(), 1);
         enum_type.set_type_name( type_name);
         mi::Size n = decl->get_length();
         auto* enum_collection = new Enum_collection();
+        enum_collection->reserve(n);
         for( mi::Size i = 0; i < n; ++i)
             enum_collection->push_back( std::make_pair( decl->get_value( i), decl->get_name( i)));
         *enum_type.set_enum() = enum_collection;
@@ -721,7 +722,7 @@ const mi::IStructure_decl* Attribute_set_impl_helper::create_structure_decl( con
         } else if( member_type_code == ATTR::TYPE_STRUCT) {
             mi::base::Handle<const mi::IStructure_decl> member_decl(
                 get_structure_decl( *member_type));
-            if( !member_decl.is_valid_interface())
+            if( !member_decl)
                 return nullptr;
             decl->add_member( member_decl->get_structure_type_name(), member_type->get_name());
             member_type = member_type->get_next();
@@ -730,7 +731,7 @@ const mi::IStructure_decl* Attribute_set_impl_helper::create_structure_decl( con
         } else if( member_type_code == ATTR::TYPE_ENUM) {
             mi::base::Handle<const mi::IEnum_decl> member_decl(
                 get_enum_decl( *member_type));
-            if( !member_decl.is_valid_interface())
+            if( !member_decl)
                 return nullptr;
             decl->add_member( member_decl->get_enum_type_name(), member_type->get_name());
             member_type = member_type->get_next();
@@ -808,7 +809,7 @@ void Attribute_set_impl_helper::register_decls_locked( const ATTR::Type& type)
             // query the structure declaration for the type name
             mi::base::Handle<const mi::IStructure_decl> decl(
                 s_class_factory->get_structure_decl( type_name.c_str()));
-            if( decl.is_valid_interface()) {
+            if( decl) {
                 // declaration exists and matches, nothing to do
                 if( type_matches_structure_decl( type, decl.get())) {
                     trace( "Skipping stored type name %s (already registered and matches).",
@@ -864,7 +865,7 @@ void Attribute_set_impl_helper::register_decls_locked( const ATTR::Type& type)
             // query the enum declaration for the type name
             mi::base::Handle<const mi::IEnum_decl> decl(
                 s_class_factory->get_enum_decl( type_name.c_str()));
-            if( decl.is_valid_interface()) {
+            if( decl) {
                 // declaration exists and matches, nothing to do
                 if( type_matches_enum_decl( type, decl.get())) {
                     trace( "Skipping stored type name %s (already registered and matches).",
@@ -1006,7 +1007,7 @@ bool Attribute_set_impl_helper::is_correct_type_for_attribute(
 {
     // Exceptions for some registered attributes: the internal attribute spec is useless
     // since it stores only a single type code which is not sufficient.
-    if( attribute_name == "material")
+    if( attribute_name == "material" || attribute_name == "active_projector")
         return type_name == "Ref" || type_name.substr( 0, 4) == "Ref[";
 
     if(    attribute_name == "decals" || attribute_name == "enabled_decals"

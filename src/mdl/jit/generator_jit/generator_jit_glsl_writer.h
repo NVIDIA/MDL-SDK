@@ -797,11 +797,10 @@ protected:
     /// The list of uniform initializers.
     Uniform_initializers m_uniform_inits;
 
-    /// Maximum size of the constant data segment in the generated GLSL code.
-    size_t m_max_const_segment_size;
-
-    /// Current size of the constant data segment in the generated GLSL code.
-    size_t m_curr_const_segment_size;
+    /// Maximum size of a constant to be put into the generated GLSL code, if the
+    /// "jit_glsl_place_uniforms_into_ssbo" option is enabled. Bigger constants will be put
+    /// into the SSBO.
+    size_t m_max_const_size;
 
     /// Target version for this code generator.
     glsl::GLSLang_version m_glslang_version;

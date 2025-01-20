@@ -1360,7 +1360,7 @@ void Definition_table::serialize_def(
     for (size_t i = 0, n = (def->m_flags.get_size() + 7) / 8; i < n; ++i) {
         serializer.write_byte(raw_data[i]);
     }
-    DOUT(("Flags:%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n",
+    DOUT(("Flags:%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n",
         def->has_flag(Definition::DEF_IS_PREDEFINED)        ? " predef"   : "",
         def->has_flag(Definition::DEF_IS_DECL_ONLY)         ? " dclonly"  : "",
         def->has_flag(Definition::DEF_IS_INCOMPLETE)        ? " incmpl"   : "",
@@ -1398,7 +1398,8 @@ void Definition_table::serialize_def(
         def->has_flag(Definition::DEF_IS_NATIVE)            ? " native"   : "",
         def->has_flag(Definition::DEF_IS_CONST_EXPR)        ? " cnst_expr": "",
         def->has_flag(Definition::DEF_IS_DERIVABLE)         ? " deriv"    : "",
-        def->has_flag(Definition::DEF_IS_DECLARATIVE)       ? " decl"     : ""
+        def->has_flag(Definition::DEF_IS_DECLARATIVE)       ? " decl"     : "",
+        def->has_flag(Definition::DEF_IS_VERSIONED)         ? "version"   : ""
     ));
 
     // serialize version flags

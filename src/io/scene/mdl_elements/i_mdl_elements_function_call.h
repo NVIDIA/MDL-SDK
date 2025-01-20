@@ -126,7 +126,7 @@ public:
 
     /// \param target_type                 The intended type of the compiled material. Needs to be
     ///                                    from the struct category "::material_category". Can be
-    ///                                    \c NULL, which indicates the same type as this DB
+    ///                                    \c nullptr, which indicates the same type as this DB
     ///                                    material instance itself.
     Mdl_compiled_material* create_compiled_material(
         DB::Transaction* transaction,
@@ -182,8 +182,8 @@ public:
     ///                                          type.
     ///                                    - -4: The JIT backend failed to compile the function.
     ///                                    - -5: The function does not point to a valid definition.
-    /// \return                            The corresponding compiled function, or \c NULL in case
-    ///                                    of failure.
+    /// \return                            The corresponding compiled function, or \c nullptr in
+    ///                                    case of failure.
     mi::mdl::IGenerated_code_lambda_function* create_jitted_function(
         DB::Transaction* transaction,
         bool environment_context,
@@ -201,7 +201,7 @@ public:
     ///                                    compilation.
     /// \param target_type                 The intended type of the compiled material. Needs to be
     ///                                    from the struct category "::material_category". Can be
-    ///                                    \c NULL, which indicates the same type as this DB
+    ///                                    \c nullptr, which indicates the same type as this DB
     ///                                    material instance itself.
     /// \param context                     execution context to propagate warnings and error
     ///                                    messages. The error codes have the following
@@ -211,7 +211,8 @@ public:
     ///                                          incorrect type.
     ///                                    - -3: An varying argument was attached to an uniform
     ///                                          parameter.
-    /// \return                            The DAG material instance, or \c NULL in case of failure.
+    /// \return                            The DAG material instance, or \c nullptr in case of
+    ///                                    failure.
     ///
     /// \note If it is detected, that a thin-walled material instance has different
     ///       transmission for surface and backface, a warning is generated.
@@ -224,7 +225,8 @@ public:
 
     /// Improved version of SERIAL::Serializable::dump().
     ///
-    /// \param transaction   The DB transaction (for name lookups and tag versions). Can be \c NULL.
+    /// \param transaction   The DB transaction (for name lookups and tag versions). Can be
+    ///                      \c nullptr.
     void dump( DB::Transaction* transaction) const;
 
     /// Checks, if the function call and its arguments still refer to valid definitions.

@@ -76,7 +76,7 @@ public:
 
     /// Sets this access to a new mipmap.
     ///
-    /// \c NULL can be passed to release the previous canvas.
+    /// \c nullptr can be passed to release the previous canvas.
     void set( const IMipmap* mipmap);
 
     /// Returns the mipmap wrapped by this access.
@@ -184,7 +184,7 @@ public:
 
     /// Set this edit to a new mipmap.
     ///
-    /// \c NULL can be passed to release the previous canvas.
+    /// \c nullptr can be passed to release the previous canvas.
     void set( IMipmap* mipmap);
 
     /// Returns the mipmap wrapped by this edit.

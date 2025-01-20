@@ -91,7 +91,7 @@ public:
     /// Notes can be used to describe an error message further or add additional details.
     virtual Size get_notes_count() const = 0;
 
-    /// Returns the note at index or \c NULL, if no such index exists.
+    /// Returns the note at index or \c nullptr, if no such index exists.
     virtual const IMessage* get_note( Size index) const = 0;
 };
 
@@ -118,7 +118,7 @@ public:
 /// - #mi::base::IInterface* "user_data": A user-supplied pointer to an arbitrary interface. This
 ///   option can be used to pass additional data from a call site of
 ///   #mi::neuraylib::IMdl_impexp_api::load_module() to a custom implementation of the entity
-///   resolver. Default: \c NULL.
+///   resolver. Default: \c nullptr.
 ///
 /// Options for MDL export
 /// - \c bool "bundle_resources": If \c true, referenced resources are exported into the same
@@ -164,10 +164,10 @@ public:
     /// Returns the number of error messages.
     virtual Size get_error_messages_count() const = 0;
 
-    /// Returns the message at index or \c NULL, if no such index exists.
+    /// Returns the message at index or \c nullptr, if no such index exists.
     virtual const IMessage* get_message( Size index) const = 0;
 
-    /// Returns the error message at index or \c NULL, if no such index exists.
+    /// Returns the error message at index or \c nullptr, if no such index exists.
     virtual const IMessage* get_error_message( Size index) const = 0;
 
     /// Clears all messages.
@@ -250,11 +250,11 @@ public:
     ///                      -  0: Success.
     ///                      - -1: Invalid option name.
     ///                      - -2: The option type does not match the value type.
-    /// \return              The interface value or \c NULL.
+    /// \return              The interface value or \c nullptr.
     template<typename T>
     const T* get_option( const char* name, Sint32& return_code)
     {
-        const base::IInterface* pointer = 0;
+        const base::IInterface* pointer = nullptr;
         return_code = get_option( name, &pointer);
         if( return_code != 0 || !pointer)
             return 0;

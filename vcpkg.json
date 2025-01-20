@@ -1,0 +1,26 @@
+{
+  "dependencies": [
+    "boost-algorithm",
+    "boost-core",
+    "boost-dynamic-bitset",
+    "boost-functional",
+    "boost-intrusive",
+    "boost-tokenizer",
+    "boost-unordered",
+    "glew",
+    "glfw3",
+    "glslang",
+    {
+      "name": "openimageio",
+      "features": [
+        "gif",
+        "openjpeg",
+        "tools",
+        "webp"
+      ]
+    },
+    "volk",
+    "vulkan-validationlayers"
+  ],
+  "builtin-baseline": "821100d967e1737d96414a308e3f7cbe0d1abf18"
+}

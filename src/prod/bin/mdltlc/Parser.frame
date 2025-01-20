@@ -168,7 +168,7 @@ void Parser::set_compilation_unit(Compilation_unit *unit)
 {
     m_alloc          = unit->get_allocator();
     m_unit           = unit;
-    m_type_factory   = &unit->get_type_factory();
+    m_type_factory   = unit->get_type_factory();
     m_expr_factory   = &unit->get_expression_factory();
     m_value_factory  = &unit->get_value_factory();
     m_rule_factory   = &unit->get_rule_factory();

@@ -52,6 +52,9 @@ protected:
         IOutput_stream *out);
 
 protected:
+    /// Set the DAG_unit.
+    void set_dag_unit(DAG_unit const *unit) { m_dag_unit = unit; }
+
     /// Get a new unique ID for a node.
     size_t get_unique_id();
 
@@ -155,7 +158,17 @@ protected:
     /// \param index  the index of the parameter
     virtual char const *get_parameter_name(int index) = 0;
 
+    /// Get a color for the given node or NULL for default
+    ///
+    /// \param node  the node
+    virtual char const *get_node_color(DAG_node const *node)
+    {
+        return NULL;
+    }
+
 protected:
+    /// The owner unit of the DAG that is dumped.
+    DAG_unit const            *m_dag_unit;
 
     /// The next expression ID.
     size_t                    m_next_node_id;

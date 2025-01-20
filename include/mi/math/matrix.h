@@ -390,32 +390,32 @@ template <typename T, Size ROW, Size COL>
 class Matrix : public Matrix_struct<T,ROW,COL> //-V690 PVS
 {
 public:
-    typedef Matrix_struct<T,ROW,COL> Pod_type;     ///< POD class corresponding to this matrix.
-    typedef Matrix_struct<T,ROW,COL> storage_type; ///< Storage class used by this matrix.
+    using Pod_type     = Matrix_struct<T, ROW, COL>; ///< POD class corresponding to this matrix.
+    using storage_type = Matrix_struct<T, ROW, COL>; ///< Storage class used by this matrix.
 
-    typedef T           value_type;                ///< Element type.
-    typedef Size        size_type;                 ///< Size type, unsigned.
-    typedef Difference  difference_type;           ///< Difference type, signed.
-    typedef T *         pointer;                   ///< Mutable pointer to element.
-    typedef const T *   const_pointer;             ///< Const pointer to element.
-    typedef T &         reference;                 ///< Mutable reference to element.
-    typedef const T &   const_reference;           ///< Const reference to element.
+    using value_type      = T;                       ///< Element type.
+    using size_type       = Size;                    ///< Size type, unsigned.
+    using difference_type = Difference;              ///< Difference type, signed.
+    using pointer         = T*;                      ///< Mutable pointer to element.
+    using const_pointer   = const T*;                ///< Const pointer to element.
+    using reference       = T&;                      ///< Mutable reference to element.
+    using const_reference = const T&;                ///< Const reference to element.
 
     /// Associated row vector of dimension \c COL.
-    typedef Vector<T,COL>  Row_vector;
+    using Row_vector = Vector<T, COL>;
 
     /// Associated column vector of dimension \c ROW.
-    typedef Vector<T,ROW>  Column_vector;
+    using Column_vector = Vector<T, ROW>;
 
-    static const Size ROWS    = ROW;      ///< Constant number of rows of the matrix.
-    static const Size COLUMNS = COL;      ///< Constant number of columns of the matrix.
-    static const Size SIZE    = ROW*COL;  ///< Constant size of the matrix.
+    static constexpr Size ROWS    = ROW;      ///< Constant number of rows of the matrix.
+    static constexpr Size COLUMNS = COL;      ///< Constant number of columns of the matrix.
+    static constexpr Size SIZE    = ROW*COL;  ///< Constant size of the matrix.
 
      /// Constant size of the vector.
-    static inline Size size()     { return SIZE; }
+    static constexpr inline Size size()     { return SIZE; }
 
      /// Constant maximum size of the vector.
-    static inline Size max_size() { return SIZE; }
+    static constexpr inline Size max_size() { return SIZE; }
 
     /// Enum type used to tag a special copy constructor that transposes the
     /// matrix while copying.
@@ -426,10 +426,10 @@ public:
     };
 
     /// Returns the pointer to the first matrix element.
-    inline T * begin() { return mi::math::matrix_base_ptr( *this); }
+    inline T * begin() { return matrix_base_ptr( *this); }
 
     /// Returns the pointer to the first matrix element.
-    inline T const * begin() const { return mi::math::matrix_base_ptr( *this); }
+    inline T const * begin() const { return matrix_base_ptr( *this); }
 
     /// Returns the past-the-end pointer.
     ///
@@ -456,18 +456,16 @@ public:
     }
 
     /// The default constructor leaves the vector elements uninitialized.
-    inline Matrix() { }
+    constexpr inline Matrix() = default;
 
-#if (__cplusplus >= 201103L)
     /// Default copy constructor.
     Matrix( const Matrix<T,ROW,COL>& other ) = default;
-#endif
 
     /// Constructor from underlying storage type.
     inline Matrix( const Matrix_struct<T,ROW,COL>& other)
     {
         for( Size i(0u); i < SIZE; ++i)
-            begin()[i] = mi::math::matrix_base_ptr( other)[i];
+            begin()[i] = matrix_base_ptr( other)[i];
     }
 
     /// Constructor initializes all matrix elements to zero and the diagonal elements to \p diag.
@@ -477,7 +475,7 @@ public:
     {
         for( Size i(0u); i < SIZE; ++i)
             begin()[i] = T(0);
-        const Size MIN_DIM = (ROW < COL) ? ROW : COL;
+        constexpr Size MIN_DIM = (ROW < COL) ? ROW : COL;
         for( Size k(0u); k < MIN_DIM; ++k)
             begin()[k * COL + k] = diag;
     }
@@ -536,7 +534,7 @@ public:
     inline explicit Matrix( const Matrix_struct<T2,ROW,COL>& other)
     {
         for( Size i(0u); i < SIZE; ++i)
-            begin()[i] = T(mi::math::matrix_base_ptr( other)[i]);
+            begin()[i] = T(matrix_base_ptr( other)[i]);
     }
 
     /// Constructor that initializes the matrix with the transpose matrix of \c other.
@@ -1602,7 +1600,7 @@ inline void Matrix<T,ROW,COL>::set_rotation( const Vector<Float64,3>& axis_v, Fl
 {
     mi_static_assert( COL == 4 && ROW == 4);
     Vector<T,3> axis( axis_v);
-    const T min_angle = T(0.00024f);
+    constexpr T min_angle = T(0.00024f);
 
     if( abs(T(angle)) < min_angle) {
         T xa = axis.x * T(angle);
@@ -1735,7 +1733,7 @@ template <class T, Size ROW, Size COL>
 class Matrix_inverter
 {
 public:
-    typedef math::Matrix<T,ROW,COL> Matrix;
+    using Matrix = math::Matrix<T, ROW, COL>;
 
     // Inverts the matrix \c M if possible and returns \c true.
     //
@@ -1748,9 +1746,9 @@ template <class T, Size DIM>
 class Matrix_inverter<T,DIM,DIM>
 {
 public:
-    typedef math::Matrix<T,DIM,DIM> Matrix;
-    typedef math::Vector<T,DIM>     Value_vector;
-    typedef math::Vector<Size,DIM>  Index_vector;
+    using Matrix = math::Matrix<T, DIM, DIM>;
+    using Value_vector = math::Vector<T, DIM>;
+    using Index_vector = math::Vector<Size, DIM>;
 
     // LU decomposition of matrix lu in place.
     //
@@ -1890,7 +1888,7 @@ template <class T>
 class Matrix_inverter<T,1,1>
 {
 public:
-    typedef math::Matrix<T,1,1>     Matrix;
+    using Matrix = math::Matrix<T, 1, 1>;
 
     static inline bool invert( Matrix& mat)
     {
@@ -1907,7 +1905,7 @@ template <class T>
 class Matrix_inverter<T,2,2>
 {
 public:
-    typedef math::Matrix<T,2,2>        Matrix;
+    using Matrix = math::Matrix<T, 2, 2>;
 
     static inline bool invert( Matrix& mat)
     {

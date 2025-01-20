@@ -132,7 +132,7 @@ std::string Compiled_material_traverser_print::print_mdl(
 
     // version string
     std::stringstream output;
-    output << "mdl 1.9;\n\n";
+    output << "mdl 1.10;\n\n";
 
     // add required includes
     size_t last_sep_pos = std::string::npos;

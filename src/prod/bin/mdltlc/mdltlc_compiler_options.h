@@ -131,37 +131,37 @@ private:
     mi::mdl::Memory_arena *m_arena;
 
     /// -v/--verbosity option.
-    int m_verbosity;
+    int m_verbosity { 0 };
 
     /// --generate flag.
-    bool m_generate;
+    bool m_generate { false };
 
     /// --all-errors flag.
-    bool m_all_errors;
+    bool m_all_errors { false };
 
     /// --debug=builtin-loading flag.
-    bool m_debug_builtin_loading;
+    bool m_debug_builtin_loading { false };
 
     /// --debug=dump-builtins flag.
-    bool m_debug_dump_builtins;
+    bool m_debug_dump_builtins { false };
 
     /// --warn=non-normalized-mixers flag.
-    bool m_warn_non_normalized_mixers;
+    bool m_warn_non_normalized_mixers { false };
 
     /// --warn=overlapping-patterns flag.
-    bool m_warn_overlapping_patterns;
+    bool m_warn_overlapping_patterns { false };
 
     /// --normalize-mixers flag.
-    bool m_normalize_mixers;
+    bool m_normalize_mixers { false };
 
     /// Configured file names.
     mi::mdl::vector<char const *>::Type m_filenames;
 
     /// Silent flag. Not available from the command line.
-    bool m_silent;
+    bool m_silent { false };
 
     /// --output-dir=DIR flag.
-    char const *m_output_dir;
+    char const *m_output_dir { nullptr };
 
     /// --mdl-path=DIR flag.
     mi::mdl::vector<char const *>::Type m_mdl_path;

@@ -101,7 +101,7 @@ public:
     /// \return        The property key for \p index.
     virtual const char* get_string_property(
         Sint32 index,
-        const char** value) { (void) index; (void) value; return 0; }
+        const char** value) { (void) index; (void) value; return nullptr; }
 
 };
 
@@ -124,7 +124,7 @@ public:
 
     /// Returns the library path of the plugin.
     ///
-    /// \return   The library path of the plugin, or \c NULL in case of failure.
+    /// \return   The library path of the plugin, or \c nullptr in case of failure.
     virtual const char* get_plugin_library_path() const = 0;
 };
 
@@ -137,9 +137,9 @@ public:
 /// \param index    The index of the plugin.
 /// \param context  The execution context for the plugin.
 #ifndef MI_FOR_DOXYGEN_ONLY
-typedef Plugin* Plugin_factory (unsigned int /*index*/, void* /*context*/);
+using Plugin_factory = Plugin *(unsigned int /*index*/, void* /*context*/);
 #else
-typedef Plugin* Plugin_factory (unsigned int index, void* context);
+using Plugin_factory = Plugin *(unsigned int index, void* context);
 #endif
 
 /*@}*/ // end group mi_base_plugin

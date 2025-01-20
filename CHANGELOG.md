@@ -1,5 +1,279 @@
 Change Log
 ==========
+MDL SDK 2024.1.0 (381500.2959): 14 Jan 2025
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2024.1.0 (381500.2959) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- MDL 1.10 Language Specification
+    - Updated version to 1.10.
+    - Changed of `diffuse_reflection_bsdf` to improved Oren-Nayar model by Fujii
+      and added parameter `multiscatter_tint`.
+    - Corrected description of `multiscatter_tint` parameter in `sheen_bsdf`.
+    - Added parameter `f82_factor` to standard distribution function modifiers
+      `directional_factor` and `color_custom_curve_layer`.
+    - Added standard distribution function modifier `microflake_sheen_bsdf`.
+    - Added standard distribution function modifier `coat_absorption_factor`.
+    - Extended rules for the distribution function normal form with new BSDFs.
+        
+- General
+    - Added `IBaker::get_type_name()` to obtain the type name for constants to be used
+      for a given baker instance. Improved the baker documentation w.r.t. the relation between
+      type of the baked expression, the pixel type for canvases, and the type name of constants.
+    - The MDL SDK is now also available via `vcpkg`.
+    - Added support for the manifest mode of `vcpkg`.
+    - The performance of editing database elements in general has been improved.
+    - The public API requires now C++ 11. All code paths for C++ 03 have been removed.
+    - The performance of the module builder has been improved.
+    - When exporting textures, the gamma value is now exported as metadata
+      (if supported by OpenImageIO and the underlying image file format).
+    - The cmake option `MDL_BUILD_WITHOUT_CUDA_DRIVER` has been added to support building
+      the MDL SDK on machines without a CUDA driver being installed.
+    - The recommended/tested thirdparty software versions are now:
+        - `vcpkg`: git hash 821100d96.
+        - `SWIG`: 4.2.1.
+        - `Windows SDK`: 10.0.22621.0 or newer.
+        - It is now recommended to install the Vulkan SDK also via vcpkg.
+    - Support for the install target has been improved. In most cases it is no longer
+      necessary to set `LD_LIBRARY_PATH`/`PATH` and/or `MDL_SAMPLES_ROOT`
+      for running the examples or tools from an installed location. The executables
+      of the CUDA-based examples also no longer depend on the CUDA SDK, only on the
+      CUDA driver.
+    - With MDL 1.10, a new lookup table for the "Microflake Sheen BSDF" was introduced.
+      If not yet supported, integrations need to handle these new 3D RGB textures.
+    - Python Bindings:
+        - Added `get_data_numpy()` to access texture tile data with numpy.
+        - Renamed internal binding functions to start with an underscore.
+        - Added type annotations to structure fields.    
+        - Updated to Swig to version 4.2.1.
+        - Added binding for new `IBaker::bake_texture_with_constant_detection` function.
+        
+- MDL Compiler and Backends
+    - Added support for MDL 1.10.
+    - Added expression promotion for default arguments of imported entities: Before this release,
+      an exported entity was bound to the language versions that are supported by the used types
+      in its signature and the called entities in its default arguments; The last restriction is
+      now partly lifted: The compiler can now promote expressions from MDL version N to MDL
+      version M if N > M. This allows to import entities from older MDL versioned modules in to
+      newer ones, even if they use expressions in its default arguments that are not available in
+      the new version. The compiler rewrites those expressions with an equivalent expression for
+      the current version (just as it is done in the internal representation).
+        - Note that this works only for imports from older modules, imports from newer modules to
+          older modules still might be filtered out if default expressions does not exists in the
+          older version, because there is not always a downgrade path.
+        - Note further that this is supported for all MDL versions, not only MDL 1.10 now, so
+          exports can create code that is not accepted by older versions of the MDL SDK/compiler.
+          
+- MDL Distilling and Baker
+    - Added support for baking `float2` and `float4` expressions.
+    - Increased the number of texture spaces supported to 16.
+    - Added a NaN-check so resulting pixel values equal to `NaN` will be replaces by zero.
+    - Both, CPU and GPU bakers, implement a new method
+      `IBaker::bake_texture_with_constant_detection()`. This method is an improved version of
+      `bake_texture()` that detects constant textures.
+      
+- MDL SDK examples
+    - Third-party dependencies:
+        - Updated `ImGui` to version 1.95.5.
+        - Added modification markers to the changes made in `ImGui`.
+        - Added modification markers to the changes made in `fx-gltf`.
+        - Updated the `d3dx12.h` license to match the one of the origin (still MIT).
+    - MDL Content:
+        - Updated the formatting and some range annotations in the glTF support module.
+    - MDL SDK df_native Example:
+        - Added support for user defined argument blocks.
+        - Added GUI for interactively change material parameters and displaying renderings
+          statistics.
+        - Using Class Compilation as default. Command line option "`--cc`" has been deprecated,
+          and "`--nocc`" has been added to force Instance Compilation.
+    - Core API / MDL SDK code_gen Example:
+        - Also dump render state usage with option "`–dump-meta-data`".
+    - MDL SDK Example Distilling:
+        - Added option "`--no_constant_detection`". By default (i.e. "`--no_constant_detection`"
+          not set), the distilling example detects baked textures containing a constant color and
+          falls back to baking a constant instead. If the option "`--no_constant_detection`" is
+          set, then the example does not attempt to detect constant colors in the baked textures.
+    - MDL SDK Example DXR:
+        - Added support for the KHR_materials_anisotropy glTF extension.
+        - Updated `d3dx12.h` to the latest version.
+        - Updated fx-gltf to version 2.0.0 and the corresponding nlohmann/json to version 3.11.3.
+        - The `ICompiled_materials` are now dumped in addition to shaders when running with
+          "`--gpu_debug`".
+        - Generated MDL code, from MaterialX, is now also dumped formatted for better readability
+          when running with "`-g`".
+    - Vulkan Examples:
+        - The examples use vcpkg for building now and don't need the Vulkan SDK anymore.
+        - Added option for selection a specific GPU.
+        - Added SPIR-V optimization and option to disable it.
+    - MDL SDK Example df_vulkan:
+        - It now uses and requires VK_EXT_descriptor_indexing for unsized and partially filled
+          texture arrays in the MDL renderer runtime. This eliminates the need for the indirection
+          through the texture index buffer in the old implementation.
+        - It now uses the single-init mode.
+        - Added GUI for changing display settings and material parameters, and displaying
+          rendering statistics.
+        - Added output of auxiliary albedo_diffuse/glossy and roughness.
+        - Added options for v-sync and the texture results cache size.
+    - Added new Core API example "df_native" that shows different compilation modes and options
+      and how to generate target code for the native backend.
+    - Added new Core API example "df_vulkan" for demonstrating generation and usage of
+      distribution functions using the GLSL backend in a Vulkan-based path tracer.
+      
+**Fixed Bugs**
+
+- General
+    - Fixed export of MDL modules with animated and/or uvtile textures if
+      the texture file exists already.
+    - Fixed `IModule::get_resource()` to enumerate resources that appear in bodies and
+      temporaries of functions.
+    - Fixed resources appearing in expressions returned by `Function_definition::get_body()`
+      and `get_temporary()`.
+    - Fixed some sources of duplicated log warnings.
+    - Fixed missing filenames in `ILight_profile::get_filename()` and
+      `IBsdf_measurement::get_filename()` if the resource resides in an MDL archive or MDLE file.
+    - `base.mdl`: Avoid undefined behavior by skipping tangent updates when this would cause
+       a division by zero.
+    - Fixed `IExpression_factory::create_direct_call()` to support
+      temporary references as arguments.
+    - When creating MDLEs of variants, the `::anno::origin` annotation now points to the
+      variant itself, not to its prototype.
+    - Fixed names of some unit test targets to support the cmake generator for Ninja.
+    - Fixed documentation for the `::base` and `::nvidia::core_definitions` modules to match
+      exactly the version of those modules.  
+
+- MDL Compiler and Backends
+    - Skip transmission check for thin-walled materials in target material mode, because the
+      analysis is only supported with the material constructor as a root of the compiled material.
+    - Fixed inserting unnecessary `decl_cast` when the root of the compiled material already had
+      the correct type. This broke the target material mode, always resulting in a material
+      constructor.
+    - Fixed wrong error message when a material and sub types are used as parameters
+      for declarative functions.
+    - Functions used inside default argument expressions of struct constructors are now
+      auto-imported.
+    - Fixed several conditions under which an auto-import of default arguments has failed.
+    - Fixed missing state usage information for distribution functions and for all functions
+      compiled in single-init mode.
+    - Fixed handling of material parameters and read-only data constants requested as derivative
+      values by functions.
+
+- MDL Distiller and Baker
+    - Fixed the baking of varying boolean expressions.
+    - Fixed distiller implementation to enable distilling with
+      the MDL core library (`libmdl_core`).
+
+- MDL SDK examples
+    - glTF Support:
+        - Fixed tangent rotation for normal map lookups.
+    - MDL SDK Example DXR:
+        - Fixed MaterialX version detection to determine if the target version option
+          is supported.
+
+MDL SDK 2024.0.4 (377400.3959): 07 Oct 2024
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2024.0.4 (377400.3959) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- MDL 1.9 Language Specification
+    - Updated to document version 1.9.2.
+
+- General
+    - The default value for the backend option `enable_exceptions` is now `off`,
+      as this is the behavior described by the MDL specification.
+      
+- MDL Compiler and Backends
+    - Implemented folding of `::tex` function calls with invalid textures on the DAG.
+    - Added “`max_const_data`” backend option to limit the size of global constants in the
+      generated code when the “`enable_ro_segment`” option is enabled. Larger constants are put
+      into read-only data segment. The default is “`1024`” bytes, which corresponds to
+      the old behavior.
+
+- MDL SDK examples
+    - MDL Core code_gen example:
+        - Added support for single-init mode.
+    - MDL SDK df_vulkan example:
+        - Added support for read-only data segments and `max_const_data` backend option.
+    - MDL Example Execution Native:
+        - It now supports the `-p` abbreviation for `–mdl_path` as in all other examples.
+    - MDL Example df_native:
+        - Added support for argument blocks in Class Compilation mode.
+        - Added OpenGL GUI for editing material parameters and displaying stats during rendering.
+        - Changed default compilation mode to Class Compilation.
+        - Removed command line option `--cc` which is now replaced
+          by `--nocc` (or disable Class Compilation mode).
+
+**Fixed Bugs**
+
+- General
+    - libbsdf: Fixed issues for `df::thin_film` over `df::custom_curve_layer` and
+      `df::directional_factor` with normal reflectivity approaching zero.
+    - Fixed a build error if image plugins are disabled.
+    - Fixed a build error caused by picking up LLVM header files from a different location.
+    - Fixed documented return codes for `IExpression_factory::create_cast()` and
+      `create_decl_cast()` (error codes are negative as usual, not positive).
+    - Fixed missing build dependencies for the distiller plugins and the distiller example plugin.    
+
+- MDL Compiler and Backends
+    - Allow material sub structs to be used inside a declarative struct and declarative functions.
+    - Improved error message in case a select operator cannot be executed because of the
+      left-hand-side type was not imported.
+    - Fixed wrong HLSL/GLSL read functions used for shadow copies of function parameters.
+    - Fixed crash when compiling a function which receives a material parameter but doesn't
+      use the state (GLSL backend with rodata segment disabled).
+    - Avoid undefined behavior with "%" operator for negative values for GLSL
+      by implementing “`a % b`” as “`a - (a / b) * b`”.
+    - Report when a standard library module is imported with a weak relative import names from
+      a module in a search path root. This is needed because standard library modules are
+      loaded from a high-priority search path and would shadow any relative import. This will
+      trigger a warning for MDL versions between 1.6 and 1.9, and an error for MDL versions
+      greater than 1.9.
+    - Fixed the documentation of the backend option "`hlsl_use_resource_data`" and
+      "`glsl_use_resource_data`". These are recognized but not supported at the moment.
+    - Fixed compilation of calls to non-inlined functions which receive material parameters as
+      arguments for GLSL/HLSL.
+    - Return identity matrix instead of zero for unimplemented `tex::grid_to_object_space()`.
+    - Fixed crash when compiling an expression as `const` which only becomes `const` after
+      optimization (e.g. by getting rid of state access).
+    - libbsdf: Fixed wrong shadow mask in microfacet BSDFs.
+    - libbsdf: Avoid `NaNs` due to out-of-range roundings during random number updates.
+    - MDL Core: Fixed resource indices for native code if a custom texture runtime is used.
+    - Fixed crashes if a non-constant default constructor occurred during code generation
+      in various backends.
+
+MDL SDK 2024.0.2 (377400.2626): 07 Aug 2024
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2024.0.2 (377400.2626) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+    - MDL Arnold: Added support for Arnold SDK version 7.3.2.1.
+
+**Fixed Bugs**
+
+- General
+    - Fixed missing leading "::" for qualified names reported by `IMdl_discovery_api`,
+      if search paths had a trailing OS separator.
+    - Improved error message that can be triggered when calling non-const methods
+      on const objects. This can e.g. be triggered via the Python binding by accessing
+      (not editing) database elements.
+    - Improved coverage tests for the Python binding.
+
+- MDL Compiler and Backends
+    - Fixed crash in some cases when derivatives were calculated for a struct also containing
+      non-floating point fields.
+    - Fixed wrong digit that can be added to `tex::texture_isvalid()` calls for
+      HLSL and GLSL backends, if more than one texture type (for instance `texture_2d` and
+      `texture_3d`) are used together in one module.
+
 MDL SDK 2024.0.1 (377400.2109): 18 Jul 2024
 -----------------------------------------------
 

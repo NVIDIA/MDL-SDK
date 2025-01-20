@@ -44,7 +44,7 @@
 #include <base/lib/log/i_log_assert.h>
 #include <base/lib/log/i_log_logger.h>
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
-#include <io/scene/mdl_elements/mdl_elements_utilities.h>
+#include <io/scene/mdl_elements/mdl_elements_utilities.h> // add_slash_in_front_of_encoded_...()
 #include <mdl/compiler/compilercore/compilercore_positions.h>
 
 #include <utility>

@@ -90,7 +90,7 @@ public:
     Expr_factory &get_expression_factory();
 
     /// Get the type factory.
-    Type_factory &get_type_factory();
+    Type_factory *get_type_factory();
 
     /// Get the value factory.
     Value_factory &get_value_factory();
@@ -137,13 +137,11 @@ private:
         mi::mdl::IMDL *imdl,
         mi::mdl::Node_types *node_types,
         Symbol_table *symbol_table,
+        Type_factory *type_factory,
         char const *file_name,
         Compiler_options const *comp_options,
         Message_list *messages,
-        Builtin_type_map *builtins);
-
-    /// Return the type for the builtin type named `type_name`.
-    Type *builtin_type_for(const char *type_name);
+        Def_table const *def_table);
 
     /// Typecheck the AST of the mdltl file.
     void type_check(Environment &builtin_env);
@@ -158,14 +156,11 @@ private:
 
     /// Add the type `type` in environment `builtin_env` to symbol
     /// `name`.
-    void add_binding(Symbol const *name, Type *type, Environment &builtin_env);
-
-    /// Declare the functions that are built into the MDL compiler.
-    void declare_builtins(Environment &env);
-
-    /// Declare all functions that have been loaded from the standard
-    /// libraries.
-    void  declare_stdlib(Environment &builtin_env);
+    void add_binding(
+        Symbol const *name, 
+        Type const *type,
+        char const *signature,
+        Environment &builtin_env);
 
     /// Declare all exported materials from the MDL module called
     /// `module_name`.
@@ -173,12 +168,6 @@ private:
         char const *module_name,
         mi::mdl::Module const *module,
         Environment &builtin_env);
-
-    /// Declare all functions defined on the state object.
-    void declare_state_functions(Environment &builtin_env);
-
-    /// Declare all functions declared as node types in the distiller.
-    void declare_dist_nodes(Environment &builtin_env);
 
     /// Perform type checking on the given rule set, using the given
     /// builtin definitions.
@@ -325,14 +314,41 @@ private:
                                     mi::mdl::string const &prefix,
                                     Var_set &used_vars);
 
+    void output_cpp_matcher_rhs(pp::Pretty_print &p,
+                                Rule const &rule,
+                                size_t rule_index,
+                                size_t node_index,
+                                size_t cont_index);
+
+
+    /// Helper function for output_cpp_rule_matcher. Outputs the code
+    /// to match an extended pattern (name, pattern, attributes).
+    void output_cpp_rule_match1(
+        pp::Pretty_print &p,
+        Rule const &rule,
+        bool first_matcher,
+        size_t skip_tl,
+        size_t rule_index,
+        size_t node_index,
+        size_t fail_node_index,
+        size_t cont_index,
+        Expr const *node,
+        size_t &tmp_index);
+
+    /// Helper function for output_cpp. Outputs the matcher function
+    /// for a single rule.
+    void output_cpp_rule_matcher(
+        pp::Pretty_print &p,
+        Rule const &rule,
+        bool first_matcher,
+        size_t skip_tl,
+        size_t rule_index,
+        size_t cont_index);
+
     /// Helper function for output_cpp. Outputs the matcher function.
     void output_cpp_matcher(pp::Pretty_print &p,
                             Ruleset &ruleset,
                             mi::mdl::vector<Rule const *>::Type &rules);
-    void output_cpp_matcher_body(pp::Pretty_print &p,
-                                 Rule const &rule,
-                                 size_t rule_index,
-                                 mi::mdl::string &pfx);
 
     /// Helper function for output_cpp. Outputs the helper function
     /// definitions for postcondition checks.
@@ -476,7 +492,7 @@ private:
     Symbol_table *m_symbol_table;
 
     /// The type factory to use for this compilation.
-    Type_factory m_type_factory;
+    Type_factory *m_type_factory;
 
     /// The value factory to use for this compilation.
     Value_factory m_value_factory;
@@ -492,9 +508,6 @@ private:
 
     /// Pointer to message collector managed in the Compiler class.
     Message_list *m_messages;
-
-    /// Pointer to map from builtin names to their MDL types.
-    Builtin_type_map *m_builtins;
 
     /// The number of errors encountered while compiling an mdltl
     /// file.
@@ -521,6 +534,8 @@ private:
     /// Environment to hold attribute types across different rule
     /// sets.
     Environment m_attribute_env;
+
+    Def_table const *m_def_table;
 };
 
 #endif

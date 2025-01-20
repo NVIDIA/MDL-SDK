@@ -468,6 +468,7 @@ struct Options {
     bool enable_auxiliary_output;
     bool enable_pdf;
     bool use_adapt_normal;
+    bool enable_mdl_next;
     unsigned int res_x, res_y;
     unsigned int iterations;
     unsigned int samples_per_iteration;
@@ -498,6 +499,7 @@ struct Options {
     , enable_auxiliary_output(true)
     , enable_pdf(true)
     , use_adapt_normal(false)
+    , enable_mdl_next(false)
     , res_x(1024)
     , res_y(1024)
     , iterations(4096)
@@ -2148,6 +2150,7 @@ static void usage(const char *name)
         << "-l <x> <y> <z> <r> <g> <b>  add an isotropic point light with given coordinates and "
            "intensity (flux)\n"
         << "-p|--mdl_path <path>        MDL search path, can occur multiple times.\n"
+        << "--mdl_next                  Enable features from upcoming MDL version.\n"
         << "--max_path_length <num>     maximum path length, default 4 (up to one total internal\n"
         << "                            reflection), clamped to 2..100\n"
         << "--noaa                      disable pixel oversampling\n"
@@ -2229,6 +2232,8 @@ int MAIN_UTF8(int argc, char* argv[])
                 options.light_intensity.z = static_cast<float>(atof(argv[++i]));
             } else if ((strcmp(opt, "-p") == 0 || strcmp(opt, "--mdl_path") == 0) && i < argc - 1) {
                 configure_options.additional_mdl_paths.push_back(argv[++i]);
+            } else if (strcmp(opt, "--mdl_next") == 0) {
+                options.enable_mdl_next = true;
             } else if (strcmp(opt, "--max_path_length") == 0 && i < argc - 1) {
                 options.max_path_length = std::min(std::max(atoi(argv[++i]), 2), 100);
             } else if (strcmp(opt, "--noaa") == 0) {
@@ -2380,6 +2385,7 @@ int MAIN_UTF8(int argc, char* argv[])
                 options.enable_pdf,
                 options.use_adapt_normal,
                 options.enable_bsdf_flags,
+                options.enable_mdl_next,
                 /*df_handle_mode=*/ "pointer",
                 /*lambda_return_mode=*/ "value");
 

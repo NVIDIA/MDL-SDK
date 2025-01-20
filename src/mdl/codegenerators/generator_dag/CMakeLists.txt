@@ -45,6 +45,7 @@ set(PROJECT_HEADERS
     "generator_dag_serializer.h"
     "generator_dag_tools.h"
     "generator_dag_walker.h"
+    "generator_dag_unit.h"
     )
 
 set(PROJECT_SOURCES
@@ -64,6 +65,7 @@ set(PROJECT_SOURCES
     "generator_dag_thin_walled.cpp"
     "generator_dag_opacity.cpp"
     "generator_dag_walker.cpp"
+    "generator_dag_unit.cpp"
     ${PROJECT_HEADERS}
     )
 

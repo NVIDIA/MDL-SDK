@@ -31,16 +31,6 @@
 #ifndef MI_NEURAYLIB_TARGET_CODE_TYPES_H
 #define MI_NEURAYLIB_TARGET_CODE_TYPES_H
 
-// Portable alignment macro supporting pre C++11.
-#ifndef __align__
-#ifdef _MSC_VER
-#define __align__(n) __declspec(align(n))
-#else
-#define __align__(n) __attribute__((aligned(n)))
-#endif
-#endif
-
-
 // If neither TARGET_CODE_USE_CUDA_TYPES nor TARGET_CODE_USE_NEURAY_TYPES is set,
 // it will default to CUDA types when compiled by a CUDA compiler and use Neuray types otherwise.
 
@@ -62,22 +52,22 @@ namespace neuraylib {
 */
 
 /// A float.
-typedef float      tct_float;
+using tct_float = float;
 
 /// A float2.
-typedef float2     tct_float2;
+using tct_float2 = float2;
 
 /// A float3.
-typedef float3     tct_float3;
+using tct_float3 = float3;
 
 /// A float4.
-typedef float4     tct_float4;
+using tct_float4 = float4;
 
 /// An int.
-typedef int        tct_int;
+using tct_int = int;
 
 /// An unsigned int.
-typedef unsigned   tct_uint;
+using tct_uint = unsigned;
 
 #else
 
@@ -92,27 +82,27 @@ namespace neuraylib {
 */
 
 /// A float.
-typedef float                  tct_float;
+using tct_float = float;
 
 /// A float2.
-typedef mi::Float32_2_struct   tct_float2;
+using tct_float2 = mi::Float32_2_struct;
 
 /// A float3.
-typedef mi::Float32_3_struct   tct_float3;
+using tct_float3 = mi::Float32_3_struct;
 
 /// A float4.
-typedef mi::Float32_4_struct   tct_float4;
+using tct_float4 = mi::Float32_4_struct;
 
 /// An int.
-typedef mi::Sint32             tct_int;
+using tct_int = mi::Sint32;
 
 /// An unsigned int.
-typedef mi::Uint32             tct_uint;
+using tct_uint = mi::Uint32;
 
 #endif
 
 /// A bool.
-typedef bool  tct_bool;
+using tct_bool = bool;
 
 
 /// A template struct with derivatives.
@@ -129,43 +119,43 @@ struct tct_traits;
 template<>
 struct tct_traits<false>
 {
-    typedef tct_float        tct_derivable_float;
-    typedef tct_float2       tct_derivable_float2;
-    typedef tct_float3       tct_derivable_float3;
-    typedef tct_float4       tct_derivable_float4;
-    typedef tct_float const  tct_coord2_type[2];
+    using tct_derivable_float = tct_float;
+    using tct_derivable_float2 = tct_float2;
+    using tct_derivable_float3 = tct_float3;
+    using tct_derivable_float4 = tct_float4;
+    using tct_coord2_type = const tct_float[2];
 };
 
 template<>
 struct tct_traits<true>
 {
-    typedef tct_deriv<tct_float>          tct_derivable_float;
-    typedef tct_deriv<tct_float2>         tct_derivable_float2;
-    typedef tct_deriv<tct_float3>         tct_derivable_float3;
-    typedef tct_deriv<tct_float4>         tct_derivable_float4;
-    typedef tct_derivable_float2 const *  tct_coord2_type;
+    using tct_derivable_float = tct_deriv<tct_float>;
+    using tct_derivable_float2 = tct_deriv<tct_float2>;
+    using tct_derivable_float3 = tct_deriv<tct_float3>;
+    using tct_derivable_float4 = tct_deriv<tct_float4>;
+    using tct_coord2_type = const tct_derivable_float2 *;
 };
 
 /// A float with derivatives.
-typedef tct_traits<true>::tct_derivable_float  tct_deriv_float;
+using tct_deriv_float = tct_traits<true>::tct_derivable_float;
 
 /// A float2 with derivatives.
-typedef tct_traits<true>::tct_derivable_float2 tct_deriv_float2;
+using tct_deriv_float2 = tct_traits<true>::tct_derivable_float2;
 
 /// A float3 with derivatives.
-typedef tct_traits<true>::tct_derivable_float3 tct_deriv_float3;
+using tct_deriv_float3 = tct_traits<true>::tct_derivable_float3;
 
 /// A float4 with derivatives.
-typedef tct_traits<true>::tct_derivable_float4 tct_deriv_float4;
+using tct_deriv_float4 = tct_traits<true>::tct_derivable_float4;
 
 /// A float[2] with derivatives (needed to avoid problems with wrong alignment).
-typedef tct_deriv<float[2]> tct_deriv_arr_float_2;
+using tct_deriv_arr_float_2 = tct_deriv<float[2]>;
 
 /// A float[3] with derivatives (needed to avoid problems with wrong alignment).
-typedef tct_deriv<float[3]> tct_deriv_arr_float_3;
+using tct_deriv_arr_float_3 = tct_deriv<float[3]>;
 
 /// A float[4] with derivatives (needed to avoid problems with wrong alignment).
-typedef tct_deriv<float[4]> tct_deriv_arr_float_4;
+using tct_deriv_arr_float_4 = tct_deriv<float[4]>;
 
 
 /// The MDL environment state structure inside the MDL SDK is a representation of the renderer
@@ -181,7 +171,8 @@ typedef tct_deriv<float[4]> tct_deriv_arr_float_4;
 /// You can choose the meaning of internal space by setting the \c "internal_space" option via
 /// the #mi::neuraylib::IMdl_backend::set_option() method to \c "world" or \c "object".
 /// The default is world space.
-struct Shading_state_environment {
+struct Shading_state_environment
+{
     /// The result of state::direction().
     /// It represents the lookup direction for the environment lookup.
     tct_float3            direction;
@@ -198,7 +189,7 @@ struct Shading_state_environment {
     ///   \c ro_data_segment field of the MDL material state. Depending on the target platform
     ///   this may require copying the data to the GPU.
     ///
-    /// For other backends, this should be \c NULL.
+    /// For other backends, this should be \c nullptr.
     char const           *ro_data_segment;
 };
 
@@ -231,8 +222,9 @@ struct Shading_state_environment {
 /// - \c state::wavelength_base() is currently not implemented in any backend,
 /// - \c state::rounded_corner_normal() currently just returns the \c normal field of the state.
 template<bool with_derivatives = false>
-struct Shading_state_material_impl {
-    typedef tct_traits<with_derivatives> traits;
+struct Shading_state_material_impl
+{
+    using traits = tct_traits<with_derivatives>;
 
     /// The result of state::normal().
     /// It represents the shading normal as determined by the renderer.
@@ -276,7 +268,7 @@ struct Shading_state_material_impl {
     /// and duplicate calculation of values.
     /// This field is only relevant for code generated with
     /// #mi::neuraylib::IMdl_backend::translate_material_df() or
-    /// #mi::neuraylib::ILink_unit::add_material_df(). In other cases this may be \c NULL.
+    /// #mi::neuraylib::ILink_unit::add_material_df(). In other cases this may be \c nullptr.
     tct_float4           *text_results;
 
     /// A pointer to a read-only data segment.
@@ -291,7 +283,7 @@ struct Shading_state_material_impl {
     ///   \c ro_data_segment field of the MDL material state. Depending on the target platform
     ///   this may require copying the data to the GPU.
     ///
-    /// For other backends, this should be \c NULL.
+    /// For other backends, this should be \c nullptr.
     char const           *ro_data_segment;
 
     /// A 4x4 transformation matrix in row-major order transforming from world to object
@@ -321,16 +313,17 @@ struct Shading_state_material_impl {
 };
 
 /// The MDL material state structure.
-typedef struct Shading_state_material_impl<false> Shading_state_material;
+using Shading_state_material = Shading_state_material_impl<false>;
 
 /// The MDL material state structure with derivatives for the texture coordinates.
-typedef struct Shading_state_material_impl<true> Shading_state_material_with_derivs;
+using Shading_state_material_with_derivs = Shading_state_material_impl<true>;
 
 
 /// The texture wrap modes as defined by \c tex::wrap_mode in the MDL specification.
 /// It determines the texture lookup behavior if a lookup coordinate
 /// is exceeding the normalized half-open texture space range of [0, 1).
-enum Tex_wrap_mode {
+enum Tex_wrap_mode
+{
     /// \c tex::wrap_clamp: clamps the lookup coordinate to the range
     TEX_WRAP_CLAMP           = 0,
 
@@ -365,8 +358,9 @@ struct Texture_handler_base;
 /// The runtime for bitmap texture access for the generated target code
 /// can optionally be implemented in form of a vtable as specified by this structure.
 template<bool with_derivatives = false>
-struct Texture_handler_vtable_impl {
-    typedef tct_traits<with_derivatives> traits;
+struct Texture_handler_vtable_impl
+{
+    using traits = tct_traits<with_derivatives>;
 
     /// Implementation of \c tex::lookup_float4() for a texture_2d texture.
     void (*m_tex_lookup_float4_2d)(
@@ -675,7 +669,7 @@ struct Texture_handler_vtable_impl {
         tct_bool                               uniform_lookup);
     //
     // The following functions are only used in the derivative variant,
-    // and can be nullptr in the non-derivative variant
+    // and can be \c nullptr in the non-derivative variant
     //
 
     /// Implementation of \c scene_data_lookup_float() with derivatives.
@@ -725,39 +719,43 @@ struct Texture_handler_vtable_impl {
 };
 
 /// The texture handler vtable struct.
-typedef Texture_handler_vtable_impl<false> Texture_handler_vtable;
+using Texture_handler_vtable = Texture_handler_vtable_impl<false>;
 
 /// The texture handler vtable struct with derivatives for the texture coordinates.
-typedef Texture_handler_vtable_impl<true> Texture_handler_deriv_vtable;
+using Texture_handler_deriv_vtable = Texture_handler_vtable_impl<true>;
 
 /// The texture handler structure that is passed to the texturing functions.
 /// A user can derive from this structure and add custom fields as required by the texturing
 /// function implementations.
-struct Texture_handler_base {
+struct Texture_handler_base
+{
     /// In vtable-mode, the vtable field is used to call the texturing functions.
-    /// Otherwise, this field may be \c NULL.
+    /// Otherwise, this field may be \c nullptr.
     Texture_handler_vtable const  *vtable;
 };
 
 /// The texture handler structure that is passed to the texturing functions with derivative support.
 /// A user can derive from this structure and add custom fields as required by the texturing
 /// function implementations.
-struct Texture_handler_deriv_base {
+struct Texture_handler_deriv_base
+{
     /// In vtable-mode, the vtable field is used to call the texturing functions.
-    /// Otherwise, this field may be \c NULL.
+    /// Otherwise, this field may be \c nullptr.
     Texture_handler_deriv_vtable const  *vtable;
 };
 
 
 /// The data structure providing access to resources for generated code.
-struct Resource_data {
-    void const                  *shared_data;      ///< currently unused, should be \c NULL
+struct Resource_data
+{
+    void const                  *shared_data;      ///< currently unused, should be \c nullptr
     Texture_handler_base const  *texture_handler;  ///< will be provided as "self" parameter to
                                                    ///< texture functions
 };
 
 /// The type of events created by BSDF importance sampling.
-enum Bsdf_event_type {
+enum Bsdf_event_type
+{
     BSDF_EVENT_ABSORB       = 0,
 
     BSDF_EVENT_DIFFUSE      = 1,
@@ -782,7 +780,8 @@ enum Bsdf_event_type {
 #define MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR (-1.0f)
 
 /// Flags controlling the calculation of DF results.
-enum Df_flags {
+enum Df_flags
+{
     DF_FLAGS_NONE = 0,               ///< allows nothing -> black
 
     DF_FLAGS_ALLOW_REFLECT = 1,
@@ -794,7 +793,8 @@ enum Df_flags {
 };
 
 /// Input and output structure for BSDF sampling data.
-struct __align__(16) Bsdf_sample_data {
+struct alignas(16) Bsdf_sample_data
+{
     tct_float3       ior1;           ///< mutual input: IOR current medium
     tct_float3       ior2;           ///< mutual input: IOR other side
     tct_float3       k1;             ///< mutual input: outgoing direction
@@ -822,7 +822,7 @@ enum Df_handle_slot_mode
 };
 
 /// Input and output structure for BSDF evaluation data.
-struct __align__(16) Bsdf_evaluate_data_base {};
+struct alignas(16) Bsdf_evaluate_data_base {};
 
 template<Df_handle_slot_mode N>
 struct Bsdf_evaluate_data : public Bsdf_evaluate_data_base
@@ -881,7 +881,8 @@ struct Bsdf_evaluate_data<DF_HSM_NONE> : public Bsdf_evaluate_data_base
 };
 
 /// Input and output structure for BSDF PDF calculation data.
-struct __align__(16) Bsdf_pdf_data {
+struct alignas(16) Bsdf_pdf_data
+{
     tct_float3       ior1;           ///< mutual input: IOR current medium
     tct_float3       ior2;           ///< mutual input: IOR other side
     tct_float3       k1;             ///< mutual input: outgoing direction
@@ -894,7 +895,7 @@ struct __align__(16) Bsdf_pdf_data {
 };
 
 /// Input and output structure for BSDF auxiliary calculation data.
-struct __align__(16) Bsdf_auxiliary_data_base {};
+struct alignas(16) Bsdf_auxiliary_data_base {};
 
 template<Df_handle_slot_mode N>
 struct Bsdf_auxiliary_data : public Bsdf_auxiliary_data_base
@@ -910,7 +911,7 @@ struct Bsdf_auxiliary_data : public Bsdf_auxiliary_data_base
                                                             ///<     albedo
     tct_float3       albedo_glossy[static_cast<size_t>(N)]; ///< output: (glossy part of the) albedo
     tct_float3       normal[static_cast<size_t>(N)];        ///< output: normal
-    tct_float3       roughness[static_cast<size_t>(N)];     ///< output: glossy roughness_u, 
+    tct_float3       roughness[static_cast<size_t>(N)];     ///< output: glossy roughness_u,
                                                             ///<     glossy roughness_v, bsdf_weight
 
     Df_flags         flags;          ///< input: flags controlling calculation of result
@@ -964,8 +965,8 @@ struct Bsdf_auxiliary_data<DF_HSM_NONE> : public Bsdf_auxiliary_data_base
 /// \param result           pointer to the result buffer which must be large enough for the result
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param arg_block_data   unused, should be \c NULL
-typedef void (Environment_function)(
+/// \param arg_block_data   unused, should be \c nullptr
+using Environment_function = void(
     void                             *result,
     Shading_state_environment const  *state,
     Resource_data const              *res_data,
@@ -980,7 +981,7 @@ typedef void (Environment_function)(
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Material_expr_function)(
+using Material_expr_function = void(
     void                          *result,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
@@ -995,7 +996,7 @@ typedef void (Material_expr_function)(
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Material_expr_function_with_derivs)(
+using Material_expr_function_with_derivs = void(
     void                                      *result,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
@@ -1016,7 +1017,7 @@ struct Material_function
     /// \param res_data         the resources
     /// \param arg_block_data   the target argument block data, if class compilation was used
     /// \return                 the result of the material expression
-    typedef T (Type)(
+    using Type = T(
         Shading_state_material const  *state,
         Resource_data const           *res_data,
         char const                    *arg_block_data);
@@ -1030,7 +1031,7 @@ struct Material_function
     /// \param res_data         the resources
     /// \param arg_block_data   the target argument block data, if class compilation was used
     /// \return                 the result of the material expression
-    typedef T (Type_with_derivs)(
+    using Type_with_derivs = T(
         Shading_state_material_with_derivs const  *state,
         Resource_data const                       *res_data,
         char const                                *arg_block_data);
@@ -1049,7 +1050,7 @@ struct Material_function
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Bsdf_init_function)(
+using Bsdf_init_function = void(
     Shading_state_material  *state,
     Resource_data const     *res_data,
     char const              *arg_block_data);
@@ -1066,7 +1067,7 @@ typedef void (Bsdf_init_function)(
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Bsdf_init_function_with_derivs)(
+using Bsdf_init_function_with_derivs = void(
     Shading_state_material_with_derivs  *state,
     Resource_data const                 *res_data,
     char const                          *arg_block_data);
@@ -1080,7 +1081,7 @@ typedef void (Bsdf_init_function_with_derivs)(
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Bsdf_sample_function)(
+using Bsdf_sample_function = void(
     Bsdf_sample_data              *data,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
@@ -1095,7 +1096,7 @@ typedef void (Bsdf_sample_function)(
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Bsdf_sample_function_with_derivs)(
+using Bsdf_sample_function_with_derivs = void(
     Bsdf_sample_data                          *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
@@ -1110,7 +1111,7 @@ typedef void (Bsdf_sample_function_with_derivs)(
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Bsdf_evaluate_function)(
+using Bsdf_evaluate_function = void(
     Bsdf_evaluate_data_base               *data,
     Shading_state_material const          *state,
     Resource_data const                   *res_data,
@@ -1125,7 +1126,7 @@ typedef void (Bsdf_evaluate_function)(
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Bsdf_evaluate_function_with_derivs)(
+using Bsdf_evaluate_function_with_derivs = void(
     Bsdf_evaluate_data_base                     *data,
     Shading_state_material_with_derivs const    *state,
     Resource_data const                         *res_data,
@@ -1140,7 +1141,7 @@ typedef void (Bsdf_evaluate_function_with_derivs)(
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Bsdf_pdf_function)(
+using Bsdf_pdf_function = void(
     Bsdf_pdf_data                 *data,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
@@ -1155,7 +1156,7 @@ typedef void (Bsdf_pdf_function)(
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Bsdf_pdf_function_with_derivs)(
+using Bsdf_pdf_function_with_derivs = void(
     Bsdf_pdf_data                             *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
@@ -1169,7 +1170,7 @@ typedef void (Bsdf_pdf_function_with_derivs)(
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Bsdf_auxiliary_function)(
+using Bsdf_auxiliary_function = void(
     Bsdf_auxiliary_data_base      *data,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
@@ -1184,7 +1185,7 @@ typedef void (Bsdf_auxiliary_function)(
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Bsdf_auxiliary_function_with_derivs)(
+using Bsdf_auxiliary_function_with_derivs = void(
     Bsdf_auxiliary_data_base                  *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
@@ -1201,7 +1202,7 @@ enum Edf_event_type
 
 
 /// Input and output structure for EDF sampling data.
-struct __align__(16) Edf_sample_data
+struct alignas(16) Edf_sample_data
 {
     tct_float4      xi;             ///< input: pseudo-random sample numbers in range [0, 1)
     tct_float3      k1;             ///< output: outgoing direction
@@ -1212,7 +1213,7 @@ struct __align__(16) Edf_sample_data
 };
 
 /// Input and output structure for EDF evaluation data.
-struct __align__(16) Edf_evaluate_data_base {};
+struct alignas(16) Edf_evaluate_data_base {};
 
 template<Df_handle_slot_mode N>
 struct Edf_evaluate_data : public Edf_evaluate_data_base
@@ -1249,14 +1250,14 @@ struct Edf_evaluate_data<DF_HSM_NONE> : public Edf_evaluate_data_base
 };
 
 /// Input and output structure for EDF PDF calculation data.
-struct __align__(16) Edf_pdf_data
+struct alignas(16) Edf_pdf_data
 {
     tct_float3      k1;             ///< input: outgoing direction
     tct_float       pdf;            ///< output: pdf (non-projected hemisphere)
 };
 
 /// Input and output structure for EDF auxiliary calculation data.
-struct __align__(16) Edf_auxiliary_data_base {};
+struct alignas(16) Edf_auxiliary_data_base {};
 
 template<Df_handle_slot_mode N>
 struct Edf_auxiliary_data : public Edf_auxiliary_data_base
@@ -1300,7 +1301,7 @@ struct Edf_auxiliary_data<DF_HSM_NONE> : public Edf_auxiliary_data_base
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Edf_init_function)(
+using Edf_init_function = void(
     Shading_state_material  *state,
     Resource_data const     *res_data,
     char const              *arg_block_data);
@@ -1317,7 +1318,7 @@ typedef void (Edf_init_function)(
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Edf_init_function_with_derivs)(
+using Edf_init_function_with_derivs = void(
     Shading_state_material_with_derivs  *state,
     Resource_data const                 *res_data,
     char const                          *arg_block_data);
@@ -1331,7 +1332,7 @@ typedef void (Edf_init_function_with_derivs)(
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Edf_sample_function)(
+using Edf_sample_function = void(
     Edf_sample_data               *data,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
@@ -1346,7 +1347,7 @@ typedef void (Edf_sample_function)(
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Edf_sample_function_with_derivs)(
+using Edf_sample_function_with_derivs = void(
     Edf_sample_data                           *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
@@ -1361,7 +1362,7 @@ typedef void (Edf_sample_function_with_derivs)(
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Edf_evaluate_function)(
+using Edf_evaluate_function = void(
     Edf_evaluate_data_base       *data,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
@@ -1376,7 +1377,7 @@ typedef void (Edf_evaluate_function)(
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Edf_evaluate_function_with_derivs)(
+using Edf_evaluate_function_with_derivs = void(
     Edf_evaluate_data_base                    *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
@@ -1391,7 +1392,7 @@ typedef void (Edf_evaluate_function_with_derivs)(
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Edf_pdf_function)(
+using Edf_pdf_function = void(
     Edf_pdf_data                  *data,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
@@ -1406,7 +1407,7 @@ typedef void (Edf_pdf_function)(
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Edf_pdf_function_with_derivs)(
+using Edf_pdf_function_with_derivs = void(
     Edf_pdf_data                              *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
@@ -1420,7 +1421,7 @@ typedef void (Edf_pdf_function_with_derivs)(
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Edf_auxiliary_function)(
+using Edf_auxiliary_function = void(
     Edf_auxiliary_data_base       *data,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
@@ -1435,7 +1436,7 @@ typedef void (Edf_auxiliary_function)(
 /// \param state            the shading state
 /// \param res_data         the resources
 /// \param arg_block_data   the target argument block data, if class compilation was used
-typedef void (Edf_auxiliary_function_with_derivs)(
+using Edf_auxiliary_function_with_derivs = void(
     Edf_auxiliary_data_base                   *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,

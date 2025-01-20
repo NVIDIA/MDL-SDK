@@ -662,7 +662,7 @@ template class Number_impl_proxy<mi::IUint64,     mi::Uint64>;
 template class Number_impl_proxy<mi::IFloat32,    mi::Float32>;
 template class Number_impl_proxy<mi::IFloat64,    mi::Float64>;
 
-// explicit template instantiation for Type_trais<T>
+// explicit template instantiation for Type_traits<T>
 template class Type_traits<mi::Sint8>;
 template class Type_traits<mi::Sint16>;
 template class Type_traits<mi::Sint32>;
@@ -999,7 +999,7 @@ mi::base::IInterface* String_impl_proxy::create_instance(
 const char* String_impl_proxy::get_c_str() const
 {
     // Note that the constructor of the proxy implementation does not call set_c_str( "").
-    // Hence, we have to check for NULL pointers here.
+    // Hence, we have to check for nullptr here.
     if( *m_pointer == nullptr)
         return "";
     return *m_pointer;

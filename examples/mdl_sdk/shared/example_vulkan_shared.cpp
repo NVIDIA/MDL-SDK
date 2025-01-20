@@ -26,21 +26,21 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_sdk/shared/example_vulkan_shared.cpp
- //
- // Code shared by all Vulkan examples.
+// examples/mdl_sdk/shared/example_vulkan_shared.cpp
+//
+// Code shared by all Vulkan examples.
 
 #include "example_vulkan_shared.h"
 
-#include <GLFW/glfw3.h>
+#define VOLK_IMPLEMENTATION
+#include <volk.h>
+
 #include <glslang/SPIRV/GlslangToSpv.h>
+#include <glslang/Public/ResourceLimits.h>
+#include <spirv-tools/optimizer.hpp>
 
 #include <unordered_set>
 #include <algorithm>
-
-// Extensions
-PFN_vkCreateDebugUtilsMessengerEXT CreateDebugUtilsMessengerEXT;
-PFN_vkDestroyDebugUtilsMessengerEXT DestroyDebugUtilsMessengerEXT;
 
 namespace
 {
@@ -58,6 +58,31 @@ Src_iterator splice_if(Src_iterator first, Src_iterator last, Dst_iterator out, 
             *out++ = *first;
     }
     return result;
+}
+
+std::string decode_driver_version(VkPhysicalDeviceProperties physical_device_props)
+{
+    std::ostringstream ss;
+    if (physical_device_props.vendorID == 4318) // NVIDIA
+    {
+        ss << ((physical_device_props.driverVersion >> 22) & 0x3ff) << "."
+            << ((physical_device_props.driverVersion >> 14) & 0x0ff);
+    }
+#ifdef MI_PLATFORM_WINDOWS
+    else if (physical_device_props.vendorID == 0x8086)
+    {
+        ss << (physical_device_props.driverVersion >> 14) << "."
+            << (physical_device_props.driverVersion & 0x3fff);
+    }
+#endif
+    else
+    {
+        ss << (physical_device_props.driverVersion >> 22) << "."
+            << ((physical_device_props.driverVersion >> 12) & 0x3ff) << "."
+            << (physical_device_props.driverVersion & 0xfff);
+    }
+
+    return ss.str();
 }
 
 } // namespace
@@ -104,7 +129,7 @@ void Glsl_compiler::add_shader(std::string_view source)
     shader->setPreamble(m_shader_preamble.c_str());
 
     bool success = shader->parse(
-        /*builtInResource=*/ mi::examples::vk::get_default_resource_limits(),
+        /*builtInResource=*/ GetDefaultResources(),
         /*defaultVersion=*/ 100, // Will be overridden by #version in shader source
         /*forwardCompatible=*/ true,
         /*messages =*/ s_messages,
@@ -135,11 +160,20 @@ std::vector<unsigned int> Glsl_compiler::link_program(bool optimize)
         terminate();
     }
 
-    glslang::SpvOptions spv_options;
-    spv_options.disableOptimizer = !optimize;
-
     std::vector<unsigned int> spirv;
-    glslang::GlslangToSpv(*program.getIntermediate(m_shader_type), spirv, &spv_options);
+    glslang::GlslangToSpv(*program.getIntermediate(m_shader_type), spirv);
+
+    if (optimize)
+    {
+        spvtools::OptimizerOptions opt_options;
+        opt_options.set_run_validator(false);
+
+        std::vector<uint32_t> spirv_opt;
+        spvtools::Optimizer optimizer(SPV_ENV_VULKAN_1_0);
+        optimizer.RegisterPerformancePasses();
+        optimizer.Run(spirv.data(), spirv.size(), &spirv_opt, opt_options);
+        return spirv_opt;
+    }
 
     return spirv;
 }
@@ -301,9 +335,20 @@ void Vulkan_example_app::save_screenshot(uint32_t image_index, const char* filen
     m_mdl_impexp_api->export_canvas(filename, canvas.get());
 }
 
+void Vulkan_example_app::set_vsync_enabled(bool vsync_enabled)
+{
+    if (vsync_enabled != m_config.vsync)
+    {
+        m_config.vsync = vsync_enabled;
+        m_framebuffer_resized = true;
+    }
+}
+
 void Vulkan_example_app::init(const Config& config)
 {
     m_config = config;
+
+    VK_CHECK(volkInitialize());
 
     if (!m_config.headless)
         init_window();
@@ -329,6 +374,13 @@ void Vulkan_example_app::init(const Config& config)
     {
         instance_extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         validation_layers.push_back("VK_LAYER_KHRONOS_validation");
+    }
+
+    if (config.enable_descriptor_indexing)
+    {
+        instance_extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+        device_extensions.push_back(VK_KHR_MAINTENANCE3_EXTENSION_NAME);
+        device_extensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
     }
 
     // Determine if all validation layers are supported and present
@@ -428,7 +480,7 @@ void Vulkan_example_app::cleanup()
     if (!m_config.headless)
         vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
     if (m_debug_messenger)
-        DestroyDebugUtilsMessengerEXT(m_instance, m_debug_messenger, nullptr);
+        vkDestroyDebugUtilsMessengerEXT(m_instance, m_debug_messenger, nullptr);
     vkDestroyInstance(m_instance, nullptr);
 
     glfwDestroyWindow(m_window);
@@ -446,6 +498,7 @@ void Vulkan_example_app::init_window()
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
 
     m_window = glfwCreateWindow(
         static_cast<int>(m_config.image_width),
@@ -475,7 +528,7 @@ void Vulkan_example_app::init_instance(
     application_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     application_info.pApplicationName = "MDL SDK Vulkan Example";
     application_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-    application_info.pEngineName = "MDL-SDK";
+    application_info.pEngineName = "MDL SDK";
     application_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
     application_info.apiVersion = VK_API_VERSION_1_0;
 
@@ -505,15 +558,11 @@ void Vulkan_example_app::init_instance(
 
     VK_CHECK(vkCreateInstance(&instance_create_info, nullptr, &m_instance));
 
+    volkLoadInstanceOnly(m_instance);
+
     if (!validation_layers.empty())
     {
-        if (!mi::examples::vk::load_debug_utils_extension(m_instance))
-        {
-            std::cerr << "Failed loading the functions for VK_EXT_debug_utils.\n";
-            terminate();
-        }
-
-        VK_CHECK(CreateDebugUtilsMessengerEXT(
+        VK_CHECK(vkCreateDebugUtilsMessengerEXT(
             m_instance, &debug_utils_create_info, nullptr, &m_debug_messenger));
     }
 }
@@ -593,11 +642,12 @@ void Vulkan_example_app::pick_physical_device(
     }
 
     // Pick the first discrete physical device
-    m_physical_device = nullptr;
+    int32_t device_index = -1;
 
     if (supported_gpus.size() > 1)
     {
-        std::cout << "Multiple supported GPUs detected, trying to pick first discrete one:\n";
+        std::cout << "Multiple GPUs detected, run with option '--device <num>' to select specific one."
+            << " Defaults to the first discrete one:\n";
 
         for (size_t i = 0; i < supported_gpus.size(); i++)
         {
@@ -605,15 +655,10 @@ void Vulkan_example_app::pick_physical_device(
             vkGetPhysicalDeviceProperties(
                 supported_gpus[i].physical_device, &physical_device_props);
 
-            if (!m_physical_device
-                && physical_device_props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
-            {
-                m_physical_device = supported_gpus[i].physical_device;
-                m_graphics_queue_family_index = supported_gpus[i].graphics_queue_family_index;
-                m_present_queue_family_index = supported_gpus[i].present_queue_family_index;
-            }
+            if (device_index == -1 && physical_device_props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+                device_index = static_cast<int32_t>(i);
 
-            std::cout << "  " << (i + 1) << ". " << physical_device_props.deviceName;
+            std::cout << "  [" << i << "] " << physical_device_props.deviceName;
             switch (physical_device_props.deviceType)
             {
             case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
@@ -634,22 +679,32 @@ void Vulkan_example_app::pick_physical_device(
             }
             std::cout << "\n";
         }
-        std::cout << "\n"; 
     }
     
-    // Either only one supported GPU was found or in the case of multiple GPUs,
-    // no discrete one was found. In either case the first one is picked.
-    if (!m_physical_device)
+    if (m_config.device_index >= 0)
     {
-        m_physical_device = supported_gpus[0].physical_device;
-        m_graphics_queue_family_index = supported_gpus[0].graphics_queue_family_index;
-        m_present_queue_family_index = supported_gpus[0].present_queue_family_index;
+        if (m_config.device_index < supported_gpus.size())
+            device_index = m_config.device_index;
+        else
+            std::cout << "Requested device index " << m_config.device_index << " is out of bounds."
+                << "Falling back to the first discrete GPU.\n";
     }
+    else if (device_index == -1)
+    {
+        // Either only one supported GPU was found or in the case of multiple GPUs,
+        // no discrete one was found. In either case the first one is picked.
+        device_index = 0;
+    }
+
+    m_physical_device = supported_gpus[device_index].physical_device;
+    m_graphics_queue_family_index = supported_gpus[device_index].graphics_queue_family_index;
+    m_present_queue_family_index = supported_gpus[device_index].present_queue_family_index;
 
     VkPhysicalDeviceProperties physical_device_props;
     vkGetPhysicalDeviceProperties(
         m_physical_device, &physical_device_props);
-    std::cout << "Chosen GPU: " << physical_device_props.deviceName << "\n\n";
+    std::cout << "Chosen GPU: " << physical_device_props.deviceName
+        << " (driver version " << decode_driver_version(physical_device_props) << ")\n";
 }
 
 void Vulkan_example_app::init_device(
@@ -684,7 +739,19 @@ void Vulkan_example_app::init_device(
     device_create_info.ppEnabledExtensionNames = device_extensions.data();
     device_create_info.enabledExtensionCount = static_cast<uint32_t>(device_extensions.size());
 
+    VkPhysicalDeviceDescriptorIndexingFeaturesEXT physicalDeviceDescriptorIndexingFeatures = {};
+    if (m_config.enable_descriptor_indexing)
+    {
+        physicalDeviceDescriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
+        physicalDeviceDescriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+        physicalDeviceDescriptorIndexingFeatures.runtimeDescriptorArray = VK_TRUE;
+        physicalDeviceDescriptorIndexingFeatures.descriptorBindingPartiallyBound = VK_TRUE;
+        device_create_info.pNext = &physicalDeviceDescriptorIndexingFeatures;
+    }
+
     VK_CHECK(vkCreateDevice(m_physical_device, &device_create_info, nullptr, &m_device));
+
+    volkLoadDevice(m_device);
 }
 
 void Vulkan_example_app::init_swapchain_for_window()
@@ -776,12 +843,15 @@ void Vulkan_example_app::init_swapchain_for_window()
         m_physical_device, m_surface, &present_mode_count, present_modes.data()));
 
     VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;// Support is guaranteed by spec
-    for (VkPresentModeKHR mode : present_modes)
+    if (!m_config.vsync)
     {
-        if (mode == VK_PRESENT_MODE_MAILBOX_KHR)
+        for (VkPresentModeKHR mode : present_modes)
         {
-            present_mode = mode;
-            break;
+            if (mode == VK_PRESENT_MODE_MAILBOX_KHR)
+            {
+                present_mode = mode;
+                break;
+            }
         }
     }
 
@@ -1202,7 +1272,7 @@ void Vulkan_example_app::internal_key_callback(
         glfwSetWindowShouldClose(window, GLFW_TRUE);
 
     auto app = static_cast<Vulkan_example_app*>(glfwGetWindowUserPointer(window));
-    app->key_callback(key, action);
+    app->key_callback(key, action, mods);
 }
 
 void Vulkan_example_app::internal_mouse_button_callback(
@@ -1332,16 +1402,6 @@ void Temporary_command_buffer::end_and_submit(VkQueue queue, bool wait)
 }
 
 
-bool load_debug_utils_extension(VkInstance instance)
-{
-    CreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
-        vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
-    DestroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
-        vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));
-
-    return CreateDebugUtilsMessengerEXT && DestroyDebugUtilsMessengerEXT;
-}
-
 bool check_instance_extensions_support(
     const std::vector<const char*>& requested_extensions)
 {
@@ -1436,23 +1496,23 @@ bool check_validation_layers_support(
 
 VkShaderModule create_shader_module_from_file(
     VkDevice device, const char* shader_filename, EShLanguage shader_type,
-    const std::vector<std::string>& defines)
+    const std::vector<std::string>& defines, bool optimize)
 {
     std::string shader_source = mi::examples::io::read_text_file(
         mi::examples::io::get_executable_folder() + "/" + shader_filename);
 
-    return create_shader_module_from_sources(device, { shader_source }, shader_type, defines);
+    return create_shader_module_from_sources(device, { shader_source }, shader_type, defines, optimize);
 }
 
 VkShaderModule create_shader_module_from_sources(
     VkDevice device, const std::vector<std::string_view> shader_sources,
-    EShLanguage shader_type, const std::vector<std::string>& defines)
+    EShLanguage shader_type, const std::vector<std::string>& defines, bool optimize)
 {
     mi::examples::vk::Glsl_compiler glsl_compiler(shader_type, "main");
     glsl_compiler.add_defines(defines);
     for (const std::string_view& source : shader_sources)
         glsl_compiler.add_shader(source);
-    std::vector<unsigned int> compiled_shader = glsl_compiler.link_program();
+    std::vector<unsigned int> compiled_shader = glsl_compiler.link_program(optimize);
 
     VkShaderModuleCreateInfo shader_module_create_info = {};
     shader_module_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -1735,6 +1795,102 @@ uint32_t get_image_format_bpp(VkFormat format)
     }
 }
 
+VkPipeline create_fullscreen_triangle_graphics_pipeline(
+    VkDevice device, VkPipelineLayout pipeline_layout,
+    VkShaderModule vertex_shader, VkShaderModule fragment_shader,
+    VkRenderPass render_pass, uint32_t subpass,
+    uint32_t image_width, uint32_t image_height, bool cull_ccw)
+{
+    VkPipelineVertexInputStateCreateInfo vertex_input_state = {};
+    vertex_input_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+    VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {};
+    input_assembly_state.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    input_assembly_state.primitiveRestartEnable = false;
+
+    VkViewport viewport = { 0.0f, 0.0f, (float)image_width, (float)image_height, 0.0f, 1.0f };
+    VkRect2D scissor_rect = { {0, 0}, {image_width, image_height} };
+
+    VkPipelineViewportStateCreateInfo viewport_state = {};
+    viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewport_state.viewportCount = 1;
+    viewport_state.pViewports = &viewport;
+    viewport_state.scissorCount = 1;
+    viewport_state.pScissors = &scissor_rect;
+
+    VkPipelineRasterizationStateCreateInfo rasterization_state = {};
+    rasterization_state.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterization_state.depthClampEnable = false;
+    rasterization_state.rasterizerDiscardEnable = false;
+    rasterization_state.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterization_state.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterization_state.frontFace = cull_ccw ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
+    rasterization_state.depthBiasEnable = false;
+    rasterization_state.lineWidth = 1.0f;
+
+    VkPipelineDepthStencilStateCreateInfo depth_stencil_state = {};
+    depth_stencil_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth_stencil_state.depthTestEnable = false;
+    depth_stencil_state.depthWriteEnable = false;
+    depth_stencil_state.depthBoundsTestEnable = false;
+    depth_stencil_state.stencilTestEnable = false;
+
+    VkPipelineMultisampleStateCreateInfo multisample_state = {};
+    multisample_state.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisample_state.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkPipelineShaderStageCreateInfo vertex_shader_stage_info = {};
+    vertex_shader_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertex_shader_stage_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertex_shader_stage_info.module = vertex_shader;
+    vertex_shader_stage_info.pName = "main";
+
+    VkPipelineShaderStageCreateInfo fragment_shader_stage_info = {};
+    fragment_shader_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragment_shader_stage_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragment_shader_stage_info.module = fragment_shader;
+    fragment_shader_stage_info.pName = "main";
+
+    const VkPipelineShaderStageCreateInfo shader_stages[] = {
+        vertex_shader_stage_info,
+        fragment_shader_stage_info
+    };
+
+    VkPipelineColorBlendAttachmentState color_blend_attachment = {};
+    color_blend_attachment.blendEnable = false;
+    color_blend_attachment.colorWriteMask =
+        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
+        | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+    VkPipelineColorBlendStateCreateInfo color_blend_state = {};
+    color_blend_state.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    color_blend_state.logicOpEnable = false;
+    color_blend_state.attachmentCount = 1;
+    color_blend_state.pAttachments = &color_blend_attachment;
+
+    VkGraphicsPipelineCreateInfo pipeline_create_info = {};
+    pipeline_create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipeline_create_info.stageCount = std::size(shader_stages);
+    pipeline_create_info.pStages = shader_stages;
+    pipeline_create_info.pVertexInputState = &vertex_input_state;
+    pipeline_create_info.pInputAssemblyState = &input_assembly_state;
+    pipeline_create_info.pViewportState = &viewport_state;
+    pipeline_create_info.pRasterizationState = &rasterization_state;
+    pipeline_create_info.pDepthStencilState = &depth_stencil_state;
+    pipeline_create_info.pMultisampleState = &multisample_state;
+    pipeline_create_info.pColorBlendState = &color_blend_state;
+    pipeline_create_info.layout = pipeline_layout;
+    pipeline_create_info.renderPass = render_pass;
+    pipeline_create_info.subpass = 0;
+
+    VkPipeline graphics_pipeline;
+    VK_CHECK(vkCreateGraphicsPipelines(
+        device, nullptr, 1, &pipeline_create_info, nullptr, &graphics_pipeline));
+
+    return graphics_pipeline;
+}
+
 VkRenderPass create_simple_color_only_render_pass(
     VkDevice device, VkFormat image_format, VkImageLayout final_layout)
 {
@@ -1865,6 +2021,37 @@ VkSampler create_linear_sampler(VkDevice device)
     return sampler;
 }
 
+void transitionImageLayout(
+    VkCommandBuffer command_buffer, VkImage image,
+    VkAccessFlags src_access_mask, VkAccessFlags dst_access_mask,
+    VkImageLayout old_layout, VkImageLayout new_layout,
+    VkPipelineStageFlags src_stage_mask, VkPipelineStageFlags dst_stage_mask,
+    VkImageAspectFlags aspect_mask, uint32_t base_mip_level, uint32_t mip_level_count)
+{
+    VkImageMemoryBarrier image_memory_barrier = {};
+    image_memory_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    image_memory_barrier.srcAccessMask = src_access_mask;
+    image_memory_barrier.dstAccessMask = dst_access_mask;
+    image_memory_barrier.oldLayout = old_layout;
+    image_memory_barrier.newLayout = new_layout;
+    image_memory_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    image_memory_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    image_memory_barrier.image = image;
+    image_memory_barrier.subresourceRange.aspectMask = aspect_mask;
+    image_memory_barrier.subresourceRange.baseMipLevel = base_mip_level;
+    image_memory_barrier.subresourceRange.levelCount = mip_level_count;
+    image_memory_barrier.subresourceRange.baseArrayLayer = 0;
+    image_memory_barrier.subresourceRange.layerCount = 1;
+
+    vkCmdPipelineBarrier(command_buffer,
+        src_stage_mask,
+        dst_stage_mask,
+        0,
+        0, nullptr,
+        0, nullptr,
+        1, &image_memory_barrier);
+}
+
 std::vector<uint8_t> copy_image_to_buffer(
     VkDevice device, VkPhysicalDevice physical_device, VkCommandPool command_pool, VkQueue queue,
     VkImage image, uint32_t image_width, uint32_t image_height, uint32_t image_bpp,
@@ -1918,29 +2105,15 @@ std::vector<uint8_t> copy_image_to_buffer(
     else
         aspect_mask = VK_IMAGE_ASPECT_COLOR_BIT;
 
-    // Transition image layout to transfer src
-    VkImageMemoryBarrier image_memory_barrier = {};
-    image_memory_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    image_memory_barrier.srcAccessMask = from_access_mask;
-    image_memory_barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    image_memory_barrier.oldLayout = image_layout;
-    image_memory_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    image_memory_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    image_memory_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    image_memory_barrier.image = image;
-    image_memory_barrier.subresourceRange.aspectMask = aspect_mask;
-    image_memory_barrier.subresourceRange.baseMipLevel = 0;
-    image_memory_barrier.subresourceRange.levelCount = 1;
-    image_memory_barrier.subresourceRange.baseArrayLayer = 0;
-    image_memory_barrier.subresourceRange.layerCount = 1;
-
-    vkCmdPipelineBarrier(command_buffer.get(),
-        from_stage_mask,
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
-        0,
-        0, nullptr,
-        0, nullptr,
-        1, &image_memory_barrier);
+    transitionImageLayout(command_buffer.get(),
+        /*image=*/           image,
+        /*src_access_mask=*/ from_access_mask,
+        /*dst_access_mask=*/ VK_ACCESS_TRANSFER_READ_BIT,
+        /*old_layout=*/      image_layout,
+        /*new_layout=*/      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        /*src_stage_mask=*/  from_stage_mask,
+        /*dst_stage_mask=*/  VK_PIPELINE_STAGE_TRANSFER_BIT,
+        /*aspect_mask=*/     aspect_mask);
 
     // Copy image to buffer
     VkBufferImageCopy copy_region = {};
@@ -1960,19 +2133,15 @@ std::vector<uint8_t> copy_image_to_buffer(
         staging_buffer.get(),
         1, &copy_region);
 
-    // Transition image layout back to present
-    image_memory_barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    image_memory_barrier.dstAccessMask = from_access_mask;
-    image_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    image_memory_barrier.newLayout = image_layout;
-
-    vkCmdPipelineBarrier(command_buffer.get(),
-        VK_PIPELINE_STAGE_TRANSFER_BIT,
-        from_stage_mask,
-        0,
-        0, nullptr,
-        0, nullptr,
-        1, &image_memory_barrier);
+    transitionImageLayout(command_buffer.get(),
+        /*image=*/           image,
+        /*src_access_mask=*/ VK_ACCESS_TRANSFER_READ_BIT,
+        /*dst_access_mask=*/ from_access_mask,
+        /*old_layout=*/      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        /*new_layout=*/      image_layout,
+        /*src_stage_mask=*/  VK_PIPELINE_STAGE_TRANSFER_BIT,
+        /*dst_stage_mask=*/  from_stage_mask,
+        /*aspect_mask=*/     aspect_mask);
 
     command_buffer.end_and_submit(queue);
 
@@ -2355,113 +2524,6 @@ const char* vkformat_to_str(VkFormat format)
     default:
         return "Unknown Format";
     }
-}
-
-static TBuiltInResource create_default_resource_limits()
-{
-    TBuiltInResource limits = {};
-    limits.maxLights = 32;
-    limits.maxClipPlanes = 6;
-    limits.maxTextureUnits = 32;
-    limits.maxTextureCoords = 32;
-    limits.maxVertexAttribs = 64;
-    limits.maxVertexUniformComponents = 4096;
-    limits.maxVaryingFloats = 64;
-    limits.maxVertexTextureImageUnits = 32;
-    limits.maxCombinedTextureImageUnits = 80;
-    limits.maxTextureImageUnits = 32;
-    limits.maxFragmentUniformComponents = 4096;
-    limits.maxDrawBuffers = 32;
-    limits.maxVertexUniformVectors = 128;
-    limits.maxVaryingVectors = 8;
-    limits.maxFragmentUniformVectors = 16;
-    limits.maxVertexOutputVectors = 16;
-    limits.maxFragmentInputVectors = 15;
-    limits.minProgramTexelOffset = -8;
-    limits.maxProgramTexelOffset = 7;
-    limits.maxClipDistances = 8;
-    limits.maxComputeWorkGroupCountX = 65535;
-    limits.maxComputeWorkGroupCountY = 65535;
-    limits.maxComputeWorkGroupCountZ = 65535;
-    limits.maxComputeWorkGroupSizeX = 1024;
-    limits.maxComputeWorkGroupSizeY = 1024;
-    limits.maxComputeWorkGroupSizeZ = 64;
-    limits.maxComputeUniformComponents = 1024;
-    limits.maxComputeTextureImageUnits = 16;
-    limits.maxComputeImageUniforms = 8;
-    limits.maxComputeAtomicCounters = 8;
-    limits.maxComputeAtomicCounterBuffers = 1;
-    limits.maxVaryingComponents = 60;
-    limits.maxVertexOutputComponents = 64;
-    limits.maxGeometryInputComponents = 64;
-    limits.maxGeometryOutputComponents = 128;
-    limits.maxFragmentInputComponents = 128;
-    limits.maxImageUnits = 8;
-    limits.maxCombinedImageUnitsAndFragmentOutputs = 8;
-    limits.maxCombinedShaderOutputResources = 8;
-    limits.maxImageSamples = 0;
-    limits.maxVertexImageUniforms = 0;
-    limits.maxTessControlImageUniforms = 0;
-    limits.maxTessEvaluationImageUniforms = 0;
-    limits.maxGeometryImageUniforms = 0;
-    limits.maxFragmentImageUniforms = 8;
-    limits.maxCombinedImageUniforms = 8;
-    limits.maxGeometryTextureImageUnits = 16;
-    limits.maxGeometryOutputVertices = 256;
-    limits.maxGeometryTotalOutputComponents = 1024;
-    limits.maxGeometryUniformComponents = 1024;
-    limits.maxGeometryVaryingComponents = 64;
-    limits.maxTessControlInputComponents = 128;
-    limits.maxTessControlOutputComponents = 128;
-    limits.maxTessControlTextureImageUnits = 16;
-    limits.maxTessControlUniformComponents = 1024;
-    limits.maxTessControlTotalOutputComponents = 4096;
-    limits.maxTessEvaluationInputComponents = 128;
-    limits.maxTessEvaluationOutputComponents = 128;
-    limits.maxTessEvaluationTextureImageUnits = 16;
-    limits.maxTessEvaluationUniformComponents = 1024;
-    limits.maxTessPatchComponents = 120;
-    limits.maxPatchVertices = 32;
-    limits.maxTessGenLevel = 64;
-    limits.maxViewports = 16;
-    limits.maxVertexAtomicCounters = 0;
-    limits.maxTessControlAtomicCounters = 0;
-    limits.maxTessEvaluationAtomicCounters = 0;
-    limits.maxGeometryAtomicCounters = 0;
-    limits.maxFragmentAtomicCounters = 8;
-    limits.maxCombinedAtomicCounters = 8;
-    limits.maxAtomicCounterBindings = 1;
-    limits.maxVertexAtomicCounterBuffers = 0;
-    limits.maxTessControlAtomicCounterBuffers = 0;
-    limits.maxTessEvaluationAtomicCounterBuffers = 0;
-    limits.maxGeometryAtomicCounterBuffers = 0;
-    limits.maxFragmentAtomicCounterBuffers = 1;
-    limits.maxCombinedAtomicCounterBuffers = 1;
-    limits.maxAtomicCounterBufferSize = 16384;
-    limits.maxTransformFeedbackBuffers = 4;
-    limits.maxTransformFeedbackInterleavedComponents = 64;
-    limits.maxCullDistances = 8;
-    limits.maxCombinedClipAndCullDistances = 8;
-    limits.maxSamples = 4;
-
-    limits.limits.nonInductiveForLoops = 1;
-    limits.limits.whileLoops = 1;
-    limits.limits.doWhileLoops = 1;
-    limits.limits.generalUniformIndexing = 1;
-    limits.limits.generalAttributeMatrixVectorIndexing = 1;
-    limits.limits.generalVaryingIndexing = 1;
-    limits.limits.generalSamplerIndexing = 1;
-    limits.limits.generalVariableIndexing = 1;
-    limits.limits.generalConstantMatrixVectorIndexing = 1;
-
-    return limits;
-}
-
-// Default resource values for glslang.
-const TBuiltInResource* get_default_resource_limits()
-{
-    static const TBuiltInResource default_resource_limits = create_default_resource_limits();
-    return &default_resource_limits;
 }
 
 } // namespace mi::examples::vk

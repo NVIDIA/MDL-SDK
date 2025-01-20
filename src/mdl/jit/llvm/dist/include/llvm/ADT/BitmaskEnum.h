@@ -80,9 +80,10 @@ namespace BitmaskEnumDetail {
 template <typename E> std::underlying_type_t<E> Mask() {
   // On overflow, NextPowerOf2 returns zero with the type uint64_t, so
   // subtracting 1 gives us the mask with all bits set, like we want.
-  return NextPowerOf2(static_cast<std::underlying_type_t<E>>(
+  return static_cast<std::underlying_type_t<E>>(
+      NextPowerOf2(static_cast<std::underlying_type_t<E>>(
              E::LLVM_BITMASK_LARGEST_ENUMERATOR)) -
-         1;
+         1);
 }
 
 /// Check that Val is in range for E, and return Val cast to E's underlying

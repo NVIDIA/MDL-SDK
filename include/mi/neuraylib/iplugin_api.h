@@ -69,7 +69,7 @@ public:
     ///
     /// \param uuid        The UUID under which the API components was registered. For built-in
     ///                    API components this is the interface ID of the corresponding interface.
-    /// \return            A pointer to the API component or \c NULL if the API component is not
+    /// \return            A pointer to the API component or \c nullptr if the API component is not
     ///                    supported or currently not available.
     virtual base::IInterface* get_api_component( const base::Uuid& uuid) const = 0;
 
@@ -83,7 +83,7 @@ public:
     /// \see #register_api_component(), #unregister_api_component()
     ///
     /// \tparam T          The type of the API components to be queried.
-    /// \return            A pointer to the API component or \c NULL if the API component is not
+    /// \return            A pointer to the API component or \c nullptr if the API component is not
     ///                    supported or currently not available.
     template<class T>
     T* get_api_component() const
@@ -106,7 +106,7 @@ public:
     /// \param api_component   The API component to register.
     /// \return
     ///                        -  0: Success.
-    ///                        - -1: Invalid parameters (\c NULL pointer).
+    ///                        - -1: Invalid parameters (\c nullptr).
     ///                        - -2: There is already an API component registered under the
     ///                              ID \p uuid.
     virtual Sint32 register_api_component(
@@ -123,7 +123,7 @@ public:
     /// \param api_component   The API component to register.
     /// \return
     ///                        -  0: Success.
-    ///                        - -1: Invalid parameters (\c NULL pointer).
+    ///                        - -1: Invalid parameters (\c nullptr).
     ///                        - -2: There is already an API component registered under the
     ///                              \c ID T::IID().
     template<class T>

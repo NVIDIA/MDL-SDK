@@ -465,9 +465,11 @@ class SignatureParser:
 
 	def is_state_supported(self, name, signature):
 		"""Checks if the given state intrinsic is supported."""
-		if (name == "normal" or name == "geometry_normal" or name == "position" or
-				name == "animation_time"):
+		if (name == "normal" or name == "geometry_normal" or name == "animation_time"):
 			self.intrinsic_modes[name + signature] = "state::core_set"
+			return True
+		elif name == "position":
+			self.intrinsic_modes[name + signature] = "state::position"
 			return True
 		elif name == "rounded_corner_normal":
 			self.intrinsic_modes[name + signature] = "state::rounded_corner_normal"
@@ -569,6 +571,8 @@ class SignatureParser:
 				name == "measured_factor" or
 				name == "chiang_hair_bsdf" or
 				name == "sheen_bsdf" or
+				name == "microflake_sheen_bsdf" or
+				name == "coat_absorption_factor" or
 				name == "unbounded_mix" or
 				name == "color_unbounded_mix"):
 			self.unsupported_intrinsics[name] = "unsupported"
@@ -1185,7 +1189,19 @@ class SignatureParser:
 		// make all runtime function "internal": this is necessary, because some of them
 		// compile only cleanly in "always_inline" mode
 		func->setLinkage(llvm::GlobalValue::InternalLinkage);
+		"""
+		self.format_code(f, code % params)
 
+		# set module for which we generate code to allow providing proper debug infos
+		if params["mode"] != "::<builtins>":
+			code = """
+			Module const *owner = m_code_gen.m_compiler->find_builtin_module(
+				string("%(mode)s", m_alloc));
+			LLVM_code_generator::MDL_module_scope scope(m_code_gen, owner);
+			"""
+			self.format_code(f, code % params)
+
+		code = """
 		Function_context ctx(m_alloc, m_code_gen, inst, func, flags);
 		llvm::Value *res;
 
@@ -3090,7 +3106,7 @@ class SignatureParser:
 		elif mode == "state::core_set":
 			self.format_code(f,
 			"""
-			llvm::Type *ret_tp = %s;
+			llvm::Type *ret_tp = ctx.get_non_deriv_return_type();
 			if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
 				llvm::Value *state = ctx.get_state_parameter();
 				llvm::Value *adr   = ctx.create_simple_gep_in_bounds(
@@ -3100,26 +3116,34 @@ class SignatureParser:
 				// zero in all other contexts
 				res = llvm::Constant::getNullValue(ret_tp);
 			}
+
+			if (inst.get_return_derivs()) { // expand to dual
+				res = ctx.get_dual(res);
+			}
 			""" % (
-				"ctx.get_return_type()" if intrinsic == "position" else "ctx.get_non_deriv_return_type()",
 				intrinsic.upper()
 			))
 
-			if intrinsic == "position":
-				self.format_code(f,
-				"""
-				// no derivatives requested? -> get value component
+		elif mode == "state::position":
+			self.format_code(f,
+			"""
+			llvm::Type *ret_tp = ctx.get_return_type();
+			if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
+				llvm::Value *state = ctx.get_state_parameter();
+				llvm::Value *adr   = ctx.create_simple_gep_in_bounds(
+					state, ctx.get_constant(m_code_gen.m_type_mapper.get_state_index(Type_mapper::STATE_CORE_POSITION)));
+
+				// no derivatives requested? -> get pointer to value component
 				if (!inst.get_return_derivs() && m_code_gen.m_type_mapper.use_derivatives()) {
-					res = ctx.get_dual_val(res);
+					adr = ctx.create_simple_gep_in_bounds(adr, 0u);
 				}
-				""")
-			else:
-				self.format_code(f,
-				"""
-				if (inst.get_return_derivs()) { // expand to dual
-					res = ctx.get_dual(res);
-				}
-				""")
+
+				res = ctx.load_and_convert(ret_tp, adr);
+			} else {
+				// zero in all other contexts
+				res = llvm::Constant::getNullValue(ret_tp);
+			}
+			""")
 
 		elif mode == "state::meters_per_scene_unit":
 			self.format_code(f,
@@ -5916,9 +5940,9 @@ class SignatureParser:
 
 			space = ' ' * (max_len - len(name))
 			if comment:
-				self.write(f, "/// \param %s%s%s\n" % (name[2:], space, comment))
+				self.write(f, "/// \\param %s%s%s\n" % (name[2:], space, comment))
 			else:
-				self.write(f, "/// \param %s\n" % name[2:])
+				self.write(f, "/// \\param %s\n" % name[2:])
 
 	def generate_constructor_parameter(self, f):
 		"""Generate the parameter for the constructor."""
@@ -6373,33 +6397,33 @@ class SignatureParser:
 
 		/// Load an runtime function arguments value.
 		///
-		/// \param ctx  the current function context
-		/// \param arg  the passed argument, either a reference or the value instead
+		/// \\param ctx  the current function context
+		/// \\param arg  the passed argument, either a reference or the value instead
 		llvm::Value *load_by_value(Function_context &ctx, llvm::Value *arg);
 
 
 		/// Get the start offset of the next entry with the given type in a valist.
 		///
-		/// \param offset        the offset into a valist in bytes pointing to after the last
+		/// \\param offset        the offset into a valist in bytes pointing to after the last
 		///                      entry. it will be advanced to after the new entry.
-		/// \param operand_type  the operand type for the next entry
+		/// \\param operand_type  the operand type for the next entry
 		int get_next_valist_entry_offset(int &offset, llvm::Type *operand_type);
 
 		/// Get a pointer to the next entry in the given valist buffer.
 		///
-		/// \param ctx           the current function context
-		/// \param valist        the valist buffer
-		/// \param offset        the offset into valist in bytes pointing to after the last entry.
+		/// \\param ctx           the current function context
+		/// \\param valist        the valist buffer
+		/// \\param offset        the offset into valist in bytes pointing to after the last entry.
 		///                      it will be advanced to after the new entry.
-		/// \param operand_type  the operand type for the next entry
+		/// \\param operand_type  the operand type for the next entry
 		llvm::Value *get_next_valist_pointer(Function_context &ctx,
 			llvm::Value *valist, int &offset, llvm::Type *operand_type);
 
 		/// Call a runtime function.
 		///
-		/// \param ctx     the current function context
-		/// \param callee  the called function
-		/// \param args    function arguments
+		/// \\param ctx     the current function context
+		/// \\param callee  the called function
+		/// \\param args    function arguments
 		llvm::Value *call_rt_func(
 			Function_context              &ctx,
 			llvm::Function                *callee,
@@ -6407,9 +6431,9 @@ class SignatureParser:
 
 		/// Call a void runtime function.
 		///
-		/// \param ctx     the current function context
-		/// \param callee  the called function
-		/// \param args    function arguments
+		/// \\param ctx     the current function context
+		/// \\param callee  the called function
+		/// \\param args    function arguments
 		void call_rt_func_void(
 			Function_context              &ctx,
 			llvm::Function                *callee,
@@ -6417,14 +6441,14 @@ class SignatureParser:
 
 		/// Call texture attribute runtime function.
 		///
-		/// \param ctx            the current function context
-		/// \param tex_func_code  the runtime function code
-		/// \param tex_func_idx   the index in the texture handler vtable
-		/// \param res_data       the resource data
-		/// \param tex_id         the ID of the texture
-		/// \param opt_uv_tile    the UV tile, if resolution_2d will be called
-		/// \param opt_frame      the frame (optional)
-		/// \param res_type       the type of the attribute
+		/// \\param ctx            the current function context
+		/// \\param tex_func_code  the runtime function code
+		/// \\param tex_func_idx   the index in the texture handler vtable
+		/// \\param res_data       the resource data
+		/// \\param tex_id         the ID of the texture
+		/// \\param opt_uv_tile    the UV tile, if resolution_2d will be called
+		/// \\param opt_frame      the frame (optional)
+		/// \\param res_type       the type of the attribute
 		llvm::Value *call_tex_attr_func(
 			Function_context &ctx,
 			Runtime_function tex_func_code,
@@ -6437,11 +6461,11 @@ class SignatureParser:
 
 		/// Call attribute runtime function.
 		///
-		/// \param ctx            the current function context
-		/// \param func_code      the runtime function code
-		/// \param tex_func_idx   the index in the texture handler vtable
-		/// \param res_data       the resource data
-		/// \param res_id         the ID of the resource
+		/// \\param ctx            the current function context
+		/// \\param func_code      the runtime function code
+		/// \\param tex_func_idx   the index in the texture handler vtable
+		/// \\param res_data       the resource data
+		/// \\param res_id         the ID of the resource
 		llvm::Value *call_attr_func(
 			Function_context &ctx,
 			Runtime_function func_code,
@@ -6476,10 +6500,10 @@ class SignatureParser:
 		code = """
 		/// Check whether the given module contains the given function and create an error if not.
 		///
-		/// \param mod        The module
-		/// \param func_name  The function name
-		/// \param ret_type   The return type the function should have, or NULL for not checking it
-		/// \param optional   If true, no error will be generated when then function does not exist
+		/// \\param mod        The module
+		/// \\param func_name  The function name
+		/// \\param ret_type   The return type the function should have, or NULL for not checking it
+		/// \\param optional   If true, no error will be generated when then function does not exist
 		///
 		/// \\returns true, if the module contains the function.
 		bool check_function_exists(
@@ -6505,8 +6529,8 @@ class SignatureParser:
 		/// Check whether the given module contains the given function returning a pointer
 		/// and create an error if not.
 		///
-		/// \param mod        The module
-		/// \param func_name  The function name
+		/// \\param mod        The module
+		/// \\param func_name  The function name
 		///
 		/// \\returns true, if the module contains the function.
 		bool check_function_returns_pointer(llvm::Module *mod, char const *func_name) {
@@ -6528,7 +6552,7 @@ class SignatureParser:
 		code = """
 		/// Check whether the given module can be used as user-implemented state module.
 		///
-		/// \param mod     The module containing the user implementation of state.
+		/// \\param mod     The module containing the user implementation of state.
 		///
 		/// \\returns true, if the module can be used as a user implementation of state.
 		bool check_state_module(llvm::Module *mod) {

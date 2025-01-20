@@ -142,7 +142,7 @@ LONG top_level_exection_filter(PEXCEPTION_POINTERS exception_information)
     MINIDUMP_EXCEPTION_INFORMATION ExpParam;
 
     // path is the executable directory
-    std::string exec_path = mi::examples::io::get_executable_folder();
+    std::string exec_path = mi::examples::io::get_working_directory();
     std::wstring exec_path_w = mi::examples::strings::str_to_wstr(exec_path);
     wmemcpy_s(szPath, dwBufferSize, exec_path_w.c_str(), exec_path_w.size());
 

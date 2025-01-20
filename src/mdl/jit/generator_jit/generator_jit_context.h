@@ -55,6 +55,7 @@ class Value;
 namespace mi {
 namespace mdl {
 
+class ICall_expr;
 class IDefinition;
 class IParameter;
 class IResource_manager;
@@ -110,6 +111,9 @@ public:
     class Break_destination {
     public:
         /// Constructor.
+        ///
+        /// \param ctx   the function context
+        /// \param dest  the basic block that would be the destination of a break statement
         Break_destination(Function_context &ctx, llvm::BasicBlock *dest)
         : m_ctx(ctx)
         {
@@ -130,8 +134,11 @@ public:
     class Continue_destination {
     public:
         /// Constructor.
+        ///
+        /// \param ctx   the function context
+        /// \param dest  the basic block that would be the destination of a continue statement
         Continue_destination(Function_context &ctx, llvm::BasicBlock *dest)
-            : m_ctx(ctx)
+        : m_ctx(ctx)
         {
             ctx.push_continue(dest);
         }
@@ -655,17 +662,28 @@ public:
     ///
     /// \param pos  the position
     void set_curr_pos(mi::mdl::Position const *pos) {
-        if (pos != NULL)
+        if (pos != NULL) {
             set_curr_pos(*pos);
+        }
     }
 
-    /// Set the current source position.
+    /// Set the current source position from an AST position.
     ///
     /// \param pos  the position
-    void set_curr_pos(mi::mdl::Position const &pos);
+    void set_curr_pos(
+        mi::mdl::Position const &pos);
 
-    /// Get the current source position.
-    mi::mdl::Position const *get_curr_pos() const { return m_curr_pos; }
+    /// Set the current source position from a DAG debug info.
+    ///
+    /// \param dbg_info  the DAG debug info
+    void set_curr_pos(
+        mi::mdl::DAG_DbgInfo dbg_info);
+
+    /// Set the current source position from a call.
+    ///
+    /// \param expr  a call
+    void set_curr_pos(
+        mi::mdl::ICall_expr const *expr);
 
     /// Add debug info for a variable declaration.
     ///
@@ -918,6 +936,14 @@ private:
     /// \param loc          the location of the index expression
     void create_div_exception_call(
         Exc_location const &loc);
+
+    /// Creates an LLVM debug file for a given source file.
+    ///
+    /// \param fname  a source file name
+    ///
+    /// \note  It is assumed that fname can be split into directory and base name parts
+    ///        by splitting at last '/' or '\'
+    llvm::DIFile *Create_debug_file(char const *fname);
 
 private:
     // Not to be implemented

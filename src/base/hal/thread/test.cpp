@@ -43,7 +43,6 @@
 #include <sys/times.h> // struct tms
 #endif
 
-#include <boost/bind/bind.hpp>
 
 #include <base/system/main/access_module.h>
 #include <base/system/test/i_test_case.h>

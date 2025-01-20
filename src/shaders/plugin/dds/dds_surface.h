@@ -53,7 +53,7 @@ public:
     /// \param h            height of the surface
     /// \param d            depth of the surface
     /// \param pixel_size   size of the pixel data
-    /// \param pixels       the pixel data of the surface (will be copied if not \c NULL)
+    /// \param pixels       the pixel data of the surface (will be copied if not \c nullptr)
     Surface(
         mi::Uint32 w,
         mi::Uint32 h,

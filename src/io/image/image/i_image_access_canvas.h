@@ -74,7 +74,7 @@ public:
 
     /// Sets this access to a new canvas.
     ///
-    /// \c NULL can be passed to release the previous canvas.
+    /// \c nullptr can be passed to release the previous canvas.
     ///
     /// \note This method is not thread-safe if the instance is lockless.
     void set( const mi::neuraylib::ICanvas* canvas);
@@ -173,7 +173,7 @@ public:
 
     /// Set this edit to a new canvas.
     ///
-    /// \c NULL can be passed to release the previous canvas.
+    /// \c nullptr can be passed to release the previous canvas.
     ///
     /// \note This method is not thread-safe if the instance is lockless.
     void set( mi::neuraylib::ICanvas* canvas);

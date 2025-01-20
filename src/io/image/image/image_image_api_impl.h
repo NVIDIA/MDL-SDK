@@ -59,10 +59,10 @@ class Image_api_impl
 public:
     /// Constructor.
     ///
-    /// Usually, \p image_module is \c NULL, in which case #start() and #stop() have to be used. If
-    /// this class is used by Plugin_api_impl below, then the #start() and #stop() calls would lead
-    /// to a cyclic module initialization, therefore it is provided directly as argument in such
-    /// cases.
+    /// Usually, \p image_module is \c nullptr, in which case #start() and #stop() have to be used.
+    /// If this class is used by Plugin_api_impl below, then the #start() and #stop() calls would
+    /// lead to a cyclic module initialization, therefore it is provided directly as argument in
+    /// such cases.
     Image_api_impl( IMAGE::Image_module* image_module);
 
     // public API methods

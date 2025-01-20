@@ -53,11 +53,11 @@ This example loads an MDL module and inspects it contents.
         In order to allow the \neurayProductName to locate MDL modules and its resources
         in the file system it is necessary to configure the MDL module search path.
         This is done by calling #mi::neuraylib::IMdl_configuration::add_mdl_path().
-        
-        Our example module \c \::nvidia::sdk_examples::tutorials makes use of textures. The 
+
+        Our example module \c \::nvidia::sdk_examples::tutorials makes use of textures. The
         support for image formats in the \neurayProductName is provided by image plugins, which
         have to be loaded explicitly via #mi::neuraylib::IPlugin_configuration::load_plugin_library().
-        
+
         In this and most other examples the configuration is done within the utility function
         \c configure(). Here, we set the module search path to the MDL directory shipped with
         the examples. We also load the \c OpenImageIO plugin which comes with the \neurayProductName
@@ -91,7 +91,7 @@ This example loads an MDL module and inspects it contents.
     <dd><br>
         MDL materials and functions (as found in a \c .mdl file) are represented in the
         \neurayApiName by the interface #mi::neuraylib::IFunction_definition. Similar to the module
-        interface thi interface offers various methods related to metadata, like the name of the
+        interface this interface offers various methods related to metadata, like the name of the
         definition, or the name of the containing module. Important methods are those that provide
         details about the parameters, like their names, types, and the values of defaults (if
         present).
@@ -109,7 +109,7 @@ This example loads an MDL module and inspects it contents.
         of resources, we can iterate them and get the database name, the mdl file path, and the
         resource type. Based on the latter, it is possible to fetch the resolved resource path that
         points to the file on the current system. In case the resource could not be resolved, the
-        database name will be \c NULL. However, the MDL file path will still point to the missing
+        database name will be \c nullptr. However, the MDL file path will still point to the missing
         resource.
         <!-- Workaround to prevent a layout problem after dd tags. -->
     </dd>

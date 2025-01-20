@@ -109,7 +109,7 @@ set(_LLVM_LIB_NAMES
     ${_LLVM_PLATFORM_UTILS}
     )
 
-target_include_directories(${__TARGET_ADD_DEPENDENCY_TARGET} 
+target_include_directories(${__TARGET_ADD_DEPENDENCY_TARGET} BEFORE
     PRIVATE
         ${mdl-jit-llvm_SOURCE_DIR}/dist/include
         ${mdl-jit-llvm_BINARY_DIR}/dist/include

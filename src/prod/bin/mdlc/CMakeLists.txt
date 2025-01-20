@@ -70,9 +70,7 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         ${LINKER_END_GROUP}
     )
 
-# -------------------------------------------------------------------------------------------------
-# Create installation rules to copy the build directory
-# -------------------------------------------------------------------------------------------------
+# create installation rules
 add_target_install(
     TARGET ${PROJECT_NAME}
     )

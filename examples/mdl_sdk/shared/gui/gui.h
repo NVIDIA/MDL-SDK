@@ -109,7 +109,7 @@ namespace mi { namespace examples { namespace gui
         bool is_valid() const;
 
         /// Get a pointer to the GUI object that invoked this event.
-        Base_element* const get_sender() const;
+        Base_element* get_sender() const;
 
         /// Get the event type id of this event. IDs are defined bz the application.
         uint64_t get_event_type_id() const;
@@ -322,10 +322,10 @@ namespace mi { namespace examples { namespace gui
         const std::string& get_name() const;
 
         /// Get the kind of this item.
-        const Kind get_kind() const;
+        Kind get_kind() const;
 
         /// Get the number of child items.
-        const size_t get_child_count() const;
+        size_t get_child_count() const;
 
         /// Get the i`th child item.
         const Menu_item* get_child(size_t index) const;

@@ -39,6 +39,7 @@
 #include <mi/math/color.h>
 
 #include <cstring>
+#include <filesystem>
 #include <iomanip>
 #include <limits>
 #include <sstream>
@@ -46,14 +47,14 @@
 
 #include <base/system/main/module_registration.h>
 #include <base/system/main/access_module.h>
+#include <base/data/serial/i_serializer.h>
 #include <base/lib/log/i_log_assert.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/plug/i_plug.h>
 #include <base/util/string_utils/i_string_utils.h>
 #include <base/hal/disk/disk_file_reader_writer_impl.h>
 #include <base/hal/disk/disk_memory_reader_writer_impl.h>
-#include <base/hal/hal/i_hal_ospath.h>
-#include <base/data/serial/i_serializer.h>
+
 #include <base/data/idata/i_idata_factory.h>
 
 #include "i_image_pixel_conversion.h"
@@ -63,6 +64,8 @@
 #include "image_mipmap_impl.h"
 #include "image_tile_impl.h"
 
+
+namespace fs = std::filesystem;
 
 namespace MI {
 
@@ -937,8 +940,8 @@ bool Image_module_impl::export_canvas(
     mi::base::Handle<const mi::neuraylib::ICanvas> canvas( canvas_ptr, mi::base::DUP_INTERFACE);
     canvas_ptr = nullptr;
 
-    std::string extension = HAL::Ospath::get_ext( output_filename);
-    if( !extension.empty() && extension[0] == '.' )
+    std::string extension = fs::u8path( output_filename).extension().u8string();
+    if( !extension.empty())
         extension = extension.substr( 1);
 
     mi::neuraylib::IImage_plugin* plugin = find_plugin_for_export( extension.c_str());
@@ -1028,8 +1031,8 @@ bool Image_module_impl::export_mipmap(
     const char* output_filename,
     const mi::IMap* export_options) const
 {
-    std::string extension = HAL::Ospath::get_ext( output_filename);
-    if( !extension.empty() && extension[0] == '.' )
+    std::string extension = fs::u8path( output_filename).extension().u8string();
+    if( !extension.empty())
         extension = extension.substr( 1);
 
     mi::neuraylib::IImage_plugin* plugin = find_plugin_for_export( extension.c_str());

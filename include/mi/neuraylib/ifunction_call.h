@@ -118,7 +118,7 @@ public:
     /// Returns the name of the parameter at \p index.
     ///
     /// \param index        The index of the parameter.
-    /// \return             The name of the parameter, or \c NULL if \p index is out of range.
+    /// \return             The name of the parameter, or \c nullptr if \p index is out of range.
     virtual const char* get_parameter_name( Size index) const = 0;
 
     /// Returns the index position of a parameter.
@@ -141,7 +141,7 @@ public:
     ///                     deep copy is performed.
     /// \return
     ///                     -   0: Success.
-    ///                     -  -1: Invalid parameters (\c NULL pointer).
+    ///                     -  -1: Invalid parameters (\c nullptr).
     ///                     -  -2: One of the parameters in \p arguments does not exist.
     ///                     -  -3: One of the argument types does not match the corresponding
     ///                            parameter type.
@@ -173,7 +173,7 @@ public:
     ///                     deep copy is performed.
     /// \return
     ///                     -  0: Success.
-    ///                     - -1: Invalid parameters (\c NULL pointer).
+    ///                     - -1: Invalid parameters (\c nullptr).
     ///                     - -2: Parameter \p index does not exist.
     ///                     - -3: The argument type does not match the parameter type.
     ///                     - -4: The function call is immutable (because it appears in a default of
@@ -202,7 +202,7 @@ public:
     ///                     deep copy is performed.
     /// \return
     ///                     -  0: Success.
-    ///                     - -1: Invalid parameters (\c NULL pointer).
+    ///                     - -1: Invalid parameters (\c nullptr).
     ///                     - -2: Parameter \p name does not exist.
     ///                     - -3: The argument type does not match the parameter type.
     ///                     - -4: The function call is immutable (because it appears in a default of
@@ -245,7 +245,7 @@ public:
     /// \param name         The name of the parameter.
     /// \return
     ///                     -   0: Success.
-    ///                     -  -1: Invalid parameters (\c NULL pointer).
+    ///                     -  -1: Invalid parameters (\c nullptr).
     ///                     -  -2: Parameter \p name does not exist.
     ///                     -  -4: The function call is immutable (because it appears in a default
     ///                            of a function or material definition).
@@ -269,7 +269,7 @@ public:
     /// \see #mi::neuraylib::IModule::reload(), #mi::neuraylib::IFunction_call::repair()
     ///
     /// \param context  Execution context that can be queried for error messages
-    ///                 after the operation has finished. Can be \c NULL.
+    ///                 after the operation has finished. Can be \c nullptr.
     /// \return
     ///      - \c true:  The instance is valid.
     ///      - \c false: The instance is invalid.
@@ -279,7 +279,7 @@ public:
     ///
     /// \param flags    Repair options, see #mi::neuraylib::Mdl_repair_options.
     /// \param context  Execution context that can be queried for error messages
-    ///                 after the operation has finished. Can be \c NULL.
+    ///                 after the operation has finished. Can be \c nullptr.
     /// \return
     ///     -   0:   Success.
     ///     -  -1:   Repair failed. Check the \c context for details.

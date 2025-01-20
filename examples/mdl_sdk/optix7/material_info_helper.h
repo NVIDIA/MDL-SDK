@@ -370,16 +370,13 @@ public:
             if (anno_block) {
                 mi::neuraylib::Annotation_wrapper annos(anno_block.get());
                 mi::Size anno_index =
-                    annos.get_annotation_index("::anno::hard_range(float,float)");
+                    annos.get_annotation_index("::anno::soft_range(float,float)");
+                if (anno_index == mi::Size(-1)) {
+                    anno_index = annos.get_annotation_index("::anno::hard_range(float,float)");
+                }
                 if (anno_index != mi::Size(-1)) {
                     annos.get_annotation_param_value(anno_index, 0, param_info.range_min());
                     annos.get_annotation_param_value(anno_index, 1, param_info.range_max());
-                } else {
-                    anno_index = annos.get_annotation_index("::anno::soft_range(float,float)");
-                    if (anno_index != mi::Size(-1)) {
-                        annos.get_annotation_param_value(anno_index, 0, param_info.range_min());
-                        annos.get_annotation_param_value(anno_index, 1, param_info.range_max());
-                    }
                 }
                 anno_index = annos.get_annotation_index("::anno::display_name(string)");
                 if (anno_index != mi::Size(-1)) {

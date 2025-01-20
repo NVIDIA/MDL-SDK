@@ -130,10 +130,11 @@ void bake_expression_cuda_ptx(
         0, nullptr, kernel_params, nullptr));
 
     // Copy the result image data to the host and export it.
-    float3 *data = static_cast<float3*>(malloc(options.res_x * options.res_y * sizeof(float3)));
+    mi::mdl::tct_float3* data =
+        static_cast<mi::mdl::tct_float3*>(malloc(options.res_x * options.res_y * sizeof(mi::mdl::tct_float3)));
     if (data != nullptr) {
         check_cuda_success(cuMemcpyDtoH(
-            data, device_outbuf, options.res_x * options.res_y * sizeof(float3)));
+            data, device_outbuf, options.res_x * options.res_y * sizeof(mi::mdl::tct_float3)));
         export_image_rgbf(options.outputfile.c_str(), options.res_x, options.res_y, data);
         free(data);
     }

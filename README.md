@@ -144,7 +144,7 @@ to more limited material models used by specific renderers.
 6.   **Texture baking:**
 Baking textures ensures optimal rendering performance for game engines.
 
-7.   **Back ends:**
+7.   **Backends:**
 A compiled material is the basis for code generation.
 The SDK provides the following backends for code generation:
 
@@ -289,7 +289,7 @@ steps:
     shows how to use compiled materials and an MDL native backend in a CPU-based
     renderer
 
-*   *Vulcan renderer:*
+*   *Vulkan renderer:*
 
     [Example for Compiled Distribution Functions (GLSL)](https://raytracing-docs.nvidia.com/mdl/api/mi_neuray_example_df_vulkan.html)
     shows how to use compiled materials and the GLSL backend in a Vulkan-based

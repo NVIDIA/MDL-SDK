@@ -73,6 +73,20 @@ inline void Serializer::write(const std::set<T, SWO>& set)
 }
 
 
+template <typename T, typename SWO>
+inline void Serializer::write(const std::unordered_set<T, SWO>& set)
+{
+    write_size_t(set.size());
+    write_range(*this, set.begin(), set.end());
+}
+
+template <typename T, typename SWO>
+inline void Serializer::write(const boost::unordered_flat_set<T, SWO>& set)
+{
+    write_size_t(set.size());
+    write_range(*this, set.begin(), set.end());
+}
+
 template <typename T1, typename T2>
 inline void Serializer::write(const std::pair<T1, T2>& pair)
 {
@@ -131,6 +145,32 @@ inline void Deserializer::read(std::set<T, SWO>* set)
         // Values were serialized in sequence, so we can use end position as hint.
         // This should amount to an O(n) complexity for deserialization.
         set->insert(set->end(), value);
+    }
+}
+
+template <typename T, typename SWO>
+inline void Deserializer::read(std::unordered_set<T, SWO>* set)
+{
+    size_t size;
+    set->clear();
+    read_size_t(&size);
+    T value;
+    for (size_t i(0); i != size; ++i) {
+        read(&value);
+        set->insert(value);
+    }
+}
+
+template <typename T, typename SWO>
+inline void Deserializer::read(boost::unordered_flat_set<T, SWO>* set)
+{
+    size_t size;
+    set->clear();
+    read_size_t(&size);
+    T value;
+    for (size_t i(0); i != size; ++i) {
+        read(&value);
+        set->insert(value);
     }
 }
 
@@ -572,6 +612,48 @@ void read(D* deserializer, std::set<T,SWO>* set)
         // Values were serialized in sequence, so we can use end position as hint.
         // This should amount to an O(n) complexity for deserialization.
         set->insert( set->end(), value );
+    }
+}
+
+template <typename T, typename SWO, typename S, typename>
+void write(S* serializer, const std::unordered_set<T,SWO>& set)
+{
+    const size_t size(set.size());
+    write(serializer,(mi::Uint64)size);
+    write_range( *serializer, set.begin(), set.end() );
+}
+
+template <typename T, typename SWO, typename D, typename>
+void read(D* deserializer, std::unordered_set<T,SWO>* set)
+{
+    set->clear();
+    mi::Uint64 size;
+    deserializer->read(&size);
+    T value;
+    for ( size_t i(0); i != size; ++i ) {
+        read( deserializer, &value );
+        set->insert( value );
+    }
+}
+
+template <typename T, typename SWO, typename S, typename>
+void write(S* serializer, const boost::unordered_flat_set<T,SWO>& set)
+{
+    const size_t size(set.size());
+    write(serializer,(mi::Uint64)size);
+    write_range( *serializer, set.begin(), set.end() );
+}
+
+template <typename T, typename SWO, typename D, typename>
+void read(D* deserializer, boost::unordered_flat_set<T,SWO>* set)
+{
+    set->clear();
+    mi::Uint64 size;
+    deserializer->read(&size);
+    T value;
+    for ( size_t i(0); i != size; ++i ) {
+        read( deserializer, &value );
+        set->insert( value );
     }
 }
 

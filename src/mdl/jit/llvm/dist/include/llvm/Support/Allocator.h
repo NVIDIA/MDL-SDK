@@ -317,7 +317,7 @@ private:
   /// a sanitizer.
   size_t RedZoneSize = 1;
 
-  static size_t computeSlabSize(unsigned SlabIdx) {
+  static size_t computeSlabSize(size_t SlabIdx) {
     // Scale the actual allocated slab size based on the number of slabs
     // allocated. Every GrowthDelay slabs allocated, we double
     // the allocated size to reduce allocation frequency, but saturate at

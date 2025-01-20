@@ -114,7 +114,7 @@ public:
     /// \param transaction          The transaction, see #Factory.
     /// \param argc                 The size of the \p argv array.
     /// \param argv                 An array of optional constructor arguments.
-    /// \return                     An instance of the class, or \c NULL on failure (incl.
+    /// \return                     An instance of the class, or \c nullptr on failure (incl.
     ///                             invalid arguments).
     using Factory_function = mi::base::IInterface*(*)(
         const Factory* factory, DB::Transaction*, mi::Uint32, const mi::base::IInterface**);
@@ -129,7 +129,7 @@ public:
     /// \param argc                 The size of the \p argv array.
     /// \param argv                 An array of optional arguments that gets passed to the factory
     ///                             methods.
-    /// \return                     An instance of the requested type, or \c NULL on failure.
+    /// \return                     An instance of the requested type, or \c nullptr on failure.
     mi::base::IInterface* create(
         DB::Transaction* transaction,
         const char* type_name,
@@ -143,7 +143,7 @@ public:
     /// \param argc                 The size of the \p argv array.
     /// \param argv                 An array of optional arguments that gets passed to the factory
     ///                             methods.
-    /// \return                     An instance of the requested type, or \c NULL on failure.
+    /// \return                     An instance of the requested type, or \c nullptr on failure.
     template<class T>
     T* create(
         DB::Transaction* transaction,
@@ -167,7 +167,7 @@ public:
     /// This wrapper only supports types supported by #mi::Type_traits.
     ///
     /// \param transaction          The transaction, see #Factory.
-    /// \return                     An instance of the requested type, or \c NULL on failure.
+    /// \return                     An instance of the requested type, or \c nullptr on failure.
     template<class T>
     T* create( DB::Transaction* transaction = nullptr)
     {
@@ -237,7 +237,7 @@ public:
     /// Returns a registered enum declaration.
     ///
     /// \param enum_name        The name of the enum declaration to return.
-    /// \return                 The enum declaration for \p enum_name, or \c NULL if there is no
+    /// \return                 The enum declaration for \p enum_name, or \c nullptr if there is no
     ///                         enum declaration for that name.
     const mi::IEnum_decl* get_enum_decl( const char* enum_name) const;
 
@@ -276,8 +276,8 @@ public:
     /// Returns a registered structure declaration.
     ///
     /// \param structure_name   The name of the structure declaration to return.
-    /// \return                 The structure declaration for \p structure_name, or \c NULL if there
-    ///                         is no structure declaration for that name.
+    /// \return                 The structure declaration for \p structure_name, or \c nullptr if
+    ///                         there is no structure declaration for that name.
     const mi::IStructure_decl* get_structure_decl( const char* structure_name) const;
 
     //@}
@@ -304,10 +304,10 @@ public:
     static std::string strip_const_pointer( const std::string& type_name);
 
     /// Returns the transaction that is embedded in references, arrays, or calls (or in collections
-    /// containing such types), or \c NULL in case of failure.
+    /// containing such types), or \c nullptr in case of failure.
     static DB::Transaction* get_transaction( const mi::IData* data);
 
-    /// Returns the tag handler (or \c NULL if none was registered in the constructor).
+    /// Returns the tag handler (or \c nullptr if none was registered in the constructor).
     ITag_handler* get_tag_handler() const;
 
     //@}
@@ -370,7 +370,7 @@ private:
     /// \param argc                 The size of the \p argv array.
     /// \param argv                 An array of optional arguments that gets passed to the factory
     ///                             methods.
-    /// \return                     An instance of the requested class, or \c NULL on failure.
+    /// \return                     An instance of the requested class, or \c nullptr on failure.
     mi::base::IInterface* create_registered(
         DB::Transaction* transaction,
         const char* class_name,
@@ -387,7 +387,7 @@ private:
     /// \param argc                 The size of the \p argv array.
     /// \param argv                 An array of optional arguments that gets passed to the factory
     ///                             methods.
-    /// \return                     An instance of the requested class, or \c NULL on failure.
+    /// \return                     An instance of the requested class, or \c nullptr on failure.
     template<class T>
     T* create_registered(
         DB::Transaction* transaction,

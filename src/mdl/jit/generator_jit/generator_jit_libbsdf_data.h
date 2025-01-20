@@ -75,11 +75,22 @@ namespace libbsdf_data {
     extern unsigned const libbsdf_multiscatter_res_ior_ward_gm;
     extern unsigned char const libbsdf_multiscatter_data_ward_gm[];
 
+    extern unsigned const libbsdf_multiscatter_res_theta_microflake_sheen;
+    extern unsigned const libbsdf_multiscatter_res_roughness_microflake_sheen;
+    extern unsigned const libbsdf_multiscatter_res_ior_microflake_sheen;
+    extern unsigned char const libbsdf_multiscatter_data_microflake_sheen[];
+
+    extern unsigned const libbsdf_general_res_u_microflake_sheen;
+    extern unsigned const libbsdf_general_res_v_microflake_sheen;
+    extern unsigned const libbsdf_general_res_w_microflake_sheen;
+    extern unsigned char const libbsdf_general_data_microflake_sheen[];
+
     inline bool get_libbsdf_multiscatter_data_resolution(
         mi::mdl::IValue_texture::Bsdf_data_kind bsdf_data_kind,
         size_t &out_theta,
         size_t &out_roughness,
-        size_t &out_ior)
+        size_t &out_ior,
+        const char *&out_pixel_type)
     {
         // (currently and for the foreseeable future) constant for all BSDFs
         out_theta = libbsdf_multiscatter_res_theta_phong_vc;
@@ -97,6 +108,7 @@ namespace libbsdf_data {
 
             case IValue_texture::BDK_BACKSCATTERING_GLOSSY_MULTISCATTER:
             case IValue_texture::BDK_SHEEN_MULTISCATTER:
+            case IValue_texture::BDK_MICROFLAKE_SHEEN_MULTISCATTER:
             case IValue_texture::BDK_WARD_GEISLER_MORODER_MULTISCATTER:
                 out_ior = libbsdf_multiscatter_res_ior_disk_bs;
                 break;
@@ -107,6 +119,7 @@ namespace libbsdf_data {
 
         out_theta = out_theta + 1;
         out_ior = out_ior * 2 + 1;
+        out_pixel_type = "Float32";
         return true;
     }
 
@@ -115,7 +128,8 @@ namespace libbsdf_data {
         size_t &size)
     {
         size_t theta, roughness, ior;
-        if (!get_libbsdf_multiscatter_data_resolution(bsdf_data_kind, theta, roughness, ior))
+        const char* pixel_type;
+        if (!get_libbsdf_multiscatter_data_resolution(bsdf_data_kind, theta, roughness, ior, pixel_type))
             return NULL;
 
         size = theta * roughness * ior * sizeof(float);
@@ -134,11 +148,54 @@ namespace libbsdf_data {
                 return libbsdf_multiscatter_data_ggx_vc;
 
             case IValue_texture::BDK_BACKSCATTERING_GLOSSY_MULTISCATTER:
-              return libbsdf_multiscatter_data_disk_bs;
-             case IValue_texture::BDK_SHEEN_MULTISCATTER:
-                 return libbsdf_multiscatter_data_sink_vc;
-             case IValue_texture::BDK_WARD_GEISLER_MORODER_MULTISCATTER:
-                 return libbsdf_multiscatter_data_ward_gm;
+                return libbsdf_multiscatter_data_disk_bs;
+            case IValue_texture::BDK_SHEEN_MULTISCATTER:
+                return libbsdf_multiscatter_data_sink_vc;
+            case IValue_texture::BDK_MICROFLAKE_SHEEN_MULTISCATTER:
+                return libbsdf_multiscatter_data_microflake_sheen;
+            case IValue_texture::BDK_WARD_GEISLER_MORODER_MULTISCATTER:
+                return libbsdf_multiscatter_data_ward_gm;
+            default:
+                return NULL; // no data for other semantics
+        }
+    }
+
+    inline bool get_libbsdf_general_data_resolution(
+        mi::mdl::IValue_texture::Bsdf_data_kind bsdf_data_kind,
+        size_t &out_u,
+        size_t &out_v,
+        size_t &out_w,
+        const char *&out_pixel_type)
+    {
+        out_u = 0;
+        out_v = 0;
+        out_w = 0;
+
+        if (bsdf_data_kind == IValue_texture::BDK_MICROFLAKE_SHEEN_GENERAL)
+        {
+            out_u = libbsdf_general_res_u_microflake_sheen;
+            out_v = libbsdf_general_res_v_microflake_sheen;
+            out_w = libbsdf_general_res_w_microflake_sheen;
+            out_pixel_type = "Float32<3>";
+            return true;
+        }
+        return false;
+    }
+
+    inline unsigned char const* get_libbsdf_general_data(
+        mi::mdl::IValue_texture::Bsdf_data_kind bsdf_data_kind,
+        size_t &size)
+    {
+        size_t u, v, w;
+        const char* pixel_type;
+        if (!get_libbsdf_general_data_resolution(bsdf_data_kind, u, v, w, pixel_type))
+            return NULL;
+
+        switch (bsdf_data_kind)
+        {
+            case IValue_texture::BDK_MICROFLAKE_SHEEN_GENERAL:
+                size = u * v * w * sizeof(float) * 3;
+                return libbsdf_general_data_microflake_sheen;
             default:
                 return NULL; // no data for other semantics
         }

@@ -67,10 +67,11 @@ else()
     else()
         # add the shared lib path as RPATH
         foreach(_SHARED ${MDL_DEPENDENCY_PANTORA_AXF_SHARED})
-        get_filename_component(_SHARED_DIR ${_SHARED} DIRECTORY)
-        target_add_rpath(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
-                RPATHS ${_SHARED_DIR}
-            )
+            get_filename_component(_SHARED_DIR ${_SHARED} DIRECTORY)
+            target_add_rpath(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
+                BUILD_RPATHS ${_SHARED_DIR}
+                INSTALL_RPATHS ${_SHARED_DIR}
+                )
         endforeach()
     endif()
 endif()

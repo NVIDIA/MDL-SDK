@@ -157,14 +157,14 @@ bool coco_string_endswith(const char* data, const char *end) {
 int coco_string_indexof(const char *data, const char value) {
 	const char *chr = strchr(data, value);
 
-	if (chr) { return (chr-data); }
+	if (chr) { return int(chr-data); }
 	return -1;
 }
 
 int coco_string_lastindexof(const char *data, const char value) {
 	const char* chr = strrchr(data, value);
 
-	if (chr) { return (chr-data); }
+	if (chr) { return int(chr-data); }
 	return -1;
 }
 

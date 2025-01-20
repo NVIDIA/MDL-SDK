@@ -735,7 +735,6 @@ mdl_version
                                         // do this only if we had NO error here
                                         if (errDist > 0) {
                                             bool res = m_module->set_version(
-                                                m_mdl,
                                                 major,
                                                 minor,
                                                 m_enable_mdl_next,

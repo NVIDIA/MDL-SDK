@@ -41,3 +41,14 @@ Changes:
  - don't call abort in global destructors in ~raw_fd_ostream when writing to stderr failed
  - applied llvm_project commit c2515a8f "[Bitcode] Add some missing GetTypeByID failure checks"
    (CVE-2023-46049)
+ - remove extra template qualifier on constructors in include/llvm/ADT/STLExtras.h
+   (result_pair and enumerator_iter)
+ - fix use of already moved MemoryManager in LLVM Orc JIT when calling notifyObjectLoaded
+   (bug introduced by our race-condition fix)
+ - applied llvm-project commit 6a684dbc "[Support] Remove llvm::is_trivially_{copy/move}_constructible"
+ - fix a bunch of MSVC warnings
+ - disable MSVC warning C4624 (deleted destructor) for Operator.h
+ - disable support for DWARF call site-related attributes for NVPTX because calls are split into multiple
+   machine instructions which is not supported
+ - disable InstCombiner optimizations producing new SRem instructions to avoid undefined behaviour for GLSL
+   in InstCombinerImpl::visitMul() and InstCombinerImpl::visitAdd()

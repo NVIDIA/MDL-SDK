@@ -700,21 +700,38 @@ Mdl_texture_set* Mdl_material_library::access_texture_resource(
                         ? (db_name + "_frame_" + std::to_string(f) +
                             "_tile_" + std::to_string(tile_id)) : db_name);
                     break;
-
-                // TODO
                 // currently all 3D textures we have are multi-scatter lookup tables
-                // which are float32 textures. so this is hard-coded for now
+                // which are float32 textures and microflake sheen which are float32<3>.
+                // So this is hard-coded for now
                 case Texture_dimension::Texture_3D:
+                {
+                    const char* pixel_type = canvas->get_type();
+                    DXGI_FORMAT format = DXGI_FORMAT_R32_FLOAT;
+                    if (strcmp(pixel_type, "Float32") == 0)
+                    {
+                        format = DXGI_FORMAT_R32_FLOAT;
+                    }
+                    else if (strcmp(pixel_type, "Float32<3>") == 0)
+                    {
+                        format = DXGI_FORMAT_R32G32B32_FLOAT;
+                    }
+                    else
+                    {
+                        log_error("Texture3D format '" + std::string(pixel_type) +
+                            "' support not implemented: " + db_name, SRC);
+                        continue;
+                    }
                     set.entries[global_tile_id].resource = Texture::create_texture_3d(
                         m_app, GPU_access::shader_resource,
                         canvas->get_resolution_x(),
                         canvas->get_resolution_y(),
                         canvas->get_layers_size(),
-                        DXGI_FORMAT_R32_FLOAT,
+                        format,
                         has_tiles_or_frames
                         ? (db_name + "_frame_" + std::to_string(f) +
                             "_tile_" + std::to_string(tile_id)) : db_name);
                     break;
+                }
 
                 default:
                     log_error("Unhandled texture dimension: " + db_name, SRC);

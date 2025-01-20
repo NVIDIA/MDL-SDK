@@ -30,10 +30,14 @@
 set(PROJECT_NAME prod-lib-mdl_sdk)
 
 function(CREATE_UNIT_TEST_TEMPLATE)
-    set(options)
+    set(options USES_IDIFF)
     set(oneValueArgs NAME)
     set(multiValueArgs LINK_LIBRARIES)
     cmake_parse_arguments(CREATE_UNIT_TEST_TEMPLATE "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    if(CREATE_UNIT_TEST_TEMPLATE_USES_IDIFF)
+        set(_USES_IDIFF "USES_IDIFF")
+    endif()
 
     create_unit_test(
         NAME
@@ -59,13 +63,14 @@ function(CREATE_UNIT_TEST_TEMPLATE)
             ${CMAKE_CURRENT_BINARY_DIR}/../../../../shaders/plugin/dds
             ${CMAKE_CURRENT_BINARY_DIR}/../../../../shaders/plugin/mdl_distiller
             ${CMAKE_CURRENT_BINARY_DIR}/../../../../shaders/plugin/openimageio
+        ${_USES_IDIFF}
         )
 endfunction()
 
 # add unit tests using the template
 create_unit_test_template(NAME test_class_factory)
 create_unit_test_template(NAME test_db_elements)
-create_unit_test_template(NAME test_icompiled_material)
+create_unit_test_template(NAME test_icompiled_material USES_IDIFF)
 create_unit_test_template(NAME test_idebug_configuration)
 create_unit_test_template(NAME test_ifactory)
 create_unit_test_template(NAME test_i18n)

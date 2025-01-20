@@ -347,7 +347,7 @@ void check_imodule_part1( mi::neuraylib::ITransaction* transaction, mi::neurayli
     mi::Size index_ior = std_mat->find_field( "ior");
     mi::base::Handle<const mi::neuraylib::IType> std_mat_ior(
         std_mat->get_field_type( index_ior));
-    // TODO MI_CHECK_EQUAL( std_mat_ior->get_all_type_modifiers(), mi::neuraylib::IType::MK_VARYING);
+    MI_CHECK_EQUAL( std_mat_ior->get_all_type_modifiers(), mi::neuraylib::IType::MK_NONE);
 
     // standard structure types
     const char* struct_types[] = {
@@ -414,6 +414,7 @@ void check_imodule_part1( mi::neuraylib::ITransaction* transaction, mi::neurayli
             "mdl::" TEST_MDL "::md_0()",
             "mdl::" TEST_MDL "::md_1(color)",
             "mdl::" TEST_MDL "::md_1_green(color)",
+            "mdl::" TEST_MDL "::md_1_blue(color)",
             "mdl::" TEST_MDL "::md_1_no_default(color)",
             "mdl::" TEST_MDL "::md_2_index(color,color)",
             "mdl::" TEST_MDL "::md_2_index_nested(color,color[N])",
@@ -447,8 +448,8 @@ void check_imodule_part1( mi::neuraylib::ITransaction* transaction, mi::neurayli
             "mdl::" TEST_MDL "::md_texture(texture_2d)",
             "mdl::" TEST_MDL "::md_light_profile(light_profile)",
             "mdl::" TEST_MDL "::md_bsdf_measurement(bsdf_measurement)",
-            "mdl::" TEST_MDL "::md_baking()",
-            "mdl::" TEST_MDL "::md_class_baking(float,::" TEST_MDL "::top_struct)",
+            "mdl::" TEST_MDL "::md_baking(float,::" TEST_MDL "::top_struct)",
+            "mdl::" TEST_MDL "::md_baking_const()",
             "mdl::" TEST_MDL "::md_named_temporaries(float)",
             "mdl::" TEST_MDL "::md_aov(float,float)"
         };
@@ -511,6 +512,7 @@ void check_imodule_part1( mi::neuraylib::ITransaction* transaction, mi::neurayli
             "mdl::" TEST_MDL "::fd_return_auto()",
             "mdl::" TEST_MDL "::fd_return_varying()",
             "mdl::" TEST_MDL "::fd_parameters_uniform_auto_varying(int,int,int)",
+            "mdl::" TEST_MDL "::fd_parameters_uniform_auto_varying_color(color,color,color)",
             "mdl::" TEST_MDL "::fd_uniform()",
             "mdl::" TEST_MDL "::fd_varying()",
             "mdl::" TEST_MDL "::fd_auto_uniform()",

@@ -57,9 +57,9 @@ function(FIND_DXC_EXT)
     set(MDL_DXC_FOUND ON CACHE INTERNAL "")
 
     if(MDL_LOG_DEPENDENCIES)
-        message(STATUS "[INFO] MDL_DEPENDENCY_DXC_INCLUDE:           ${MDL_DEPENDENCY_DXC_INCLUDE}")
-        message(STATUS "[INFO] MDL_DEPENDENCY_DXC_LIBS:              ${MDL_DEPENDENCY_DXC_LIBS}")
-        message(STATUS "[INFO] MDL_DEPENDENCY_DXC_SHARED:            ${MDL_DEPENDENCY_DXC_SHARED}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_DXC_INCLUDE:               ${MDL_DEPENDENCY_DXC_INCLUDE}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_DXC_LIBS:                  ${MDL_DEPENDENCY_DXC_LIBS}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_DXC_SHARED:                ${MDL_DEPENDENCY_DXC_SHARED}")
     endif()
 
 endfunction()

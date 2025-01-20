@@ -65,34 +65,49 @@ DAG_node const* Imports::matcher(
     IDistiller_plugin_api &e,
     DAG_node const *node,
     const mi::mdl::Distiller_options *options,
-    Rule_result_code &result_code)const
+    Rule_result_code &result_code) const
 {
-    switch (e.get_selector(node)) {
-    case mi::mdl::DS_DIST_STRUCT_MATERIAL: // match for material(thin_walled, surface, backface, ior, volume, geometry, hair)
+    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+
 // 029_imports.mdltl:16
 //RUID 485693
-        if (true) {
-            const DAG_node* v_thin_walled = e.get_compound_argument(node, 0);
-            const DAG_node* v_surface = e.get_compound_argument(node, 1);
-            const DAG_node* v_backface = e.get_compound_argument(node, 2);
-            const DAG_node* v_ior = e.get_compound_argument(node, 3);
-            const DAG_node* v_volume = e.get_compound_argument(node, 4);
-            const DAG_node* v_geometry = e.get_compound_argument(node, 5);
-            const DAG_node* v_hair = e.get_compound_argument(node, 6);
-            if (event_handler != nullptr)
-                fire_match_event(*event_handler, 0);
-            return e.create_call("material(bool,material_surface,material_surface,color,material_volume,material_geometry,hair_bsdf)",
-                IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<7>::mk_args(e,m_node_types,
-                    material, v_thin_walled, v_surface, v_backface, v_ior, v_volume,
-                    v_geometry, v_hair).args, 7, e.get_type_factory()->get_predefined_struct(
-                IType_struct::SID_MATERIAL));
-        }
-        break;
-    default:
-        break;
-    }
+    auto match_rule0 = [&] (DAG_node const *node0, IDistiller_plugin_api::Match_properties &node_props0) -> const DAG_node * {
 
-    return node;
+        // match for material(thin_walled, surface, backface, ior, volume, geometry, hair)
+        if (node_props0.sema != IDefinition::DS_ELEM_CONSTRUCTOR || node_props0.type_kind != IType::TK_STRUCT || node_props0.struct_id != IType_struct::SID_MATERIAL) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node2 = e.get_compound_argument(node0, 0);
+        DAG_node const *v_thin_walled = node2; (void)v_thin_walled;
+        DAG_node const *node4 = e.get_compound_argument(node0, 1);
+        DAG_node const *v_surface = node4; (void)v_surface;
+        DAG_node const *node6 = e.get_compound_argument(node0, 2);
+        DAG_node const *v_backface = node6; (void)v_backface;
+        DAG_node const *node8 = e.get_compound_argument(node0, 3);
+        DAG_node const *v_ior = node8; (void)v_ior;
+        DAG_node const *node10 = e.get_compound_argument(node0, 4);
+        DAG_node const *v_volume = node10; (void)v_volume;
+        DAG_node const *node12 = e.get_compound_argument(node0, 5);
+        DAG_node const *v_geometry = node12; (void)v_geometry;
+        DAG_node const *node14 = e.get_compound_argument(node0, 6);
+        DAG_node const *v_hair = node14; (void)v_hair;
+        DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
+        (void) root_dbg_info;
+
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 0);
+        return e.create_call("material(bool,material_surface,material_surface,color,material_volume,material_geometry,hair_bsdf)",
+            IDefinition::DS_ELEM_CONSTRUCTOR, Args_wrapper<7>::mk_args(e, m_node_types,
+                material, v_thin_walled, v_surface, v_backface, v_ior, v_volume,
+                v_geometry, v_hair).args, 7, e.get_type_factory()->get_predefined_struct(
+            IType_struct::SID_MATERIAL), root_dbg_info);
+    };
+    (void)match_rule0;
+
+    IDistiller_plugin_api::Match_properties node_props;
+    e.get_match_properties(node, node_props);
+    return match_rule0(node, node_props);
+
 }
 
 bool Imports::postcond(

@@ -46,7 +46,6 @@ Camera_controls::Camera_controls(mdl_d3d12::Base_application* app, mdl_d3d12::Sc
     , m_mouse_move_start_x(0)
     , m_mouse_move_start_y(0)
     , m_target(nullptr)
-    , m_has_focus(false)
 {
     set_target(node);
 }
@@ -71,48 +70,39 @@ bool Camera_controls::update(const mdl_d3d12::Update_args & args)
     bool has_focus = m_app->get_window()->has_focus();
     bool orbit_mode = false;
 
-    // lost focus
-    if (m_has_focus && !has_focus)
-    {
-        for (size_t k = 0; k < 512; k++) {
-            io.KeysDown[k] = false;
-        }
-    }
-    m_has_focus = has_focus;
-
     if (!io.WantCaptureKeyboard && has_focus)
     {
-        if (io.KeysDown['W'])
+        if (ImGui::IsKeyPressed(ImGuiKey_W))
         {
             delta_forward += float(args.elapsed_time * 4.0f * movement_speed);
             camera_changed = true;
         }
 
-        if (io.KeysDown['S'])
+        if (ImGui::IsKeyPressed(ImGuiKey_S))
         {
             delta_forward -= float(args.elapsed_time * 4.0f * movement_speed);
             camera_changed = true;
         }
 
-        if (io.KeysDown['A'])
+        if (ImGui::IsKeyPressed(ImGuiKey_A))
         {
             delta_right -= float(args.elapsed_time * 4.0f * movement_speed);
             camera_changed = true;
         }
 
-        if (io.KeysDown['D'])
+        if (ImGui::IsKeyPressed(ImGuiKey_D))
         {
             delta_right += float(args.elapsed_time * 4.0f * movement_speed);
             camera_changed = true;
         }
 
-        if (io.KeysDown['R'])
+        if (ImGui::IsKeyPressed(ImGuiKey_R))
         {
             delta_up += float(args.elapsed_time * 4.0f * movement_speed);
             camera_changed = true;
         }
 
-        if (io.KeysDown['F'])
+        if (ImGui::IsKeyPressed(ImGuiKey_F))
         {
             delta_up -= float(args.elapsed_time * 4.0f * movement_speed);
             camera_changed = true;
@@ -324,7 +314,6 @@ void Camera_controls::set_target(mdl_d3d12::Scene_node* node)
     m_right_mouse_button_held = false;
     m_mouse_move_start_x = 0;
     m_mouse_move_start_y = 0;
-    m_has_focus = false;
 }
 
 // ------------------------------------------------------------------------------------------------

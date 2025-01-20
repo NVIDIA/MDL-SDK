@@ -37,36 +37,48 @@
 #include <cstdlib>
 #include <unordered_map>
 #include <vector>
+#include <fstream>
 
 #include <mi/base.h>
 #include <mi/mdl/mdl.h>
+#include <mi/math/vector.h>
+#include <mi/math/matrix.h>
 
 #ifndef MI_PLATFORM_WINDOWS
 #include <dlfcn.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #endif
 
 #ifdef MI_PLATFORM_MACOSX
 #include <mach-o/dyld.h>   // _NSGetExecutablePath
 #endif
 
-#ifndef MDL_SAMPLES_ROOT
-#define MDL_SAMPLES_ROOT "."
-#endif
-
 typedef mi::mdl::IMDL *(IMDL_factory)(bool, mi::base::IAllocator *);
 
 
 /// Pointer to the DSO handle. Cached here for unload().
-void* g_dso_handle = 0;
+extern void* g_dso_handle;
+
+/// Extended mi vector types
+namespace mi
+{
+    typedef math::Vector<Uint32, 2> Uint32_2;
+    typedef math::Vector<Uint32, 3> Uint32_3;
+    typedef math::Vector<Sint32, 2> Sint32_2;
+    typedef math::Vector<Sint32, 3> Sint32_3;
+    typedef math::Vector<Float32, 4> Float32_4;
+    typedef math::Vector_struct<Float32, 4> Float32_4_struct;
+}
 
 /// Returns the value of the given environment variable.
 ///
 /// \param env_var   environment variable name
 /// \return          the value of the environment variable or an empty string
 ///                  if that variable does not exist or does not have a value.
-std::string get_environment(const char* env_var)
+inline std::string get_environment(const char* env_var)
 {
     std::string value;
 #ifdef MI_PLATFORM_WINDOWS
@@ -84,11 +96,20 @@ std::string get_environment(const char* env_var)
     return value;
 }
 
+/// Checks if the given file exists.
+inline bool file_exists(const char* path)
+{
+    struct stat info;
+    if (stat(path, &info) != 0)
+        return false;
+    return !(info.st_mode & S_IFDIR);
+}
+
 // Checks if the given directory exists.
 //
 // \param  directory path to check
 // \return true, of the path points to a directory, false if not
-bool dir_exists(const char* path)
+inline bool dir_exists(const char* path)
 {
 #ifdef MI_PLATFORM_WINDOWS
     DWORD attrib = GetFileAttributesA(path);
@@ -103,30 +124,84 @@ bool dir_exists(const char* path)
 #endif
 }
 
-/// Returns a string pointing to the directory relative to which the MDL-Core examples
-/// expect their resources, e. g. materials or textures.
-std::string get_samples_root()
+/// Normalize a path.
+/// On windows, this turns backslashes into forward slashes. No changes on Linux and Mac.
+inline std::string normalize_path(std::string path)
 {
-    std::string samples_root = get_environment("MDL_SAMPLES_ROOT");
-    if (samples_root.empty()) {
-        samples_root = MDL_SAMPLES_ROOT;
-    }
-    if (dir_exists(samples_root.c_str()))
-        return samples_root;
-
-    return ".";
+    if (path.empty())
+        return path;
+#ifdef MI_PLATFORM_WINDOWS
+    std::replace(path.begin(), path.end(), '\\', '/');
+#endif
+    return path;
 }
 
-/// Returns a string pointing to the MDL search root for the MDL-Core examples
-std::string get_samples_mdl_root()
+/// Checks if a path absolute or relative.
+inline bool is_absolute_path(const std::string& path)
+{
+    std::string npath = normalize_path(path);
+
+#ifdef MI_PLATFORM_WINDOWS
+    if (npath.size() < 2) // no absolute path of length 1 or
+        return false;
+    if (npath[0] == '/' && npath[1] == '/') // UNC paths
+        return true;
+    if (isalpha(npath[0]) && npath[1] == ':') // drive letter
+        return true;
+    return false;
+#else
+    return npath[0] == '/';
+#endif
+}
+
+/// Returns the directory name a given file or the parent directory of a directory, or the empty
+/// string if there is no parent directory.
+inline std::string dirname(const std::string& path)
+{
+    std::string npath = normalize_path(path);
+    size_t pos = npath.rfind('/');
+    return pos == std::string::npos ? "" : npath.substr(0, pos);
+}
+
+/// Returns the complete text content of the file with the given filename as a string.
+inline std::string read_text_file(const std::string& filename)
+{
+    std::ifstream file(filename.c_str());
+    if (!file.is_open())
+    {
+        fprintf(stderr, "Cannot open file : \"%s\".\n", filename.c_str());
+        return "";
+    }
+
+    std::stringstream string_stream;
+    string_stream << file.rdbuf();
+    return string_stream.str();
+}
+
+/// Returns a string pointing to the directory relative to which the MDL Core examples
+/// expect their resources, e. g. materials or textures.
+std::string get_samples_root();
+
+/// Returns a string pointing to the MDL search root for the MDL Core examples
+inline std::string get_samples_mdl_root()
 {
     return get_samples_root() + "/mdl";
 }
 
+/// Returns a directory that contains ::nvidia::core_definitions and ::nvida::axf_to_mdl.
+///
+/// Might also return "." if that directory is the "mdl" subdirectory of #get_samples_root()
+/// and no extra handling is required.
+std::string get_src_shaders_mdl();
+
+/// Returns the path of the current executable.
+std::string get_executable_folder();
+
 /// Ensures that the console with the log messages does not close immediately. On Windows, the user
 /// is asked to press enter. On other platforms, nothing is done as the examples are most likely
 /// started from the console anyway.
-void keep_console_open() {
+inline void keep_console_open()
+{
 #ifdef MI_PLATFORM_WINDOWS
     if (IsDebuggerPresent()) {
         fprintf(stderr, "Press enter to continue . . . \n");
@@ -164,12 +239,17 @@ void keep_console_open() {
 /// \param filename    The file name of the DSO. It is feasible to pass \c nullptr, which uses a
 ///                    built-in default value.
 /// \return            A pointer to an instance of the main #mi::mdl::IMDL interface
-mi::mdl::IMDL* load_mdl_compiler(const char* filename = 0)
+inline mi::mdl::IMDL* load_mdl_compiler(const char* filename = 0)
 {
     if (!filename)
         filename = "libmdl_core" MI_BASE_DLL_FILE_EXT;
 #ifdef MI_PLATFORM_WINDOWS
     void* handle = LoadLibraryA((LPSTR) filename);
+    if (!handle) {
+        // fall back to libraries in a relative lib folder, relevant for install targets
+        std::string fallback = std::string("../../../bin/") + filename;
+        handle = LoadLibraryA(fallback.c_str());
+    }
     if (!handle) {
         LPTSTR buffer = 0;
         LPCTSTR message = TEXT("unknown failure");
@@ -178,7 +258,7 @@ mi::mdl::IMDL* load_mdl_compiler(const char* filename = 0)
             FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
             MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buffer, 0, 0))
             message = buffer;
-        fprintf(stderr, "Failed to load library (%u): " FMT_LPTSTR, error_code, message);
+        fprintf(stderr, "Failed to load %s library (%u): " FMT_LPTSTR, filename, error_code, message);
         if (buffer)
             LocalFree(buffer);
         return nullptr;
@@ -215,7 +295,7 @@ mi::mdl::IMDL* load_mdl_compiler(const char* filename = 0)
 }
 
 /// Unloads the mdl_core lib.
-bool unload()
+inline bool unload()
 {
 #ifdef MI_PLATFORM_WINDOWS
     int result = FreeLibrary((HMODULE)g_dso_handle);
@@ -243,8 +323,14 @@ bool unload()
 #endif
 }
 
+// Returns true, if the string str starts with the given prefix, false otherwise.
+inline bool starts_with(std::string const& str, std::string const& prefix)
+{
+    return str.size() >= prefix.size() && str.compare(0, prefix.size(), prefix) == 0;
+}
+
 /// Sleep the indicated number of seconds.
-void sleep_seconds(mi::Float32 seconds)
+inline void sleep_seconds(mi::Float32 seconds)
 {
 #ifdef MI_PLATFORM_WINDOWS
     Sleep(static_cast<DWORD>(seconds * 1000));
@@ -257,44 +343,6 @@ void sleep_seconds(mi::Float32 seconds)
 #ifdef MI_PLATFORM_WINDOWS
 #define snprintf _snprintf
 #endif
-
-/// Returns the folder path of the current executable.
-std::string get_executable_folder()
-{
-#ifdef MI_PLATFORM_WINDOWS
-    char path[MAX_PATH];
-    if (!GetModuleFileNameA(nullptr, path, MAX_PATH))
-        return "";
-
-    const char sep = '\\';
-#else  // MI_PLATFORM_WINDOWS
-    char path[4096];
-
-#ifdef MI_PLATFORM_MACOSX
-    uint32_t buflen(sizeof(path));
-    if (_NSGetExecutablePath(path, &buflen) != 0)
-        return "";
-#else  // MI_PLATFORM_MACOSX
-    char proc_path[64];
-#ifdef __FreeBSD__
-    snprintf(proc_path, sizeof(proc_path), "/proc/%d/file", getpid());
-#else
-    snprintf(proc_path, sizeof(proc_path), "/proc/%d/exe", getpid());
-#endif
-
-    ssize_t written = readlink(proc_path, path, sizeof(path));
-    if (written < 0 || size_t(written) >= sizeof(path))
-        return "";
-    path[written] = 0;  // add terminating null
-#endif // MI_PLATFORM_MACOSX
-
-    const char sep = '/';
-#endif // MI_PLATFORM_WINDOWS
-
-    char *last_sep = strrchr(path, sep);
-    if (last_sep == nullptr) return "";
-    return std::string(path, last_sep);
-}
 
 
 /// An implementation of the MDL search path interface.
@@ -351,7 +399,7 @@ public:
         m_out = filename == nullptr ?
             mdl_compiler->create_std_stream(mi::mdl::IMDL::OS_STDOUT) :
             mdl_compiler->create_file_output_stream(filename);
-            
+
         m_printer = mi::base::make_handle(mdl_compiler->create_printer(m_out.get()));
         m_printer->enable_color(true);
         m_ctx = mdl_compiler->create_thread_context();
@@ -442,7 +490,7 @@ public:
                 mi::base::Handle<mi::mdl::IModule const> imported_module(module->get_import(i));
                 add_module(imported_module.get());
             }
-            
+
             mi::base::Handle<mi::mdl::IGenerated_code_dag const> dag(m_dag_be->compile(module));
             m_dags[module->get_name()] = dag;
 
@@ -468,7 +516,7 @@ public:
         it->second->retain();
         return it->second.get();
     }
-    
+
     /// Find the owner module of a given entity name.
     /// If the entity name does not contain a colon, you should return the builtins module,
     /// which you can identify by IModule::is_builtins().
@@ -828,8 +876,8 @@ public:
     ///     on error (unknown function name, missing or too many arguments, creation failed)
     mi::mdl::DAG_node const *create_call(
         mi::mdl::IGenerated_code_dag const *module_dag,
-        char const                         *function_name,
-        Array_ref<Call_argument> const     &args)
+        char const *function_name,
+        Array_ref<Call_argument> const &args)
     {
         size_t func_index = find_first_function(module_dag, function_name);
         if (func_index == ~0)
@@ -890,7 +938,8 @@ public:
             module_dag->get_function_semantics(func_index),
             real_args.data(),
             int(real_args.size()),
-            module_dag->get_function_return_type(func_index));
+            module_dag->get_function_return_type(func_index),
+            mi::mdl::DAG_DbgInfo());
     }
 
 private:

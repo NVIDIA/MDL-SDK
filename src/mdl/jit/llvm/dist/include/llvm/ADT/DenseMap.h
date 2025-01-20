@@ -389,7 +389,7 @@ protected:
       return 0;
     // +1 is required because of the strict equality.
     // For example if NumEntries is 48, we need to return 401.
-    return NextPowerOf2(NumEntries * 4 / 3 + 1);
+    return unsigned(NextPowerOf2(NumEntries * 4 / 3 + 1));
   }
 
   void moveFromOldBuckets(BucketT *OldBucketsBegin, BucketT *OldBucketsEnd) {
@@ -920,7 +920,7 @@ public:
 
   template<typename InputIt>
   SmallDenseMap(const InputIt &I, const InputIt &E) {
-    init(NextPowerOf2(std::distance(I, E)));
+    init(unsigned(NextPowerOf2(std::distance(I, E))));
     this->insert(I, E);
   }
 
@@ -1037,7 +1037,7 @@ public:
 
   void grow(unsigned AtLeast) {
     if (AtLeast > InlineBuckets)
-      AtLeast = std::max<unsigned>(64, NextPowerOf2(AtLeast-1));
+      AtLeast = std::max<unsigned>(64, unsigned(NextPowerOf2(AtLeast-1)));
 
     if (Small) {
       // First move the inline buckets into a temporary storage.

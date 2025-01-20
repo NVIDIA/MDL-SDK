@@ -650,14 +650,14 @@ mi::mdl::IGenerated_code_lambda_function* Mdl_function_call::create_jitted_funct
     }
 
     // get code DAG
-    ASSERT(M_SCENE, m_module_tag);
-    DB::Access<Mdl_module> module(m_module_tag, transaction);
+    ASSERT( M_SCENE, m_module_tag);
+    DB::Access<Mdl_module> module( m_module_tag, transaction);
     mi::base::Handle<const mi::mdl::IGenerated_code_dag> code_dag( module->get_code_dag());
 
     // create a lambda function for an environment function
     mi::base::Handle<mi::mdl::ILambda_function> lambda_func(
         mdl->create_lambda_function( environment_context
-            ?  mi::mdl::ILambda_function::LEC_ENVIRONMENT
+            ? mi::mdl::ILambda_function::LEC_ENVIRONMENT
             : mi::mdl::ILambda_function::LEC_DISPLACEMENT ));
 
     // set JIT generator parameters
@@ -709,8 +709,11 @@ mi::mdl::IGenerated_code_lambda_function* Mdl_function_call::create_jitted_funct
 
     // create DAG node for the environment function
     const mi::mdl::DAG_node* call = lambda_func->create_call(
-        m_definition_name.c_str(), function_definition->get_core_semantic(),
-        core_arguments.data(), int( n_params), return_type);
+        m_definition_name.c_str(),
+        function_definition->get_core_semantic(),
+        core_arguments.data(), int( n_params),
+        return_type,
+        mi::mdl::DAG_DbgInfo());
 
     // if return type is a struct type assume it is ::base::texture_return (see above) and wrap
     // DAG node by a select to extract the tint field
@@ -733,7 +736,8 @@ mi::mdl::IGenerated_code_lambda_function* Mdl_function_call::create_jitted_funct
             mi::mdl::IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS,
             args,
             1,
-            field->get_type());
+            field->get_type(),
+            mi::mdl::DAG_DbgInfo::generated);
     }
 
     if( !environment_context) {

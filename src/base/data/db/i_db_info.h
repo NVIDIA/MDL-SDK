@@ -37,7 +37,7 @@
 
 namespace MI {
 
-namespace SCHED { class Job; }
+namespace SCHED { class Job_base; }
 
 namespace DB {
 
@@ -58,14 +58,14 @@ public:
 
     /// Returns the element held by this info.
     ///
-    /// Returns \c NULL if the info holds a job that has not yet been executed, or if the element
+    /// Returns \c nullptr if the info holds a job that has not yet been executed, or if the element
     /// is still serialized.
     virtual Element_base* get_element() const = 0;
 
     /// Returns the job held by this info.
     ///
-    /// Returns \c NULL if the info does not hold a job, or if the job is still serialized.
-    virtual SCHED::Job* get_job() const = 0;
+    /// Returns \c nullptr if the info does not hold a job, or if the job is still serialized.
+    virtual SCHED::Job_base* get_job() const = 0;
 
     /// Returns the tag.
     virtual Tag get_tag() const = 0;
@@ -82,7 +82,7 @@ public:
     /// Returns the privacy level.
     virtual Privacy_level get_privacy_level() const = 0;
 
-    /// Returns the name associated with the tag (or \c NULL).
+    /// Returns the name associated with the tag (or \c nullptr).
     virtual const char* get_name() const = 0;
 };
 

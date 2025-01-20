@@ -586,15 +586,15 @@ public:
     /// \param module  the builtin module
     void register_builtin_module(const Module *module);
 
-    /// Find a builtin module by name.
+    /// Find a builtin module by its absolute name.
     ///
-    /// \param name  the absolute module name
+    /// \param abs_name  the absolute module name
     ///
     /// \return the builtin module or NULL in no such module exists.
     ///
     /// \note Does NOT increase the reference count of the returned
     ///       module, do NOT decrease it just because of this call.
-    Module const *find_builtin_module(string const &name) const;
+    Module const *find_builtin_module(string const &abs_name) const;
 
     /// Find a builtin module by its ID.
     ///

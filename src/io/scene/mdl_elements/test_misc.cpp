@@ -67,6 +67,7 @@
 #include <base/data/db/i_db_scope.h>
 #include <base/data/db/i_db_transaction.h>
 #include <mdl/compiler/compilercore/compilercore_comparator.h>
+#include <io/image/image/i_image.h>
 #include <io/scene/bsdf_measurement/i_bsdf_measurement.h>
 #include <io/scene/dbimage/i_dbimage.h>
 #include <io/scene/lightprofile/i_lightprofile.h>
@@ -80,7 +81,7 @@ using namespace MI;
 
 // Checks that there are no error messages (and dumps them otherwise).
 #define MI_CHECK_CTX( context) \
-    log_messages( context); \
+    log_messages( context, 0); \
     MI_CHECK_EQUAL( context->get_error_messages_count(), 0);
 
 // Checks that the context result matches the given result.
@@ -139,6 +140,33 @@ void check_texture_def(
     DB::Tag tag = transaction->name_to_tag( db_element_name);
     DB::Access<MDL::Mdl_function_definition> fd( tag, transaction);
     mi::base::Handle<const MDL::IExpression_list> arguments( fd->get_defaults());
+    check_texture( transaction, arguments.get(), arg_name, success, resolve_resources, file_path);
+}
+
+void check_texture_def(
+    DB::Transaction* transaction,
+    const char* db_element_name,
+    const std::vector<mi::Size> body_arg_index_sequence,
+    bool success,
+    bool resolve_resources,
+    const char* file_path)
+{
+    MI_CHECK( !body_arg_index_sequence.empty());
+
+    DB::Tag tag = transaction->name_to_tag( db_element_name);
+    DB::Access<MDL::Mdl_function_definition> fd( tag, transaction);
+    mi::base::Handle<const MDL::IExpression> expr( fd->get_body( transaction));
+    mi::base::Handle<const MDL::IExpression_direct_call> body_call(
+        expr->get_interface<MDL::IExpression_direct_call>());
+    mi::base::Handle<const MDL::IExpression_list> arguments( body_call->get_arguments());
+
+    for( mi::Size i = 0, n = body_arg_index_sequence.size(); i+1 < n; ++i) {
+        expr = arguments->get_expression( body_arg_index_sequence[i]);
+        body_call = expr->get_interface<MDL::IExpression_direct_call>();
+        arguments = body_call->get_arguments();
+    }
+    const char* arg_name = arguments->get_name(
+        body_arg_index_sequence[body_arg_index_sequence.size()-1]);
     check_texture( transaction, arguments.get(), arg_name, success, resolve_resources, file_path);
 }
 
@@ -302,32 +330,44 @@ void test_resources( DB::Transaction* transaction)
 
     // resolver succeeds
     check_texture_def( transaction, // weak-relative file path
-        "mdl::mdl_elements::test_resolver_success::fd_texture_success(texture_2d)", "t",
-        true, true, "/mdl_elements/resources/test.png");
+        "mdl::mdl_elements::test_resolver_success::fd_texture(texture_2d)",
+        "t", true, true, "/mdl_elements/resources/test.png");
     check_texture_call( transaction,
-        "mdl::mdl_elements::test_resolver_success::fc_texture_success", "t",
-        true, true, "/mdl_elements/resources/test.png");
+        "mdl::mdl_elements::test_resolver_success::fc_texture",
+        "t", true, true, "/mdl_elements/resources/test.png");
 
-    check_texture_def (transaction, // weak-relative file path, udim image sequence
-        "mdl::mdl_elements::test_resolver_success::fd_texture_udim_success(texture_2d)", "t",
-        true, true, "/mdl_elements/resources/test<UDIM>.png");
+    check_texture_def( transaction, // weak-relative file path, udim image sequence
+        "mdl::mdl_elements::test_resolver_success::fd_texture_udim(texture_2d)",
+        "t", true, true, "/mdl_elements/resources/test<UDIM>.png");
     check_texture_call( transaction,
-        "mdl::mdl_elements::test_resolver_success::fc_texture_udim_success", "t",
-        true, true, "/mdl_elements/resources/test<UDIM>.png");
+        "mdl::mdl_elements::test_resolver_success::fc_texture_udim",
+        "t", true, true, "/mdl_elements/resources/test<UDIM>.png");
+
+    check_texture_def( transaction, // strict-relative file path, gamma_srgb
+        "mdl::mdl_elements::test_resolver_success::fd_texture_gamma_srgb(texture_2d)",
+        "t", true, true, "/mdl_elements/resources/test.png");
+
+    check_texture_def( transaction, // strict-relative file path, gamma_linear
+        "mdl::mdl_elements::test_resolver_success::fd_texture_gamma_linear(texture_2d)",
+        "t", true, true, "/mdl_elements/resources/test.png");
+
+    check_texture_def( transaction, // strict-relative file path, body
+        "mdl::mdl_elements::test_resolver_success::fd_texture_body()",
+        {0, 0}, true, true, "/mdl_elements/resources/test.png");
 
     check_light_profile_def( transaction, // strict-relative file path
-        "mdl::mdl_elements::test_resolver_success::fd_light_profile_success(light_profile)", "l",
-        true, true, "/mdl_elements/resources/test.ies");
+        "mdl::mdl_elements::test_resolver_success::fd_light_profile(light_profile)",
+        "l", true, true, "/mdl_elements/resources/test.ies");
     check_light_profile_call( transaction,
-        "mdl::mdl_elements::test_resolver_success::fc_light_profile_success", "l",
-        true, true, "/mdl_elements/resources/test.ies");
+        "mdl::mdl_elements::test_resolver_success::fc_light_profile",
+        "l", true, true, "/mdl_elements/resources/test.ies");
 
     check_bsdf_measurement_def( transaction, // absolute path
-        "mdl::mdl_elements::test_resolver_success::fd_bsdf_measurement_success(bsdf_measurement)", "b",
-        true, true, "/mdl_elements/resources/test.mbsdf");
+        "mdl::mdl_elements::test_resolver_success::fd_bsdf_measurement(bsdf_measurement)",
+        "b", true, true, "/mdl_elements/resources/test.mbsdf");
     check_bsdf_measurement_call( transaction,
-        "mdl::mdl_elements::test_resolver_success::fc_bsdf_measurement_success", "b",
-        true, true, "/mdl_elements/resources/test.mbsdf");
+        "mdl::mdl_elements::test_resolver_success::fc_bsdf_measurement",
+        "b", true, true, "/mdl_elements/resources/test.mbsdf");
 }
 
 void test_jitted_environment_function( DB::Transaction* transaction)
@@ -639,9 +679,11 @@ void test_resource_sharing( DB::Transaction* transaction, MDL::Execution_context
     result = MDL::Mdl_module::create_module( transaction, mdle_path1.c_str(), context);
     MI_CHECK_CTX( context);
     MI_CHECK_EQUAL( 0, result);
+    context->clear_messages();
     result = MDL::Mdl_module::create_module( transaction, mdle_path2.c_str(), context);
     MI_CHECK_CTX( context);
     MI_CHECK_EQUAL( 0, result);
+    context->clear_messages();
 
     // load defaults of material_name1/2
     DB::Tag md1_tag = transaction->name_to_tag( material_name1.c_str());
@@ -748,7 +790,7 @@ void test_parsing( MDL::Execution_context* context)
             { "0",           true  },
             { "int",         true  },
             { "€",           true  },
-            { u8"\u20ac",    true  }, // Euro sign
+            { reinterpret_cast<const char*>( u8"\u20ac"), true  }, // Euro sign
             { "",            false },
             { "/",           false },
             { "\\",          false },
@@ -1826,19 +1868,31 @@ void test_unresolved_resources_load( DB::Transaction* transaction, MDL::Executio
     MI_CHECK_EQUAL( 0, result);
 
     check_texture_def( transaction, // weak-relative file path
-        "mdl::mdl_elements::test_resolver_success::fd_texture_success(texture_2d)",
+        "mdl::mdl_elements::test_resolver_success::fd_texture(texture_2d)",
         "t", true, false, "resources/test.png");
 
-    check_texture_def(transaction, // weak-relative file path, udim image sequence
-        "mdl::mdl_elements::test_resolver_success::fd_texture_udim_success(texture_2d)",
+    check_texture_def( transaction, // weak-relative file path, udim image sequence
+        "mdl::mdl_elements::test_resolver_success::fd_texture_udim(texture_2d)",
         "t", true, false, "resources/test<UDIM>.png");
 
+    check_texture_def( transaction, // strict-relative file path, gamma_srgb
+        "mdl::mdl_elements::test_resolver_success::fd_texture_gamma_srgb(texture_2d)",
+        "t", true, false, "/mdl_elements/resources/test.png");
+
+    check_texture_def( transaction, // strict-relative file path, gamma_linear
+        "mdl::mdl_elements::test_resolver_success::fd_texture_gamma_linear(texture_2d)",
+        "t", true, false, "/mdl_elements/resources/test.png");
+
+    check_texture_def( transaction, // strict-relative file path, body
+        "mdl::mdl_elements::test_resolver_success::fd_texture_body()",
+        {0, 0}, true, false, "/mdl_elements/resources/test.png");
+
     check_light_profile_def( transaction, // strict-relative file path
-        "mdl::mdl_elements::test_resolver_success::fd_light_profile_success(light_profile)",
+        "mdl::mdl_elements::test_resolver_success::fd_light_profile(light_profile)",
         "l", true, false, "/mdl_elements/resources/test.ies");
 
     check_bsdf_measurement_def( transaction, // absolute path
-        "mdl::mdl_elements::test_resolver_success::fd_bsdf_measurement_success(bsdf_measurement)",
+        "mdl::mdl_elements::test_resolver_success::fd_bsdf_measurement(bsdf_measurement)",
         "b", true, false, "/mdl_elements/resources/test.mbsdf");
 
     context->set_option( MDL_CTX_OPTION_RESOLVE_RESOURCES, true);
@@ -2059,23 +2113,28 @@ void test_main( DB::Scope* global_scope)
     mi::Sint32 result = MDL::Mdl_module::create_module(
         transaction, "::mdl_elements::test_misc", &context);
     MI_CHECK_EQUAL( 0, result);
+    context.clear_messages();
+
     result = MDL::Mdl_module::create_module(
         transaction, "::mdl_elements::test_resolver_success", &context);
     MI_CHECK_EQUAL( 0, result);
+    context.clear_messages();
+
     result = MDL::Mdl_module::create_module(
         transaction, "::mdl_elements::test_resolver_failures", &context);
     MI_CHECK_EQUAL( 0, result);
+    context.clear_messages();
 
     // instantiate some definitions
     const char* definitions[] = {
-        "mdl::mdl_elements::test_resolver_success::fd_texture_success(texture_2d)",
-            "mdl::mdl_elements::test_resolver_success::fc_texture_success",
-        "mdl::mdl_elements::test_resolver_success::fd_texture_udim_success(texture_2d)",
-            "mdl::mdl_elements::test_resolver_success::fc_texture_udim_success",
-        "mdl::mdl_elements::test_resolver_success::fd_light_profile_success(light_profile)",
-            "mdl::mdl_elements::test_resolver_success::fc_light_profile_success",
-        "mdl::mdl_elements::test_resolver_success::fd_bsdf_measurement_success(bsdf_measurement)",
-            "mdl::mdl_elements::test_resolver_success::fc_bsdf_measurement_success",
+        "mdl::mdl_elements::test_resolver_success::fd_texture(texture_2d)",
+            "mdl::mdl_elements::test_resolver_success::fc_texture",
+        "mdl::mdl_elements::test_resolver_success::fd_texture_udim(texture_2d)",
+            "mdl::mdl_elements::test_resolver_success::fc_texture_udim",
+        "mdl::mdl_elements::test_resolver_success::fd_light_profile(light_profile)",
+            "mdl::mdl_elements::test_resolver_success::fc_light_profile",
+        "mdl::mdl_elements::test_resolver_success::fd_bsdf_measurement(bsdf_measurement)",
+            "mdl::mdl_elements::test_resolver_success::fc_bsdf_measurement",
         "mdl::mdl_elements::test_misc::fd_int(int)",
             "mdl::mdl_elements::test_misc::fc_int",
         "mdl::mdl_elements::test_misc::fd_float(float)",
@@ -2119,10 +2178,10 @@ void test_main( DB::Scope* global_scope)
     MI_CHECK_EQUAL( 0, path_module->add_path( PATH::MDL, path));
 
     // load the MDL "test_archives" module from test_archives.mdr
-    context.clear_messages();
     context.set_result( 0);
     result = MDL::Mdl_module::create_module( transaction, "::test_archives", &context);
     MI_CHECK_EQUAL( 0, result);
+    context.clear_messages();
 
     test_body_and_temporaries( transaction, ef.get());
 
@@ -2181,7 +2240,6 @@ void check_resource_map( const T* object, bool resolve_resources)
 {
     mi::Size index = resolve_resources ? 0 : 1;
     mi::Size n = object->get_resources_count();
-    MI_CHECK_EQUAL( n, expected[index].size());
 
     std::set<std::string> got;
     for( mi::Size i = 0; i < n; ++i) {
@@ -2190,9 +2248,9 @@ void check_resource_map( const T* object, bool resolve_resources)
         MI_CHECK_EQUAL( resolve_resources, rtt->m_tag.is_valid());
     }
 
-    MI_CHECK_EQUAL( n, got.size());
     MI_CHECK_EQUAL_COLLECTIONS(
         expected[index].begin(), expected[index].end(), got.begin(), got.end());
+    MI_CHECK_EQUAL( expected[index].size(), got.size());
 }
 
 void check_resource_ivalue(
@@ -2200,7 +2258,6 @@ void check_resource_ivalue(
 {
     mi::Size index = resolve_resources ? 0 : 1;
     mi::Size n = module->get_resources_count();
-    MI_CHECK_EQUAL( n, expected[index].size());
 
     std::set<std::string> got;
 
@@ -2221,9 +2278,9 @@ void check_resource_ivalue(
         MI_CHECK_EQUAL( resolve_resources, res->get_value().is_valid());
     }
 
-    MI_CHECK_EQUAL( n, got.size());
     MI_CHECK_EQUAL_COLLECTIONS(
         expected[index].begin(), expected[index].end(), got.begin(), got.end());
+    MI_CHECK_EQUAL( expected[index].size(), got.size());
 }
 
 void test_resource_maps( DB::Scope* global_scope, bool resolve_resources)
@@ -2301,6 +2358,9 @@ MI_TEST_AUTO_FUNCTION( test )
 
     SYSTEM::Access_module<PLUG::Plug_module> plug_module( false);
     MI_CHECK( plug_module->load_library( plugin_path_openimageio));
+
+    // Avoid repeated initialization on the fly.
+    SYSTEM::Access_module<IMAGE::Image_module> image_module( false);
 
     DB::Database* database = db_access.get_database();
     DB::Scope* scope = database->get_global_scope();

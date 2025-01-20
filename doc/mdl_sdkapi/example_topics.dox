@@ -33,94 +33,69 @@ index.
 
 \section mi_neuray_example_topics_general General
 
-  - \ref mi_neuray_example_start_shutdown "Naming conventions"
-  - \ref mi_neuray_example_start_shutdown "Main include files"
-  - \ref mi_neuray_example_start_shutdown "Main API access point"
-  - \ref mi_neuray_example_start_shutdown "Interfaces and handles"
-  - \ref mi_neuray_example_start_shutdown "Starting and shutting down"
-
-  - \ref mi_neuray_example_modules "Configuration of \neurayProductName"
-  - \ref mi_neuray_example_modules "Loading of MDL modules"
-  - \ref mi_neuray_example_modules "Enumerating the contents of MDL modules"
-  - \ref mi_neuray_example_modules "Inspecting the parameters of material and function definitions"
-
-  - \ref mi_neuray_example_instantiation "Instantiating material and function definitions"
+  - \ref mi_neuray_example_derivatives "Automatic derivatives"
+  - \ref mi_neuray_example_axf_to_mdl "AxF to MDL material format conversion"
+  - \ref mi_neuray_example_distilling "Baking material sub-expressions"
+  - \ref mi_neuray_example_distilling_unity "Baking material to Unity texture channel layout"
+  - \ref mi_neuray_example_mdl_browser "Caching of information on packages, modules, and materials"
   - \ref mi_neuray_example_instantiation "Changing arguments"
-  - \ref mi_neuray_example_instantiation "Creating material and function variants"
-
-  - \ref mi_neuray_example_calls "Rationale for expressions vs values"
-  - \ref mi_neuray_example_calls "Creating a textured material"
-
+  - \ref mi_neuray_example_df_native "Changing compiled material arguments at runtime (CPU)"
+  - \ref mi_neuray_example_df_cuda "Changing compiled material arguments at runtime (PTX)"
   - \ref mi_neuray_example_compilation "Compiled materials"
+  - \ref mi_neuray_example_distilling_unity "Compiling into one link unit"
+  - \ref mi_neuray_example_modules "Configuration of \neurayProductName"
+  - \ref mi_neuray_example_execution_glsl_vk "Configuration of the GLSL backend for Vulkan"
+  - \ref mi_neuray_example_execution_glsl "Constant data (GLSL)"
+  - \ref mi_neuray_example_create_module "Creation and usage of user-defined enum and struct types"
+  - \ref mi_neuray_example_create_module "Creation of a material variant"
+  - \ref mi_neuray_example_create_module "Creation of a simple diffuse material"
+  - \ref mi_neuray_example_calls "Creating a textured material"
+  - \ref mi_neuray_example_instantiation "Creating material and function variants"
+  - \ref mi_neuray_example_distilling_target "Custom Distiller plugin implementation"
+  - \ref mi_neuray_example_distilling_target "Custom Distiller target loading"
   - \ref mi_neuray_example_compilation "Different compilation modes"
-  - \ref mi_neuray_example_compilation "Target code generation"
-
   - \ref mi_neuray_example_code_gen "Different compilation modes and options between"
+  - \ref mi_neuray_example_discovery "Discovery of MDL archives, packages and modules"
+  - \ref mi_neuray_example_modules "Enumerating the contents of MDL modules"
+  - \ref mi_neuray_example_dxr "Example for a Microsoft DXR-based MDL-enabled path tracer"
+  - \ref mi_neuray_example_mdle "Example for Integrating the MDL encapsulated format"
+  - \ref mi_neuray_example_execution_native "Execution of generated code (CPU)"
+  - \ref mi_neuray_example_execution_glsl "Execution of generated code (GLSL)"
+  - \ref mi_neuray_example_optix7 "Execution of generated code (OptiX 7)"
+  - \ref mi_neuray_example_execution_ptx "Execution of generated code (PTX)"
+  - \ref mi_neuray_example_mdle "Export and load materials or functions using the MDL encapsulated format"
+  - \ref mi_neuray_example_df_native "Generated BSDF functions (CPU)"
+  - \ref mi_neuray_example_df_vulkan "Generated BSDF functions (GLSL)"
+  - \ref mi_neuray_example_df_cuda "Generated BSDF functions (PTX)"
+  - \ref mi_neuray_example_traversal "Generating MDL code"
+  - \ref mi_neuray_example_mdl_browser "Illustration of how we believe MDL materials should be presented to the user"
+  - \ref mi_neuray_example_modules "Inspecting the parameters of material and function definitions"
+  - \ref mi_neuray_example_instantiation "Instantiating material and function definitions"
+  - \ref mi_neuray_example_start_shutdown "Interfaces and handles"
+  - \ref mi_neuray_example_optix7 "Limiting the number of exported PTX functions"
+  - \ref mi_neuray_example_optix7 "Linking and optimizing generated MDL code with renderer code"
+  - \ref mi_neuray_example_modules "Loading of MDL modules"
+  - \ref mi_neuray_example_execution_glsl "Loading textures (GLSL)"
+  - \ref mi_neuray_example_execution_ptx "Loading textures (PTX)"
+  - \ref mi_neuray_example_distilling_glsl "Mapping distilled materials to a GLSL shader"
+  - \ref mi_neuray_example_distilling "Material distilling"
+  - \ref mi_neuray_example_execution_native "MDL material state (CPU)"
+  - \ref mi_neuray_example_execution_glsl "MDL material state (GLSL)"
+  - \ref mi_neuray_example_execution_ptx "MDL material state (PTX)"
+  - \ref mi_neuray_example_start_shutdown "Naming conventions"
+  - \ref mi_neuray_example_start_shutdown "Main API access point"
+  - \ref mi_neuray_example_start_shutdown "Main include files"
+  - \ref mi_neuray_example_calls "Rationale for expressions vs values"
+  - \ref mi_neuray_example_dxr "Rendering glTF scenes using MDL materials"
+  - \ref mi_neuray_example_start_shutdown "Starting and shutting down"
+  - \ref mi_neuray_example_compilation "Target code generation"
   - \ref mi_neuray_example_code_gen "Target code generation for a material with multiple functions"
   - \ref mi_neuray_example_code_gen "Target code serialization"
-
-  - \ref mi_neuray_example_execution_native "MDL material state (CPU)"
-  - \ref mi_neuray_example_execution_ptx "MDL material state (PTX)"
-  - \ref mi_neuray_example_execution_glsl "MDL material state (GLSL)"
-
-  - \ref mi_neuray_example_execution_native "Execution of generated code (CPU)"
-  - \ref mi_neuray_example_execution_ptx "Execution of generated code (PTX)"
-  - \ref mi_neuray_example_optix7 "Execution of generated code (OptiX 7)"
-  - \ref mi_neuray_example_execution_glsl "Execution of generated code (GLSL)"
-
-  - \ref mi_neuray_example_execution_ptx "Loading textures (PTX)"
-  - \ref mi_neuray_example_execution_glsl "Loading textures (GLSL)"
-
-  - \ref mi_neuray_example_execution_ptx "Texture access functions (PTX)"
   - \ref mi_neuray_example_execution_glsl "Texture access functions (GLSL)"
-
-  - \ref mi_neuray_example_execution_glsl "Constant data (GLSL)"
-
-  - \ref mi_neuray_example_execution_glsl_vk "Configuration of the GLSL backend for Vulkan"
-
-  - \ref mi_neuray_example_df_cuda "Generated BSDF functions (PTX)"
-  - \ref mi_neuray_example_df_cuda "Changing compiled material arguments at runtime (PTX)"
-  
-  - \ref mi_neuray_example_df_native "Generated BSDF functions (CPU)"
-  - \ref mi_neuray_example_df_native "Changing compiled material arguments at runtime (CPU)"
-
-  - \ref mi_neuray_example_df_vulkan "Generated BSDF functions (GLSL)"
-
-  - \ref mi_neuray_example_derivatives "Automatic derivatives"
-
-  - \ref mi_neuray_example_distilling "Material distilling"
-  - \ref mi_neuray_example_distilling "Baking material sub-expressions"
-
-  - \ref mi_neuray_example_distilling_unity "Compiling into one link unit"
-  - \ref mi_neuray_example_distilling_unity "Baking material to Unity texture channel layout"
-
-  - \ref mi_neuray_example_distilling_glsl "Mapping distilled materials to a GLSL shader"
-
-  - \ref mi_neuray_example_distilling_target "Custom Distiller target loading"
-  - \ref mi_neuray_example_distilling_target "Custom Distiller plugin implementation"
-
+  - \ref mi_neuray_example_execution_ptx "Texture access functions (PTX)"
   - \ref mi_neuray_example_traversal "Traversal of a compiled material"
-  - \ref mi_neuray_example_traversal "Generating MDL code"
-
-  - \ref mi_neuray_example_create_module "Creation of a simple diffuse material"
-  - \ref mi_neuray_example_create_module "Creation of a material variant"
   - \ref mi_neuray_example_create_module "Using the uniform analysis"
-  - \ref mi_neuray_example_create_module "Creation and usage of user-defined enum and struct types"
 
-  - \ref mi_neuray_example_discovery "Discovery of MDL archives, packages and modules"
 
-  - \ref mi_neuray_example_mdl_browser "Caching of information on packages, modules, and materials"
-  - \ref mi_neuray_example_mdl_browser "Illustration of how we believe MDL materials should be presented to the user"
-
-  - \ref mi_neuray_example_mdle "Example for Integrating the MDL encapsulated format"
-  - \ref mi_neuray_example_mdle "Export and load materials or functions using the MDL encapsulated format"
-
-  - \ref mi_neuray_example_dxr "Example for a Microsoft DXR-based MDL-enabled path tracer"
-  - \ref mi_neuray_example_dxr "Rendering glTF scenes using MDL materials"
-
-  - \ref mi_neuray_example_optix7 "Linking and optimizing generated MDL code with renderer code"
-  - \ref mi_neuray_example_optix7 "Limiting the number of exported PTX functions"
-  
-  - \ref mi_neuray_example_axf_to_mdl "AxF to MDL material format conversion"
   
 */

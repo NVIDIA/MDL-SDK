@@ -51,7 +51,7 @@ namespace neuraylib {
 
 /// A wrapper around the interfaces for MDL annotations.
 ///
-/// The purpose of the MDL helper is to simplify working with MDL annotations. 
+/// The purpose of the MDL helper is to simplify working with MDL annotations.
 /// It is wrapping API call sequences occurring in typical tasks into one single method call.
 ///
 /// See #mi::neuraylib::IAnnotation_block and #mi::neuraylib::IAnnotation for the underlying
@@ -66,7 +66,7 @@ public:
 
     /// Constructs a helper that provides convenience methods for annotations.
     ///
-    /// \param anno_block    Block of annotations attached to a module, function, etc. 
+    /// \param anno_block    Block of annotations attached to a module, function, etc.
     Annotation_wrapper(const mi::neuraylib::IAnnotation_block* anno_block);
 
     /// Get the number of the annotations.
@@ -84,7 +84,7 @@ public:
     ///
     /// \param anno_name    The name of the annotation
     /// \param offset       The first index to be considered in the search. If zero, the entire
-    ///                     annotation block is searched. 
+    ///                     annotation block is searched.
     /// \return
     ///                  -  index:  of the annotation in case of success.
     ///                  -  -1:     If there is none with that name.
@@ -102,33 +102,33 @@ public:
     ///
     /// \param anno_index   The index of the annotation
     /// \param param_index  The index of the parameter value to query
-    /// \return             The name, or \c NULL if it does not exist
+    /// \return             The name, or \c nullptr if it does not exist
     const char* get_annotation_param_name(mi::Size anno_index, mi::Size param_index) const;
 
     /// Get the type of one of the parameters of one of the annotations.
     ///
     /// \param anno_index   The index of the annotation
     /// \param param_index  The index of the parameter value to query
-    /// \return             The type, or \c NULL if it does not exist
+    /// \return             The type, or \c nullptr if it does not exist
     const IType* get_annotation_param_type(mi::Size anno_index, mi::Size param_index) const;
 
-    /// Get the value of one of the parameters of one of the annotations. 
+    /// Get the value of one of the parameters of one of the annotations.
     ///
     /// \param anno_index   The index of the annotation
     /// \param param_index  The index of the parameter value to query
-    /// \return             The value, or \c NULL if it does not exist
+    /// \return             The value, or \c nullptr if it does not exist
     const IValue* get_annotation_param_value(
         mi::Size anno_index, mi::Size param_index) const;
 
-    /// Get the value of one of the parameters of one of the annotations. 
+    /// Get the value of one of the parameters of one of the annotations.
     ///
     /// \param anno_name    The name of the annotation
     /// \param param_index  The index of the parameter value to query
-    /// \return             The value, or \c NULL if it does not exist
+    /// \return             The value, or \c nullptr if it does not exist
     const IValue* get_annotation_param_value_by_name(
         const char* anno_name, mi::Size param_index ) const;
 
-    /// Get the value of one of the parameters of one of the annotations. 
+    /// Get the value of one of the parameters of one of the annotations.
     ///
     /// \param anno_index   The index of the annotation
     /// \param param_index  The index of the parameter value to query
@@ -137,11 +137,11 @@ public:
     ///                  -  0: Success.
     ///                  - -1: The type of the parameter does not match the template type of \p T.
     ///                  - -3: The index parameter is not valid for the provided annotation block.
-    template <class T> 
+    template <class T>
     mi::Sint32 get_annotation_param_value(
         mi::Size anno_index, mi::Size param_index, T& value) const;
 
-    /// Get the value of one of the parameters of one of the annotations. 
+    /// Get the value of one of the parameters of one of the annotations.
     ///
     /// \param anno_name    The name of the annotation
     /// \param param_index  The index of the parameter value to query
@@ -178,12 +178,12 @@ inline mi::Size Annotation_wrapper::get_annotation_count() const
 inline const char* Annotation_wrapper::get_annotation_name(mi::Size anno_index) const
 {
     if (!m_anno_block || m_anno_block->get_size() <= anno_index)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<const mi::neuraylib::IAnnotation> anno(
         m_anno_block->get_annotation(anno_index));
     if (!anno)
-        return 0;
+        return nullptr;
 
     return anno->get_name();
 }
@@ -223,19 +223,19 @@ inline const char* Annotation_wrapper::get_annotation_param_name(
     mi::Size anno_index, mi::Size param_index) const
 {
     if (!m_anno_block || m_anno_block->get_size() <= anno_index)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<const mi::neuraylib::IAnnotation> anno(
         m_anno_block->get_annotation(anno_index));
     if (!anno)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<const mi::neuraylib::IExpression_list> expr_list(anno->get_arguments());
     if (!expr_list)
-        return 0;
+        return nullptr;
 
     if (expr_list->get_size() <= param_index)
-        return 0;
+        return nullptr;
 
     return expr_list->get_name(param_index);
 }
@@ -244,23 +244,23 @@ inline const IType* Annotation_wrapper::get_annotation_param_type(
     mi::Size anno_index, mi::Size param_index) const
 {
     if (!m_anno_block || m_anno_block->get_size() <= anno_index)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<const mi::neuraylib::IAnnotation> anno(
         m_anno_block->get_annotation(anno_index));
     if (!anno)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<const mi::neuraylib::IExpression_list> expr_list(anno->get_arguments());
     if (!expr_list)
-        return 0;
+        return nullptr;
 
     if (expr_list->get_size() <= param_index)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<const mi::neuraylib::IExpression> expr(expr_list->get_expression(param_index));
     if (!expr)
-        return 0;
+        return nullptr;
 
     return expr->get_type();
 }
@@ -269,28 +269,28 @@ inline const mi::neuraylib::IValue* Annotation_wrapper::get_annotation_param_val
     mi::Size anno_index, mi::Size param_index) const
 {
     if (!m_anno_block || m_anno_block->get_size() <= anno_index)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<const mi::neuraylib::IAnnotation> anno(
         m_anno_block->get_annotation(anno_index));
     if (!anno)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<const mi::neuraylib::IExpression_list> expr_list(anno->get_arguments());
     if (!expr_list)
-        return 0;
+        return nullptr;
 
     if (expr_list->get_size() <= param_index)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<const mi::neuraylib::IExpression> expr(expr_list->get_expression(param_index));
     if (!expr)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<const mi::neuraylib::IExpression_constant> c(
         expr->get_interface<const mi::neuraylib::IExpression_constant>());
     if (!c)
-        return 0;
+        return nullptr;
 
     return c->get_value();
 }
@@ -300,7 +300,7 @@ inline const mi::neuraylib::IValue* Annotation_wrapper::get_annotation_param_val
 {
     mi::Size anno_index = get_annotation_index(anno_name);
     if (anno_index == static_cast<mi::Size>(-1))
-        return 0;
+        return nullptr;
 
     return get_annotation_param_value(anno_index, param_index);
 }

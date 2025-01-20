@@ -797,7 +797,7 @@ public:
     Name *get_name() { return m_name; }
 
     /// Get the name of the field.
-    Name *const get_name() const { return m_name; }
+    Name const *get_name() const { return m_name; }
 
     /// Set the name of the field.
     void set_name(Name *name);

@@ -36,7 +36,9 @@
 #include <sstream>
 #include <cassert>
 
+#include "io.h"
 #include "strings.h"
+
 using namespace mi::examples::strings;
 
 #ifndef WIN_NT
@@ -92,17 +94,6 @@ void splitpath(std::string path, std::vector<std::string>& components)
 
 }
 
-// Return the OS independent separator. On Windows the separator is '\',
-// while on the other operating system is is '/'.
-std::string Ospath::sep()
-{
-#ifdef WIN_NT
-        return std::string("\\");
-#else
-        return std::string("/");
-#endif
-}
-
 // Return the OS independent path set separator.
 // on Linux and MacOSX, path set is separated by ":", e.g.,
 // "/home/user0:/home/user0", on Windows,
@@ -152,76 +143,8 @@ std::string Ospath::join(
     else if (path2.empty())
         return path;
     else
-        return path + sep() + path2;
+        return path + io::sep() + path2;
 }
-
-
-#if 0
-// Normalize a pathname. This collapses redundant separators and up-level
-// references, e.g. A//B, A/./B and A/foo/../B all become A/B. It does not
-// normalize the case. On Windows, it converts forward slashes to backward slashes.
-std::string Ospath::normpath(
-    const std::string& orig_in_path)            // Incoming path
-{
-    std::vector<std::string> token_list;
-    const std::string separator = HAL::Ospath::sep();
-    const std::string in_path = Ospath::normpath_only(orig_in_path);
-    std::string out_path;
-
-    UTIL::Tokenizer::parse(in_path, separator, token_list);
-
-    std::vector<std::string> last_dir;
-    std::vector<std::string>::const_iterator it = token_list.begin();
-
-    // iterate over all elements, skipping . and resolving ..
-    while(it != token_list.end()) {
-        if (it->empty()) { // We do not care about empty tokens (i.e. //)
-            ++it;
-            continue;
-        }
-        // valid dir names are appended and saved on a stack (last_dir)
-        if (*it != ".." && *it != ".") {
-            last_dir.push_back(*it);
-            if (!out_path.empty() && out_path[out_path.length() - 1] != separator[0])
-                out_path.append(separator);
-            out_path.append(*it);
-        }
-        // ".." means we have to pop the last valid dir name from the stack if we can
-        else if (*it == "..") {
-            if (last_dir.empty())
-                return orig_in_path;
-            size_t ind = out_path.rfind(last_dir.back());
-            if (ind == std::string::npos)
-                return orig_in_path;
-            out_path = out_path.substr(0, ind);
-            last_dir.pop_back();
-        }
-        ++it;
-    }
-
-    // special case: path ended with /
-    if (!out_path.empty() && !in_path.empty() && in_path[in_path.length() - 1] == separator[0])
-        out_path.append(separator);
-    // special case: path was absolute, i.e. started with /
-    if (!in_path.empty() && in_path[0] == separator[0])
-      out_path.insert(0, separator);
-
-#if WIN_NT
-    // Check for UNC and put back the '\\' which have been removed.
-    // First convert back to backslashes since siteconfig converts
-    // paths to forward slashes which means the test against sep()
-    // which returns backslashes on windows would not work.
-    std::string win_path = convert_to_backward_slashes(orig_in_path);
-    if (win_path.length() >= 2 &&
-        (win_path[0] == sep()[0]) && (win_path[1] == sep()[0]))
-        out_path.insert(0, sep());
-    return convert_to_backward_slashes(out_path);
-#else
-    return out_path;
-#endif
-}
-#endif
-
 
 // Normalize a pathname. On Windows, it converts forward slashes to
 // backward slashes.
@@ -238,8 +161,8 @@ std::string Ospath::normpath_only(
     // which returns backslashes on windows would not work.
     std::string win_path = convert_to_backward_slashes(path);
     if (win_path.length() >= 2 &&
-        (win_path[0] == sep()[0]) && (win_path[1] == sep()[0]))
-        npath.insert(0, sep());
+        (win_path[0] == io::sep()) && (win_path[1] == io::sep()))
+        npath.insert(0, 1, io::sep());
     return convert_to_backward_slashes(npath);
 #else
     return npath;
@@ -561,11 +484,11 @@ bool make_path_relative(
 
     splitpath(abs_base_dir_norm, abs_base_dir_comp);
     splitpath(abs_dir_norm, abs_dir_comp);
-    int n = std::min(abs_base_dir_comp.size(), abs_dir_comp.size());
-    int c = 0;
-    for (int i = 0; i < n; ++i) {
+    size_t n = std::min(abs_base_dir_comp.size(), abs_dir_comp.size());
+    size_t c = 0;
+    for (size_t i = 0; i < n; ++i) {
         if (abs_base_dir_comp[i] == abs_dir_comp[i])
-            c++;
+            ++c;
         else
             break;
     }
@@ -576,11 +499,11 @@ bool make_path_relative(
     }
 #endif
     std::string up;
-    for (int i = c; i < abs_base_dir_comp.size(); ++i) {
+    for (size_t i = c; i < abs_base_dir_comp.size(); ++i) {
         up += "../";
     }
     rel_path = up;
-    for (int i = c; i < abs_dir_comp.size(); ++i) {
+    for (size_t i = c; i < abs_dir_comp.size(); ++i) {
         rel_path += abs_dir_comp[i] + "/";
     }
     rel_path += filename;

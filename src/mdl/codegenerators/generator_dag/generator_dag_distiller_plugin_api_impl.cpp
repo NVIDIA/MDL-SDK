@@ -936,11 +936,12 @@ DAG_node const *Distiller_plugin_api_impl::create_call(
     char const                    *name,
     IDefinition::Semantics        sema,
     DAG_call::Call_argument const call_args[],
-    int                           num_call_args,
-    IType const                   *ret_type)
+    size_t                        num_call_args,
+    IType const                   *ret_type,
+    DAG_DbgInfo                   dbg_info)
 {
     DAG_node const *res = m_node_factory->create_call(
-        name, sema, call_args, num_call_args, m_type_factory->import(ret_type));
+        name, sema, call_args, num_call_args, m_type_factory->import(ret_type), dbg_info);
     m_checker.check_node(res);
     return res;
 }
@@ -950,7 +951,8 @@ DAG_node const *Distiller_plugin_api_impl::create_call(
 DAG_node const *Distiller_plugin_api_impl::create_function_call(
     char const             *name,
     DAG_node const * const call_args[],
-    size_t                 num_call_args)
+    size_t                 num_call_args,
+    DAG_DbgInfo            dbg_info)
 {
     for (size_t i = 0; i < num_call_args; ++i) {
         m_checker.check_node(call_args[i]);
@@ -1022,7 +1024,7 @@ DAG_node const *Distiller_plugin_api_impl::create_function_call(
     // FIXME: do type binding, uniform propagation
     sema = def->get_semantics();
 
-    VLA<DAG_call::Call_argument> args(m_alloc, num_call_args);
+    Small_VLA<DAG_call::Call_argument, 8> args(m_alloc, num_call_args);
     for (size_t i = 0; i < num_call_args; ++i) {
         IType const   *p_tp;
         ISymbol const *p_sym;
@@ -1037,7 +1039,7 @@ DAG_node const *Distiller_plugin_api_impl::create_function_call(
     Option_store<DAG_node_factory_impl, bool> optimizations(
         *m_node_factory, &DAG_node_factory_impl::enable_opt, true);
 
-    return create_call(sig, sema, args.data(), args.size(), ret_type);
+    return create_call(sig, sema, args.data(), args.size(), ret_type, dbg_info);
 }
 
 // Create a 1-, 2-, or 3-mixer call, with 2, 4, 6, or 8 parameters respectively.
@@ -1137,7 +1139,8 @@ DAG_node const *Distiller_plugin_api_impl::create_mixer_call(
             tp1,
             mi::mdl::IDefinition::DS_ELEM_CONSTRUCTOR,
             args, 2,
-            itp1);
+            itp1,
+            DAG_DbgInfo());
     }
 
     // create bsdf_component's array and mixer
@@ -1145,13 +1148,15 @@ DAG_node const *Distiller_plugin_api_impl::create_mixer_call(
         get_array_constructor_signature(),
         mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,
         comp_args, n,
-        itp2);
+        itp2,
+        DAG_DbgInfo());
     DAG_call::Call_argument mix_arg = { array, "components"};
     return create_call(
         tp2,
         mi::mdl::IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX,
         &mix_arg, 1,
-        arg_type);
+        arg_type,
+        DAG_DbgInfo());
 }
 
 // Create a 1-, 2-, or 3-color-mixer call, with 2, 4, 6, or 8 parameters respectively.
@@ -1251,7 +1256,8 @@ DAG_node const *Distiller_plugin_api_impl::create_color_mixer_call(
             tp1,
             mi::mdl::IDefinition::DS_ELEM_CONSTRUCTOR,
             args, 2,
-            itp1);
+            itp1,
+            DAG_DbgInfo());
     }
 
     // create color_..df_component's array and mixer
@@ -1259,13 +1265,15 @@ DAG_node const *Distiller_plugin_api_impl::create_color_mixer_call(
         get_array_constructor_signature(),
         mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,
         comp_args, n,
-        itp2);
+        itp2,
+        DAG_DbgInfo());
     DAG_call::Call_argument mix_arg = { array, "components"};
     DAG_node const *res = create_call(
         tp2,
         mi::mdl::IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX,
         &mix_arg, 1,
-        arg_type);
+        arg_type,
+        DAG_DbgInfo());
     MDL_ASSERT(
         (arg_type->get_kind() == mi::mdl::IType::TK_BSDF &&
           get_selector(res) == mi::mdl::DS_DIST_BSDF_COLOR_MIX_1 + num_call_args/2 - 1)
@@ -1276,10 +1284,13 @@ DAG_node const *Distiller_plugin_api_impl::create_color_mixer_call(
 }
 
 // Create a parameter reference.
-DAG_parameter const *Distiller_plugin_api_impl::create_parameter(IType const *type, int index)
+DAG_parameter const *Distiller_plugin_api_impl::create_parameter(
+    IType const *type,
+    int         index,
+    DAG_DbgInfo dbg_info)
 {
     DAG_parameter const *res =
-        m_node_factory->create_parameter(m_type_factory->import(type), index);
+        m_node_factory->create_parameter(m_type_factory->import(type), index, dbg_info);
     m_checker.check_parameter(res);
     return res;
 }
@@ -1467,7 +1478,7 @@ DAG_node const *Distiller_plugin_api_impl::create_unary(
     Option_store<DAG_node_factory_impl, bool> optimizations(
         *m_node_factory, &DAG_node_factory_impl::enable_opt, true);
 
-    return create_call(name.c_str(), sema, args, 1, ret_type);
+    return create_call(name.c_str(), sema, args, 1, ret_type, DAG_DbgInfo());
 }
 
 // Creates an operator, handles types.
@@ -1508,7 +1519,7 @@ DAG_node const *Distiller_plugin_api_impl::create_binary(
 
         IDefinition::Semantics sema = operator_to_semantic(bin_op);
         return create_call(
-            name.c_str(), sema, args, 2, ret_type);
+            name.c_str(), sema, args, 2, ret_type, DAG_DbgInfo());
     }
 
     DAG_node_factory_impl::normalize(bin_op, l, r);
@@ -1557,7 +1568,7 @@ DAG_node const *Distiller_plugin_api_impl::create_binary(
     Option_store<DAG_node_factory_impl, bool> optimizations(
         *m_node_factory, &DAG_node_factory_impl::enable_opt, true);
 
-    return create_call(name.c_str(), sema, args, 2, ret_type);
+    return create_call(name.c_str(), sema, args, 2, ret_type, DAG_DbgInfo());
 }
 
 // Creates a ternary operator.
@@ -1599,7 +1610,8 @@ DAG_node const *Distiller_plugin_api_impl::create_ternary(
         operator_to_semantic(IExpression::OK_TERNARY),
         args,
         dimension_of(args),
-        ret_type);
+        ret_type,
+        DAG_DbgInfo());
 }
 
 // Creates a SELECT operator on a struct or vector.
@@ -1645,7 +1657,8 @@ DAG_node const *Distiller_plugin_api_impl::create_select(
             name.c_str(),
             operator_to_semantic(IExpression_binary::OK_ARRAY_INDEX),
             call_args, 2,
-            v_type->get_element_type());
+            v_type->get_element_type(),
+            DAG_DbgInfo());
     }
 
     IType_struct const *s_type = as<IType_struct>(l_type);
@@ -1688,7 +1701,11 @@ DAG_node const *Distiller_plugin_api_impl::create_select(
         *m_node_factory, &DAG_node_factory_impl::enable_opt, true);
 
     return create_call(
-        op_name.c_str(), IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS, &arg, 1, ret_type);
+        op_name.c_str(),
+        IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS,
+        &arg, 1,
+        ret_type,
+        DAG_DbgInfo());
 }
 
 // Creates an array constructor.
@@ -1710,7 +1727,7 @@ DAG_node const *Distiller_plugin_api_impl::create_array(
     }
 
     Memory_arena arena(m_alloc);
-    VLA<DAG_call::Call_argument> args(m_alloc, n_values);
+    Small_VLA<DAG_call::Call_argument, 8> args(m_alloc, n_values);
 
     for (size_t i = 0; i < n_values; ++i) {
         m_printer.print("value");
@@ -1731,7 +1748,8 @@ DAG_node const *Distiller_plugin_api_impl::create_array(
         IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,
         args.data(),
         args.size(),
-        ret_type);
+        ret_type,
+        DAG_DbgInfo());
 }
 
 // Creates a boolean constant.
@@ -1890,7 +1908,8 @@ DAG_node const *Distiller_plugin_api_impl::create_bsdf_component(
         "::df::bsdf_component(float,bsdf)",
         IDefinition::DS_ELEM_CONSTRUCTOR,
         args, 2,
-        get_bsdf_component_type());
+        get_bsdf_component_type(),
+        DAG_DbgInfo());
 }
 
 // Create a edf_component for a mixer; can be a call or a constant.
@@ -1920,7 +1939,8 @@ DAG_node const *Distiller_plugin_api_impl::create_edf_component(
         "::df::edf_component(float,edf)",
         IDefinition::DS_ELEM_CONSTRUCTOR,
         args, 2,
-        get_edf_component_type());
+        get_edf_component_type(),
+        DAG_DbgInfo());
 }
 
 // Create a vdf_component for a mixer; can be a call or a constant.
@@ -1950,7 +1970,8 @@ DAG_node const *Distiller_plugin_api_impl::create_vdf_component(
         "::df::vdf_component(float,vdf)",
         IDefinition::DS_ELEM_CONSTRUCTOR,
         args, 2,
-        get_vdf_component_type());
+        get_vdf_component_type(),
+        DAG_DbgInfo());
 }
 
 // Create a color_bsdf_component for a mixer; can be a call or a constant.
@@ -1980,7 +2001,8 @@ DAG_node const *Distiller_plugin_api_impl::create_color_bsdf_component(
         "::df::color_bsdf_component(color,bsdf)",
         IDefinition::DS_ELEM_CONSTRUCTOR,
         args, 2,
-        get_color_bsdf_component_type());
+        get_color_bsdf_component_type(),
+        DAG_DbgInfo());
 }
 
 // Create a color_edf_component for a mixer; can be a call or a constant.
@@ -2010,7 +2032,8 @@ DAG_node const *Distiller_plugin_api_impl::create_color_edf_component(
         "::df::color_edf_component(color,edf)",
         IDefinition::DS_ELEM_CONSTRUCTOR,
         args, 2,
-        get_color_edf_component_type());
+        get_color_edf_component_type(),
+        DAG_DbgInfo());
 }
 
 // Create a color_vdf_component for a mixer; can be a call or a constant.
@@ -2040,7 +2063,8 @@ DAG_node const *Distiller_plugin_api_impl::create_color_vdf_component(
         "::df::color_vdf_component(color,vdf)",
         IDefinition::DS_ELEM_CONSTRUCTOR,
         args, 2,
-        get_color_vdf_component_type());
+        get_color_vdf_component_type(),
+        DAG_DbgInfo());
 }
 
 // Create a constant node for a given type and value.
@@ -2055,6 +2079,8 @@ DAG_constant const *Distiller_plugin_api_impl::mk_constant(
             return create_color_constant(0.0f, 0.0f, 0.0f);
         } else if (0 == strcmp(value, "color(1.0)")) {
             return create_color_constant(1.0f, 1.0f, 1.0f);
+        } else if (0 == strcmp(value, "color(0.0)")) {
+            return create_color_constant(0.0f, 0.0f, 0.0f);
         }
     } else if (0 == strcmp(const_type, "string")) {
         return create_string_constant(value);
@@ -2106,12 +2132,18 @@ DAG_node const *Distiller_plugin_api_impl::mk_default(
         if (0 == strcmp(param_default, "float3(0.0)"))
             return create_float3_constant(0.0f, 0.0f, 0.0f);
         if (0 == strcmp(param_default, "::state::normal()"))
-            return create_function_call("::state::normal", 0, 0);
+            return create_function_call(
+                "::state::normal",
+                0, 0,
+                DAG_DbgInfo());
         if (0 == strcmp(param_default, "::state::texture_tangent_u(0)")) {
             DAG_node const *args[1] = {
                 create_int_constant(0)
             };
-            return create_function_call("::state::texture_tangent_u", args, dimension_of(args));
+            return create_function_call(
+                "::state::texture_tangent_u",
+                args, dimension_of(args),
+                DAG_DbgInfo());
         }
     }
     return mk_constant(param_type, param_default);
@@ -2494,6 +2526,20 @@ IMaterial_instance *Distiller_plugin_api_impl::apply_rules(
         }
     }
 
+    {
+        // Look up function from ::nvidia::distilling_support to verify that the module 
+        // has been loaded before applying distilling rules. The distiller user is responsible
+        // to load this module beforehand (the MDL SDK does it, but core users have to do
+        // it themselves).
+        mi::base::Handle<IModule const> owner(
+            m_call_resolver->get_owner_module(
+                "::nvidia::distilling_support::float_ior_from_refl(float)"));
+        if (!owner.is_valid_interface()) {
+            error = -3;
+            return curr;
+        }
+    }
+
     // mark that we modify the material by distilling
     curr->set_property(Generated_code_dag::Material_instance::IP_DISTILLED, true);
 
@@ -2756,7 +2802,8 @@ IMaterial_instance *Distiller_plugin_api_impl::merge_materials(
         geom0->get_name(),
         geom0->get_semantic(),
         g_args, dimension_of(g_args),
-        geom0->get_type());
+        geom0->get_type(),
+        DAG_DbgInfo());
 
     // create new backface
     DAG_call::Call_argument b_args[2];
@@ -2778,7 +2825,8 @@ IMaterial_instance *Distiller_plugin_api_impl::merge_materials(
         backface0->get_name(),
         backface0->get_semantic(),
         b_args, dimension_of(b_args),
-        backface0->get_type());
+        backface0->get_type(),
+        DAG_DbgInfo());
 
     // create new material root
     DAG_call::Call_argument args[7];
@@ -2801,7 +2849,8 @@ IMaterial_instance *Distiller_plugin_api_impl::merge_materials(
         root0->get_name(),
         root0->get_semantic(),
         args, dimension_of(args),
-        root0->get_type());
+        root0->get_type(),
+        DAG_DbgInfo());
 
     Visited_node_map attr_marker_map(
         0, Visited_node_map::hasher(), Visited_node_map::key_equal(), m_alloc);
@@ -2846,7 +2895,8 @@ restart:
             DAG_parameter const *p    = cast<DAG_parameter>(node);
             IType const         *type = p->get_type();
             int                 index = p->get_index();
-            node = m_node_factory->create_parameter(m_type_factory->import(type), index);
+            node = m_node_factory->create_parameter(
+                m_type_factory->import(type), index, DAG_DbgInfo());
         }
         break;
     case DAG_node::EK_TEMPORARY:
@@ -2863,7 +2913,7 @@ restart:
             char const             *name    = call->get_name();
             IType const            *type    = m_type_factory->import(call->get_type());
 
-            VLA<DAG_call::Call_argument> args(m_alloc, n_params);
+            Small_VLA<DAG_call::Call_argument, 8> args(m_alloc, n_params);
 
             for (int i = 0; i < n_params; ++i) {
                 args[i].param_name = call->get_parameter_name(i);
@@ -2871,7 +2921,7 @@ restart:
             }
 
             node = m_node_factory->create_call(
-                name, sema, args.data(), args.size(), type);
+                name, sema, args.data(), args.size(), type, DAG_DbgInfo());
         }
         break;
     }
@@ -3003,6 +3053,89 @@ Definition *Distiller_plugin_api_impl::find_exported_def(
         return NULL;
     }
     return def;
+}
+
+// Compute all properties of a node that are required for matching against a rule pattern.
+void Distiller_plugin_api_impl::get_match_properties(
+    DAG_node const *node,
+    Match_properties &mprops) const
+{
+    mprops.sema = IDefinition::DS_UNKNOWN;
+    mprops.type_kind = node->get_type()->get_kind();
+    mprops.struct_id = IType_struct::SID_USER;
+    mprops.arity = 0;
+
+    switch (node->get_kind()) {
+    case DAG_node::EK_CONSTANT:
+    {
+        // All constants are treated as elemental constructors for matching.
+        mprops.sema = IDefinition::DS_ELEM_CONSTRUCTOR;
+
+        DAG_constant const *c = cast<DAG_constant>(node);
+        switch (c->get_type()->get_kind()) {
+        case IType::TK_STRUCT:
+            // Elemental constructors are distinguished for material and material sub-structs.
+            mprops.struct_id = cast<IType_struct>(c->get_type())->get_predefined_id();
+            break;
+        case IType::TK_BSDF:
+        case IType::TK_EDF:
+        case IType::TK_VDF:
+        case IType::TK_HAIR_BSDF:
+            mprops.sema = IDefinition::DS_INVALID_REF_CONSTRUCTOR;
+            break;
+        default:
+            break;
+        }
+    }
+    break;
+
+    case DAG_node::EK_CALL:
+    {
+        DAG_call const *c = cast<DAG_call>(node);
+        mprops.sema = c->get_semantic();
+        if (mprops.sema == IDefinition::DS_ELEM_CONSTRUCTOR) {
+            if (IType_struct const *s_type = as<IType_struct>(node->get_type())) {
+                // Elemental constructors are distinguished for material and material sub-structs.
+                mprops.struct_id = s_type->get_predefined_id();
+            }
+        } else if ((mprops.sema == IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX)
+            || (mprops.sema == IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX)
+            || (mprops.sema == IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX)
+            || (mprops.sema == IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX)
+            || (mprops.sema == IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX)
+            || (mprops.sema == IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX))
+        {
+            // Invariant: the array argument cannot be a constant here
+            DAG_call const *array = cast<DAG_call>(c->get_argument(0));
+            mprops.arity = array->get_argument_count();
+            mprops.arity = mprops.arity < 5 ? mprops.arity : 4;
+        } else if (mprops.sema == IDefinition::DS_INTRINSIC_DF_TINT
+            || mprops.sema == IDefinition::DS_INTRINSIC_DF_DIRECTIONAL_FACTOR) 
+        {
+            mprops.arity = c->get_argument_count();
+        } else if (mprops.sema == (IDefinition::DS_OP_BASE + IExpression::OK_TERNARY)) {
+            DAG_call const *c1 = as<DAG_call>(c->get_argument(1));
+            if (c1 != NULL && c1->get_semantic() == IDefinition::DS_ELEM_CONSTRUCTOR
+                && is<IType_struct>(c1->get_type())
+                && cast<IType_struct>(c1->get_type())->get_predefined_id()
+                == IType_struct::SID_MATERIAL)
+            {
+                mprops.type_kind = IType::TK_STRUCT;
+                mprops.struct_id = IType_struct::SID_MATERIAL;
+            } else if (c->get_argument(1)->get_type()->get_kind() == mi::mdl::IType::TK_BSDF) {
+                mprops.type_kind = IType::TK_BSDF;
+            } else if (c->get_argument(1)->get_type()->get_kind() == mi::mdl::IType::TK_EDF) {
+                mprops.type_kind = IType::TK_EDF;
+            } else if (c->get_argument(1)->get_type()->get_kind() == mi::mdl::IType::TK_VDF) {
+                mprops.type_kind = IType::TK_VDF;
+            }
+        }
+    }
+    break;
+    case DAG_node::EK_TEMPORARY:
+    case DAG_node::EK_PARAMETER:
+        break;
+    }
 }
 
 // Compute the node selector for the matcher, either the semantic for a DAG_call
@@ -3181,6 +3314,28 @@ int Distiller_plugin_api_impl::get_selector(DAG_node const *node) const {
                     default:
                         MDL_ASSERT(!"Unsupported directional_factor modifier");
                     }
+                } else if (c->get_argument_count() == 5) {
+                    const IType::Kind k = c->get_argument(4)->get_type()->get_kind();
+                    switch (k) {
+                    case mi::mdl::IType::TK_BSDF:
+                        selector = DS_DIST_BSDF_DIRECTIONAL_FACTOR; 
+                        break;
+
+                    case mi::mdl::IType::TK_EDF:
+                        selector = DS_DIST_EDF_DIRECTIONAL_FACTOR; 
+                        break;
+
+                    case mi::mdl::IType::TK_COLOR:
+                        // FIXME: This happens when local normals are
+                        // calculated, where BSDFs can be replaced by
+                        // color values.
+
+                        selector = DS_DIST_BSDF_DIRECTIONAL_FACTOR; 
+                        break;
+
+                    default:
+                        MDL_ASSERT(!"Unsupported directional_factor modifier");
+                    }
                 } else {
                     MDL_ASSERT(
                         c->get_argument_count() == 4 && "Unsupported directional_factor overload");
@@ -3251,7 +3406,8 @@ DAG_node const *Distiller_plugin_api_impl::convert_enum_to_int(DAG_node const *n
         IDefinition::DS_CONV_OPERATOR,
         args,
         1,
-        m_type_factory->create_int());
+        m_type_factory->create_int(),
+        DAG_DbgInfo());
 }
 
 // Convert a material emission value into a constructor as a call.
@@ -3269,7 +3425,8 @@ DAG_node const *Distiller_plugin_api_impl::conv_material_emission_value(
         "material_emission(edf,color,intensity_mode)",
         IDefinition::DS_ELEM_CONSTRUCTOR,
         e_args, 3,
-        get_type_factory()->get_predefined_struct(IType_struct::SID_MATERIAL_EMISSION));
+        get_type_factory()->get_predefined_struct(IType_struct::SID_MATERIAL_EMISSION),
+        DAG_DbgInfo());
 }
 
 // Convert a material surface value into a constructor as a call.
@@ -3286,7 +3443,8 @@ DAG_node const *Distiller_plugin_api_impl::conv_material_surface_value(
         "material_surface(bsdf,material_emission)",
         IDefinition::DS_ELEM_CONSTRUCTOR,
         args, 2,
-        get_type_factory()->get_predefined_struct(IType_struct::SID_MATERIAL_SURFACE));
+        get_type_factory()->get_predefined_struct(IType_struct::SID_MATERIAL_SURFACE),
+        DAG_DbgInfo());
 }
 
 // Convert a material volume value into a constructor as a call.
@@ -3306,7 +3464,8 @@ DAG_node const *Distiller_plugin_api_impl::conv_material_volume_value(
         "material_volume(vdf,color,color,color)",
         IDefinition::DS_ELEM_CONSTRUCTOR,
         args, 4,
-        get_type_factory()->get_predefined_struct(IType_struct::SID_MATERIAL_VOLUME));
+        get_type_factory()->get_predefined_struct(IType_struct::SID_MATERIAL_VOLUME),
+        DAG_DbgInfo());
 }
 
 // Convert a material geometry value into a constructor as a call.
@@ -3324,7 +3483,8 @@ DAG_node const *Distiller_plugin_api_impl::conv_material_geometry_value(
         "material_geometry(float3,float,float3)",
         IDefinition::DS_ELEM_CONSTRUCTOR,
         args, 3,
-        get_type_factory()->get_predefined_struct(IType_struct::SID_MATERIAL_GEOMETRY));
+        get_type_factory()->get_predefined_struct(IType_struct::SID_MATERIAL_GEOMETRY),
+        DAG_DbgInfo());
 }
 
 // Convert a material value into a constructor as a call.
@@ -3351,7 +3511,8 @@ DAG_node const *Distiller_plugin_api_impl::conv_material_value(
         "hair_bsdf)",
         IDefinition::DS_ELEM_CONSTRUCTOR,
         args, 7,
-        get_type_factory()->get_predefined_struct(IType_struct::SID_MATERIAL));
+        get_type_factory()->get_predefined_struct(IType_struct::SID_MATERIAL),
+        DAG_DbgInfo());
 }
 
 // Replace standard material structures with a DAG_call if they happen to be constants.
@@ -3382,7 +3543,8 @@ DAG_node const *Distiller_plugin_api_impl::replace_constant_by_call(DAG_node con
                         "::df::bsdf_component(float,bsdf)",
                         IDefinition::DS_ELEM_CONSTRUCTOR,
                         args, 2,
-                        get_bsdf_component_type());
+                        get_bsdf_component_type(),
+                        DAG_DbgInfo());
                 }
                 break;
             }
@@ -3445,7 +3607,7 @@ DAG_node const *Distiller_plugin_api_impl::replace(
         DAG_call const *c = cast<DAG_call>(node);
         int n = c->get_argument_count();
 
-        VLA<DAG_call::Call_argument> n_args(m_alloc, n);
+        Small_VLA<DAG_call::Call_argument, 8> n_args(m_alloc, n);
 
         for (int i = 0; i < n; ++i) {
             DAG_node const *arg = c->get_argument(i);
@@ -3463,7 +3625,8 @@ DAG_node const *Distiller_plugin_api_impl::replace(
             c->get_name(),
             c->get_semantic(),
             n_args.data(), n,
-            c->get_type());
+            c->get_type(),
+            DAG_DbgInfo());
         move_attributes(node, old_node);
 
         // mixer nodes might need a renormalization here
@@ -3511,7 +3674,7 @@ DAG_node const *Distiller_plugin_api_impl::replace(
         if (result_code != RULE_SKIP_RECURSION) {
             int n = n_c->get_argument_count();
 
-            VLA<DAG_call::Call_argument> n_args(m_alloc, n);
+            Small_VLA<DAG_call::Call_argument, 8> n_args(m_alloc, n);
 
             for (int i = 0; i < n; ++i) {
                 DAG_node const *arg = n_c->get_argument(i);
@@ -3529,7 +3692,8 @@ DAG_node const *Distiller_plugin_api_impl::replace(
                 n_c->get_name(),
                 n_c->get_semantic(),
                 n_args.data(), n,
-                n_c->get_type());
+                n_c->get_type(),
+                DAG_DbgInfo());
             move_attributes(node, old_node);
         }
 

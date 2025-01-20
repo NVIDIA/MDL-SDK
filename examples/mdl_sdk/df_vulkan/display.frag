@@ -33,8 +33,10 @@
 layout(location = 0) out vec4 FragColor;
 
 layout(rgba32f, set = 0, binding = 0) uniform readonly restrict image2D uBeautyBuffer;
-layout(rgba32f, set = 0, binding = 1) uniform readonly restrict image2D uAuxAlbedoBuffer;
-layout(rgba32f, set = 0, binding = 2) uniform readonly restrict image2D uAuxNormalBuffer;
+layout(rgba32f, set = 0, binding = 1) uniform readonly restrict image2D uAuxAlbedoDiffuseBuffer;
+layout(rgba32f, set = 0, binding = 2) uniform readonly restrict image2D uAuxAlbedoGlossyBuffer;
+layout(rgba32f, set = 0, binding = 3) uniform readonly restrict image2D uAuxNormalBuffer;
+layout(rgba32f, set = 0, binding = 4) uniform readonly restrict image2D uAuxRoughnessBuffer;
 
 layout(push_constant) uniform UserData
 {
@@ -53,13 +55,25 @@ void main()
     switch (uBufferIndex)
     {
     case 1:
-        color = imageLoad(uAuxAlbedoBuffer, uv).xyz;
+        color = imageLoad(uAuxAlbedoDiffuseBuffer, uv).xyz + imageLoad(uAuxAlbedoGlossyBuffer, uv).xyz;
         break;
 
     case 2:
+        color = imageLoad(uAuxAlbedoDiffuseBuffer, uv).xyz;
+        break;
+
+    case 3:
+        color = imageLoad(uAuxAlbedoGlossyBuffer, uv).xyz;
+        break;
+
+    case 4:
         color = imageLoad(uAuxNormalBuffer, uv).xyz;
         if (dot(color, color) > 0.01)
             color = normalize(color) * 0.5 + 0.5;
+        break;
+
+    case 5:
+        color = imageLoad(uAuxRoughnessBuffer, uv).xyz;
         break;
 
     default:

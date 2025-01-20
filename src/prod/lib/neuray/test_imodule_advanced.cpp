@@ -1503,22 +1503,24 @@ void check_analyze_uniform(
     mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
         mdl_factory->create_execution_context());
 
-    // create "uniform_material" whose "ior" slot is connected to state::normal()
+    // create instances of "fd_parameters_uniform_auto_varying_color" with the uniform/varying
+    // parameter indirectly connected to state::normal()
 
     {
-        // instantiate ::state::normal()
+        // instantiate ::state::normal() as "analyze_varying_normal"
         mi::base::Handle<const mi::neuraylib::IFunction_definition> fd(
             transaction->access<mi::neuraylib::IFunction_definition>(
                 "mdl::state::normal()"));
         mi::base::Handle<mi::neuraylib::IFunction_call> fc(
             fd->create_function_call( nullptr, &result));
         MI_CHECK_EQUAL( 0, result);
-        MI_CHECK_EQUAL( 0, transaction->store( fc.get(), "analyze_uniform_normal"));
+        MI_CHECK_EQUAL( 0, transaction->store( fc.get(), "analyze_varying_normal"));
     }
     {
-        // instantiate ::color(float3) with "color" connected to "analyze_uniform_normal"
+        // instantiate ::color(float3) as "analyze_auto_color" with "color" connected to
+        // "analyze_varying_normal"
         mi::base::Handle<mi::neuraylib::IExpression> color(
-           ef->create_call( "analyze_uniform_normal"));
+           ef->create_call( "analyze_varying_normal"));
         mi::base::Handle<mi::neuraylib::IExpression_list> args(
            ef->create_expression_list());
         args->add_expression( "rgb", color.get());
@@ -1529,54 +1531,98 @@ void check_analyze_uniform(
         mi::base::Handle<mi::neuraylib::IFunction_call> fc(
             fd->create_function_call( args.get(), &result));
         MI_CHECK_EQUAL( 0, result);
-        MI_CHECK_EQUAL( 0, transaction->store( fc.get(), "analyze_uniform_color"));
+        MI_CHECK_EQUAL( 0, transaction->store( fc.get(), "analyze_auto_color"));
     }
     {
-        // instantiate the material constructor with "ior" connected to "analyze_uniform_color"
-        mi::base::Handle<mi::neuraylib::IExpression> ior(
-           ef->create_call( "analyze_uniform_color"));
+        // instantiate "fd_parameters_uniform_auto_varying_color" as "analyze_uniform_root" with the
+        // uniform "param0_uniform" parameter connected to "analyze_auto_color"
+        mi::base::Handle<mi::neuraylib::IExpression> call(
+           ef->create_call( "analyze_auto_color"));
         mi::base::Handle<mi::neuraylib::IExpression_list> args(
            ef->create_expression_list());
-        args->add_expression( "ior", ior.get());
+        args->add_expression( "param0_uniform", call.get());
 
-        // MDL material constructor.
-        mi::base::Handle<const mi::neuraylib::IFunction_definition> fd_19(
+        mi::base::Handle<const mi::neuraylib::IFunction_definition> fd(
             transaction->access<mi::neuraylib::IFunction_definition>(
-                "mdl::material(bool,material_surface,material_surface,color,material_volume,"
-                "material_geometry,hair_bsdf)"));
-        mi::base::Handle<mi::neuraylib::IFunction_call> fc_19(
-            fd_19->create_function_call( args.get(), &result));
+                "mdl::" TEST_MDL "::fd_parameters_uniform_auto_varying_color(color,color,color)"));
+        mi::base::Handle<mi::neuraylib::IFunction_call> fc(
+            fd->create_function_call( args.get(), &result));
         MI_CHECK_EQUAL( 0, result);
-        MI_CHECK_EQUAL( 0, transaction->store( fc_19.get(), "analyze_varying_material"));
+        MI_CHECK_EQUAL( 0, transaction->store( fc.get(), "analyze_uniform_root"));
+    }
+    {
+        // instantiate "fd_parameters_uniform_auto_varying_color" as "analyze_varying_root" with the
+        // uniform "param2_varying" parameter connected to "analyze_auto_color"
+        mi::base::Handle<mi::neuraylib::IExpression> call(
+           ef->create_call( "analyze_auto_color"));
+        mi::base::Handle<mi::neuraylib::IExpression_list> args(
+           ef->create_expression_list());
+        args->add_expression( "param2_varying", call.get());
+
+        mi::base::Handle<const mi::neuraylib::IFunction_definition> fd(
+            transaction->access<mi::neuraylib::IFunction_definition>(
+                "mdl::" TEST_MDL "::fd_parameters_uniform_auto_varying_color(color,color,color)"));
+        mi::base::Handle<mi::neuraylib::IFunction_call> fc(
+            fd->create_function_call( args.get(), &result));
+        MI_CHECK_EQUAL( 0, result);
+        MI_CHECK_EQUAL( 0, transaction->store( fc.get(), "analyze_varying_root"));
     }
     {
         bool query_result = false;
         mi::base::Handle<mi::IString> error_string( transaction->create<mi::IString>());
 
-        // The subgraph starting at "analyze_uniform_color" is ok,
+        // The subgraph starting at "analyze_auto_color" is ok,
         query_result = false;
         mdl_factory->analyze_uniform(
-            transaction, "analyze_uniform_color", false, nullptr,
+            transaction, "analyze_auto_color", false, nullptr,
             query_result, error_string.get(), context.get());
         MI_CHECK_CTX( context);
         MI_CHECK_EQUAL_CSTR( error_string->get_c_str(), "");
 
-        // Attached to the varying "ior" slot of a MDL 1.9 material, it works.
+        // Attached to the uniform "param0_uniform" parameter, it is broken.
         query_result = false;
         mdl_factory->analyze_uniform(
-            transaction, "analyze_varying_material", false, nullptr,
+            transaction, "analyze_uniform_root", false, nullptr,
+            query_result, error_string.get(), context.get());
+        MI_CHECK_EQUAL_CSTR( error_string->get_c_str(), "param0_uniform.rgb");
+
+        // Attached to the varying "param2_varying" parameter, it works.
+        query_result = false;
+        mdl_factory->analyze_uniform(
+            transaction, "analyze_varying_root", false, nullptr,
             query_result, error_string.get(), context.get());
         MI_CHECK_CTX( context);
         MI_CHECK_EQUAL_CSTR( error_string->get_c_str(), "");
 
-        // Access the "ior.color" node.
+        // Access the "analyze_auto_color" node.
         mi::base::Handle<const mi::neuraylib::IFunction_call> query_fc(
             transaction->access<mi::neuraylib::IFunction_call>(
-                "analyze_uniform_color"));
+                "analyze_auto_color"));
         mi::base::Handle<const mi::neuraylib::IExpression_list> query_args(
             query_fc->get_arguments());
         mi::base::Handle<const mi::neuraylib::IExpression> query_expr(
             query_args->get_expression( "rgb"));
+
+        // And query explicitly that node.
+        query_result = false;
+        mdl_factory->analyze_uniform(
+            transaction, "analyze_uniform_root", false,
+            query_expr.get(), query_result, nullptr, context.get());
+        MI_CHECK_EQUAL( query_result, true);
+
+        // Access the "param0_uniform" node (arguments of the root expression need a special
+        // handling internally).
+        query_fc = transaction->access<mi::neuraylib::IFunction_call>(
+                "analyze_uniform_root");
+        query_args = query_fc->get_arguments();
+        query_expr = query_args->get_expression( "param0_uniform");
+
+        // And query explicitly that node.
+        query_result = false;
+        mdl_factory->analyze_uniform(
+            transaction, "analyze_uniform_root", false,
+            query_expr.get(), query_result, nullptr, context.get());
+        MI_CHECK_EQUAL( query_result, true);
     }
 }
 

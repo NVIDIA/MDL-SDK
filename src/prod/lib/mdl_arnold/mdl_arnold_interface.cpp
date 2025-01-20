@@ -220,7 +220,7 @@ void Mdl_sdk_interface::set_search_paths()
     std::vector<std::string> mdl_search_paths;
 
     // parse options provided by the integrator or the scene file
-    AtNode* options = AiUniverseGetOptions();
+    AtNode* options = AiUniverseGetOptions(nullptr);
 
     #ifdef MI_PLATFORM_WINDOWS
         char separator = ';';
@@ -242,12 +242,12 @@ void Mdl_sdk_interface::set_search_paths()
         push_back_uniquely(mdl_search_paths, p);
 
     // add mdl paths specified in the Arnold options
-    list = expand_env_vars(AiNodeGetStr(options, "procedural_searchpath").c_str());
+    list = expand_env_vars(AiNodeGetStr(options, AtString("procedural_searchpath")).c_str());
     paths = mi::examples::strings::split(list, separator);
     for (const auto& p : paths)
         push_back_uniquely(mdl_search_paths, p);
 
-    list = expand_env_vars(AiNodeGetStr(options, "texture_searchpath").c_str());
+    list = expand_env_vars(AiNodeGetStr(options, AtString("texture_searchpath")).c_str());
     paths = mi::examples::strings::split(list, separator);
     for (const auto& p : paths)
         push_back_uniquely(mdl_search_paths, p);

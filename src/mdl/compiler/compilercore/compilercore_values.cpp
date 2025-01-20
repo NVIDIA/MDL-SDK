@@ -2791,6 +2791,31 @@ IValue_array const *Value_factory::create_array(
     return v;
 }
 
+// Create a new value of type array.
+IValue_array const *Value_factory::create_array(
+    IType_array const *type,
+    IValue const      *value,
+    size_t            size)
+{
+    MDL_ASSERT(m_tf.is_owner(type) && "Type is not associated which this value factory");
+    MDL_ASSERT(type->is_immediate_sized() && "Array values must have a immediate sized array type");
+
+    Small_VLA<IValue const *, 8> values(get_allocator(), size);
+
+    for (size_t i = 0; i < size; ++i) {
+        values[i] = value;
+    }
+
+    IValue_array *v = m_builder.create<Value_array>(
+        m_builder.get_arena(), type, values.data(), values.size());
+    std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
+    if (!res.second) {
+        m_builder.get_arena()->drop(v);
+        return cast<IValue_array>(*res.first);
+    }
+    return v;
+}
+
 // Create a new value of type color.
 IValue_rgb_color const *Value_factory::create_rgb_color(
     IValue_float const *value_r,
@@ -2977,14 +3002,28 @@ IValue_compound const *Value_factory::create_compound(
 IValue const *Value_factory::create_zero(IType const *type)
 {
     switch (type->get_kind()) {
+    case IType::TK_ALIAS:
+        return create_zero(type->skip_type_alias());
     case IType::TK_BOOL:
         return create_bool(false);
     case IType::TK_INT:
         return create_int(0);
+    case IType::TK_ENUM:
+        return create_enum(cast<IType_enum>(type), 0);
     case IType::TK_FLOAT:
         return create_float(0.0f);
     case IType::TK_DOUBLE:
         return create_double(0.0);
+    case IType::TK_STRING:
+        return create_string("");
+    case IType::TK_LIGHT_PROFILE:
+    case IType::TK_BSDF:
+    case IType::TK_HAIR_BSDF:
+    case IType::TK_EDF:
+    case IType::TK_VDF:
+    case IType::TK_TEXTURE:
+    case IType::TK_BSDF_MEASUREMENT:
+        return create_invalid_ref(cast<IType_reference>(type));
     case IType::TK_VECTOR:
         {
             IType_vector const *v_type = cast<IType_vector>(type);
@@ -3009,14 +3048,38 @@ IValue const *Value_factory::create_zero(IType const *type)
 
             return create_matrix(m_type, values, m_type->get_columns());
         }
+    case IType::TK_ARRAY:
+        {
+            IType_array const *a_type = cast<IType_array>(type);
+
+            if (!a_type->is_immediate_sized()) {
+                // cannot create zeros for deferred size arrays
+                return create_bad();
+            }
+
+            IType const       *e_type = a_type->get_element_type();
+            IValue const      *e_zero = create_zero(e_type);
+
+            if (is<IValue_bad>(e_zero)) {
+                // elemental type has no zero representation
+                return e_zero;
+            }
+            return create_array(a_type, e_zero, a_type->get_size());
+        }
     case IType::TK_COLOR:
         {
             IValue_float const *zero = create_float(0.0f);
             return create_rgb_color(zero, zero, zero);
         }
-    default:
+    case IType::TK_FUNCTION:
+    case IType::TK_STRUCT:
+    case IType::TK_AUTO:
+    case IType::TK_ERROR:
+        // these type do not have a zero (or the zero might not exists in all cases)
         return create_bad();
     }
+    MDL_ASSERT(!"unexpected type kind");
+    return create_bad();
 }
 
 // Return the type factory of this value factory.
@@ -3138,13 +3201,13 @@ void Value_factory::dump() const
     private:
         Allocator_builder m_builder;
     };
-    
+
     Alloc alloc(m_builder.get_arena()->get_allocator());
 
     mi::base::Handle<Debug_Output_stream> dbg(alloc.dbg());
     mi::base::Handle<Printer>             printer(alloc.prt(dbg.get()));
 
-    long i = 0;
+    size_t i = 0;
     for (Value_table::const_iterator it(m_vt.begin()), end(m_vt.end());
          it != end;
          ++it)

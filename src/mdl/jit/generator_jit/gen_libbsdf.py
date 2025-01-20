@@ -88,17 +88,18 @@ def main(args):
     if len(args) != 3:
         return usage()
 
-    bc_name        = args[1]
+    bc_path        = args[1]
     IntDir         = args[2]
 
-    suffix = bc_name[bc_name.rfind('_'):-3];
+    bc_name = os.path.basename(bc_path)
+    suffix = bc_name[bc_name.find('_'):-3]
     out_name = "libbsdf_bitcode" + suffix + ".h"
 
     with open(os.path.join(IntDir, out_name), "w") as f:
         f.write(copyright_str)
         f.write("\n// Automatically generated from libbsdf%s.bc\n\n"
             "static unsigned char const libbsdf_bitcode%s[] = {\n" % (suffix, suffix))
-        xxd(bc_name, f)
+        xxd(bc_path, f)
         f.write("};\n")
 
     return 0

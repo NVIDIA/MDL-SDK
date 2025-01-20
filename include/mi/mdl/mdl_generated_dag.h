@@ -38,6 +38,7 @@
 namespace mi {
 namespace mdl {
 
+class DAG_unit;
 class ICall_name_resolver;
 class IResource_modifier;
 class IValue;
@@ -138,6 +139,65 @@ private:
     unsigned char hash[16];
 };
 
+/// The debug info type for DAG nodes.
+class DAG_DbgInfo {
+public:
+    /// Default Constructor of the invalid debug info.
+    DAG_DbgInfo()
+    : line(0)
+    , file_column(0)
+    {
+    }
+
+    /// Constructor.
+    ///
+    /// \param file_id  the file id of a source file registered by the owning DAG_unit
+    /// \param line     source line
+    /// \param column   source column
+    DAG_DbgInfo(
+        unsigned file_id,
+        unsigned line,
+        unsigned column)
+    : line(line)
+    , file_column((file_id << 20u) | (column & 0x000FFFFFu))
+    {
+    }
+
+    /// Check if the info is invalid.
+    operator bool() const { return file_column != 0u && line != 0u; }
+
+    /// Check if two debug info entries are equal.
+    bool operator==(DAG_DbgInfo other) {
+        return file_column == other.file_column && line == other.line;
+    }
+
+    /// Check if two debug info entries are not equal.
+    bool operator!=(DAG_DbgInfo other) { return !operator==(other); }
+
+    /// Get the file id.
+    ///
+    /// \note  The returned ID is only meaningful in the context of the owning DAG_unit
+    unsigned get_file_id() const { return (file_column >> 20u) & 0x00000FFFu; }
+
+    /// Get the line.
+    unsigned get_line() const { return line; }
+
+    /// Get the column.
+    unsigned get_column() const { return (file_column & 0x000FFFFFu); }
+
+    /// The "generated" debug info.
+    static const DAG_DbgInfo generated;
+
+    /// The "builtin" debug info.
+    static const DAG_DbgInfo builtin;
+
+private:
+    /// Line number.
+    unsigned line;
+    /// File ID and column, currently 12 bit file ID, 20 bit column.
+    unsigned file_column;
+};
+
 /// A node inside the DAG Intermediate Representation.
 class DAG_node : public Interface_owned {
 public:
@@ -160,6 +220,9 @@ public:
     /// \note Only nodes created by the same factory have unique IDs, do not
     ///       compare nodes from different factories.
     virtual size_t get_id() const = 0;
+
+    /// Get the Debug info for this node.
+    virtual DAG_DbgInfo get_dbg_info() const = 0;
 };
 
 /// A DAG IR constant.
@@ -313,8 +376,10 @@ public:
     /// Create a constant.
     ///
     /// \param value       The value of the constant.
+    ///
     /// \returns           The created constant.
-    virtual DAG_constant const *create_constant(IValue const *value) = 0;
+    virtual DAG_constant const *create_constant(
+        IValue const *value) = 0;
 
     /// Create a call.
     ///
@@ -323,22 +388,28 @@ public:
     /// \param call_args       The call arguments of the called function.
     /// \param num_call_args   The number of call arguments.
     /// \param ret_type        The return type of the called function.
-    /// \returns               The created call.
+    /// \param dbg_info        The debug info for this call if any.
+    ///
+    /// \returns               The created call or an equivalent node.
     virtual DAG_node const *create_call(
         char const                    *signature,
         IDefinition::Semantics        sema,
         DAG_call::Call_argument const call_args[],
         int                           num_call_args,
-        IType const                   *ret_type) = 0;
+        IType const                   *ret_type,
+        DAG_DbgInfo                   dbg_info) = 0;
 
     /// Create a parameter reference.
     ///
     /// \param type        The type of the parameter
     /// \param index       The index of the parameter.
+    /// \param dbg_info    The debug info for this parameter if any.
+    ///
     /// \returns           The created parameter reference.
     virtual DAG_parameter const *create_parameter(
         IType const *type,
-        int         index) = 0;
+        int         index,
+        DAG_DbgInfo dbg_info) = 0;
 
     /// Enable common subexpression elimination.
     ///
@@ -440,16 +511,21 @@ public:
     public:
         /// Create a constant.
         ///
-        /// \param  value       The value of the constant.
+        /// \param value        The value of the constant.
+        ///
         /// \returns            The created constant.
-        virtual DAG_constant const *create_constant(IValue const *value) = 0;
+        virtual DAG_constant const *create_constant(
+            IValue const *value) = 0;
 
         /// Create a temporary reference.
         ///
         /// \param node         The DAG node that is "named" by this temporary.
         /// \param index        The index of the temporary.
+        ///
         /// \returns            The created temporary reference.
-        virtual DAG_temporary const *create_temporary(DAG_node const *node, int index)  = 0;
+        virtual DAG_temporary const *create_temporary(
+            DAG_node const *node,
+            int            index)  = 0;
 
         /// Create a call.
         ///
@@ -458,20 +534,28 @@ public:
         /// \param call_args       The call arguments of the called function.
         /// \param num_call_args   The number of call arguments.
         /// \param ret_type        The return type of the function.
+        /// \param dbg_info        The debug info for this node if any.
+        ///
         /// \returns               The created call or an equivalent expression.
         virtual DAG_node const *create_call(
             char const                    *signature,
             IDefinition::Semantics        sema,
             DAG_call::Call_argument const call_args[],
-            int                           num_call_args,
-            IType const                   *ret_type) = 0;
+            size_t                        num_call_args,
+            IType const                   *ret_type,
+            DAG_DbgInfo                   dbg_info) = 0;
 
         /// Create a parameter reference.
         ///
         /// \param type        The type of the parameter
         /// \param index       The index of the parameter.
+        /// \param dbg_info    The debug info for this node if any.
+        ///
         /// \returns           The created parameter reference.
-        virtual DAG_parameter const *create_parameter(IType const *type, int index) = 0;
+        virtual DAG_parameter const *create_parameter(
+            IType const *type,
+            int         index,
+            DAG_DbgInfo dbg_info) = 0;
 
         /// Enable common subexpression elimination.
         ///
@@ -1507,7 +1591,8 @@ public:
     /// \returns           The created constant.
     ///
     /// \note Use this method to create arguments of the instance.
-    virtual DAG_constant const *create_constant(IValue const *value) = 0;
+    virtual DAG_constant const *create_constant(
+        IValue const *value) = 0;
 
     /// Create a call node.
     ///
@@ -1516,6 +1601,8 @@ public:
     /// \param call_args       The call arguments of the called function.
     /// \param num_call_args   The number of call arguments.
     /// \param ret_type        The return type of the called function.
+    /// \param dbg_info        The debug info for this call if any.
+    ///
     /// \returns               The created call.
     ///
     /// \note Use this method to create arguments of the instance.
@@ -1524,18 +1611,28 @@ public:
         IDefinition::Semantics        sema,
         DAG_call::Call_argument const call_args[],
         int                           num_call_args,
-        IType const                   *ret_type) = 0;
+        IType const                   *ret_type,
+        DAG_DbgInfo                   dbg_info) = 0;
 
     /// Create a parameter reference node.
     ///
     /// \param type        The type of the parameter
     /// \param index       The index of the parameter.
+    /// \param dbg_info    The debug info for this call if any.
+    ///
     /// \returns           The created parameter reference.
     virtual DAG_parameter const *create_parameter(
         IType const *type,
-        int         index) = 0;
+        int         index,
+        DAG_DbgInfo dbg_info) = 0;
 
     // ----------------- own methods -----------------
+
+    /// Get the DAG_unit of this instance.
+    virtual DAG_unit &get_dag_unit() = 0;
+
+    /// Get the DAG_unit of this instance.
+    virtual DAG_unit const &get_dag_unit() const = 0;
 
     /// Initialize this material instance.
     ///

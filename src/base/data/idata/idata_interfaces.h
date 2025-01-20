@@ -114,13 +114,13 @@ public:
     /// ATTR::Type::lookup() returns a pointer to a subtree of the type tree of the attribute
     /// itself.
     ///
-    /// \return    The type, or \c NULL in case of failure (e.g., \p attribute_name does
+    /// \return    The type, or \c nullptr in case of failure (e.g., \p attribute_name does
     ///           identify a part of the attribute).
     virtual const ATTR::Type* get_type( const char* attribute_name) const = 0;
 
     /// Compute the memory address for the (part of the) attribute identified by \p attribute_name.
     ///
-    /// \return   The memory address, or \c NULL in case of failure (e.g., \p attribute_name does
+    /// \return   The memory address, or \c nullptr in case of failure (e.g., \p attribute_name does
     ///           identify a part of the attribute).
     virtual void* get_address( const char* attribute_name) const = 0;
 
@@ -148,7 +148,7 @@ public:
     /// Wrapper for #DB::Transaction::tag_to_name().
     virtual const char* tag_to_name( DB::Transaction* transaction, DB::Tag tag) = 0;
 
-    /// Looks up the name of a tag (within the context of this transaction).
+    /// Looks up the tag for a name (within the context of this transaction).
     ///
     /// Wrapper for #DB::Transaction::name_to_tag().
     virtual DB::Tag name_to_tag( DB::Transaction* transaction, const char* name) = 0;
@@ -163,7 +163,7 @@ public:
     /// Similar to #mi::neuraylib::ITransaction::edit(), but for a tag.
     virtual mi::base::IInterface* edit_tag( DB::Transaction* transaction, DB::Tag tag) = 0;
 
-    /// Extracts a tag from a dababase element.
+    /// Extracts a tag from a database element.
     ///
     /// \param db_element    The database element to extract the tag from.
     /// \return

@@ -126,7 +126,7 @@ public:
     ///                         attribute to use.
     /// \param attribute_name   The name of the attribute, or the name that identifies a part
     ///                         of the attribute.
-    /// \return                 The attribute, or \c NULL in case of failure.
+    /// \return                 The attribute, or \c nullptr in case of failure.
     static mi::IData* get_attribute(
         const IDATA::IAttribute_context* owner, const std::string& attribute_name);
 
@@ -148,7 +148,7 @@ private:
     /// \param attribute_type   The type of the attribute, or the type of the part of the
     ///                         attribute.
     /// \param pointer          The address of the actual data.
-    /// \return                 The attribute, or \c NULL in case of failure.
+    /// \return                 The attribute, or \c nullptr in case of failure.
     static mi::IData* get_attribute(
         mi::neuraylib::ITransaction* transaction,
         const mi::base::IInterface* owner,
@@ -184,7 +184,7 @@ private:
     ///
     /// \param type                An ATTR type which top-level node is of type TYPE_STRUCT. The
     ///                            array size in the top-level node is ignored.
-    /// \return                    The corresponding registered structure declaration, or \c NULL
+    /// \return                    The corresponding registered structure declaration, or \c nullptr
     ///                            if none is registered.
     static const mi::IStructure_decl* get_structure_decl( const ATTR::Type& type);
 
@@ -192,7 +192,7 @@ private:
     ///
     /// \param type                An ATTR type which top-level node is of type TYPE_ENUM. The
     ///                            array size in the top-level node is ignored.
-    /// \return                    The corresponding registered enum declaration, or \c NULL
+    /// \return                    The corresponding registered enum declaration, or \c nullptr
     ///                            if none is registered.
     static const mi::IEnum_decl* get_enum_decl( const ATTR::Type& type);
 
@@ -202,7 +202,7 @@ private:
     ///
     /// \param type                An ATTR type which top-level node is of type TYPE_STRUCT. The
     ///                            array size in the top-level node is ignored.
-    /// \return                    The corresponding structure declaration, or \c NULL in case of
+    /// \return                    The corresponding structure declaration, or \c nullptr in case of
     ///                            failure.
     static const mi::IStructure_decl* create_structure_decl( const ATTR::Type& type);
 
@@ -212,7 +212,7 @@ private:
     ///
     /// \param type                An ATTR type which top-level node is of type TYPE_ENUM. The
     ///                            array size in the top-level node is ignored.
-    /// \return                    The corresponding enum declaration, or \c NULL in case of
+    /// \return                    The corresponding enum declaration, or \c nullptr in case of
     ///                            failure.
     static const mi::IEnum_decl* create_enum_decl( const ATTR::Type& type);
 

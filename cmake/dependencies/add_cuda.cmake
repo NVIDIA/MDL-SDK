@@ -42,32 +42,24 @@ if(NOT MDL_ENABLE_CUDA_EXAMPLES)
 else()
 
     # headers
-    target_include_directories(${__TARGET_ADD_DEPENDENCY_TARGET} 
+    target_include_directories(${__TARGET_ADD_DEPENDENCY_TARGET}
         PRIVATE
             ${MDL_DEPENDENCY_CUDA_INCLUDE}
         )
 
     if(NOT __TARGET_ADD_DEPENDENCY_NO_LINKING)
         if(WINDOWS)
-            target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET} 
+            target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET}
                 PRIVATE
-                    ${MDL_DEPENDENCY_CUDA_LIBS} # static library (part)
+                    ${MDL_DEPENDENCY_CUDA_LIBS}
                 )
         else()
-            # shared library
-            target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET} 
+            target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET}
                 PRIVATE
                     ${LINKER_NO_AS_NEEDED}
-                    ${MDL_DEPENDENCY_CUDA_SHARED}
+                    ${MDL_DEPENDENCY_CUDA_LIBS}
                     ${LINKER_AS_NEEDED}
                 )
-
-            if(MACOSX)
-                target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET} 
-                    PRIVATE
-                        ${MDL_DEPENDENCY_CUDA_LIBS} # cuda framework
-                    )
-            endif()
         endif()
     endif()
 endif()

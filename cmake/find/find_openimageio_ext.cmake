@@ -28,19 +28,17 @@
 
 function(FIND_OPENIMAGEIO_EXT)
 
-    if(${CMAKE_VERSION} VERSION_LESS "3.19.0")
-        find_package(OpenImageIO)
-        if(OpenImageIO_FOUND)
-            if(${OpenImageIO_VERSION} VERSION_LESS "2.4")
-                set(OpenImageIO_FOUND OFF)
-                message(WARNING "Found OpenImageIO version ${OpenImageIO_VERSION} is too old.")
-            elseif(${OpenImageIO_VERSION} VERSION_GREATER_EQUAL "3.0")
-                set(OpenImageIO_FOUND OFF)
-                message(WARNING "Found OpenImageIO version ${OpenImageIO_VERSION} is too new.")
-            endif()
+    # Explicit code since a version range on find_package() does not support multiple major
+    # versions.
+    find_package(OpenImageIO)
+    if(OpenImageIO_FOUND)
+        if(${OpenImageIO_VERSION} VERSION_LESS "2.4")
+            set(OpenImageIO_FOUND OFF)
+            message(WARNING "Found OpenImageIO version ${OpenImageIO_VERSION} is too old.")
+        elseif(${OpenImageIO_VERSION} VERSION_GREATER_EQUAL "4.0")
+            set(OpenImageIO_FOUND OFF)
+            message(WARNING "Found OpenImageIO version ${OpenImageIO_VERSION} is too new.")
         endif()
-    else()
-        find_package(OpenImageIO 2.4...<3.0)
     endif()
 
     # See https://github.com/microsoft/vcpkg/issues/29284
@@ -95,10 +93,10 @@ function(FIND_OPENIMAGEIO_EXT)
         set(MDL_OPENIMAGEIO_FOUND ON CACHE INTERNAL "")
 
         if(MDL_LOG_DEPENDENCIES)
-            message(STATUS "[INFO] MDL_DEPENDENCY_OPENIMAGEIO_INCLUDE:   ${MDL_DEPENDENCY_OPENIMAGEIO_INCLUDE}")
-            message(STATUS "[INFO] MDL_DEPENDENCY_OPENIMAGEIO_LIB:       ${MDL_DEPENDENCY_OPENIMAGEIO_LIB}")
-            message(STATUS "[INFO] MDL_DEPENDENCY_OPENIMAGEIO_VERSION:   ${MDL_DEPENDENCY_OPENIMAGEIO_VERSION}")
-            message(STATUS "[INFO] MDL_DEPENDENCY_OPENIMAGEIO_IDIFF:     ${MDL_DEPENDENCY_OPENIMAGEIO_IDIFF}")
+            message(STATUS "[INFO] MDL_DEPENDENCY_OPENIMAGEIO_INCLUDE:       ${MDL_DEPENDENCY_OPENIMAGEIO_INCLUDE}")
+            message(STATUS "[INFO] MDL_DEPENDENCY_OPENIMAGEIO_LIB:           ${MDL_DEPENDENCY_OPENIMAGEIO_LIB}")
+            message(STATUS "[INFO] MDL_DEPENDENCY_OPENIMAGEIO_VERSION:       ${MDL_DEPENDENCY_OPENIMAGEIO_VERSION}")
+            message(STATUS "[INFO] MDL_DEPENDENCY_OPENIMAGEIO_IDIFF:         ${MDL_DEPENDENCY_OPENIMAGEIO_IDIFF}")
         endif()
 
     endif()

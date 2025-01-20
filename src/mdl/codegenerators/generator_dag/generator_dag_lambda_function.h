@@ -42,6 +42,7 @@
 
 #include "generator_dag_derivatives.h"
 #include "generator_dag_ir.h"
+#include "generator_dag_unit.h"
 
 namespace mi {
 namespace mdl {
@@ -73,16 +74,26 @@ struct Resource_hasher {
     size_t operator()(Resource_tag_tuple const &p) const {
         cstring_hash cstring_hasher;
 
-        return size_t(p.m_kind) ^ cstring_hasher(p.m_url) ^ cstring_hasher(p.m_selector) ^ p.m_tag;
+        /// Avoid hashing the tag to support lookups without knowing the tag. But include it if no
+        /// URL is known to avoid degeneration to a linear list (in such a case a lookup without
+        /// knowing the tag does not make much sense, either).
+        size_t hash = size_t(p.m_kind) ^ cstring_hasher(p.m_url) ^ cstring_hasher(p.m_selector);
+        if (!p.m_url[0]) {
+            hash ^= p.m_tag;
+        }
+        return hash;
     }
 };
 
 struct Resource_equal_to {
+    /// Sentinel value to indicate that the tag should not be considered for comparisons.
+    static const int IGNORE_TAG = -1;
+
     bool operator()(Resource_tag_tuple const &a, Resource_tag_tuple const &b) const {
         if (a.m_kind != b.m_kind) {
             return false;
         }
-        if (a.m_tag != b.m_tag) {
+        if (a.m_tag != IGNORE_TAG && b.m_tag != IGNORE_TAG && a.m_tag != b.m_tag) {
             return false;
         }
 
@@ -94,6 +105,7 @@ struct Resource_equal_to {
         return cstring_cmp(a.m_selector, b.m_selector);
     }
 };
+
 
 typedef hash_map<Resource_tag_tuple, Resource_attr_entry, Resource_hasher, Resource_equal_to>::Type
     Resource_attr_map;
@@ -108,9 +120,52 @@ class Lambda_function : public Allocator_interface_implement<ILambda_function>
     typedef Allocator_interface_implement<ILambda_function> Base;
     friend class Allocator_builder;
 
-    typedef ptr_hash_map<DAG_node const, DAG_node const *>::Type Node_cache;
+    typedef ptr_hash_map<DAG_node const, DAG_node const *>::Type                     Node_cache;
+    typedef ptr_hash_map<char const, unsigned, cstring_hash, cstring_equal_to>::Type Fname_tbl;
+
+    /// Helper class for handling node imports.
+    class Import_helper {
+    public:
+        /// Constructor.
+        ///
+        /// \param dest  the unit in which we will import
+        /// \param src   the unit we will import from
+        Import_helper(
+            DAG_unit       &dest,
+            DAG_unit const &src);
+
+        /// Translate a src debug info into a destination debug info.
+        DAG_DbgInfo import(DAG_DbgInfo src);
+
+        /// Check if the given expression exists already in the import cache.
+        Node_cache::iterator find(DAG_node const *expr) { return m_node_cache.find(expr); }
+
+        /// Return the end iterator of the import cache.
+        Node_cache::iterator end() { return m_node_cache.end(); }
+
+        /// Operator [] on the import cache.
+        DAG_node const *&operator[](DAG_node const *node) { return m_node_cache[node]; }
+    private:
+        /// The Node_cache (stores which nodes are already visited and its imported result).
+        Node_cache m_node_cache;
+
+        /// The file name table.
+        Fname_tbl m_fname_tbl;
+
+        /// The translation table from src file IDs to dest file IDs.
+        vector<unsigned>::Type m_translate;
+
+        /// True if debug info translation is enabled.
+        bool m_has_dbg_info;
+    };
 
 public:
+        /// Get the DAG_unit of this lambda function.
+    DAG_unit &get_dag_unit() MDL_FINAL;
+
+    /// Get the DAG_unit of this lambda function.
+    DAG_unit const &get_dag_unit() const MDL_FINAL;
+
     /// Get the type factory of this function.
     Type_factory *get_type_factory() MDL_FINAL;
 
@@ -130,7 +185,9 @@ public:
     /// \param  call_args       The call arguments of the called function.
     /// \param  num_call_args   The number of call arguments.
     /// \param  ret_type        The return type of the called function.
-    /// \returns                The created call.
+    /// \param dbg_info         The debug info for this call if any.
+    ///
+    /// \returns                The created call or an equivalent node.
     ///
     /// \note Use this method to create arguments of the instance.
     DAG_node const *create_call(
@@ -138,11 +195,13 @@ public:
         IDefinition::Semantics        sema,
         DAG_call::Call_argument const call_args[],
         int                           num_call_args,
-        mi::mdl::IType const          *ret_type) MDL_FINAL;
+        IType const                   *ret_type,
+        DAG_DbgInfo                   dbg_info) MDL_FINAL;
 
     /// Create a parameter reference.
     /// \param  type        The type of the parameter
     /// \param  index       The index of the parameter.
+    /// \param dbg_info     The debug info for this parameter if any.
     ///
     /// \returns            The created parameter[index] reference.
     ///
@@ -150,7 +209,8 @@ public:
     ///       a parameter[n] will be created.
     DAG_parameter const *create_parameter(
         IType const *type,
-        int         index) MDL_FINAL;
+        int         index,
+        DAG_DbgInfo dbg_info) MDL_FINAL;
 
     /// Enable common subexpression elimination.
     ///
@@ -182,10 +242,13 @@ public:
 
     /// Import (i.e. deep-copy) a DAG expression into this lambda function.
     ///
-    /// \param expr  the DAG expression to import
+    /// \param owner  the DAG_unit that owns the expression to import
+    /// \param expr   the DAG expression to import
     ///
     /// \return the imported DAG expression
-    DAG_node const *import_expr(DAG_node const *expr) MDL_FINAL;
+    DAG_node const *import_expr(
+        DAG_unit const &owner,
+        DAG_node const *expr) MDL_FINAL;
 
     /// Store a DAG (root) expression and returns an index for it.
     ///
@@ -457,11 +520,13 @@ public:
     /// Returns true if this lambda function is an entry point.
     bool is_entry_point() const { return true; }
 
-    /// Returns true if this lambda function uses the render state.
-    bool uses_render_state() const { return m_uses_render_state; }
+    /// Returns true if this lambda function uses the varying state.
+    bool uses_varying_state() const { return m_uses_varying_state; }
 
-    /// Sets whether this lambda function uses the render state.
-    void set_uses_render_state(bool uses_render_state) { m_uses_render_state = uses_render_state; }
+    /// Sets whether this lambda function uses the varying state.
+    void set_uses_varying_state(bool uses_varying_state) const {
+        m_uses_varying_state = uses_varying_state;
+    }
 
     /// Returns true if this lambda function uses lambda_results.
     bool uses_lambda_results() const { return m_uses_lambda_results; }
@@ -512,10 +577,13 @@ public:
     DAG_node_factory_impl const &get_node_factory() const { return m_node_factory; }
 
     /// Get the type factory.
-    Type_factory const &get_type_factory() const { return m_type_factory; }
+    Type_factory const &get_type_factory() const { return m_dag_unit.get_type_factory(); }
 
     /// Get the value factory.
-    Value_factory const &get_value_factory() const { return m_value_factory; }
+    Value_factory const &get_value_factory() const { return m_dag_unit.get_value_factory(); }
+
+    /// Returns true if this lambda function owns the given node.
+    bool is_owner(DAG_node const *node) const { return m_node_factory.is_owner(node); }
 
     /// Dump a lambda expression to a .gv file.
     ///
@@ -615,28 +683,20 @@ private:
 
     /// Import (i.e. deep-copy) a DAG expression into this lambda function.
     ///
-    /// \param expr  the DAG expression to import
+    /// \param expr           the DAG expression to import
+    /// \param import_helper  the import helper
     ///
     /// \return the imported DAG expression
     DAG_node const *do_import_expr(
         DAG_node const *expr,
-        Node_cache     &import_cache);
+        Import_helper  &import_helper);
 
 private:
     /// The mdl compiler.
     mi::base::Handle<MDL> m_mdl;
 
-    /// The memory arena that holds all types, symbols and IR nodes of this instance.
-    Memory_arena m_arena;
-
-    /// The symbol table;
-    Symbol_table m_sym_tab;
-
-    /// The type factory.
-    mutable Type_factory m_type_factory;
-
-    /// The value factory.
-    mutable Value_factory m_value_factory;
+    /// The DAG_unit of this lambda function.
+    DAG_unit m_dag_unit;
 
     /// The node factory.
     DAG_node_factory_impl m_node_factory;
@@ -686,8 +746,8 @@ private:
     /// The next serial number
     static mi::base::Atom32 g_next_serial;
 
-    /// If true, this function uses the (render) state.
-    unsigned m_uses_render_state:1;
+    /// If true, this function uses the varying state.
+    mutable unsigned m_uses_varying_state:1;
 
     /// If true, garbage collection must run.
     unsigned m_has_dead_code:1;
@@ -721,13 +781,13 @@ class Distribution_function : public Allocator_interface_implement<IDistribution
     friend class Allocator_builder;
 
 public:
-    /// Initialize this distribution function object for the given material
+    /// Initialize this distribution function object for the given material instance
     /// with the given requested functions.
     /// Any additionally required expressions from the material will also be handled.
     /// Any material parameters must already be registered in the root lambda at this point.
     /// The DAG nodes must already be owned by the root lambda.
     ///
-    /// \param material_constructor       the DAG node of the material constructor
+    /// \param mat_instance               the material instance
     /// \param requested_functions        the expressions for which functions will be generated
     /// \param num_functions              the number of requested functions
     /// \param include_geometry_normal    if true, the geometry normal will be handled
@@ -738,7 +798,7 @@ public:
     ///
     /// \returns EC_NONE, if initialization was successful, an error code otherwise.
     Error_code initialize(
-        DAG_node const            *material_constructor,
+        IMaterial_instance const  *mat_instance,
         Requested_function        *requested_functions,
         size_t                     num_functions,
         bool                       include_geometry_normal,
@@ -747,7 +807,7 @@ public:
         ICall_name_resolver const *name_resolver) MDL_FINAL;
 
     /// Get the root lambda function used to build nodes and manage parameters and resources.
-    ILambda_function *get_root_lambda() const MDL_FINAL;
+    Lambda_function *get_root_lambda() const MDL_FINAL;
 
     /// Add the given function as main lambda function.
     ///
@@ -759,7 +819,7 @@ public:
     /// \param index  the index of the main lambda
     ///
     /// \returns  the requested main lambda function or NULL, if the index is invalid
-    ILambda_function *get_main_function(size_t index) const MDL_FINAL;
+    Lambda_function *get_main_function(size_t index) const MDL_FINAL;
 
     /// Get the number of main lambda functions.
     size_t get_main_function_count() const MDL_FINAL;
@@ -778,7 +838,7 @@ public:
     /// \param index  the index of the expression lambda
     ///
     /// \returns  the requested expression lambda function or NULL, if the index is invalid
-    ILambda_function *get_expr_lambda(size_t index) const MDL_FINAL;
+    Lambda_function *get_expr_lambda(size_t index) const MDL_FINAL;
 
     /// Get the number of expression lambda functions.
     size_t get_expr_lambda_count() const MDL_FINAL;
@@ -916,13 +976,13 @@ private:
     mi::base::Handle<MDL> m_mdl;
 
     /// One lambda function, which owns all nodes and values, and manages parameters and resources.
-    mi::base::Handle<ILambda_function> m_root_lambda;
+    mi::base::Handle<Lambda_function> m_root_lambda;
 
     /// The main lambda functions, which will be exported.
-    vector<mi::base::Handle<ILambda_function> >::Type m_main_functions;
+    vector<mi::base::Handle<Lambda_function> >::Type m_main_functions;
 
     /// Collection of expression lambdas generated from the DAG.
-    vector<mi::base::Handle<ILambda_function> >::Type m_expr_lambdas;
+    vector<mi::base::Handle<Lambda_function> >::Type m_expr_lambdas;
 
     /// Array of indexes into the collection of expression lambdas for special lambda functions
     /// used to get certain material properties.

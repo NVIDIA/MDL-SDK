@@ -112,13 +112,13 @@ inline   signed int   getSwappedBytes(  signed int   C) { return ByteSwap_32(C);
 
 inline unsigned long getSwappedBytes(unsigned long C) {
   // Handle LLP64 and LP64 platforms.
-  return sizeof(long) == sizeof(int) ? ByteSwap_32((uint32_t)C)
-                                     : ByteSwap_64((uint64_t)C);
+  return (unsigned long)(sizeof(long) == sizeof(int) ? ByteSwap_32((uint32_t)C)
+                                                     : ByteSwap_64((uint64_t)C));
 }
 inline signed long getSwappedBytes(signed long C) {
   // Handle LLP64 and LP64 platforms.
-  return sizeof(long) == sizeof(int) ? ByteSwap_32((uint32_t)C)
-                                     : ByteSwap_64((uint64_t)C);
+  return long(sizeof(long) == sizeof(int) ? ByteSwap_32((uint32_t)C)
+                                          : ByteSwap_64((uint64_t)C));
 }
 
 inline unsigned long long getSwappedBytes(unsigned long long C) {

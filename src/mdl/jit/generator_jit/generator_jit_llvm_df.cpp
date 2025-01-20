@@ -32,6 +32,7 @@
 #include <algorithm>
 
 #include <llvm/ADT/SetVector.h>
+#include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Transforms/Utils/Cloning.h>
@@ -850,13 +851,40 @@ public:
             llvm::GlobalValue::InternalLinkage,
             "switch_func",
             m_code_gen.get_llvm_module());
+        m_code_gen.m_state_usage_analysis.register_function(switch_func);
         m_code_gen.set_llvm_function_attributes(switch_func, /*mark_noinline=*/false);
+
+        llvm::DISubprogram *di_func = nullptr;
+        if (llvm::DIBuilder *di_builder = m_code_gen.get_debug_info_builder()) {
+            llvm::DIFile *di_file = di_builder->createFile("<generated>", "");
+
+            di_func = di_builder->createFunction(
+                /*Scope=*/ di_file,
+                /*Name=*/ switch_func->getName(),
+                /*LinkageName=*/ switch_func->getName(),
+                /*File=*/ di_file,
+                1,
+                m_code_gen.get_type_mapper().get_debug_info_type(
+                    di_builder, di_file, switch_func_type),
+                1,
+                llvm::DINode::FlagPrototyped,
+                llvm::DISubprogram::toSPFlags(
+                    /*IsLocalToUnit=*/true,
+                    /*IsDefinition=*/true,
+                    /*IsOptimized=*/m_code_gen.is_optimized()
+                ));
+            switch_func->setSubprogram(di_func);
+        }
 
         llvm::BasicBlock *start_block =
             llvm::BasicBlock::Create(llvm_context, "start", switch_func);
         llvm::BasicBlock *end_block = llvm::BasicBlock::Create(llvm_context, "end", switch_func);
 
         llvm::IRBuilder<> builder(start_block);
+        if (di_func) {
+            builder.SetCurrentDebugLocation(llvm::DILocation::get(
+                di_func->getContext(), 1, 0, di_func));
+        }
         llvm::SwitchInst *switch_inst =
             builder.CreateSwitch(switch_func->arg_end() - 1, end_block, num_funcs);
 
@@ -876,6 +904,7 @@ public:
                 llvm::ConstantInt::get(llvm_context, llvm::APInt(32, uint64_t(i))),
                 case_block);
             builder.SetInsertPoint(case_block);
+            m_code_gen.m_state_usage_analysis.add_call(switch_func, funcs[i]);
             builder.CreateCall(funcs[i], arg_values);
             builder.CreateBr(end_block);
         }
@@ -1641,6 +1670,8 @@ llvm::Function *LLVM_code_generator::get_libbsdf_function(
                 "backscattering_glossy_reflection_bsdf")
     SEMA_CASE(DS_INTRINSIC_DF_SHEEN_BSDF,
                 "sheen_bsdf")
+    SEMA_CASE(DS_INTRINSIC_DF_MICROFLAKE_SHEEN_BSDF,
+                "microflake_sheen_bsdf")
     SEMA_CASE(DS_INTRINSIC_DF_MEASURED_BSDF,
                 "measured_bsdf")
 
@@ -1678,6 +1709,8 @@ llvm::Function *LLVM_code_generator::get_libbsdf_function(
                 "measured_curve_factor")
     SEMA_CASE(DS_INTRINSIC_DF_MEASURED_FACTOR,
                 "measured_factor")
+    SEMA_CASE(DS_INTRINSIC_DF_COAT_ABSORPTION_FACTOR,
+                "coat_absorption_factor")
 
     // Not a DF: DS_INTRINSIC_DF_LIGHT_PROFILE_POWER
     // Not a DF: DS_INTRINSIC_DF_LIGHT_PROFILE_MAXIMUM
@@ -1721,7 +1754,9 @@ llvm::Function *LLVM_code_generator::get_libbsdf_function(
     #undef SEMA_CASE
 
     func_name = "gen_" + func_name + get_dist_func_state_suffix();
-    return m_module->getFunction(func_name.c_str());
+    llvm::Function *func = m_module->getFunction(func_name.c_str());
+    MDL_ASSERT(func && "Function for supported DF not found in libbsdf");
+    return func;
 }
 
 // Determines the semantics for a libbsdf df function name.
@@ -1782,7 +1817,7 @@ IDefinition::Semantics LLVM_code_generator::get_libbsdf_function_semantics(
         return IDefinition::DS_INTRINSIC_DF_DIRECTIONAL_FACTOR;
     }
 
-    // df::directional_factor(color, color, float, bsdf) overload?
+    // df::directional_factor(color, color, color, float, bsdf) overload?
     if (basename == "directional_factor_bsdf") {
         return IDefinition::DS_INTRINSIC_DF_DIRECTIONAL_FACTOR;
     }
@@ -1968,6 +2003,62 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
             module_name.c_str(), signature.c_str());
         if (def == NULL) {
             return true;  // not one of our modules, maybe a builtin function
+        }
+
+        State_usage usage;
+        switch (def->get_semantics()) {
+        case IDefinition::DS_INTRINSIC_STATE_POSITION:
+            usage = IGenerated_code_executable::SU_POSITION;
+            break;
+        case IDefinition::DS_INTRINSIC_STATE_NORMAL:
+            usage = IGenerated_code_executable::SU_NORMAL;
+            break;
+        case IDefinition::DS_INTRINSIC_STATE_GEOMETRY_NORMAL:
+            usage = IGenerated_code_executable::SU_GEOMETRY_NORMAL;
+            break;
+        case IDefinition::DS_INTRINSIC_STATE_MOTION:
+            usage = IGenerated_code_executable::SU_MOTION;
+            break;
+        case IDefinition::DS_INTRINSIC_STATE_TEXTURE_COORDINATE:
+            usage = IGenerated_code_executable::SU_TEXTURE_COORDINATE;
+            break;
+        case IDefinition::DS_INTRINSIC_STATE_TEXTURE_TANGENT_U:
+        case IDefinition::DS_INTRINSIC_STATE_TEXTURE_TANGENT_V:
+            usage = IGenerated_code_executable::SU_TEXTURE_TANGENTS;
+            break;
+        case IDefinition::DS_INTRINSIC_STATE_TANGENT_SPACE:
+            usage = IGenerated_code_executable::SU_TANGENT_SPACE;
+            break;
+        case IDefinition::DS_INTRINSIC_STATE_GEOMETRY_TANGENT_U:
+        case IDefinition::DS_INTRINSIC_STATE_GEOMETRY_TANGENT_V:
+            usage = IGenerated_code_executable::SU_GEOMETRY_TANGENTS;
+            break;
+        case IDefinition::DS_INTRINSIC_STATE_DIRECTION:
+            usage = IGenerated_code_executable::SU_DIRECTION;
+            break;
+        case IDefinition::DS_INTRINSIC_STATE_ANIMATION_TIME:
+            usage = IGenerated_code_executable::SU_ANIMATION_TIME;
+            break;
+        case IDefinition::DS_INTRINSIC_STATE_ROUNDED_CORNER_NORMAL:
+            usage = IGenerated_code_executable::SU_ROUNDED_CORNER_NORMAL;
+            break;
+        case IDefinition::DS_INTRINSIC_STATE_TRANSFORM:
+        case IDefinition::DS_INTRINSIC_STATE_TRANSFORM_NORMAL:
+        case IDefinition::DS_INTRINSIC_STATE_TRANSFORM_POINT:
+        case IDefinition::DS_INTRINSIC_STATE_TRANSFORM_SCALE:
+        case IDefinition::DS_INTRINSIC_STATE_TRANSFORM_VECTOR:
+            usage = IGenerated_code_executable::SU_TRANSFORMS;
+            break;
+        case IDefinition::DS_INTRINSIC_STATE_OBJECT_ID:
+            usage = IGenerated_code_executable::SU_OBJECT_ID;
+            break;
+        default:
+            usage = 0;
+            break;
+        }
+
+        if (usage != 0) {
+            m_state_usage_analysis.add_state_usage(ctx.get_function(), usage);
         }
 
         if (target_is_structured_language()) {
@@ -2352,6 +2443,8 @@ bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
         // make all functions from libbsdf internal to allow global dead code elimination
         func->setLinkage(llvm::GlobalValue::InternalLinkage);
 
+        m_state_usage_analysis.register_function(func);
+
         // translate all runtime calls
         {
             Function_context ctx(
@@ -2490,6 +2583,9 @@ bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
                         llvm::GlobalValue::InternalLinkage,
                         "",
                         m_module);
+                    m_state_usage_analysis.register_cloned_function(new_func, func);
+                    llvm::DISubprogram *di_func = func->getSubprogram();
+                    new_func->setSubprogram(di_func);
                     set_llvm_function_attributes(new_func, /*mark_noinline=*/false);
                     new_func->takeName(func);
                     new_func->getBasicBlockList().splice(
@@ -2506,13 +2602,19 @@ bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
                     llvm::Value *new_scratch_space_param = new_arg_it++;
                     llvm::Value *new_material_param      = new_arg_it++;
 
-                    // replace all uses of parameters
-                    old_df_data_param->replaceAllUsesWith(new_df_data_param);
-                    old_state_param->replaceAllUsesWith(new llvm::BitCastInst(
+                    llvm::Instruction *state_cast = new llvm::BitCastInst(
                         new_state_param,
                         old_state_param->getType(),
                         "state_cast",
-                        &*param_init_insert_point));
+                        &*param_init_insert_point);
+                    if (di_func) {
+                        state_cast->setDebugLoc(llvm::DILocation::get(
+                            di_func->getContext(), di_func->getLine(), 0, di_func));
+                    }
+
+                    // replace all uses of parameters
+                    old_df_data_param->replaceAllUsesWith(new_df_data_param);
+                    old_state_param->replaceAllUsesWith(state_cast);
                     old_scratch_space_param->replaceAllUsesWith(new_scratch_space_param);
                     old_material_param->replaceAllUsesWith(new_material_param);
 
@@ -2548,6 +2650,9 @@ bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
                         llvm::GlobalValue::InternalLinkage,
                         "",
                         m_module);
+                    m_state_usage_analysis.register_cloned_function(new_func, func);
+                    llvm::DISubprogram *di_func = old_func->getSubprogram();
+                    new_func->setSubprogram(di_func);
                     set_llvm_function_attributes(new_func, /*mark_noinline=*/false);
                     new_func->setName("gen_" + func->getName());
                     new_func->getBasicBlockList().splice(
@@ -2579,13 +2684,22 @@ bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
                         inherited_weight_param = arg_it++;
                     }
 
-                    // replace all uses of parameters which will not be removed
-                    df_data->replaceAllUsesWith(data_param);
-                    exec_ctx->replaceAllUsesWith(new llvm::BitCastInst(
+                    llvm::DILocation *start_loc = NULL;
+
+                    llvm::Instruction *exec_ctx_cast = new llvm::BitCastInst(
                         exec_ctx_param,
                         exec_ctx->getType(),
                         "exec_ctx_cast",
-                        &*param_init_insert_point));
+                        &*param_init_insert_point);
+                    if (di_func) {
+                        start_loc = llvm::DILocation::get(
+                            di_func->getContext(), di_func->getLine(), 0, di_func);
+                        exec_ctx_cast->setDebugLoc(start_loc);
+                    }
+
+                    // replace all uses of parameters which will not be removed
+                    df_data->replaceAllUsesWith(data_param);
+                    exec_ctx->replaceAllUsesWith(exec_ctx_cast);
                     inherited_normal->replaceAllUsesWith(inherited_normal_param);
                     if (has_inherited_weight) {
                         inherited_weight->replaceAllUsesWith(inherited_weight_param);
@@ -2613,7 +2727,7 @@ bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
                         }
 
                         llvm::AllocaInst *arg_var;
-                        llvm::Value *arg_val;
+                        llvm::Instruction *arg_val;
                         if (llvm::PointerType *ptr_type = llvm::dyn_cast<llvm::PointerType>(
                             old_arg_it->getType()))
                         {
@@ -2646,11 +2760,13 @@ bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
                                 alloca_addr_space,
                                 df_arg_var,
                                 &*new_func->getEntryBlock().begin());
+                            arg_var->setDebugLoc(start_loc);
                             arg_val = new llvm::LoadInst(
                                 old_arg_it->getType(),
                                 arg_var,
                                 df_arg,
                                 &*param_init_insert_point);
+                            arg_val->setDebugLoc(start_loc);
                         }
 
                         // set metadata on the local variables
@@ -2735,6 +2851,7 @@ Expression_result LLVM_code_generator::generate_expr_lambda_call(
         lambda_args.push_back(ctx.get_lambda_results_parameter());
     }
 
+    m_state_usage_analysis.add_call(ctx.get_function(), func);
     llvm::CallInst *call = ctx->CreateCall(func, lambda_args);
     if (res_pointer == NULL) {
         if (opt_results_buffer != NULL) {
@@ -3133,8 +3250,12 @@ bool LLVM_code_generator::rewrite_weight_memcpy_addr(
     llvm::Value *idxs[] = { null_val, index };
     llvm::GetElementPtrInst *weight_ptr = llvm::GetElementPtrInst::Create(
         nullptr, weight_array, idxs, "", addr_bitcast);
-    llvm::Value *new_cast = llvm::BitCastInst::Create(
+    weight_ptr->setDebugLoc(addr_bitcast->getDebugLoc());
+
+    llvm::Instruction *new_cast = llvm::BitCastInst::Create(
         llvm::Instruction::BitCast, weight_ptr, addr_bitcast->getType(), "", weight_ptr);
+    new_cast->setDebugLoc(addr_bitcast->getDebugLoc());
+
     addr_bitcast->replaceAllUsesWith(new_cast);
     delete_list.push_back(addr_bitcast);
 
@@ -3200,7 +3321,7 @@ void LLVM_code_generator::rewrite_df_component_usages(
 
         // access to weight?
         if (struct_idx == 0) {
-            llvm::Value *new_gep;
+            llvm::Instruction *new_gep;
 
             // check whether this is actually
             //   color_df_component[i].weight.x/y/z -> color_weights[i].x/y/z
@@ -3221,6 +3342,7 @@ void LLVM_code_generator::rewrite_df_component_usages(
                 };
                 new_gep = llvm::GetElementPtrInst::Create(nullptr, weight_array, idxs, "", gep);
             }
+            new_gep->setDebugLoc(gep->getDebugLoc());
             gep->replaceAllUsesWith(new_gep);
             continue;
         }
@@ -3276,6 +3398,7 @@ void LLVM_code_generator::rewrite_df_component_usages(
 
                     Distribution_function_state call_state = convert_to_df_state(df_func_kind);
                     llvm::Function *df_func = comp_info.get_df_function(ctx, call_state);
+                    m_state_usage_analysis.add_call(ctx.get_function(), df_func);
 
                     // convert 64-bit index to 32-bit index
                     llvm::Value *idx_val = component_idx_val;
@@ -3299,7 +3422,8 @@ void LLVM_code_generator::rewrite_df_component_usages(
                     if (comp_info.is_switch_function()) {
                         llvm_args.push_back(idx_val);                 // BSDF function index
                     }
-                    llvm::CallInst::Create(df_func, llvm_args, "", call);
+                    llvm::CallInst *new_call = llvm::CallInst::Create(df_func, llvm_args, "", call);
+                    new_call->setDebugLoc(call->getDebugLoc());
                     delete_list.push_back(call);
                 }
                 delete_list.push_back(load);
@@ -3624,6 +3748,7 @@ DAG_node const *LLVM_code_generator::get_factor_base_bsdf(DAG_node const *node)
     case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR:
     case IDefinition::DS_INTRINSIC_DF_FRESNEL_FACTOR:
     case IDefinition::DS_INTRINSIC_DF_MEASURED_FACTOR:
+    case IDefinition::DS_INTRINSIC_DF_COAT_ABSORPTION_FACTOR:
         {
             DAG_node const *base = call->get_argument("base");
             MDL_ASSERT(base != NULL && "base parameter missing for factor BSDF");
@@ -3751,7 +3876,28 @@ llvm::Function *LLVM_code_generator::instantiate_ternary_df(
         llvm::GlobalValue::InternalLinkage,
         operator_name,
         m_module);
+    m_state_usage_analysis.register_function(func);
     set_llvm_function_attributes(func, /*mark_noinline=*/false);
+
+    if (m_di_builder) {
+        llvm::DIFile *di_file = m_di_builder->createFile("<generated>", "");
+
+        llvm::DISubprogram *di_func = m_di_builder->createFunction(
+            /*Scope=*/ di_file,
+            /*Name=*/ operator_name,
+            /*LinkageName=*/ operator_name,
+            /*File=*/ di_file,
+            1,
+            m_type_mapper.get_debug_info_type(m_di_builder, di_file, func_type),
+            1,
+            llvm::DINode::FlagPrototyped,
+            llvm::DISubprogram::toSPFlags(
+                /*IsLocalToUnit=*/true,
+                /*IsDefinition=*/true,
+                /*IsOptimized=*/is_optimized()
+            ));
+        func->setSubprogram(di_func);
+    }
 
     {
         // Context needs a non-empty start block, so create a jump to a second block
@@ -3978,7 +4124,7 @@ llvm::Function *LLVM_code_generator::instantiate_ternary_df(
     return func;
 }
 
-// Returns true, if the given DAG node is a call to diffuse_reflection_bsdf(color(1), 0).
+// Returns true, if the given DAG node is a call to diffuse_reflection_bsdf(color(1), 0, color(0)).
 bool LLVM_code_generator::is_default_diffuse_reflection(DAG_node const *node)
 {
     // match diffuse_reflection_bsdf(*)
@@ -3996,11 +4142,7 @@ bool LLVM_code_generator::is_default_diffuse_reflection(DAG_node const *node)
     }
 
     IValue_rgb_color const *tint_value = as<IValue_rgb_color>(tint_arg->get_value());
-    if (tint_value == NULL ||
-        tint_value->get_value(0)->get_value() != 1.0f ||
-        tint_value->get_value(1)->get_value() != 1.0f ||
-        tint_value->get_value(2)->get_value() != 1.0f)
-    {
+    if (tint_value == NULL || !tint_value->is_one()) {
         return false;
     }
 
@@ -4011,9 +4153,19 @@ bool LLVM_code_generator::is_default_diffuse_reflection(DAG_node const *node)
     }
 
     IValue_float const *roughness_value = as<IValue_float>(roughness_arg->get_value());
-    if (roughness_value == NULL ||
-        roughness_value->get_value() != 0.0f)
-    {
+    if (roughness_value == NULL || !roughness_value->is_zero()) {
+        return false;
+    }
+
+    // match multiscatter_tint argument as color(0.0f)
+    DAG_constant const *multiscatter_arg = as<DAG_constant>(dag_call->get_argument(2));
+    if (multiscatter_arg == NULL) {
+        return false;
+    }
+
+    IValue_rgb_color const *multiscatter_value =
+        as<IValue_rgb_color>(multiscatter_arg->get_value());
+    if (multiscatter_value == NULL || !multiscatter_value->is_zero()) {
         return false;
     }
 
@@ -4037,7 +4189,7 @@ Df_flags LLVM_code_generator::get_bsdf_scatter_components(
         return it->second;
     }
 
-    Df_flags res;
+    Df_flags res = DF_FLAGS_NONE;
     int scatter_arg_index = -1;
 
     switch (unsigned(dag_call->get_semantic())) {
@@ -4069,6 +4221,7 @@ Df_flags LLVM_code_generator::get_bsdf_scatter_components(
         break;
 
     case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_MICROFLAKE_SHEEN_BSDF:
         {
             Df_flags multiscatter_comps = get_bsdf_scatter_components(dag_call->get_argument(3));
             res = Df_flags(int(DF_FLAGS_ALLOW_REFLECT) | multiscatter_comps);
@@ -4081,6 +4234,7 @@ Df_flags LLVM_code_generator::get_bsdf_scatter_components(
     case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR:
     case IDefinition::DS_INTRINSIC_DF_FRESNEL_FACTOR:
     case IDefinition::DS_INTRINSIC_DF_MEASURED_FACTOR:
+    case IDefinition::DS_INTRINSIC_DF_COAT_ABSORPTION_FACTOR:
         // last argument is the base bsdf
         res = get_bsdf_scatter_components(
             dag_call->get_argument(dag_call->get_argument_count() - 1));
@@ -4184,6 +4338,8 @@ llvm::CallInst *LLVM_code_generator::instantiate_and_call_df(
 
     llvm::Function *param_bsdf_func = instantiate_df(ctx, node, opt_ctx);
 
+    m_state_usage_analysis.add_call(ctx.get_function(), param_bsdf_func);
+
     // call it with state parameters added
     llvm::SmallVector<llvm::Value *, 4> llvm_args;
     llvm_args.push_back(res_pointer);
@@ -4194,6 +4350,7 @@ llvm::CallInst *LLVM_code_generator::instantiate_and_call_df(
         llvm_args.push_back(opt_inherited_weight);
     }
     llvm::CallInst *call = llvm::CallInst::Create(param_bsdf_func, llvm_args, "", insertBefore);
+    ctx->SetInstDebugLocation(call);
 
     m_dist_func_state = old_state;
 
@@ -4372,6 +4529,7 @@ llvm::Function *LLVM_code_generator::instantiate_df(
     if (m_enable_noinline && !is_always_inline_enabled()) {
         bsdf_func->addFnAttr(llvm::Attribute::NoInline);
     }
+    m_state_usage_analysis.register_cloned_function(bsdf_func, df_lib_func);
 
     ORE.emit([&]() {
         return llvm::OptimizationRemark(DEBUG_TYPE, "Instantiation", bsdf_func)
@@ -4514,6 +4672,7 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                                 if (true_param_idx < 0) {
                                     continue;
                                 }
+
                                 DAG_node const *true_arg = dag_call->get_argument(true_param_idx);
 
                                 // get the DAG node for the false_bsdf argument
@@ -4522,6 +4681,7 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                                 if (false_param_idx < 0) {
                                     continue;
                                 }
+
                                 DAG_node const *false_arg = dag_call->get_argument(false_param_idx);
 
                                 // true_bsdf and false_bsdf point to same DAG node?
@@ -4529,13 +4689,14 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                                     // instantiated df will be the same, so only one call needed
                                     //   select_sample/pdf(cond, bsdf, bsdf)
                                     //   -> sample/pdf(bsdf, normal(cond))
-                                    llvm::Value *inherited_normal =
+                                    llvm::Instruction *inherited_normal =
                                         llvm::SelectInst::Create(
                                             param_cond,
                                             param_true_inherited_normal,
                                             param_false_inherited_normal,
                                             "",
                                             call);
+                                    inherited_normal->setDebugLoc(call->getDebugLoc());
 
                                     instantiate_and_call_df(
                                         ctx,
@@ -4559,13 +4720,14 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                                     // a factor BSDF
 
                                     // get selected normal
-                                    llvm::Value *inherited_normal =
+                                    llvm::Instruction *inherited_normal =
                                         llvm::SelectInst::Create(
                                             param_cond,
                                             param_true_inherited_normal,
                                             param_false_inherited_normal,
                                             "",
                                             call);
+                                    inherited_normal->setDebugLoc(call->getDebugLoc());
 
                                     // call common code only once
                                     instantiate_and_call_df(
@@ -4678,7 +4840,7 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                             llvm::ConstantInt::get(bool_type, is_black ? 1 : 0));
                     } else if (df_func_kind == LDFK_IS_DEFAULT_DIFFUSE_REFLECTION) {
                         // replace is_default_diffuse_reflection() by true, if the DAG call argument
-                        // is a "diffuse_reflection_bsdf(color(1.0f), 0.0f)"
+                        // is a "diffuse_reflection_bsdf(color(1.0f), 0.0f, color(0.0f))"
                         // constant, otherwise replace it by false
 
                         call->replaceAllUsesWith(
@@ -4841,6 +5003,9 @@ void LLVM_code_generator::translate_distribution_function(
         // convert to type used in libbsdf
         normal_buf = ctx.create_local(m_float3_struct_type, "normal_buf");
         ctx.convert_and_store(normal, normal_buf);
+
+        m_state_usage_analysis.add_state_usage(
+            ctx.get_function(), IGenerated_code_executable::SU_NORMAL);
     }
 
     // initialize evaluate and auxiliary data
@@ -5103,6 +5268,7 @@ void LLVM_code_generator::translate_distribution_function(
         ctx->CreateStore(llvm::ConstantStruct::get(m_float3_struct_type, elems), weight_buf);
         df_args.push_back(weight_buf);
     }
+    m_state_usage_analysis.add_call(ctx.get_function(), df_func);
     ctx->CreateCall(df_func, df_args);
 
     // at the end of the sample function, call the pdf function to calculate the pdf result
@@ -5140,14 +5306,14 @@ void LLVM_code_generator::translate_distribution_function(
         llvm::Function *param_bsdf_func = instantiate_df(ctx, df_node);
         m_dist_func_state = old_state;
 
+        m_state_usage_analysis.add_call(ctx.get_function(), param_bsdf_func);
+
         // call it
         llvm::SmallVector<llvm::Value *, 4> llvm_args;
         llvm_args.push_back(pdf_data);
         llvm_args.push_back(exec_ctx ? exec_ctx : ctx.get_state_parameter());
         llvm_args.push_back(normal_buf);  // inherited_normal
-        llvm::CallInst *pdf_call = llvm::CallInst::Create(param_bsdf_func, llvm_args);
-
-        ctx->Insert(pdf_call);
+        ctx->CreateCall(param_bsdf_func, llvm_args);
 
         // write pdf value from pdf data to sample data
         llvm::Value *pdf_val = ctx->CreateLoad(

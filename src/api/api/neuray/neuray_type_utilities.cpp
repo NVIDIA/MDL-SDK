@@ -106,7 +106,7 @@ bool Type_utilities::is_valid_structure_attribute_type( const std::string& type_
 {
     mi::base::Handle<const mi::IStructure_decl> decl(
         s_class_factory->get_structure_decl( type_name.c_str()));
-    if( !decl.is_valid_interface())
+    if( !decl)
         return false;
 
     mi::Size n = decl->get_length();
@@ -123,7 +123,7 @@ bool Type_utilities::is_valid_enum_attribute_type( const std::string& type_name)
 {
     mi::base::Handle<const mi::IEnum_decl> decl(
         s_class_factory->get_enum_decl( type_name.c_str()));
-    return decl.is_valid_interface();
+    return !!decl;
 }
 
 ATTR::Type_code Type_utilities::convert_attribute_type_name_to_type_code(
@@ -191,23 +191,21 @@ bool Type_utilities::compatible_types(
     // compare structures
     mi::base::Handle<const mi::IStructure_decl> lhs_structure_decl(
         s_class_factory->get_structure_decl( lhs.c_str()));
-    if( lhs_structure_decl.is_valid_interface()) {
+    if( lhs_structure_decl) {
         mi::base::Handle<const mi::IStructure_decl> rhs_structure_decl(
             s_class_factory->get_structure_decl( rhs.c_str()));
-        return rhs_structure_decl.is_valid_interface()
-            && compatible_structure_types(
-                lhs_structure_decl.get(), rhs_structure_decl.get(), relaxed_array_check);
+        return rhs_structure_decl && compatible_structure_types(
+            lhs_structure_decl.get(), rhs_structure_decl.get(), relaxed_array_check);
     }
 
     // compare enums
     mi::base::Handle<const mi::IEnum_decl> lhs_enum_decl(
         s_class_factory->get_enum_decl( lhs.c_str()));
-    if( lhs_enum_decl.is_valid_interface()) {
+    if( lhs_enum_decl) {
         mi::base::Handle<const mi::IEnum_decl> rhs_enum_decl(
             s_class_factory->get_enum_decl( rhs.c_str()));
-        return rhs_enum_decl.is_valid_interface()
-            && compatible_enum_types(
-                lhs_enum_decl.get(), rhs_enum_decl.get(), relaxed_array_check);
+        return rhs_enum_decl && compatible_enum_types(
+            lhs_enum_decl.get(), rhs_enum_decl.get(), relaxed_array_check);
     }
 
     // compare arrays
@@ -255,7 +253,7 @@ void Type_utilities::check_type_name(
         return;
 
     mi::base::Handle<mi::IData> tmp( transaction->create<mi::IData>( type_name));
-    ASSERT( M_NEURAY_API, tmp.is_valid_interface());
+    ASSERT( M_NEURAY_API, tmp);
 }
 #else // ENABLE_ASSERT
 // see .h file

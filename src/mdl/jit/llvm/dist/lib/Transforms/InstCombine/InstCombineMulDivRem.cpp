@@ -263,6 +263,8 @@ Instruction *InstCombinerImpl::visitMul(BinaryOperator &I) {
   if (match(&I, m_c_Mul(m_OneUse(m_Neg(m_Value(X))), m_Value(Y))))
     return BinaryOperator::CreateNeg(Builder.CreateMul(X, Y));
 
+  // MDL: Disable instcombine to modulo instruction, as it is undefined for negative values in GLSL
+#if 0
   // (X / Y) *  Y = X - (X % Y)
   // (X / Y) * -Y = (X % Y) - X
   {
@@ -295,6 +297,7 @@ Instruction *InstCombinerImpl::visitMul(BinaryOperator &I) {
       return BinaryOperator::CreateSub(Rem, X);
     }
   }
+#endif
 
   /// i1 mul -> i1 and.
   if (I.getType()->isIntOrIntVectorTy(1))

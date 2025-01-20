@@ -358,12 +358,12 @@ void test_idata_simple( mi::neuraylib::IFactory* factory, mi::neuraylib::ITransa
     mi::base::Handle<mi::IPointer> pointer_1( factory->create<mi::IPointer>( "Pointer<Sint32>"));
     mi::base::Handle<mi::IPointer> pointer_2( factory->create<mi::IPointer>( "Pointer<Sint32>"));
     mi::base::Handle<mi::ISint32> m_sint32( pointer_2->get_pointer<mi::ISint32>());
-    MI_CHECK( !m_sint32.is_valid_interface());
+    MI_CHECK( !m_sint32);
     MI_CHECK_EQUAL( 0, pointer_1->set_pointer( sint32_1.get()));
     CHECK_COMPARE( 1, pointer_1.get(), pointer_2.get());
     CHECK_ASSIGN( 0, pointer_1.get(), pointer_2.get());
     m_sint32 = pointer_2->get_pointer<mi::ISint32>();
-    MI_CHECK( m_sint32.is_valid_interface());
+    MI_CHECK( m_sint32);
     CHECK_COMPARE( 0, pointer_1.get(), pointer_2.get());
     pointer_1->set_pointer( nullptr);
     CHECK_COMPARE( -1, pointer_1.get(), pointer_2.get());
@@ -374,12 +374,12 @@ void test_idata_simple( mi::neuraylib::IFactory* factory, mi::neuraylib::ITransa
     mi::base::Handle<mi::IConst_pointer> cpointer_2(
         factory->create<mi::IConst_pointer>( "Const_pointer<Sint32>"));
     mi::base::Handle<const mi::ISint32> c_sint32( cpointer_2->get_pointer<mi::ISint32>());
-    MI_CHECK( !c_sint32.is_valid_interface());
+    MI_CHECK( !c_sint32);
     MI_CHECK_EQUAL( 0, cpointer_1->set_pointer( sint32_1.get()));
     CHECK_COMPARE( 1, cpointer_1.get(), cpointer_2.get());
     CHECK_ASSIGN( 0, cpointer_1.get(), cpointer_2.get());
     c_sint32 = cpointer_2->get_pointer<mi::ISint32>();
-    MI_CHECK( c_sint32.is_valid_interface());
+    MI_CHECK( c_sint32);
     CHECK_COMPARE( 0, cpointer_1.get(), cpointer_2.get());
     cpointer_1->set_pointer( nullptr);
     CHECK_COMPARE( -1, cpointer_1.get(), cpointer_2.get());
@@ -394,18 +394,18 @@ void test_idata_simple( mi::neuraylib::IFactory* factory, mi::neuraylib::ITransa
 
     // clone()
     mi::base::Handle<mi::ISint32> sint32_1_clone( factory->clone<mi::ISint32>( sint32_1.get()));
-    MI_CHECK( sint32_1_clone.is_valid_interface());
+    MI_CHECK( sint32_1_clone);
     mi::base::Handle<mi::IString> string_1_clone( factory->clone<mi::IString>( string_1.get()));
-    MI_CHECK( string_1_clone.is_valid_interface());
+    MI_CHECK( string_1_clone);
     mi::base::Handle<mi::IUuid> uuid_1_clone( factory->clone<mi::IUuid>( uuid_1.get()));
-    MI_CHECK( uuid_1_clone.is_valid_interface());
+    MI_CHECK( uuid_1_clone);
     mi::base::Handle<mi::IVoid> void_1_clone( factory->clone<mi::IVoid>( void_1.get()));
-    MI_CHECK( void_1_clone.is_valid_interface());
+    MI_CHECK( void_1_clone);
     mi::base::Handle<mi::IPointer> pointer_1_clone( factory->clone<mi::IPointer>( pointer_1.get()));
-    MI_CHECK( pointer_1_clone.is_valid_interface());
+    MI_CHECK( pointer_1_clone);
     mi::base::Handle<mi::IConst_pointer> cpointer_1_clone(
         factory->clone<mi::IConst_pointer>( cpointer_1.get()));
-    MI_CHECK( cpointer_1_clone.is_valid_interface());
+    MI_CHECK( cpointer_1_clone);
 }
 
 void test_idata_collection( mi::neuraylib::IFactory* factory)
@@ -466,8 +466,8 @@ void test_idata_collection( mi::neuraylib::IFactory* factory)
     // ISint32_2
     mi::base::Handle<mi::ISint32_2> vector_1( factory->create<mi::ISint32_2>( "Sint32<2>"));
     mi::base::Handle<mi::ISint32_2> vector_2( factory->create<mi::ISint32_2>( "Sint32<2>"));
-    MI_CHECK( vector_1.is_valid_interface());
-    MI_CHECK( vector_2.is_valid_interface());
+    MI_CHECK( vector_1);
+    MI_CHECK( vector_2);
     vector_1->set_value( 0, 0, 1);
     vector_2->set_value( 0, 0, 2);
     MI_CHECK_NOT_EQUAL(
@@ -480,8 +480,8 @@ void test_idata_collection( mi::neuraylib::IFactory* factory)
     // IBbox3
     mi::base::Handle<mi::IBbox3> bbox_1( factory->create<mi::IBbox3>( "Bbox3"));
     mi::base::Handle<mi::IBbox3> bbox_2( factory->create<mi::IBbox3>( "Bbox3"));
-    MI_CHECK( bbox_1.is_valid_interface());
-    MI_CHECK( bbox_2.is_valid_interface());
+    MI_CHECK( bbox_1);
+    MI_CHECK( bbox_2);
     bbox_1->set_value( 1, 2, 1);
     bbox_2->set_value( 1, 2, 2);
     MI_CHECK_NOT_EQUAL( bbox_2->get_value<mi::Sint32>( 1, 2), bbox_1->get_value<mi::Sint32>( 1, 2));
@@ -493,14 +493,14 @@ void test_idata_collection( mi::neuraylib::IFactory* factory)
 
     // clone()
     mi::base::Handle<mi::IArray> array_1_clone( factory->clone<mi::IArray>( array_1.get()));
-    MI_CHECK( array_1_clone.is_valid_interface());
+    MI_CHECK( array_1_clone);
     mi::base::Handle<mi::IDynamic_array> dynamic_array_1_clone(
         factory->clone<mi::IDynamic_array>( dynamic_array_1.get()));
-    MI_CHECK( dynamic_array_1_clone.is_valid_interface());
+    MI_CHECK( dynamic_array_1_clone);
     mi::base::Handle<mi::IMap> map_1_clone( factory->clone<mi::IMap>( map_1.get()));
-    MI_CHECK( map_1_clone.is_valid_interface());
+    MI_CHECK( map_1_clone);
     mi::base::Handle<mi::ISint32_2> vector_1_clone( factory->clone<mi::ISint32_2>( vector_1.get()));
-    MI_CHECK( vector_1_clone.is_valid_interface());
+    MI_CHECK( vector_1_clone);
 }
 
 template<class I>
@@ -544,9 +544,9 @@ void test_type_traits_helper(
     data = factory->create<I>( type_name);
     if( type_name_str.substr( 0, 3) == "Ref") {
         // IFactory cannot handle IRef
-        MI_CHECK( !data.is_valid_interface());
+        MI_CHECK( !data);
     } else {
-        MI_CHECK( data.is_valid_interface());
+        MI_CHECK( data);
         MI_CHECK( type_name_str == data->get_type_name());
     }
 
@@ -554,20 +554,20 @@ void test_type_traits_helper(
     data = factory->create<I>();
     if( type_name_str.substr( 0, 3) == "Ref") {
         // IFactory cannot handle IRef
-        MI_CHECK( !data.is_valid_interface());
+        MI_CHECK( !data);
     } else {
-        MI_CHECK( data.is_valid_interface());
+        MI_CHECK( data);
         MI_CHECK( type_name_str == data->get_type_name());
     }
 
     // check ITransaction::create<T>( const char*)
     data = transaction->create<I>( type_name);
-    MI_CHECK( data.is_valid_interface());
+    MI_CHECK( data);
     MI_CHECK( type_name_str == data->get_type_name());
 
     // check ITransaction::create<T>()
     data = transaction->create<I>();
-    MI_CHECK( data.is_valid_interface());
+    MI_CHECK( data);
     MI_CHECK( type_name_str == data->get_type_name());
 }
 
@@ -670,16 +670,16 @@ void run_tests( mi::neuraylib::INeuray* neuray)
     {
         mi::base::Handle<mi::neuraylib::IDatabase> database(
             neuray->get_api_component<mi::neuraylib::IDatabase>());
-        MI_CHECK( database.is_valid_interface());
+        MI_CHECK( database);
         mi::base::Handle<mi::neuraylib::IScope> scope( database->get_global_scope());
-        MI_CHECK( scope.is_valid_interface());
+        MI_CHECK( scope);
         mi::base::Handle<mi::neuraylib::ITransaction> transaction( scope->create_transaction());
-        MI_CHECK( transaction.is_valid_interface());
+        MI_CHECK( transaction);
 
 
         mi::base::Handle<mi::neuraylib::IFactory> factory(
             neuray->get_api_component<mi::neuraylib::IFactory>());
-        MI_CHECK( factory.is_valid_interface());
+        MI_CHECK( factory);
 
         // test assign() with non-zero result code, clone()
         test_null_pointer( factory.get());
@@ -707,7 +707,7 @@ void run_tests( mi::neuraylib::INeuray* neuray)
 MI_TEST_AUTO_FUNCTION( test_ifactory )
 {
     mi::base::Handle<mi::neuraylib::INeuray> neuray( load_and_get_ineuray());
-    MI_CHECK( neuray.is_valid_interface());
+    MI_CHECK( neuray);
 
     {
         mi::base::Handle<mi::neuraylib::IDebug_configuration> debug_configuration(
@@ -718,7 +718,7 @@ MI_TEST_AUTO_FUNCTION( test_ifactory )
 
         mi::base::Handle<mi::neuraylib::IFactory> factory(
             neuray->get_api_component<mi::neuraylib::IFactory>());
-        MI_CHECK( factory.is_valid_interface());
+        MI_CHECK( factory);
 
 
         run_tests( neuray.get());

@@ -72,7 +72,7 @@ public:
   /// FIXME: Remove this function once transition to Align is over.
   unsigned getAlignment() const {
     MaybeAlign Align = getAlign();
-    return Align ? Align->value() : 0;
+    return Align ? unsigned(Align->value()) : 0;
   }
 
   /// Returns the alignment of the given variable or function.

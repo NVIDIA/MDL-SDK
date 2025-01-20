@@ -29,57 +29,44 @@
 // examples/mdl_sdk/df_vulkan/mdl_runtime.glsl
 
 // Expected defines:
-//   NUM_MATERIAL_TEXTURES_2D          : The number of material 2D textures
-//   NUM_MATERIAL_TEXTURES_3D          : The number of material 3D textures
-//   SET_MATERIAL_TEXTURES_INDICES     : The set index for the array of material texture array indices
-//   SET_MATERIAL_TEXTURES_2D          : The set index for the array of material 2D textures
-//   SET_MATERIAL_TEXTURES_3D          : The set index for the array of material 3D textures
-//   SET_MATERIAL_ARGUMENT_BLOCK       : The set index for the material argument block buffer
-//   BINDING_MATERIAL_TEXTURES_INDICES : The binding index for the array of material texture array indices
-//   BINDING_MATERIAL_TEXTURES_2D      : The binding index for the array of material 2D textures
-//   BINDING_MATERIAL_TEXTURES_3D      : The binding index for the array of material 3D textures
-//   BINDING_MATERIAL_ARGUMENT_BLOCK   : The binding index for the material argument block buffer
+//   MDL_SET_MATERIAL_TEXTURES_2D         : The set index for the array of material 2D textures
+//   MDL_SET_MATERIAL_TEXTURES_3D         : The set index for the array of material 3D textures
+//   MDL_SET_MATERIAL_ARGUMENT_BLOCK      : The set index for the material argument block buffer
+//   MDL_SET_MATERIAL_RO_DATA_SEGMENT     : The set index for the material read-only data segment buffer
+//   MDL_BINDING_MATERIAL_TEXTURES_2D     : The binding index for the array of material 2D textures
+//   MDL_BINDING_MATERIAL_TEXTURES_3D     : The binding index for the array of material 3D textures
+//   MDL_BINDING_MATERIAL_ARGUMENT_BLOCK  : The binding index for the material argument block buffer
+//   MDL_BINDING_MATERIAL_RO_DATA_SEGMENT : The binding index for the material read-only data segment buffer
+//   NUM_TEX_RESULTS                      : The size of the texture results cache (only defined if size > 0)
+//   USE_RO_DATA_SEGMENT                  : Defined if the read-only data segment is enabled
 
 #ifndef MDL_RUNTIME_GLSL
 #define MDL_RUNTIME_GLSL
 
-// The array indices of the material textures. This is needed because in MDL the 2D and 3D textures
-// are not differentiated and thus, the 2D and 3D sampler arrays should overlap.
-// e.g. 2D textures: | A | _ | C | D | _ | _ |
-//      3D textures: | _ | B | _ | _ | E | F |
-// However, in Vulkan 1.0 without extensions this is not possible since all bindings of a descriptor
-// set must be bound to a valid resource. Therefore, we need to tightly pack the texture arrays
-// defined below and add the indirection from MDL texture index to the real index. Alternatively,
-// the VK_EXT_robustness2 extension allows "null descriptors" which lets the texture arrays be
-// sparse. The best solution, however, would be to use "Descriptor Indexing" which is core in
-// Vulkan 1.2 or can be used through various extensions in older versions. This would allow
-// variable sized texture arrays that can have undefined entries. We show the solution that is
-// most compatible with older hardware, but recommend using "Descriptor Indexing" if possible.
-#if (NUM_MATERIAL_TEXTURES_2D + NUM_MATERIAL_TEXTURES_3D > 0)
-layout(std140, set = SET_MATERIAL_TEXTURES_INDICES, binding = BINDING_MATERIAL_TEXTURES_INDICES)
-uniform MaterialTextureIndiciesBuffer
-{
-    uint uMaterialTextureIndices[NUM_MATERIAL_TEXTURES_2D + NUM_MATERIAL_TEXTURES_3D];
-};
-#endif // (NUM_MATERIAL_TEXTURES_2D + NUM_MATERIAL_TEXTURES_3D > 0)
+#extension GL_EXT_nonuniform_qualifier : require
 
 // The arrays of material textures used in the texturing functions
-#if (NUM_MATERIAL_TEXTURES_2D > 0)
-layout(set = SET_MATERIAL_TEXTURES_2D, binding = BINDING_MATERIAL_TEXTURES_2D)
-uniform sampler2D uMaterialTextures2D[NUM_MATERIAL_TEXTURES_2D];
-#endif // (NUM_MATERIAL_TEXTURES_2D > 0)
+layout(set = MDL_SET_MATERIAL_TEXTURES_2D, binding = MDL_BINDING_MATERIAL_TEXTURES_2D)
+uniform sampler2D uMaterialTextures2D[];
 
-#if (NUM_MATERIAL_TEXTURES_3D > 0)
-layout(set = SET_MATERIAL_TEXTURES_3D, binding = BINDING_MATERIAL_TEXTURES_3D)
-uniform sampler3D uMaterialTextures3D[NUM_MATERIAL_TEXTURES_3D];
-#endif // (NUM_MATERIAL_TEXTURES_3D > 0)
+layout(set = MDL_SET_MATERIAL_TEXTURES_3D, binding = MDL_BINDING_MATERIAL_TEXTURES_3D)
+uniform sampler3D uMaterialTextures3D[];
 
 // The material argument block used for dynamic parameters in class compilation mode
-layout(std430, set = SET_MATERIAL_ARGUMENT_BLOCK, binding = BINDING_MATERIAL_ARGUMENT_BLOCK)
+layout(std430, set = MDL_SET_MATERIAL_ARGUMENT_BLOCK, binding = MDL_BINDING_MATERIAL_ARGUMENT_BLOCK)
 readonly restrict buffer ArgumentBlockBuffer
 {
     uint uMaterialArgumentBlock[];
 };
+
+#ifdef USE_RO_DATA_SEGMENT
+// The read-only data segment
+layout(std430, set = MDL_SET_MATERIAL_RO_DATA_SEGMENT, binding = MDL_BINDING_MATERIAL_RO_DATA_SEGMENT)
+readonly restrict buffer RODataSegmentBuffer
+{
+    uint uMaterialRODataSegment[];
+};
+#endif // USE_RO_DATA_SEGMENT
 
 
 //-----------------------------------------------------------------------------
@@ -116,7 +103,7 @@ readonly restrict buffer ArgumentBlockBuffer
 #define BSDF_USE_MATERIAL_IOR (-1.0)
 
 /// Flags controlling the calculation of DF results.
-/// This cannot be represented as a real enum, because the MDL SDK HLSL backend only sees enums
+/// This cannot be represented as a real enum, because the MDL SDK GLSL backend only sees enums
 /// as ints on LLVM level and would create wrong types for temporary variables
 #define Df_flags                             int
 #define DF_FLAGS_NONE                        0               ///< allows nothing -> black
@@ -136,7 +123,9 @@ struct State
     vec3   text_coords[1];
     vec3   tangent_u[1];
     vec3   tangent_v[1];
-    vec4   text_results[16];
+#ifdef NUM_TEX_RESULTS
+    vec4   text_results[NUM_TEX_RESULTS];
+#endif
     int    ro_data_segment_offset;
     mat4   world_to_object;
     mat4   object_to_world;
@@ -259,6 +248,42 @@ bool mdl_read_argblock_as_bool(int offs)
 }
 
 
+// ------------------------------------------------------------------------------------------------
+// Read-only data access via read functions
+// ------------------------------------------------------------------------------------------------
+
+#ifdef USE_RO_DATA_SEGMENT
+
+float mdl_read_rodata_as_float(int offs)
+{
+    return uintBitsToFloat(uMaterialRODataSegment[offs >> 2]);
+}
+
+double mdl_read_rodata_as_double(int offs)
+{
+    return packDouble2x32(
+        uvec2(uMaterialRODataSegment[offs >> 2], uMaterialRODataSegment[(offs >> 2) + 1]));
+}
+
+int mdl_read_rodata_as_int(int offs)
+{
+    return int(uMaterialRODataSegment[offs >> 2]);
+}
+
+uint mdl_read_rodata_as_uint(int offs)
+{
+    return uMaterialRODataSegment[offs >> 2];
+}
+
+bool mdl_read_rodata_as_bool(int offs)
+{
+    uint val = uMaterialRODataSegment[offs >> 2];
+    return (val & (0xff << (8 * (offs & 3)))) != 0;
+}
+
+#endif // USE_RO_DATA_SEGMENT
+
+
 //-----------------------------------------------------------------------------
 // Texture helper functions
 //-----------------------------------------------------------------------------
@@ -317,21 +342,18 @@ vec2 apply_smootherstep_filter(vec2 uv, ivec2 size)
 // Texture function implementations, 2D
 //-----------------------------------------------------------------------------
 
-#if (NUM_MATERIAL_TEXTURES_2D > 0)
 // corresponds to ::tex::width(uniform texture_2d tex, int2 uv_tile, float frame)
 int tex_width_2d(int tex, ivec2 uv_tile, float frame)
 {
     if (tex == 0) return 0; // invalid texture
-    uint texture_index = uMaterialTextureIndices[tex - 1];
-    return textureSize(uMaterialTextures2D[texture_index], 0).x;
+    return textureSize(uMaterialTextures2D[nonuniformEXT(tex - 1)], 0).x;
 }
 
 // corresponds to ::tex::height(uniform texture_2d tex, int2 uv_tile, float frame)
 int tex_height_2d(int tex, ivec2 uv_tile, float frame)
 {
     if (tex == 0) return 0; // invalid texture
-    uint texture_index = uMaterialTextureIndices[tex - 1];
-    return textureSize(uMaterialTextures2D[texture_index], 0).y;
+    return textureSize(uMaterialTextures2D[nonuniformEXT(tex - 1)], 0).y;
 }
 
 // corresponds to ::tex::lookup_float4(uniform texture_2d tex, float2 coord, ...)
@@ -344,13 +366,12 @@ vec4 tex_lookup_float4_2d(int tex, vec2 coord, int wrap_u, int wrap_v, vec2 crop
     if (wrap_v == TEX_WRAP_CLIP && (coord.y < 0.0 || coord.y >= 1.0))
         return vec4(0.0);
 
-    uint texture_index = uMaterialTextureIndices[tex - 1];
-    ivec2 tex_size = textureSize(uMaterialTextures2D[texture_index], 0);
+    ivec2 tex_size = textureSize(uMaterialTextures2D[nonuniformEXT(tex - 1)], 0);
     coord.x = apply_wrap_and_crop(coord.x, wrap_u, crop_u, tex_size.x);
     coord.y = apply_wrap_and_crop(coord.y, wrap_v, crop_v, tex_size.y);
     coord = apply_smootherstep_filter(coord, tex_size);
 
-    return texture(uMaterialTextures2D[texture_index], coord);
+    return texture(uMaterialTextures2D[nonuniformEXT(tex - 1)], coord);
 }
 
 vec3 tex_lookup_float3_2d(int tex, vec2 coord, int wrap_u, int wrap_v, vec2 crop_u, vec2 crop_v, float frame)
@@ -378,12 +399,11 @@ vec4 tex_texel_float4_2d(int tex, ivec2 coord, ivec2 uv_tile, float frame)
 {
     if (tex == 0) return vec4(0.0); // invalid texture
 
-    uint texture_index = uMaterialTextureIndices[tex - 1];
-    ivec2 res = textureSize(uMaterialTextures2D[texture_index], 0);
+    ivec2 res = textureSize(uMaterialTextures2D[nonuniformEXT(tex - 1)], 0);
     if (coord.x < 0 || coord.y < 0 || coord.x >= res.x || coord.y >= res.y)
         return vec4(0.0); // out of bounds
 
-    return texelFetch(uMaterialTextures2D[texture_index], coord, 0);
+    return texelFetch(uMaterialTextures2D[nonuniformEXT(tex - 1)], coord, 0);
 }
 
 vec3 tex_texel_float3_2d(int tex, ivec2 coord, ivec2 uv_tile, float frame)
@@ -405,36 +425,31 @@ float tex_texel_float_2d(int tex, ivec2 coord, ivec2 uv_tile, float frame)
 {
     return tex_texel_float4_2d(tex, coord, uv_tile, frame).x;
 }
-#endif // (NUM_MATERIAL_TEXTURES_2D > 0)
 
 
 //-----------------------------------------------------------------------------
 // Texture function implementations, 3D
 //-----------------------------------------------------------------------------
 
-#if (NUM_MATERIAL_TEXTURES_3D > 0)
 // corresponds to ::tex::width(uniform texture_3d tex, float frame)
 int tex_width_3d(int tex, float frame)
 {
     if (tex == 0) return 0; // invalid texture
-    uint texture_index = uMaterialTextureIndices[tex - 1];
-    return textureSize(uMaterialTextures3D[texture_index], 0).x;
+    return textureSize(uMaterialTextures3D[nonuniformEXT(tex - 1)], 0).x;
 }
 
 // corresponds to ::tex::height(uniform texture_3d tex, float frame)
 int tex_height_3d(int tex, float frame)
 {
     if (tex == 0) return 0; // invalid texture
-    uint texture_index = uMaterialTextureIndices[tex - 1];
-    return textureSize(uMaterialTextures3D[texture_index], 0).y;
+    return textureSize(uMaterialTextures3D[nonuniformEXT(tex - 1)], 0).y;
 }
 
 // corresponds to ::tex::depth(uniform texture_3d tex, float frame)
 int tex_depth_3d(int tex, float frame)
 {
     if (tex == 0) return 0; // invalid texture
-    uint texture_index = uMaterialTextureIndices[tex - 1];
-    return textureSize(uMaterialTextures3D[texture_index], 0).z;
+    return textureSize(uMaterialTextures3D[nonuniformEXT(tex - 1)], 0).z;
 }
 
 // corresponds to ::tex::lookup_float4(uniform texture_3d tex, float3 coord, ...)
@@ -449,13 +464,12 @@ vec4 tex_lookup_float4_3d(int tex, vec3 coord, int wrap_u, int wrap_v, int wrap_
     if (wrap_w == TEX_WRAP_CLIP && (coord.z < 0.0 || coord.z >= 1.0))
         return vec4(0.0);
 
-    uint texture_index = uMaterialTextureIndices[tex - 1];
-    ivec3 tex_size = textureSize(uMaterialTextures3D[texture_index], 0);
+    ivec3 tex_size = textureSize(uMaterialTextures3D[nonuniformEXT(tex - 1)], 0);
     coord.x = apply_wrap_and_crop(coord.x, wrap_u, crop_u, tex_size.x);
     coord.y = apply_wrap_and_crop(coord.y, wrap_v, crop_v, tex_size.y);
     coord.z = apply_wrap_and_crop(coord.z, wrap_w, crop_w, tex_size.z);
 
-    return texture(uMaterialTextures3D[texture_index], coord);
+    return texture(uMaterialTextures3D[nonuniformEXT(tex - 1)], coord);
 }
 
 vec3 tex_lookup_float3_3d(int tex, vec3 coord, int wrap_u, int wrap_v, int wrap_w, vec2 crop_u, vec2 crop_v, vec2 crop_w, float frame)
@@ -483,12 +497,11 @@ vec4 tex_texel_float4_3d(int tex, ivec3 coord, float frame)
 {
     if (tex == 0) return vec4(0.0); // invalid texture
 
-    uint texture_index = uMaterialTextureIndices[tex - 1];
-    ivec3 res = textureSize(uMaterialTextures3D[texture_index], 0);
+    ivec3 res = textureSize(uMaterialTextures3D[nonuniformEXT(tex - 1)], 0);
     if (coord.x < 0 || coord.y < 0 || coord.z < 0 || coord.x >= res.x || coord.y >= res.y || coord.z >= res.z)
         return vec4(0.0); // out of bounds
 
-    return texelFetch(uMaterialTextures3D[texture_index], coord, 0);
+    return texelFetch(uMaterialTextures3D[nonuniformEXT(tex - 1)], coord, 0);
 }
 
 vec3 tex_texel_float3_3d(int tex, ivec3 coord, float frame)
@@ -510,7 +523,6 @@ float tex_texel_float_3d(int tex, ivec3 coord, float frame)
 {
     return tex_texel_float4_3d(tex, coord, frame).x;
 }
-#endif // (NUM_MATERIAL_TEXTURES_3D > 0)
 
 
 // ------------------------------------------------------------------------------------------------

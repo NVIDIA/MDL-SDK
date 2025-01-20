@@ -69,6 +69,8 @@ enum Df_data_kind {
     DFK_GGX_VC_MULTISCATTER,
     DFK_WARD_GEISLER_MORODER_MULTISCATTER,
     DFK_SHEEN_MULTISCATTER,
+    DFK_MICROFLAKE_SHEEN_GENERAL,
+    DFK_MICROFLAKE_SHEEN_MULTISCATTER,
     DFK_FORCE_32_BIT = 0xffffffffU
 };
 
@@ -93,25 +95,27 @@ public:
     /// Returns an MDL backend generator.
     ///
     /// \param kind              The desired backend generator.
-    /// \return                  The backend generator, or \c NULL if the requested backend is not
-    ///                          available.
+    /// \return                  The backend generator, or \c nullptr if the requested backend is
+    ///                          not available.
     virtual IMdl_backend* get_backend(Mdl_backend_kind kind) = 0;
 
     //@}
 
     /// Returns the distribution function data of the texture identified by \p kind.
     ///
-    /// \param kind       The kind of the distribution function data texture.
-    /// \param [out] rx   The resolution of the texture in x.
-    /// \param [out] ry   The resolution of the texture in y.
-    /// \param [out] rz   The resolution of the texture in z.
-    /// \return           A pointer to the texture data or \c NULL, if \p kind does not
-    ///                   correspond to a distribution function data texture.
+    /// \param kind             The kind of the distribution function data texture.
+    /// \param [out] rx         The resolution of the texture in x.
+    /// \param [out] ry         The resolution of the texture in y.
+    /// \param [out] rz         The resolution of the texture in z.
+    /// \param [out] pixel_type The type of the data elements.
+    /// \return                 A pointer to the texture data or \c nullptr, if \p kind does not
+    ///                         correspond to a distribution function data texture.
     virtual const Float32* get_df_data_texture(
         Df_data_kind kind,
         Size &rx,
         Size &ry,
-        Size &rz) const = 0;
+        Size &rz,
+        const char *&pixel_type) const = 0;
 };
 
 /**@}*/ // end group mi_neuray_mdl_misc

@@ -261,6 +261,7 @@ private:
         case IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF:
         case IDefinition::DS_INTRINSIC_DF_DUSTY_DIFFUSE_REFLECTION_BSDF:
         case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
+        case IDefinition::DS_INTRINSIC_DF_MICROFLAKE_SHEEN_BSDF:
             // no transmission at all
             return true;
 
@@ -299,11 +300,13 @@ private:
         case IDefinition::DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER:
             return check_layer_no_transmission(bsdf);
 
+
         case IDefinition::DS_INTRINSIC_DF_TINT:
         case IDefinition::DS_INTRINSIC_DF_THIN_FILM:
         case IDefinition::DS_INTRINSIC_DF_DIRECTIONAL_FACTOR:
         case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR:
         case IDefinition::DS_INTRINSIC_DF_FRESNEL_FACTOR:
+        case IDefinition::DS_INTRINSIC_DF_COAT_ABSORPTION_FACTOR:
             return check_modifier_no_transmission(bsdf);
 
         case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_SMITH_BSDF:
@@ -798,6 +801,7 @@ private:
         case IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF:
         case IDefinition::DS_INTRINSIC_DF_DUSTY_DIFFUSE_REFLECTION_BSDF:
         case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
+        case IDefinition::DS_INTRINSIC_DF_MICROFLAKE_SHEEN_BSDF:
             // no transmission at all
             return true;
 
@@ -906,6 +910,7 @@ private:
         case IDefinition::DS_INTRINSIC_DF_DIRECTIONAL_FACTOR:
         case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR:
         case IDefinition::DS_INTRINSIC_DF_FRESNEL_FACTOR:
+        case IDefinition::DS_INTRINSIC_DF_COAT_ABSORPTION_FACTOR:
             return check_modifier(lbsdf, rbsdf);
 
         case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:

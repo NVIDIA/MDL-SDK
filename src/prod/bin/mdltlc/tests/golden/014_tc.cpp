@@ -65,47 +65,60 @@ DAG_node const* Simple_rule::matcher(
     IDistiller_plugin_api &e,
     DAG_node const *node,
     const mi::mdl::Distiller_options *options,
-    Rule_result_code &result_code)const
+    Rule_result_code &result_code) const
 {
-    switch (e.get_selector(node)) {
-    case mi::mdl::IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF: // match for microfacet_ggx_vcavities_bsdf(ru, rv, tint, _, t, mode)
+    auto match_rule1 = [&] (DAG_node const *node, IDistiller_plugin_api::Match_properties &node_props) -> const DAG_node * { return node; };
+
 // 014_tc.mdltl:6
 //RUID 478273
-        if (true) {
-            const DAG_node* v_ru = e.get_compound_argument(node, 0);
-            const DAG_node* v_rv = e.get_compound_argument(node, 1);
-            const DAG_node* v_tint = e.get_compound_argument(node, 2);
-            const DAG_node* v_t = e.get_compound_argument(node, 4);
-            const DAG_node* v_mode = e.get_compound_argument(node, 5);
-            if (e.eval_if(e.create_binary(
-                IDistiller_plugin_api::OK_EQUAL,
-                    v_mode,
-                    e.create_scatter_enum_constant(2)))) {
-                if (event_handler != nullptr)
-                    fire_match_event(*event_handler, 0);
-                return e.create_call("::df::custom_curve_layer(float,float,float,float,bsdf,bsdf,float3)",
-                    IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER, Args_wrapper<7>::mk_args(
-                        e,m_node_types, custom_curve_layer, e.create_function_call("::nvidia::distilling_support::refl_from_ior",
-                            Nodes_wrapper<1>(e.create_global_float_ior()).data(),
-                            1), e.create_float_constant(1.0f), e.create_float_constant(5.0f),
-                        e.create_float_constant(1.0f), e.create_call("::df::microfacet_ggx_vcavities_bsdf(float,float,color,color,float3,::df::scatter_mode,string)",
-                            IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF,
-                            Args_wrapper<7>::mk_args(e,m_node_types, microfacet_ggx_vcavities_bsdf,
-                                v_ru, v_rv, v_tint, e.create_color_constant(0,0,0),
-                                v_t, e.create_scatter_enum_constant(0)).args, 7,
-                            e.get_type_factory()->create_bsdf()), e.create_call("::df::simple_glossy_bsdf(float,float,color,color,float3,::df::scatter_mode,string)",
-                            IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF, Args_wrapper<7>::mk_args(
-                                e,m_node_types, simple_glossy_bsdf, v_ru, v_rv, v_tint,
-                                e.create_color_constant(0,0,0), v_t, e.create_scatter_enum_constant(1)).args,
-                            7, e.get_type_factory()->create_bsdf())).args, 7, e.get_type_factory()->create_bsdf());
-            }
-        }
-        break;
-    default:
-        break;
-    }
+    auto match_rule0 = [&] (DAG_node const *node0, IDistiller_plugin_api::Match_properties &node_props0) -> const DAG_node * {
 
-    return node;
+        // match for microfacet_ggx_vcavities_bsdf(ru, rv, tint, _, t, mode)
+        if (node_props0.sema != IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF) {
+            return match_rule1(node0, node_props0);
+        }
+        DAG_node const *node2 = e.get_compound_argument(node0, 0);
+        DAG_node const *v_ru = node2; (void)v_ru;
+        DAG_node const *node4 = e.get_compound_argument(node0, 1);
+        DAG_node const *v_rv = node4; (void)v_rv;
+        DAG_node const *node6 = e.get_compound_argument(node0, 2);
+        DAG_node const *v_tint = node6; (void)v_tint;
+        DAG_node const *node8 = e.get_compound_argument(node0, 4);
+        DAG_node const *v_t = node8; (void)v_t;
+        DAG_node const *node10 = e.get_compound_argument(node0, 5);
+        DAG_node const *v_mode = node10; (void)v_mode;
+        DAG_DbgInfo root_dbg_info = node0->get_dbg_info();
+        (void) root_dbg_info;
+        if (!e.eval_if(e.create_binary(
+            IDistiller_plugin_api::OK_EQUAL,
+                v_mode,
+                e.create_scatter_enum_constant(2)))) {
+            return match_rule1(node0, node_props0);
+        }
+        if (event_handler != nullptr)
+            fire_match_event(*event_handler, 0);
+        return e.create_call("::df::custom_curve_layer(float,float,float,float,bsdf,bsdf,float3)",
+            IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER, Args_wrapper<7>::mk_args(
+                e, m_node_types, custom_curve_layer, e.create_function_call("::nvidia::distilling_support::refl_from_ior",
+                    Nodes_wrapper<1>(e.create_global_float_ior()).data(), 1, root_dbg_info),
+                e.create_float_constant(1.0f), e.create_float_constant(5.0f), e.create_float_constant(1.0f),
+                e.create_call("::df::microfacet_ggx_vcavities_bsdf(float,float,color,color,float3,::df::scatter_mode,string)",
+                    IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF, Args_wrapper<7>::mk_args(
+                        e, m_node_types, microfacet_ggx_vcavities_bsdf, v_ru, v_rv,
+                        v_tint, e.create_color_constant(0,0,0), v_t, e.create_scatter_enum_constant(0)).args,
+                    7, e.get_type_factory()->create_bsdf(), root_dbg_info), e.create_call("::df::simple_glossy_bsdf(float,float,color,color,float3,::df::scatter_mode,string)",
+                    IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF, Args_wrapper<7>::mk_args(
+                        e, m_node_types, simple_glossy_bsdf, v_ru, v_rv, v_tint,
+                        e.create_color_constant(0,0,0), v_t, e.create_scatter_enum_constant(1)).args,
+                    7, e.get_type_factory()->create_bsdf(), root_dbg_info)).args,
+            7, e.get_type_factory()->create_bsdf(), root_dbg_info);
+    };
+    (void)match_rule0;
+
+    IDistiller_plugin_api::Match_properties node_props;
+    e.get_match_properties(node, node_props);
+    return match_rule0(node, node_props);
+
 }
 
 bool Simple_rule::postcond(

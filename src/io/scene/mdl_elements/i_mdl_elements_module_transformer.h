@@ -73,6 +73,14 @@ class Execution_context;
 class Mdl_module_transformer : public boost::noncopyable
 {
 public:
+    /// Constructor.
+    ///
+    /// The module transformer directly operates on the passed module.
+    Mdl_module_transformer( DB::Transaction* transaction, mi::mdl::IModule* module);
+
+    /// Constructor.
+    ///
+    /// The module transformer operates on a copy of the passed module.
     Mdl_module_transformer( DB::Transaction* transaction, const mi::mdl::IModule* module);
 
     ~Mdl_module_transformer();
@@ -121,8 +129,8 @@ public:
 
     /// Sets up regular expressions for both filters.
     ///
-    /// The smart pointer is left unchanged if the corresponding filter is \c NULL. Returns \c true
-    /// in case of success, or \c false if any filter is not a valid regular expression.
+    /// The smart pointer is left unchanged if the corresponding filter is \c nullptr. Returns
+    /// \c true in case of success, or \c false if any filter is not a valid regular expression.
     ///
     /// \note The conversion function used here (and for the strings that are matched later) does
     ///       not support code points beyond U+FFFF, even if the underlying wchar implementation

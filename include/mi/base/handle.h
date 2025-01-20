@@ -32,7 +32,6 @@
 #define MI_BASE_HANDLE_H
 
 #include <mi/base/assert.h>
-#include <mi/base/config.h> // for MI_CXX_FEATURE_RVALUE_REFERENCES
 #include <mi/base/iinterface.h>
 
 #ifdef __cpp_variadic_templates
@@ -53,12 +52,12 @@ struct Dup_interface_helper {};
 /// Type for a symbolic constant to trigger a special constructor in the %Handle class.
 ///
 /// \see #mi::base::Handle::Handle(Interface* ptr,Dup_interface)
-typedef const Dup_interface_helper* Dup_interface;
+using Dup_interface = const Dup_interface_helper *;
 
 /// Symbolic constant to trigger a special constructor in the %Handle class.
 ///
 /// \see #mi::base::Handle::Handle(Interface* ptr,Dup_interface)
-static const Dup_interface DUP_INTERFACE = 0;
+static const Dup_interface DUP_INTERFACE = nullptr;
 
 /// %Handle class template for interfaces, automatizing the lifetime control via reference counting.
 ///
@@ -137,34 +136,34 @@ class Handle
 {
 public:
     /// Own type.
-    typedef Handle<Interface> Self;
+    using Self = Handle<Interface>;
 
     /// Type of the underlying interface.
-    typedef Interface Interface_type;
+    using Interface_type = Interface;
 
     // STL iterator inspired typedef names
 
     /// Type of the underlying interface.
-    typedef Interface  value_type;
+    using value_type = Interface;
 
     /// Difference type (signed integral type to hold pointer differences).
-    typedef Difference difference_type;
+    using difference_type = Difference;
 
     /// Mutable-pointer type to underlying interface.
-    typedef Interface* pointer;
+    using pointer = Interface*;
 
     /// Mutable-reference type to underlying interface.
-    typedef Interface& reference;
+    using reference = Interface&;
 
 private:
     template <typename I2> friend class Handle;
 
-    // Pointer to underlying interface, can be \c NULL
+    // Pointer to underlying interface, can be \c nullptr
     Interface* m_iptr;
 
 public:
     /// Default constructor, initializes handle to hold an invalid interface.
-    Handle() : m_iptr( 0) { }
+    Handle() : m_iptr( nullptr) { }
 
     /// Constructor from interface pointer, takes ownership of interface.
     ///
@@ -209,12 +208,11 @@ public:
             m_iptr->retain();
     }
 
-#ifdef MI_CXX_FEATURE_RVALUE_REFERENCES
     /// Move constructor.
     Handle( Self&& other) noexcept
       : m_iptr( other.m_iptr)
     {
-        other.m_iptr = 0;
+        other.m_iptr = nullptr;
     }
 
     /// Converting move constructor.
@@ -224,7 +222,6 @@ public:
     {
         other.m_iptr = 0;
     }
-#endif
 
     /// Swap two interfaces.
     void swap( Self& other)
@@ -256,7 +253,6 @@ public:
         return *this;
     }
 
-#ifdef MI_CXX_FEATURE_RVALUE_REFERENCES
     /// Move assignment operator, releases old interface.
     Self& operator=( Self&& other) noexcept
     {
@@ -264,7 +260,7 @@ public:
             if( m_iptr)
                 m_iptr->release();
             m_iptr = other.m_iptr;
-            other.m_iptr = 0;
+            other.m_iptr = nullptr;
         }
         return *this;
     }
@@ -280,7 +276,6 @@ public:
 
         return *this;
     }
-#endif
 
     /// Assignment operator from interface pointer, releases old interface and assigns new interface
     /// \p ptr, takes ownership of interface.
@@ -312,7 +307,7 @@ public:
     }
 
     /// Returns \c true if the interface is valid.
-    bool is_valid_interface() const { return m_iptr != 0; }
+    bool is_valid_interface() const { return m_iptr != nullptr; }
 
     /// Access to the interface. Returns 0 for an invalid interface.
     Interface* get() const { return  m_iptr; }
@@ -386,7 +381,7 @@ public:
     ///
     /// This typedef represent the type of #is_valid_interface() used by the
     /// #bool_conversion_support() operator.
-    typedef bool (Handle::*bool_conversion_support)() const;
+    using bool_conversion_support = bool (Handle::*)() const;
 
     /// Helper function for the conversion of a Handle<Interface> to a bool.
     ///
@@ -402,7 +397,7 @@ public:
     ///   \endcode
     operator bool_conversion_support() const
     {
-        return is_valid_interface() ? &Handle<Interface>::is_valid_interface : 0;
+        return is_valid_interface() ? &Handle<Interface>::is_valid_interface : nullptr;
     }
 
     /// Returns \c true if the underlying interface pointer of \p lhs is equal to \p rhs

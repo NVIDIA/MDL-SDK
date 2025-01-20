@@ -64,6 +64,15 @@ def get_examples_search_path():
 
     return os.path.abspath(example_sp)
 
+def get_src_shaders_mdl_search_path():
+    """Try to get the search path for modules like ::nvidia::core_definitions or
+    ::nvidia::axf_to_mdl. Returns the empty string if that directory is the sames as
+    get_examples_search_path(), or in case of failure."""
+    shader_sp = os.getenv('MDL_SRC_SHADERS_MDL')
+    if shader_sp is None or not os.path.exists(shader_sp):
+        return ""
+    return os.path.abspath(shader_sp)
+
 #--------------------------------------------------------------------------------------------------
 # MDL Python Example
 #--------------------------------------------------------------------------------------------------
@@ -103,7 +112,7 @@ def get_function_by_name(neuray: pymdlsdk.INeuray, transaction: pymdlsdk.ITransa
 
         # do overload resolution otherwise and return the first function with that name
         # if more than overload is expected this function should be extended to narrow down a unique
-        # function by specifying parameter types and names. here we simply return the first 
+        # function by specifying parameter types and names. here we simply return the first
         with mdl_module.get_function_overloads(mdl_function_name, None) as overloads:
             if overloads.get_length() == 0:
                 return ""
@@ -253,6 +262,9 @@ def main():
             cfg.add_mdl_user_paths()
             example_sp = get_examples_search_path()
             cfg.add_mdl_path(example_sp)
+            src_shader_mdl_sp = get_src_shaders_mdl_search_path()
+            if src_shader_mdl_sp:
+                cfg.add_mdl_path(src_shader_mdl_sp)
 
         # Load the 'nv_openimageio' and 'dds' plug-ins
         if not pymdlsdk.load_plugin(neuray, 'nv_openimageio'):

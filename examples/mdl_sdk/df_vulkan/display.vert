@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
- // examples/mdl_sdk/df_vulkan/display.vert
+// examples/mdl_sdk/df_vulkan/display.vert
 
 #version 450
 

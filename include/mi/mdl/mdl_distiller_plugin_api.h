@@ -45,7 +45,7 @@ class ICall_name_resolver;
 /// A plugin is only accepted if it is compiled against the same API version
 /// than the SDK. This version needs to be incremented whenever something in
 /// this API changes.
-#define MI_MDL_DISTILLER_PLUGIN_API_VERSION 4
+#define MI_MDL_DISTILLER_PLUGIN_API_VERSION 6
 
 ///
 /// The rule engine handles the transformation of a compiled material by a rule set.
@@ -64,10 +64,10 @@ public:
     /// \return a new compiled material
     virtual IMaterial_instance *apply_rules(
         IMaterial_instance const *inst,
-        IRule_matcher                                 &matcher,
-        IRule_matcher_event                           *event_handler,
-        const Distiller_options                       *options,
-        mi::Sint32                                    &error) = 0;
+        IRule_matcher            &matcher,
+        IRule_matcher_event      *event_handler,
+        const Distiller_options  *options,
+        mi::Sint32               &error) = 0;
 
     /// == Node attributes =============================================================
     ///
@@ -80,9 +80,11 @@ public:
         }
     };
 
-    virtual void dump_attributes(IMaterial_instance const *inst) = 0;
-    virtual void dump_attributes(IMaterial_instance const *inst,
-                                 DAG_node const *node) = 0;
+    virtual void dump_attributes(
+        IMaterial_instance const *inst) = 0;
+    virtual void dump_attributes(
+        IMaterial_instance const *inst,
+        DAG_node const           *node) = 0;
 
     /// Set the value of a named attribute of a node. If the node
     /// already has the attribute, its value is overwritten.
@@ -90,19 +92,26 @@ public:
     /// \param node  node to attach attribute to (must not be NULL)
     /// \param name  name of the attribute (must not be NULL)
     /// \param value new value of the attribute (must not be NULL)
-    virtual void set_attribute(DAG_node const * node, char const *name,
-                               DAG_node const *value) = 0;
-    virtual void set_attribute(IMaterial_instance const *inst,
-                               DAG_node const * node, char const *name,
-                               mi::Float32 value) = 0;
-    virtual void set_attribute(IMaterial_instance const *inst,
-                               DAG_node const * node, char const *name,
-                               mi::Sint32 value) = 0;
+    virtual void set_attribute(
+        DAG_node const *node,
+        char const     *name,
+        DAG_node const *value) = 0;
+    virtual void set_attribute(
+        IMaterial_instance const *inst,
+        DAG_node const           *node,
+        char const               *name,
+         mi::Float32             value) = 0;
+    virtual void set_attribute(
+        IMaterial_instance const *inst,
+        DAG_node const           *node,
+        char const               *name,
+        mi::Sint32               value) = 0;
 
     /// Remove all attributes from the given DAG node.
     ///
     /// \param node node for which to remove all attributes
-    virtual void remove_attributes(DAG_node const * node) = 0;
+    virtual void remove_attributes(
+        DAG_node const *node) = 0;
 
     /// Get the value of an attribute for the given DAG node.
     ///
@@ -110,7 +119,9 @@ public:
     /// \param name name of the attribute (must not be NULL)
     ///
     /// \return value of the attribute or NULL if the attribute does not exist.
-    virtual DAG_node const * get_attribute(DAG_node const * node, char const *name) = 0;
+    virtual DAG_node const *get_attribute(
+        DAG_node const *node,
+        char const     *name) = 0;
 
     /// Check whether a named attribute exists for a DAG node.
     ///
@@ -118,14 +129,18 @@ public:
     /// \param name name of the attribute (must not be NULL)
     ///
     /// \return true if the attribute exists, false otherwise
-    virtual bool attribute_exists(DAG_node const * node, char const *name) = 0;
+    virtual bool attribute_exists(
+        DAG_node const *node,
+        char const     *name) = 0;
 
     /// Move all nodes from `from_node` to node `to_node`, removing
     /// them from `from_node`.
     ///
     /// \param to_node node to which to assign the attributes
     /// \param from_node node from which to move the attributes
-    virtual void move_attributes(DAG_node const *to_node, DAG_node const *from_node) = 0;
+    virtual void move_attributes(
+        DAG_node const *to_node,
+        DAG_node const *from_node) = 0;
 
 
     /// ================================================================================
@@ -176,7 +191,7 @@ public:
     virtual IMaterial_instance *merge_materials(
         IMaterial_instance const *m0,
         IMaterial_instance const *m1,
-        Field_selector                                field_selector) = 0;
+        Field_selector           field_selector) = 0;
 
     /// Create a constant.
     ///
@@ -192,7 +207,9 @@ public:
     /// \param index        The index of the temporary.
     ///
     /// \returns            The created temporary reference.
-    virtual DAG_temporary const *create_temporary(DAG_node const *node, int index) = 0;
+    virtual DAG_temporary const *create_temporary(
+        DAG_node const *node,
+        int            index) = 0;
 
     /// Create a call.
     ///
@@ -201,14 +218,16 @@ public:
     /// \param  call_args       The call arguments of the called function.
     /// \param  num_call_args   The number of call arguments.
     /// \param  ret_type        The return type of the function.
+    /// \param dbg_info         The debug info for this node if any.
     ///
     /// \returns                The created call or an equivalent expression.
     virtual DAG_node const *create_call(
         char const                    *name,
         IDefinition::Semantics        sema,
         DAG_call::Call_argument const call_args[],
-        int                           num_call_args,
-        IType const                   *ret_type) = 0;
+        size_t                        num_call_args,
+        IType const                   *ret_type,
+        DAG_DbgInfo                   dbg_info) = 0;
 
     /// Create a function call for a non-overloaded function. All parameter
     /// and return types are deduced from the function definition.
@@ -216,12 +235,14 @@ public:
     /// \param  name            The name of the called function, e.g., "::state::normal".
     /// \param  call_args       The call arguments of the called function.
     /// \param  num_call_args   The number of call arguments.
+    /// \param dbg_info         The debug info for this node if any.
     ///
     /// \returns                The created call or an equivalent expression.
     virtual DAG_node const *create_function_call(
         char const             *name,
         DAG_node const * const call_args[],
-        size_t                 num_call_args) = 0;
+        size_t                 num_call_args,
+        DAG_DbgInfo            dbg_info) = 0;
 
     /// Create a 1-, 2-, 3-, or 4-mixer call, with 2, 4, 6, or 8 parameters respectively.
     virtual DAG_node const *create_mixer_call(
@@ -237,9 +258,13 @@ public:
     ///
     /// \param  type        The type of the parameter
     /// \param  index       The index of the parameter.
+    /// \param dbg_info     The debug info for this node if any.
     ///
     /// \returns            The created parameter reference.
-    virtual DAG_parameter const *create_parameter(IType const *type, int index) = 0;
+    virtual DAG_parameter const *create_parameter(
+        IType const *type,
+        int         index,
+        DAG_DbgInfo dbg_info) = 0;
 
     /// Get the type factory associated with this expression factory.
     ///
@@ -298,13 +323,16 @@ public:
     virtual IType const *get_vdf_component_type() = 0;
 
     /// Return the type for \::df::bsdf_component
-    virtual IType const *get_bsdf_component_array_type( int n_values) = 0;
+    virtual IType const *get_bsdf_component_array_type(
+        int n_values) = 0;
 
     /// Return the type for \::df::edf_component
-    virtual IType const *get_edf_component_array_type( int n_values) = 0;
+    virtual IType const *get_edf_component_array_type(
+        int n_values) = 0;
 
     /// Return the type for \::df::vdf_component
-    virtual IType const *get_vdf_component_array_type( int n_values) = 0;
+    virtual IType const *get_vdf_component_array_type(
+        int n_values) = 0;
 
     /// Return the type for \::df::color_bsdf_component
     virtual IType const *get_color_bsdf_component_type() = 0;
@@ -316,13 +344,16 @@ public:
     virtual IType const *get_color_vdf_component_type() = 0;
 
     /// Return the type for \::df::color_bsdf_component
-    virtual IType const *get_color_bsdf_component_array_type( int n_values) = 0;
+    virtual IType const *get_color_bsdf_component_array_type(
+        int n_values) = 0;
 
     /// Return the type for \::df::color_edf_component
-    virtual IType const *get_color_edf_component_array_type( int n_values) = 0;
+    virtual IType const *get_color_edf_component_array_type(
+        int n_values) = 0;
 
     /// Return the type for \::df::color_vdf_component
-    virtual IType const *get_color_vdf_component_array_type( int n_values) = 0;
+    virtual IType const *get_color_vdf_component_array_type(
+        int n_values) = 0;
 
     /// Return the type for bool
     virtual IType const *get_bool_type() = 0;
@@ -335,7 +366,7 @@ public:
     /// \returns a DAG representing l op r
     virtual DAG_node const *create_unary(
         Unary_operator op,
-        DAG_node const  *o) = 0;
+        DAG_node const *o) = 0;
 
     /// Creates an operator, handles types.
     ///
@@ -382,34 +413,42 @@ public:
         size_t                 n_values) = 0;
 
     /// Creates a boolean constant.
-    virtual DAG_constant const *create_bool_constant(bool f) = 0;
+    virtual DAG_constant const *create_bool_constant(
+        bool f) = 0;
 
     /// Creates an integer constant.
-    virtual DAG_constant const *create_int_constant(int i) = 0;
+    virtual DAG_constant const *create_int_constant(
+        int i) = 0;
 
     /// Creates a constant of the predefined intensity_mode enum.
     ///
     /// \param i  the index of the enum value
-    virtual DAG_constant const *create_emission_enum_constant(int i) = 0;
+    virtual DAG_constant const *create_emission_enum_constant(
+        int i) = 0;
 
     /// Creates a constant of the df::scatter_mode enum.
     ///
     /// \param i  the index of the enum value
-    virtual DAG_constant const *create_scatter_enum_constant(int i) = 0;
+    virtual DAG_constant const *create_scatter_enum_constant(
+        int i) = 0;
 
     /// Creates a constant of the tex::wrap_mode enum.
     ///
     /// \param i  the index of the enum value
-    virtual DAG_constant const *create_wrap_mode_enum_constant(int i) = 0;
+    virtual DAG_constant const *create_wrap_mode_enum_constant(
+        int i) = 0;
 
     /// Creates a floating point constant.
-    virtual DAG_constant const *create_float_constant(float f) = 0;
+    virtual DAG_constant const *create_float_constant(
+        float f) = 0;
 
     /// Creates a float3 constant.
-    virtual DAG_constant const *create_float3_constant(float x, float y, float z) = 0;
+    virtual DAG_constant const *create_float3_constant(
+        float x, float y, float z) = 0;
 
     /// Creates a RGB color constant.
-    virtual DAG_constant const *create_color_constant( float r, float g, float b) = 0;
+    virtual DAG_constant const *create_color_constant(
+        float r, float g, float b) = 0;
 
     /// Creates a RGB color constant of the global material IOR value.
     virtual DAG_constant const *create_global_ior() = 0;
@@ -418,7 +457,8 @@ public:
     virtual DAG_constant const *create_global_float_ior() = 0;
 
     /// Creates a string constant.
-    virtual DAG_constant const *create_string_constant(char const *s) = 0;
+    virtual DAG_constant const *create_string_constant(
+        char const *s) = 0;
 
     /// Creates an invalid bsdf.
     virtual DAG_constant const *create_bsdf_constant() = 0;
@@ -434,62 +474,75 @@ public:
 
     /// Create a bsdf_component for a mixer; can be a call or a constant.
     virtual DAG_node const *create_bsdf_component(
-        DAG_node const* weight_arg,
-        DAG_node const* bsdf_arg) = 0;
+        DAG_node const *weight_arg,
+        DAG_node const *bsdf_arg) = 0;
 
     /// Create a edf_component for a mixer; can be a call or a constant.
     virtual DAG_node const *create_edf_component(
-        DAG_node const* weight_arg,
-        DAG_node const* edf_arg) = 0;
+        DAG_node const *weight_arg,
+        DAG_node const *edf_arg) = 0;
 
     /// Create a vdf_component for a mixer; can be a call or a constant.
     virtual DAG_node const *create_vdf_component(
-        DAG_node const* weight_arg,
-        DAG_node const* vdf_arg) = 0;
+        DAG_node const *weight_arg,
+        DAG_node const *vdf_arg) = 0;
 
     /// Create a bsdf_color_component for a color mixer; can be a call or a constant.
     virtual DAG_node const *create_color_bsdf_component(
-        DAG_node const* weight_arg,
-        DAG_node const* bsdf_arg) = 0;
+        DAG_node const *weight_arg,
+        DAG_node const *bsdf_arg) = 0;
 
     /// Create a edf_color_component for a color mixer; can be a call or a constant.
     virtual DAG_node const *create_color_edf_component(
-        DAG_node const* weight_arg,
-        DAG_node const* edf_arg) = 0;
+        DAG_node const *weight_arg,
+        DAG_node const *edf_arg) = 0;
 
     /// Create a vdf_color_component for a color mixer; can be a call or a constant.
     virtual DAG_node const *create_color_vdf_component(
-        DAG_node const* weight_arg,
-        DAG_node const* edf_arg) = 0;
+        DAG_node const *weight_arg,
+        DAG_node const *edf_arg) = 0;
 
     /// Create a constant node for a given type and value.
-    virtual DAG_constant const* mk_constant( const char* const_type, const char* value) = 0;
+    virtual DAG_constant const *mk_constant(
+        const char *const_type,
+        const char *value) = 0;
 
     /// Create DAG_node's for possible default values of Node_types parameter.
-    virtual DAG_node const* mk_default( const char* param_type, const char* param_default) = 0;
+    virtual DAG_node const *mk_default(
+        char const *param_type,
+        char const *param_default) = 0;
 
     /// Returns the argument count if node is non-null and of the call kind or a compound constant,
     /// and 0 otherwise.
-    virtual size_t get_compound_argument_size(DAG_node const* node) = 0;
+    virtual size_t get_compound_argument_size(
+        DAG_node const *node) = 0;
 
     /// Return the i-th argument if node is non-null and of the call kind, or a compound constant,
     /// and NULL otherwise.
-    virtual DAG_node const *get_compound_argument(DAG_node const* node, size_t i) = 0;
+    virtual DAG_node const *get_compound_argument(
+        DAG_node const *node,
+        size_t         i) = 0;
 
     /// Return the i-th argument if node is non-null and of the call kind, or a compound constant,
     /// and NULL otherwise; remaps index for special case handling of mixers and parameter
     /// order of glossy BSDFs.
-    virtual DAG_node const *get_remapped_argument(DAG_node const* node, size_t i) = 0;
+    virtual DAG_node const *get_remapped_argument(
+        DAG_node const *node,
+        size_t         i) = 0;
 
     /// Returns the name of the i-th parameter of node, or NULL if there is none or node is NULL.
-    virtual char const *get_compound_parameter_name(DAG_node const *node, size_t i) const = 0;
+    virtual char const *get_compound_parameter_name(
+        DAG_node const *node,
+        size_t         i) const = 0;
 
     /// Returns true if node evaluates to true
-    virtual bool eval_if( DAG_node const* node) = 0;
+    virtual bool eval_if(
+        DAG_node const *node) = 0;
 
     /// Returns true if node is not evaluating to false, i.e., it either evaluates
     /// to true or cannot be evaluated.
-    virtual bool eval_maybe_if( DAG_node const* node) = 0;
+    virtual bool eval_maybe_if(
+        DAG_node const *node) = 0;
 
     /// Compute the node selector for the matcher, either the semantic for a DAG_call
     /// node, or one of the Distiller_extended_node_semantics covering DAG_constant
@@ -497,15 +550,17 @@ public:
     /// one of the material structs, and selectors for mix_1, mix_2, mix_3, mix_4,
     /// clamped_mix_1, ..., as well as a special selector for local_normal.
     /// All other nodes return 0.
-    virtual int get_selector( DAG_node const* node) const = 0;
+    virtual int get_selector(
+        DAG_node const *node) const = 0;
 
     /// Checks recursively for all call nodes if the property test_fct returns true.
     virtual bool all_nodes(
         IRule_matcher::Checker_function test_fct,
-        DAG_node const *node) = 0;
+        DAG_node const                  *node) = 0;
 
     /// Set the normalization of mixer node flag and return its previous value.
-    virtual bool set_normalize_mixers( bool new_value) = 0;
+    virtual bool set_normalize_mixers(
+        bool new_value) = 0;
 
     /// Normalize mixer nodes and set respective flag to keep them normalized
     ///
@@ -516,15 +571,42 @@ public:
     ///
     /// \return a new compiled material
     virtual IMaterial_instance *normalize_mixers(
-        IMaterial_instance const *inst,
-        IRule_matcher_event                           *event_handler,
-        const mi::mdl::Distiller_options              *options,
-        mi::Sint32                                    &error) = 0;
+        IMaterial_instance const         *inst,
+        IRule_matcher_event              *event_handler,
+        const mi::mdl::Distiller_options *options,
+        mi::Sint32                       &error) = 0;
 
     /// Immediately deletes this distiller plugin API
     virtual void release() const  = 0;
 
-    virtual void debug_node(IOutput_stream *outs, DAG_node const *node) = 0;
+    virtual void debug_node(
+        IOutput_stream *outs,
+        DAG_node const *node) = 0;
+
+    // This structs collects the node properties that are required for matching on a node in 
+    // the Distiller. The following properties are relevant.
+    // 1. Semantics
+    // 2. Type kind (if the semantics is not enough, e.g. DS_UNKOWN or DS_ELEM_CONSTRUCTOR or 
+    //    ternaries)
+    // 3. Predefined struct Id (if the Type kind is also not enough, e.g. for materials)
+    // 4. Arity (number of arguments for mixers and tint())
+    // The properties are stored in the output parameters. Parameters that are not relevant
+    // (or not even meaningful) for a node are set to default values as follows:
+    // - sema: DS_UNKNOWN
+    // - type_kind: TK_ERROR
+    // - struct_id: SID_USER
+    // - arity: 0
+    struct Match_properties {
+        IDefinition::Semantics      sema;
+        IType::Kind                 type_kind;
+        IType_struct::Predefined_id struct_id;
+        size_t                      arity;
+    };
+
+    // Compute all properties of a node that are required for matching against a rule pattern.
+    virtual void get_match_properties(
+        DAG_node const   *node,
+        Match_properties &mprops) const = 0;
 };
 
 } // mdl

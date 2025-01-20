@@ -120,6 +120,10 @@ Resource_tag_tuple::Kind kind_from_bsdf_data_kind(
         return Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER;
     case IValue_texture::BDK_SHEEN_MULTISCATTER:
         return Resource_tag_tuple::RK_SHEEN_MULTISCATTER;
+    case IValue_texture::BDK_MICROFLAKE_SHEEN_GENERAL:
+        return Resource_tag_tuple::RK_MICROFLAKE_SHEEN_GENERAL;
+    case IValue_texture::BDK_MICROFLAKE_SHEEN_MULTISCATTER:
+        return Resource_tag_tuple::RK_MICROFLAKE_SHEEN_MULTISCATTER;
     }
     MDL_ASSERT(!"Unsupported bsdf_data kind");
     return Resource_tag_tuple::RK_BAD;
@@ -146,6 +150,10 @@ IValue_texture::Bsdf_data_kind bsdf_data_kind_from_kind(
         return IValue_texture::BDK_WARD_GEISLER_MORODER_MULTISCATTER;
     case Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
         return IValue_texture::BDK_SHEEN_MULTISCATTER;
+    case Resource_tag_tuple::RK_MICROFLAKE_SHEEN_GENERAL:
+        return IValue_texture::BDK_MICROFLAKE_SHEEN_GENERAL;
+    case Resource_tag_tuple::RK_MICROFLAKE_SHEEN_MULTISCATTER:
+        return IValue_texture::BDK_MICROFLAKE_SHEEN_MULTISCATTER;
     default:
         return IValue_texture::BDK_NONE;
     }

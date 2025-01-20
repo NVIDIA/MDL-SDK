@@ -128,8 +128,6 @@ Mdl_module_builder::Mdl_module_builder(
     m_mdl_module_name = mdl_module_name;
 
     create_module( context);
-
-    m_name_mangler = std::make_unique<Name_mangler>( m_mdl.get(), m_module.get());
 }
 
 Mdl_module_builder::~Mdl_module_builder()
@@ -159,7 +157,7 @@ mi::Sint32 Mdl_module_builder::add_variant(
     // get prototype for obtaining defaults and annotations
     DB::Access<Mdl_function_definition> prototype( prototype_tag, m_transaction);
 
-    // get defaults from prototype if NULL
+    // get defaults from prototype if \c nullptr
     mi::base::Handle<const IExpression_list> prototype_defaults;
     if( !defaults) {
         prototype_defaults = prototype->get_defaults();
@@ -174,7 +172,7 @@ mi::Sint32 Mdl_module_builder::add_variant(
         return -1;
     }
 
-    // get annotations from prototype if NULL
+    // get annotations from prototype if \c nullptr
     mi::base::Handle<const IAnnotation_block> prototype_annotations;
     if( !annotations) {
         prototype_annotations = prototype->get_annotations();
@@ -189,7 +187,7 @@ mi::Sint32 Mdl_module_builder::add_variant(
             return -1;
         }
     } else {
-        // get return annotations from prototype if NULL
+        // get return annotations from prototype if \c nullptr
         mi::base::Handle<const IAnnotation_block> prototype_return_annotations;
         if( !return_annotations) {
             prototype_return_annotations = prototype->get_return_annotations();
@@ -238,7 +236,7 @@ mi::Sint32 Mdl_module_builder::add_function(
     IType::Modifier frequency_qualifier,
     Execution_context* context)
 {
-    // handle NULL arguments
+    // handle nullptr arguments
     ASSERT( M_SCENE, name);
     ASSERT( M_SCENE, body);
     if( !temporaries)
@@ -268,7 +266,7 @@ mi::Sint32 Mdl_module_builder::add_function(
         m_transaction,
         body,
         /*allow_calls*/ false,
-        /*alllow_direct_calls*/ true,
+        /*allow_direct_calls*/ true,
         /*allowed_parameter_count*/ n_parameters,
         /*allowed_temporary_count*/ n_temporaries,
         context))
@@ -280,7 +278,7 @@ mi::Sint32 Mdl_module_builder::add_function(
             m_transaction,
             expr.get(),
             /*allow_calls*/ false,
-            /*alllow_direct_calls*/ true,
+            /*allow_direct_calls*/ true,
             /*allowed_parameter_count*/ n_parameters,
             /*allowed_temporary_count*/ i,
             context))
@@ -291,7 +289,7 @@ mi::Sint32 Mdl_module_builder::add_function(
         m_transaction,
         defaults,
         /*allow_calls*/ true,
-        /*alllow_direct_calls*/ true,
+        /*allow_direct_calls*/ true,
         /*allowed_parameter_count*/ 0,
         /*allowed_temporary_count*/ 0,
         context))
@@ -314,6 +312,7 @@ mi::Sint32 Mdl_module_builder::add_function(
         return_annotations);
     if( is_declarative && (version < mi::neuraylib::MDL_VERSION_1_9))
         version = mi::neuraylib::MDL_VERSION_1_9;
+
     upgrade_mdl_version( version, context);
     if( context->get_error_messages_count() > 0)
         return -1;
@@ -350,7 +349,7 @@ mi::Sint32 Mdl_module_builder::add_function(
         }
     }
 
-    // check for surplus parameter_anotations
+    // check for surplus parameter_annotations
     mi::Size n_parameter_annotations = parameter_annotations->get_size();
     for( mi::Size i = 0; i < n_parameter_annotations; ++i) {
         const char* parameter_annotation_name = parameter_annotations->get_name( i);
@@ -698,7 +697,7 @@ mi::Sint32 Mdl_module_builder::add_annotation(
     bool is_exported,
     Execution_context* context)
 {
-    // handle NULL arguments
+    // handle nullptr arguments
     ASSERT( M_SCENE, name);
     if( !parameters)
         parameters = m_empty_type_list.get();
@@ -720,7 +719,7 @@ mi::Sint32 Mdl_module_builder::add_annotation(
         m_transaction,
         defaults,
         /*allow_calls*/ true,
-        /*alllow_direct_calls*/ true,
+        /*allow_direct_calls*/ true,
         /*allowed_parameter_count*/ 0,
         /*allowed_temporary_count*/ 0,
         context))
@@ -760,7 +759,7 @@ mi::Sint32 Mdl_module_builder::add_annotation(
         }
     }
 
-    // check for surplus parameter_anotations
+    // check for surplus parameter_annotations
     mi::Size n_parameter_annotations = parameter_annotations->get_size();
     for( mi::Size i = 0; i < n_parameter_annotations; ++i) {
         const char* parameter_annotation_name = parameter_annotations->get_name( i);
@@ -856,7 +855,7 @@ mi::Sint32 Mdl_module_builder::add_struct_category(
     bool is_exported,
     Execution_context* context)
 {
-    // handle NULL arguments
+    // handle nullptr arguments
     ASSERT( M_SCENE, name);
     if( !annotations)
         annotations = m_empty_annotation_block.get();
@@ -929,7 +928,7 @@ mi::Sint32 Mdl_module_builder::add_enum_type(
     bool is_exported,
     Execution_context* context)
 {
-    // handle NULL arguments
+    // handle nullptr arguments
     ASSERT( M_SCENE, name);
     ASSERT( M_SCENE, enumerators);
     if( !enumerator_annotations)
@@ -948,7 +947,7 @@ mi::Sint32 Mdl_module_builder::add_enum_type(
         m_transaction,
         enumerators,
         /*allow_calls*/ false,
-        /*alllow_direct_calls*/ true,
+        /*allow_direct_calls*/ true,
         /*allowed_parameter_count*/ 0,
         /*allowed_temporary_count*/ 0,
         context))
@@ -973,7 +972,7 @@ mi::Sint32 Mdl_module_builder::add_enum_type(
         return -1;
     }
 
-    // check for surplus enumerator_anotations
+    // check for surplus enumerator_annotations
     mi::Size n_enumerator_annotations = enumerator_annotations->get_size();
     for( mi::Size i = 0; i < n_enumerator_annotations; ++i) {
         const char* enumerator_annotation_name = enumerator_annotations->get_name( i);
@@ -1058,7 +1057,7 @@ mi::Sint32 Mdl_module_builder::add_struct_type(
     const IStruct_category* struct_category,
     Execution_context* context)
 {
-    // handle NULL arguments
+    // handle nullptr arguments
     ASSERT( M_SCENE, name);
     ASSERT( M_SCENE, fields);
     if( !field_defaults)
@@ -1079,7 +1078,7 @@ mi::Sint32 Mdl_module_builder::add_struct_type(
         m_transaction,
         field_defaults,
         /*allow_calls*/ false,
-        /*alllow_direct_calls*/ true,
+        /*allow_direct_calls*/ true,
         /*allowed_parameter_count*/ 0,
         /*allowed_temporary_count*/ 0,
         context))
@@ -1120,7 +1119,7 @@ mi::Sint32 Mdl_module_builder::add_struct_type(
         }
     }
 
-    // check for surplus field_anotations
+    // check for surplus field_annotations
     mi::Size n_field_annotations = field_annotations->get_size();
     for( mi::Size i = 0; i < n_field_annotations; ++i) {
         const char* field_annotation_name = field_annotations->get_name( i);
@@ -1219,7 +1218,7 @@ mi::Sint32 Mdl_module_builder::add_constant(
     bool is_exported,
     Execution_context* context)
 {
-    // handle NULL arguments
+    // handle nullptr arguments
     ASSERT( M_SCENE, name);
     ASSERT( M_SCENE, expr);
     if( !annotations)
@@ -1236,7 +1235,7 @@ mi::Sint32 Mdl_module_builder::add_constant(
         m_transaction,
         expr,
         /*allow_calls*/ false,
-        /*alllow_direct_calls*/ true,
+        /*allow_direct_calls*/ true,
         /*allowed_parameter_count*/ 0,
         /*allowed_temporary_count*/ 0,
         context))
@@ -1299,6 +1298,9 @@ mi::Sint32 Mdl_module_builder::set_module_annotations(
     const IAnnotation_block* annotations,
     Execution_context* context)
 {
+    if( !check_valid( context))
+        return -1;
+
     // convert annotations
     mi::mdl::IAnnotation_block* core_annotations = int_anno_block_to_core_anno_block(
         annotations, /*skip_anno_unused*/ false, context);
@@ -1372,7 +1374,7 @@ bool has_name( const mi::mdl::IDeclaration* decl, const char* name)
     }
 }
 
-// Clones constant declarations with \p name removed, returns NULL for other kinds (or if the
+// Clones constant declarations with \p name removed, returns \c nullptr for other kinds (or if the
 // constant declaration has exactly one element).
 mi::mdl::IDeclaration* create_decl(
     mi::mdl::IModule* module, const mi::mdl::IDeclaration* decl, const char* name)
@@ -1411,7 +1413,7 @@ mi::Sint32 Mdl_module_builder::remove_entity(
     mi::Size index,
     Execution_context* context)
 {
-    // handle NULL arguments
+    // handle nullptr arguments
     ASSERT( M_SCENE, name);
     ASSERT( M_SCENE, context);
 
@@ -1468,7 +1470,7 @@ mi::Sint32 Mdl_module_builder::remove_entity(
 mi::Sint32 Mdl_module_builder::clear_module(
     Execution_context* context)
 {
-    // handle NULL arguments
+    // handle nullptr arguments
     ASSERT( M_SCENE, context);
 
     if( !check_valid( context))
@@ -1502,7 +1504,7 @@ std::vector<bool> Mdl_module_builder::analyze_uniform(
         m_transaction,
         root_expr,
         root_expr_uniform,
-        /*quer_expr*/ nullptr,
+        /*query_expr*/ nullptr,
         result,
         /*uniform_query_expr*/ dummy,
         /*error_path*/ dummy2,
@@ -1542,21 +1544,21 @@ mi::Sint32 Mdl_module_builder::add_function(
         return -1;
     }
 
-    // get defaults from prototype if NULL
+    // get defaults from prototype if \c nullptr
     mi::base::Handle<const IExpression_list> prototype_defaults;
     if( !defaults) {
         prototype_defaults = prototype->get_defaults();
         defaults = prototype_defaults.get();
     }
 
-    // get parameter annotations from prototype if NULL
+    // get parameter annotations from prototype if \c nullptr
     mi::base::Handle<const IAnnotation_list> prototype_parameter_annotations;
     if( !parameter_annotations) {
         prototype_parameter_annotations = prototype->get_parameter_annotations();
         parameter_annotations = prototype_parameter_annotations.get();
     }
 
-    // get annotations from prototype if NULL
+    // get annotations from prototype if \c nullptr
     mi::base::Handle<const IAnnotation_block> prototype_annotations;
     if( !annotations) {
         prototype_annotations = prototype->get_annotations();
@@ -1571,7 +1573,7 @@ mi::Sint32 Mdl_module_builder::add_function(
             return -1;
         }
     } else {
-        // get return annotations from prototype if NULL
+        // get return annotations from prototype if \c nullptr
         mi::base::Handle<const IAnnotation_block> prototype_return_annotations;
         if( !return_annotations) {
             prototype_return_annotations = prototype->get_return_annotations();
@@ -1605,6 +1607,8 @@ const mi::mdl::IModule* Mdl_module_builder::get_module() const
 
 bool Mdl_module_builder::check_valid( Execution_context* context)
 {
+    sync_from_db();
+
     if( m_module && m_module->is_valid())
         return true;
 
@@ -1641,7 +1645,7 @@ mi::Sint32 Mdl_module_builder::add_prototype_based(
         m_transaction,
         defaults,
         /*allow_calls*/ true,
-        /*alllow_direct_calls*/ false,
+        /*allow_direct_calls*/ false,
         /*allowed_parameter_count*/ 0,
         /*allowed_temporary_count*/ 0,
         context))
@@ -1955,11 +1959,7 @@ void Mdl_module_builder::upgrade_mdl_version(
     if( context->get_error_messages_count() > 0)
         return;
 
-    // The module transformer is about to be destroyed, no need to serialize the module.
-    m_module = const_cast<mi::mdl::IModule*>( transformer.get_module());
-    update_module();
-
-    // Re-create name mangler of namespace aliases legality changed.
+    // Re-create name mangler if namespace aliases legality changed.
     if( is_namespace_alias_legal( current_version) != is_namespace_alias_legal( new_version))
         m_name_mangler = std::make_unique<Name_mangler>( m_mdl.get(), m_module.get());
 }
@@ -2136,7 +2136,7 @@ mi::mdl::IAnnotation_block* Mdl_module_builder::int_anno_block_to_core_anno_bloc
 
 void Mdl_module_builder::create_module( Execution_context* context)
 {
-    m_module = nullptr;
+    m_module.reset();
 
     // Run sanity checks if module exists already.
     DB::Tag tag = m_transaction->name_to_tag( m_db_module_name.c_str());
@@ -2162,14 +2162,8 @@ void Mdl_module_builder::create_module( Execution_context* context)
     if( tag && !ignore_existing) {
 
         // Start with existing module.
-        DB::Access<Mdl_module> db_module( tag, m_transaction);
-        mi::base::Handle<const mi::mdl::IModule> module( db_module->get_core_module());
-        mi::mdl::Buffer_serializer serializer( m_mdl->get_mdl_allocator());
-        m_mdl->serialize_module( module.get(), &serializer, /*include_dependencies*/ false);
-        mi::mdl::Buffer_deserializer deserializer(
-            m_mdl->get_mdl_allocator(), serializer.get_data(), serializer.get_size());
-        m_module = mi::mdl::impl_cast<mi::mdl::Module>( const_cast<mi::mdl::IModule*>(
-            m_mdl->deserialize_module( &deserializer)));
+        m_needs_sync_from_db = true;
+        sync_from_db( tag);
 
     } else {
 
@@ -2249,8 +2243,7 @@ void Mdl_module_builder::analyze_module( Execution_context* context)
     }
 
     // export to DB
-    std::string db_module_name = get_db_name( m_module->get_name());
-    DB::Tag db_module_tag = m_transaction->name_to_tag( db_module_name.c_str());
+    DB::Tag db_module_tag = m_transaction->name_to_tag( m_db_module_name.c_str());
     if( db_module_tag) {
         DB::Edit<Mdl_module> db_module_edit( db_module_tag, m_transaction);
         db_module_edit->reload_module_internal(
@@ -2268,22 +2261,46 @@ void Mdl_module_builder::analyze_module( Execution_context* context)
         }
     }
 
-    // clone module and reinitialize dependent members
+    // Delay re-reading the module from the DB until the next modification.
+    m_module.reset();
+    m_needs_sync_from_db = true;
+}
+
+void Mdl_module_builder::sync_from_db()
+{
+    DB::Tag db_module_tag = m_transaction->name_to_tag( m_db_module_name.c_str());
+    Mdl_module_builder::sync_from_db( db_module_tag);
+}
+
+void Mdl_module_builder::sync_from_db( DB::Tag tag)
+{
+    if( !m_needs_sync_from_db)
+        return;
+
+    ASSERT( M_SCENE, !m_module);
+
+    // Access module in the DB. This should be the same as m_module.
+    DB::Access<Mdl_module> db_module( tag, m_transaction);
+    mi::base::Handle<const mi::mdl::IModule> module( db_module->get_core_module());
+
     mi::mdl::Buffer_serializer serializer( m_mdl->get_mdl_allocator());
-    m_mdl->serialize_module( m_module.get(), &serializer, /*include_dependencies*/ false);
+    m_mdl->serialize_module( module.get(), &serializer, /*include_dependencies*/ false);
     mi::mdl::Buffer_deserializer deserializer(
         m_mdl->get_mdl_allocator(), serializer.get_data(), serializer.get_size());
     m_module = const_cast<mi::mdl::IModule*>( m_mdl->deserialize_module( &deserializer));
 
     update_module();
+    m_needs_sync_from_db = false;
 }
 
 void Mdl_module_builder::update_module()
 {
+    ASSERT( M_SCENE, m_module);
     if( !m_module)
         return;
 
     m_symbol_importer = std::make_unique<Symbol_importer>( m_module.get());
+    m_name_mangler = std::make_unique<Name_mangler>( m_mdl.get(), m_module.get());
 
     m_af = m_module->get_annotation_factory();
     m_df = m_module->get_declaration_factory();

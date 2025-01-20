@@ -34,6 +34,7 @@
 
 #include "compilercore_cc_conf.h"
 #include "compilercore_memory_arena.h"
+#include "compilercore_analysis.h"
 #include "compilercore_factories.h"
 #include "compilercore_positions.h"
 #include "compilercore_tools.h"
@@ -1397,61 +1398,63 @@ IDeclaration_namespace_alias *Declaration_factory::create_namespace_alias(
     return result;
 }
 
-// Skip all presets returning the original definition.
-IDeclaration_function const *skip_presets(
-    IDeclaration_function const     *func_decl,
-    mi::base::Handle<IModule const> &owner_mod)
+// Skip all presets returning the original function declaration.
+IDefinition const *skip_presets(
+    IDeclaration_function const    *f_decl,
+    mi::base::Handle<Module const> &owner_mod)
 {
-    if (func_decl->is_preset()) {
+     if (f_decl->is_preset()) {
         // A preset, retrieve its original definition.
         // Beware, might be a preset of a preset, so find out the original (non-preset)
         // declaration by iteration.
         do {
-            IStatement_expression const *preset_body
-                = cast<IStatement_expression>(func_decl->get_body());
-            IExpression const           *expr = preset_body->get_expression();
+            IStatement_expression const *body = cast<IStatement_expression>(f_decl->get_body());
+            IExpression const *expr = body->get_expression();
 
             // skip let expressions
             while (IExpression_let const *let = as<IExpression_let>(expr)) {
                 expr = let->get_expression();
             }
-            IExpression_call const      *inst = cast<IExpression_call>(expr);
-            IExpression_reference const *ref  =
-                cast<IExpression_reference>(inst->get_reference());
+            IExpression_call const *call = cast<IExpression_call>(expr);
+            IExpression_reference const *ref = cast<IExpression_reference>(call->get_reference());
 
             IDefinition const *orig_def = ref->get_definition();
 
-            mi::base::Handle<IModule const> next(owner_mod->get_owner_module(orig_def));
+            mi::base::Handle<Module const> next(owner_mod->get_owner_module(orig_def));
 
             orig_def = owner_mod->get_original_definition(orig_def);
             owner_mod = next;
 
+            if (is_error(orig_def)) {
+                return orig_def;
+            }
+
             // get the prototype of the preset if any, else its definition
-            func_decl = cast<IDeclaration_function>(orig_def->get_declaration());
-        } while (func_decl->is_preset());
+            f_decl = cast<IDeclaration_function>(orig_def->get_declaration());
+        } while (f_decl->is_preset());
     }
-    return func_decl;
+    return f_decl->get_definition();
 }
 
 // Skip all presets returning the original function definition.
 IDefinition const *skip_presets(
-    IDefinition const               *func_def,
-    mi::base::Handle<IModule const> &owner_mod)
+    IDefinition const              *func_def,
+    mi::base::Handle<Module const> &owner_mod)
 {
     MDL_ASSERT(
         !func_def->get_property(IDefinition::DP_IS_IMPORTED) &&
         "skip_presets() called on imported entity");
-    if (func_def->get_kind() != IDefinition::DK_FUNCTION)
+    if (func_def->get_kind() != IDefinition::DK_FUNCTION) {
         return func_def;
+    }
 
     IDeclaration const *decl = func_def->get_declaration();
-    if (decl == NULL)
+    if (decl == NULL) {
         return func_def;
+    }
 
     IDeclaration_function const *f_decl = cast<IDeclaration_function>(decl);
-    f_decl = skip_presets(f_decl, owner_mod);
-
-    return f_decl->get_definition();
+    return skip_presets(f_decl, owner_mod);
 }
 
 }  // mdl

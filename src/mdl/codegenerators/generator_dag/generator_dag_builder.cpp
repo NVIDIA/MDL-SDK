@@ -1105,9 +1105,21 @@ DAG_builder::DAG_builder(
 , m_module_stack(alloc)
 , m_module_stack_tos(0)
 , m_accesible_parameters(alloc)
+, m_curr_file_id_table(NULL)
 , m_skip_flags(INL_NO_SKIP)
 , m_inline_return_node(NULL)
 , m_error_calls(alloc)
+, m_file_table_arena(alloc)
+, m_module_2_file_id_map(
+    0,
+    File_ID_table_map::hasher(),
+    File_ID_table_map::key_equal(),
+    alloc)
+, m_file_2_id_map(
+    0,
+    File_2_ID_map::hasher(),
+    File_2_ID_map::key_equal(),
+    alloc)
 , m_forbid_local_calls(false)
 , m_conditional_created(false)
 , m_conditional_df_created(false)
@@ -1208,8 +1220,64 @@ void DAG_builder::make_accessible(mi::mdl::IParameter const *param)
     make_accessible(p_def);
 }
 
-// Push a module on the module stack.
-void DAG_builder::push_module(IModule const *mod)
+// Get the unique file ID for the given file name.
+size_t DAG_builder::get_unique_file_id(char const *fname)
+{
+    if (fname == NULL) {
+        return 0;
+    }
+
+    File_2_ID_map::iterator it(m_file_2_id_map.find(fname));
+    if (it != m_file_2_id_map.end()) {
+        return it->second;
+    }
+
+    // register with the DAG unit and cache it
+    size_t ID = m_node_factory.register_file_name(fname);
+    m_file_2_id_map[fname] = ID;
+
+    return ID;
+}
+
+// Get the unique file ID for the given module.
+size_t DAG_builder::get_unique_file_id(Module const *mod)
+{
+    if (mod == NULL) {
+        return 0;
+    }
+    return get_unique_file_id(mod->get_name());
+}
+
+// Get the file ID mapping table for a given module.
+File_id_table const *DAG_builder::get_file_id_table(
+    Module const *mod)
+{
+    File_ID_table_map::iterator it(m_module_2_file_id_map.find(mod));
+    if (it != m_module_2_file_id_map.end()) {
+        return it->second;
+    }
+
+    Messages_impl const &msgs = mod->access_messages_impl();
+    size_t n = msgs.get_fname_count();
+
+    MDL_ASSERT(n > 0 && "a file table should have at least one entry");
+
+    File_id_table *table = static_cast<File_id_table *>(
+        m_file_table_arena.allocate(sizeof(*table) + (n - 1) * sizeof(table->map[0])));
+
+    table->module_id = mod->get_unique_id();
+    table->len       = n;
+
+    for (size_t i = 0; i < table->len; ++i) {
+        table->map[i] = get_unique_file_id(msgs.get_fname(i));
+    }
+
+    m_module_2_file_id_map[mod] = table;
+    return table;
+}
+
+// Push a module on the module stack and process debug info of the module.
+void DAG_builder::push_module(Module const *mod)
 {
     if (m_module_stack_tos >= m_module_stack.size()) {
         m_module_stack.push_back(mi::base::make_handle_dup(mod));
@@ -1217,6 +1285,10 @@ void DAG_builder::push_module(IModule const *mod)
         m_module_stack[m_module_stack_tos] = mi::base::make_handle_dup(mod);
     }
     ++m_module_stack_tos;
+
+    if (m_node_factory.is_dbg_info_enabled()) {
+        m_curr_file_id_table = get_file_id_table(mod);
+    }
 }
 
 // Pop a module from the module stack.
@@ -1225,11 +1297,19 @@ void DAG_builder::pop_module()
     if (m_module_stack_tos > 0) {
         --m_module_stack_tos;
         m_module_stack[m_module_stack_tos].reset();
+
+        if (m_node_factory.is_dbg_info_enabled()) {
+            if (Module const *mod = tos_module()) {
+                m_curr_file_id_table = get_file_id_table(mod);
+            } else {
+                m_curr_file_id_table = NULL;
+            }
+        }
     }
 }
 
 // Return the top-of-stack module, not retained.
-IModule const *DAG_builder::tos_module() const
+Module const *DAG_builder::tos_module() const
 {
     if (m_module_stack_tos > 0) {
         return m_module_stack[m_module_stack_tos - 1].get();
@@ -1348,6 +1428,27 @@ IDefinition const *DAG_builder::get_parameter_definition(
     return simple_name->get_definition();
 }
 
+// Convert an AST position into a DAG debug info.
+DAG_DbgInfo DAG_builder::get_dbg_info(
+    Position const *pos)
+{
+    if (pos != NULL && m_node_factory.is_dbg_info_enabled()) {
+        size_t file_id = pos->get_filename_id();
+        MDL_ASSERT(m_curr_file_id_table != NULL && "file ID table is missing");
+
+        if (file_id < m_curr_file_id_table->len) {
+            return DAG_DbgInfo(
+                m_curr_file_id_table->map[file_id],
+                pos->get_start_line(),
+                pos->get_start_column());
+        } else {
+            // FIXME: should not happen
+            return DAG_DbgInfo();
+        }
+    }
+    return DAG_DbgInfo();
+}
+
 // Set array size for size-deferred arrays
 void DAG_builder::set_parameter_array_size_var(
     IDeclaration_function const *decl,
@@ -1364,11 +1465,13 @@ void DAG_builder::set_parameter_array_size_var(
         } else {
             DAG_call::Call_argument arg(arg_exp, "a");
 
+            DAG_DbgInfo dbg_info = get_dbg_info(size_name);
             array_size = m_node_factory.create_call(
                 "operator_len(<0>[])",
                 IDefinition::DS_INTRINSIC_DAG_ARRAY_LENGTH,
                 &arg, 1,
-                m_type_factory.create_int());
+                m_type_factory.create_int(),
+                dbg_info);
         }
         m_tmp_value_map[size_name->get_definition()] = array_size;
     }
@@ -1379,7 +1482,8 @@ DAG_node const *DAG_builder::optimize_binary_operator(
     IExpression_binary::Operator op,
     DAG_node const               *l,
     DAG_node const               *r,
-    IType const                  *type)
+    IType const                  *type,
+    DAG_DbgInfo                  dbg_info)
 {
     DAG_node_factory_impl::normalize(op, l, r);
 
@@ -1405,7 +1509,8 @@ DAG_node const *DAG_builder::optimize_binary_operator(
         operator_to_semantic(op),
         call_args,
         2,
-        type);
+        type,
+        dbg_info);
 }
 
 DAG_call const *DAG_builder::constant_to_call(DAG_constant const *cnst) {
@@ -1715,15 +1820,16 @@ DAG_node const *DAG_builder::insert_decl_cast(
         }
     }
 
-    Small_VLA<DAG_call::Call_argument, 1> call_args(get_allocator(), 1);
+    DAG_call::Call_argument call_arg;
 
-    call_args[0].arg = expr;
-    call_args[0].param_name = "cast";
+    call_arg.arg = expr;
+    call_arg.param_name = "cast";
     return m_node_factory.create_call(
         "operator_decl_cast(<0>)",
         IDefinition::DS_INTRINSIC_DAG_DECL_CAST,
-        call_args.data(), call_args.size(),
-        dst_type);
+        &call_arg, 1,
+        dst_type,
+        expr->get_dbg_info());
     return expr;
 }
 
@@ -1851,7 +1957,8 @@ DAG_node const *DAG_builder::ref_to_dag(
                 IType const *p_type = m_type_factory.import(
                     ref_def->get_type()->skip_type_alias());
 
-                return m_node_factory.create_parameter(p_type, parameter_index);
+                DAG_DbgInfo dbg_info = get_dbg_info(ref_def->get_position());
+                return m_node_factory.create_parameter(p_type, parameter_index, dbg_info);
             } else {
                 return it->second;
             }
@@ -1888,7 +1995,8 @@ DAG_node const *DAG_builder::ref_to_dag(
                     IType const *p_type = m_type_factory.import(
                         param_def->get_type()->skip_type_alias());
 
-                    node = m_node_factory.create_parameter(p_type, parameter_index);
+                    DAG_DbgInfo dbg_info = get_dbg_info(param_def->get_position());
+                    node = m_node_factory.create_parameter(p_type, parameter_index, dbg_info);
                 } else {
                     node = dit->second;
 
@@ -1908,7 +2016,8 @@ DAG_node const *DAG_builder::ref_to_dag(
                     "operator_len(<0>[])",
                     IDefinition::DS_INTRINSIC_DAG_ARRAY_LENGTH,
                     &arg, 1,
-                    m_type_factory.create_int());
+                    m_type_factory.create_int(),
+                    node->get_dbg_info());
             }
             break;
         }
@@ -2007,12 +2116,14 @@ DAG_node const *DAG_builder::unary_to_dag(
             call_args[0].arg        = node;
             call_args[0].param_name = "x";
 
+            DAG_DbgInfo dbg_info = get_dbg_info(unary);
             return m_node_factory.create_call(
                 name.c_str(),
                 operator_to_semantic(op),
                 call_args,
                 1,
-                ret_type);
+                ret_type,
+                dbg_info);
         }
     }
 
@@ -2041,11 +2152,13 @@ DAG_node const *DAG_builder::unary_to_dag(
     }
 
     if (res == NULL) {
+        DAG_DbgInfo dbg_info = get_dbg_info(unary);
         res = optimize_binary_operator(
             bin_op,
             pre_node,
             one,
-            m_type_factory.import(unary->get_type()));
+            m_type_factory.import(unary->get_type()),
+            dbg_info);
     }
 
     if (is_simple_select(arg)) {
@@ -2070,15 +2183,23 @@ DAG_node const *DAG_builder::unary_to_dag(
         case IType::TK_STRUCT:
             {
                 IType_struct const *s_type = cast<IType_struct>(c_tp);
-                new_node =
-                    create_struct_insert(s_type, mem_def->get_field_index(), old_node, res);
+                new_node = create_struct_insert(
+                    s_type,
+                    mem_def->get_field_index(),
+                    old_node,
+                    res,
+                    &select->access_position());
             }
             break;
         case IType::TK_VECTOR:
             {
                 IType_vector const *v_type = cast<IType_vector>(c_tp);
-                new_node =
-                    create_vector_insert(v_type, mem_def->get_field_index(), old_node, res);
+                new_node = create_vector_insert(
+                    v_type,
+                    mem_def->get_field_index(),
+                    old_node,
+                    res,
+                    &select->access_position());
             }
             break;
         default:
@@ -2234,7 +2355,8 @@ DAG_node const *DAG_builder::create_struct_insert(
     IType_struct const *s_type,
     int                index,
     DAG_node const     *c_node,
-    DAG_node const     *e_node)
+    DAG_node const     *e_node,
+    Position const     *pos)
 {
     IValue_struct const *s_val = NULL;
 
@@ -2293,13 +2415,16 @@ DAG_node const *DAG_builder::create_struct_insert(
                 name += s_name;
                 name += ')';
 
-                DAG_call::Call_argument call_args[1];
+                DAG_call::Call_argument call_arg;
 
-                call_args[0].arg        = c_node;
-                call_args[0].param_name = "s";
+                call_arg.arg        = c_node;
+                call_arg.param_name = "s";
                 dag_field = m_node_factory.create_call(
-                    name.c_str(), IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS, call_args, 1,
-                    field_tp);
+                    name.c_str(),
+                    IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS,
+                    &call_arg, 1,
+                    field_tp,
+                    get_dbg_info(pos));
             }
         }
         call_args[i].param_name = field_sym->get_name();
@@ -2327,7 +2452,11 @@ DAG_node const *DAG_builder::create_struct_insert(
     // string name = elem_constructor_name(c_type);
 
     return m_node_factory.create_call(
-        name.c_str(), IDefinition::DS_ELEM_CONSTRUCTOR, call_args.data(), n_fields, s_type);
+        name.c_str(),
+        IDefinition::DS_ELEM_CONSTRUCTOR,
+        call_args.data(), call_args.size(),
+        s_type,
+        get_dbg_info(pos));
 }
 
 // Creates a insert pseudo-instruction on a struct value.
@@ -2335,7 +2464,8 @@ DAG_node const *DAG_builder::create_vector_insert(
     IType_vector const *v_type,
     int                index,
     DAG_node const     *c_node,
-    DAG_node const     *e_node)
+    DAG_node const     *e_node,
+    Position const     *pos)
 {
     IValue_vector const *v_val = NULL;
 
@@ -2399,7 +2529,8 @@ DAG_node const *DAG_builder::create_vector_insert(
                     "operator[](<0>[],int)",
                     operator_to_semantic(IExpression::OK_ARRAY_INDEX),
                     call_args, 2,
-                    elem_tp);
+                    elem_tp,
+                    get_dbg_info(pos));
             }
         }
         call_args[i].param_name = field_name;
@@ -2427,7 +2558,11 @@ DAG_node const *DAG_builder::create_vector_insert(
     // string name = elem_constructor_name(c_type);
 
     return m_node_factory.create_call(
-        name.c_str(), IDefinition::DS_ELEM_CONSTRUCTOR, call_args.data(), n_fields, v_type);
+        name.c_str(),
+        IDefinition::DS_ELEM_CONSTRUCTOR,
+        call_args.data(), call_args.size(),
+        v_type,
+        get_dbg_info(pos));
 }
 
 // Convert a node to a destination type.
@@ -2463,14 +2598,19 @@ DAG_node const *DAG_builder::convert_to_type(
 
     DAG_call::Call_argument arg(n, "x");
     return m_node_factory.create_call(
-        name.c_str(), IDefinition::DS_CONV_CONSTRUCTOR, &arg, 1, dst_type);
+        name.c_str(),
+        IDefinition::DS_CONV_CONSTRUCTOR,
+        &arg, 1,
+        dst_type,
+        n->get_dbg_info());
 }
 
 // Create a struct field select.
 DAG_node const *DAG_builder::create_field_select(
     DAG_node const *compound,
     char const     *field,
-    IType const    *f_type)
+    IType const    *f_type,
+    DAG_DbgInfo    dbg_info)
 {
     IType_struct const *s_type = cast<IType_struct>(compound->get_type()->skip_type_alias());
     char const *s_name = s_type->get_symbol()->get_name();
@@ -2483,13 +2623,16 @@ DAG_node const *DAG_builder::create_field_select(
     name += s_name;
     name += ')';
 
-    DAG_call::Call_argument call_args[1];
+    DAG_call::Call_argument call_arg;
 
-    call_args[0].arg = compound;
-    call_args[0].param_name = "s";
+    call_arg.arg = compound;
+    call_arg.param_name = "s";
     return m_node_factory.create_call(
-        name.c_str(), IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS, call_args, 1,
-        f_type);
+        name.c_str(),
+        IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS,
+        &call_arg, 1,
+        f_type,
+        dbg_info);
 }
 
 // Convert an MDL binary expression to a DAG expression.
@@ -2567,7 +2710,10 @@ DAG_node const *DAG_builder::binary_to_dag(
             switch (left_type->get_kind()) {
             case IType::TK_STRUCT:
                 return create_field_select(
-                    compound, symbol->get_name(), m_type_factory.import(binary->get_type()));
+                    compound,
+                    symbol->get_name(),
+                    m_type_factory.import(binary->get_type()),
+                    get_dbg_info(binary));
             case IType::TK_VECTOR:
                 {
                     char const *fname = symbol->get_name();
@@ -2600,7 +2746,8 @@ DAG_node const *DAG_builder::binary_to_dag(
                         "operator[](<0>[],int)",
                         operator_to_semantic(IExpression::OK_ARRAY_INDEX),
                         call_args, 2,
-                        m_type_factory.import(binary->get_type()));
+                        m_type_factory.import(binary->get_type()),
+                        get_dbg_info(binary));
                 }
             default:
                 break;
@@ -2621,7 +2768,8 @@ DAG_node const *DAG_builder::binary_to_dag(
                 operator_to_semantic(IExpression::OK_ARRAY_INDEX),
                 call_args,
                 2,
-                m_type_factory.import(binary->get_type()));
+                m_type_factory.import(binary->get_type()),
+                get_dbg_info(binary));
         }
     case IExpression_binary::OK_SEQUENCE:
         // ignore comma operator, dropping left argument
@@ -2705,7 +2853,8 @@ DAG_node const *DAG_builder::binary_to_dag(
                 op,
                 l,
                 r,
-                m_type_factory.import(binary->get_type()));
+                m_type_factory.import(binary->get_type()),
+                get_dbg_info(binary));
         }
     }
 
@@ -2732,15 +2881,23 @@ DAG_node const *DAG_builder::binary_to_dag(
             case IType::TK_STRUCT:
                 {
                     IType_struct const *s_type = cast<IType_struct>(c_tp);
-                    new_node =
-                        create_struct_insert(s_type, mem_def->get_field_index(), old_node, res);
+                    new_node = create_struct_insert(
+                        s_type,
+                        mem_def->get_field_index(),
+                        old_node,
+                        res,
+                        &binary->access_position());
                 }
                 break;
             case IType::TK_VECTOR:
                 {
                     IType_vector const *v_type = cast<IType_vector>(c_tp);
-                    new_node =
-                        create_vector_insert(v_type, mem_def->get_field_index(), old_node, res);
+                    new_node = create_vector_insert(
+                        v_type,
+                        mem_def->get_field_index(),
+                        old_node,
+                        res,
+                        &binary->access_position());
                 }
                 break;
             default:
@@ -2790,13 +2947,15 @@ DAG_node const *DAG_builder::cond_to_dag(
     call_args[2].arg        = expr_to_dag(cond->get_false());
     call_args[2].param_name = "false_exp";
 
-    IDefinition::Semantics sema = operator_to_semantic(op);
-    DAG_node const *res = m_node_factory.create_call(
+    DAG_DbgInfo            dbg_info = get_dbg_info(cond);
+    IDefinition::Semantics sema     = operator_to_semantic(op);
+    DAG_node const         *res     = m_node_factory.create_call(
         get_ternary_operator_signature(),
         sema,
         call_args,
         dimension_of(call_args),
-        ret_type);
+        ret_type,
+        dbg_info);
 
     if (DAG_call const *call_res = as<DAG_call>(res)) {
         if (call_res->get_semantic() == sema) {
@@ -2866,12 +3025,10 @@ DAG_node const *DAG_builder::try_inline(
     IType_function const *f_type = cast<IType_function>(orig_call_def->get_type());
     IType const *ret_type = f_type->get_return_type();
 
-    IDeclaration_function const *func_decl =
-        cast<IDeclaration_function>(orig_call_def->get_declaration());
+    mi::base::Handle<Module const> owner_mod(tos_module()->get_owner_module(call_def));
 
-    mi::base::Handle<const IModule> owner_mod(tos_module()->get_owner_module(call_def));
-
-    func_decl = skip_presets(func_decl, owner_mod);
+    IDefinition const           *f_def = skip_presets(orig_call_def, owner_mod);
+    IDeclaration_function const *f_decl = cast<IDeclaration_function>(f_def->get_declaration());
 
     bool is_declarative_func = false;
     if (orig_call_def->get_semantics() != IDefinition::DS_ELEM_CONSTRUCTOR &&
@@ -2882,7 +3039,7 @@ DAG_node const *DAG_builder::try_inline(
 
         // except we are in target material model compilation mode
         if (m_target_material_model_mode && is_material_category_type(ret_type)) {
-            if (has_target_material_model_anno(func_decl->get_annotations())) {
+            if (has_target_material_model_anno(f_decl->get_annotations())) {
                 // do not inline
                 return NULL;
             }
@@ -2907,7 +3064,7 @@ DAG_node const *DAG_builder::try_inline(
     Inline_scope inline_scope(*this);
 
     for (int i = 0; i < n_args; ++i) {
-        IDefinition const *parameter_def = get_parameter_definition(func_decl, i);
+        IDefinition const *parameter_def = get_parameter_definition(f_decl, i);
         DAG_node const    *expr          = arg_exprs[i];
 
         m_tmp_value_map[parameter_def] = expr;
@@ -2915,7 +3072,7 @@ DAG_node const *DAG_builder::try_inline(
         make_accessible(parameter_def);
 
         // set array size for size-deferred arrays
-        set_parameter_array_size_var(func_decl, i, expr);
+        set_parameter_array_size_var(f_decl, i, expr);
     }
 
     if (!is_declarative_func) {
@@ -2924,7 +3081,7 @@ DAG_node const *DAG_builder::try_inline(
             tos_module(),
             m_node_factory.get_value_factory(),
             m_node_factory.get_call_evaluator(),
-            func_decl,
+            f_decl,
             call,
             m_forbid_local_calls,
             m_tmp_value_map);
@@ -2935,7 +3092,7 @@ DAG_node const *DAG_builder::try_inline(
 
     Module_scope mod_scope(*this, owner_mod.get());
 
-    DAG_node const *res = stmt_to_dag(func_decl->get_body());
+    DAG_node const *res = stmt_to_dag(f_decl->get_body());
     MDL_ASSERT((m_skip_flags & INL_SKIP_BREAK) == 0 && "break was not properly handled");
     MDL_ASSERT(res != NULL || (m_skip_flags & INL_SKIP_RETURN) != 0);
     if ((m_skip_flags & INL_SKIP_RETURN) != 0) {
@@ -2970,7 +3127,7 @@ DAG_node const *DAG_builder::try_inline(
         return NULL;
     }
 
-    IDefinition const *orig_def = tos_module()->get_original_definition(def);
+    IDefinition const           *orig_def  = tos_module()->get_original_definition(def);
     IDeclaration_function const *func_decl =
         cast<IDeclaration_function>(orig_def->get_declaration());
     if (func_decl == NULL) {
@@ -2986,9 +3143,8 @@ DAG_node const *DAG_builder::try_inline(
         }
     }
 
-    mi::base::Handle<IModule const> owner_mod(tos_module()->get_owner_module(def));
-
-    func_decl = skip_presets(func_decl, owner_mod);
+    mi::base::Handle<Module const> owner_mod(tos_module()->get_owner_module(def));
+    func_decl = cast<IDeclaration_function>(skip_presets(func_decl, owner_mod)->get_declaration());
 
 
     // enter inlining
@@ -3138,7 +3294,9 @@ DAG_node const *DAG_builder::call_to_dag(
         return m_node_factory.create_call(
             get_array_constructor_signature(),
             IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,
-            call_args.data(), n_args, a_type);
+            call_args.data(), call_args.size(),
+            a_type,
+            get_dbg_info(call));
     }
     // else not an array constructor ...
 
@@ -3197,7 +3355,11 @@ DAG_node const *DAG_builder::call_to_dag(
     string name = def_to_name(call_def, owner_name);
 
     return m_node_factory.create_call(
-        name.c_str(), call_sema, call_args.data(), n_args, ret_type);
+        name.c_str(),
+        call_sema,
+        call_args.data(), call_args.size(),
+        ret_type,
+        get_dbg_info(call));
 }
 
 // Convert an MDL let expression to a DAG IR node.
@@ -3266,7 +3428,8 @@ DAG_node const *DAG_builder::preset_to_dag(
         IType const *p_type = m_type_factory.import(
             parameter_def->get_type()->skip_type_alias());
 
-        DAG_node const *node = m_node_factory.create_parameter(p_type, i);
+        DAG_node const *node = m_node_factory.create_parameter(
+            p_type, i, get_dbg_info(parameter_def->get_position()));
         m_tmp_value_map[parameter_def] = node;
     }
 
@@ -3314,7 +3477,7 @@ DAG_node const *DAG_builder::annotation_to_dag(
     }
     IDefinition::Semantics sema = annotation_def->get_semantics();
     return m_node_factory.create_call(
-        name.c_str(), sema, call_args.data(), n_args, /*ret_type=*/NULL);
+        name.c_str(), sema, call_args.data(), n_args, /*ret_type=*/NULL, DAG_DbgInfo());
 }
 
 // Creates an anno::hidden() annotation.
@@ -3327,7 +3490,7 @@ DAG_node const *DAG_builder::create_hidden_annotation()
 
     const char *hidden_sig = "::anno::hidden()";
     return m_node_factory.create_call(
-        hidden_sig, IDefinition::DS_HIDDEN_ANNOTATION, NULL, 0, /*ret_type=*/NULL);
+        hidden_sig, IDefinition::DS_HIDDEN_ANNOTATION, NULL, 0, /*ret_type=*/NULL, DAG_DbgInfo());
 }
 
 // Find a parameter for a given array size symbol.

@@ -43,7 +43,7 @@ function(FIND_OPTIX7_EXT)
     endif()
 
     if(MDL_LOG_DEPENDENCIES)
-        message(STATUS "[INFO] OPTIX7_DIR:                           ${OPTIX7_DIR}")
+        message(STATUS "[INFO] OPTIX7_DIR:                               ${OPTIX7_DIR}")
     endif()
 
 endfunction()

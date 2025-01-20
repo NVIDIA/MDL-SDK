@@ -29,12 +29,11 @@ if __name__ == '__main__':
     if report_coverage:
         folder: str = 'coverage_report'
         cov = coverage.Coverage(data_file=folder + '/.coverage')
-        cov.exclude('.*No constructor defined - class is abstract.*')
         cov.start()
         ret_code = run()
         cov.stop()
         cov.save()
-        cov.html_report(directory=folder)
+        cov.html_report(directory=folder, omit="**/__init__.py")
     else:
         ret_code = run()
     exit(ret_code)

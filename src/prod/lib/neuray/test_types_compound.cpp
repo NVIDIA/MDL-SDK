@@ -239,7 +239,7 @@ void test_compound(
     for( mi::Size i = 0; i < m*n; ++i) {
         mi::base::Handle<mi::INumber> element(
             transaction->create<mi::INumber>( element_type_name));
-        MI_CHECK( element.is_valid_interface());
+        MI_CHECK( element);
         element->set_value( source1[i]);
         MI_CHECK_EQUAL( 0, data_collection->set_value( i, element.get()));
     }
@@ -250,14 +250,14 @@ void test_compound(
 
     for( mi::Size i = 0; i < m*n; ++i) {
         mi::base::Handle<mi::INumber> element( data_collection->get_value<mi::INumber>( i));
-        MI_CHECK( element.is_valid_interface());
+        MI_CHECK( element);
         T value = element->get_value<T>();
         MI_CHECK_EQUAL( value, source1[i]);
     }
 
     mi::base::Handle<mi::INumber> element(
         transaction->create<mi::INumber>( element_type_name));
-    MI_CHECK( element.is_valid_interface());
+    MI_CHECK( element);
     MI_CHECK_EQUAL( -1, data_collection->set_value( zero_size, nullptr));
     MI_CHECK_EQUAL( -2, data_collection->set_value( m*n, element.get()));
     mi::base::Handle<mi::IVoid> void_( transaction->create<mi::IVoid>( "Void"));
@@ -288,7 +288,7 @@ void test_vector(
     else
         icompound->retain();
     mi::base::Handle<I> compound( icompound);
-    MI_CHECK( compound.is_valid_interface());
+    MI_CHECK( compound);
 
     // run generic mi::ICompound test
 
@@ -331,7 +331,7 @@ void test_matrix(
     else
         icompound->retain();
     mi::base::Handle<I> compound( icompound);
-    MI_CHECK( compound.is_valid_interface());
+    MI_CHECK( compound);
 
     // run generic mi::ICompound test
 
@@ -375,7 +375,7 @@ void test_color(
     else
         icompound->retain();
     mi::base::Handle<I> compound( icompound);
-    MI_CHECK( compound.is_valid_interface());
+    MI_CHECK( compound);
 
     // run generic mi::ICompound test
 
@@ -418,7 +418,7 @@ void test_color3(
     else
         icompound->retain();
     mi::base::Handle<I> compound( icompound);
-    MI_CHECK( compound.is_valid_interface());
+    MI_CHECK( compound);
 
     // run generic mi::ICompound test
 
@@ -461,7 +461,7 @@ void test_spectrum(
     else
         icompound->retain();
     mi::base::Handle<I> compound( icompound);
-    MI_CHECK( compound.is_valid_interface());
+    MI_CHECK( compound);
 
     // run generic mi::ICompound test
 
@@ -504,7 +504,7 @@ void test_bbox(
     else
         icompound->retain();
     mi::base::Handle<I> compound( icompound);
-    MI_CHECK( compound.is_valid_interface());
+    MI_CHECK( compound);
 
     // run generic mi::ICompound test
 
@@ -546,10 +546,10 @@ void test_attribute_vector( mi::neuraylib::ITransaction* transaction, const char
 {
     mi::base::Handle<mi::neuraylib::IAttribute_container> attribute_container(
         transaction->create<mi::neuraylib::IAttribute_container>( "Attribute_container"));
-    MI_CHECK( attribute_container.is_valid_interface());
+    MI_CHECK( attribute_container);
 
     mi::base::Handle<I> compound( attribute_container->create_attribute<I>( "the_attribute", type_name));
-    MI_CHECK( compound.is_valid_interface());
+    MI_CHECK( compound);
 
     std::string real_type_name = type_name;
     if( real_type_name[0] == 'U')
@@ -564,10 +564,10 @@ void test_attribute_matrix( mi::neuraylib::ITransaction* transaction, const char
 {
     mi::base::Handle<mi::neuraylib::IAttribute_container> attribute_container(
         transaction->create<mi::neuraylib::IAttribute_container>( "Attribute_container"));
-    MI_CHECK( attribute_container.is_valid_interface());
+    MI_CHECK( attribute_container);
 
     mi::base::Handle<I> compound( attribute_container->create_attribute<I>( "the_attribute", type_name));
-    MI_CHECK( compound.is_valid_interface());
+    MI_CHECK( compound);
 
     test_matrix<I,T,ROWS,COLUMNS>( transaction, type_name, compound.get());
 }
@@ -578,10 +578,10 @@ void test_attribute_color( mi::neuraylib::ITransaction* transaction, const char*
 {
     mi::base::Handle<mi::neuraylib::IAttribute_container> attribute_container(
         transaction->create<mi::neuraylib::IAttribute_container>( "Attribute_container"));
-    MI_CHECK( attribute_container.is_valid_interface());
+    MI_CHECK( attribute_container);
 
     mi::base::Handle<I> compound( attribute_container->create_attribute<I>( "the_attribute", type_name));
-    MI_CHECK( compound.is_valid_interface());
+    MI_CHECK( compound);
 
     test_color<I,T>( transaction, type_name, compound.get());
 }
@@ -592,10 +592,10 @@ void test_attribute_color3( mi::neuraylib::ITransaction* transaction, const char
 {
     mi::base::Handle<mi::neuraylib::IAttribute_container> attribute_container(
         transaction->create<mi::neuraylib::IAttribute_container>( "Attribute_container"));
-    MI_CHECK( attribute_container.is_valid_interface());
+    MI_CHECK( attribute_container);
 
     mi::base::Handle<I> compound( attribute_container->create_attribute<I>( "the_attribute", type_name));
-    MI_CHECK( compound.is_valid_interface());
+    MI_CHECK( compound);
 
     test_color3<I,T>( transaction, type_name, compound.get());
 }
@@ -606,10 +606,10 @@ void test_attribute_spectrum( mi::neuraylib::ITransaction* transaction, const ch
 {
     mi::base::Handle<mi::neuraylib::IAttribute_container> attribute_container(
         transaction->create<mi::neuraylib::IAttribute_container>( "Attribute_container"));
-    MI_CHECK( attribute_container.is_valid_interface());
+    MI_CHECK( attribute_container);
 
     mi::base::Handle<I> compound( attribute_container->create_attribute<I>( "the_attribute", type_name));
-    MI_CHECK( compound.is_valid_interface());
+    MI_CHECK( compound);
 
     test_spectrum<I,T>( transaction, type_name, compound.get());
 }
@@ -754,7 +754,7 @@ void run_tests( mi::neuraylib::INeuray* neuray)
 MI_TEST_AUTO_FUNCTION( test_types_compound )
 {
     mi::base::Handle<mi::neuraylib::INeuray> neuray( load_and_get_ineuray());
-    MI_CHECK( neuray.is_valid_interface());
+    MI_CHECK( neuray);
 
     {
         mi::base::Handle<mi::neuraylib::IDebug_configuration> debug_configuration(

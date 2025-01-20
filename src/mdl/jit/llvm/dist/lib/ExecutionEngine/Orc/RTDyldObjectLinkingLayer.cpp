@@ -279,21 +279,6 @@ void RTDyldObjectLinkingLayer::onObjEmit(
     return;
   }
 
-  // Add to MemMgrs before potentially notifying other threads, that the object was emitted.
-  // Otherwise these other threads could already execute the code and remove the object,
-  // leading to defunct resource trackers.
-  if (auto Err = R.withResourceKeyDo(
-      [&](ResourceKey K) { MemMgrs[K].push_back(std::move(MemMgr)); })) {
-      getExecutionSession().reportError(std::move(Err));
-      R.failMaterialization();
-  }
-
-  if (auto Err = R.notifyEmitted()) {
-    getExecutionSession().reportError(std::move(Err));
-    R.failMaterialization();
-    return;
-  }
-
   std::unique_ptr<object::ObjectFile> Obj;
   std::unique_ptr<MemoryBuffer> ObjBuffer;
   std::tie(Obj, ObjBuffer) = O.takeBinary();
@@ -308,6 +293,27 @@ void RTDyldObjectLinkingLayer::onObjEmit(
 
   if (NotifyEmitted)
     NotifyEmitted(R, std::move(ObjBuffer));
+
+  // Add to MemMgrs before potentially notifying other threads, that the object
+  // was emitted. Otherwise these other threads could already execute the code
+  // and remove the object, leading to defunct resource trackers.
+  if (auto Err = R.withResourceKeyDo(
+          [&](ResourceKey K) { MemMgrs[K].push_back(std::move(MemMgr)); })) {
+    getExecutionSession().reportError(std::move(Err));
+    R.failMaterialization();
+    return;
+  }
+
+  if (auto Err = R.notifyEmitted()) {
+    // Undo adding the memory manager and calling the event listeners.
+    consumeError(R.withResourceKeyDo([&](ResourceKey K) {
+      consumeError(handleRemoveResources(K));
+    }));
+
+    getExecutionSession().reportError(std::move(Err));
+    R.failMaterialization();
+    return;
+  }
 }
 
 Error RTDyldObjectLinkingLayer::handleRemoveResources(ResourceKey K) {

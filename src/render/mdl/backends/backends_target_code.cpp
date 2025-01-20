@@ -402,12 +402,13 @@ const mi::Float32* Target_code::get_texture_df_data(
     mi::Size index,
     mi::Size &rx,
     mi::Size &ry,
-    mi::Size &rz) const
+    mi::Size &rz,
+    const char *&pixel_data) const
 {
     if (index < m_texture_table.size() &&
         m_texture_table[index].get_texture_shape() == mi::neuraylib::ITarget_code::Texture_shape_bsdf_data) {
 
-        return get_df_data_texture(m_texture_table[index].get_df_data_kind(), rx, ry, rz);
+        return get_df_data_texture(m_texture_table[index].get_df_data_kind(), rx, ry, rz, pixel_data);
     }
     return nullptr;
 }
@@ -1097,17 +1098,27 @@ const mi::Float32* Target_code::get_df_data_texture(
     mi::mdl::IValue_texture::Bsdf_data_kind kind,
     mi::Size &rx,
     mi::Size &ry,
-    mi::Size &rz)
+    mi::Size &rz,
+    const char *&pixel_type)
 {
-    size_t w = 0, h = 0, d = 0;
-    mi::mdl::libbsdf_data::get_libbsdf_multiscatter_data_resolution(
-        kind, w, h, d);
+    size_t w = 0, h = 0, d = 0, s = 0;
+    const unsigned char* data = nullptr;
+    switch (kind) {
+        case mi::mdl::IValue_texture::BDK_MICROFLAKE_SHEEN_GENERAL:
+            mi::mdl::libbsdf_data::get_libbsdf_general_data_resolution(
+                kind, w, h, d, pixel_type);
+            data = mi::mdl::libbsdf_data::get_libbsdf_general_data(kind, s);
+            break;
+        default:
+            mi::mdl::libbsdf_data::get_libbsdf_multiscatter_data_resolution(
+                kind, w, h, d, pixel_type);
+            data = mi::mdl::libbsdf_data::get_libbsdf_multiscatter_data(kind, s);
+            break;
+    }
     rx = w;
     ry = h;
     rz = d;
-    size_t s;
-    return reinterpret_cast<const mi::Float32*>(
-        mi::mdl::libbsdf_data::get_libbsdf_multiscatter_data(kind, s));
+    return reinterpret_cast<const mi::Float32*>(data);
 }
 
 /// Returns the resource index for use in an \c ITarget_argument_block of resources already

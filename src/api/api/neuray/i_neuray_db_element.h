@@ -118,13 +118,13 @@ public:
 
     /// Returns the corresponding transaction.
     ///
-    /// Returns \c NULL if the DB element is in state STATE_INVALID.
+    /// Returns \c nullptr if the DB element is in state STATE_INVALID.
     /// \note This method does \em not increase the reference count of the return value.
     virtual Transaction_impl* get_transaction() const = 0;
 
     /// Returns the corresponding DB transaction.
     ///
-    /// Returns \c NULL if the DB element is in state STATE_INVALID.
+    /// Returns \c nullptr if the DB element is in state STATE_INVALID.
     /// \note This method does \em not increase the reference count of the return value.
     virtual DB::Transaction* get_db_transaction() const = 0;
 

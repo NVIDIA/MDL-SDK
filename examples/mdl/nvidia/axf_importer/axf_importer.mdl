@@ -239,7 +239,7 @@ export material svbrdf(
     anno::hidden(),
     anno::description("MDL implementation of the SVBRDF model used in AxF files"),
     anno::author("NVIDIA Corporation"),
-    anno::copyright_notice("Copyright 2024 NVIDIA Corporation. All rights reserved."),
+    anno::copyright_notice("Copyright 2025 NVIDIA Corporation. All rights reserved."),
     anno::key_words(string[]("axf","svbrdf"))
 ]]
  = let {
@@ -917,7 +917,7 @@ export material carpaint(
     anno::hidden(),
     anno::description("MDL approximation of the AxF carpaint material"),
     anno::author("NVIDIA Corporation"),
-    anno::copyright_notice("Copyright 2024 NVIDIA Corporation. All rights reserved."),
+    anno::copyright_notice("Copyright 2025 NVIDIA Corporation. All rights reserved."),
     anno::key_words(string[]("axf","carpaint"))
 ]]
  = let {
@@ -1049,7 +1049,7 @@ export material volumetric(
     anno::hidden(),
     anno::description("MDL version of the AxF volumetric material"),
     anno::author("NVIDIA Corporation"),
-    anno::copyright_notice("Copyright 2024 NVIDIA Corporation. All rights reserved."),
+    anno::copyright_notice("Copyright 2025 NVIDIA Corporation. All rights reserved."),
     anno::key_words(string[]("axf","volumetric"))
 ]]
 = material(

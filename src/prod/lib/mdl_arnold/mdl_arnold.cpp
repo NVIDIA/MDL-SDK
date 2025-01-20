@@ -216,8 +216,9 @@ bool update_current_user_param_value(
         return false;
 
     uint8_t param_type = AiUserParamGetType(entry);
-    const char* param_name = AiUserParamGetName(entry);
-    size_t hash = std::hash<std::string>{}(param_name);
+    const char* param_name_cstr = AiUserParamGetName(entry);
+    size_t hash = std::hash<std::string>{}(param_name_cstr);
+    AtString param_name(param_name_cstr);
 
     // parameter not known yet? -> just set it
     bool found = data.current_user_param_values.find(hash) != data.current_user_param_values.end();

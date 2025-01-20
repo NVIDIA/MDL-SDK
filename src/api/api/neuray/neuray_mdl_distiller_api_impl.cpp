@@ -58,18 +58,6 @@ namespace NEURAY {
 
 namespace {
 
-// Unused, kept for possible later use
-// /// Reads a string option value from an IMap.
-// static void get_option( const mi::IMap* options, const char* name, std::string& value)
-// {
-//     if( !options)
-//         return;
-//     mi::base::Handle<const mi::IString> istring(
-//         options->get_value<const mi::IString>( name));
-//     if( istring.is_valid_interface())
-//         value = istring->get_c_str();
-// }
-
 /// Reads a bool option value from an IMap.
 void get_option( const mi::IMap* options, const char* name, bool& value)
 {
@@ -77,7 +65,7 @@ void get_option( const mi::IMap* options, const char* name, bool& value)
         return;
     mi::base::Handle<const mi::IBoolean> ivalue(
         options->get_value<const mi::IBoolean>( name));
-    if( ivalue.is_valid_interface())
+    if( ivalue)
         ivalue->get_value( value);
 }
 
@@ -88,7 +76,7 @@ void get_option( const mi::IMap* options, const char* name, int& value)
         return;
     mi::base::Handle<const mi::ISint32> ivalue(
         options->get_value<const mi::ISint32>( name));
-    if( ivalue.is_valid_interface())
+    if( ivalue)
         ivalue->get_value( value);
 }
 
@@ -99,7 +87,7 @@ void get_option( const mi::IMap* options, const char* name, float& value)
         return;
     mi::base::Handle<const mi::IFloat32> ivalue(
         options->get_value<const mi::IFloat32>( name));
-    if( ivalue.is_valid_interface())
+    if( ivalue)
         ivalue->get_value( value);
 }
 
@@ -240,7 +228,7 @@ class Rule_matcher_event : public mi::mdl::IRule_matcher_event
     ///
     /// \param rule_set_name   the name of the rule set
     /// \param rule_name       the name of the rule that matched
-    /// \param file_name       if non-NULL, the file name where the rule was declared
+    /// \param file_name       if non-\c nulltptr, the file name where the rule was declared
     /// \param line_number     if non-ZERO, the line number where the rule was declared
     virtual void rule_match_event(
         char const *rule_set_name,
@@ -428,6 +416,88 @@ mi::Sint32 Mdl_distiller_api_impl::shutdown()
     return 0;
 }
 
+namespace {
+
+bool convert_baker_constant(
+    const std::string& pixel_type,
+    const BAKER::Baker_module::Constant_result& data,
+    mi::IData* constant)
+{
+    if( pixel_type == "Rgb_fp") {
+
+        mi::base::Handle<mi::IColor> constant_color(
+            constant->get_interface<mi::IColor>());
+        if( !constant_color)
+            return false;
+
+        constant_color->set_value( 0, 0, data.v.x);
+        constant_color->set_value( 1, 0, data.v.y);
+        constant_color->set_value( 2, 0, data.v.z);
+        constant_color->set_value( 3, 0, 1.0f);
+
+    } else if( pixel_type == "Float32<2>") {
+
+        mi::base::Handle<mi::IFloat32_2> constant_float32_2(
+            constant->get_interface<mi::IFloat32_2>());
+        if( !constant_float32_2)
+            return false;
+
+        constant_float32_2->set_value( 0, 0, data.v.x);
+        constant_float32_2->set_value( 1, 0, data.v.y);
+
+    } else if( pixel_type == "Float32<3>") {
+
+        mi::base::Handle<mi::IFloat32_3> constant_float32_3(
+            constant->get_interface<mi::IFloat32_3>());
+        if( !constant_float32_3)
+            return false;
+
+        constant_float32_3->set_value( 0, 0, data.v.x);
+        constant_float32_3->set_value( 1, 0, data.v.y);
+        constant_float32_3->set_value( 2, 0, data.v.z);
+
+    } else if( pixel_type == "Float32<4>") {
+
+        mi::base::Handle<mi::IFloat32_4> constant_float32_4(
+            constant->get_interface<mi::IFloat32_4>());
+        if( !constant_float32_4)
+            return false;
+
+        constant_float32_4->set_value( 0, 0, data.v.x);
+        constant_float32_4->set_value( 1, 0, data.v.y);
+        constant_float32_4->set_value( 2, 0, data.v.z);
+        constant_float32_4->set_value( 3, 0, data.v.w);
+
+    } else if( pixel_type == "Float32") {
+
+        mi::base::Handle<mi::IFloat32> constant_float32(
+            constant->get_interface<mi::IFloat32>());
+        if( !constant_float32)
+            return false;
+
+        constant_float32->set_value( data.f);
+
+    } else if( pixel_type == "Sint8") {
+
+        mi::base::Handle<mi::IBoolean> constant_boolean(
+            constant->get_interface<mi::IBoolean>());
+        if( !constant_boolean)
+            return false;
+
+        constant_boolean->set_value( data.b);
+
+    } else {
+
+        ASSERT( M_NEURAY_API, false);
+        return false;
+
+    }
+
+    return true;
+}
+
+} // anonymous
+
 Baker_impl::Baker_impl(
     DB::Transaction* transaction,
     const BAKER::IBaker_code* baker_code,
@@ -452,6 +522,18 @@ const char* Baker_impl::get_pixel_type() const
     return m_pixel_type.c_str();
 }
 
+const char* Baker_impl::get_type_name() const
+{
+    if( m_pixel_type == "Float32")    return "Float32";
+    if( m_pixel_type == "Rgb_fp")     return "Color";
+    if( m_pixel_type == "Sint8")      return "Boolean";
+    if( m_pixel_type == "Float32<2>") return "Float32<2>";
+    if( m_pixel_type == "Float32<3>") return "Float32<3>";
+    if( m_pixel_type == "Float32<4>") return "Float32<4>";
+    ASSERT( M_NEURAY_API, false);
+    return nullptr;
+}
+
 bool Baker_impl::is_uniform() const
 {
     return m_is_uniform;
@@ -459,22 +541,99 @@ bool Baker_impl::is_uniform() const
 
 mi::Sint32 Baker_impl::bake_texture( mi::neuraylib::ICanvas* texture, mi::Uint32 samples) const
 {
-    return Baker_impl::bake_texture(texture, 0, 1, 0, 1, samples);
+    return bake_texture(
+        texture,
+        /*min_u*/ 0,
+        /*max_u*/ 1,
+        /*min_v*/ 0,
+        /*max_v*/ 1,
+        /*animation_time*/ 0.0f,
+        samples);
 }
 
 mi::Sint32 Baker_impl::bake_texture(
     mi::neuraylib::ICanvas* texture,
-    mi::Float32 min_u, mi::Float32 max_u, mi::Float32 min_v, mi::Float32 max_v,
+    mi::Float32 min_u,
+    mi::Float32 max_u,
+    mi::Float32 min_v,
+    mi::Float32 max_v,
+    mi::Float32 animation_time,
     mi::Uint32 samples) const
 {
-    if (!texture)
+    if( !texture)
         return -1;
-    if (!m_transaction->is_open())
+    if( !m_transaction->is_open())
         return -2;
 
-    if (m_baker_module->bake_texture(m_transaction, m_baker_code.get(), texture, min_u, max_u, min_v, max_v, samples) != 0)
+    if( m_baker_module->bake_texture(
+            m_transaction,
+            m_baker_code.get(),
+            texture,
+            min_u,
+            max_u,
+            min_v,
+            max_v,
+            animation_time,
+            samples) != 0)
         return -3;
+
     return 0;
+}
+
+mi::Sint32 Baker_impl::bake_texture_with_constant_detection(
+    mi::neuraylib::ICanvas* texture,
+    mi::IData* constant,
+    bool& is_constant,
+    mi::Uint32 samples) const
+{
+    return bake_texture_with_constant_detection(
+        texture,
+        constant,
+        is_constant,
+        /*min_u*/ 0,
+        /*max_u*/ 1,
+        /*min_v*/ 0,
+        /*max_v*/ 1,
+        /*animation_time*/ 0.0f,
+        samples);
+}
+
+mi::Sint32 Baker_impl::bake_texture_with_constant_detection(
+    mi::neuraylib::ICanvas* texture,
+    mi::IData* constant,
+    bool& is_constant,
+    mi::Float32 min_u,
+    mi::Float32 max_u,
+    mi::Float32 min_v,
+    mi::Float32 max_v,
+    mi::Float32 animation_time,
+    mi::Uint32 samples) const
+{
+    if( !texture || !constant)
+        return -1;
+    if( !m_transaction->is_open())
+        return -2;
+
+    BAKER::Baker_module::Constant_result constant_result;
+    if( m_baker_module->bake_texture_with_constant_detection(
+            m_transaction,
+            m_baker_code.get(),
+            texture,
+            constant_result,
+            is_constant,
+            min_u,
+            max_u,
+            min_v,
+            max_v,
+            animation_time,
+            samples,
+            m_pixel_type.c_str()) != 0)
+        return -3;
+
+    if( !is_constant)
+        return 0;
+
+    return convert_baker_constant( m_pixel_type, constant_result, constant) ? 0 : -4;
 }
 
 mi::Sint32 Baker_impl::bake_constant( mi::IData* constant, mi::Uint32 samples) const
@@ -484,61 +643,17 @@ mi::Sint32 Baker_impl::bake_constant( mi::IData* constant, mi::Uint32 samples) c
     if( !m_transaction->is_open())
         return -2;
 
-    if (m_pixel_type == "Boolean") {
+    if( m_pixel_type == "Sint8") {
         // boolean results cannot be accumulated
         samples = 1;
     }
 
-    BAKER::Baker_module::Constant_result data;
+    BAKER::Baker_module::Constant_result constant_result;
     if( m_baker_module->bake_constant(
-            m_transaction, m_baker_code.get(), data, samples, m_pixel_type.c_str()) != 0)
+            m_transaction, m_baker_code.get(), constant_result, samples, m_pixel_type.c_str()) != 0)
         return -3;
 
-    if( m_pixel_type == "Rgb_fp") {
-
-        mi::base::Handle<mi::IColor> constant_color(
-            constant->get_interface<mi::IColor>());
-        if( !constant_color)
-            return -4;
-
-        constant_color->set_value(0, 0, data.v.x);
-        constant_color->set_value(1, 0, data.v.y);
-        constant_color->set_value(2, 0, data.v.z);
-
-    } else if( m_pixel_type == "Float32<3>") {
-
-        mi::base::Handle<mi::IFloat32_3> constant_float32_3(
-            constant->get_interface<mi::IFloat32_3>());
-        if( !constant_float32_3)
-            return -4;
-
-        constant_float32_3->set_value( 0, 0, data.v.x);
-        constant_float32_3->set_value( 1, 0, data.v.y);
-        constant_float32_3->set_value( 2, 0, data.v.z);
-
-    } else if( m_pixel_type == "Float32") {
-
-        mi::base::Handle<mi::IFloat32> constant_float32(
-            constant->get_interface<mi::IFloat32>());
-        if( !constant_float32)
-            return -4;
-
-        constant_float32->set_value( data.f);
-
-    } else if (m_pixel_type == "Boolean") {
-
-        mi::base::Handle<mi::IBoolean> constant_boolean(
-            constant->get_interface<mi::IBoolean>());
-        if (!constant_boolean)
-            return -4;
-
-        constant_boolean->set_value(data.b);
-
-    } else
-
-        ASSERT( M_NEURAY_API, false);
-
-    return 0;
+    return convert_baker_constant( m_pixel_type, constant_result, constant) ? 0 : -4;
 }
 
 } // namespace NEURAY

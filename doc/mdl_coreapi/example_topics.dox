@@ -54,6 +54,12 @@ The \ref mi_mdl_core_examples explain topics that are listed here as an index.
   
   - \ref mi_mdl_core_example_code_gen "Different compilation modes and options"
   - \ref mi_mdl_core_example_code_gen "Target code generation for a material with multiple functions"
+  
+  - \ref mi_mdl_core_example_df_native "Generating target code for BSDF functions (CPU)"
+  - \ref mi_mdl_core_example_df_native "Using generated BSDF functions (CPU)"
+
+  - \ref mi_mdl_core_example_df_vulkan "Generating target code for BSDF functions (GLSL)"
+  - \ref mi_mdl_core_example_df_vulkan "Using generated BSDF functions (GLSL)"
 
   - \ref mi_mdl_core_example_execution_ptx "MDL material state (PTX)"
   - \ref mi_mdl_core_example_execution_ptx "Execution of generated code (PTX)"

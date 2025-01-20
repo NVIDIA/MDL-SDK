@@ -56,6 +56,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
     public:
         virtual ~IMdl_material_description_loader() = default;
 
+        /// Get the application options.
+        virtual const Base_options& get_options() const = 0;
+
         /// check if this loaded is responsible for loading the material
         /// based on out naming convention.
         /// \returns true if the material can be loaded.

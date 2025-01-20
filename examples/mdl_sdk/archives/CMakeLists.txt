@@ -60,9 +60,7 @@ target_add_content(TARGET ${PROJECT_NAME}
 # creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)
 target_create_vs_user_settings(TARGET ${PROJECT_NAME})
 
-# -------------------------------------------------------------------------------------------------
-# Create installation rules to copy the build directory
-# -------------------------------------------------------------------------------------------------
+# create installation rules
 add_target_install(
     TARGET ${PROJECT_NAME}
     DESTINATION "examples/mdl_sdk/archives"

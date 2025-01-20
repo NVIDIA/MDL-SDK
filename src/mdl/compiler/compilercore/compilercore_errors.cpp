@@ -678,7 +678,11 @@ char const *get_error_template(
             return "struct '$0' may not contain a field in the same struct category";
         case DECLARATIVE_INDEX_NOT_UNIFORM:
             return "index expression for declarative array must be uniform";
-        
+        case WEAK_RELATIVE_IMPORT_FROM_SEARCH_PATH_ROOT:
+            return "weak relative imports of standard modules are not allowed in MDL $0.$1";
+        case SELECT_FROM_NOT_IMPORTED_STRUCT:
+            return "cannot select from not imported struct $0";
+
         // ------------------------------------------------------------- //
         case EXTERNAL_APPLICATION_ERROR:
             return "external application error: $.";
@@ -1629,8 +1633,9 @@ static void print_error_param(
             printer->print(type);
             printer->print('[');
             int size = params.get_type_size_arg(idx);
-            if (size >= 0)
-                printer->print(long(size));
+            if (size >= 0) {
+                printer->print(size);
+            }
             printer->print(']');
         }
         break;
@@ -1645,14 +1650,14 @@ static void print_error_param(
         {
             // integer
             int v = params.get_int_arg(idx);
-            printer->print(long(v));
+            printer->print(v);
         }
         break;
     case Error_params::EK_POS:
         {
             // position
             int pos = params.get_pos_arg(idx);
-            printer->print(long(pos));
+            printer->print(pos);
             printer->print(".");
         }
         break;
@@ -1925,17 +1930,18 @@ static void print_error_param(
             IMDL::MDL_version ver = params.get_mdl_version(idx);
             char const *s = "1.0";
             switch (ver) {
-            case IMDL::MDL_VERSION_1_0: s = "1.0"; break;
-            case IMDL::MDL_VERSION_1_1: s = "1.1"; break;
-            case IMDL::MDL_VERSION_1_2: s = "1.2"; break;
-            case IMDL::MDL_VERSION_1_3: s = "1.3"; break;
-            case IMDL::MDL_VERSION_1_4: s = "1.4"; break;
-            case IMDL::MDL_VERSION_1_5: s = "1.5"; break;
-            case IMDL::MDL_VERSION_1_6: s = "1.6"; break;
-            case IMDL::MDL_VERSION_1_7: s = "1.7"; break;
-            case IMDL::MDL_VERSION_1_8: s = "1.8"; break;
-            case IMDL::MDL_VERSION_1_9: s = "1.9"; break;
-            case IMDL::MDL_VERSION_EXP: s = "99.99"; break;
+            case IMDL::MDL_VERSION_1_0:  s = "1.0"; break;
+            case IMDL::MDL_VERSION_1_1:  s = "1.1"; break;
+            case IMDL::MDL_VERSION_1_2:  s = "1.2"; break;
+            case IMDL::MDL_VERSION_1_3:  s = "1.3"; break;
+            case IMDL::MDL_VERSION_1_4:  s = "1.4"; break;
+            case IMDL::MDL_VERSION_1_5:  s = "1.5"; break;
+            case IMDL::MDL_VERSION_1_6:  s = "1.6"; break;
+            case IMDL::MDL_VERSION_1_7:  s = "1.7"; break;
+            case IMDL::MDL_VERSION_1_8:  s = "1.8"; break;
+            case IMDL::MDL_VERSION_1_9:  s = "1.9"; break;
+            case IMDL::MDL_VERSION_1_10: s = "1.10"; break;
+            case IMDL::MDL_VERSION_EXP:  s = "99.99"; break;
             }
             printer->print(s);
         }
@@ -1946,7 +1952,7 @@ static void print_error_param(
             unsigned char c = params.get_char(idx);
             if (c < 32 || c == 127) {
                 printer->print("0x");
-                printer->print(long(c));
+                printer->print(unsigned(c));
             } else {
                 printer->print(char(c));
             }

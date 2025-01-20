@@ -119,7 +119,7 @@ public:
     /// canvas in case of errors).
     ///
     /// \param filename           The file that shall be represented by this canvas.
-    /// \param selector           The selector, or \c NULL.
+    /// \param selector           The selector, or \c nullptr.
     /// \param miplevel           The miplevel in the file that shall be represented by this canvas.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
     ///                           be written. The error codes have the following meaning:
@@ -164,7 +164,7 @@ public:
     ///                           absolute access.
     /// \param container_filename The resolved filename of the container itself.
     /// \param member_filename    The relative filename of the canvas in the container.
-    /// \param selector           The selector, or \c NULL.
+    /// \param selector           The selector, or \c nullptr.
     /// \param miplevel           The miplevel in the file that shall be represented by this canvas.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
     ///                           be written. The error codes have the following meaning:
@@ -210,9 +210,9 @@ public:
     /// \param reader             The reader to be used to obtain the canvas. Needs to support
     ///                           absolute access.
     /// \param image_format       The image format of the buffer.
-    /// \param selector           The selector, or \c NULL.
+    /// \param selector           The selector, or \c nullptr.
     /// \param mdl_file_path      The resolved MDL file path (to be used for log messages only),
-    ///                           or \c NULL in other contexts.
+    ///                           or \c nullptr in other contexts.
     /// \param miplevel           The miplevel in the buffer that shall be represented by this
     ///                           canvas.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
@@ -345,7 +345,7 @@ private:
     /// Really loads the tile data for file-based canvases.
     ///
     /// \param z      The z position of the tile in the canvas.
-    /// \return       The loaded tile, or \c NULL in case of failures.
+    /// \return       The loaded tile, or \c nullptr in case of failures.
     ///
     /// \note The caller needs to hold the lock m_lock.
      mi::neuraylib::ITile* do_load_tile( mi::Uint32 z) const;
@@ -373,8 +373,8 @@ private:
 
     /// The tiles of this canvas.
     ///
-    /// Might contain \c NULL pointers for not yet loaded tiles for file-based canvases. Never
-    /// contains \c NULL pointers for memory-based canvases.
+    /// Might contain \c nullptr pointers for not yet loaded tiles for file-based canvases. Never
+    /// contains \c nullptr pointers for memory-based canvases.
     ///
     /// \note Any access needs to be protected by m_lock.
     mutable std::vector<mi::base::Handle<mi::neuraylib::ITile>> m_tiles;

@@ -112,7 +112,7 @@ inline bool Attribute::get_value_bool(
 {
     ASSERT(M_ATTR, contains_expected_type(m_type, TYPE_BOOLEAN));
     ASSERT(M_ATTR, n < m_type.get_arraysize());
-    return n >= m_type.get_arraysize() ? 0 : reinterpret_cast<const bool*>(m_values)[n];
+    return n >= m_type.get_arraysize() ? false : reinterpret_cast<const bool*>(m_values)[n];
 }
 
 
@@ -209,7 +209,7 @@ inline Attribute::Vector3 Attribute::get_value_vector3(
     ASSERT(M_ATTR, n < m_type.get_arraysize());
     return (m_type.get_typecode() == TYPE_VECTOR3 && n < m_type.get_arraysize()) ?
             reinterpret_cast<const Vector3*>(m_values)[n] :
-            Vector3(0);
+            Vector3{0.f};
 }
 
 inline mi::math::Color Attribute::get_value_color(
@@ -486,7 +486,7 @@ inline Attribute::Vector3 Attribute::get_value_vector3_i(
             i < get_listsize() &&
             n < m_type.get_arraysize()) ?
             reinterpret_cast<const Vector3*>(m_values)[i * m_type.get_arraysize() + n] :
-            Vector3(0);
+            Vector3{0.f};
 }
 
 inline mi::math::Color Attribute::get_value_color_i(

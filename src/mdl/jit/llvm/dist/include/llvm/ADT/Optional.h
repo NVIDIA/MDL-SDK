@@ -34,14 +34,6 @@ struct in_place_t {};
 
 /// Storage for any type.
 //
-// The specialization condition intentionally uses
-// llvm::is_trivially_copy_constructible instead of
-// std::is_trivially_copy_constructible.  GCC versions prior to 7.4 may
-// instantiate the copy constructor of `T` when
-// std::is_trivially_copy_constructible is instantiated.  This causes
-// compilation to fail if we query the trivially copy constructible property of
-// a class which is not copy constructible.
-//
 // The current implementation of OptionalStorage insists that in order to use
 // the trivial specialization, the value_type must be trivially copy
 // constructible and trivially copy assignable due to =default implementations
@@ -51,7 +43,7 @@ struct in_place_t {};
 //
 // The move constructible / assignable conditions emulate the remaining behavior
 // of std::is_trivially_copyable.
-template <typename T, bool = (llvm::is_trivially_copy_constructible<T>::value &&
+template <typename T, bool = (std::is_trivially_copy_constructible<T>::value &&
                               std::is_trivially_copy_assignable<T>::value &&
                               (std::is_trivially_move_constructible<T>::value ||
                                !std::is_move_constructible<T>::value) &&

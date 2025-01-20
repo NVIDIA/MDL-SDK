@@ -45,10 +45,18 @@ target_include_directories(${__TARGET_ADD_DEPENDENCY_TARGET}
 if(MDL_TREAT_RUNTIME_DEPS_AS_BUILD_DEPS)
     add_dependencies(${__TARGET_ADD_DEPENDENCY_TARGET}
         mdl::mdl_sdk
-        mdl::dds
-        mdl::nv_openimageio
         mdl::mdl_distiller
     )
+    if(TARGET mdl::dds)
+        add_dependencies(${__TARGET_ADD_DEPENDENCY_TARGET}
+            mdl::dds
+        )
+    endif()
+    if(TARGET mdl::openimageio)
+        add_dependencies(${__TARGET_ADD_DEPENDENCY_TARGET}
+            mdl::openimageio
+        )
+    endif()
 endif()
 
 # runtime dependencies
@@ -70,8 +78,11 @@ if(NOT __TARGET_ADD_DEPENDENCY_NO_RUNTIME_COPY)
             # instead of copying, we set the rpath for the MDL SDK in the executables
             # the rpath for plugins is set in the MDL SDK library itself
             target_add_rpath(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
-                RPATHS
+                BUILD_RPATHS
                     ${CMAKE_BINARY_DIR}/src/prod/lib/mdl_sdk/${CMAKE_BUILD_TYPE}
+                INSTALL_RPATHS
+                    "../${CMAKE_INSTALL_LIBDIR}"       # tools
+                    "../../../${CMAKE_INSTALL_LIBDIR}" # examples
                 )
 
     endif()

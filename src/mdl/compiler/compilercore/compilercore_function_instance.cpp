@@ -60,9 +60,7 @@ Function_instance::Function_instance(
 : m_key(def)
 , m_array_instances(alloc)
 , m_parameter_storage_mods(alloc)
-, m_return_derivs(
-    return_derivs ||
-    (def != NULL ? impl_cast<Definition>(def)->has_flag(Definition::DEF_IS_DERIVABLE) : false))
+, m_return_derivs(return_derivs)
 , m_has_storage_spaces(has_storage_spaces)
 , m_kind(KI_DEFINITION)
 {

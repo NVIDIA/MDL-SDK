@@ -167,7 +167,7 @@ public:
     /// \param transaction  The transaction in which the fragmented job is executed. The transaction
     ///                     can be used to access database elements and database jobs required for
     ///                     execution but should not be used to edit or create tags. Might be
-    ///                     \c NULL if the fragmented job was started without transaction.
+    ///                     \c nullptr if the fragmented job was started without transaction.
     /// \param index        The index of the fragment to be executed. The value is in the range from
     ///                     0 to \p count-1.
     /// \param count        The number of fragments into which the fragmented job is split.

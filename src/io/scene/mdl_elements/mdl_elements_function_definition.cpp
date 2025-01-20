@@ -51,7 +51,6 @@
 #include <base/data/serial/i_serializer.h>
 #include <base/data/db/i_db_access.h>
 #include <base/data/db/i_db_transaction.h>
-#include <base/hal/hal/i_hal_ospath.h>
 #include <mdl/compiler/compilercore/compilercore_modules.h>
 #include <mdl/compiler/compilercore/compilercore_tools.h>
 #include <mdl/compiler/compilercore/compilercore_mangle.h>
@@ -77,7 +76,8 @@ Mdl_function_definition::Mdl_function_definition()
     m_is_material( false),
     m_since_version( mi::neuraylib::MDL_VERSION_INVALID),
     m_removed_version( mi::neuraylib::MDL_VERSION_INVALID),
-    m_function_hash()
+    m_function_hash(),
+    m_resolve_resources( true)
 {
 }
 
@@ -99,7 +99,8 @@ Mdl_function_definition::Mdl_function_definition(
     m_function_tag( function_tag),
     m_function_ident( function_ident),
     m_is_material( is_material),
-    m_function_hash()
+    m_function_hash(),
+    m_resolve_resources( resolve_resources)
 {
     m_module_mdl_name = module_mdl_name;
     m_module_db_name  = get_db_name( m_module_mdl_name);
@@ -142,7 +143,7 @@ Mdl_function_definition::Mdl_function_definition(
         /*create_direct_calls*/ false,
         m_module_mdl_name.c_str(),
         m_prototype_tag,
-        resolve_resources,
+        m_resolve_resources,
         /*user_modules_seen*/ nullptr);
 
     // return type
@@ -387,7 +388,7 @@ const IExpression* Mdl_function_definition::get_body( DB::Transaction* transacti
         /*create_direct_calls*/ true,
         /*module_mdl_name*/ nullptr,
         m_prototype_tag,
-        /*resolve_resources*/ false,
+        m_resolve_resources,
         /*user_modules_seen*/ nullptr);
 
     mi::base::Handle<const IExpression> body_int(
@@ -447,7 +448,7 @@ const IExpression* Mdl_function_definition::get_temporary(
         /*create_direct_calls*/ true,
         /*module_mdl_name*/ nullptr,
         m_prototype_tag,
-        /*resolve_resources*/ false,
+        m_resolve_resources,
         /*user_modules_seen*/ nullptr);
 
     return converter.core_dag_node_to_int_expr( temporary, nullptr);
@@ -616,7 +617,7 @@ Mdl_function_call* Mdl_function_definition::create_call_internal(
         transaction,
         arguments,
         allow_ek_parameter,
-        /*allow_ek_direct_call*/ false,
+        /*allow_ek_direct_call_and_temporaries*/ false,
         /*create_direct_calls*/ false,
         /*copy_immutable_calls*/ !immutable,
         errors));
@@ -655,7 +656,7 @@ IExpression_direct_call* Mdl_function_definition::create_direct_call_internal(
         transaction,
         arguments,
         /*allow_ek_parameter*/ true,
-        /*allow_ek_direct_call*/ true,
+        /*allow_ek_direct_call_and_temporaries*/ true,
         /*create_direct_calls*/ true,
         /*copy_immutable_calls*/ false,
         errors));
@@ -692,7 +693,7 @@ Mdl_function_call* Mdl_function_definition::create_array_constructor_call_intern
             transaction,
             arguments,
             allow_ek_parameter,
-            /*allow_ek_direct_call*/ false,
+            /*allow_ek_direct_call_and_temporaries*/ false,
             /*create_direct_calls*/ false,
             /*copy_immutable_calls*/ !immutable,
             errors);
@@ -737,7 +738,7 @@ IExpression_direct_call* Mdl_function_definition::create_array_constructor_direc
             transaction,
             arguments,
             /*allow_ek_parameter*/ true,
-            /*allow_ek_direct_call*/ true,
+            /*allow_ek_direct_call_and_temporaries*/ true,
             /*create_direct_calls*/ true,
             /*copy_immutable_calls*/ false,
             errors);
@@ -1133,6 +1134,24 @@ mi::mdl::IDefinition::Semantics Mdl_function_definition::get_core_semantic() con
     return m_core_semantic;
 }
 
+const mi::mdl::IGenerated_code_dag* Mdl_function_definition::get_core_code_dag(
+    DB::Transaction* transaction, mi::Size& definition_index) const
+{
+    DB::Tag module_tag = transaction->name_to_tag( m_module_db_name.c_str());
+    ASSERT( M_SCENE, module_tag);
+
+    DB::Access<Mdl_module> module( module_tag, transaction);
+    if( !module->is_valid( transaction, /*context*/ nullptr))
+        return nullptr;
+    if( module->has_definition( m_is_material,  m_db_name, m_function_ident) != 0)
+        return nullptr;
+
+    definition_index = module->get_definition_index( m_is_material, m_db_name, m_function_ident);
+    ASSERT( M_SCENE, definition_index != ~mi::Size( 0));
+
+    return module->get_code_dag();
+}
+
 const mi::mdl::IType* Mdl_function_definition::get_core_return_type(
     DB::Transaction* transaction) const
 {
@@ -1443,6 +1462,7 @@ const SERIAL::Serializable* Mdl_function_definition::serialize(
 
     SERIAL::write( serializer, m_enable_if_users);
     write( serializer, m_function_hash);
+    SERIAL::write( serializer, m_resolve_resources);
 
     return this + 1;
 }
@@ -1452,7 +1472,7 @@ SERIAL::Serializable* Mdl_function_definition::deserialize( SERIAL::Deserializer
     Scene_element_base::deserialize( deserializer);
 
     SERIAL::read( deserializer, &m_module_filename);
-    m_module_filename = HAL::Ospath::convert_to_platform_specific_path( m_module_filename);
+    m_module_filename = fs::u8path( m_module_filename).u8string();
     std::error_code ec;
     if( !m_module_filename.empty() && !fs::exists( fs::u8path( m_module_filename), ec))
         m_module_filename.clear();
@@ -1486,6 +1506,7 @@ SERIAL::Serializable* Mdl_function_definition::deserialize( SERIAL::Deserializer
 
     SERIAL::read( deserializer, &m_enable_if_users);
     read( deserializer, &m_function_hash);
+    SERIAL::read( deserializer, &m_resolve_resources);
 
     return this + 1;
 }
@@ -1582,7 +1603,7 @@ IExpression_list* Mdl_function_definition::check_and_prepare_arguments(
     DB::Transaction* transaction,
     const IExpression_list* arguments,
     bool allow_ek_parameter,
-    bool allow_ek_direct_call,
+    bool allow_ek_direct_call_and_temporaries,
     bool create_direct_calls,
     bool copy_immutable_calls,
     mi::Sint32* errors) const
@@ -1649,7 +1670,8 @@ IExpression_list* Mdl_function_definition::check_and_prepare_arguments(
             if(     kind != IExpression::EK_CONSTANT
                 &&  kind != IExpression::EK_CALL
                 && (kind != IExpression::EK_PARAMETER   || !allow_ek_parameter)
-                && (kind != IExpression::EK_DIRECT_CALL || !allow_ek_direct_call)) {
+                && (kind != IExpression::EK_DIRECT_CALL || !allow_ek_direct_call_and_temporaries)
+                && (kind != IExpression::EK_TEMPORARY   || !allow_ek_direct_call_and_temporaries)) {
                 *errors = -6;
                 return nullptr;
             }
@@ -2080,7 +2102,7 @@ Mdl_function_definition::check_and_prepare_arguments_array_constructor_operator(
     DB::Transaction* transaction,
     const IExpression_list* arguments,
     bool allow_ek_parameter,
-    bool allow_ek_direct_call,
+    bool allow_ek_direct_call_and_temporaries,
     bool create_direct_calls,
     bool copy_immutable_calls,
     mi::Sint32* errors) const
@@ -2168,7 +2190,8 @@ Mdl_function_definition::check_and_prepare_arguments_array_constructor_operator(
         if(     kind != IExpression::EK_CONSTANT
             &&  kind != IExpression::EK_CALL
             && (kind != IExpression::EK_PARAMETER   || !allow_ek_parameter)
-            && (kind != IExpression::EK_DIRECT_CALL || !allow_ek_direct_call)) {
+            && (kind != IExpression::EK_DIRECT_CALL || !allow_ek_direct_call_and_temporaries)
+            && (kind != IExpression::EK_TEMPORARY   || !allow_ek_direct_call_and_temporaries)) {
             *errors = -6;
             return std::make_tuple( nullptr, nullptr, nullptr);
         }

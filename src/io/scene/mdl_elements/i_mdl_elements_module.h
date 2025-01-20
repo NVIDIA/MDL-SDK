@@ -234,7 +234,7 @@ public:
 
     /// Returns the underlying core module.
     ///
-    /// Never returns NULL.
+    /// Never returns \c nullptr.
     const mi::mdl::IModule* get_core_module() const;
 
     /// Returns the DAG representation of this module.
@@ -248,7 +248,8 @@ public:
 
     /// Improved version of SERIAL::Serializable::dump().
     ///
-    /// \param transaction   The DB transaction (for name lookups and tag versions). Can be \c NULL.
+    /// \param transaction   The DB transaction (for name lookups and tag versions). Can be
+    ///                      \c nullptr.
     void dump( DB::Transaction* transaction) const;
 
     // methods of SERIAL::Serializable
@@ -309,7 +310,7 @@ public:
     /// Returns the resource tag tuple for a given resource (low-level access to the resource
     /// vector).
     ///
-    /// Returns \c NULL for invalid indices.
+    /// Returns \c nullptr for invalid indices.
     ///
     /// Does not contain all/any resources if context options
     /// MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS or MDL_CTX_OPTION_RESOLVE_RESOURCES are

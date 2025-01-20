@@ -90,7 +90,7 @@ The following third-party dependencies are used by several and/or major
 examples. Installation is strongly recommended unless the corresponding group
 of examples is of no interest to you.
 
--   <a name="vcpkg">**vcpkg**</a> (git commit ID 5d675c7e5)
+-   <a name="vcpkg">**vcpkg**</a> (git commit ID 821100d96)
     [Vcpkg](https://vcpkg.io/en/getting-started.html) is the recommended way to
     install other dependencies like GLEW and GLFW. The
     vcpkg version mentioned above corresponds to the versions mentioned for
@@ -129,12 +129,11 @@ of examples is of no interest to you.
     Please follow the instructions on the 
     [CUDA Developer Website](https://developer.nvidia.com/cuda-toolkit).
 
--   **Vulkan SDK** (Windows: 1.3.275.0, Linux: 1.2.198.1) \n
-    This dependency is required for all Vulkan-based examples. \n
-    Please follow the instructions on the
-    [Vulkan SDK Website](https://vulkan.lunarg.com/sdk/home). \n
-    For debug builds on Windows, the debug libraries are required to be installed. \n
-    Note that the prebuilt binaries for version 1.3.275.0 do not work on CentOS 7.x.
+-   **Vulkan SDK** *(1.3.280.0)* \n
+    Building the Vulkan examples requires the Vulkan headers and validation layers,
+    volk, and glslang. \n
+    Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
+    packages *glslang*, *volk*, and *vulkan-validationlayers*.
 
 The following third-party dependencies are only used by fewer or single
 examples, or add additional features to other examples. Installation can be
@@ -246,9 +245,6 @@ features.
     -   **Qt5_DIR** in Ungrouped Entries (only if not installed using the installer) \n
         for example: *C:/Qt/5.10.1/msvc2017_64*
 
-    -   **VULKAN_SDK_DIR** in Ungrouped Entries (only if not installed using the installer) \n
-        for example: *C:/VulkanSDK/1.3.275.0*
-
     -   **PANTORA_AXF_DIR** in Ungrouped Entries \n
         for example: *C:/projects/thirdparty/pantora-axf-1.9.0*
 
@@ -302,16 +298,13 @@ features.
 
             cmake -DMDL_ENABLE_QT_EXAMPLES=OFF ../..
 
-        You can also use the flags to point CMake to custom installation directories 
-        for third party libraries. Please refer to 
-        \link mi_neuray_getting_started_windows_build Windows build\endlink for a list of supported flags. 
-        On Unix-like systems, it is assumed that the 
-        specified paths contain a directory named *include* for headers 
-        files and subdirectories named `lib64` or `lib` that contains shared 
-        libraries. For the Vulkan SDK for example, the call to CMake could
-        look as follows:
+        You can also use the flags to point CMake to custom installation
+        directories for third party libraries. Please refer to
+        \link mi_neuray_getting_started_windows_build Windows build\endlink
+        for a list of supported flags. For the vcpkg installation, the call to
+        CMake could look as follows:
 
-            cmake -DVULKAN_SDK_DIR=$HOME/projects/thirdparty/vulkansdk-linux-x86_64-1.2.198.1/1.2.198.1/x86_64 ../..
+            cmake -DCMAKE_TOOLCHAIN_FILE=$HOME/projects/thirdparty/vcpkg/scripts/buildsystems/vcpkg.cmake ../..
 
         For builds using a different compiler version, you need to pass the 
         compiler names when calling CMake as follows:

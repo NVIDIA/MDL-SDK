@@ -63,7 +63,7 @@ public:
     /// need to modify a miplevel.
     ///
     /// \param level   The miplevel to return. Valid values are from 0 to #get_nlevels()-1.
-    /// \return        The requested miplevel, or \c NULL if \p level is greater than or equal to
+    /// \return        The requested miplevel, or \c nullptr if \p level is greater than or equal to
     ///                #get_nlevels().
     virtual const mi::neuraylib::ICanvas* get_level( mi::Uint32 level) const = 0;
 
@@ -74,7 +74,7 @@ public:
     /// needed).
     ///
     /// \param level   The miplevel to return. Valid values are from 0 to #get_nlevels()-1.
-    /// \return        The requested miplevel, or \c NULL if \p level is greater than or equal to
+    /// \return        The requested miplevel, or \c nullptr if \p level is greater than or equal to
     ///                #get_nlevels().
     virtual mi::neuraylib::ICanvas* get_level( mi::Uint32 level) = 0;
 

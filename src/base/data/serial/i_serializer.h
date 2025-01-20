@@ -105,30 +105,32 @@
 #ifndef BASE_DATA_SERIAL_I_SERIALIZER_H
 #define BASE_DATA_SERIAL_I_SERIALIZER_H
 
-#include <mi/math/vector.h>
-#include <mi/math/matrix.h>
-#include <mi/math/bbox.h>
-#include <base/lib/mem/i_mem_allocatable.h>
-#include <base/lib/cont/i_cont_array.h>
+#include <array>
 #include <cstddef>
+#include <list>
+#include <map>
+#include <set>
+#include <string>
+#include <type_traits>
+#include <unordered_set>
+#include <utility>
+#include <variant>
+#include <vector>
+
+#include <mi/base/interface_implement.h>
+#include <mi/math/bbox.h>
+#include <mi/math/matrix.h>
+#include <mi/math/vector.h>
+#include <mi/neuraylib/iserializer.h>
+#include <mi/neuraylib/ideserializer.h>
+
+#include <base/lib/cont/i_cont_array.h>
+#include <base/lib/mem/i_mem_allocatable.h>
 #include <base/data/db/i_db_transaction_id.h>
 #include <base/data/db/i_db_tag.h>
 
 #include <base/system/stlext/i_stlext_safe_cast.h>
-#include <map>
-#include <set>
-#include <unordered_set>
-#include <array>
-#include <list>
-#include <string>
-#include <vector>
-#include <utility>
-#include <type_traits>
-#include <variant>
-
-#include <mi/base/interface_implement.h>
-#include <mi/neuraylib/iserializer.h>
-#include <mi/neuraylib/ideserializer.h>
+#include <boost/unordered/unordered_flat_set.hpp>
 
 #include "i_serial_serializable.h"
 
@@ -240,6 +242,8 @@ public:
 
     template <typename T1, typename T2> void write(const std::pair<T1, T2>& pair);
     template <typename T, typename SWO> void write(const std::set<T, SWO>& set);
+    template <typename T, typename SWO> void write(const std::unordered_set<T, SWO>& set);
+    template <typename T, typename SWO> void write(const boost::unordered_flat_set<T, SWO>& set);
 
     /// Write a serializable object to the stream.
     virtual void write(const Serializable& object) = 0;
@@ -365,8 +369,11 @@ public:
     template <typename T> void read(CONT::Array<T*>* array);
     template <typename T, typename A1, typename A2>
     void read(std::vector< std::vector<T, A1>, A2>* array);
-    template <typename T, typename SWO> void read(std::set<T, SWO>* set);
+
     template <typename T1, typename T2> void read(std::pair<T1, T2>* pair);
+    template <typename T, typename SWO> void read(std::set<T, SWO>* set);
+    template <typename T, typename SWO> void read(std::unordered_set<T, SWO>* set);
+    template <typename T, typename SWO> void read(boost::unordered_flat_set<T, SWO>* set);
 
     /// Read back a serializable object from the stream.
     virtual void read(Serializable* object) = 0;
@@ -575,6 +582,22 @@ void write(S* serializer, const std::set<T,SWO>& set);
 /// Deserialize a set.
 template <typename T, typename SWO, typename D, typename = enable_if_deserializer_t<D>>
 void read(D* deserializer, std::set<T,SWO>* set);
+
+/// Serialize an unordered set.
+template <typename T, typename SWO, typename S, typename = enable_if_serializer_t<S>>
+void write(S* serializer, const std::unordered_set<T,SWO>& set);
+
+/// Deserialize an unordered set.
+template <typename T, typename SWO, typename D, typename = enable_if_deserializer_t<D>>
+void read(D* deserializer, std::unordered_set<T,SWO>* set);
+
+/// Serialize an unordered set.
+template <typename T, typename SWO, typename S, typename = enable_if_serializer_t<S>>
+void write(S* serializer, const boost::unordered_flat_set<T,SWO>& set);
+
+/// Deserialize an unordered set.
+template <typename T, typename SWO, typename D, typename = enable_if_deserializer_t<D>>
+void read(D* deserializer, boost::unordered_flat_set<T,SWO>* set);
 
 /// Serialize a map.
 template <typename T, typename U, typename SWO, typename S, typename = enable_if_serializer_t<S>>

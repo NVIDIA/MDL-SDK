@@ -71,15 +71,15 @@ public:
     ///                          The type of an argument in the expression list must match the type
     ///                          of the corresponding parameter of the prototype. \n
     ///                          If the list is empty, the resulting MDLE will have no parameters.
-    ///                          If \c NULL is passed, the MDLE will inherit the defaults of the
+    ///                          If \c nullptr is passed, the MDLE will inherit the defaults of the
     ///                          prototype.
     ///                        - #mi::neuraylib::IAnnotation_block* \b annotations \n
     ///                          Annotations of the main material or function definition of the
     ///                          MDLE file.
     ///                          If the list is empty, the resulting MDLE will have no annotations.
-    ///                          If \c NULL is passed, the MDLE will inherit the annotations of the
-    ///                          prototype. Please note that parameter and return type annotations
-    ///                          are always inherited from the prototype.
+    ///                          If \c nullptr is passed, the MDLE will inherit the annotations of
+    ///                          the prototype. Please note that parameter and return type
+    ///                          annotations are always inherited from the prototype.
     ///                        - #mi::IString \b thumbnail_path \n
     ///                          Path to a thumbnail image representing the exported material or
     ///                          function.
@@ -87,7 +87,7 @@ public:
     ///                        - #mi::base::IInterface* \b user_files \n
     ///                          A static or dynamic array of structures of type \c Mdle_user_file
     ///                          pointing to additional user content (files) that should be added to
-    ///                          the MDLE archive. Can be \c NULL.\n
+    ///                          the MDLE archive. Can be \c nullptr.\n
     ///                          The structure has the two members
     ///                             - #mi::IString \b source_path \n
     ///                               MDL file path or file system path pointing to the file.
@@ -95,7 +95,7 @@ public:
     ///                               New path of the file in the archive.\n
     /// \param context      An execution context which can be queried
     ///                     for detailed error messages after the
-    ///                     operation has finished. Can be \c NULL.
+    ///                     operation has finished. Can be \c nullptr.
     ///
     /// \return
     ///                     -   0: Success
@@ -113,7 +113,7 @@ public:
     /// \param file_name    The file name of the MDLE to check.
     /// \param context      An execution context which can be queried for detailed error messages
     ///                     after the operation has finished.
-    ///                     Can be \c NULL.
+    ///                     Can be \c nullptr.
     /// \return
     ///                     -   0: Success
     ///                     -  -1: The MDLE file is invalid. If provided, please check
@@ -129,10 +129,9 @@ public:
     ///                         This equals the \b target_path during the creation.
     /// \param context          An execution context which can be queried for detailed error
     ///                         messages after the operation has finished.
-    ///                         Can be \c NULL.
-    /// \return
-    ///                         A reader with access to the user file content or \c NULL in case of
-    ///                         errors. Check the context for details in that case.
+    ///                         Can be \c nullptr.
+    /// \return                 A reader with access to the user file content or \c nullptr in case
+    ///                         of errors. Check the context for details in that case.
     virtual IReader* get_user_file(
         const char* mdle_file_name,
         const char* user_file_name,
@@ -145,7 +144,7 @@ public:
     /// \param mdle_file_name_b   The file name of the second MDLE to compare.
     /// \param context            An execution context which can be queried for detailed error
     ///                           messages after the operation has finished.
-    ///                           Can be \c NULL.
+    ///                           Can be \c nullptr.
     /// \return
     ///                           -   0: Success
     ///                           -  -1: The files are different or at least one is not existing.
@@ -161,7 +160,7 @@ public:
     /// \param[out] hash        The returned hash value.
     /// \param context          An execution context which can be queried for detailed error
     ///                         messages after the operation has finished.
-    ///                         Can be \c NULL.
+    ///                         Can be \c nullptr.
     /// \return
     ///                          -   0: Success
     ///                          -  -1: An error occurred. If provided,
