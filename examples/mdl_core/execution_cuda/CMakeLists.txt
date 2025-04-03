@@ -50,7 +50,6 @@ create_from_base_preset(
     OUTPUT_NAME "execution_cuda"
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
-    STATIC_MSVC_RUNTIME
     ${ADDITIONAL_OPTS}
 )
 

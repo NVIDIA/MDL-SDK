@@ -2828,8 +2828,10 @@ Expression_result LLVM_code_generator::generate_expr_lambda_call(
         res_pointer = NULL;
     } else if (opt_dest_ptr != NULL &&
             (dest_type = opt_dest_ptr->getType()->getPointerElementType()) == lambda_res_type) {
+        // lambda function can write directly into the results buffer
         res_pointer = opt_dest_ptr;
     } else {
+        // we need a temporary buffer and convert the result later
         res_pointer = ctx.create_local(lambda_res_type, "res_buf");
     }
 
@@ -2853,29 +2855,40 @@ Expression_result LLVM_code_generator::generate_expr_lambda_call(
 
     m_state_usage_analysis.add_call(ctx.get_function(), func);
     llvm::CallInst *call = ctx->CreateCall(func, lambda_args);
-    if (res_pointer == NULL) {
-        if (opt_results_buffer != NULL) {
-            if (target_is_structured_language()) {
-                store_to_float4_array(
-                    ctx,
-                    call,
-                    opt_results_buffer,
-                    m_texture_result_offsets[opt_result_index]);
-            } else {
-                ctx.convert_and_store(call, opt_dest_ptr);
-                return Expression_result::ptr(opt_dest_ptr);
-            }
+
+    // requested to store result in results buffer?
+    if (opt_results_buffer != NULL) {
+        // result already written into results buffer?
+        if (opt_dest_ptr != NULL && dest_type == lambda_res_type) {
+            return Expression_result::ptr(opt_dest_ptr);
         }
+
+        llvm::Value *res;
+        if (res_pointer == NULL) {
+            res = call;
+        } else {
+            res = ctx->CreateLoad(res_pointer);
+        }
+
+        // write result into the result buffer and convert if necessary
+        if (target_is_structured_language()) {
+            store_to_float4_array(
+                ctx,
+                res,
+                opt_results_buffer,
+                m_texture_result_offsets[opt_result_index]);
+            return Expression_result::value(res);
+        } else {
+            ctx.convert_and_store(res, opt_dest_ptr);
+            return Expression_result::ptr(opt_dest_ptr);
+        }
+    }
+
+    if (res_pointer == NULL) {
         return Expression_result::value(call);
+    } else {
+        return Expression_result::ptr(res_pointer);
     }
-
-    if (opt_dest_ptr != NULL && dest_type != lambda_res_type) {
-        llvm::Value *res = ctx->CreateLoad(res_pointer);
-        ctx.convert_and_store(res, opt_dest_ptr);
-        return Expression_result::ptr(opt_dest_ptr);
-    }
-
-    return Expression_result::ptr(res_pointer);
 }
 
 // Generate a call to an expression lambda function.

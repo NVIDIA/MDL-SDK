@@ -168,7 +168,7 @@ set_source_files_properties(
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
-    TYPE SHARED
+    TYPE MODULE
     NAMESPACE mdl_sdk
     OUTPUT_NAME "mdl_qt_plugin"
     SOURCES ${PROJECT_SOURCES}

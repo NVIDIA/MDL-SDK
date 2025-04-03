@@ -50,6 +50,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
         // replace all materials in the scene by one specified on the command line
         void replace_all_materials(const std::string& material_name);
 
+        // replace single materials in the scene by one specified on the command line
+        void replace_single_materials(const std::string& name_to_replace, const std::string& material_name);
+
     private:
         std::unique_ptr<IScene_loader::Scene> m_scene;
     };

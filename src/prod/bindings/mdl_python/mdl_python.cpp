@@ -33,7 +33,7 @@ mi::neuraylib::INeuray* g_neuray;
 
 mi::neuraylib::INeuray* load_and_get_ineuray(const char* filename)
 {
-    if (!filename || strlen(filename) == 0) {
+    if (!filename || filename[0] == '\0') {
         mi::neuraylib::INeuray* result = mi::examples::mdl::load_and_get_ineuray();
         g_neuray = result;
         return result;

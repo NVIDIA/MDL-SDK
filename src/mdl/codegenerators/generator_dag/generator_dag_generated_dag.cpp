@@ -1391,8 +1391,10 @@ void Generated_code_dag::compile_function(
             for (size_t k = 0; k < parameter_count; ++k) {
                 Parameter_info &param = func.get_parameter(k);
 
-                param.set_default(
-                    dag_builder.expr_to_dag(orig_f_def->get_default_param_initializer(k)));
+                DAG_node const *init = dag_builder.expr_to_dag(
+                    param.get_type(),
+                    orig_f_def->get_default_param_initializer(k));
+                param.set_default(init);
             }
         }
     } else {
@@ -1428,8 +1430,10 @@ void Generated_code_dag::compile_function(
                     dag_builder.make_accessible(parameter);
                 }
 
-                param.set_default(
-                    dag_builder.expr_to_dag(orig_f_def->get_default_param_initializer(k)));
+                DAG_node const *init = dag_builder.expr_to_dag(
+                    param.get_type(),
+                    orig_f_def->get_default_param_initializer(k));
+                param.set_default(init);
             }
         }
 
@@ -1526,8 +1530,10 @@ void Generated_code_dag::compile_annotation(
             IParameter const *parameter = decl->get_parameter(k);
             dag_builder.make_accessible(parameter);
 
-            param.set_default(
-                dag_builder.expr_to_dag(orig_f_def->get_default_param_initializer(k)));
+            DAG_node const *init = dag_builder.expr_to_dag(
+                param.get_type(),
+                orig_f_def->get_default_param_initializer(k));
+            param.set_default(init);
         }
     }
 
@@ -1897,8 +1903,10 @@ void Generated_code_dag::compile_material(
                     No_INLINE_scope no_inline(m_node_factory);
 
                     Parameter_info &param = mat.get_parameter(k);
-                    param.set_default(
-                        dag_builder.expr_to_dag(orig_mat_def->get_default_param_initializer(k)));
+                    DAG_node const *init = dag_builder.expr_to_dag(
+                        param.get_type(),
+                        orig_mat_def->get_default_param_initializer(k));
+                    param.set_default(init);
                 }
             }
 
@@ -2051,8 +2059,10 @@ void Generated_code_dag::compile_material(
                 {
                     No_INLINE_scope no_inline(m_node_factory);
 
-                    param.set_default(
-                        dag_builder.expr_to_dag(orig_mat_def->get_default_param_initializer(k)));
+                    DAG_node const *init = dag_builder.expr_to_dag(
+                        param.get_type(),
+                        orig_mat_def->get_default_param_initializer(k));
+                    param.set_default(init);
                 }
             }
 
@@ -5423,6 +5433,7 @@ static bool is_uniform_call(
     case IDefinition::DS_INTRINSIC_DAG_ARRAY_LENGTH:
     case IDefinition::DS_INTRINSIC_DAG_SET_OBJECT_ID:
     case IDefinition::DS_INTRINSIC_DAG_SET_TRANSFORMS:
+    case IDefinition::DS_INTRINSIC_DAG_DECL_CAST:
         // these are always uniform
         return true;
 
@@ -6953,7 +6964,7 @@ Generated_code_dag::Material_instance::Instantiate_helper::insert_elemental_cons
                 IExpression const *init = elem_constr->get_default_param_initializer(i);
                 if (init != NULL) {
                     Module_scope scope(m_dag_builder, owner.get());
-                    f_node = m_dag_builder.expr_to_dag(init);
+                    f_node = m_dag_builder.expr_to_dag(f_type, init);
                 } else {
                     // default construct
                     if (is<IType_struct>(f_type)) {
@@ -6985,16 +6996,19 @@ Generated_code_dag::Material_instance::Instantiate_helper::insert_elemental_cons
     return res;
 }
 
+// Translate a decl_cast expression into a combination of a constructor call
+// of the target type, field selections and default initializers, converting
+// the expression between two compatible struct types.
 DAG_node const *
 Generated_code_dag::Material_instance::Instantiate_helper::translate_decl_cast_call(
     DAG_call const *call)
 {
     DAG_node const *arg = call->get_argument(0);
 
-    IType_struct const *dst_type =
-        cast<IType_struct>(call->get_type()->skip_type_alias());
+    IType const *dst_type = call->get_type()->skip_type_alias();
+    dst_type = m_type_factory.import(dst_type);
 
-    return insert_elemental_constructor(arg, dst_type, call->get_dbg_info());
+    return insert_elemental_constructor(arg, cast<IType_struct>(dst_type), call->get_dbg_info());
 }
 
 // Instantiate a DAG expression.

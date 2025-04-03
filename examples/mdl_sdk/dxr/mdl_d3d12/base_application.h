@@ -125,6 +125,11 @@ namespace mi { namespace examples { namespace mdl_d3d12
             DF_FLAGS_FORCE_32_BIT = 0xffffffffU
         };
 
+        struct Material_override {
+            std::string selector;
+            std::string material;
+        };
+
         explicit Base_options()
             : features()
             , window_title(L"MDL D3D12 Example Application")
@@ -139,6 +144,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
             , no_console_window(false)
             , hide_gui(false)
             , ray_depth(6)
+            , sss_depth(256)
             , output_file("output.png")
             , lpe({ "beauty" })
             , iterations(1)
@@ -173,6 +179,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
 #endif
 #if MDL_ENABLE_MATERIALX
             , mtlx_to_mdl("latest")
+            , materialxtest_mode(false)
 #endif
         {
         }
@@ -192,6 +199,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         bool no_console_window;
         bool hide_gui;
         size_t ray_depth;
+        size_t sss_depth;
         std::string output_file;
         std::string generated_mdl_path;
         std::vector<std::string> lpe;
@@ -234,23 +242,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
         std::vector<std::string> mtlx_paths;
         std::vector<std::string> mtlx_libraries;
         std::string mtlx_to_mdl;
+        bool materialxtest_mode;
 #endif
-
-        std::unordered_map<std::string, std::string> user_options;
-
-        bool get_user_options(
-            const std::string& name,
-            std::string& out_value) const
-        {
-            const auto& found = user_options.find(name);
-            if (found != user_options.end())
-            {
-                out_value = found->second;
-                return out_value == "" ? false : true;
-            }
-            out_value = "";
-            return false;
-        }
     };
 
     // --------------------------------------------------------------------------------------------

@@ -3398,7 +3398,7 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         break;
     case RT_MDL_ROUND_AWAY_FROM_ZERO:
     case RT_MDL_ROUND_AWAY_FROM_ZEROF:
-        // round(x) = floor(x + 0.5)
+        // round_away_from_zero(x) = floor(x + sign(x) * 0.5)
         {
             llvm::Value    *x       = arg_it;
             bool           is_float = code == RT_MDL_ROUND_AWAY_FROM_ZEROF;

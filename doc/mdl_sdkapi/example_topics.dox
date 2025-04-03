@@ -93,6 +93,7 @@ index.
   - \ref mi_neuray_example_code_gen "Target code serialization"
   - \ref mi_neuray_example_execution_glsl "Texture access functions (GLSL)"
   - \ref mi_neuray_example_execution_ptx "Texture access functions (PTX)"
+  - \ref mi_neuray_example_dependency_inspector "Type of dependencies of an MDL module"
   - \ref mi_neuray_example_traversal "Traversal of a compiled material"
   - \ref mi_neuray_example_create_module "Using the uniform analysis"
 

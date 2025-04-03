@@ -51,6 +51,10 @@ static const float DIRAC = -1.0f;
 #define FLAG_FIRST_PATH_SEGMENT (1 << 2)
 #define FLAG_LAST_PATH_SEGMENT  (1 << 3)
 #define FLAG_CAMERA_RAY         (1 << 4)
+#define FLAG_SSS                (1 << 5)
+#define FLAG_SSS_R              (1 << 6)
+#define FLAG_SSS_G              (1 << 7)
+#define FLAG_SSS_B              (1 << 8)
 
 void add_flag(inout RadianceHitInfoFlags flags, RadianceHitInfoFlags to_add) { flags |= to_add; }
 void toggle_flag(inout RadianceHitInfoFlags flags, RadianceHitInfoFlags to_toggle) { flags ^= to_toggle; }
@@ -187,6 +191,9 @@ struct SceneConstants
 
     // the BSDF data flags to use when executing BSDF functions
     Df_flags bsdf_data_flags;
+
+    // for counting SSS steps separate from 'max_ray_depth'
+    uint max_sss_depth;
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -217,17 +224,19 @@ struct Env_Sample
 //-------------------------------------------------------------------------------------------------
 
 
-#define MATERIAL_CODE_FEATURE_HAS_INIT              (1 << 0)
-#define MATERIAL_CODE_FEATURE_SURFACE_SCATTERING    (1 << 1)
-#define MATERIAL_CODE_FEATURE_SURFACE_EMISSION      (1 << 2)
-#define MATERIAL_CODE_FEATURE_BACKFACE_SCATTERING   (1 << 3)
-#define MATERIAL_CODE_FEATURE_BACKFACE_EMISSION     (1 << 4)
-#define MATERIAL_CODE_FEATURE_VOLUME_ABSORPTION     (1 << 5)
-#define MATERIAL_CODE_FEATURE_CUTOUT_OPACITY        (1 << 6)
-#define MATERIAL_CODE_FEATURE_CAN_BE_THIN_WALLED    (1 << 7)
-#define MATERIAL_CODE_FEATURE_HAS_AOVS              (1 << 8)
+#define MATERIAL_CODE_FEATURE_HAS_INIT                      (1 << 0)
+#define MATERIAL_CODE_FEATURE_SURFACE_SCATTERING            (1 << 1)
+#define MATERIAL_CODE_FEATURE_SURFACE_EMISSION              (1 << 2)
+#define MATERIAL_CODE_FEATURE_BACKFACE_SCATTERING           (1 << 3)
+#define MATERIAL_CODE_FEATURE_BACKFACE_EMISSION             (1 << 4)
+#define MATERIAL_CODE_FEATURE_VOLUME_ABSORPTION             (1 << 5)
+#define MATERIAL_CODE_FEATURE_VOLUME_SCATTERING             (1 << 6)
+#define MATERIAL_CODE_FEATURE_VOLUME_SCATTERING_DIR_BIAS    (1 << 7)
+#define MATERIAL_CODE_FEATURE_CUTOUT_OPACITY                (1 << 8)
+#define MATERIAL_CODE_FEATURE_CAN_BE_THIN_WALLED            (1 << 9)
+#define MATERIAL_CODE_FEATURE_HAS_AOVS                      (1 << 10)
 
-#define MATERIAL_FLAG_SINGLE_SIDED                  (1 << 0)
+#define MATERIAL_FLAG_SINGLE_SIDED                          (1 << 0)
 
 bool has_feature(uint flags, uint to_check) { return (flags & to_check) != 0; }
 
@@ -262,6 +271,15 @@ struct Material_constants
             return MDL_HAS_VOLUME_ABSORPTION == 1;
         #else
             return has_feature(features, MATERIAL_CODE_FEATURE_VOLUME_ABSORPTION);
+        #endif
+    }
+
+    bool has_volume_scattering()
+    {
+        #ifdef MDL_HAS_VOLUME_SCATTERING
+            return MDL_HAS_VOLUME_SCATTERING == 1;
+        #else
+            return has_feature(features, MATERIAL_CODE_FEATURE_VOLUME_SCATTERING);
         #endif
     }
 
@@ -553,6 +571,16 @@ float4 rnd4(inout uint prev)
 float4x4 to4x4(float3x4 source)
 {
     return float4x4(source[0], source[1], source[2], float4(0.0f, 0.0f, 0.0f, 1.0f));
+}
+
+// Duff et al - "Building an Orthonormal Basis, Revisited"
+void create_basis(float3 n, out float3 b1, out float3 b2)
+{
+    const float sign = (n.z >= 0.0f) ? 1.0f : -1.0f;
+    const float a = -1.0f / (sign + n.z);
+    const float b = n.x * n.y * a;
+    b1 = float3(1.0f + sign * n.x * n.x * a, sign * b, -sign * n.x);
+    b2 = float3(b, sign + n.y * n.y * a, -n.y);
 }
 
 //-------------------------------------------------------------------------------------------------

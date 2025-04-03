@@ -454,8 +454,9 @@ bool Example_dxr::load()
     scene_data.progressive_iteration =
         static_cast<uint32_t>(options->no_gui ? 1 : options->iterations);
     scene_data.max_ray_depth = static_cast<uint32_t>(options->ray_depth);
+    scene_data.max_sss_depth = static_cast<uint32_t>(options->sss_depth);
     scene_data.iterations_per_frame = 1;
-    scene_data.exposure_compensation = 0.0f;
+    scene_data.exposure_compensation = options->exposure_compensation;
     scene_data.burn_out = options->tone_mapping_burn_out;
     scene_data.point_light_enabled = options->point_light_enabled ? 1u : 0u;
     scene_data.point_light_position = options->point_light_position;
@@ -502,7 +503,7 @@ bool Example_dxr::load()
     {
         // if the initial environment map is specified manually (on the command line)
         // the file is resolved in the scene folder, if not available in the working directory.
-        std::string env_path = get_options()->user_options.at("environment");
+        std::string env_path = static_cast<const Example_dxr_options*>(get_options())->hdr_environment;
         if (!mi::examples::io::is_absolute_path(env_path))
         {
             std::string p = mi::examples::io::dirname(get_scene_path()) + "/" + env_path;
@@ -612,7 +613,7 @@ bool Example_dxr::load_scene(
     set_scene_is_updating(true);
 
     log_info("Started loading scene: " + scene_path);
-    const auto options = get_options();
+    const Example_dxr_options* options = static_cast<const Example_dxr_options*>(get_options());
 
     // two stages, import scene from a specific format
     Loader_gltf loader;
@@ -627,41 +628,62 @@ bool Example_dxr::load_scene(
         set_scene_is_updating(false);
         return false;
     }
-    // replace all materials (for debugging purposes)
-    std::string override_material;
-    if (options->get_user_options("override_material", override_material))
+    // replace all materials (for debugging and testing purposes, mostly)
+    if (!options->material_overrides.empty())
     {
-        bool found_replacement = false;
-
-        // check for code generators that match this name
-        get_mdl_sdk().get_library()->visit_material_description_loaders(
-            [&](const IMdl_material_description_loader* loader)
-            {
-                if (loader->match_gltf_name(override_material))
-                {
-                    found_replacement = true;
-                    return false; // stop visits
-                }
-                return true; // continue visits
-            });
-
-        // replace with MDL or MDLE material
-        std::string mod, mat;
-        if (!found_replacement && mi::examples::mdl::parse_cmd_argument_material_name(
-            override_material, mod, mat, false))
+        // helper check if the replacement is a supported format
+        auto find_replacement = [&](const std::string& replacement) -> std::string
         {
-            override_material = mod + "::" + mat;
-            found_replacement = true;
-        }
+            // check for code generators that match this name
+            bool found_replacement = false;
+            get_mdl_sdk().get_library()->visit_material_description_loaders(
+                [&](const IMdl_material_description_loader* loader)
+                {
+                    if (loader->match_gltf_name(replacement))
+                    {
+                        found_replacement = true;
+                        return false; // stop visits
+                    }
+                    return true; // continue visits
+                });
+            if (found_replacement)
+                return replacement;
 
-        // use the GLTF support material
-        if (!found_replacement)
+            // replace with MDL or MDLE material
+            std::string mod, mat;
+            std::string query = mi::examples::strings::get_url_query(replacement);
+            if (mi::examples::mdl::parse_cmd_argument_material_name(
+                mi::examples::strings::drop_url_query(replacement), mod, mat, false))
+            {
+                return query.empty()
+                    ? mod + "::" + mat
+                    : mod + "::" + mat + "?" + query;
+            }
+
+            // use the GLTF support material
             log_warning("Using the GLTF Support Material as override because the "
                 "provided argument does not match the naming convention for any special "
                 "handling like mdl or mdle.");
 
-        loader.replace_all_materials(override_material);
-        log_info("All material are replaced by: " + override_material);
+            return replacement;
+        };
+
+        // iterate over the replacements
+        for (const auto& over : options->material_overrides)
+        {
+            const std::string new_material_name = find_replacement(over.material);
+            if (over.selector.empty())
+            {
+                loader.replace_all_materials(new_material_name);
+                log_info("All materials are replaced by: " + new_material_name);
+            }
+            else
+            {
+                const std::string to_replace = over.selector;
+                loader.replace_single_materials(to_replace, new_material_name);
+                log_info("Material named '" + to_replace + "' replaced by: " + new_material_name);
+            }
+        }
     }
 
     // then, build the scene graph, with meshes, acceleration structure, ...

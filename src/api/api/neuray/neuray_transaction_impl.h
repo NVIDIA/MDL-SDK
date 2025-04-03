@@ -33,6 +33,8 @@
 #ifndef API_API_NEURAY_NEURAY_TRANSACTION_IMPL_H
 #define API_API_NEURAY_NEURAY_TRANSACTION_IMPL_H
 
+#define MI_API_API_NEURAY_USE_NAME_TO_TAG_MODIFIED 1
+
 #include <mi/neuraylib/itransaction.h>
 
 #include <regex>
@@ -201,6 +203,7 @@ public:
     /// \note This method does \em not increase the reference count of the return value.
     const Class_factory* get_class_factory() const;
 
+#if ! MI_API_API_NEURAY_USE_NAME_TO_TAG_MODIFIED
     /// Returns the tag to be used for storing a DB element of that name.
     ///
     /// Calls DB::Transaction::name_to_tag() followed by get_tag_for_store(DB::Tag).
@@ -216,6 +219,7 @@ public:
     /// requested for removal, must not be reused (at least those tags with reference count 0 might
     /// disappear at any time -- even within a transaction).
     DB::Tag get_tag_for_store( DB::Tag tag);
+#endif // MI_API_API_NEURAY_USE_NAME_TO_TAG_MODIFIED
 
     /// Record the construction of (an API class for) a DB element.
     ///

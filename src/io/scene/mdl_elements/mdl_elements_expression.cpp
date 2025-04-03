@@ -1778,30 +1778,34 @@ mi::Size Annotation_definition_list::get_memory_consumption() const
 class Factories
 {
 public:
-    Factories() : m_vf( &m_tf), m_ef( &m_vf) { }
-    Type_factory m_tf;
-    Value_factory m_vf;
-    Expression_factory m_ef;
+    Factories()
+      : m_tf( new Type_factory()),
+        m_vf( new Value_factory( m_tf.get())),
+        m_ef( new Expression_factory( m_vf.get())) { }
+
+    mi::base::Handle<Type_factory> m_tf;
+    mi::base::Handle<Value_factory> m_vf;
+    mi::base::Handle<Expression_factory> m_ef;
 };
 
 Factories g_factories;
 
 IType_factory* get_type_factory()
 {
-   g_factories.m_tf.retain();
-   return &g_factories.m_tf;
+   g_factories.m_tf->retain();
+   return g_factories.m_tf.get();
 }
 
 IValue_factory* get_value_factory()
 {
-   g_factories.m_vf.retain();
-   return &g_factories.m_vf;
+   g_factories.m_vf->retain();
+   return g_factories.m_vf.get();
 }
 
 IExpression_factory* get_expression_factory()
 {
-   g_factories.m_ef.retain();
-   return &g_factories.m_ef;
+   g_factories.m_ef->retain();
+   return g_factories.m_ef.get();
 }
 
 } // namespace MDL

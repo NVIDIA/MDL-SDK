@@ -237,7 +237,8 @@ features.
 
     -   **MATERIALX_DIR** in Ungrouped Entries, \n
         for example: *C:/projects/thirdparty/git/MaterialX* \n
-        For MaterialX support, the option **MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES** has to be enabled.
+        See also the option
+        [MDL_MSVC_DYNAMIC_RUNTIME_DXR_EXAMPLE](#mdl-msvc-dynamic-dxr).
 
     -   **python_PATH** in Ungrouped Entries (only if not found in the PATH), \n
         for example: *C:/projects/thirdparty/python_3_8_0/bin/python.exe*
@@ -409,9 +410,17 @@ In case of any help request, please attach the log messages generated when the l
 
 The following options affect how various components are built:
 
--   **MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES** \n
-    [ON/OFF] links the MSVC dynamic runtime (/MD) instead of static (/MT) when
-    creating the example executables.
+-   **MDL_MSVC_DYNAMIC_RUNTIME** \n
+    [ON/OFF] links all binaries except for the DXR example with the dynamic
+    MSVC runtime (/MD or /MDd) instead of the static one (/MT or /MTd).
+    Default: OFF.
+
+-   <a name="mdl-msvc-dynamic-dxr">**MDL_MSVC_DYNAMIC_RUNTIME_DXR_EXAMPLE**</a>\n
+    [ON/OFF] links the DXR example with the dynamic MSVC runtime (/MD or /MDd)
+    instead of the static one (/MT or /MTd). If MaterialX support is enabled
+    (see the option [MDL_ENABLE_MATERIALX](#mdl-enable-materialx)), and the
+    pre-built MaterialX libraries are used, then this option needs to be
+    enabled. Default: ON
 
 The following options enable you to select the examples to be built based on
 their required thirdparty dependencies (see also **MDL_BUILD_SDK_EXAMPLES**
@@ -441,8 +450,9 @@ above):
 -   **MDL_BUILD_ARNOLD_PLUGIN** \n
     [ON/OFF] enable/disable the build of the MDL Arnold Plugin.
 
--   **MDL_ENABLE_MATERIALX** \n
-    [ON/OFF] enable/disable MaterialX in examples that support it.
+-   <a name="mdl-enable-materialx">**MDL_ENABLE_MATERIALX**</a> \n
+    [ON/OFF] enable/disable MaterialX in examples that support it. See also the
+    option [MDL_MSVC_DYNAMIC_RUNTIME_DXR_EXAMPLE](#mdl-msvc-dynamic-dxr).
 
 
 \endif

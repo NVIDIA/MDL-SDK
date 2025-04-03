@@ -50,16 +50,15 @@ create_from_base_preset(
     OUTPUT_NAME "execution_glsl_vk"
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
-    STATIC_MSVC_RUNTIME
 )
 
 # add dependencies
 target_add_dependencies(TARGET ${PROJECT_NAME}
     DEPENDS
+        mdl::mdl_sdk
+        mdl_sdk::shared
         vulkan
         glfw
-        mdl::mdl_sdk
-        mdl_sdk::shared_static
     )
 
 # copy additional resources

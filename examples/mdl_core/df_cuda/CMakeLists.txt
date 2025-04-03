@@ -51,7 +51,6 @@ create_from_base_preset(
     OUTPUT_NAME "df_cuda"
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
-    STATIC_MSVC_RUNTIME
     ${ADDITIONAL_OPTS}
 )
 
@@ -62,7 +61,7 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         mdl_core::shared
         opengl
         glfw
-        imgui_static
+        imgui
         cuda
         openimageio
     )

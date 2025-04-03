@@ -322,7 +322,7 @@ bool Mdl_material_target::add_material_to_link_unit(
         return value->get_kind() == mi::neuraylib::IValue::VK_INVALID_DF;
     };
 
-    // helper function to check if a color function needs to be evaluted
+    // helper function to check if a color function needs to be evaluated
     // returns true if the expression value is constant black, otherwise true
     auto is_constant_black_color = [&compiled_material](const char* expression_path)
     {
@@ -350,7 +350,29 @@ bool Mdl_material_target::add_material_to_link_unit(
         return true;
     };
 
-    // helper function to check if a bool function needs to be evaluted
+    // helper function to check if a float function needs to be evaluated
+    // returns true if the expression value is constant 0.0f, otherwise true
+    auto is_constant_0f = [&compiled_material](const char* expression_path)
+        {
+            // fetch the constant expression
+            mi::base::Handle<const mi::neuraylib::IExpression> expr(
+                compiled_material->lookup_sub_expression(expression_path));
+            if (expr->get_kind() != mi::neuraylib::IExpression::EK_CONSTANT)
+                return false;
+
+            // get the constant value
+            mi::base::Handle<const mi::neuraylib::IExpression_constant> expr_constant(
+                expr->get_interface<mi::neuraylib::IExpression_constant>());
+            mi::base::Handle<const mi::neuraylib::IValue_float> value(
+                expr_constant->get_value<mi::neuraylib::IValue_float>());
+            if (!value)
+                return false;
+
+            // check for "false"
+            return value->get_value() == 0.0f;
+        };
+
+    // helper function to check if a bool function needs to be evaluated
     // returns true if the expression value is constant false, otherwise true
     auto is_constant_false = [&compiled_material](const char* expression_path)
     {
@@ -402,6 +424,23 @@ bool Mdl_material_target::add_material_to_link_unit(
         selected_functions.push_back(mi::neuraylib::Target_function_description(
             "volume.absorption_coefficient", "mdl_volume_absorption_coefficient"));
         interface_data.add_code_feature(Material_code_feature::VOLUME_ABSORPTION);
+    }
+    // add scattering
+    if (exists("volume.scattering_coefficient") &&
+        !is_constant_black_color("volume.scattering_coefficient"))
+    {
+        selected_functions.push_back(mi::neuraylib::Target_function_description(
+            "volume.scattering_coefficient", "mdl_volume_scattering_coefficient"));
+        interface_data.add_code_feature(Material_code_feature::VOLUME_SCATTERING);
+
+        // only in case we have volume scattering, evaluate directional bias of the anisotropic vdf
+        if (exists("volume.scattering.directional_bias") &&
+            !is_constant_0f("volume.scattering.directional_bias"))
+        {
+            selected_functions.push_back(mi::neuraylib::Target_function_description(
+                "volume.scattering.directional_bias", "mdl_volume_scattering_directional_bias"));
+            interface_data.add_code_feature(Material_code_feature::VOLUME_SCATTERING_DIR_BIAS);
+        }
     }
 
     // add surface scattering if available
@@ -1089,6 +1128,10 @@ bool Mdl_material_target::generate()
             ? "#define MDL_HAS_VOLUME_ABSORPTION 1\n"
             : "#define MDL_HAS_VOLUME_ABSORPTION 0\n";
         m_hlsl_source_code +=
+            interface_data.has_code_feature(Material_code_feature::VOLUME_SCATTERING)
+            ? "#define MDL_HAS_VOLUME_SCATTERING 1\n"
+            : "#define MDL_HAS_VOLUME_SCATTERING 0\n";
+        m_hlsl_source_code +=
             interface_data.has_code_feature(Material_code_feature::CAN_BE_THIN_WALLED)
             ? "#define MDL_CAN_BE_THIN_WALLED 1\n"
             : "#define MDL_CAN_BE_THIN_WALLED 0\n";
@@ -1197,6 +1240,12 @@ bool Mdl_material_target::generate()
     if (!interface_data.has_code_feature(Material_code_feature::VOLUME_ABSORPTION))
         m_hlsl_source_code +=
         "float3 mdl_volume_absorption_coefficient(const Shading_state_material) { return float3(0, 0, 0); }\n";
+    if (!interface_data.has_code_feature(Material_code_feature::VOLUME_SCATTERING))
+        m_hlsl_source_code +=
+        "float3 mdl_volume_scattering_coefficient(const Shading_state_material) { return float3(0, 0, 0); }\n";
+    if (!interface_data.has_code_feature(Material_code_feature::VOLUME_SCATTERING_DIR_BIAS))
+        m_hlsl_source_code +=
+        "float mdl_volume_scattering_directional_bias(const Shading_state_material) { return 0.0f; }\n";
     if (!interface_data.has_code_feature(Material_code_feature::CUTOUT_OPACITY))
         m_hlsl_source_code +=
         "float mdl_standalone_geometry_cutout_opacity(const Shading_state_material) { return 1.0; }\n";

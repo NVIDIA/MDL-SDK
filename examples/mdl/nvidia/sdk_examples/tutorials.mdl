@@ -463,7 +463,11 @@ export material dxr_sphere_mat(
     color tint = color(0.3), 
     float roughness_scale = 1.0,
     float roughness_offset = 0.25
-) = let {
+)
+[[
+    anno::key_words(string[]("metal", "dirty", "testing"))
+]]
+ = let {
     uniform texture_2d tex = texture_2d("./resources/example_roughness.png", ::tex::gamma_linear);
     float3 tex_coord = state::texture_coordinate(0);
     float mod_roughness = roughness_offset + roughness_scale * tex::lookup_float3(tex, float2(tex_coord.x, tex_coord.y)).x;
@@ -674,4 +678,26 @@ in material(
             intensity: emission ? procedural_tint : color(0.0)
         )
     )
+);
+
+export material example_volume(
+    uniform color absorption_color = color(0.234),
+    uniform float absorption_distance = 0.36,
+    uniform color scattering_color = color(0.368, 0.691, 0.603)
+) = let {
+    float eps = 0.00001;
+    color extinction_coeff = -math::log(math::max(color(eps), absorption_color)) / math::max(eps, absorption_distance);
+    color scattering_coeff = extinction_coeff * scattering_color;
+    color absorbtion_coeff = extinction_coeff - scattering_coeff;
+} in material(
+    surface: material_surface(
+        scattering: df::microfacet_ggx_vcavities_bsdf(
+            roughness_u: 0.0,
+            mode: df::scatter_transmit)
+    ),
+    volume: material_volume(
+        absorption_coefficient: absorbtion_coeff,
+        scattering_coefficient: scattering_coeff
+    ),
+    ior: color(1.0)
 );

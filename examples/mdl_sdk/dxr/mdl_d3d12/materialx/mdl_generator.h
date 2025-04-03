@@ -74,6 +74,10 @@ namespace materialx
         /// Specify the MDL language version the code generator should produce.
         void set_mdl_version(const std::string& mdl_version);
 
+        /// The MaterialXTest applications needs some special setup to align texture coordinates.
+        /// Do NOT use this mode in any other environment since this would indicate inconsistent inputs.
+        void set_materialxtest_mode(bool enabled);
+
         /// set the main mtlx file of the material to generate code from.
         bool set_source(const std::string& mtlx_material, const std::string& material_name);
 
@@ -87,6 +91,7 @@ namespace materialx
         std::string m_mtlx_source;
         std::string m_mtlx_material_name;
         std::string m_mdl_version;
+        bool m_materialxtest_mode;
     };
 
 }}}}

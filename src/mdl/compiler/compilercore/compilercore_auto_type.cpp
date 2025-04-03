@@ -279,6 +279,25 @@ IExpression *AT_check::post_visit(IExpression_binary *bin_expr)
         res_mod = infimum(get_type_modifier(lhs), get_type_modifier(rhs));
         break;
     case IExpression_binary::OK_ARRAY_INDEX:
+        {
+            IExpression const *lhs = bin_expr->get_left_argument();
+            IExpression const *rhs = bin_expr->get_right_argument();
+
+            IType const *lhs_type = lhs->get_type()->skip_type_alias();
+
+            if (lhs_type->is_declarative()) {
+                // index of declarative arrays should be at least uniform
+                if (get_type_modifier(rhs) > IType::MK_UNIFORM) {
+                    error(
+                        DECLARATIVE_INDEX_NOT_UNIFORM,
+                        rhs->access_position(),
+                        Error_params(*this));
+                }
+            }
+        }
+        // hmm, is this right?
+        res_mod = supremum(get_type_modifier(lhs), get_type_modifier(rhs));
+        break;
     case IExpression_binary::OK_MULTIPLY:
     case IExpression_binary::OK_DIVIDE:
     case IExpression_binary::OK_MODULO:
@@ -457,10 +476,6 @@ IExpression *AT_check::post_visit(IExpression_call *call_expr)
     IExpression_reference const *callee = cast<IExpression_reference>(call_expr->get_reference());
     Definition const            *f_def  = impl_cast<Definition>(callee->get_definition());
 
-    if (f_def == NULL || is_error(f_def)) {
-        // Error was already reported.
-        return call_expr;
-    }
     if (callee->is_array_constructor()) {
         // array constructors are uniform calls with auto-typed parameters
         int n_args = call_expr->get_argument_count();
@@ -473,6 +488,9 @@ IExpression *AT_check::post_visit(IExpression_call *call_expr)
             // auto-type parameter
             res_mod = supremum(res_mod, a_mod);
         }
+    } else if (f_def == NULL || is_error(f_def)) {
+        // Error was already reported.
+        return call_expr;
     } else if (f_def->get_kind() == Definition::DK_ERROR) {
         // already error
         return call_expr;

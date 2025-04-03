@@ -308,11 +308,13 @@ mi::Sint32 Mdl_module::create_module(
     mi::base::Handle<const mi::mdl::IModule> module(
         mdl->load_module( ctx.get(), core_load_module_arg.c_str(), &module_cache));
 
-    // Report messages even when the module is valid (warnings, notes, ...)
-    convert_and_log_messages( ctx->access_messages(), context);
-
-    if( !module || !module->is_valid())
+    // Consider messages from the thread context only if there is no module at all or it is not
+    // valid. Otherwise, these should have already been handled in create_module_internal() and
+    // generate_dag(), and would lead to a duplication of warnings.
+    if( !module || !module->is_valid()) {
+        convert_and_log_messages( ctx->access_messages(), context);
         return -2;
+    }
 
     // Even if module loading itself did not fail, DB registration could have failed.
     return context->get_result();
@@ -394,12 +396,13 @@ mi::Sint32 Mdl_module::create_module(
     mi::base::Handle<const mi::mdl::IModule> module( mdl->load_module_from_stream(
         ctx.get(), &module_cache, core_module_name.c_str(), module_source_stream.get()));
 
-    // Report messages even when the module is valid (warnings, notes, ...)
-    convert_and_log_messages( ctx->access_messages(), context);
-
+    // Consider messages from the thread context only if there is no module at all or it is not
+    // valid. Otherwise, these should have already been handled in create_module_internal() and
+    // generate_dag(), and would lead to a duplication of warnings.
     if( !module || !module->is_valid()) {
+        convert_and_log_messages( ctx->access_messages(), context);
         return -2;
-     }
+    }
 
     // Even if module loading itself did not fail, DB registration could have failed.
     return context->get_result();
@@ -1275,7 +1278,7 @@ std::vector<std::string> Mdl_module::get_function_overloads(
 
     std::string name_str( name);
     if( !name_str.empty() && name_str.back() == ')') {
-        LOG::mod_log->warning( M_NEURAY_API, LOG::Mod_log::C_MISC,
+        LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_MISC,
             "Name of function definition \"%s\" passed to mi::neuraylib::IModule::get_function_"
             "overloads() includes the signature. This is deprecated and may fail in the case of "
             "general Unicode names.", name_str.c_str());
@@ -1610,18 +1613,18 @@ mi::Sint32 Mdl_module::reload(
 
     std::string core_module_name = decode_module_name( m_mdl_name);
     mi::base::Handle<const mi::mdl::IModule> module(
-        mdl->load_module(ctx.get(), core_module_name.c_str(), recursive ? nullptr : &cache));
+        mdl->load_module( ctx.get(), core_module_name.c_str(), recursive ? nullptr : &cache));
 
-    // report messages even when the module is valid (warnings, notes, ...)
-    convert_and_log_messages(ctx->access_messages(), context);
-
-    if (!module || !module->is_valid()) {
-        add_error_message(
-            context, "The module failed to compile.", -2);
+    // Consider messages from the thread context only if there is no module at all or it is not
+    // valid. Otherwise, these should have already been handled in create_module_internal() and
+    // generate_dag(), and would lead to a duplication of warnings.
+     if( !module || !module->is_valid()) {
+        convert_and_log_messages( ctx->access_messages(), context);
+        add_error_message( context, "The module failed to compile.", -2);
         return -1;
     }
 
-    return reload_module_internal(transaction, mdl.get(), module.get(), context);
+    return reload_module_internal( transaction, mdl.get(), module.get(), context);
 }
 
 mi::Sint32 Mdl_module::reload_from_string(
@@ -1670,16 +1673,16 @@ mi::Sint32 Mdl_module::reload_from_string(
         core_module_name.c_str(),
         module_source_stream.get()));
 
-    // report messages even when the module is valid (warnings, notes, ...)
-    convert_and_log_messages(ctx->access_messages(), context);
-
-    if (!module || !module->is_valid()) {
-        add_error_message(
-            context, "The module failed to compile.", -2);
+    // Consider messages from the thread context only if there is no module at all or it is not
+    // valid. Otherwise, these should have already been handled in create_module_internal() and
+    // generate_dag(), and would lead to a duplication of warnings.
+    if( !module || !module->is_valid()) {
+        convert_and_log_messages( ctx->access_messages(), context);
+        add_error_message( context, "The module failed to compile.", -2);
         return -1;
     }
 
-    return reload_module_internal(transaction, mdl.get(), module.get(), context);
+    return reload_module_internal( transaction, mdl.get(), module.get(), context);
 }
 
 mi::Sint32 Mdl_module::reload_imports(

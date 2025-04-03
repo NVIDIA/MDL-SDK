@@ -599,6 +599,7 @@ private:
 #define MDL_CTX_OPTION_INCLUDE_GEO_NORMAL                  "include_geometry_normal"
 #define MDL_CTX_OPTION_BUNDLE_RESOURCES                    "bundle_resources"
 #define MDL_CTX_OPTION_EXPORT_RESOURCES_WITH_MODULE_PREFIX "export_resources_with_module_prefix"
+#define MDL_CTX_OPTION_HANDLE_FILENAME_CONFLICTS           "handle_filename_conflicts"
 #define MDL_CTX_OPTION_MDL_NEXT                            "mdl_next"
 #define MDL_CTX_OPTION_EXPERIMENTAL                        "experimental"
 #define MDL_CTX_OPTION_RESOLVE_RESOURCES                   "resolve_resources"
@@ -727,20 +728,20 @@ private:
 
 };
 
-/// Adds MDL messages to an execution context.
+/// Adds core messages to an execution context.
 void convert_messages( const mi::mdl::Messages& in_messages, Execution_context* context);
+
+/// Adds messages from an execution context to the core messages.
+void convert_messages( const Execution_context* context, mi::mdl::Messages& out_messages);
 
 /// Logs the messages in an execution context.
 void log_messages( const Execution_context* context, mi::Size start_index);
 
-/// Adds MDL messages to an optional execution context and logs them.
-///
-/// Similar to #convert_messages() followed by #log_messages(), except that context can be
-/// \c nullptr.
-void convert_and_log_messages( const mi::mdl::Messages& in_messages, Execution_context* context);
+/// Logs the core messages.
+void log_messages( const mi::mdl::Messages& messages);
 
-/// Adds messages from an execution context to the mi::mdl::Messages.
-void convert_messages( const Execution_context* context, mi::mdl::Messages& out_messages);
+/// Adds core messages to an optional execution context and logs them.
+void convert_and_log_messages( const mi::mdl::Messages& in_messages, Execution_context* context);
 
 /// Adds \p message as message to the context.
 ///

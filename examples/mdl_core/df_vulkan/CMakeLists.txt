@@ -54,7 +54,6 @@ create_from_base_preset(
     OUTPUT_NAME "df_vulkan"
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
-    STATIC_MSVC_RUNTIME
 )
 
 # add dependencies
@@ -64,7 +63,7 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         mdl_core::shared
         vulkan
         glfw
-        imgui_static
+        imgui
         openimageio
     )
 

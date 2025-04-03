@@ -451,14 +451,49 @@ public:
     /// \return      The corresponding name, or \c nullptr if the tag has no associated name.
     virtual const char* tag_to_name( Tag tag) = 0;
 
-    /// Looks up the tag for a name (within the context of this transaction).
+    /// Looks up the tag for a name (within the context of this transaction, original version).
     ///
     /// \note There is no guarantee that name_to_tag() followed by tag_to_name() produces the
     ///       original name.
     ///
+    /// \see #name_to_tag_modified()
+    ///
     /// \param name  The name to look up.
     /// \return      The corresponding tag, or the invalid tag if the name was not found.
     virtual Tag name_to_tag( const char* name) = 0;
+
+    /// Looks up the tag for a name (within the context of this transaction, modified version).
+    ///
+    /// This method differs from #name_to_tag() in the following way:
+    /// - (1) No difference if no tag is found for the given name.
+    /// - (2) No difference if the found tag is not flagged for removal.
+    /// - (3) If flagged for removal and the reference count is equal to 0, pretend that no tag was
+    ///       found.
+    /// - (4) If flagged for removal and the reference count is larger than 0, keep the found info
+    ///       pinned until the end of the transaction.
+    ///
+    /// Case (3): The tag can be garbage collected at any time after this method returned. Instead
+    /// of handing out a tag that might lead to an invalid tag access, pretend that the lookup
+    /// failed, with the intention that the caller requests a new tag for store or copy operations.
+    /// A new tag also avoids that the removal flag carries over to a new version of that database
+    /// element.
+    ///
+    /// Case (4): A garbage collection of all referencing elements would decrease the reference
+    /// count of this tag to 0, and then it can be garbage collected, too. However, we do not know
+    /// whether the referencing elements will be garbage collected at all, and unconditionally
+    /// letting the look up fail is logically wrong. Instead we pin the info until the end of the
+    /// transaction. This gives callers a chance to store a new version of that database element,
+    /// and to reference it again (or keep it referenced). The removal flag will carry over to a
+    /// potentially new version of that database element.
+    ///
+    /// \note There is no guarantee that name_to_tag_modified() followed by tag_to_name() produces
+    ///       the original name.
+    ///
+    /// \see #name_to_tag()
+    ///
+    /// \param name  The name to look up.
+    /// \return      The corresponding tag, or the invalid tag if the name was not found.
+    virtual Tag name_to_tag_modified( const char* name) = 0;
 
     //@}
     /// \name Information about a specific tag

@@ -371,6 +371,10 @@ to your particular MDL integration.
     [Example Implementation of an MDL Browser](https://raytracing-docs.nvidia.com/mdl/api/mi_neuray_example_mdl_browser.html)
     shows how to implement a material selection dialog for a material library
 
+*   *Inspecting all dependencies of an MDL module:*
+
+    [Example for Listing all Dependencies of an MDL Module](https://raytracing-docs.nvidia.com/mdl/api/mi_neuray_example_dependency_inspector.html)
+    shows how to inspect an MDL module to identify all its imports and resource dependencies.
 
 *   *Encapsulating an MDL material in MDLE:*
 

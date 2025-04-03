@@ -52,7 +52,7 @@ set(PROJECT_ADDITIONAL_FILES
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
-    TYPE SHARED
+    TYPE MODULE
     SOURCES
         ${SOURCES_HEADERS}
         ${PROJECT_SOURCES}

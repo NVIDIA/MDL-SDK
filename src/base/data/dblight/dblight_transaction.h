@@ -208,6 +208,8 @@ public:
 
     DB::Tag name_to_tag( const char* name) override;
 
+    DB::Tag name_to_tag_modified( const char* name) override;
+
     bool get_tag_is_job( DB::Tag tag) override { return false; }
 
     SERIAL::Class_id get_class_id( DB::Tag tag) override;
@@ -373,6 +375,12 @@ public:
         DB::Tag_set& processing,
         DB::Tag_set& done);
 
+    /// Returns the number of infos pinned by this transaction.
+    size_t get_pinned_infos_size() const;
+
+    /// Unpins all infos pinned by this transaction.
+    void unpin_pinned_infos();
+
     /// Waits for #m_block_counter to reach zero.
     ///
     /// Returns immediately if #m_block_counter is zero. Otherwise releases the database lock,
@@ -418,6 +426,11 @@ private:
     std::atomic_uint32_t m_next_sequence_number = 0;
     /// Complete journal of updates for this transaction.
     std::vector<Transaction_journal_entry> m_journal;
+
+    /// The lock for #m_pinned_infos.
+    mutable THREAD::Lock m_pinned_infos_lock;
+    /// Tracks infos from #name_to_tag_modified. Needs #m_pinned_infos_lock.
+    std::vector<DB::Info*> m_pinned_infos;
 
     /// The counter to track outstanding commit/abort blocking requests.
     std::atomic_uint32_t m_block_counter = 0;

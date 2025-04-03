@@ -30,6 +30,7 @@
  //
  // Simple CPU renderer using compiled BSDFs with a material parameter editor GUI.
 
+#define _USE_MATH_DEFINES
 #include <cmath>
 #include <iomanip>
 #include <iostream>
@@ -806,7 +807,9 @@ struct Render_context
         // Load environment map from file
         void load(std::string filename, mi::mdl::IMDL* mdl_compiler)
         {
-            Texture_data env_tex(filename.c_str(), mdl_compiler->create_entity_resolver(nullptr));
+            mi::base::Handle<mi::mdl::IEntity_resolver> entity_resolver(
+                mdl_compiler->create_entity_resolver(nullptr));
+            Texture_data env_tex(filename.c_str(), entity_resolver.get());
             check_success(env_tex.is_valid());
 
             const mi::Uint32 rx = env_tex.get_width();
@@ -2109,7 +2112,7 @@ int MAIN_UTF8(int argc, char* argv[])
     rc.surface_emission_intensity_function_index = descs[3].function_index;
 
     // Generate the native target code
-    Target_code* target_code = mc.generate_target_code();
+    std::unique_ptr<Target_code> target_code(mc.generate_target_code());
     rc.exe_code = target_code->get_code_lambda();
 
     // Collect material arguments information for the class compilation mode
@@ -2119,7 +2122,7 @@ int MAIN_UTF8(int argc, char* argv[])
             mat_info,
             descs[0].argument_block_index,
             rc,
-            target_code
+            target_code.get()
         );
 
     String_constant_table& constant_table(target_code->get_string_constant_table());
@@ -2610,7 +2613,7 @@ int MAIN_UTF8(int argc, char* argv[])
 
     }
 
-    exit(EXIT_SUCCESS);
+    return EXIT_SUCCESS;
 }
 // Convert command line arguments to UTF8 on Windows
 COMMANDLINE_TO_UTF8

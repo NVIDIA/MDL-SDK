@@ -108,6 +108,13 @@ endif()
 # -------------------------------------------------------------------------------------------------
 # -------------------------------------------------------------------------------------------------
 
+# Select MSVC runtime based on MDL_MSVC_DYNAMIC_RUNTIME_DXR_EXAMPLE.
+if(MDL_MSVC_DYNAMIC_RUNTIME_DXR_EXAMPLE)
+    set(_SHARED_DXR_MSVC_RUNTIME "DYNAMIC_MSVC_RUNTIME")
+else()
+    set(_SHARED_DXR_MSVC_RUNTIME "STATIC_MSVC_RUNTIME")
+endif()
+
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME} WIN32
@@ -121,15 +128,16 @@ create_from_base_preset(
         "../../thirdparty/d3dx12"
         "../../thirdparty/gltf"
     EXAMPLE
+    ${_SHARED_DXR_MSVC_RUNTIME}
 )
 
 # add dependencies
 target_add_dependencies(TARGET ${PROJECT_NAME}
     DEPENDS
         d3d12
-        imgui
+        imgui_dxr
         mdl::mdl_sdk
-        mdl_sdk::shared
+        mdl_sdk::shared_dxr
     )
 
 # copy content
@@ -173,45 +181,29 @@ if(MDL_ENABLE_MATERIALX)
             "MDL_ENABLE_MATERIALX"
         )
 
+    # find all mtlx libraries in the MaterialX SDK
+    set(_MATERIALX_LIB_FILENAMES "")
+    file(GLOB _PATHS RELATIVE ${MDL_DEPENDENCY_MATERIALX_BASE_DIR} "${MDL_DEPENDENCY_MATERIALX_BASE_DIR}/libraries/bxdf/*/*.mtlx")
+    list(APPEND _MATERIALX_LIB_FILENAMES ${_PATHS})
+    file(GLOB _PATHS RELATIVE ${MDL_DEPENDENCY_MATERIALX_BASE_DIR} "${MDL_DEPENDENCY_MATERIALX_BASE_DIR}/libraries/bxdf/*.mtlx")
+    list(APPEND _MATERIALX_LIB_FILENAMES ${_PATHS})
+    file(GLOB _PATHS RELATIVE ${MDL_DEPENDENCY_MATERIALX_BASE_DIR} "${MDL_DEPENDENCY_MATERIALX_BASE_DIR}/libraries/*/*_defs.mtlx")
+    list(APPEND _MATERIALX_LIB_FILENAMES ${_PATHS})
+    file(GLOB _PATHS RELATIVE ${MDL_DEPENDENCY_MATERIALX_BASE_DIR} "${MDL_DEPENDENCY_MATERIALX_BASE_DIR}/libraries/*/*_ng.mtlx")
+    list(APPEND _MATERIALX_LIB_FILENAMES ${_PATHS})
+    file(GLOB _PATHS RELATIVE ${MDL_DEPENDENCY_MATERIALX_BASE_DIR} "${MDL_DEPENDENCY_MATERIALX_BASE_DIR}/libraries/*/genmdl/*_impl.mtlx")
+    list(APPEND _MATERIALX_LIB_FILENAMES ${_PATHS})
+    list(APPEND _MATERIALX_LIB_FILENAMES "libraries/targets/genmdl.mtlx")
     target_add_content(TARGET ${PROJECT_NAME}
         FILE_BASE "${MDL_DEPENDENCY_MATERIALX_BASE_DIR}/"
         TARGET_BASE "autodesk_materialx/"
         DEP_NAME "content_mtlx"
-        FILES
-            "libraries/bxdf/lama/lama_add.mtlx"
-            "libraries/bxdf/lama/lama_dielectric.mtlx"
-            "libraries/bxdf/lama/lama_emission.mtlx"
-            "libraries/bxdf/lama/lama_mix.mtlx"
-            "libraries/bxdf/lama/lama_sss.mtlx"
-            "libraries/bxdf/lama/lama_conductor.mtlx"
-            "libraries/bxdf/lama/lama_diffuse.mtlx"
-            "libraries/bxdf/lama/lama_layer.mtlx"
-            "libraries/bxdf/lama/lama_sheen.mtlx"
-            "libraries/bxdf/lama/lama_translucent.mtlx"
-            "libraries/bxdf/translation/standard_surface_to_gltf_pbr.mtlx"
-            "libraries/bxdf/translation/standard_surface_to_usd.mtlx"
-            "libraries/bxdf/disney_brdf_2012.mtlx"
-            "libraries/bxdf/disney_brdf_2015.mtlx"
-            "libraries/bxdf/gltf_pbr.mtlx"
-            "libraries/bxdf/standard_surface.mtlx"
-            "libraries/bxdf/usd_preview_surface.mtlx"
-            "libraries/nprlib/genmdl/nprlib_genmdl_impl.mtlx"
-            "libraries/nprlib/nprlib_defs.mtlx"
-            "libraries/nprlib/nprlib_ng.mtlx"
-            "libraries/cmlib/cmlib_defs.mtlx"
-            "libraries/cmlib/cmlib_ng.mtlx"
-            "libraries/pbrlib/genmdl/pbrlib_genmdl_impl.mtlx"
-            "libraries/pbrlib/pbrlib_defs.mtlx"
-            "libraries/pbrlib/pbrlib_ng.mtlx"
-            "libraries/stdlib/genmdl/stdlib_genmdl_impl.mtlx"
-            "libraries/stdlib/stdlib_defs.mtlx"
-            "libraries/stdlib/stdlib_ng.mtlx"
-            "libraries/targets/genmdl.mtlx"
+        FILES ${_MATERIALX_LIB_FILENAMES}
         )
 
     # find all support modules from the MaterialX SDK
-    file(GLOB _MATERIALX_MDL_MODULE_PATHS "${MDL_DEPENDENCY_MATERIALX_BASE_DIR}/libraries/mdl/materialx/*.mdl")
     set(_MATERIALX_MDL_MODULE_FILENAMES "")
+    file(GLOB _MATERIALX_MDL_MODULE_PATHS "${MDL_DEPENDENCY_MATERIALX_BASE_DIR}/libraries/mdl/materialx/*.mdl")
     foreach(_MODULE_PATH ${_MATERIALX_MDL_MODULE_PATHS})
         get_filename_component(_MODULE_FILENAME ${_MODULE_PATH} NAME)
         list(APPEND _MATERIALX_MDL_MODULE_FILENAMES ${_MODULE_FILENAME})

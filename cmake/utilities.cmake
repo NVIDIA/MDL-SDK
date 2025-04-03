@@ -41,10 +41,15 @@ set(LINKER_NO_AS_NEEDED     "$<$<CXX_COMPILER_ID:GNU>:-Wl,--no-as-needed>")
 #   target_build_setup(TARGET <NAME>)
 #
 function(TARGET_BUILD_SETUP)
-    set(options DYNAMIC_MSVC_RUNTIME WINDOWS_UNICODE)
+    set(options DYNAMIC_MSVC_RUNTIME STATIC_MSVC_RUNTIME WINDOWS_UNICODE)
     set(oneValueArgs TARGET)
     set(multiValueArgs)
     cmake_parse_arguments(TARGET_BUILD_SETUP "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
+
+    # sanity check
+    if(TARGET_BUILD_SETUP_DYNAMIC_MSVC_RUNTIME AND TARGET_BUILD_SETUP_STATIC_MSVC_RUNTIME)
+        message(FATAL_ERROR "The options DYNAMIC_MSVC_RUNTIME and STATIC_MSVC_RUNTIME are mutually exclusive.")
+    endif()
 
     # GENERAL
     #---------------------------------------------------------------------------------------
@@ -112,17 +117,26 @@ function(TARGET_BUILD_SETUP)
 
         # set static or dynamic runtime
         # cmake 3.15 has an option for that. MSVC_RUNTIME_LIBRARY
+        #
+        # Merge explicit options TARGET_BUILD_SETUP_*_MSVC_RUNTIME and default MDL_MSVC_DYNAMIC_RUNTIME
+        # option into _DYNAMIC.
         if(TARGET_BUILD_SETUP_DYNAMIC_MSVC_RUNTIME)
-            # examples can use the dynamic runtime
+            set(_DYNAMIC ON)
+        elseif(TARGET_BUILD_SETUP_STATIC_MSVC_RUNTIME)
+            set(_DYNAMIC OFF)
+        else()
+            set(_DYNAMIC ${MDL_MSVC_DYNAMIC_RUNTIME})
+        endif()
+        # Handle _DYNAMIC.
+        if(_DYNAMIC)
             target_compile_options(${TARGET_BUILD_SETUP_TARGET} PRIVATE "/MD$<$<CONFIG:Debug>:d>")
             if(MDL_LOG_FILE_DEPENDENCIES)
-                MESSAGE(STATUS "- msvc runtime:   dynamic (/MD or /MDd)")
+                MESSAGE(STATUS "- MSVC runtime:   dynamic (/MD or /MDd)")
             endif()
         else()
-            # a libraries 'in' the sdk use the static runtime
             target_compile_options(${TARGET_BUILD_SETUP_TARGET} PRIVATE "/MT$<$<CONFIG:Debug>:d>")
             if(MDL_LOG_FILE_DEPENDENCIES)
-                MESSAGE(STATUS "- msvc runtime:   static (/MT or /MTd)")
+                MESSAGE(STATUS "- MSVC runtime:   static (/MT or /MTd)")
             endif()
         endif()
 
@@ -165,6 +179,9 @@ function(TARGET_BUILD_SETUP)
                 "-static-libgcc"
             )
 
+        set_target_properties(${TARGET_BUILD_SETUP_TARGET} PROPERTIES
+            LINK_FLAGS_RELEASE "-Wl,--strip-all")
+
     endif()
 
     # MACOSX
@@ -198,6 +215,9 @@ function(TARGET_BUILD_SETUP)
                 "-Wno-non-virtual-dtor"
                 "-Wno-unusable-partial-specialization"
             )
+
+        set_target_properties(${TARGET_BUILD_SETUP_TARGET} PROPERTIES
+            LINK_FLAGS_RELEASE "-Wl,-x")
 
     endif()
 endfunction()
@@ -668,8 +688,6 @@ endfunction()
 # the reduce the redundant code in the base library projects, we can bundle several repeated tasks
 #
 function(CREATE_FROM_BASE_PRESET)
-    # the options DYNAMIC_MSVC_RUNTIME and STATIC_MSVC_RUNTIME override the
-    # general option MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES
     set(options WIN32 WINDOWS_UNICODE EXAMPLE DYNAMIC_MSVC_RUNTIME STATIC_MSVC_RUNTIME SKIP_UNDEFINED_SYMBOL_CHECK)
     set(oneValueArgs TARGET VERSION TYPE NAMESPACE EXPORT_NAME OUTPUT_NAME VS_PROJECT_NAME EMBED_RC)
     set(multiValueArgs SOURCES ADDITIONAL_INCLUDE_DIRS EXPORTED_SYMBOLS)
@@ -680,20 +698,16 @@ function(CREATE_FROM_BASE_PRESET)
         message(FATAL_ERROR "The options DYNAMIC_MSVC_RUNTIME and STATIC_MSVC_RUNTIME are mutually exclusive.")
     endif()
 
-    # the option EXAMPLE bundles a few things
-    if(CREATE_FROM_BASE_PRESET_EXAMPLE)
-        set(CREATE_FROM_BASE_PRESET_WINDOWS_UNICODE ON)           # enable unicode
-        if(MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES AND NOT CREATE_FROM_BASE_PRESET_STATIC_MSVC_RUNTIME)
-            set(CREATE_FROM_BASE_PRESET_DYNAMIC_MSVC_RUNTIME ON)  # runtime linking
-        endif()
+    if(CREATE_FROM_BASE_PRESET_WINDOWS_UNICODE OR CREATE_FROM_BASE_PRESET_EXAMPLE)
+        list(APPEND BUILD_SETUP_OPTIONS WINDOWS_UNICODE) # enable unicode
     endif()
 
     if(CREATE_FROM_BASE_PRESET_DYNAMIC_MSVC_RUNTIME)
         list(APPEND BUILD_SETUP_OPTIONS DYNAMIC_MSVC_RUNTIME) # runtime linking
     endif()
 
-    if(CREATE_FROM_BASE_PRESET_WINDOWS_UNICODE)
-        list(APPEND BUILD_SETUP_OPTIONS WINDOWS_UNICODE) # unicode
+    if(CREATE_FROM_BASE_PRESET_STATIC_MSVC_RUNTIME)
+        list(APPEND BUILD_SETUP_OPTIONS STATIC_MSVC_RUNTIME) # runtime linking
     endif()
 
     # create the project
@@ -730,7 +744,9 @@ function(CREATE_FROM_BASE_PRESET)
     endif()
 
     # create target and alias
-    if(CREATE_FROM_BASE_PRESET_TYPE STREQUAL "STATIC" OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED")
+    if(    CREATE_FROM_BASE_PRESET_TYPE STREQUAL "STATIC"
+        OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED"
+        OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "MODULE")
         add_library(${CREATE_FROM_BASE_PRESET_TARGET} ${CREATE_FROM_BASE_PRESET_TYPE} ${CREATE_FROM_BASE_PRESET_SOURCES})
         add_library(${CREATE_FROM_BASE_PRESET_NAMESPACE}::${CREATE_FROM_BASE_PRESET_TARGET} ALIAS ${CREATE_FROM_BASE_PRESET_TARGET})
     elseif(CREATE_FROM_BASE_PRESET_TYPE STREQUAL "EXECUTABLE" OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "WIN_EXECUTABLE")
@@ -783,7 +799,10 @@ function(CREATE_FROM_BASE_PRESET)
         )
 
     # add system dependencies
-    if(CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED" OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "EXECUTABLE" OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "WIN_EXECUTABLE")
+    if(    CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED"
+        OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "MODULE"
+        OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "EXECUTABLE"
+        OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "WIN_EXECUTABLE")
         target_add_dependencies(TARGET ${CREATE_FROM_BASE_PRESET_TARGET}
             DEPENDS
                 system
@@ -791,7 +810,8 @@ function(CREATE_FROM_BASE_PRESET)
     endif()
 
     # embed .rc files
-    if(CREATE_FROM_BASE_PRESET_EMBED_RC AND WINDOWS AND CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED")
+    if(CREATE_FROM_BASE_PRESET_EMBED_RC AND WINDOWS AND (   CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED"
+                                                         OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "MODULE"))
         if(MDL_LOG_FILE_DEPENDENCIES)
             message(STATUS "- embedding:      ${CREATE_FROM_BASE_PRESET_EMBED_RC}")
         endif()
@@ -1345,10 +1365,26 @@ function(ADD_TARGET_INSTALL)
             DESTINATION ${ADD_TARGET_INSTALL_DESTINATION}
         )
     else()
-        install(
-            TARGETS ${ADD_TARGET_INSTALL_TARGET}
-            EXPORT  mdl-targets
-        )
+        # Module libraries require an explicit destination since there is no default. Use the same
+        # destination as for shared libraries.
+        get_target_property(_TYPE ${ADD_TARGET_INSTALL_TARGET} TYPE)
+        if(${_TYPE} STREQUAL MODULE_LIBRARY)
+            if(WINDOWS)
+                set(_DESTINATION "${CMAKE_INSTALL_BINDIR}")
+            else()
+                set(_DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+            endif()
+            install(
+                TARGETS ${ADD_TARGET_INSTALL_TARGET}
+                EXPORT mdl-targets
+                DESTINATION ${_DESTINATION}
+            )
+        else()
+            install(
+                TARGETS ${ADD_TARGET_INSTALL_TARGET}
+                EXPORT mdl-targets
+            )
+        endif()
     endif()
 endfunction()
 
@@ -1382,9 +1418,10 @@ function(CREATE_FROM_PYTHON_PRESET)
 
     # add dependencies
     target_add_dependencies(TARGET ${CREATE_FROM_PYTHON_PRESET_TARGET}
-    DEPENDS
-        mdl::mdl_python
-        mdl::mdl_sdk
+        NO_LINKING
+        DEPENDS
+            mdl::mdl_python
+            mdl::mdl_sdk
     )
 
     # create working directories for each configuration

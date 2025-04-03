@@ -2758,9 +2758,11 @@ void MDL_resource_set::update_component_index()
 MDL_resource_set *MDL_resource_set::from_mask_file(
     IAllocator        *alloc,
     char const        *url,
-    char const        *file_mask,
+    char const        *os_file_mask,
     Marker_info const &info)
 {
+    char const *file_mask = os_file_mask;
+
     Directory dir(alloc);
     string dname(alloc);
 
@@ -2788,7 +2790,7 @@ MDL_resource_set *MDL_resource_set::from_mask_file(
 
     MDL_resource_set *res_set =
         builder.create<MDL_resource_set>(
-            alloc, url, file_mask, info.get_udim_mode(), info.has_sequence_marker());
+            alloc, url, os_file_mask, info.get_udim_mode(), info.has_sequence_marker());
 
     for (char const *entry = dir.read(); entry != NULL; entry = dir.read()) {
         if (utf8_match(file_mask, entry)) {

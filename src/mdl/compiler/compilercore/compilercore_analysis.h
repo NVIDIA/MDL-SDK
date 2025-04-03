@@ -1988,6 +1988,14 @@ private:
     /// \param expr  the expression to check
     bool is_lvalue(IExpression const *expr) const;
 
+    /// Check if the given type is declarative and used in the right context.
+    ///
+    /// \param type  the type to check
+    /// \param pos   position of type occurrence
+    void check_declarative_type_usage(
+        IType const    *type,
+        Position const &pos);
+
     /// Process the return expression (or the single body expression).
     ///
     /// \param expr  the return expression

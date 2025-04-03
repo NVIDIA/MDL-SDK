@@ -537,6 +537,7 @@ private:
         def  = m_def_tab.enter_definition(Definition::DK_MEMBER, sym, type, NULL);          \
         def->set_field_index(num_fields++);                                                 \
         def->set_version_flags(VERSION(flags));                                             \
+        def->set_flag(Definition::DEF_IS_PREDEFINED);                                       \
     }
 
 // handle enum values

@@ -3292,11 +3292,11 @@ const IStruct_category* create_struct_category(
     IStruct_category::Predefined_id id_int
         = DETAIL::core_struct_category_id_to_int_struct_category_id( id_core);
 
-    IExpression_factory* ef = get_expression_factory();
+    mi::base::Handle<IExpression_factory> ef( get_expression_factory());
 
     // note: annotations cannot contain resources, hence we can safely ignore the mode
     Mdl_dag_converter anno_converter(
-        ef,
+        ef.get(),
         /*transaction*/ nullptr,
         /*resource_tagger*/ nullptr,
         /*code_dag*/ nullptr,
@@ -3360,11 +3360,11 @@ const IType_enum* create_enum(
         values[i] = std::make_pair( e_value->get_symbol()->get_name(), e_value->get_code());
     }
 
-    IExpression_factory* ef = get_expression_factory();
+    mi::base::Handle<IExpression_factory> ef( get_expression_factory());
 
     // note: annotations cannot contain resources, hence we can safely ignore the mode
     Mdl_dag_converter anno_converter(
-        ef,
+        ef.get(),
         /*transaction*/ nullptr,
         /*resource_tagger*/ nullptr,
         /*code_dag*/ nullptr,
@@ -3421,11 +3421,11 @@ const IType_struct* create_struct(
     mi::base::Handle<const IStruct_category> struct_category_int(
         core_struct_category_to_int_struct_category( tf, struct_category_core, nullptr));
 
-    IExpression_factory* ef = get_expression_factory();
+    mi::base::Handle<IExpression_factory> ef( get_expression_factory());
 
     // note: annotations cannot contain resources, hence we can safely ignore the mode
     Mdl_dag_converter anno_converter(
-        ef,
+        ef.get(),
         /*transaction*/ nullptr,
         /*resource_tagger*/ nullptr,
         /*code_dag*/ nullptr,
@@ -4153,6 +4153,14 @@ IExpression* Mdl_dag_converter::core_call_to_int_expr_indirect(
             m_transaction, arguments.get(), m_immutable_callees, &errors);
     } else if( is_array_index_operator) {
         function_call = function_definition->create_array_index_operator_call_internal(
+            m_transaction, arguments.get(), m_immutable_callees, &errors);
+    } else if( is_decl_cast_operator) {
+        // add a dummy argument to pass the return type
+        mi::base::Handle<const IType> ret_type(core_type_to_int_type(call->get_type()));
+        mi::base::Handle<IValue> value(m_vf->create(ret_type.get()));
+        mi::base::Handle<IExpression> expr(m_ef->create_constant(value.get()));
+        arguments->add_expression_unchecked("cast_return", expr.get());
+        function_call = function_definition->create_decl_cast_operator_call_internal(
             m_transaction, arguments.get(), m_immutable_callees, &errors);
     } else {
         function_call = function_definition->create_call_internal( m_transaction,
@@ -6247,7 +6255,10 @@ void convert_messages( const mi::mdl::Messages& in_messages, Execution_context* 
 
 void log_messages( const Execution_context* context, mi::Size start_index)
 {
-    for( mi::Size i = start_index, n = context->get_messages_count(); i < n; ++i) {
+    mi::Size n = context->get_messages_count();
+    MI_ASSERT( start_index <= n);
+
+    for( mi::Size i = start_index; i < n; ++i) {
 
         const Message& message = context->get_message( i);
 
@@ -6270,8 +6281,17 @@ void log_messages( const Execution_context* context, mi::Size start_index)
     }
 }
 
+void log_messages( const mi::mdl::Messages& in_messages)
+{
+    Execution_context context;
+    convert_messages( in_messages, &context);
+    log_messages( &context, /*start_index*/ 0);
+}
+
 void convert_and_log_messages( const mi::mdl::Messages& in_messages, Execution_context* context)
 {
+    // TODO remove fallback
+    MI_ASSERT( context);
     Execution_context dummy_execution_context;
     if( !context)
         context = &dummy_execution_context;
@@ -7854,26 +7874,31 @@ bool validate_warning(const std::any& value)
     return opt[0] == '\0';
 }
 
-bool validate_optimization_level(const std::any& value)
+bool validate_optimization_level( const std::any& value)
 {
-    if (value.type() != typeid(mi::Sint32))
+    if( value.type() != typeid( mi::Sint32))
         return false;
 
-    const auto& s = std::any_cast<const mi::Sint32&>(value);
+    const auto& s = std::any_cast<const mi::Sint32&>( value);
     return s >= 0 && s <= 2;
 }
 
-bool validate_internal_space(const std::any& value)
+bool validate_internal_space( const std::any& value)
 {
-    if (value.type() != typeid(std::string))
+    if( value.type() != typeid( std::string))
         return false;
 
-    const auto& s = std::any_cast<const std::string&>(value);
-    if (s == "coordinate_object" ||
-        s == "coordinate_world")
-        return true;
+    const auto& s = std::any_cast<const std::string&>( value);
+    return (s == "coordinate_object") || (s == "coordinate_world");
+}
 
-    return false;
+bool validate_handle_filename_conflicts( const std::any& value)
+{
+    if( value.type() != typeid( std::string))
+        return false;
+
+    const auto& s = std::any_cast<const std::string&>( value);
+    return (s == "generate_unique") || (s == "overwrite_existing") || (s == "fail_if_existing");
 }
 
 bool validate_target_type( const std::any& value)
@@ -7881,13 +7906,13 @@ bool validate_target_type( const std::any& value)
     if( value.type() != typeid( mi::base::Handle<const mi::base::IInterface>))
         return false;
 
-    mi::base::Handle<const mi::base::IInterface> iface(
+    mi::base::Handle<const mi::base::IInterface> interface(
         std::any_cast<mi::base::Handle<const mi::base::IInterface>>( value));
-    if( !iface)
+    if( !interface)
         return true;
 
     mi::base::Handle<const mi::neuraylib::IType_struct> type_struct(
-       iface->get_interface<mi::neuraylib::IType_struct>());
+       interface->get_interface<mi::neuraylib::IType_struct>());
     if( !type_struct)
         return false;
 
@@ -8057,6 +8082,8 @@ Execution_context::Execution_context( bool add_defaults)
     ADD3( MDL_CTX_OPTION_INCLUDE_GEO_NORMAL, true, false);
     ADD3( MDL_CTX_OPTION_BUNDLE_RESOURCES, false, false);
     ADD3( MDL_CTX_OPTION_EXPORT_RESOURCES_WITH_MODULE_PREFIX, true, false);
+    ADD4( MDL_CTX_OPTION_HANDLE_FILENAME_CONFLICTS,
+        "generate_unique"s, false, validate_handle_filename_conflicts);
     ADD3( MDL_CTX_OPTION_MDL_NEXT, false, false);
     ADD3( MDL_CTX_OPTION_EXPERIMENTAL, false, false);
     ADD3( MDL_CTX_OPTION_RESOLVE_RESOURCES, true, false);
@@ -8948,7 +8975,7 @@ std::string get_file_path(
     filename = HAL::Ospath::normpath_v2( filename);
 
     const std::string& sep = HAL::Ospath::sep();
-    ASSERT( M_NEURAY_API, sep.size() == 1);
+    ASSERT( M_SCENE, sep.size() == 1);
 
     std::string result;
 

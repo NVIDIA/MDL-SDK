@@ -69,6 +69,7 @@ namespace mi {namespace examples { namespace mdl_d3d12 { namespace materialx
         std::vector<std::string> m_libraries;
         std::string m_generated_mdl_path;
         std::string m_mdl_version;
+        bool m_materialxtest_mode;
     };
 
 }}}}

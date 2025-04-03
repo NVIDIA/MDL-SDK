@@ -221,7 +221,7 @@ public:
         }
         return NULL;
     }
-    
+
     bool is_base_map_parm(const std::string& param_name)
     {
         return (param_name == "base_color" || param_name == "transparency" || param_name == "opacity");
@@ -346,7 +346,7 @@ mi::neuraylib::ICompiled_material* compile_material_instance(
     return compiled_material;
 }
 
-// Distills the given compiled material to the requested target model, 
+// Distills the given compiled material to the requested target model,
 // and returns it
 const mi::neuraylib::ICompiled_material* create_distilled_material(
     mi::neuraylib::IMdl_distiller_api* distiller_api,
@@ -362,7 +362,7 @@ const mi::neuraylib::ICompiled_material* create_distilled_material(
     return distilled_material.get();
 }
 
-// remap normal 
+// remap normal
 void remap_normal(mi::base::IInterface* icanvas)
 {
     mi::base::Handle<mi::neuraylib::ICanvas> canvas(
@@ -441,7 +441,7 @@ void setup_target_material(
         path_prefix += "base.";
     }
 
-    // Check for a weighted layer. Sole purpose of this layer is the transportation of  
+    // Check for a weighted layer. Sole purpose of this layer is the transportation of
     // the under-clearcoat-normal. It contains an empty base and a layer with the
     // actual material body
     if (semantic == mi::neuraylib::IFunction_definition::DS_INTRINSIC_DF_WEIGHTED_LAYER)
@@ -786,7 +786,7 @@ private:
 
                     if (expr_type == EXT_BASE_COLOR)
                     {
-                        // Gamma correction 
+                        // Gamma correction
                         const float gammainv(1 / 2.2f);
                         pixel_data.x = powf(pixel_data.x, gammainv);
                         pixel_data.y = powf(pixel_data.y, gammainv);
@@ -942,7 +942,7 @@ private:
 
         return true;
     }
-   
+
     mi::Uint32 get_components_per_pixel(const std::string & pixel_type) const
     {
         if (pixel_type == "Rgb_fp")
@@ -1065,7 +1065,7 @@ private:
             // Create an output buffer large enough to contain data for all the possible expressions
             CUdeviceptr device_outbuf;
             check_cuda_success(cuMemAlloc(&device_outbuf, res_x * res_y * sizeof(float4)));
-          
+
             float metallic(-1); // no need to set metallic unless bake_path is not set
             {
                 Material_parameter * param = m_out_material.find_parameter("metallic");
@@ -1152,7 +1152,7 @@ private:
             check_cuda_success(cuMemFree(device_outbuf));
             check_cuda_success(cuModuleUnload(cuda_module));
         }
-    
+
         uninit_cuda(cuda_context);
 
         return true;
@@ -1224,7 +1224,7 @@ private:
             check_success(backend.is_valid_interface());
 
             m_native_code = build_baker_programs_for_backend_kind(material, backend.get());
-            check_success(m_native_code.is_valid_interface());        
+            check_success(m_native_code.is_valid_interface());
         }
         if (m_bake_gpu)
         {
@@ -1392,7 +1392,7 @@ void process_target_material(
             // Here is the Base Map
             base_map = true;
         }
-        
+
         std::stringstream log_message;
         if(param.texture)
         {
@@ -1415,7 +1415,7 @@ void process_target_material(
                     log_message << param_name << " baked to constant ";
                 }
                 mi::Float32_4 pixel_data;
-                param.texture->get_tile()->get_pixel(0, 0, (mi::Float32*)&pixel_data.x);
+                make_handle(param.texture->get_tile())->get_pixel(0, 0, (mi::Float32*)&pixel_data.x);
                 std::string type(param.texture->get_type());
                 if (type == "Rgb_fp")
                 {
@@ -1818,7 +1818,7 @@ int MAIN_UTF8(int argc, char* argv[])
     the_logger->log(mi::base::MESSAGE_SEVERITY_VERBOSE, std::string("Shutting down the SDK"));
     if (neuray->shutdown() != 0)
         exit_failure("Failed to shutdown the SDK.");
-    
+
     // Unload the MDL SDK
     the_logger->log(mi::base::MESSAGE_SEVERITY_VERBOSE, std::string("Unloading the SDK"));
     neuray = nullptr;

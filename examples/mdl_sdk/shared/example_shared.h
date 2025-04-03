@@ -97,10 +97,9 @@ inline void exit_success_()
             fgetc(stdin);
         }
     #endif
-    exit(EXIT_SUCCESS);
 }
 
-#define exit_success() exit_success_(); return EXIT_SUCCESS; // no warning about missing return
+#define exit_success() exit_success_(); return EXIT_SUCCESS;
 
 // ------------------------------------------------------------------------------------------------
 

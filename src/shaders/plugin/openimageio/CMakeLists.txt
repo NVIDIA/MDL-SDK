@@ -48,7 +48,7 @@ set(PROJECT_SOURCES
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
-    TYPE SHARED
+    TYPE MODULE
     SOURCES ${PROJECT_SOURCES}
     EMBED_RC "openimageio.rc"
     OUTPUT_NAME "nv_openimageio"

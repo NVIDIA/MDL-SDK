@@ -102,10 +102,15 @@ Function_context::Function_context(
 
     // set fast-math flags
     llvm::FastMathFlags FMF;
-    if (func_def != NULL &&
-            (func_def->get_semantics() == mi::mdl::IDefinition::DS_INTRINSIC_MATH_ISNAN ||
-            func_def->get_semantics() == mi::mdl::IDefinition::DS_INTRINSIC_MATH_ISFINITE) ) {
-        // isnan and isfinite may not use fast-math, otherwise functions will be optimized away
+    Definition::Semantics sema =
+        func_def != NULL ? func_def->get_semantics() : Definition::DS_UNKNOWN;
+    if (sema == Definition::DS_INTRINSIC_MATH_ISNAN ||
+        sema == Definition::DS_INTRINSIC_MATH_ISFINITE ||
+        sema == Definition::DS_INTRINSIC_MATH_SQRT)
+    {
+        // isnan and isfinite may not use fast-math, otherwise functions will be optimized away.
+        // sqrt may not use NoInfs (included in fast-math), because the estimation for +Inf
+        // results in NaN instead of +Inf
     } else {
         if (code_gen.is_fast_math_enabled()) {
             FMF.setFast();

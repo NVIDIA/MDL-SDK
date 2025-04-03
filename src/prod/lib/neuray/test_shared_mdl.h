@@ -825,12 +825,50 @@ struct Exreimp_data
     // The suffix "_export_string" is added for for string-based exports.
     std::string export_mdl_name;
 
+    // Expected error codes.
     mi::Sint32 error_number_file = 0;
     mi::Sint32 error_number_string = 0;
+
+    // Export options.
     bool modify_mdl_paths = false;
     bool bundle_resources = false;
     bool export_resources_with_module_prefix = false;
+
+    // Expected resource strings in the exported module (simple substring search plus quotes, only
+    // checked for successful exports).
+    std::vector<std::string> resource_strings {};
+
+    // Unexpected resource strings in the exported module (simple substring search plus quotes, only
+    // checked for successful exports).
+    std::vector<std::string> unexpected_resource_strings {};
 };
+
+// Check that all substrings occur in \p haystack (including additional double quotes).
+void check_quoted_substrings_string(
+    const std::string& haystack,
+    const std::vector<std::string>& sub_strings,
+    const std::vector<std::string>& unexpected_sub_strings)
+{
+    for( const auto& rs: sub_strings) {
+        std::string t = "\"" + rs + "\"";
+        MI_CHECK( haystack.find( t) != std::string::npos);
+    }
+    for( const auto& rs: unexpected_sub_strings) {
+        std::string t = "\"" + rs + "\"";
+        MI_CHECK( haystack.find( t) == std::string::npos);
+    }
+}
+
+// Check that all substrings occur in \p filename (including additional double quotes).
+void check_quoted_substrings_file(
+    const std::string& filename,
+    const std::vector<std::string>& sub_strings,
+    const std::vector<std::string>& unexpected_sub_strings)
+{
+    std::ifstream file( filename);
+    std::string content( (std::istreambuf_iterator<char>( file)), std::istreambuf_iterator<char>());
+    check_quoted_substrings_string( content, sub_strings, unexpected_sub_strings);
+}
 
 
 // Exports a module as file/string and imports it again.
@@ -878,8 +916,11 @@ void do_check_mdl_export_reimport(
     // file-based export
     mi::Sint32 result = mdl_impexp_api->export_module(
         transaction, d.module_db_name.c_str(), full_file_name.c_str(), context.get());
-    if( d.error_number_file == 0)
+    if( d.error_number_file == 0) {
         MI_CHECK_CTX( context);
+        check_quoted_substrings_file(
+            full_file_name, d.resource_strings, d.unexpected_resource_strings);
+    }
     MI_CHECK_EQUAL( -d.error_number_file, result);
 
     // re-import from file
@@ -920,8 +961,11 @@ void do_check_mdl_export_reimport(
         transaction->create<mi::IString>( "String"));
     result = mdl_impexp_api->export_module_to_string(
         transaction, d.module_db_name.c_str(), exported_module.get(), context.get());
-    if( d.error_number_string == 0)
+    if( d.error_number_string == 0) {
         MI_CHECK_CTX( context);
+        check_quoted_substrings_string(
+            exported_module->get_c_str(), d.resource_strings, d.unexpected_resource_strings);
+    }
     MI_CHECK_EQUAL( -d.error_number_string, result);
 
     // re-import from string

@@ -234,6 +234,24 @@ class MainModulesMdl(UnittestBase):
         self.assertIsValidInterface(pTypes)
         fAnnos: pymdlsdk.IAnnotation_block = fDefinition.get_annotations()
         self.assertIsNotNone(fAnnos)
+        if fAnnos.is_valid_interface():
+            for aIndex in range(fAnnos.get_size()):
+                anno: pymdlsdk.IAnnotation = fAnnos.get_annotation(aIndex)
+                self.assertIsValidInterface(anno)
+                annoArgs: pymdlsdk.IExpression_list = anno.get_arguments()
+                for argIndex in range(annoArgs.get_size()):
+                    annoArg: pymdlsdk.IExpression_constant = annoArgs.get_expression_as(pymdlsdk.IExpression_constant, argIndex)
+                    self.assertIsValidInterface(annoArg)
+                    annoArgValue: pymdlsdk.IValue = annoArg.get_value()
+                    self.assertIsValidInterface(annoArgValue)
+                    if annoArgValue.get_kind() == pymdlsdk.IValue.Kind.VK_ARRAY:
+                        annoArgValueArray: pymdlsdk.IValue_array = annoArgValue.get_interface(pymdlsdk.IValue_array)
+                        for arrayIndex in range(annoArgValueArray.get_size()):
+                            arrayElement: pymdlsdk.IValue = annoArgValueArray.get_value(arrayIndex)
+                            self.assertIsValidInterface(arrayElement)
+                            if arrayElement.get_kind() == pymdlsdk.IValue.Kind.VK_STRING:
+                                arrayElementString: pymdlsdk.IValue_string = arrayElement.get_interface(pymdlsdk.IValue_string)
+                                self.assertIsValidInterface(arrayElementString)
         pAnnos: pymdlsdk.IAnnotation_list = fDefinition.get_parameter_annotations()
         self.assertIsValidInterface(pAnnos)
         since: pymdlsdk.IModule
@@ -564,6 +582,7 @@ class MainModulesMdl(UnittestBase):
         ifirstOverload: pymdlsdk.IString = ioverloads.get_element_as(pymdlsdk.IString, 0)
         definition: pymdlsdk.IFunction_definition = self.sdk.transaction.access_as(pymdlsdk.IFunction_definition, ifirstOverload.get_c_str())
         self.assertIsValidInterface(definition)
+        self.run_function_test(ifirstOverload.get_c_str())
         res: pymdlsdk.ReturnCode = pymdlsdk.ReturnCode()
         call: pymdlsdk.IFunction_call = definition.create_function_call(None, res)
         self.assertEqual(res.value, 0)

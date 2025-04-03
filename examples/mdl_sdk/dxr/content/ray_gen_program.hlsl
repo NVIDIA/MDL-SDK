@@ -42,12 +42,21 @@ float3 trace_path(inout RayDesc ray, inout uint seed)
     payload.last_bsdf_pdf = DIRAC;
     payload.flags = FLAG_FIRST_PATH_SEGMENT | FLAG_CAMERA_RAY;
 
+    uint sss_steps_left = scene_constants.max_sss_depth;
+
     [loop]
     for (uint i = 0; i < scene_constants.max_ray_depth; ++i)
     {
         // last path segment skips next event estimation
         if (i == scene_constants.max_ray_depth - 1)
             add_flag(payload.flags, FLAG_LAST_PATH_SEGMENT);
+
+        // don't count volume scattering steps using the regular ray depth
+        if (has_flag(payload.flags, FLAG_SSS) && sss_steps_left > 0)
+        {
+            sss_steps_left--;
+            i--;
+        }
 
         TraceRay(
             SceneBVH,               // AccelerationStructure

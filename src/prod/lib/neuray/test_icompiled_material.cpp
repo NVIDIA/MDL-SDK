@@ -1865,7 +1865,9 @@ void check_baker(
 const mi::neuraylib::ICompiled_material* compile_material_tmm(
     mi::neuraylib::ITransaction* transaction,
     mi::neuraylib::INeuray* neuray,
-    bool target_material_model_mode)
+    bool target_material_model_mode,
+    bool target_type,
+    bool class_compilation)
 {
     mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
         neuray->get_api_component<mi::neuraylib::IMdl_factory>());
@@ -1875,6 +1877,14 @@ const mi::neuraylib::ICompiled_material* compile_material_tmm(
     mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
         mdl_factory->create_execution_context());
     context->set_option( "target_material_model_mode", target_material_model_mode);
+
+    if( target_type) {
+        mi::base::Handle<mi::neuraylib::IType_factory> tf(
+            mdl_factory->create_type_factory( transaction));
+        mi::base::Handle<const mi::neuraylib::IType> standard_material_type(
+            tf->get_predefined_struct( mi::neuraylib::IType_struct::SID_MATERIAL));
+        context->set_option( "target_type", standard_material_type.get());
+    }
 
     result = mdl_impexp_api->load_module(
         transaction, "::test_target_material_model", context.get());
@@ -1888,7 +1898,9 @@ const mi::neuraylib::ICompiled_material* compile_material_tmm(
 
     mi::base::Handle mi( transaction->access<mi::neuraylib::IMaterial_instance>(
         "mdl::test_target_material_model::mi_tmm"));
-    mi::Uint32 flags = mi::neuraylib::IMaterial_instance::CLASS_COMPILATION;
+    mi::Uint32 flags = class_compilation
+        ? mi::neuraylib::IMaterial_instance::CLASS_COMPILATION
+        : mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS;
     mi::base::Handle<const mi::neuraylib::ICompiled_material> cm(
             mi->create_compiled_material( flags, context.get()));
     MI_CHECK_CTX( context);
@@ -1897,7 +1909,11 @@ const mi::neuraylib::ICompiled_material* compile_material_tmm(
     return cm.extract();
 }
 
-void check_target_material_mode( mi::neuraylib::IDatabase* database, mi::neuraylib::INeuray* neuray)
+void check_target_material_mode_w_wo_target_type(
+    mi::neuraylib::IDatabase* database,
+    mi::neuraylib::INeuray* neuray,
+    bool target_type,
+    bool class_compilation)
 {
     mi::base::Handle<mi::neuraylib::IScope> child_scope( database->create_scope( nullptr, 1));
     mi::base::Handle<mi::neuraylib::ITransaction> transaction(
@@ -1906,7 +1922,7 @@ void check_target_material_mode( mi::neuraylib::IDatabase* database, mi::neurayl
     {
         // target material mode enabled
         mi::base::Handle<const mi::neuraylib::ICompiled_material> cm( compile_material_tmm(
-            transaction.get(), neuray, true));
+            transaction.get(), neuray, true, target_type, class_compilation));
         mi::base::Handle<const mi::neuraylib::IExpression_direct_call> body( cm->get_body());
 
         const char* def_name = body->get_definition();
@@ -1928,7 +1944,7 @@ void check_target_material_mode( mi::neuraylib::IDatabase* database, mi::neurayl
     {
         // target material mode disabled
         mi::base::Handle<const mi::neuraylib::ICompiled_material> cm( compile_material_tmm(
-            transaction.get(), neuray, false));
+            transaction.get(), neuray, false, target_type, class_compilation));
         mi::base::Handle<const mi::neuraylib::IExpression_direct_call> body( cm->get_body());
 
         const char* def_name = body->get_definition();
@@ -1938,6 +1954,16 @@ void check_target_material_mode( mi::neuraylib::IDatabase* database, mi::neurayl
     }
 
     transaction->commit();
+}
+
+void check_target_material_mode( mi::neuraylib::IDatabase* database, mi::neuraylib::INeuray* neuray)
+{
+    // instance compilation
+    check_target_material_mode_w_wo_target_type( database, neuray, false, false);
+    check_target_material_mode_w_wo_target_type( database, neuray, true, false);
+    // class compilation
+    check_target_material_mode_w_wo_target_type( database, neuray, false, true);
+    check_target_material_mode_w_wo_target_type( database, neuray, true, true);
 }
 
 void run_tests( mi::neuraylib::INeuray* neuray, bool first_run)

@@ -54,6 +54,7 @@ For a detailed explanation about the previous helper classes, please refer to
 
   - Different compilation modes and options
   - Target code generation for a material with multiple functions
+  - Material distilling
 
 \section example_code_gen_descr Detailed Description
 
@@ -91,6 +92,23 @@ For a detailed explanation about the previous helper classes, please refer to
         required the handle transparent or semi-transparent surfaces like leafs of a plant or wire 
         fences. There are more expressions to account for and the example shows how to select them 
         and how to register them at a link unit for code generation. 
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Material distilling
+    </b></dt>
+    <dd><br>
+        This example makes use of the \c Distiller_helper helper class. Please refer to
+        \ref mi_mdl_core_example_distilling_shared for an introduction to material distilling in
+        MDL and a description of this helper class.
+        
+        To distill a material to a specific target model, this example creates an instance of the
+        helper class \c Distiller_helper and then call \c Distiller_helper::distill(). The function
+        requires to pass a compiled instance of the source material and the desired target model.
+        Upon successful execution, the function returns a compiled version of the distilled target material.
+        
+        Finally the example continues as normal creating target code for the selected material
+        expressions and the desired backend.        
         <!-- Workaround to prevent a layout problem after dd tags. -->
     </dd>
 </dl>

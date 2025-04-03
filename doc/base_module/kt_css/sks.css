@@ -1,13 +1,7 @@
 
 :root {
-    --ser: 'Linux Libertine', serif;
-    --serif: 1.1rem 'Linux Libertine',serif;
-
-    --sans: 'Noto Sans',sans-serif;
-    --sans-serif: 1rem 'Noto Sans',sans-serif;
-
-    --mono: 'Roboto Mono',monospace;
-    --monospace: .95rem 'Roboto Mono',monospace;
+    --ser: 'NVIDIA Sans', sans-serif;
+    --serif: 1.1rem 'NVIDIA Sans',sersans-serifif;
 }
 
 

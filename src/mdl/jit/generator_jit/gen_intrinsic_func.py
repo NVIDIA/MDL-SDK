@@ -955,6 +955,10 @@ class SignatureParser:
 		# poor man's scanner :-)
 		tokens = re.sub(r'[,()]', lambda m: ' ' + m.group(0) + ' ', decl).split()
 
+		# skip declarative modifier if any
+		if tokens[0] == 'declarative':
+			tokens = tokens[1:]
+
 		tokens, ret_type = self.get_type(tokens)
 
 		name = tokens[0]

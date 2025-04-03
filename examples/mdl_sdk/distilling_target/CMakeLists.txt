@@ -99,7 +99,7 @@ source_group("generator" FILES ${_GENERATOR_FILES})
 # create target from template
 create_from_base_preset(
     TARGET ${PLUGIN_PROJECT_NAME}
-    TYPE SHARED
+    TYPE MODULE
     SOURCES ${PLUGIN_PROJECT_SOURCES}
     OUTPUT_NAME "distilling_target_plugin"
     EXPORTED_SYMBOLS mi_plugin_factory

@@ -305,6 +305,15 @@ public:
     DAG_node const *expr_to_dag(
         IExpression const *expr);
 
+    /// Convert an MDL expression to a DAG IR node and decl_cast it to dst_type if necessary.
+    ///
+    /// \param expr         The MDL expression to convert.
+    /// \returns            The DAG IR node representing the MDL expression.
+    ///
+    DAG_node const *expr_to_dag(
+        IType const       *dst_type,
+        IExpression const *expr);
+
     /// Convert an MDL annotation to a DAG IR node.
     ///
     /// \param exp          The MDL annotation to convert.

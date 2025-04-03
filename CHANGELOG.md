@@ -1,5 +1,120 @@
 Change Log
 ==========
+MDL SDK 2024.1.1 (381500.4681): 31 Mar 2025
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2024.1.1 (381500.4681) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+    - MDL Python Bindings:
+        - Improve type hints for  `*_as(type, ...)}` functions.
+    - On Windows, the MSVC runtime flavor is now controlled by the new options
+      `MDL_MSVC_DYNAMIC_RUNTIME` and `MDL_MSVC_DYNAMIC_RUNTIME_DXR_EXAMPLE`. Support
+      for the old option `MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES` has been removed.
+    - The severity filter for log messages is now also applied to delayed
+      messages, i.e., the first two messages concerning the location and version
+      information of the library.
+    - Added a new context option "`handle_filename_conflicts`" to control naming of
+      resources during export. See `IMdl_impexp_api::export_module()` for details.
+    - Improved performance of code generation by the MDL backends on Linux by 3-4%.
+    - Added `SECURITY.md` file with instructions how to report security issues.
+    - Added `::nvidia::distilling_support` to the example content such that it can be
+      used by the MDL Core examples.
+    - Classified all plugins as cmake module libraries instead of shared
+      libraries. This avoids that they get used incorrectly with
+      `target_link_libraries()` and eliminates the `.lib` files on Windows.
+    - Linking the MDL Core/SDK library is deprecated (this also happens implicitly
+      when using `target_link_libraries()`. The cmake library type will be changed
+      from `SHARED` to `MODULE` in a future release. Likewise, the corresponding
+      import libraries on Windows will be removed. Users should access the MDL
+      Core/SDK library using `LoadLibrary()`/`GetProcAddress()` or `dlopen()`/`dlsym()`
+      instead (as it is done in all examples). Cmake users should use:
+      
+        `get_target_property(SOME_VAR mdl::mdl_sdk INTERFACE_INCLUDE_DIRECTORIES)`
+        `target_include_directories(your_target PRIVATE ${SOME_VAR})`
+
+     (similarly for `mdl::mdl_core`).  
+    - Added the linker option `--strip-all/-x` for release builds on Linux/MacOS.
+    
+- MDL Compiler and Backends
+    - The compiler now obeys the {\tt target_material_model} annotation when used on material
+      presets. This allows to make a target material from a preset, even if the original material
+      is not. This implements user expectations.
+      
+- MDL SDK examples
+    - Added new dependency_inspector example:
+        - It lists all file dependencies of an MDL module for direct and (optionally) indirect
+          imports and resources.
+    - Example modules:
+        - Completely refactored this example that now extends its functionality.
+        - Added options to set MDL search paths and load/scan user selected modules.
+        - Added filter option to select which information to output from a module: imports,
+          types and constants definitions, function and material definitions, resources. 
+        - Added option to scan indirect dependencies and resources from imported modules.
+        - Added option to display the default values, temporaries and body of selected function
+          and material definitions.
+    - Example DXR:
+        - Updated MaterialX SDK to 1.39.3.
+        - Added option to override selected materials in the scene:
+          "`--mat_selective <selector> <qualified_name>`".
+        - Added option to control the camera exposure for matching certain render tests:
+          "`--cam_exposure`".
+        - Added support for subsurface scattering by implementing the Henyey-Greenstein
+          phase function.
+        - Added option to control the subsurface scattering path length: "`--max_sss_steps`".  
+    - Third-party dependencies:
+        - Disabled XInput support in the ImGui compilation.
+        
+- MDL Core examples
+    - Shared:
+        - Added new `Distiller_helper` helper class. It simplifies the context creation and
+          procedure required for distilling an MDL material using Core API.
+    - Example code_gen:
+        - Added option to distill an MDL material to a given material target model.
+                
+**Fixed Bugs**
+
+- MDL 1.10 Language Specification
+    - Fixed minor typographic errors and improved wording.
+
+- General
+    - Improved the handling of invalid re-use of names of DB elements eligible
+      for garbage collection. As a consequence, some of these uses are considered
+      safe now. See "Database Access" in the API reference documentation for
+      details.
+    - Fixed export of MDL modules with animated and/or uvtile textures if the
+      texture file exists already. Now we generate a unique filename (as for
+      plain textures and other resources) instead of unconditionally overwriting
+      an existing file.
+
+- MDL Compiler and Backends
+    - Fixed entity resolver returns only a file name (without the directory) when resolving
+	  UDIM sets on disk.
+    - Fixed wrong error message "index of declarative types must be uniform" that was issued
+      by the compiler if the index of an declarative array access was a constant.
+    - Fixed wrong error messages issued that a (constant) array cannot be converted into a
+      uniform array.
+    - Fixed missing backend support for implicit conversion between declarative structs of the
+      same category in default argument, causing a crash when target code is generated.
+    - Fixed missing type import causing assertions in debug build.
+    - Added missing support for the hidden argument of the `decl_cast` intrinsic function.
+    - Fixed several problems with the auto import of entities in MDL, most of them now visible
+      by the user, but causing assertions in debug builds.
+    - Fixed core compiler not recognizing several declarative properties, causing missing errors
+      when declarative types are used inside non-declarative functions, especially in combination
+      with declarative structs defined in the `::df` module (`bsdf_compoments` and alikes).
+    - Fixed pre-calculated arrays not being properly stored in texture results (HLSL/GLSL).
+    - Fixed NaNs being generated by `sqrt(+inf)` for the native backend.
+    - Fixed crash when compiling functions with derivative arrays as parameters.
+
+- MDL SDK examples
+    - Fixed memory leaks in MDL examples.
+    - Fixed `trace_shadow` function executing a generated MDL function potentially requiring
+      texture results without providing them.
+              
 MDL SDK 2024.1.0 (381500.2959): 14 Jan 2025
 -----------------------------------------------
 
@@ -126,7 +241,8 @@ ABI compatible with the MDL SDK 2024.1.0 (381500.2959) binary release
 
 - General
     - Fixed export of MDL modules with animated and/or uvtile textures if
-      the texture file exists already.
+      the texture file exists already. Fixed the regression that caused the entire export
+      operation to fail instead of overwriting the existing file.
     - Fixed `IModule::get_resource()` to enumerate resources that appear in bodies and
       temporaries of functions.
     - Fixed resources appearing in expressions returned by `Function_definition::get_body()`

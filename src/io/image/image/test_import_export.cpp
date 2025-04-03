@@ -619,6 +619,8 @@ MI_TEST_AUTO_FUNCTION( test_import_export )
 
     // EXR export options exr:data_type and/or exr:create_multipart_for_alpha.
     test_exr_data_type();
+    test_exr_create_multipart_for_alpha();
+    test_exr_data_type_and_create_multipart_for_alpha();
 
     g_mdl_container_callback = nullptr;
 

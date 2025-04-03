@@ -66,8 +66,7 @@ source_group("generator" FILES ${_GENERATOR_FILES})
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
-    TYPE SHARED
-    DYNAMIC_MSVC_RUNTIME
+    TYPE MODULE
     SOURCES
         ${PROJECT_SOURCES}
         ${_GENERATED_SOURCES}

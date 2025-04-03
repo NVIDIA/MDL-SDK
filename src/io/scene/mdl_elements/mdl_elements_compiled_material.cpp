@@ -33,7 +33,6 @@
 #include <sstream>
 
 #include <boost/algorithm/string.hpp>
-#include <boost/tokenizer.hpp>
 
 #include "i_mdl_elements_utilities.h"
 #include "i_mdl_elements_function_call.h"

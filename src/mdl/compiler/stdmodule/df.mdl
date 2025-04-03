@@ -37,37 +37,37 @@ export enum scatter_mode {
     scatter_reflect_transmit
 };
 
-export bsdf diffuse_reflection_bsdf(
+export declarative bsdf diffuse_reflection_bsdf(
     color          tint      = color(1.0),
     float          roughness = 0.0 [[ hard_range(0.0, 1.0) ]],
     uniform string handle    = ""
 ) [[ intrinsic(), removed(1,10) ]];
 
 // Oren-Nayar diffuse reflection with optional energy compensation
-export bsdf diffuse_reflection_bsdf(
+export declarative bsdf diffuse_reflection_bsdf(
     color          tint              = color(1.0),
     float          roughness         = 0.0 [[ hard_range(0.0, 1.0) ]],
     color          multiscatter_tint = color(0.0),
     uniform string handle            = ""
 ) [[ intrinsic(), since(1,10) ]];
 
-export bsdf dusty_diffuse_reflection_bsdf(
+export declarative bsdf dusty_diffuse_reflection_bsdf(
     color          tint   = color( 1.0),
     uniform string handle = ""
 ) [[ intrinsic(), since(1,8) ]];
 
-export bsdf diffuse_transmission_bsdf(
+export declarative bsdf diffuse_transmission_bsdf(
     color          tint      = color(1.0),
     uniform string handle    = ""
 ) [[ intrinsic() ]];
 
-export bsdf specular_bsdf(
+export declarative bsdf specular_bsdf(
     color                tint = color(1.0),
     uniform scatter_mode mode = scatter_reflect,
     uniform string       handle = ""
 ) [[ intrinsic() ]];
 
-export bsdf simple_glossy_bsdf(
+export declarative bsdf simple_glossy_bsdf(
     float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
     float                roughness_v = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
     color                tint        = color(1.0),
@@ -76,7 +76,7 @@ export bsdf simple_glossy_bsdf(
     uniform string       handle      = ""
 ) [[ intrinsic(), removed(1,6) ]];
 
-export bsdf simple_glossy_bsdf(
+export declarative bsdf simple_glossy_bsdf(
     float                roughness_u                     [[ hard_range(0.0, +1.0/0.0) ]],
     float                roughness_v       = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
     color                tint              = color(1.0),
@@ -86,7 +86,7 @@ export bsdf simple_glossy_bsdf(
     uniform string       handle            = ""
 ) [[ intrinsic(),since(1,6) ]];
 
-export bsdf backscattering_glossy_reflection_bsdf(
+export declarative bsdf backscattering_glossy_reflection_bsdf(
     float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
     float                roughness_v = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
     color                tint        = color(1.0),
@@ -94,7 +94,7 @@ export bsdf backscattering_glossy_reflection_bsdf(
     uniform string       handle      = ""
 ) [[ intrinsic(), removed(1,6) ]];
 
-export bsdf backscattering_glossy_reflection_bsdf(
+export declarative bsdf backscattering_glossy_reflection_bsdf(
     float                roughness_u                     [[ hard_range(0.0, +1.0/0.0) ]],
     float                roughness_v       = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
     color                tint              = color(1.0),
@@ -103,14 +103,14 @@ export bsdf backscattering_glossy_reflection_bsdf(
     uniform string       handle            = ""
 ) [[ intrinsic(), since(1,6) ]];
 
-export bsdf measured_bsdf(
+export declarative bsdf measured_bsdf(
     uniform bsdf_measurement measurement,
     uniform float        multiplier  = 1.0,
     uniform scatter_mode mode        = scatter_reflect,
     uniform string       handle      = ""
 ) [[ intrinsic(), since(1,1) ]];
 
-export bsdf microfacet_beckmann_smith_bsdf(
+export declarative bsdf microfacet_beckmann_smith_bsdf(
     float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
     float                roughness_v = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
     color                tint        = color(1.0),
@@ -119,7 +119,7 @@ export bsdf microfacet_beckmann_smith_bsdf(
     uniform string       handle      = ""
 ) [[ intrinsic(), since(1,1), removed(1,6) ]];
 
-export bsdf microfacet_beckmann_smith_bsdf(
+export declarative bsdf microfacet_beckmann_smith_bsdf(
     float                roughness_u                     [[ hard_range(0.0, +1.0/0.0) ]],
     float                roughness_v       = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
     color                tint              = color(1.0),
@@ -130,7 +130,7 @@ export bsdf microfacet_beckmann_smith_bsdf(
 ) [[ intrinsic(), since(1,6) ]];
 
 // anisotropic GGX distribution
-export bsdf microfacet_ggx_smith_bsdf(
+export declarative bsdf microfacet_ggx_smith_bsdf(
     float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
     float                roughness_v = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
     color                tint        = color(1.0),
@@ -139,7 +139,7 @@ export bsdf microfacet_ggx_smith_bsdf(
     uniform string       handle      = ""
 ) [[ intrinsic(), since(1,1), removed(1,6) ]];
 
-export bsdf microfacet_ggx_smith_bsdf(
+export declarative bsdf microfacet_ggx_smith_bsdf(
     float                roughness_u                     [[ hard_range(0.0, +1.0/0.0) ]],
     float                roughness_v       = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
     color                tint              = color(1.0),
@@ -149,7 +149,7 @@ export bsdf microfacet_ggx_smith_bsdf(
     uniform string handle                  = ""
 ) [[ intrinsic(), since(1,6) ]];
 
-export bsdf microfacet_beckmann_vcavities_bsdf(
+export declarative bsdf microfacet_beckmann_vcavities_bsdf(
     float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
     float                roughness_v = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
     color                tint        = color(1.0),
@@ -158,7 +158,7 @@ export bsdf microfacet_beckmann_vcavities_bsdf(
     uniform string       handle      = ""
 ) [[ intrinsic(), since(1,1), removed(1,6) ]];
 
-export bsdf microfacet_beckmann_vcavities_bsdf(
+export declarative bsdf microfacet_beckmann_vcavities_bsdf(
     float                roughness_u                     [[ hard_range(0.0, +1.0/0.0) ]],
     float                roughness_v       = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
     color                tint              = color(1.0),
@@ -168,7 +168,7 @@ export bsdf microfacet_beckmann_vcavities_bsdf(
     uniform string       handle            = ""
 ) [[ intrinsic(), since(1,6) ]];
 
-export bsdf microfacet_ggx_vcavities_bsdf(
+export declarative bsdf microfacet_ggx_vcavities_bsdf(
     float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
     float                roughness_v = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
     color                tint        = color(1.0),
@@ -177,7 +177,7 @@ export bsdf microfacet_ggx_vcavities_bsdf(
     uniform string       handle      = ""
 ) [[ intrinsic(), since(1,1), removed(1,6) ]];
 
-export bsdf microfacet_ggx_vcavities_bsdf(
+export declarative bsdf microfacet_ggx_vcavities_bsdf(
     float                roughness_u                     [[ hard_range(0.0, +1.0/0.0) ]],
     float                roughness_v       = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
     color                tint              = color(1.0),
@@ -187,7 +187,7 @@ export bsdf microfacet_ggx_vcavities_bsdf(
     uniform string       handle            = ""
 ) [[ intrinsic(), since(1,6) ]];
 
-export bsdf ward_geisler_moroder_bsdf(
+export declarative bsdf ward_geisler_moroder_bsdf(
     float                roughness_u               [[ hard_range(0.0, +1.0/0.0) ]],
     float                roughness_v = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
     color                tint        = color(1.0),
@@ -195,7 +195,7 @@ export bsdf ward_geisler_moroder_bsdf(
     uniform string       handle      = ""
 ) [[ intrinsic(), since(1,1), removed(1,6) ]];
 
-export bsdf ward_geisler_moroder_bsdf(
+export declarative bsdf ward_geisler_moroder_bsdf(
     float                roughness_u                     [[ hard_range(0.0, +1.0/0.0) ]],
     float                roughness_v       = roughness_u [[ hard_range(0.0, +1.0/0.0) ]],
     color                tint              = color(1.0),
@@ -204,14 +204,14 @@ export bsdf ward_geisler_moroder_bsdf(
     uniform string       handle            = ""
 ) [[ intrinsic(), since(1,6) ]];
 
-export bsdf sheen_bsdf(
+export declarative bsdf sheen_bsdf(
     float roughness                      [[ hard_range(0.0, +1.0/0.0) ]],
     color tint              = color(1.0),
     color multiscatter_tint = color(0.0),
     uniform string handle   = ""
 ) [[ intrinsic(), since(1,6), removed(1,7) ]];
 
-export bsdf sheen_bsdf(
+export declarative bsdf sheen_bsdf(
     float roughness                      [[ hard_range(0.0, +1.0/0.0) ]],
     color tint              = color(1.0),
     color multiscatter_tint = color(0.0),
@@ -219,7 +219,7 @@ export bsdf sheen_bsdf(
     uniform string handle   = ""
 ) [[ intrinsic(), since(1,7), removed(1,10) ]];
 
-export bsdf sheen_bsdf(
+export declarative bsdf sheen_bsdf(
     float roughness                      [[ hard_range(0.0, +1.0/0.0) ]],
     color tint              = color(1.0),
     color multiscatter_tint = color(0.0),
@@ -227,7 +227,7 @@ export bsdf sheen_bsdf(
     uniform string handle   = ""
 ) [[ intrinsic(), since(1,10) ]];
 
-export bsdf microflake_sheen_bsdf(
+export declarative bsdf microflake_sheen_bsdf(
     float                   roughness            [[ hard_range(0.0, 1.0) ]],
     color                   tint               = color(1.0f),
     color                   multiscatter_tint  = color(0.0),
@@ -236,26 +236,26 @@ export bsdf microflake_sheen_bsdf(
     uniform string          handle             = ""
 ) [[ intrinsic(), since(1,10) ]];
 
-export bsdf coat_absorption_factor(
+export declarative bsdf coat_absorption_factor(
     color                    ior           = color(1.0),
     color                    absorption_coefficient = color(0.0),
     float                    thickness     = 0.0,
     bsdf                     base          = bsdf()
 ) [[ intrinsic(), since(1,10) ]];
 
-export edf diffuse_edf (
+export declarative edf diffuse_edf (
     uniform string handle = ""
 ) [[ intrinsic() ]];
 
 // cos^k
-export edf spot_edf (
+export declarative edf spot_edf (
     uniform float         exponent,
     uniform bool          global_distribution = true,
     uniform float3x3      global_frame = float3x3(1.0),
     uniform string        handle = ""
 ) [[ intrinsic(), removed(1,1) ]];
 
-export edf spot_edf (
+export declarative edf spot_edf (
     uniform float         exponent,
     uniform float         spread = math::PI,
     uniform bool          global_distribution = true,
@@ -263,14 +263,14 @@ export edf spot_edf (
     uniform string        handle = ""
 ) [[ intrinsic(), since(1,1) ]];
 
-export edf measured_edf (
+export declarative edf measured_edf (
     uniform light_profile profile,
     uniform bool          global_distribution = true,
     uniform float3x3      global_frame = float3x3(1.0),
     uniform string        handle = ""
 ) [[ intrinsic(), removed(1,1) ]];
 
-export edf measured_edf(
+export declarative edf measured_edf(
     uniform light_profile profile,
     uniform float         multiplier          = 1.0,
     uniform bool          global_distribution = true,
@@ -278,7 +278,7 @@ export edf measured_edf(
     uniform string        handle              = ""
 ) [[ intrinsic(), since(1,1), removed(1,2) ]];
 
-export edf measured_edf(
+export declarative edf measured_edf(
     uniform light_profile profile,
     uniform float         multiplier          = 1.0,
     uniform bool          global_distribution = true,
@@ -288,51 +288,51 @@ export edf measured_edf(
 ) [[ intrinsic(), since(1,2) ]];
 
 // volume specifications
-export vdf anisotropic_vdf (
+export declarative vdf anisotropic_vdf (
     float directional_bias = 0.0 [[ hard_range(-1.0, 1.0) ]],
     uniform string handle  = ""
 ) [[ intrinsic() ]];
 
-export vdf fog_vdf(
+export declarative vdf fog_vdf(
     float particle_size = 8.0f,
     uniform string handle = ""
 ) [[ intrinsic(), since(1,8) ]];
 
 // recoloring of bsdf, edf, and vdf
-export bsdf tint(color tint, bsdf base) [[ intrinsic() ]];
+export declarative bsdf tint(color tint, bsdf base) [[ intrinsic() ]];
 
-export bsdf tint(
+export declarative bsdf tint(
     color reflection_tint,
     color transmission_tint,
     bsdf  base
 )  [[ intrinsic(), since(1,6) ]];
 
-export edf tint(
+export declarative edf tint(
     uniform color tint,
     edf base) [[ intrinsic(), removed(1,7) ]];
 
-export edf tint(
+export declarative edf tint(
     color tint,
     edf base) [[ intrinsic(), since(1,7) ]];
 
-export vdf tint(
+export declarative vdf tint(
     color tint,
     vdf   base) [[ intrinsic(), since(1,7) ]];
 
-export hair_bsdf tint(color tint, hair_bsdf base) [[ intrinsic(), since(1,6) ]];
+export declarative hair_bsdf tint(color tint, hair_bsdf base) [[ intrinsic(), since(1,6) ]];
 
 // thin film effect modifier
-export bsdf thin_film( float thickness, color ior, bsdf base) [[ intrinsic() ]];
+export declarative bsdf thin_film( float thickness, color ior, bsdf base) [[ intrinsic() ]];
 
 // custom curve factor for blending backscattering glossy with forward scattering
-export bsdf directional_factor(
+export declarative bsdf directional_factor(
     color  normal_tint  = color(1.0),
     color  grazing_tint = color(1.0),
     float  exponent     = 5.0,
     bsdf   base         = bsdf()
 ) [[ intrinsic(), removed(1,10) ]];
 
-export bsdf directional_factor(
+export declarative bsdf directional_factor(
     color  normal_tint   = color(1.0),
     color  grazing_tint  = color(1.0),
     color  f82_factor    = color(1.0),
@@ -340,7 +340,7 @@ export bsdf directional_factor(
     bsdf   base          = bsdf()
 ) [[ intrinsic(), since(1,10) ]];
 
-export edf directional_factor(
+export declarative edf directional_factor(
     color  normal_tint  = color(1.0),
     color  grazing_tint = color(1.0),
     float  exponent     = 5.0,
@@ -348,38 +348,38 @@ export edf directional_factor(
 ) [[ intrinsic(), since(1,7) ]];
 
 // component structs for mixers
-export struct bsdf_component {
+export declarative struct bsdf_component {
     float weight    = 0.0 [[ hard_range(0.0, +1.0/0.0), soft_range(0.0, 1.0) ]];
     bsdf  component = bsdf();
 };
 
-export struct edf_component {
+export declarative struct edf_component {
     float weight = 0.0 [[ hard_range(0.0, +1.0/0.0), soft_range(0.0, 1.0) ]];
     edf  component = edf();
 };
 
-export struct vdf_component {
+export declarative struct vdf_component {
     float weight    = 0.0 [[ hard_range(0.0, +1.0/0.0), soft_range(0.0, 1.0) ]];
     vdf  component = vdf();
 };
 
 // mixing of xdf
-export bsdf normalized_mix( bsdf_component[<N>] components) [[ intrinsic() ]];
-export edf  normalized_mix( edf_component[<N>]  components) [[ intrinsic() ]];
-export vdf  normalized_mix( vdf_component[<N>]  components) [[ intrinsic() ]];
-export bsdf clamped_mix(    bsdf_component[<N>] components) [[ intrinsic() ]];
-export edf  clamped_mix(    edf_component[<N>]  components) [[ intrinsic() ]];
-export vdf  clamped_mix(    vdf_component[<N>]  components) [[ intrinsic() ]];
+export declarative bsdf normalized_mix( bsdf_component[<N>] components) [[ intrinsic() ]];
+export declarative edf  normalized_mix( edf_component[<N>]  components) [[ intrinsic() ]];
+export declarative vdf  normalized_mix( vdf_component[<N>]  components) [[ intrinsic() ]];
+export declarative bsdf clamped_mix(    bsdf_component[<N>] components) [[ intrinsic() ]];
+export declarative edf  clamped_mix(    edf_component[<N>]  components) [[ intrinsic() ]];
+export declarative vdf  clamped_mix(    vdf_component[<N>]  components) [[ intrinsic() ]];
 
 // layering of bsdf
-export bsdf weighted_layer(
+export declarative bsdf weighted_layer(
     float  weight [[ hard_range(0.0, 1.0) ]],
     bsdf   layer,
     bsdf   base   = bsdf(),
     float3 normal = state::normal()
 ) [[ intrinsic() ]];
 
-export bsdf fresnel_layer(
+export declarative bsdf fresnel_layer(
     color  ior,
     float  weight = 1.0 [[ hard_range(0.0, 1.0) ]],
     bsdf   layer  = bsdf(),
@@ -387,7 +387,7 @@ export bsdf fresnel_layer(
     float3 normal = state::normal()
 ) [[ intrinsic(), removed(1,4) ]];
 
-export bsdf custom_curve_layer(
+export declarative bsdf custom_curve_layer(
     float  normal_reflectivity,
     float  grazing_reflectivity = 1.0,
     float  exponent = 5.0, // Schlick's approximation
@@ -397,7 +397,7 @@ export bsdf custom_curve_layer(
     float3 normal = state::normal()
 ) [[ intrinsic() ]];
 
-export bsdf measured_curve_layer(
+export declarative bsdf measured_curve_layer(
     color[<N>]          curve_values,
     float               weight = 1.0,
     bsdf                layer = bsdf(),
@@ -405,7 +405,7 @@ export bsdf measured_curve_layer(
     float3              normal = state::normal()
 ) [[ intrinsic(), since(1,1) ]];
 
-export bsdf measured_curve_factor(
+export declarative bsdf measured_curve_factor(
     color[<N>]          curve_values,
     bsdf                base = bsdf()
 ) [[ intrinsic(), since(1,1) ]];
@@ -421,44 +421,44 @@ export bool light_profile_isvalid(
 export bool bsdf_measurement_isvalid(
     uniform bsdf_measurement measurement) uniform [[ intrinsic(), since(1,2) ]];
 
-export struct color_bsdf_component  [[ since(1,4) ]] {
+export declarative struct color_bsdf_component  [[ since(1,4) ]] {
     color weight = color(0.0)  [[ hard_range(color(0.0), color(1.0)) ]];
     bsdf component = bsdf();
 };
 
-export struct color_edf_component  [[ since(1,4) ]] {
+export declarative struct color_edf_component  [[ since(1,4) ]] {
     color weight = color(0.0)  [[ hard_range(color(0.0), color(1.0)) ]];
     edf component = edf();
 };
 
-export struct color_vdf_component  [[ since(1,7) ]] {
+export declarative struct color_vdf_component  [[ since(1,7) ]] {
     color weight = color(0.0)  [[ hard_range(color(0.0), color(1.0)) ]];
     vdf component = vdf();
 };
 
-export bsdf color_normalized_mix(
+export declarative bsdf color_normalized_mix(
     color_bsdf_component[<N>] components) [[ intrinsic(), since(1,4) ]];
-export edf  color_normalized_mix(
+export declarative edf  color_normalized_mix(
     color_edf_component[<N>]  components) [[ intrinsic(), since(1,4) ]];
-export vdf  color_normalized_mix(
+export declarative vdf  color_normalized_mix(
     color_vdf_component[<N>]  components) [[ intrinsic(), since(1,7) ]];
 
-export bsdf color_clamped_mix(
+export declarative bsdf color_clamped_mix(
     color_bsdf_component[<N>] components) [[ intrinsic(), since(1,4) ]];
-export edf  color_clamped_mix(
+export declarative edf  color_clamped_mix(
     color_edf_component[<N>]  components) [[ intrinsic(), since(1,4) ]];
-export vdf  color_clamped_mix(
+export declarative vdf  color_clamped_mix(
     color_vdf_component[<N>]  components) [[ intrinsic(), since(1,7) ]];
 
 // layering of bsdf
-export bsdf color_weighted_layer(
+export declarative bsdf color_weighted_layer(
     color  weight,
     bsdf   layer,
     bsdf   base   = bsdf(),
     float3 normal = state::normal()
 ) [[ intrinsic(), since(1,4) ]];
 
-export bsdf fresnel_layer(
+export declarative bsdf fresnel_layer(
     float  ior,
     float  weight = 1.0 [[ hard_range(0.0, 1.0) ]],
     bsdf   layer  = bsdf(),
@@ -466,7 +466,7 @@ export bsdf fresnel_layer(
     float3 normal = state::normal()
 ) [[ intrinsic(), since(1,4) ]];
 
-export bsdf color_fresnel_layer(
+export declarative bsdf color_fresnel_layer(
     color  ior,
     color  weight = color(1.0) [[ hard_range(color(0.0), color(1.0)) ]],
     bsdf   layer  = bsdf(),
@@ -474,7 +474,7 @@ export bsdf color_fresnel_layer(
     float3 normal = state::normal()
 ) [[ intrinsic(), since(1,4) ]];
 
-export bsdf color_custom_curve_layer(
+export declarative bsdf color_custom_curve_layer(
     color  normal_reflectivity,
     color  grazing_reflectivity = color(1.0),
     float  exponent             = 5.0,
@@ -484,7 +484,7 @@ export bsdf color_custom_curve_layer(
     float3 normal               = state::normal()
 ) [[ intrinsic(), since(1,4), removed(1,10) ]];
 
-export bsdf color_custom_curve_layer(
+export declarative bsdf color_custom_curve_layer(
     color  normal_reflectivity,
     color  grazing_reflectivity = color(1.0),
     color  f82_factor           = color(1.0),
@@ -495,7 +495,7 @@ export bsdf color_custom_curve_layer(
     float3 normal               = state::normal()
 ) [[ intrinsic(), since(1,10) ]];
 
-export bsdf color_measured_curve_layer(
+export declarative bsdf color_measured_curve_layer(
     color[<N>] curve_values,
     color      weight = color(1.0) [[ hard_range(color(0.0), color(1.0)) ]],
     bsdf       layer  = bsdf(),
@@ -503,18 +503,18 @@ export bsdf color_measured_curve_layer(
     float3     normal = state::normal()
 ) [[ intrinsic(), since(1,4) ]];
 
-export bsdf fresnel_factor(
+export declarative bsdf fresnel_factor(
     color ior,                     // n(Eta), refractive index, per wavelength
     color extinction_coefficient,  // k, extinction coefficient, per wavelength
     bsdf  base = bsdf()
 ) [[ intrinsic(), since(1,4) ]];
 
-export bsdf measured_factor(
+export declarative bsdf measured_factor(
     uniform texture_2d values,
     bsdf  base = bsdf()
 ) [[ intrinsic(), since(1,5) ]];
 
-export hair_bsdf chiang_hair_bsdf(
+export declarative hair_bsdf chiang_hair_bsdf(
     float   diffuse_reflection_weight = 0.0,
     color   diffuse_reflection_tint   = color(1.0),
     float2  roughness_R   = float2(0.0),
@@ -526,16 +526,16 @@ export hair_bsdf chiang_hair_bsdf(
     uniform string handle = ""
 ) [[ intrinsic(), since(1,5) ]];
 
-export bsdf unbounded_mix(
+export declarative bsdf unbounded_mix(
     bsdf_component[<N>] components) [[ intrinsic(), since(1,7) ]];
-export edf unbounded_mix(
+export declarative edf unbounded_mix(
     edf_component[<N>]  components) [[ intrinsic(), since(1,7) ]];
-export vdf unbounded_mix(
+export declarative vdf unbounded_mix(
     vdf_component[<N>]  components) [[ intrinsic(), since(1,7) ]];
 
-export bsdf color_unbounded_mix(
+export declarative bsdf color_unbounded_mix(
     color_bsdf_component[<N>] components) [[ intrinsic(), since(1,7) ]];
-export edf color_unbounded_mix(
+export declarative edf color_unbounded_mix(
     color_edf_component[<N>]  components) [[ intrinsic(), since(1,7) ]];
-export vdf color_unbounded_mix(
+export declarative vdf color_unbounded_mix(
     color_vdf_component[<N>]  components) [[ intrinsic(), since(1,7) ]];

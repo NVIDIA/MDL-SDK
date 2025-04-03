@@ -26,12 +26,8 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #*****************************************************************************
 
-# -------------------------------------------------------------------------------------------------
-# Create installion rules to copy the example directory
-# -------------------------------------------------------------------------------------------------
-
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/nvidia/sdk_examples
-    DESTINATION "examples/mdl/nvidia"
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/nvidia
+    DESTINATION "examples/mdl"
     USE_SOURCE_PERMISSIONS
     FILES_MATCHING
     PATTERN "*"

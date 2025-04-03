@@ -42,6 +42,7 @@
 
 #include <mi/neuraylib/factory.h>
 #include <mi/neuraylib/idatabase.h>
+#include <mi/neuraylib/iimage.h>
 #include <mi/neuraylib/ineuray.h>
 #include <mi/neuraylib/iscope.h>
 #include <mi/neuraylib/itexture.h>
@@ -169,7 +170,7 @@ void run_tests( mi::neuraylib::INeuray* neuray)
         }
 
         {
-            // check that the last created, not released edit() wins -- release in creation order
+            // check that the last created, not released edit() wins: release in creation order
             transaction = scope->create_transaction();
 
             texture = transaction->create<mi::neuraylib::ITexture>( "Texture");
@@ -196,7 +197,8 @@ void run_tests( mi::neuraylib::INeuray* neuray)
         }
 
         {
-            // check that the last created, not released edit() wins -- release in reverse creation order
+            // check that the last created, not released edit() wins: release in reverse creation
+            // order
             transaction = scope->create_transaction();
 
             texture = transaction->create<mi::neuraylib::ITexture>( "Texture");
@@ -219,6 +221,125 @@ void run_tests( mi::neuraylib::INeuray* neuray)
             MI_CHECK_EQUAL( 3.0, c_texture1->get_gamma());
 
             c_texture1 = nullptr;
+            transaction->commit();
+        }
+
+        mi::base::Handle<mi::neuraylib::ITransaction> transaction1;
+        mi::base::Handle<mi::neuraylib::ITransaction> transaction2;
+
+        {
+            // check that the last started, not committed transaction wins: commit in start order
+            transaction = scope->create_transaction();
+            texture = transaction->create<mi::neuraylib::ITexture>( "Texture");
+            texture->set_gamma( 1.0);
+            MI_CHECK_EQUAL( 0, transaction->store( texture.get(), "dummy"));
+            texture = 0;
+            transaction->commit();
+
+            transaction1 = scope->create_transaction();
+            transaction2 = scope->create_transaction();
+
+            m_texture1 = transaction1->edit<mi::neuraylib::ITexture>( "dummy");
+            MI_CHECK_EQUAL( 1.0, m_texture1->get_gamma());
+            m_texture2 = transaction2->edit<mi::neuraylib::ITexture>( "dummy");
+            MI_CHECK_EQUAL( 1.0, m_texture2->get_gamma());
+
+            m_texture1->set_gamma( 2.0);
+            m_texture2->set_gamma( 3.0);
+            m_texture1 = 0;
+            m_texture2 = 0;
+
+            transaction1->commit();
+            transaction2->commit();
+
+            transaction = scope->create_transaction();
+
+            m_texture1 = transaction->edit<mi::neuraylib::ITexture>( "dummy");
+            MI_CHECK_EQUAL( 3.0, m_texture1->get_gamma());
+            m_texture1->set_gamma( 1.0);
+            m_texture1 = 0;
+
+            transaction->commit();
+        }
+
+        {
+            // check that the last started, not committed transaction wins: commit in reverse start
+            // order
+            transaction = scope->create_transaction();
+            texture = transaction->create<mi::neuraylib::ITexture>( "Texture");
+            texture->set_gamma( 1.0);
+            MI_CHECK_EQUAL( 0, transaction->store( texture.get(), "dummy"));
+            texture = 0;
+            transaction->commit();
+
+            transaction1 = scope->create_transaction();
+            transaction2 = scope->create_transaction();
+
+            m_texture1 = transaction1->edit<mi::neuraylib::ITexture>( "dummy");
+            MI_CHECK_EQUAL( 1.0, m_texture1->get_gamma());
+            m_texture2 = transaction2->edit<mi::neuraylib::ITexture>( "dummy");
+            MI_CHECK_EQUAL( 1.0, m_texture2->get_gamma());
+
+            m_texture1->set_gamma( 2.0);
+            m_texture2->set_gamma( 3.0);
+            m_texture1 = 0;
+            m_texture2 = 0;
+
+            transaction2->commit();
+            transaction1->commit();
+
+            transaction = scope->create_transaction();
+
+            m_texture1 = transaction->edit<mi::neuraylib::ITexture>( "dummy");
+            MI_CHECK_EQUAL( 3.0, m_texture1->get_gamma());
+            m_texture1->set_gamma( 1.0);
+            m_texture1 = 0;
+
+            transaction->commit();
+        }
+
+        {
+            // check storing elements under names eligible for GC
+
+            transaction = scope->create_transaction();
+            {
+                // Create "texture" referencing "image". Flag "image" for removal.
+                mi::base::Handle image( transaction->create<mi::neuraylib::IImage>( "Image"));
+                MI_CHECK_EQUAL( 0, transaction->store( image.get(), "image"));
+                MI_CHECK_EQUAL( 0, transaction->remove( "image"));
+
+                mi::base::Handle texture2( transaction->create<mi::neuraylib::ITexture>( "Texture"));
+                MI_CHECK_EQUAL( 0, texture2->set_image( "image"));
+                MI_CHECK_EQUAL( 0, transaction->store( texture2.get(), "texture"));
+            }
+            transaction->commit();
+            transaction = scope->create_transaction();
+            {
+                // Flag "texture" for removal.
+                MI_CHECK_EQUAL( 0, transaction->remove( "texture"));
+            }
+            transaction->commit();
+            // "texture" is now eligible for GC, "image" not yet, but will become eligible as
+            // soon as "texture" is garbage collected.
+            transaction = scope->create_transaction();
+            {
+                // Store new element under "image".
+                mi::base::Handle image( transaction->create<mi::neuraylib::IImage>( "Image"));
+                MI_CHECK_EQUAL( 0, transaction->store( image.get(), "image"));
+
+                // Two cases are possible here (not easily distinguishable via the API):
+                // - the GC did not yet process "image", and just a new version was stored above
+                //   (which inherited the removal flag)
+                // - the GC did already process "image", and a new tag was allocated
+
+                // Invoke the synchronous GC (instead of a delay to let the potentially
+                // asynchronous GC run).
+                database->garbage_collection();
+
+                // Access the version just stored above under "image".
+                mi::base::Handle test( transaction->access<mi::neuraylib::IImage>( "image"));
+                MI_CHECK( test);
+            }
             transaction->commit();
         }
 

@@ -46,6 +46,10 @@ instructions on how to build \MDLCoreProductName and the examples.
 
 - \subpage mi_mdl_core_example_cuda_shared <br>
   A helper class for compiling MDL materials into different target backend codes.
+  
+- \subpage mi_mdl_core_example_distilling_shared <br>
+A helper class for distilling MDL materials.
+
 
 \section mi_mdl_core_examples_getting_started Getting Started
 

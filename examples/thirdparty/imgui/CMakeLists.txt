@@ -44,20 +44,20 @@ set(PROJECT_SOURCES
     )
 
 if(WINDOWS)
-    list(APPEND PROJECT_SOURCES 
+    list(APPEND PROJECT_SOURCES
         "imgui_impl_win32.h"
         "imgui_impl_win32.cpp"
         )
 
     if(MDL_ENABLE_D3D11_EXAMPLES)
-        list(APPEND PROJECT_SOURCES 
+        list(APPEND PROJECT_SOURCES
             "imgui_impl_dx11.cpp"
             "imgui_impl_dx11.h"
         )
     endif()
 
     if(MDL_ENABLE_D3D12_EXAMPLES)
-        list(APPEND PROJECT_SOURCES 
+        list(APPEND PROJECT_SOURCES
             "imgui_impl_dx12.cpp"
             "imgui_impl_dx12.h"
         )
@@ -68,52 +68,61 @@ if(WINDOWS)
 endif()
 
 if(MACOSX)
-    list(APPEND PROJECT_SOURCES 
+    list(APPEND PROJECT_SOURCES
         "imgui_impl_osx.h"
         "imgui_impl_osx.mm"
         )
 endif()
 
-if(MDL_ENABLE_OPENGL_EXAMPLES)
-    list(APPEND PROJECT_SOURCES 
+if(MDL_ENABLE_OPENGL_EXAMPLES OR MDL_ENABLE_VULKAN_EXAMPLES)
+    list(APPEND PROJECT_SOURCES_NON_DXR
         "imgui_impl_glfw.cpp"
         "imgui_impl_glfw.h"
     )
 endif()
 
 if(MDL_ENABLE_OPENGL_EXAMPLES)
-    list(APPEND PROJECT_SOURCES 
+    list(APPEND PROJECT_SOURCES_NON_DXR
         "imgui_impl_opengl3.cpp"
         "imgui_impl_opengl3.h"
         "imgui_impl_opengl3_loader.h"
     )
 endif()
 
+if(MDL_ENABLE_VULKAN_EXAMPLES)
+    list(APPEND PROJECT_SOURCES_NON_DXR
+        "imgui_impl_vulkan.cpp"
+        "imgui_impl_vulkan.h"
+    )
+endif()
+
+
+
 # name of the target and the resulting library
 #
-# This variant is used by almost all examples which use a dynamic MSVC runtime.
+# This variant is used by all examples except the MDL SDK DXR example.
 set(PROJECT_NAME imgui)
+
+# Select MSVC runtime based on MDL_MSVC_DYNAMIC_RUNTIME. This is the default behavior from
+# target_build_setup(), just for consistency with DXR case below.
+if(MDL_MSVC_DYNAMIC_RUNTIME)
+    set(_IMGUI_MSVC_RUNTIME "DYNAMIC_MSVC_RUNTIME")
+else()
+    set(_IMGUI_MSVC_RUNTIME "STATIC_MSVC_RUNTIME")
+endif()
 
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
     NAMESPACE ${PROJECT_NAME}
     VERSION ${PROJECT_VERSION}
-    SOURCES ${PROJECT_SOURCES}
+    SOURCES ${PROJECT_SOURCES} ${PROJECT_SOURCES_NON_DXR}
     EXAMPLE
+    ${_IMGUI_MSVC_RUNTIME}
 )
 
-if(MDL_ENABLE_OPENGL_EXAMPLES)
-    # add dependencies
-    target_add_dependencies(TARGET ${PROJECT_NAME} 
-        DEPENDS 
-            glfw
-            opengl
-        )
-endif()
-
 # add include directories
-target_include_directories(${PROJECT_NAME} 
+target_include_directories(${PROJECT_NAME}
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     )
@@ -126,59 +135,24 @@ if(MACOSX)
         )
 endif()
 
-# name of the target and the resulting library
-#
-# This variant is used by the mdl_core and Vulkan examples which
-# need to use a static MSVC runtime.
-set(PROJECT_NAME imgui_static)
-
-# vulkan implementation is only in the static MSVC runtime variant
-if(MDL_ENABLE_VULKAN_EXAMPLES)
-    list(APPEND PROJECT_SOURCES 
-        "imgui_impl_vulkan.cpp"
-        "imgui_impl_vulkan.h"
-    )
-    # add glfw sources only if previously not added because of opengl dependency
-    if(NOT MDL_ENABLE_OPENGL_EXAMPLES)
-        list(APPEND PROJECT_SOURCES 
-            "imgui_impl_glfw.cpp"
-            "imgui_impl_glfw.h"
-        )
-    endif()
-endif()
-
-# create target from template
-create_from_base_preset(
-    TARGET ${PROJECT_NAME}
-    NAMESPACE ${PROJECT_NAME}
-    VERSION ${PROJECT_VERSION}
-    SOURCES ${PROJECT_SOURCES}
-    EXAMPLE
-    STATIC_MSVC_RUNTIME
-)
-
-set_target_properties(${PROJECT_NAME} PROPERTIES PROJECT_LABEL "imgui_static")
-
+# add dependencies
 if(MDL_ENABLE_OPENGL_EXAMPLES OR MDL_ENABLE_VULKAN_EXAMPLES)
-    # add dependencies
-    target_add_dependencies(TARGET ${PROJECT_NAME} 
-        DEPENDS 
+    target_add_dependencies(TARGET ${PROJECT_NAME}
+        DEPENDS
             glfw
         )
 endif()
 
 if(MDL_ENABLE_OPENGL_EXAMPLES)
-    # add dependencies
-    target_add_dependencies(TARGET ${PROJECT_NAME} 
-        DEPENDS 
+    target_add_dependencies(TARGET ${PROJECT_NAME}
+        DEPENDS
             opengl
         )
 endif()
 
 if(MDL_ENABLE_VULKAN_EXAMPLES)
-    # add dependencies
-    target_add_dependencies(TARGET ${PROJECT_NAME} 
-        DEPENDS 
+    target_add_dependencies(TARGET ${PROJECT_NAME}
+        DEPENDS
             vulkan
         )
 
@@ -188,16 +162,41 @@ if(MDL_ENABLE_VULKAN_EXAMPLES)
         )
 endif()
 
+
+
+if(MDL_ENABLE_D3D12_EXAMPLES)
+
+# name of the target and the resulting library
+#
+# This variant is used by the MDL SDK DXR example.
+set(PROJECT_NAME imgui_dxr)
+
+# Select MSVC runtime based on MDL_MSVC_DYNAMIC_RUNTIME_DXR_EXAMPLE.
+if(MDL_MSVC_DYNAMIC_RUNTIME_DXR_EXAMPLE)
+    set(_IMGUI_DXR_MSVC_RUNTIME "DYNAMIC_MSVC_RUNTIME")
+else()
+    set(_IMGUI_DXR_MSVC_RUNTIME "STATIC_MSVC_RUNTIME")
+endif()
+
+# create target from template
+create_from_base_preset(
+    TARGET ${PROJECT_NAME}
+    NAMESPACE ${PROJECT_NAME}
+    VERSION ${PROJECT_VERSION}
+    SOURCES ${PROJECT_SOURCES}
+    EXAMPLE
+    ${_IMGUI_DXR_MSVC_RUNTIME}
+)
+
+set_target_properties(${PROJECT_NAME} PROPERTIES PROJECT_LABEL "imgui_dxr")
+
 # add include directories
-target_include_directories(${PROJECT_NAME} 
+target_include_directories(${PROJECT_NAME}
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     )
 
-# suppress MacOS/clang specific warning
-if(MACOSX)
-    target_compile_options(${PROJECT_NAME}
-        PRIVATE
-            "-Wno-arc-bridge-casts-disallowed-in-nonarc"
-        )
+# MacOS/clang specific warning and OpenGL/Vulkan dependencies not relevant for
+# the MDL SDK DXR example.
+
 endif()

@@ -48,19 +48,19 @@ namespace neuraylib {
 /// Scopes are organized in a tree-like fashion and have a so-called \em privacy \em level. The root
 /// of the tree is called \em global \em scope and has privacy level 0. On each path from the global
 /// scope to one of the leafs of the tree the privacy levels are strictly increasing. Scopes are
-/// identified with a cluster-unique ID which can be used to access a scope on any host in the
-/// cluster.
+/// identified with a \ifnot MDL_SDK_API unique ID. \else cluster-unique ID which can be used to
+/// access a scope on any host in the cluster.\endif
 ///
 /// A database element stored in a given scope is only visible in this scope and all child scopes.
 /// For example, a database element stored in the global scope is visible in all scopes. This
 /// visibility concept for database elements is similar to visibility of stack variables in
 /// programming languages.
 ///
-/// Any database element can exist in multiple versions (at most one version per scope). In this
-/// case the scope at hand does not just determine the visibility itself but also determines which
-/// version is visible. The version from the current scope has highest priority, next is the version
-/// from the parent scope, etc., until the global scope is reached. Again, this is similar to
-/// shadowing of variables with the same name in programming languages.
+/// A database element can exist in multiple versions. The scope at hand does not just determine
+/// the visibility itself, but also determines (in combination with a transaction) which version is
+/// visible. The version from the current scope has highest priority, next is the version from the
+/// parent scope, etc., until the global scope is reached. Again, this is similar to shadowing of
+/// variables with the same name in programming languages.
 ///
 /// For scope management see the methods on #mi::neuraylib::IDatabase.
 class IScope : public

@@ -67,9 +67,9 @@ namespace {
 void handle_messages(Mdl_execution_context_impl* ctx, const mi::mdl::Messages& messages)
 {
     if(ctx)
-        ctx->get_context().add_messages(messages);
+        MDL::convert_messages(messages, &ctx->get_context());
     else
-        MDL::convert_and_log_messages(messages, nullptr);
+        MDL::log_messages(messages);
 }
 
 

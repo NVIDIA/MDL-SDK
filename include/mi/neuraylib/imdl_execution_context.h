@@ -122,10 +122,21 @@ public:
 ///
 /// Options for MDL export
 /// - \c bool "bundle_resources": If \c true, referenced resources are exported into the same
-///   directory as the module, even if they can be found via the module search path. Default:
-///   \c false.
-/// - \c bool "export_resources_with_module_prefix": If \c true, the name of the exported resources
-///   start with the module name as prefix. Default: \c true.
+///   directory as the module, even if they can be found via the module search
+///   path. Default: \c false.
+/// - \c bool "export_resources_with_module_prefix": If \c true, the name of the exported
+///   resources start with the module name as prefix. Default: \c true.
+/// - \c std::string "handle_filename_conflicts": Controls what to do in case of filename
+///   conflicts for resources during export. Possible values:
+///   - \c "generate_unique": Always generates a unique filename that does not conflict with an
+///     existing resource file (adding a counter suffix if necessary).
+///   - \c "fail_if_existing": The export fails if an existing resource file would be
+///     overwritten by the export operation.
+///   - \c "overwrite_existing": The export operation silently overwrites existing resource
+///     files. Note that using this setting might destroy other modules. Setting the option
+///     "export_resources_with_module_prefix" (see above) to \c true reduces that risk (but does
+///     not eliminate it).
+///   Default: \c "generate_unique".
 ///
 /// Options for material compilation
 /// - \c bool "fold_meters_per_scene_unit": If \c true, occurrences of the functions

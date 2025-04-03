@@ -56,12 +56,12 @@ namespace mi { namespace examples { namespace dxr
             , background_color{ 0.25f, 0.5f, 0.75f }
             , firefly_clamp(true)
             , tone_mapping_burn_out(1.0f)
+            , exposure_compensation(0.0f)
+            , material_overrides()
         {
-            user_options["environment"] =
+            hdr_environment =
                 mi::examples::io::get_executable_folder() +
                 "/content/hdri/hdrihaven_teufelsberg_inner_2k.exr";
-
-            user_options["override_material"] = "";
         }
 
         std::string initial_scene;
@@ -69,6 +69,7 @@ namespace mi { namespace examples { namespace dxr
         DirectX::XMFLOAT3 point_light_position;
         DirectX::XMFLOAT3 point_light_intensity;
 
+        std::string hdr_environment;
         float hdr_scale;
         float hdr_rotate;
         bool background_color_enabled;
@@ -76,6 +77,9 @@ namespace mi { namespace examples { namespace dxr
 
         bool firefly_clamp;
         float tone_mapping_burn_out;
+        float exposure_compensation;
+
+        std::vector<Material_override> material_overrides;
     };
 
     inline void print_options()
@@ -120,7 +124,7 @@ namespace mi { namespace examples { namespace dxr
 
         << "--hdr <filename>          HDR environment map\n"
         << "                          (default: <scene_folder>/" <<
-                                      defaults.user_options["environment"] << ")\n"
+                                      defaults.hdr_environment << ")\n"
 
         << "--hdr_scale <factor>      Environment intensity scale factor\n"
         << "                          (default: " << defaults.hdr_scale << ")\n"
@@ -141,7 +145,10 @@ namespace mi { namespace examples { namespace dxr
         << "--mdl_next                Enable features from upcoming MDL version.\n"
 
         << "--max_path_length <num>   Maximum path length (up to one total internal reflection),\n"
-        << "                          clamped to 2..100, default " << defaults.ray_depth << "\n"
+        << "                          minimum of 2, default " << defaults.ray_depth << "\n"
+
+        << "--max_sss_steps <num>     Maximum number of volume scattering steps in addition to \n"
+        << "                          'max_path_length', default " << defaults.sss_depth << "\n"
 
         << "--iterations <num>        Number of progressive iterations. In GUI-mode, this is the\n"
         << "                          iterations per frame. In NO-GUI-mode it is the total count.\n"
@@ -158,10 +165,16 @@ namespace mi { namespace examples { namespace dxr
         << "--burn_out <factor>       Tone mapping parameter (default: " <<
                                       defaults.tone_mapping_burn_out << ")\n"
 
+        << "--cam_exposure <factor>   Exposure compensation of the camera (default: " <<
+                                      defaults.exposure_compensation << ")\n"
+
         << "-l <x> <y> <z> <r> <g> <b>      Add an isotropic point light with given coordinates\n"
         << "                                and intensity (flux) (default: none)\n"
 
         << "--mat <qualified_name>    Override all materials using a qualified material name.\n"
+
+        << "--mat_selective <selector> <qualified_name> Override material in the scene that is\n"
+        << "                                            selected by the material name in gltf.\n"
 
         << "--z_axis_up               Flip coordinate axis while loading the scene to (x, -z, y).\n"
 
@@ -203,18 +216,18 @@ namespace mi { namespace examples { namespace dxr
         << "--use_slang               Use the Slang shader compiler instead of DXC.\n"
 
         << "--distill <target>        Distill the material before running the code generation.\n"
-        << "--distill_debug           Dumps the orignal and distilled material (default is 'false').\n"
+        << "--distill_debug           Dumps the original and distilled material (default is 'false').\n"
 
         << "--slot_mode <mode>        Slot mode for BSDF handles, one of 'none', '1', '2', '4', '8'.\n"
            "                          (default: 'none')\n"
 
-        << "--material_type <type>    Qualified name of the the material type (default: <empty>).\n"
+        << "--material_type <type>    Qualified name of the material type (default: <empty>).\n"
            "                          If a type is specified and no --aov option is set,\n"
            "                          it's fields will be made available as AOVs.\n"
 
         << "--avo <field>             Field name of the material type to render. Return types that are\n"
            "                          not supported for visualization will be filtered out. Combinations,\n"
-           "                          seperated by ',' are valid, too. The first is used for rendering while\n"
+           "                          separated by ',' are valid, too. The first is used for rendering while\n"
            "                          the following will be available on the UI. (default: <empty>)\n"
            "                          See also the --material_type option for interactions.\n"
 
@@ -234,9 +247,11 @@ namespace mi { namespace examples { namespace dxr
            "                          documents. Can occur multiple times.\n"
 
         << "--mtlx_to_mdl <version>   Specify the MDL version to generate (requires MaterialX 1.38.9).\n"
-            "                         Supported values are \"1.6\", \"1.7\", \"1.8\", ... and \"latest\".\n"
+            "                         Supported values are \"1.6\", \"1.7\", ..., \"1.10\", and \"latest\".\n"
+            "                         Later MDL language versions require later MaterialX SDKs, too.\n"
             "                         (default: \"latest\")\n"
 
+        << "--materialxtest_mode      Setup image and tex-coord space to match the MaterialXTest setup.\n"
         #endif
         ;
 
@@ -386,7 +401,7 @@ namespace mi { namespace examples { namespace dxr
                         return false;
                     }
 
-                    options.user_options["environment"] = environment;
+                    options.hdr_environment = environment;
                 }
                 else if (wcscmp(opt, L"--hdr_scale") == 0 && i < argc - 1)
                 {
@@ -426,9 +441,19 @@ namespace mi { namespace examples { namespace dxr
                         std::max(0.0f, 
                             std::min(static_cast<float>(_wtof(argv[++i])), 90.0f)) * float(M_PI) / 180.0f;
                 }
+                else if (wcscmp(opt, L"--mat_selective") == 0 && i < argc - 2)
+                {
+                    Base_options::Material_override over;
+                    over.selector = mi::examples::strings::wstr_to_str(argv[++i]);
+                    over.material = mi::examples::strings::wstr_to_str(argv[++i]);
+                    options.material_overrides.push_back(over);
+                }
                 else if (wcscmp(opt, L"--mat") == 0 && i < argc - 1)
                 {
-                    options.user_options["override_material"] = mi::examples::strings::wstr_to_str(argv[++i]);
+                    Base_options::Material_override over;
+                    over.selector = "";
+                    over.material = mi::examples::strings::wstr_to_str(argv[++i]);
+                    options.material_overrides.push_back(over);
                 }
                 else if (wcscmp(opt, L"--no_firefly_clamp") == 0)
                 {
@@ -438,6 +463,10 @@ namespace mi { namespace examples { namespace dxr
                 {
                     options.tone_mapping_burn_out = static_cast<float>(_wtof(argv[++i]));
                 }
+                else if (wcscmp(opt, L"--cam_exposure") == 0 && i < argc - 1)
+                {
+                    options.exposure_compensation = static_cast<float>(_wtof(argv[++i]));
+                    }
                 else if (wcscmp(opt, L"--enable_derivs") == 0)
                 {
                     options.automatic_derivatives = true;
@@ -492,7 +521,11 @@ namespace mi { namespace examples { namespace dxr
                 }
                 else if (wcscmp(opt, L"--max_path_length") == 0 && i < argc - 1)
                 {
-                    options.ray_depth = std::max(2, std::min(_wtoi(argv[++i]), 100));
+                    options.ray_depth = std::max(2, _wtoi(argv[++i]));
+                }
+                else if (wcscmp(opt, L"--max_sss_steps") == 0 && i < argc - 1)
+                {
+                    options.sss_depth = std::max(0, _wtoi(argv[++i]));
                 }
                 else if ((wcscmp(opt, L"-p") == 0 || wcscmp(opt, L"--mdl_path") == 0) && i < argc - 1)
                 {
@@ -674,13 +707,24 @@ namespace mi { namespace examples { namespace dxr
                     else if (wcscmp(opt, L"--mtlx_to_mdl") == 0 && i < argc - 1)
                     {
                         std::string version = mi::examples::strings::wstr_to_str(argv[++i]);
-                        if (version != "1.6" && version != "1.7" && version != "1.8" && version != "latest")
+                        if (version != "1.6" && version != "1.7" && version != "1.8" && version != "1.9" &&
+                            version != "1.10" && version != "latest")
                         {
                             log_error("Unexpected MaterialX to MDL version number: '" + version + "'.");
                             return_code = EXIT_FAILURE;
                             return false;
                         }
                         options.mtlx_to_mdl = version;
+                    }
+                    else if (wcscmp(opt, L"--materialxtest_mode") == 0)
+                    {
+                        options.uv_flip = false;
+                        options.uv_scale = { 0.5f, 1.0f };
+                        options.uv_offset = { 0.0f, 0.0f };
+                        options.uv_repeat = true;
+                        options.enable_auxiliary = false;
+                        options.use_class_compilation = false;
+                        options.materialxtest_mode = true;
                     }
                 #endif
                 else

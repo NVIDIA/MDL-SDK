@@ -42,7 +42,6 @@ create_from_base_preset(
     OUTPUT_NAME "code_gen"
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
-    STATIC_MSVC_RUNTIME
 )
 
 # add dependencies

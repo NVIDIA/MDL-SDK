@@ -334,8 +334,8 @@ void Mdl_factory_impl::analyze_uniform(
     }
 
     mi::base::Handle<const MDL::IType> int_root_type( int_root_expr->get_type());
-    int_root_type = MDL::get_type_factory()->create_alias(
-        int_root_type.get(), root_uniform, /*symbol*/ nullptr);
+    mi::base::Handle<MDL::IType_factory> tf( MDL::get_type_factory());
+    int_root_type = tf->create_alias( int_root_type.get(), root_uniform, /*symbol*/ nullptr);
 
     mi::base::Handle<const MDL::IExpression> int_query_expr(
         get_internal_expression( query_expr));

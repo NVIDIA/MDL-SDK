@@ -2016,9 +2016,8 @@ Mdl_function_definition::check_and_prepare_arguments_array_index_operator(
     // result type is uniform if array and index type are uniform
     if(    (base_type->get_all_type_modifiers()  & IType::MK_UNIFORM) != 0
         && (index_type->get_all_type_modifiers() & IType::MK_UNIFORM) != 0) {
-        IType_factory *tf = get_type_factory();
-        ret_type = mi::base::make_handle(
-            tf->create_alias( ret_type.get(), IType::MK_UNIFORM, nullptr));
+        mi::base::Handle<IType_factory> tf( get_type_factory());
+        ret_type = tf->create_alias( ret_type.get(), IType::MK_UNIFORM, nullptr);
     }
 
     // clone arguments
@@ -2080,10 +2079,9 @@ Mdl_function_definition::check_and_prepare_arguments_array_length_operator(
     }
 
     // result type is "uniform int"
-    IType_factory *tf = get_type_factory();
+    mi::base::Handle<IType_factory> tf( get_type_factory());
     mi::base::Handle<const IType> ret_type( tf->create_int());
-    ret_type = mi::base::make_handle(
-        tf->create_alias( ret_type.get(), IType::MK_UNIFORM, nullptr));
+    ret_type = tf->create_alias( ret_type.get(), IType::MK_UNIFORM, nullptr);
 
     // clone arguments
     mi::base::Handle<IExpression_list> new_arguments(

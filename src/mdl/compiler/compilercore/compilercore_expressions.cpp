@@ -1340,7 +1340,17 @@ const IArgument_positional *Expression_factory::create_positional_argument(
     int               end_column)
 {
     IArgument_positional *result = m_builder.create<Argument_positional>(expr);
-    set_position(result, start_line, start_column, end_line, end_column);
+    if (expr != NULL && start_line == 0) {
+        Position const &pos = expr->access_position();
+        set_position(
+            result,
+            pos.get_start_line(),
+            pos.get_start_column(),
+            pos.get_end_line(),
+            pos.get_end_column());
+    } else {
+        set_position(result, start_line, start_column, end_line, end_column);
+    }
     return result;
 }
 
@@ -1354,7 +1364,17 @@ IArgument_named const *Expression_factory::create_named_argument(
     int                end_column)
 {
     IArgument_named *result = m_builder.create<Argument_named>(parameter_name,expr);
-    set_position(result, start_line, start_column, end_line, end_column);
+    if (expr != NULL && start_line == 0) {
+        Position const &pos = expr->access_position();
+        set_position(
+            result,
+            pos.get_start_line(),
+            pos.get_start_column(),
+            pos.get_end_line(),
+            pos.get_end_column());
+    } else {
+        set_position(result, start_line, start_column, end_line, end_column);
+    }
     return result;
 }
 

@@ -91,7 +91,12 @@ void Gui_section_rendering::update(mi::neuraylib::ITransaction* /*transaction*/)
 
     uint32_t default_value = uint32_t(m_options->ray_depth);
     if (Gui_control::slider("Path length", "Maximum ray path length.",
-        &m_scene_data->max_ray_depth, &default_value, Gui_control::Flags::None, 1u, 16u))
+        &m_scene_data->max_ray_depth, &default_value, Gui_control::Flags::None, 2u, 32u))
+        m_scene_data->restart_progressive_rendering();
+
+    uint32_t default_value_sss = uint32_t(m_options->sss_depth);
+    if (Gui_control::slider("SSS Path length", "Volume scattering steps additional to ray path length.",
+        &m_scene_data->max_sss_depth, &default_value_sss, Gui_control::Flags::None, 0u, 1024u))
         m_scene_data->restart_progressive_rendering();
 
     bool vsync = m_app->get_window()->get_vsync();
@@ -102,7 +107,8 @@ void Gui_section_rendering::update(mi::neuraylib::ITransaction* /*transaction*/)
 
     Gui_control::slider(
         "Exposure", "Brightness adjustment of the output image. [in stops]",
-        &m_scene_data->exposure_compensation, &default_0, Gui_control::Flags::None, -3.f, 3.f);
+        &m_scene_data->exposure_compensation, &m_options->exposure_compensation,
+        Gui_control::Flags::None, -3.f, 3.f);
 
     Gui_control::slider(
         "Burnout", "Tone mapping parameter. Increases the brightness of highlights.",
@@ -441,10 +447,11 @@ Gui_section_edit_material::Gui_section_edit_material(
     , m_wait_for_external_popup(false)
     , m_stop_waiting_for_external_popup(false)
 {
-    std::string override_material;
-    if (app->get_options()->get_user_options("override_material", override_material))
-        m_last_assign_new_material_name = override_material;
-
+    const Example_dxr_options* options = static_cast<const Example_dxr_options*>(app->get_options());
+    if (!options->material_overrides.empty())
+    {
+        m_last_assign_new_material_name = options->material_overrides[0].material;
+    }
     memcpy(
         m_last_assign_input_buffer.data(),
         m_last_assign_new_material_name.data(),

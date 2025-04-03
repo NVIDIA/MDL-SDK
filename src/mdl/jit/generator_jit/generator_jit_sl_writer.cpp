@@ -822,12 +822,21 @@ namespace {
         return false;
     }
 
-    bool flows_into_terminator(llvm::Value *value, llvm::BasicBlock *bb, size_t limit = 10)
+    bool flows_into_non_ret_terminator(
+        llvm::Value *value, llvm::BasicBlock *bb, size_t limit = 10)
     {
         if (limit == 0) {
-            // Safely return true if nested too deply.
+            // Conservatively return true if nested too deeply.
             return true;
         }
+
+        // Skip insert value/element chains
+        while ((llvm::isa<llvm::InsertValueInst>(value) ||
+                llvm::isa<llvm::InsertElementInst>(value)) &&
+                value->hasOneUse()) {
+            value = *value->user_begin();
+        }
+
         for (llvm::Value *user : value->users()) {
             if (llvm::isa<llvm::Instruction>(user)) {
                 llvm::Instruction *inst = llvm::cast<llvm::Instruction>(user);
@@ -838,11 +847,13 @@ namespace {
                     // Therefore, we can safely ignore this use.
                     return false;
                 }
-                if (inst->isTerminator()) {
+
+                // Found a terminator which is not a return?
+                if (inst->isTerminator() && !llvm::isa<llvm::ReturnInst>(inst)) {
                     return true;
                 }
             }
-            if (flows_into_terminator(user, bb, limit - 1)) {
+            if (flows_into_non_ret_terminator(user, bb, limit - 1)) {
                 return true;
             }
         }
@@ -1122,7 +1133,7 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
                         }
                     }
                 }
-                if (has_phi_operands && flows_into_terminator(&value, bb)) {
+                if (has_phi_operands && flows_into_non_ret_terminator(&value, bb)) {
                     gen_statement = true;
                 }
             }

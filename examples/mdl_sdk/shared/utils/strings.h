@@ -461,6 +461,16 @@ namespace mi { namespace examples { namespace strings
         return result;
     }
 
+    // removes the query substring of an url if present.
+    inline std::string drop_url_query(const std::string& url)
+    {
+        size_t pos = url.find_first_of('?');
+        if (pos == std::string::npos)
+            return url;
+        else
+            return url.substr(0, pos);
+    }
+
     // --------------------------------------------------------------------------------------------
 
     /// create a formatted string.

@@ -2368,6 +2368,14 @@ llvm::Module *LLVM_code_generator::compile_module(
         mi::mdl::IDefinition const *def = module->get_exported_definition(i);
 
         if (def->get_kind() == mi::mdl::IDefinition::DK_FUNCTION) {
+            mi::mdl::IDeclaration_function const *func_decl =
+                cast<mi::mdl::IDeclaration_function>(def->get_declaration());
+
+            if (func_decl->get_body() == NULL) {
+                // declaration only (in stdlib), ignore
+                continue;
+            }
+
             mi::mdl::IType_function const *f_tp   = cast<mi::mdl::IType_function>(def->get_type());
             mi::mdl::IType const          *ret_tp = f_tp->get_return_type();
 
@@ -2375,9 +2383,6 @@ llvm::Module *LLVM_code_generator::compile_module(
                 // this is a material constructor, ignore them
                 continue;
             }
-
-            mi::mdl::IDeclaration_function const *func_decl =
-                cast<mi::mdl::IDeclaration_function>(def->get_declaration());
 
             if (func_decl != NULL) {
                 // skip presets: this will insert the "real" body
@@ -3228,7 +3233,7 @@ LLVM_context_data *LLVM_code_generator::declare_function(
             tp = m_type_mapper.lookup_deriv_type(p_type, arr_size);
 
             // pass by reference if supported by target
-            if (target_supports_pointers()) {
+            if (is_passed_by_reference(p_type, arr_size) || target_supports_pointers()) {
                 arg_types.push_back(Type_mapper::get_ptr(tp));
             } else {
                 arg_types.push_back(tp);
@@ -7857,7 +7862,8 @@ Expression_result LLVM_code_generator::translate_call_user_defined_function(
             }
         }
 
-        if (m_type_mapper.is_passed_by_reference(arg_type, param_imm_size) ||
+        if (m_type_mapper.is_passed_by_reference(
+                m_type_mapper.skip_deriv_type(arg_type), param_imm_size) ||
             (target_supports_pointers() && m_type_mapper.is_deriv_type(expr_res.get_value_type())))
         {
             // pass by reference

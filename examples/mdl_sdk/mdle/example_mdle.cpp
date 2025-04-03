@@ -206,10 +206,10 @@ int MAIN_UTF8( int /*argc*/, char* /*argv*/[])
 
             // print the content to the console
             mi::Sint64 file_size = reader->get_file_size();
-            char* content = new char[file_size + 1];
+            std::vector<char> content(file_size+1);
             content[file_size] = '\0';
-            reader->read(content, file_size);
-            std::cerr << "content of the readme.txt:" << std::endl << content << std::endl
+            reader->read(content.data(), file_size);
+            std::cerr << "content of the readme.txt:" << std::endl << content.data() << std::endl
                       << std::endl;
         }
 

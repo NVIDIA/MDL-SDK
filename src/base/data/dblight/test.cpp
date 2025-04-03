@@ -1136,7 +1136,8 @@ void test_transaction_name_to_tag()
     DB::Tag tag = transaction->name_to_tag( "foo");
     MI_CHECK_EQUAL( tag, tag2);
     MI_CHECK_NOT_EQUAL( tag, tag1);
-    tag = transaction->name_to_tag( "bar");
+
+    tag = transaction->name_to_tag( "baz");
     MI_CHECK( !tag);
     tag = transaction->name_to_tag( "");
     MI_CHECK( !tag);
@@ -1144,6 +1145,36 @@ void test_transaction_name_to_tag()
     MI_CHECK( !tag);
 
     transaction->commit();
+}
+
+void test_transaction_name_to_tag_modified()
+{
+    Test_db db( __func__);
+    DB::Transaction_ptr transaction = db.m_global_scope->start_transaction();
+
+    auto* element1 = new My_element( 42);
+    DB::Tag tag1 = transaction->store( element1, "foo");
+    auto* element2 = new My_element( 43);
+    DB::Tag tag2 = transaction->store( element2, "bar");
+    transaction->remove( tag2);
+    db.dump();
+
+    DB::Tag tag1a = transaction->name_to_tag_modified( "foo");
+    DB::Tag tag2a = transaction->name_to_tag_modified( "bar");
+    db.dump();
+    MI_CHECK_EQUAL( tag1a, tag1);
+    MI_CHECK_EQUAL( tag2a, tag2);
+
+    DB::Tag tag = transaction->name_to_tag( "baz");
+    MI_CHECK( !tag);
+    tag = transaction->name_to_tag( "");
+    MI_CHECK( !tag);
+    tag = transaction->name_to_tag( nullptr);
+    MI_CHECK( !tag);
+    db.dump();
+
+    transaction->commit();
+    db.dump();
 }
 
 void test_transaction_tag_to_name_and_back()
@@ -3509,6 +3540,7 @@ void test( const char* explicit_gc_method)
 
     test_transaction_tag_to_name();
     test_transaction_name_to_tag();
+    test_transaction_name_to_tag_modified();
     test_transaction_tag_to_name_and_back();
     test_transaction_name_to_tag_and_back();
 

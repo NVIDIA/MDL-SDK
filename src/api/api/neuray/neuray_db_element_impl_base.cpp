@@ -187,7 +187,11 @@ mi::Sint32 Db_element_impl_base::store(
     DB::Privacy_level store_level = privacy;
 
     // prevent overwriting an existing DB element with one of a different type
+#if MI_API_API_NEURAY_USE_NAME_TO_TAG_MODIFIED
+    DB::Tag tag = db_transaction->name_to_tag_modified( name);
+#else // MI_API_API_NEURAY_USE_NAME_TO_TAG_MODIFIED
     DB::Tag tag = db_transaction->name_to_tag( name);
+#endif // MI_API_API_NEURAY_USE_NAME_TO_TAG_MODIFIED
     if( tag) {
         SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
         if(    (class_id == MDL::ID_MDL_MODULE)
@@ -202,7 +206,12 @@ mi::Sint32 Db_element_impl_base::store(
         }
     }
 
+#if MI_API_API_NEURAY_USE_NAME_TO_TAG_MODIFIED
+    if( !tag)
+        tag = db_transaction->reserve_tag();
+#else // MI_API_API_NEURAY_USE_NAME_TO_TAG_MODIFIED
     tag = transaction->get_tag_for_store( tag);
+#endif // MI_API_API_NEURAY_USE_NAME_TO_TAG_MODIFIED
 
     // use DB::JOURNAL_ALL instead of journal flags in m_access_base: for initial stores it does
     // not really matter, but for overwriting existing elements we do not know the journal flags

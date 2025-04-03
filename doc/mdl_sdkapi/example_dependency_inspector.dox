@@ -1,0 +1,95 @@
+/******************************************************************************
+ * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_dependency_inspector Example for Listing all Dependencies of an MDL Module
+
+<div align="right">
+    [\link mi_neuray_example_mdl_browser Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_mdle Next\endlink]
+</div>
+
+This example is particularly useful when you need to copy, export, or embed materials along with
+a scene. It provides a clear overview of all file dependencies for a given MDL module, including
+imported MDL modules and associated resources.
+
+\section mi_neuray_example_dependency_inspector_new New Topics
+
+  - Type of dependencies of an MDL module
+
+\section example_dependency_inspector_descr Detailed Description
+
+<dl>
+    <dt><b>
+        Type of dependencies of an MDL module
+    </b></dt>
+    <dd><br>
+        An MDL module can have three main types of file dependencies: imports, resources and thumbnails.
+        
+        Imports refer to other MDL modules that are included using the \c 'import' directive.
+        However, in this example, we focus specifically on imports that resolve to physical files,
+        which can be retrieved with the function #mi::neuraylib::IModule::get_filename(). It is
+        important to distinguish these from built-in modules, such as those from the standard library
+        or \c \::base, which do not have an associated filename. These built-in modules are excluded from
+        this example.        
+                
+        Resources are another type of file dependencies, such as texture images, light profiles,
+        and BSDF measurements. To retrieve the files associated with these resources, we first obtain an
+        instance of the resource by using its database name (through #mi::neuraylib::IValue_resource::get_value())
+        and its type (through #mi::neuraylib::IValue_resource::get_type()). This instance can be
+        one of the following types: #mi::neuraylib::ITexture, #mi::neuraylib::ILightprofile,
+        or #mi::neuraylib::IBsdf_measurement. Once we have the instance, we simply call
+        \c \::get_filename() to get the associated file.
+        
+        Note that MDL archives (*.mdr) or MDLE modules (*.mdle) may contain embedded resources, which in
+        this example we detect and skip in \c Dependency_inspector::get_resolved_filename(), since
+        the corresponding file has been already reported for the module itself.
+                        
+        Finally, Thumbnails are small image files associated to MDL function and material definitions.
+        Thumbnails are optional, and when available, their filenames can be retrieved by calling
+        #mi::neuraylib::IFunction_definition::get_thumbnail() on the corresponding function or
+        material definition.                         
+        
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+</dl>
+
+\section example_dependency_inspector Example Source
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/dependency_inspector/example_dependency_inspector.cpp</tt>
+
+\include dependency_inspector/example_dependency_inspector.cpp
+
+<div align="right">
+    [\link mi_neuray_example_mdl_browser Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_mdle Next\endlink]
+</div>
+
+*/

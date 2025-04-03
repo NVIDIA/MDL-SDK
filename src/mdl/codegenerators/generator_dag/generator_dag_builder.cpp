@@ -1908,6 +1908,18 @@ DAG_node const *DAG_builder::expr_to_dag(
     return NULL;
 }
 
+// Convert an MDL expression to a DAG IR node and decl_cast it to dst_type if necessary.
+DAG_node const *DAG_builder::expr_to_dag(
+    IType const       *dst_type,
+    IExpression const *expr)
+{
+    DAG_node const *res = expr_to_dag(expr);
+    if (res != NULL) {
+        res = maybe_insert_decl_cast(dst_type, res);
+    }
+    return res;
+}
+
 // Convert an MDL literal expression to a DAG constant.
 DAG_constant const *DAG_builder::lit_to_dag(
     IExpression_literal const *lit)
@@ -3042,6 +3054,16 @@ DAG_node const *DAG_builder::try_inline(
             if (has_target_material_model_anno(f_decl->get_annotations())) {
                 // do not inline
                 return NULL;
+            }
+            // check annotations on presets too
+            if (orig_call_def != f_def) {
+                IDeclaration_function const *orig_f_decl = cast<IDeclaration_function>(
+                    orig_call_def->get_declaration());
+                if (orig_f_decl != NULL &&
+                    has_target_material_model_anno(orig_f_decl->get_annotations())) {
+                    // do not inline
+                    return NULL;
+                }
             }
         }
     }

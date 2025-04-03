@@ -474,6 +474,7 @@ const char* Transaction_impl::tag_to_name( DB::Tag tag)
         return nullptr;
 
     const char* result = info->get_name();
+
     info->unpin();
     return result;
 }
@@ -498,8 +499,52 @@ DB::Tag Transaction_impl::name_to_tag( const char* name)
         return {};
 
     DB::Tag result = info->get_tag();
+    MI_ASSERT( result);
+
     info->unpin();
     return result;
+}
+
+DB::Tag Transaction_impl::name_to_tag_modified( const char* name)
+{
+    Statistics_helper helper( g_name_to_tag);
+
+    THREAD::Block_shared block( &m_database->get_lock());
+
+    if( m_state != OPEN) {
+        LOG::mod_log->error(
+            M_DB, LOG::Mod_log::C_DATABASE, "Use of non-open transaction.");
+        return {};
+    }
+
+    if( !name)
+        return {};
+
+    Info_manager* info_manager = m_database->get_info_manager();
+    Info_impl* info = info_manager->lookup_info( name, m_scope, m_id);
+    if( !info)
+        return {};
+
+    DB::Tag tag = info->get_tag();
+    MI_ASSERT( tag);
+
+    if( !info_manager->get_tag_is_removed( tag)) {
+
+        info->unpin();
+        return tag;
+
+    } else if( info_manager->get_tag_reference_count( tag) == 0) {
+
+        info->unpin();
+        return {};
+
+    } else {
+
+        THREAD::Block block2( m_pinned_infos_lock);
+        m_pinned_infos.push_back( info);
+        return tag;
+
+    }
 }
 
 SERIAL::Class_id Transaction_impl::get_class_id( DB::Tag tag)
@@ -940,6 +985,22 @@ void Transaction_impl::check_reference_cycles_internal(
     info->unpin();
 }
 
+size_t Transaction_impl::get_pinned_infos_size() const
+{
+    THREAD::Block block( m_pinned_infos_lock);
+    return m_pinned_infos.size();
+}
+
+void Transaction_impl::unpin_pinned_infos()
+{
+    THREAD::Block block( m_pinned_infos_lock);
+
+    for( const auto& info: m_pinned_infos)
+        info->unpin();
+
+    m_pinned_infos.clear();
+}
+
 void Transaction_impl::wait_for_unblocked_locked( bool commit)
 {
     THREAD::Shared_lock& lock = m_database->get_lock();
@@ -1077,6 +1138,8 @@ bool Transaction_manager::end_transaction( Transaction_impl* transaction, bool c
     MI_ASSERT( it != m_open_transactions.end());
     m_open_transactions.erase( it);
 
+    transaction->unpin_pinned_infos();
+
     transaction->set_visibility_id( m_next_transaction_id);
     transaction->set_state( commit ? Transaction_impl::COMMITTED : Transaction_impl::ABORTED);
 
@@ -1154,8 +1217,13 @@ void Transaction_manager::dump( std::ostream& s, bool mask_pointer_values)
         s << ": pin count = " << t.get_pin_count()
           << ", state = " << t.get_state()
           << ", next sequence number = " << t.get_next_sequence_number()
-          << ", visibility ID = " << t.get_visibility_id()()
-          << std::endl;
+          << ", visibility ID = " << t.get_visibility_id()();
+
+        size_t pinned_infos = t.get_pinned_infos_size();
+        if( pinned_infos > 0)
+            s << ", count of pinned infos = " << pinned_infos;
+
+        s << std::endl;
 
         if( m_database->get_journal_enabled()) {
             const Transaction_impl::Transaction_journal& journal = t.get_journal();

@@ -181,6 +181,11 @@ public:
 
     Tag name_to_tag( const char* name) { return m_transaction->name_to_tag( name); }
 
+    Tag name_to_tag_modified( const char* name)
+    {
+        return m_transaction->name_to_tag_modified( name);
+    }
+
     bool get_tag_is_job( Tag tag) { return m_transaction->get_tag_is_job( tag); }
 
     SERIAL::Class_id get_class_id( Tag tag) { return m_transaction->get_class_id( tag); }

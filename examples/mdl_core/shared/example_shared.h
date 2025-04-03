@@ -835,6 +835,12 @@ public:
     }
 
     /// Get the DAG containing the material of the material instance.
+    void set_material_instance(mi::base::Handle<mi::mdl::IMaterial_instance> &mat_instance)
+    {
+        m_inst = mat_instance;
+    }
+
+    /// Get the DAG containing the material of the material instance.
     mi::base::Handle<mi::mdl::IGenerated_code_dag const> get_dag() const {
         return m_dag;
     }
@@ -1026,6 +1032,18 @@ public:
     Module_manager &get_module_manager()
     {
         return m_module_manager;
+    }
+
+    /// Load some requires modules to make distilling work.
+    void load_distilling_support()
+    {
+        mi::base::Handle<mi::mdl::IModule const> nv_ds_module(
+            m_mdl_compiler->load_module(m_msg_context, "::nvidia::distilling_support", &m_module_manager));
+
+        if (!nv_ds_module || !nv_ds_module->is_valid())
+            check_success(!"Loading distilling support module failed");
+
+        m_module_manager.add_module(nv_ds_module.get());
     }
 
     /// Access the compiler messages.

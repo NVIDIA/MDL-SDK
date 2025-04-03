@@ -1429,4 +1429,13 @@ void Loader_gltf::replace_all_materials(const std::string & mdl_name)
             p.material = 0;
 }
 
+// ------------------------------------------------------------------------------------------------
+
+void Loader_gltf::replace_single_materials(const std::string& name_to_replace, const std::string& material_name)
+{
+    for (auto&& mat : m_scene->materials)
+        if (mat.name == name_to_replace)
+            mat.name = material_name;
+}
+
 }}} // mi::examples::mdl_d3d12

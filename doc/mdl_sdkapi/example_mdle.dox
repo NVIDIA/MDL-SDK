@@ -29,7 +29,7 @@
 /*! \page mi_neuray_example_mdle Example for Integrating the MDL Encapsulated Format
 
 <div align="right">
-    [\link mi_neuray_example_mdl_browser Previous\endlink]
+    [\link mi_neuray_example_dependency_inspector Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
     [\link mi_neuray_example_dxr Next\endlink]
 </div>
@@ -184,7 +184,7 @@ std::string db_name_func = mdle_to_db_name_with_signature(transaction.get(), mdl
 \include mdle/example_mdle.cpp
 
 <div align="right">
-    [\link mi_neuray_example_mdl_browser Previous\endlink]
+    [\link mi_neuray_example_dependency_inspector Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
     [\link mi_neuray_example_dxr Next\endlink]
 </div>

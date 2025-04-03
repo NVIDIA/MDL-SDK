@@ -416,23 +416,123 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
 
     // apply volume attenuation
     //---------------------------------------------------------------------------------------------
-    if (inside && !thin_walled && mat.has_volume_absorption()) // compute absorption only on exit
+    if (inside && !thin_walled && (mat.has_volume_absorption() || mat.has_volume_scattering())) 
     {
-        const float3 abs_coeff = mdl_volume_absorption_coefficient(mdl_state);
+        const float3 a_coeff = mdl_volume_absorption_coefficient(mdl_state);
+        const float3 s_coeff = mdl_volume_scattering_coefficient(mdl_state);
+        const float3 t_coeff = a_coeff + s_coeff;
+        const float g = mdl_volume_scattering_directional_bias(mdl_state);
 
-        // distance in meters
-        #if defined(USE_DERIVS)
-            const float distance = length(mdl_state.position.val - payload.ray_origin_next) *
-                scene_constants.meters_per_scene_unit;
-        #else
-            const float distance =
-                length(mdl_state.position - payload.ray_origin_next) *
-                scene_constants.meters_per_scene_unit;
-        #endif
+        // distance the ray traveled in meters
+#if defined(USE_DERIVS)
+        float distance = length(mdl_state.position.val - payload.ray_origin_next) * scene_constants.meters_per_scene_unit;
+#else
+        float distance = length(mdl_state.position - payload.ray_origin_next) * scene_constants.meters_per_scene_unit;
+#endif
 
-        payload.weight.x *= abs_coeff.x > 0.0f ? exp(-abs_coeff.x * distance) : 1.0f;
-        payload.weight.y *= abs_coeff.y > 0.0f ? exp(-abs_coeff.y * distance) : 1.0f;
-        payload.weight.z *= abs_coeff.z > 0.0f ? exp(-abs_coeff.z * distance) : 1.0f;
+        // scatter only if we have non-zero scatter coefficients
+        float survival_prob = 1.0f;
+        if (s_coeff.x > 0.0f || s_coeff.y > 0.0 || s_coeff.z > 0.0f)
+        {
+            const float s_coeff_max = max(s_coeff.x, max(s_coeff.y, s_coeff.z));
+            const float t_coeff_min = min(t_coeff.x, min(t_coeff.y, t_coeff.z));
+
+            float sample_coeff = 0.0f;
+            if (s_coeff_max <= t_coeff_min)
+            {
+                // can use common coefficient for distance importance sampling while keeping variance bounded
+                sample_coeff = t_coeff_min;
+            }
+            else if ((payload.flags & (FLAG_SSS_R | FLAG_SSS_G | FLAG_SSS_B)) == 0)
+            {
+                // switch to single color
+                const float xi = rnd(payload.seed);
+                if (xi < (1.0 / 3.0))
+                {
+                    payload.flags |= FLAG_SSS_R;
+                    payload.weight.x *= 3.0f;
+                    payload.weight.y = 0.0f;
+                    payload.weight.z = 0.0f;
+                }
+                else if (xi < (2.0 / 3.0))
+                {
+                    payload.flags |= FLAG_SSS_G;
+                    payload.weight.x = 0.0f;
+                    payload.weight.y *= 3.0f;
+                    payload.weight.z = 0.0f;
+                }
+                else
+                {
+                    payload.flags |= FLAG_SSS_B;
+                    payload.weight.x = 0.0f;
+                    payload.weight.y = 0.0f;
+                    payload.weight.z *= 3.0f;
+                }
+            }
+
+            if (has_flag(payload.flags, FLAG_SSS_R))
+                sample_coeff = t_coeff.x;
+            else if (payload.flags & FLAG_SSS_G)
+                sample_coeff = t_coeff.y;
+            else if (payload.flags & FLAG_SSS_B)
+                sample_coeff = t_coeff.z;
+
+            // sample travel distance in meters
+            const float sampled_distance = -log(1.0 - rnd(payload.seed)) / sample_coeff;
+
+            // scattering event happened
+            if (sampled_distance < distance)
+            {
+                // compute scattering position in scene units
+                distance = sampled_distance;
+                payload.ray_origin_next += payload.ray_direction_next * (distance / scene_constants.meters_per_scene_unit);
+
+                // random direction, Henyey-Greenstein phase function
+                float cosTheta;
+                if (g < 0.001)
+                    cosTheta = 1.0 - 2.0 * rnd(payload.seed);
+                else
+                {
+                    const float inner_term = (1.0 - g * g) / (1.0 - g + 2.0 * g * rnd(payload.seed));
+                    cosTheta = (1.0 + g * g - inner_term * inner_term) / (2.0 * g);
+                }
+                const float phi = 2.0 * M_PI * rnd(payload.seed);
+                const float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+                float sinPhi, cosPhi;
+                sincos(phi, sinPhi, cosPhi);
+
+                float3 u, v;
+                create_basis(payload.ray_direction_next, u, v);
+                payload.ray_direction_next = u * cosPhi * sinTheta + v * sinPhi * sinTheta + payload.ray_direction_next * cosTheta;
+
+                // apply scattering and volume attenuation
+                // note, this is limited to uniform scattering for subsurface scattering
+                // for non-uniform volume data, this is not sufficient
+                float pdf_dist = sample_coeff * exp(-sample_coeff * distance);
+                if (payload.weight.x > 0.0f)
+                    payload.weight.x *= s_coeff.x * exp(-t_coeff.x * distance) / pdf_dist;
+                if (payload.weight.y > 0.0f)
+                    payload.weight.y *= s_coeff.y * exp(-t_coeff.y * distance) / pdf_dist;
+                if (payload.weight.z > 0.0f)
+                    payload.weight.z *= s_coeff.z * exp(-t_coeff.z * distance) / pdf_dist;
+
+                // continue the ray into scattering direction
+                add_flag(payload.flags, FLAG_SSS); // for counting SSS steps separate
+                return;
+            }
+            remove_flag(payload.flags, FLAG_SSS); // for counting SSS steps separate
+
+            // probability to reach the distance
+            survival_prob = exp(-sample_coeff * distance);
+        }
+
+        // apply volume attenuation
+        if (payload.weight.x > 0.0f)
+            payload.weight.x *= exp(-t_coeff.x * distance) / survival_prob;
+        if (payload.weight.y > 0.0f)
+            payload.weight.y *= exp(-t_coeff.y * distance) / survival_prob;
+        if (payload.weight.z > 0.0f)
+            payload.weight.z *= exp(-t_coeff.z * distance) / survival_prob;
     }
 
     // add emission
@@ -655,11 +755,10 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
     }
 
     // stop on absorb
-    if ((sample_data.pdf == 0.0f && (sample_data.event_type & BSDF_EVENT_SPECULAR) == 0) ||
-        sample_data.event_type == BSDF_EVENT_ABSORB)
+    if (sample_data.event_type == BSDF_EVENT_ABSORB)
     {
         add_flag(payload.flags, FLAG_DONE);
-        // do not return here, we need to do next event estimation first
+        // no not return here, we need to do next event estimation first
     }
     else
     {

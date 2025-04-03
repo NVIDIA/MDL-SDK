@@ -3044,7 +3044,32 @@ void check_mdl_export_reimport(
         { "mdl::non_existing", "::non_existing", 6002, 6002 },
         { "mdl::base", "::base", 6004, 6004 },
         { "mdl::mdl_elements::test_misc", "::test_misc", 0, 0 },
-        { "mdl::test_archives", "::test_archives", 0, 0 },
+
+        { "mdl::test_archives", "::test_archives", 0, 0, false, false, false, {
+            "/test_archives/test_in_archive.png",
+            "/test_archives/test_in_archive.ies",
+            "/test_archives/test_in_archive.mbsdf" } },
+
+        { "mdl::test_archives", "::test_archives2", 0, 6015, true, false, false, {
+            "./test_in_archive.png",
+            "./test_in_archive.ies",
+            "./test_in_archive.mbsdf" } },
+
+        { "mdl::test_archives", "::test_archives3", 0, 6006, false, true, false, {
+            "./test_in_archive_0.png",
+            "./test_in_archive_0.ies",
+            "./test_in_archive_0.mbsdf" } },
+
+        { "mdl::test_archives", "::test_archives4", 0, 0, false, false, true, {
+            "/test_archives/test_in_archive.png",
+            "/test_archives/test_in_archive.ies",
+            "/test_archives/test_in_archive.mbsdf" } },
+
+        { "mdl::test_archives", "::test_archives5", 0, 6006, false, true, true, {
+            "./test_archives5_export_test_in_archive.png",
+            "./test_archives5_export_test_in_archive.ies",
+            "./test_archives5_export_test_in_archive.mbsdf" } },
+
         { "mdl::from_string", "::from_string", 0, 0 },
         { "mdl::imports_from_string", "::imports_from_string", 0, 0 },
         { "mdl::mybuiltins", "::mybuiltins", 6004, 6004  },

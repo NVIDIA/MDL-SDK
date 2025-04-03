@@ -31,8 +31,8 @@ additional or alternate copyrights, licenses, and/or restrictions:
 * jQuery v3.6.4: [doc/js/jquery/jquery-3.6.4.min.js](doc/js/jquery/jquery-3.6.4.min.js), see https://jquery.org/license
 * jQuery v3.7.1: [doc/base_module/ext/jquery/jquery-3.7.1.min.js](doc/base_module/ext/jquery/jquery-3.7.1.min.js),
   [doc/core_definitions/ext/jquery/jquery-3.7.1.min.js](doc/core_definitions/ext/jquery/jquery-3.7.1.min.js), see https://jquery.org/license
-* jQuery UI v1.14.0: [doc/base_module/ext/jquery/jquery-ui-1.14.0.custom/LICENSE.txt](doc/base_module/ext/jquery/jquery-ui-1.14.0.custom/LICENSE.txt),
-  [doc/core_definitions/ext/jquery/jquery-ui-1.14.0.custom/LICENSE.txt](doc/core_definitions/ext/jquery/jquery-ui-1.14.0.custom/LICENSE.txt)
+* jQuery UI v1.14.1: [doc/base_module/ext/jquery/jquery-ui-1.14.1.custom/LICENSE.txt](doc/base_module/ext/jquery/jquery-ui-1.14.1.custom/LICENSE.txt),
+  [doc/core_definitions/ext/jquery/jquery-ui-1.14.1.custom/LICENSE.txt](doc/core_definitions/ext/jquery/jquery-ui-1.14.1.custom/LICENSE.txt)
 * Linux Libertine font: [doc/css/linux-libertine/SIL Open Font License.txt](doc/css/linux-libertine/SIL Open Font License.txt),
   [doc/base_module/ext/fonts/linux-libertine/SIL Open Font License.txt](doc/base_module/ext/fonts/linux-libertine/SIL Open Font License.txt),
   [doc/core_definitions/ext/fonts/linux-libertine/SIL Open Font License.txt](doc/core_definitions/ext/fonts/linux-libertine/SIL Open Font License.txt)

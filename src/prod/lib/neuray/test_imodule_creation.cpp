@@ -3096,11 +3096,41 @@ void check_mdl_export_reimport(
 {
     Exreimp_data modules[] = {
         { "mdl::variants", "::variants", 0, 0 },
-        { "mdl::resources", "::resources", 0, 0, false, false, false },
-        { "mdl::resources", "::resources2", 0, 6011, true, false, false },
-        { "mdl::resources", "::resources3", 0, 6006, false, true, false },
-        { "mdl::resources", "::resources4", 0, 0, false, false, true },
-        { "mdl::resources", "::resources5", 0, 6006, false, true, true },
+
+        { "mdl::resources", "::resources", 0, 0, false, false, false,
+            { "/mdl_elements/resources/test.png",
+              "/mdl_elements/resources/test.ies",
+              "/mdl_elements/resources/test.mbsdf",
+              "/test_archives/test_in_archive.png" } },
+
+        { "mdl::resources", "::resources2", 0, 6011, true, false, false,
+            { "./test.png",
+              "./test.ies",
+              "./test.mbsdf",
+              "./test_in_archive.png" },
+            { "./test_0.png" } },
+
+        { "mdl::resources", "::resources3", 0, 6006, false, true, false,
+            { "./test_0.png",
+              "./test_0.ies",
+              "./test_0.mbsdf",
+              "./test_in_archive_0.png" },
+            { "./test_1.png",
+              "./test_2.png" } },
+
+        { "mdl::resources", "::resources4", 0, 0, false, false, true,
+            { "/mdl_elements/resources/test.png",
+              "/mdl_elements/resources/test.ies",
+              "/mdl_elements/resources/test.mbsdf",
+              "/test_archives/test_in_archive.png" } },
+
+        { "mdl::resources", "::resources5", 0, 6006, false, true, true,
+            { "./resources5_export_test.png",
+              "./resources5_export_test.ies",
+              "./resources5_export_test.mbsdf",
+              "./resources5_export_test_in_archive.png" },
+            { "./resources5_export_test_0.png" } },
+
         { "mdl::new_materials", "::new_materials", 0, 0 },
         { "mdl::123_check_unicode_new_materials", "::123_check_unicode_new_materials", 0, 0 },
         { "mdl::123_check_unicode_new_variants", "::123_check_unicode_new_variants", 0, 0 },

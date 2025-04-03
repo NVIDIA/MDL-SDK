@@ -135,7 +135,7 @@ mi::Sint32 Mdl_archive_api_impl::create_archive(
             manifest_entries_count));
 
     const mi::mdl::Messages& messages = archive_tool->access_messages();
-    MDL::convert_and_log_messages( messages, /*out_messages*/ nullptr);
+    MDL::log_messages( messages);
     if( messages.get_error_message_count() > 0)
         return -4;
 
@@ -155,7 +155,7 @@ mi::Sint32 Mdl_archive_api_impl::extract_archive( const char* archive, const cha
     archive_tool->extract_archive( archive, directory);
 
     const mi::mdl::Messages& messages = archive_tool->access_messages();
-    MDL::convert_and_log_messages( messages, /*out_messages*/ nullptr);
+    MDL::log_messages( messages);
     if( messages.get_error_message_count() > 0)
         return -2;
 
@@ -173,7 +173,7 @@ const mi::neuraylib::IManifest* Mdl_archive_api_impl::get_manifest( const char* 
         archive_tool->get_manifest( archive));
 
     const mi::mdl::Messages& messages = archive_tool->access_messages();
-    MDL::convert_and_log_messages( messages, /*out_messages*/ nullptr);
+    MDL::log_messages( messages);
     if( !manifest || messages.get_error_message_count() > 0)
         return nullptr;
 
@@ -191,7 +191,7 @@ mi::neuraylib::IReader* Mdl_archive_api_impl::get_file( const char* archive, con
         archive_tool->get_file_content( archive, filename));
 
     const mi::mdl::Messages& messages = archive_tool->access_messages();
-    MDL::convert_and_log_messages( messages, /*out_messages*/ nullptr);
+    MDL::log_messages( messages);
     if( !file || messages.get_error_message_count() > 0)
         return nullptr;
 
@@ -218,7 +218,7 @@ mi::neuraylib::IReader* Mdl_archive_api_impl::get_file(const char* filename)
         archive_tool->get_file_content(fn.substr(0, p + 4).c_str(), fn.substr(p + 5).c_str()));
 
     const mi::mdl::Messages& messages = archive_tool->access_messages();
-    MDL::convert_and_log_messages(messages, /*out_messages*/ nullptr);
+    MDL::log_messages( messages);
     if (!file || messages.get_error_message_count() > 0)
         return nullptr;
 

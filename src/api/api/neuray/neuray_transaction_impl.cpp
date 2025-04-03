@@ -290,7 +290,11 @@ mi::Sint32 Transaction_impl::copy( const char* source, const char* target, mi::U
     } else {
         // If source and target names are different, lookup target tag.
         // Prevent overwriting an existing DB element with one of a different type
+#if MI_API_API_NEURAY_USE_NAME_TO_TAG_MODIFIED
+        DB::Tag target_tag = m_db_transaction->name_to_tag_modified( target);
+#else // MI_API_API_NEURAY_USE_NAME_TO_TAG_MODIFIED
         DB::Tag target_tag = m_db_transaction->name_to_tag( target);
+#endif // MI_API_API_NEURAY_USE_NAME_TO_TAG_MODIFIED
         if( target_tag) {
             SERIAL::Class_id target_class_id = m_db_transaction->get_class_id( target_tag);
             if(    (target_class_id == MDL::ID_MDL_MODULE)
@@ -304,11 +308,16 @@ mi::Sint32 Transaction_impl::copy( const char* source, const char* target, mi::U
             }
         }
 
-        DB::Access<DB::Element_base> access(source_tag, m_db_transaction);
+        DB::Access<DB::Element_base> access( source_tag, m_db_transaction);
         // Create a copy of the DB element.
         DB::Element_base* element = access->copy();
         // And store it.
+#if MI_API_API_NEURAY_USE_NAME_TO_TAG_MODIFIED
+    if( !target_tag)
+        target_tag = m_db_transaction->reserve_tag();
+#else // MI_API_API_NEURAY_USE_NAME_TO_TAG_MODIFIED
         target_tag = get_tag_for_store( target_tag);
+#endif // MI_API_API_NEURAY_USE_NAME_TO_TAG_MODIFIED
 #ifdef VERBOSE_TX
         LOG::mod_log->info( SYSTEM::M_NEURAY_API, LOG::Mod_log::C_DATABASE,
             "TX %u copying \"%s\" to \"%s\" ...", m_id_as_uint, source, target);
@@ -590,6 +599,7 @@ const Class_factory* Transaction_impl::get_class_factory() const
     return m_class_factory;
 }
 
+#if ! MI_API_API_NEURAY_USE_NAME_TO_TAG_MODIFIED
 DB::Tag Transaction_impl::get_tag_for_store( const char* name)
 {
     return get_tag_for_store( m_db_transaction->name_to_tag( name));
@@ -603,6 +613,7 @@ DB::Tag Transaction_impl::get_tag_for_store( DB::Tag tag)
 
     return m_db_transaction->reserve_tag();
 }
+#endif // MI_API_API_NEURAY_USE_NAME_TO_TAG_MODIFIED
 
 void Transaction_impl::add_element( const Db_element_impl_base* db_element)
 {

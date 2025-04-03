@@ -184,14 +184,11 @@ public:
 
     /// Exports the transformed MDL module to disk.
     ///
-    /// The following options are supported:
-    /// - \c "bundle_resources" of type bool: If \c true, referenced resources are exported
-    ///   into the same directory as the module, even if they can be found via the module search
-    ///   path. Default: \c false.
-    /// - \c bool "export_resources_with_module_prefix": If \c true, the name of the exported
-    ///   resources start with the module name as prefix. Default: \c true.
+    /// See #mi::neuraylib::IMdl_impexp_api::export_module() for the supported context options.
     ///
-    /// \param filename          The name of the file to be used for the export.
+    /// \param filename          The name of the file to be used for the export. Note that the
+    ///                          context option "handle_filename_conflicts" affects only resources,
+    ///                          not modules: if this file exists already, it will be overwritten.
     /// \param context           The execution context can be used to obtain messages like errors
     ///                          or warnings are stored in the context. Can be \c nullptr.
     /// \return
@@ -207,7 +204,7 @@ public:
     ///                          - -6010: Incorrect type for a referenced resource.
     ///                          - -6013: The export of a file-based resource failed.
     ///                          - -6014: The export of a memory-based resource failed.
-    ///                          - -6016: The export of an archive-based resource failed.
+    ///                          - -6016: The export of an container-based resource failed.
     virtual Sint32 export_module( const char* filename, IMdl_execution_context* context) = 0;
 
     /// Exports the transformed MDL module to string.
@@ -231,9 +228,9 @@ public:
     ///                                   string-based exports.
     ///                          - -6013: The export of a file-based resource failed.
     ///                          - -6014: The export of a memory-based resource failed.
-    ///                          - -6015: The export of archive-based resources is not supported for
+    ///                          - -6015: The export of container-based resources is not supported for
     ///                                   string-based exports.
-    ///                          - -6016: The export of an archive-based resource failed.
+    ///                          - -6016: The export of an container-based resource failed.
     virtual Sint32 export_module_to_string(
         IString* exported_module, IMdl_execution_context* context) = 0;
 };

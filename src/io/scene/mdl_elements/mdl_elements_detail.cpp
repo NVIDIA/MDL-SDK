@@ -91,14 +91,14 @@ std::string convert_os_separators_to_slashes( const std::string& s)
 }
 
 /// Calls the MDL entity resolver with the given arguments and returns the file name set, or
-/// \c nullptr in case of failure. The flag \c log_messages indicates whether error messages should
-/// be logged. This method supports all three kinds of resources, including animated and/or uvtile
-/// textures.
+/// \c nullptr in case of failure. The flag \c do_log_messages indicates whether error messages
+/// should be logged. This method supports all three kinds of resources, including animated and/or
+/// uvtile textures.
 mi::mdl::IMDL_resource_set* get_resource_set(
     const char* file_path,
     const char* module_file_system_path,
     const char* module_name,
-    bool log_messages,
+    bool do_log_messages,
     Execution_context* context)
 {
     ASSERT( M_SCENE, file_path);
@@ -112,20 +112,20 @@ mi::mdl::IMDL_resource_set* get_resource_set(
     mi::mdl::IMDL_resource_set* res_set = resolver->resolve_resource_file_name(
         file_path, module_file_system_path, module_name, /*pos*/ nullptr, ctx.get());
 
-    if( log_messages)
-        convert_and_log_messages( resolver->access_messages(), /*out_messages*/ nullptr);
+    if( do_log_messages)
+        log_messages( resolver->access_messages());
     return res_set;
 }
 
 /// Calls the MDL entity resolver with the given arguments and returns the resulting reader, or
-/// \c nullptr in case of failure. The flag \c log_messages indicates whether error messages should
-/// be logged. This method does not support animated nor uvtile textures. It should only be used
-/// for light profiles and BSDF measurements.
+/// \c nullptr in case of failure. The flag \c do_log_messages indicates whether error messages
+/// should be logged. This method does not support animated nor uvtile textures. It should only be
+/// used for light profiles and BSDF measurements.
 mi::mdl::IMDL_resource_reader* get_reader(
     const char* file_path,
     const char* module_file_system_path,
     const char* module_name,
-    bool log_messages,
+    bool do_log_messages,
     Execution_context* context)
 {
     ASSERT( M_SCENE, file_path);
@@ -139,8 +139,8 @@ mi::mdl::IMDL_resource_reader* get_reader(
     mi::base::Handle<mi::mdl::IMDL_resource_set> res_set( resolver->resolve_resource_file_name(
         file_path, module_file_system_path, module_name, /*pos*/ nullptr, ctx.get()));
 
-    if( log_messages)
-        convert_and_log_messages( resolver->access_messages(), /*out_messages*/ nullptr);
+    if( do_log_messages)
+        log_messages( resolver->access_messages());
     if( !res_set)
         return nullptr;
     if( res_set->get_count() != 1 || res_set->get_udim_mode() != mi::mdl::NO_UDIM)
@@ -155,16 +155,16 @@ std::string resolve_resource_filename(
     const char* file_path,
     const char* module_file_system_path,
     const char* module_name,
-    bool log_messages,
+    bool do_log_messages,
     Execution_context* context)
 {
     mi::base::Handle<mi::mdl::IMDL_resource_set> name_set( get_resource_set(
-        file_path, module_file_system_path, module_name, log_messages, context));
+        file_path, module_file_system_path, module_name, do_log_messages, context));
     if( !name_set)
         return "";
 
-    mi::base::Handle<mi::mdl::IMDL_resource_element const> elem(name_set->get_element(0));
-    if (!elem)
+    mi::base::Handle<mi::mdl::IMDL_resource_element const> elem( name_set->get_element( 0));
+    if( !elem)
         return "";
     const char* resolved_filename = elem->get_filename( 0);
     return std::string( resolved_filename ? resolved_filename : "");
@@ -249,7 +249,7 @@ std::string unresolve_resource_filename(
 
     // return failure if re-resolving of file path yields a different filename
     std::string resolved_filename = resolve_resource_filename(
-        file_path.c_str(), module_filename, module_name, /*log_messages*/ false, context);
+        file_path.c_str(), module_filename, module_name, /*do_log_messages*/ false, context);
     resolved_filename = HAL::Ospath::normpath_v2( resolved_filename);
     if( is_container_member( resolved_filename.c_str()))
         return "";
@@ -300,7 +300,7 @@ std::string unresolve_resource_filename(
 
     // return failure if re-resolving of file path yields a different filename
     std::string resolved_filename = resolve_resource_filename(
-        file_path.c_str(), module_filename, module_name, /*log_messages*/ false, context);
+        file_path.c_str(), module_filename, module_name, /*do_log_messages*/ false, context);
     resolved_filename = HAL::Ospath::normpath_v2( resolved_filename);
     if( !is_container_member( resolved_filename.c_str()))
         return "";
@@ -321,6 +321,8 @@ DB::Tag core_resource_to_tag(
     bool errors_are_warnings,
     Execution_context* context)
 {
+    ASSERT( M_SCENE, context);
+
     switch( value->get_kind()) {
 
         case mi::mdl::IValue::VK_TEXTURE: {
@@ -370,6 +372,8 @@ DB::Tag core_texture_to_tag(
     bool errors_are_warnings,
     Execution_context* context)
 {
+    ASSERT( M_SCENE, context);
+
     mi::Uint32 tag_uint32 = value->get_tag_value();
 
     // Check whether the tag value is set before checking whether the string value is not set.
@@ -416,6 +420,8 @@ DB::Tag core_texture_to_tag(
     bool shared,
     Execution_context* context)
 {
+    ASSERT( M_SCENE, context);
+
     // Check for volume textures.
     if( shape == mi::mdl::IType_texture::TS_3D) {
         if (".vdb" == STRING::to_lower( HAL::Ospath::get_ext( file_path))) {
@@ -432,7 +438,7 @@ DB::Tag core_texture_to_tag(
     }
 
     mi::base::Handle<mi::mdl::IMDL_resource_set> resource_set( get_resource_set(
-        file_path, module_filename, module_name, /*log_messages*/ true, context));
+        file_path, module_filename, module_name, /*do_log_messages*/ true, context));
     mi::base::Handle<const mi::mdl::IMDL_resource_element> elem(
         resource_set ? resource_set->get_element( 0) : nullptr);
     if( !elem) {
@@ -517,6 +523,8 @@ DB::Tag core_volume_texture_to_tag(
     bool shared,
     Execution_context* context)
 {
+    ASSERT( M_SCENE, context);
+
     return {};
 }
 
@@ -528,6 +536,8 @@ DB::Tag core_light_profile_to_tag(
     bool errors_are_warnings,
     Execution_context* context)
 {
+    ASSERT( M_SCENE, context);
+
     mi::Uint32 tag_uint32 = value->get_tag_value();
 
     // Check whether the tag value is set before checking whether the string value is not set.
@@ -561,6 +571,8 @@ DB::Tag core_light_profile_to_tag(
     bool errors_are_warnings,
     Execution_context* context)
 {
+    ASSERT( M_SCENE, context);
+
     std::string extension = STRING::to_lower( HAL::Ospath::get_ext( file_path));
     if( extension != ".ies") {
         std::string decoded_mdl_module_name = get_module_name_for_error_msg( module_name);
@@ -576,7 +588,7 @@ DB::Tag core_light_profile_to_tag(
     }
 
     mi::base::Handle<mi::mdl::IMDL_resource_reader> reader(
-        get_reader( file_path, module_filename, module_name, /*log_messages*/ true, context));
+        get_reader( file_path, module_filename, module_name, /*do_log_messages*/ true, context));
     if( !reader) {
         std::string decoded_mdl_module_name = get_module_name_for_error_msg( module_name);
         std::string msg = std::string( "Failed to resolve \"") + file_path
@@ -648,6 +660,8 @@ DB::Tag core_bsdf_measurement_to_tag(
     bool errors_are_warnings,
     Execution_context* context)
 {
+    ASSERT( M_SCENE, context);
+
     mi::Uint32 tag_uint32 = value->get_tag_value();
 
     // Check whether the tag value is set before checking whether the string value is not set.
@@ -681,6 +695,8 @@ DB::Tag core_bsdf_measurement_to_tag(
     bool errors_are_warnings,
     Execution_context* context)
 {
+    ASSERT( M_SCENE, context);
+
     std::string extension = STRING::to_lower( HAL::Ospath::get_ext( file_path));
     if( extension != ".mbsdf") {
         std::string decoded_mdl_module_name = get_module_name_for_error_msg( module_name);
@@ -696,7 +712,7 @@ DB::Tag core_bsdf_measurement_to_tag(
     }
 
     mi::base::Handle<mi::mdl::IMDL_resource_reader> reader(
-        get_reader( file_path, module_filename, module_name, /*log_messages*/ true, context));
+        get_reader( file_path, module_filename, module_name, /*do_log_messages*/ true, context));
     if( !reader) {
         std::string decoded_mdl_module_name = get_module_name_for_error_msg( module_name);
         std::string msg = std::string( "Failed to resolve \"") + file_path
@@ -1286,7 +1302,7 @@ std::string lookup_thumbnail(
              vstr->get_value(),
              module_filename.c_str(),
              module_name.c_str(),
-             /*log_messages*/ true,
+             /*do_log_messages*/ true,
              &context);
          if( !file.empty())
              return file;
