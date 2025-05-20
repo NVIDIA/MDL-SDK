@@ -409,7 +409,7 @@ private:
 template <>
 struct Nodes_wrapper<4> {
 public:
-    explicit Nodes_wrapper<4>(
+    explicit Nodes_wrapper(
         mi::mdl::DAG_node const *arg0,
         mi::mdl::DAG_node const *arg1,
         mi::mdl::DAG_node const *arg2,

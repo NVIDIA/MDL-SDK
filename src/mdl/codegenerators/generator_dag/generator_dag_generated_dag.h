@@ -3267,8 +3267,6 @@ private:
     /// If true, an error was detected during construction.
     bool m_error_detected;
 
-    typedef vector<Resource_tag_tuple>::Type Resource_tag_map;
-
     /// The resource tag map, mapping accessible resources to tags.
     Resource_tag_map m_resource_tag_map;
 

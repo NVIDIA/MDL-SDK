@@ -34,7 +34,7 @@ namespace mdl {
 <div align="right">
     [\link mi_mdl_core_example_calls Previous\endlink]
     [\link mi_mdl_core_examples Up\endlink]
-    [\link mi_mdl_core_example_df_native Next\endlink]
+    [\link mi_mdl_core_example_dependency_inspector Next\endlink]
 </div>
 
 This example illustrates the necessary steps from loading an MDL module and processing a material
@@ -123,7 +123,7 @@ For a detailed explanation about the previous helper classes, please refer to
 <div align="right">
     [\link mi_mdl_core_example_calls Previous\endlink]
     [\link mi_mdl_core_examples Up\endlink]
-    [\link mi_mdl_core_example_df_native Next\endlink]
+    [\link mi_mdl_core_example_dependency_inspector Next\endlink]
 </div>
 
 */

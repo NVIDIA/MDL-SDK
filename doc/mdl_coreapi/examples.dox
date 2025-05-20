@@ -59,6 +59,9 @@ A helper class for distilling MDL materials.
 - \subpage mi_mdl_core_example_code_gen <br>
   Loads a MDL material and processes it up to code generation and beyond.
 
+- \subpage mi_mdl_core_example_dependency_inspector <br>
+  Example for listing all file dependencies of an MDL Module.
+
 - \subpage mi_mdl_core_example_df_native <br>
   Example for integrating MDL into a renderer by using the Native backend (CPU).
 

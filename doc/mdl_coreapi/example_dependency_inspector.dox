@@ -1,0 +1,104 @@
+/******************************************************************************
+ * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+namespace mi {
+namespace mdl {
+
+/*! \page mi_mdl_core_example_dependency_inspector Inspecting all dependencies of an MDL module.
+
+<div align="right">
+    [\link mi_mdl_core_example_code_gen Previous\endlink]
+    [\link mi_mdl_core_examples Up\endlink]
+    [\link mi_mdl_core_example_df_native Next\endlink]
+</div>
+
+This example is particularly useful when you need to copy, export, or embed materials along with
+a scene. It provides a clear overview of all file dependencies for a given MDL module, including
+imported MDL modules and associated resources.
+
+\section example_dependency_inspector_new New Topics
+
+  - Type of dependencies of an MDL module
+  
+\section example_dependency_inspector_descr Detailed Description
+
+<dl>
+    <dt><b>
+        Type of dependencies of an MDL module
+    </b></dt>
+    <dd><br>
+        An MDL module can have three main types of file dependencies: imports, resources and thumbnails.
+        
+        Imports refer to other MDL modules that are included using the \c 'import' directive.
+        However, in this example, we focus specifically on imports that resolve to physical files,
+        which can be retrieved with the function #mi::mdl::IModule::get_filename(). It is
+        important to distinguish these from built-in modules, such as those from the standard library
+        or \c \::base, which do not have an associated filename. These built-in modules are excluded from
+        this example.
+		
+        Resources are another type of file dependencies, such as texture images, light profiles,
+        and BSDF measurements. To retrieve the files associated with these resources, we can call
+		#mi::mdl::IModule::get_referenced_resources_count() to obtain the number of references resources
+		by this module, and then for each, obtain the resolved resource set by using the entity resolver to
+		call #mi::mdl::IEntity_resolver::resolve_resource_file_name(). We need to use this function instead of
+		#mi::mdl::IModule::get_referenced_resource_url(), since some resources could be tiled in multiples
+		files. Then, we iterate over each resource element to obtain their filenames through
+		#mi::mdl::IMDL_resource_element::get_filename().		
+		
+		MDL modules may include optional thumbnail images to visually represent material and function definitions.
+		When available, their filenames are stored in the annotation block of function/material declarations as 
+		\c anno::thumbnail(). To obtain that, we first need to find all module function and material declarations. We achieve
+		that by iterating over all module definitions #mi::mdl::IModule::get_exported_definition() and pick only those
+		of the kind #mi::mdl::IDefinition::DK_FUNCTION. With the function declaration we can retrieve the annotation block
+		#mi::mdl::IDeclaration_function::get_annotations() where we search for annotations that have a semantic
+		of type #mi::mdl::IDefinition::DS_THUMBNAIL_ANNOTATION. For thumbnail annotations the argument
+		#mi::mdl::IAnnotation::get_argument() is a literal string which contains the filename of the
+		thumbnail relative to the module. Finally, the entity resolver can be used to obtain the absolute path 
+		of the thumbnail.
+		                        
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+</dl>
+
+\section example_dependency_inspector Example Source
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_core/dependency_inspector/example_dependency_inspector.cpp</tt>
+
+\include dependency_inspector/example_dependency_inspector.cpp
+
+<div align="right">
+    [\link mi_mdl_core_example_calls Previous\endlink]
+    [\link mi_mdl_core_examples Up\endlink]
+    [\link mi_mdl_core_example_df_native Next\endlink]
+</div>
+
+*/
+
+}
+}

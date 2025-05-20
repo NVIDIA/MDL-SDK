@@ -41,7 +41,7 @@ set(LINKER_NO_AS_NEEDED     "$<$<CXX_COMPILER_ID:GNU>:-Wl,--no-as-needed>")
 #   target_build_setup(TARGET <NAME>)
 #
 function(TARGET_BUILD_SETUP)
-    set(options DYNAMIC_MSVC_RUNTIME STATIC_MSVC_RUNTIME WINDOWS_UNICODE)
+    set(options DYNAMIC_GCC_RUNTIME DYNAMIC_MSVC_RUNTIME STATIC_MSVC_RUNTIME WINDOWS_UNICODE)
     set(oneValueArgs TARGET)
     set(multiValueArgs)
     cmake_parse_arguments(TARGET_BUILD_SETUP "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
@@ -173,11 +173,17 @@ function(TARGET_BUILD_SETUP)
                 "$<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-enum-enum-conversion>"
             )
 
-        target_link_libraries(${TARGET_BUILD_SETUP_TARGET}
-            PRIVATE
-                "-static-libstdc++"
-                "-static-libgcc"
-            )
+        # Do not add flags for static libraries since they are propagated to reverse dependencies
+        # (despite the PRIVATE flag).
+        if(NOT (_TARGET_TYPE STREQUAL "STATIC_LIBRARY"))
+            if(NOT TARGET_BUILD_SETUP_DYNAMIC_GCC_RUNTIME)
+                target_link_libraries(${TARGET_BUILD_SETUP_TARGET}
+                    PRIVATE
+                        "-static-libstdc++"
+                        "-static-libgcc"
+                    )
+            endif()
+        endif()
 
         set_target_properties(${TARGET_BUILD_SETUP_TARGET} PROPERTIES
             LINK_FLAGS_RELEASE "-Wl,--strip-all")
@@ -688,7 +694,7 @@ endfunction()
 # the reduce the redundant code in the base library projects, we can bundle several repeated tasks
 #
 function(CREATE_FROM_BASE_PRESET)
-    set(options WIN32 WINDOWS_UNICODE EXAMPLE DYNAMIC_MSVC_RUNTIME STATIC_MSVC_RUNTIME SKIP_UNDEFINED_SYMBOL_CHECK)
+    set(options WIN32 WINDOWS_UNICODE EXAMPLE DYNAMIC_GCC_RUNTIME DYNAMIC_MSVC_RUNTIME STATIC_MSVC_RUNTIME SKIP_UNDEFINED_SYMBOL_CHECK)
     set(oneValueArgs TARGET VERSION TYPE NAMESPACE EXPORT_NAME OUTPUT_NAME VS_PROJECT_NAME EMBED_RC)
     set(multiValueArgs SOURCES ADDITIONAL_INCLUDE_DIRS EXPORTED_SYMBOLS)
     cmake_parse_arguments(CREATE_FROM_BASE_PRESET "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
@@ -700,6 +706,10 @@ function(CREATE_FROM_BASE_PRESET)
 
     if(CREATE_FROM_BASE_PRESET_WINDOWS_UNICODE OR CREATE_FROM_BASE_PRESET_EXAMPLE)
         list(APPEND BUILD_SETUP_OPTIONS WINDOWS_UNICODE) # enable unicode
+    endif()
+
+    if(CREATE_FROM_BASE_PRESET_DYNAMIC_GCC_RUNTIME)
+        list(APPEND BUILD_SETUP_OPTIONS DYNAMIC_GCC_RUNTIME) # runtime linking
     endif()
 
     if(CREATE_FROM_BASE_PRESET_DYNAMIC_MSVC_RUNTIME)
@@ -811,7 +821,9 @@ function(CREATE_FROM_BASE_PRESET)
 
     # embed .rc files
     if(CREATE_FROM_BASE_PRESET_EMBED_RC AND WINDOWS AND (   CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED"
-                                                         OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "MODULE"))
+                                                         OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "MODULE"
+                                                         OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "EXECUTABLE"
+                                                         OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "WIN_EXECUTABLE"))
         if(MDL_LOG_FILE_DEPENDENCIES)
             message(STATUS "- embedding:      ${CREATE_FROM_BASE_PRESET_EMBED_RC}")
         endif()
@@ -826,7 +838,7 @@ function(CREATE_FROM_BASE_PRESET)
         # TODO: _NAME => short name?
         set_source_files_properties(${CREATE_FROM_BASE_PRESET_EMBED_RC}
             PROPERTIES COMPILE_DEFINITIONS
-                "MI_ARCH_LITTLE_ENDIAN;TARGET_FILENAME=\"$<TARGET_FILE_NAME:${CREATE_FROM_BASE_PRESET_TARGET}>\""
+                "MI_ARCH_LITTLE_ENDIAN;TARGET_FILENAME=\"$<TARGET_FILE_NAME:${CREATE_FROM_BASE_PRESET_TARGET}>\";TARGET_DESC=\"$<TARGET_FILE_NAME:${CREATE_FROM_BASE_PRESET_TARGET}>\""
             )
     endif()
 
@@ -1337,12 +1349,14 @@ endfunction()
 
 function(ADD_TARGET_INSTALL)
     set(options)
-    set(oneValueArgs TARGET DESTINATION)
+    set(oneValueArgs TARGET DESTINATION EXCLUDE)
     set(multiValueArgs)
     cmake_parse_arguments(ADD_TARGET_INSTALL "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
-    # provides the following variables:
-    # - ADD_TARGET_INSTALL_TARGET
-    # - ADD_TARGET_INSTALL_DESTINATION
+
+    # The EXCLUDE argument specifies a pattern that is excluded from the first install() target
+    # with the wildcard. It is meant for cases where multiple targets in one directory are
+    # installed, and the wildcard for the second target would otherwise overwrite the RPATH change
+    # for the first target.
 
     # The if-case is meant for examples, which are not added to the list of exported targets. The
     # else-case if meant for libraries and tools, which are added to the list of exported targets.
@@ -1356,6 +1370,7 @@ function(ADD_TARGET_INSTALL)
             PATTERN "*"
             PATTERN "*.d" EXCLUDE
             PATTERN "linkerscript.txt" EXCLUDE
+            PATTERN "${ADD_TARGET_INSTALL_EXCLUDE}" EXCLUDE
         )
         # Install the target file itself (again) via a separate call using TARGETS in order to
         # support RPATH changes. Excluding it above would be cleaner, but the patterns do not

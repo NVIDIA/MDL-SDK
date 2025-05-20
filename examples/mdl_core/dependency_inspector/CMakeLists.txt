@@ -1,5 +1,5 @@
 #*****************************************************************************
-# Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -26,59 +26,37 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #*****************************************************************************
 
-# name of the target and the resulting library
-set(PROJECT_NAME prod-bin-i18n)
+# name of the target and the resulting example
+set(PROJECT_NAME examples-mdl_core-dependency_inspector)
 
 # collect sources
-set(PROJECT_HEADERS
-    "application.h"
-    "command.h"
-    "errors.h"
-    "logger.h"
-    "options.h"
-    "neuray_factory.h"
-    "search_path.h"
-    "traversal.h"
-    "util.h"
-    "version_helper.h"
-    "xliff.h"
-    )
-
 set(PROJECT_SOURCES
-    "main.cpp"
-    "application.cpp"
-    "command.cpp"
-    "errors.cpp"
-    "logger.cpp"
-    "options.cpp"
-    "search_path.cpp"
-    "traversal.cpp"
-    "util.cpp"
-    "version_helper.cpp"
-    "xliff.cpp"
-    ${PROJECT_HEADERS}
+    "example_dependency_inspector.cpp"
     )
 
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
     TYPE EXECUTABLE
-    OUTPUT_NAME "i18n"
-    EMBED_RC "../../../base/system/main/mdl_core_sdk.rc"
+    NAMESPACE mdl_core
+    OUTPUT_NAME "dependency_inspector"
     SOURCES ${PROJECT_SOURCES}
+    EXAMPLE
+    STATIC_MSVC_RUNTIME
 )
 
-# add mdl and other dependencies
+# add dependencies
 target_add_dependencies(TARGET ${PROJECT_NAME}
     DEPENDS
-        ${LINKER_START_GROUP}
-        ${LINKER_DEPENDENCIES_BASE_WITHOUT_BASE_DATA}
-        ${LINKER_END_GROUP}
-        mdl::mdl_sdk
-        boost
-    )
+        mdl::mdl_core
+        mdl_core::shared
+        )
+
+# creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)
+target_create_vs_user_settings(TARGET ${PROJECT_NAME})
 
 # create installation rules
 add_target_install(
     TARGET ${PROJECT_NAME}
+    DESTINATION "examples/mdl_core/dependency_inspector"
     )

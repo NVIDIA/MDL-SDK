@@ -29,6 +29,7 @@
 #ifndef MDL_COMPILER_HLSL_VALUES_H
 #define MDL_COMPILER_HLSL_VALUES_H 1
 
+#include <cstdint>
 #include <cstddef>
 
 #include <mi/mdl/mdl_iowned.h>

@@ -774,7 +774,7 @@ export user_roughness_info transform_inverse_aniso_semantics(float roughness_u, 
         rotation_offset = .25;
         roughness = roughness_v;
     }
-    float rotation = rotation_offset - math::atan2(math::length(math::cross(tangent, state::texture_tangent_u(0))),math::dot(tangent, state::texture_tangent_u(0)))/(2.0*math::PI);
+    float rotation = rotation_offset - math::atan2(math::dot(math::cross(tangent, state::texture_tangent_u(0)), state::normal()), math::dot(tangent, state::texture_tangent_u(0)))/(2.0*math::PI);
     if(rotation < 0) rotation +=1.0;
     if(rotation >1.0) rotation -=1.0;
     return user_roughness_info(roughness,math::saturate(anisotropy),rotation);

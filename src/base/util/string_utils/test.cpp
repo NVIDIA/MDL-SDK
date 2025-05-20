@@ -30,6 +30,8 @@
 
 #define MI_TEST_AUTO_SUITE_NAME "Regression Test Suite for base/util/string_utils"
 
+#include <cstdint>
+
 #include <base/system/test/i_test_auto_driver.h>
 #include <base/system/test/i_test_auto_case.h>
 

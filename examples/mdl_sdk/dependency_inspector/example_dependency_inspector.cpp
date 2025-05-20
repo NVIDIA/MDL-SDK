@@ -326,7 +326,7 @@ bool Dependency_inspector::was_listed(const std::string& filename)
 void Options::print_usage(std::ostream& s)
 {
     s << R"(
-code_gen [options] <qualified_module_name>
+dependency_inspector [options] <qualified_module_name>
 
 options:
 

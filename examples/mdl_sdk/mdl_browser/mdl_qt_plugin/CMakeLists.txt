@@ -171,6 +171,8 @@ create_from_base_preset(
     TYPE MODULE
     NAMESPACE mdl_sdk
     OUTPUT_NAME "mdl_qt_plugin"
+    DYNAMIC_GCC_RUNTIME
+    SKIP_UNDEFINED_SYMBOL_CHECK
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
     )

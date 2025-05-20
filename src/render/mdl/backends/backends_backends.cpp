@@ -3653,7 +3653,6 @@ mi::Sint32 Mdl_llvm_backend::set_option(
             jit_options.set_option(MDL_JIT_OPTION_GLSL_UNIFORM_SSBO_SET, value);
             return 0;
         }
-
         if (strcmp(name, "glsl_use_resource_data") == 0) {
             if (strcmp(value, "on") == 0) {
                 value = "true";
@@ -3663,6 +3662,14 @@ mi::Sint32 Mdl_llvm_backend::set_option(
                 return -2;
             }
             jit_options.set_option(MDL_JIT_OPTION_SL_USE_RESOURCE_DATA, value);
+            return 0;
+        }
+        if (strcmp(name, "material_state_struct_name") == 0) {
+            jit_options.set_option(MDL_JIT_OPTION_SL_CORE_STATE_API_NAME, value);
+            return 0;
+        }
+        if (strcmp(name, "environment_state_struct_name") == 0) {
+            jit_options.set_option(MDL_JIT_OPTION_SL_ENV_STATE_API_NAME, value);
             return 0;
         }
         break;
@@ -3699,6 +3706,14 @@ mi::Sint32 Mdl_llvm_backend::set_option(
         }
         if (strcmp(name, "hlsl_remap_functions") == 0) {
             jit_options.set_option(MDL_JIT_OPTION_REMAP_FUNCTIONS, value);
+            return 0;
+        }
+        if (strcmp(name, "material_state_struct_name") == 0) {
+            jit_options.set_option(MDL_JIT_OPTION_SL_CORE_STATE_API_NAME, value);
+            return 0;
+        }
+        if (strcmp(name, "environment_state_struct_name") == 0) {
+            jit_options.set_option(MDL_JIT_OPTION_SL_ENV_STATE_API_NAME, value);
             return 0;
         }
         break;

@@ -314,7 +314,7 @@ public:
 
     /// Extracts the interface and releases the handle. Returns 0 for an invalid interface.
     ///
-    /// Note that the owner takes responsible for managing the lifetime of the interface.
+    /// Note that the caller takes responsibility for managing the lifetime of the interface.
     Interface* extract()
     {
         Interface* ptr = m_iptr;

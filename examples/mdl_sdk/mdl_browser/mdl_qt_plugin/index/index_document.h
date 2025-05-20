@@ -33,6 +33,7 @@
 #ifndef MDL_SDK_EXAMPLES_MDL_BROWSER_DOCUMENT_BASE_H
 #define MDL_SDK_EXAMPLES_MDL_BROWSER_DOCUMENT_BASE_H
 
+#include <cstdint>
 #include <vector>
 #include <string>
 

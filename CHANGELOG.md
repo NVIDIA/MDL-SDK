@@ -1,5 +1,53 @@
 Change Log
 ==========
+MDL SDK 2024.1.3 (381500.5658): 15 May 2025
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2024.1.3 (381500.5658) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+	- Added GLSL/HLSL backend options "`material_state_struct_name`" and
+	  "`environment_state_struct_name`".
+
+- MDL Core examples
+    - Added new dependency_inspector example:
+        - It lists all file dependencies of an MDL module for direct and (optionally) indirect
+          imports and resources.
+		  
+**Fixed Bugs**
+		  
+- General
+	- Fixed warnings/errors with newer compilers (GCC 15 beta).
+	- Fixed embedded RC files on Windows.
+
+- MDL Compiler and Backends
+	- Fixed code generation for switch statements that could result in compilation
+	  failure in rare cases.
+	- Fixed generation of array compound assignments outside of declarations for HLSL.
+	
+- MDL Distiller and Baker
+	- Fixed distilling bug in the anisotropy rotation remapping causing anisotropy angles
+	  to be flipped.
+	
+- MDL Core examples
+	- Example codegen:
+		- Fixed example on Windows such that after installation it loads the distiller plugin
+		  without depending on PATH.
+		  
+- MDL SDK examples
+	- Example modules:
+		- Fixed wrong executable name in command line help description.
+	- Example dependency_inspector:
+		- Fixed wrong executable name in command line help description.
+	- Example mdl_browser:
+		- Fixed crash on Linux.
+	- Example distilling_target:
+		- Fixed example on MacOS X such that after installation it starts without depending
+		  on DYLD_LIBRARY_PATH.
+
 MDL SDK 2024.1.1 (381500.4681): 31 Mar 2025
 -----------------------------------------------
 

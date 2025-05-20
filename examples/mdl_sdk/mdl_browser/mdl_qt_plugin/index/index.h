@@ -35,13 +35,15 @@
 #ifndef MDL_SDK_EXAMPLES_MDL_BROWSER_INDEX_H
 #define MDL_SDK_EXAMPLES_MDL_BROWSER_INDEX_H
 
+#include <cstdint>
+#include <cstdlib>
 #include <map>
-#include <vector>
 #include <regex>
 #include <set>
+#include <vector>
+
 #include "tokenizer.h"
 #include "index_document.h"
-#include <cstdlib>
 
 // list element stored for each document that contains the current word 
 template<class T_document>

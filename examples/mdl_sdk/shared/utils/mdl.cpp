@@ -67,14 +67,16 @@ std::string get_examples_root()
     return ".";
 }
 
-// Indicates whether that directory contains nvidia/core_definitions.mdl and nvidia/axf_to_mdl.mdl.
+// Indicates whether that directory contains nvidia/core_definitions.mdl and
+// nvidia/axf_importer/axf_importer.mdl.
 bool is_src_shaders_mdl(const std::string& path)
 {
-    std::string file1 = path + io::sep() + "nvidia" + io::sep() + "core_definitions.mdl";
+    std::string nvidia_dir = path + io::sep() + "nvidia" + io::sep();
+    std::string file1 = nvidia_dir + "core_definitions.mdl";
     if (!io::file_exists(file1))
         return false;
 
-    std::string file2 = path + io::sep() + "nvidia" + io::sep() + "axf_to_mdl.mdl";
+    std::string file2 = nvidia_dir + "axf_importer" + io::sep() + "axf_importer.mdl";
     if (!io::file_exists(file2))
         return false;
 

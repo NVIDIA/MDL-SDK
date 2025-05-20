@@ -1836,6 +1836,23 @@ void check_array_constructor(
         transaction, dmn->get_load_module_argument(), context.get());
     MI_CHECK_CTX( context);
     MI_CHECK_EQUAL( result, 1);
+
+    // check that an empty argument list does not succeed
+    arguments = ef->create_expression_list();
+    fc = fd->create_function_call( arguments.get(), &result);
+    MI_CHECK_EQUAL( result, -3);
+
+    // but an empty array can be created directly without using the array constructor
+    mi::base::Handle<const mi::neuraylib::IType> element_type( tf->create_float());
+    mi::base::Handle<const mi::neuraylib::IType> array_type(
+        tf->create_immediate_sized_array( element_type.get(), 0));
+    MI_CHECK( tf);
+    mi::base::Handle<const mi::neuraylib::IValue> array_value(
+        vf->create( array_type.get()));
+    MI_CHECK( vf);
+    mi::base::Handle<const mi::neuraylib::IExpression> array_expr(
+        ef->create_constant( array_value.get()));
+    MI_CHECK( ef);
 }
 
 void check_array_length_operator(

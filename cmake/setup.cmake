@@ -44,15 +44,14 @@ endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
+#  Enable compilation database
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # IDE Setup
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)  # Generate folders for IDE targets
 set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "_cmake")
 # Find includes in corresponding build directories
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
-
-# Instruct CMake to run not moc automatically (Qt)
-# We select the files manually and add the generated files to the project and the IDEs.
-# set(CMAKE_AUTOMOC ON)
 
 # custom properties
 define_property(TARGET PROPERTY VS_DEBUGGER_PATHS

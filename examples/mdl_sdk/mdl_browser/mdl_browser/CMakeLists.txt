@@ -51,6 +51,8 @@ create_from_base_preset(
     TYPE EXECUTABLE
     NAMESPACE mdl_sdk
     OUTPUT_NAME "mdl_browser"
+    DYNAMIC_GCC_RUNTIME
+    SKIP_UNDEFINED_SYMBOL_CHECK
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
 )

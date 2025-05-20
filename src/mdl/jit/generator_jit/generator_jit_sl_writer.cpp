@@ -1276,6 +1276,34 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
 
                     // insert variable declaration here
                     stmts.push_back(Base::m_stmt_factory.create_declaration(decl_var));
+                } else if (is<Expr_compound>(res) && !Base::compound_allowed(false)) {
+                    // assign array element-wise to the variable
+                    if (Type_array *array_type = as<Type_array>(res->get_type())) {
+                        Expr_compound *expr_comp = as<Expr_compound>(res);
+                        if (array_type->get_size() != expr_comp->get_element_count()) {
+                            MDL_ASSERT(!"Array type size does not fit to expression compound size");
+                            Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
+                            stmts.push_back(create_assign_stmt(
+                                var_def, Base::m_expr_factory.create_invalid(Base::zero_loc)));
+                        } else {
+                            for (int i = 0, n = int(array_type->get_size()); i < n; ++i) {
+                                Expr *index_expr = Base::m_expr_factory.create_literal(
+                                    Base::zero_loc,
+                                    Base::m_value_factory.get_int32(i));
+                                Expr *elem_access = Base::create_binary(
+                                    Expr_binary::OK_ARRAY_SUBSCRIPT,
+                                    Base::create_reference(var_def),
+                                    index_expr);
+                                stmts.push_back(create_assign_stmt(
+                                    elem_access, expr_comp->get_element(i)));
+                            }
+                        }
+                    } else {
+                        MDL_ASSERT(!"Unexpected compound expression");
+                        Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
+                        stmts.push_back(create_assign_stmt(
+                            var_def, Base::m_expr_factory.create_invalid(Base::zero_loc)));
+                    }
                 } else {
                     stmts.push_back(create_assign_stmt(var_def, res));
                 }

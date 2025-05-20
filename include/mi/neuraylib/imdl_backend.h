@@ -182,6 +182,14 @@ public:
     ///   * \c "direct_call": generate direct function calls
     ///   * \c "optix_cp": generate calls through OptiX bindless callable programs
     ///
+    /// The following options are supported by the HLSL and GLSL backends only:
+    ///  - \c "material_state_struct_name": Specifies the name of struct type representing the
+    ///    shading state for materials. Default: \c "Shading_state_material" for HLSL and
+    ///    \c "State" for GLSL.
+    ///  - \c "environment_state_struct_name": Specifies the name of struct type representing the
+    ///    shading state for environments. Default: \c "Shading_state_environment" for HLSL and
+    ///    \c "State_env" for GLSL.
+    ///
     /// The following options are supported by the HLSL backend only:
     /// - \c "hlsl_use_resource_data": If enabled, an extra user defined resource data struct is
     ///   passed to all resource callbacks. This option is currently not supported.

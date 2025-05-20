@@ -484,7 +484,7 @@ void MDL_module_scanner::dump_module(
 void Options::print_usage(std::ostream& s)
 {
     s << R"(
-code_gen [options] <qualified_module_name>
+modules [options] <qualified_module_name>
 
 options:
 

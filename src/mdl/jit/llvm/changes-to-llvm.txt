@@ -52,3 +52,5 @@ Changes:
    machine instructions which is not supported
  - disable InstCombiner optimizations producing new SRem instructions to avoid undefined behaviour for GLSL
    in InstCombinerImpl::visitMul() and InstCombinerImpl::visitAdd()
+ - include <cstdint> in include/llvm/Support/Signals.h and lib/Target/X86/MCTargetDesc/X86MCTargetDesc.h
+ - remove extra template qualifier on ~ChangeReporter in lib/Passes/StandardInstrumentations.cpp

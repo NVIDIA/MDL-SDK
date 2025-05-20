@@ -546,6 +546,11 @@ The following requirements apply when creating function calls of the array const
 The suffix for the serialized name has two arguments, the type name of the element type, and the
 size of the array.
 
+Note that the array constructor can \em not be used with an empty argument list. Empty arrays can
+be created directly as values of the corresponding type (and constant expressions of such values),
+without requiring the use of the array constructor.
+
+
 \subsection mi_neuray_mdl_array_length_operator Array length operator
 
 Semantic: #mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_ARRAY_LENGTH \n

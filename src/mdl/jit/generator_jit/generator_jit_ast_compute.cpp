@@ -2305,9 +2305,11 @@ void UnswitchPass::fixPhis(
 {
     for (PHINode &phi : bb->phis()) {
         int idx = phi.getBasicBlockIndex(old_pred);
-        while (idx != -1) {
+        if (idx != -1) {
+            // Change the first PHI incoming block from old_pred to new_pred,
+            // other (possible) entries will be adjusted when further switch cases are
+            // processed.
             phi.setIncomingBlock(unsigned(idx), new_pred);
-            idx = phi.getBasicBlockIndex(old_pred);
         }
     }
 }

@@ -43,6 +43,7 @@
 
 #include <mdl/codegenerators/generator_code/generator_code.h>
 
+#include <cstdint>
 #include <cstring>
 
 #include "generator_dag_generated_dag.h"

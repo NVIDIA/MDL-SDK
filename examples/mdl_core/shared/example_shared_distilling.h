@@ -259,6 +259,11 @@ mi::base::Plugin_factory* Distiller_helper::load_distiller_plugin(const char* fi
 
 #ifdef MI_PLATFORM_WINDOWS
     void* handle = LoadLibraryA((LPSTR)filename);
+    if (!handle) {
+        // fall back to libraries in a relative bin folder, relevant for install targets
+        std::string fallback = std::string("../../../bin/") + filename;
+        handle = LoadLibraryA(fallback.c_str());
+    }
     if (!handle)
     {
         LPTSTR buffer = 0;

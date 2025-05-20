@@ -97,7 +97,7 @@
 #endif // MI_NEURAYLIB_VERSION_QUALIFIER_EMPTY
 
 /// \NeurayProductName product version number in a string representation, such as \c "2.0".
-#define MI_NEURAYLIB_PRODUCT_VERSION_STRING  "2024.1.1"
+#define MI_NEURAYLIB_PRODUCT_VERSION_STRING  "2024.1.3"
 
 /// Type of plugins for the \NeurayApiName.
 /// \see #mi::base::Plugin::get_type().
