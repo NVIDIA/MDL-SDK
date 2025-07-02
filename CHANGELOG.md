@@ -1,5 +1,21 @@
 Change Log
 ==========
+MDL SDK 2024.1.4 (381500.6583): 01 Jul 2025
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2024.1.4 (381500.6583) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+  - The recommended vcpkg version has been updated to git ID ef7dbf94. This update
+    includes Boost 1.88.0, OpenImageIO 3.0.1.0, Vulkan SDK 1.4.304.1, and various
+    security fixes in their dependencies.
+
+- MDL SDK examples:
+  - AXF to MDL: Updated recommended AxF SDK version to 1.9.1.
+
 MDL SDK 2024.1.3 (381500.5658): 15 May 2025
 -----------------------------------------------
 

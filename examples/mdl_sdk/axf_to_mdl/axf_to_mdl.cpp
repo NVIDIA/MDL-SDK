@@ -28,7 +28,7 @@
 
 // examples/mdl_sdk/axf_to_mdl/axf_to_mdl.cpp
 //
-// Converts a X-Rite AxF(Appearance Exchange Format) physical material representration to
+// Converts a X-Rite AxF(Appearance Exchange Format) physical material representation to
 // MDL format.
 
 #include <iostream>

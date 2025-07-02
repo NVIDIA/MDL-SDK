@@ -2061,10 +2061,10 @@ bool Axf_reader::access_mdl_material_definitions(
             impexp_state);
         return false;
     }
-    if (major < 1 || (major == 1 && minor < 9) || (major == 1 && minor == 9 && patch < 0)) {
+    if (major < 1 || (major == 1 && minor < 9) || (major == 1 && minor == 9 && patch < 1)) {
         ostringstream str;
         str << "Insufficient version (" << major << '.' << minor << '.' << patch << ") of "
-            "nvidia::axf_importer::axf_importer, required version is (1.9.0)";
+            "nvidia::axf_importer::axf_importer, required version is (1.9.1)";
         Axf_importer::report_message(
             6031, mi::base::MESSAGE_SEVERITY_ERROR,
             str.str(), impexp_state);

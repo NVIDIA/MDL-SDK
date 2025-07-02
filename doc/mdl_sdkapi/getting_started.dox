@@ -79,7 +79,7 @@ The build with the following x64-platform-compiler combinations has been
 successfully tested:
 
 -   **Windows 10:**            Microsoft Visual Studio 2022 (msvc v143)
--   **CentOS 7, Debian 12**:   GCC 12 (on x86-64 or aarch64)
+-   **CentOS 7, Debian 12:**   GCC 12 (on x86-64 or aarch64)
 -   **Mac OS X 12.6:**         Xcode 14.2 (Apple Clang 14.0.0, on x86-64 or aarch64)
 
 The versions listed with the following dependencies have been
@@ -90,7 +90,7 @@ The following third-party dependencies are used by several and/or major
 examples. Installation is strongly recommended unless the corresponding group
 of examples is of no interest to you.
 
--   <a name="vcpkg">**vcpkg**</a> (git commit ID 821100d96)
+-   <a name="vcpkg">**vcpkg**</a> *(git commit ID ef7dbf9)*
     [Vcpkg](https://vcpkg.io/en/getting-started.html) is the recommended way to
     install other dependencies like GLEW and GLFW. The
     vcpkg version mentioned above corresponds to the versions mentioned for
@@ -105,7 +105,7 @@ of examples is of no interest to you.
 
 -   **DirectX Raytracing support** (Windows only) \n
     Building the DXR example requires Windows 10 version 1909 and the
-    corresponding SDK 10.0.18362.0. Additionally the optional *Graphic Tools*
+    corresponding SDK 10.0.22621.0. Additionally the optional *Graphic Tools*
     feature has to be installed.
 
 -   **DirectX Shader Compiler support** (July 2022) (Windows only) \n
@@ -114,22 +114,22 @@ of examples is of no interest to you.
     Download and extract the pre-compiled x64 binaries from
     [github](https://github.com/microsoft/DirectXShaderCompiler/releases).
 
--   **GLEW** (2.2.0) \n
+-   **GLEW** *(2.2.0)* \n
     This dependency is required for all OpenGL-based examples. \n
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
     package *glew*.
 
--   **GLFW** (3.4) \n
+-   **GLFW** *(3.4)* \n
     This dependency is required for all OpenGL- and Vulkan-based examples. \n
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
     package *glfw3*.
 
--   **NVIDIA CUDA Toolkit** (12.x) \n
+-   **NVIDIA CUDA Toolkit** *(12.x)* \n
     This dependency is required for all CUDA-based examples. \n
     Please follow the instructions on the 
     [CUDA Developer Website](https://developer.nvidia.com/cuda-toolkit).
 
--   **Vulkan SDK** *(1.3.280.0)* \n
+-   **Vulkan SDK** *(1.4.304.0)* \n
     Building the Vulkan examples requires the Vulkan headers and validation layers,
     volk, and glslang. \n
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
@@ -140,7 +140,7 @@ examples, or add additional features to other examples. Installation can be
 safely skipped unless you are specifically interested in those examples or
 features.
 
--   **Clang** (12.0.1) \n
+-   **Clang** *(12.0.1)* \n
     This dependency is required to build the OptiX 7 example. \n
     Using version 12.0.1 is mandatory. \n
     Pre-compiled binaries can be found on
@@ -153,35 +153,35 @@ features.
     The pre-built packages do not contain libs for debug. If those are needed,
     a build from source is required.
 
--   **NVIDIA CUDA Toolkit** (8.0) \n
+-   **NVIDIA CUDA Toolkit** *(8.0)* \n
     This exact version is required by the OptiX 7 example to generate LLVM bitcode
     for the closest hit shader with Clang 12.0.1. \n
     The old version is available in the
     [CUDA Toolkit Archive](https://developer.nvidia.com/cuda-toolkit-archive).
 
--   **OptiX** (7.0.0 to 8.0.0) \n
+-   **OptiX** *(7.0.0 to 8.0.0)* \n
     This dependency is required to build the OptiX 7 example. \n
     Please follow the instructions on the [OptiX Website](https://developer.nvidia.com/designworks/optix/download).
 
--   **Python3** (3.8.0) \n
+-   **Python3** *(3.10.0)* \n
     This dependency is required to build the Python bindings examples. \n
     Linux: Install the *python* package. \n
-    Windows and Max OS X: Download and install Python 3.8 from
+    Windows and Max OS X: Download and install Python 3.10 from
     [python.org](https://www.python.org/downloads/).
 
--   **Python3 Development Package** (3.8.0) \n
+-   **Python3 Development Package** *(3.10.0)* \n
     This dependency is required to build the Python bindings. \n
     Linux: Install the *python-dev* package in addition to *python*. \n
-    Windows and Max OS X: Download and install Python 3.8 from
+    Windows and Max OS X: Download and install Python 3.10 from
     [python.org](https://www.python.org/downloads/).
 
--   **Qt** (5.10.1) \n
+-   **Qt** *(5.10.1)* \n
     This dependency is required for the MDL browser example, a Qt-based browser
     for MDL modules and materials. This browser is also accessible from the DXR
     example. \n
     Please follow the instructions on the [Qt Website](https://www.qt.io/).
 
--   **X-Rite AxF SDK** (1.9.0) \n
+-   **X-Rite AxF SDK** *(1.9.0)* \n
     This dependency is required to build the AxF-to-MDL example. \n
     Please send the "Request AxF SDK" document from the
     [X-Rite AxF Website](https://www.xrite.com/axf).
@@ -241,7 +241,7 @@ features.
         [MDL_MSVC_DYNAMIC_RUNTIME_DXR_EXAMPLE](#mdl-msvc-dynamic-dxr).
 
     -   **python_PATH** in Ungrouped Entries (only if not found in the PATH), \n
-        for example: *C:/projects/thirdparty/python_3_8_0/bin/python.exe*
+        for example: *C:/projects/thirdparty/python_3_10_0/bin/python.exe*
 
     -   **Qt5_DIR** in Ungrouped Entries (only if not installed using the installer) \n
         for example: *C:/Qt/5.10.1/msvc2017_64*
