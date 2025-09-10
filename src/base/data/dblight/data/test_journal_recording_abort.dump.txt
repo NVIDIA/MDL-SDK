@@ -43,6 +43,9 @@ Index 4: tag = 5, count = 1, pin count = 1, removed = 0
 Index 5: tag = 6, count = 1, pin count = 1, removed = 0
     Index 0: scope ID = 1, transaction ID = 0 (set), version = 5, pin count = 0, tag = 6, privacy level = 1, removal = 0, name = "foo6", references = { }
 
+Count of all infos: 6
+Count of infos by class IDs:
+     6 0x4d79656c "Myel"
 
 Count of all scopes: 2
 ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
@@ -59,4 +62,6 @@ ID 0: pin count = 1, state = ABORTED, next sequence number = 6, visibility ID = 
 
 Count of infos by distinct names: 0
 Count of infos by distinct tags: 0
+Count of all infos: 0
+Count of infos by class IDs:
 

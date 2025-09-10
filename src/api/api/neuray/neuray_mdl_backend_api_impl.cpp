@@ -78,8 +78,6 @@ mi::neuraylib::IMdl_backend* Mdl_backend_api_impl::get_backend(Mdl_backend_kind 
             code_cache.get(),
             /*string_ids=*/true);
     }
-    case MB_FORCE_32_BIT:
-        break;
     }
 
     return nullptr;

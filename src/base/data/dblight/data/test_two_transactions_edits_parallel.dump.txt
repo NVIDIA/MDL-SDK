@@ -15,4 +15,7 @@ Count of infos by distinct tags: 1
 Index 0: tag = 1, count = 1, pin count = 1, removed = 0
     Index 0: scope ID = 0, transaction ID = 2 (cleared), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
 
+Count of all infos: 1
+Count of infos by class IDs:
+     1 0x4d79656c "Myel"
 

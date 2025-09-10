@@ -32,11 +32,15 @@
 #include <base/data/db/i_db_database.h>
 
 #include <atomic>
+#include <condition_variable>
+#include <list>
 #include <map>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
+#include <mi/base/condition.h>
 #include <mi/base/handle.h>
 
 #include "dblight_util.h"
@@ -53,6 +57,35 @@ class Scope_impl;
 class Scope_manager;
 class Transaction_manager;
 
+/// A request for a DB lock.
+///
+/// Used if a different thread attempts to acquire a lock already held by another thread.
+class Db_lock_request
+{
+public:
+    /// Constructor.
+    Db_lock_request( const std::thread::id& id) : m_thread_id( id) { }
+
+    std::thread::id m_thread_id;       ///< Thread requesting the lock.
+    mi::base::Condition m_condition;   ///< Condition variable that the requesting thread blocks on.
+};
+
+/// A DB lock.
+///
+/// See #Database_impl::lock(), #Database_impl::unlock(), and #Database_impl::check_locked().
+class Db_lock
+{
+public:
+    /// Constructor.
+    ///
+    /// A newly acquired lock is locked once, and by the calling thread.
+    Db_lock() : m_counter( 1), m_thread_id( std::this_thread::get_id()) { }
+
+    mi::Uint32 m_counter;                    ///< Number of recursive locks.
+    std::thread::id m_thread_id;             ///< Locking thread.
+    std::list<Db_lock_request*> m_requests;  ///< Outstanding lock requests.
+};
+
 /// The database class manages the whole database.
 ///
 /// Limits:
@@ -63,8 +96,6 @@ class Transaction_manager;
 ///   transactions ago will become invisible due to ordering problems.
 /// - Versions within a transaction: at most 2^32 versions. If exceeded, wraps around and mixes up
 ///   the ordering.
-///
-/// "NI" means DBLIGHT does not implement/support that method of the interface.
 class Database_impl : public DB::Database
 {
 public:
@@ -96,9 +127,11 @@ public:
 
     void garbage_collection( int priority) override;
 
-    /*NI*/ void lock( mi::Uint32 lock_id) override;
-    /*NI*/ bool unlock( mi::Uint32 lock_id) override;
-    /*NI*/ void check_is_locked( mi::Uint32 lock_id) override;
+    /// Note that the flexibility of lock IDs comes with a non-negligible overhead compared to
+    /// a global mutex, in particular in case of lock contention.
+    void lock( mi::Uint32 lock_id) override;
+    bool unlock( mi::Uint32 lock_id) override;
+    void check_is_locked( mi::Uint32 lock_id) override;
 
     /// Note that the configured limits are simply ignored.
     mi::Sint32 set_memory_limits( size_t low_water, size_t high_water) override;
@@ -117,10 +150,7 @@ public:
     void register_scope_listener( DB::IScope_listener* listener) override;
     void unregister_scope_listener( DB::IScope_listener* listener) override;
 
-    /// Only the scheduling mode LOCAL is supported.
     mi::Sint32 execute_fragmented( DB::Fragmented_job* job, size_t count) override;
-
-    /// Only the scheduling mode LOCAL is supported.
     mi::Sint32 execute_fragmented_async(
         DB::Fragmented_job* job, size_t count, DB::IExecution_listener* listener) override;
 
@@ -148,8 +178,9 @@ public:
     /// Returns the deserialization manager used for serialization checks.
     ///
     /// Note that the database itself does \em not require to register all classes of possible
-    /// database elements upfront with the deserialization manager. This is only necessary if the
-    /// debug options for serializer checks are enabled.
+    /// database elements upfront with the deserialization manager. This is only necessary if
+    /// Transaction_impl::construct_empty_element() is called or if the debug options for
+    /// serializer checks are enabled.
     SERIAL::Deserialization_manager* get_deserialization_manager();
 
     /// Indicates whether serialization should be tested in Transaction::store().
@@ -167,6 +198,9 @@ public:
 
     /// Indicates whether reference cycles should be tested in Transaction::finish_edit().
     bool get_check_reference_cycles_edit() const { return m_check_reference_cycles_edit; }
+
+    /// Indicates whether the unsafe implementation of Transaction::name_to_tag() is enabled.
+    bool get_unsafe_name_to_tag() const { return m_unsafe_name_to_tag; }
 
     /// Indicates whether the journal is enabled.
     bool get_journal_enabled() const { return m_journal_enabled; }
@@ -197,7 +231,7 @@ public:
     DB::Tag allocate_tag();
 
     /// Dumps the state of the database to the stream.
-    void dump( std::ostream& s, bool mask_pointer_values = false);
+    void dump( std::ostream& s, bool verbose = false, bool mask_pointer_values = false);
 
 private:
     /// The central database lock.
@@ -236,6 +270,9 @@ private:
     /// The transaction listeners.
     std::vector<mi::base::Handle<DB::ITransaction_listener> > m_transaction_listeners;
 
+    /// All currently acquired DB locks.
+    std::map<mi::Uint32, Db_lock> m_db_locks;
+
     /// Indicates whether serialization should be tested in Transaction::store().
     bool m_check_serialization_store = false;
 
@@ -258,6 +295,9 @@ private:
 
     /// Indicates whether reference cycles should be tested in Transaction::finish_edit).
     bool m_check_reference_cycles_edit = false;
+
+    /// Indicates whether the unsafe implementation of Transaction::name_to_tag() is enabled.
+    bool m_unsafe_name_to_tag = false;
 
     /// Indicates whether the journal is enabled.
     const bool m_journal_enabled;

@@ -82,7 +82,7 @@ const char* native_module = "mdl 1.3; export color f(color c) [[ native() ]] { r
 
 void check_matrix( mi::neuraylib::ITransaction* transaction)
 {
-    // see test_mdl.mdl for rationale
+    // see test_mdl$.mdl for rationale
     mi::base::Handle<const mi::neuraylib::IFunction_definition> c_fd(
         transaction->access<mi::neuraylib::IFunction_definition>(
             "mdl::" TEST_MDL "::fd_matrix(float3x2)"));
@@ -2344,7 +2344,7 @@ void check_named_temporaries( mi::neuraylib::ITransaction* transaction)
         MI_CHECK( names.count( "v1") == 1);
         MI_CHECK( names.count( "v2") == 1);
 
-        // From test_mdl.mdl:
+        // From test_mdl$.mdl:
         // Keep the order of v0 and f3 to test that CSE does not identify the named expression f3
         // for param0 with a previous unnamed expression (as part of v0) for param0.
         // float3 v0 = float3(param0, 0.f, 0.f);
@@ -2454,7 +2454,7 @@ void load_secondary_modules_from_string(
         MI_CHECK_EQUAL( 1, context.get()->get_error_messages_count());
 
         mi::base::Handle<const mi::neuraylib::IMessage> msg( context->get_error_message( 0));
-        MI_CHECK_EQUAL( mi::neuraylib::IMessage::MSG_COMILER_CORE, msg->get_kind());
+        MI_CHECK_EQUAL( mi::neuraylib::IMessage::MSG_COMPILER_CORE, msg->get_kind());
         MI_CHECK_EQUAL( mi::base::MESSAGE_SEVERITY_ERROR, msg->get_severity());
     }
 }
@@ -3044,7 +3044,66 @@ void check_mdl_export_reimport(
         { "mdl::non_existing", "::non_existing", 6002, 6002 },
         { "mdl::base", "::base", 6004, 6004 },
         { "mdl::mdl_elements::test_misc", "::test_misc", 0, 0 },
-        { "mdl::test_archives", "::test_archives", 0, 0 },
+
+        // Export a module with resources from an archive with various (context) options.
+        // The tests for the "handle_filename_conflicts" context option are in
+        // io/scene/mdl_elements/test_misc.cpp.
+
+        // Default options.
+        { "mdl::test_archives", "::test_archives", 0, 0, false, false, false,
+            { },
+            { "/test_archives/test_in_archive.png",
+              "/test_archives/test_in_archive.ies",
+              "/test_archives/test_in_archive.mbsdf" } },
+
+        // modify_mdl_paths
+        { "mdl::test_archives", "::test_archives2", 0, 6015, true, false, false,
+            { },
+            { "./test_in_archive.png",
+              "./test_in_archive.ies",
+              "./test_in_archive.mbsdf" } },
+
+        // modify_mdl_paths and filename_hints
+        { "mdl::test_archives", "::test_archives3", 0, 6015, true, false, false,
+            { { "/test_archives/test_in_archive.png",   "new_name.exr"   },
+              { "/test_archives/test_in_archive.ies",   "new_name.ies"   },
+              { "/test_archives/test_in_archive.mbsdf", "new_name.mbsdf" } },
+            { "./new_name.exr",
+              "./new_name.ies",
+              "./new_name.mbsdf" } },
+
+        // bundle_resources (generated names depend on ::test_archives2 test)
+        { "mdl::test_archives", "::test_archives4", 0, 6006, false, true, false,
+            { },
+            { "./test_in_archive_0.png",
+              "./test_in_archive_0.ies",
+              "./test_in_archive_0.mbsdf" } },
+
+        // bundle_resources and filename_hints (generated names depend on ::test_archives3 test)
+        { "mdl::test_archives", "::test_archives5", 0, 6006, false, true, false,
+            { { "/test_archives/test_in_archive.png",   "new_name.exr"   },
+              { "/test_archives/test_in_archive.ies",   "new_name.ies"   },
+              { "/test_archives/test_in_archive.mbsdf", "new_name.mbsdf" } },
+            { "./new_name_0.exr",
+              "./new_name_0.ies",
+              "./new_name_0.mbsdf" } },
+
+        // bundle_resources and export_resources_with_module_prefix
+        { "mdl::test_archives", "::test_archives6", 0, 6006, false, true, true,
+            { },
+            { "./test_archives6_export_test_in_archive.png",
+              "./test_archives6_export_test_in_archive.ies",
+              "./test_archives6_export_test_in_archive.mbsdf" } },
+
+        // bundle_resources, export_resources_with_module_prefix, and filename_hints
+        { "mdl::test_archives", "::test_archives7", 0, 6006, false, true, true,
+            { { "/test_archives/test_in_archive.png",   "new_name.exr"   },
+              { "/test_archives/test_in_archive.ies",   "new_name.ies"   },
+              { "/test_archives/test_in_archive.mbsdf", "new_name.mbsdf" } },
+            { "./test_archives7_export_new_name.exr",
+              "./test_archives7_export_new_name.ies",
+              "./test_archives7_export_new_name.mbsdf" } },
+
         { "mdl::from_string", "::from_string", 0, 0 },
         { "mdl::imports_from_string", "::imports_from_string", 0, 0 },
         { "mdl::mybuiltins", "::mybuiltins", 6004, 6004  },

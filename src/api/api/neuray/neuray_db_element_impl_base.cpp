@@ -36,6 +36,9 @@
 #include "neuray_db_element_tracker.h"
 #include "neuray_transaction_impl.h"
 
+#include <base/data/db/i_db_element.h>
+#include <base/data/db/i_db_info.h>
+
 #include <io/scene/mdl_elements/i_mdl_elements_annotation_definition_proxy.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
@@ -60,6 +63,7 @@ Db_element_tracker g_db_element_tracker;
 Db_element_impl_base::Db_element_impl_base()
 {
     m_state = STATE_INVALID;
+    m_info = nullptr;
     m_pointer.m_const = nullptr;
     m_transaction = nullptr;
 
@@ -68,14 +72,15 @@ Db_element_impl_base::Db_element_impl_base()
 
 void Db_element_impl_base::set_state_access(
     Transaction_impl* transaction,
-    DB::Tag tag)
+    DB::Info* info)
 {
     ASSERT( M_NEURAY_API, m_state == STATE_INVALID);
     ASSERT( M_NEURAY_API, transaction);
-    DB::Transaction* db_transaction = transaction->get_db_transaction();
+    ASSERT( M_NEURAY_API, info);
     m_state = STATE_ACCESS;
-    m_pointer.m_const
-        = m_access_base.set_access( tag, db_transaction, db_transaction->get_class_id( tag));
+    m_info = info;
+    info->pin();
+    m_pointer.m_const = m_info->get_element();
     m_transaction = transaction;
     m_transaction->retain();
     m_transaction->add_element( this);
@@ -83,15 +88,15 @@ void Db_element_impl_base::set_state_access(
 
 void Db_element_impl_base::set_state_edit(
     Transaction_impl* transaction,
-    DB::Tag tag)
+    DB::Info* info)
 {
     ASSERT( M_NEURAY_API, m_state == STATE_INVALID);
     ASSERT( M_NEURAY_API, transaction);
-    DB::Transaction* db_transaction = transaction->get_db_transaction();
+    ASSERT( M_NEURAY_API, info);
     m_state = STATE_EDIT;
-    m_pointer.m_mutable
-        = m_access_base.set_edit(
-            tag, db_transaction, db_transaction->get_class_id( tag), DB::JOURNAL_NONE);
+    m_info = info;
+    info->pin();
+    m_pointer.m_mutable = m_info->get_element();
     m_transaction = transaction;
     m_transaction->retain();
     m_transaction->add_element( this);
@@ -123,31 +128,30 @@ Db_element_impl_base::~Db_element_impl_base()
 
     switch( m_state) {
         case STATE_ACCESS:
+            m_info->unpin();
             break;
         case STATE_EDIT:
 #ifdef MI_API_API_NEURAY_DUMP_JOURNAL_FLAGS
             {
                 std::ostringstream s;
 
-                DB::Element_base* element_base = m_access_base.get_base_ptr();
+                DB::Element_base* element_base = m_info->get_element();
                 ASSERT( M_NEURAY_API, element_base);
                 s << element_base->get_class_name();
 
-                DB::Tag tag = m_access_base.get_tag();
+                DB::Tag tag = m_info->get_tag();
                 s << ' ' << tag.get_uint();
 
-                ASSERT( M_NEURAY_API, m_transaction);
-                DB::Transaction* db_transaction = m_transaction->get_db_transaction();
-                ASSERT( M_NEURAY_API, db_transaction);
-                const char* element_name = get_db_transaction()->tag_to_name( tag);
+                const char* element_name = m_info->get_name();
                 s << ' ' << (element_name ? element_name : "(unknown)");
 
-                DB::Journal_type flags = m_access_base.get_journal_flags();
-                s << ' ' << flags.get_type() << ' ' << Db_element_tracker::flags_to_string( flags);
+                s << ' ' << m_journal_flags.get_type();
+                s << ' ' << Db_element_tracker::flags_to_string( m_journal_flags);
 
-                LOG::mod_log->info( M_NEURAY_API, LOG::Mod_log::C_DATABASE, s.str().c_str());
+                LOG::mod_log->info( M_NEURAY_API, LOG::Mod_log::C_DATABASE, "%s", s.str().c_str());
             }
 #endif // MI_API_API_NEURAY_DUMP_JOURNAL_FLAGS
+            m_transaction->get_db_transaction()->finish_edit( m_info, m_journal_flags);
             break;
         case STATE_POINTER:
             delete m_pointer.m_mutable;
@@ -156,6 +160,7 @@ Db_element_impl_base::~Db_element_impl_base()
             // ignore
             return; // no transaction to release
     }
+
     if( m_transaction)
         m_transaction->release();
 }
@@ -165,7 +170,7 @@ DB::Tag Db_element_impl_base::get_tag() const
     switch( m_state) {
         case STATE_ACCESS:
         case STATE_EDIT:
-            return m_access_base.get_tag();
+            return m_info->get_tag();
             break;
         case STATE_POINTER:
         case STATE_INVALID:
@@ -187,7 +192,11 @@ mi::Sint32 Db_element_impl_base::store(
     DB::Privacy_level store_level = privacy;
 
     // prevent overwriting an existing DB element with one of a different type
-    DB::Tag tag = db_transaction->name_to_tag( name);
+#ifndef MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
+    DB::Tag tag = db_transaction->name_to_tag( name, DB::Transaction::STORE_CONTEXT);
+#else // MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
+    DB::Tag tag = db_transaction->name_to_tag_unsafe( name);
+#endif // MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
     if( tag) {
         SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
         if(    (class_id == MDL::ID_MDL_MODULE)
@@ -202,9 +211,14 @@ mi::Sint32 Db_element_impl_base::store(
         }
     }
 
+#ifndef MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
+    if( !tag)
+        tag = db_transaction->reserve_tag();
+#else // MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
     tag = transaction->get_tag_for_store( tag);
+#endif // MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
 
-    // use DB::JOURNAL_ALL instead of journal flags in m_access_base: for initial stores it does
+    // use DB::JOURNAL_ALL instead of journal flags in m_journal_flags: for initial stores it does
     // not really matter, but for overwriting existing elements we do not know the journal flags
     // that need to be set
     db_transaction->store( tag, m_pointer.m_mutable, name, privacy, DB::JOURNAL_ALL, store_level);
@@ -271,7 +285,6 @@ void Db_element_impl_base::clear_transaction()
         m_transaction->release();
         m_transaction = nullptr;
     }
-    m_access_base.clear_transaction();
 }
 
 void Db_element_impl_base::add_journal_flag( DB::Journal_type type)
@@ -283,7 +296,7 @@ void Db_element_impl_base::add_journal_flag( DB::Journal_type type)
             ASSERT( M_NEURAY_API, false);
             break;
         case STATE_EDIT:
-            m_access_base.add_journal_flags( type);
+            m_journal_flags.add_journal( type);
             break;
         case STATE_POINTER:
             // ignore

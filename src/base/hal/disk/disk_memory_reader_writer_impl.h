@@ -40,13 +40,21 @@
 
 #include <boost/core/noncopyable.hpp>
 
-namespace mi { namespace neuraylib { class IBuffer; } }
+namespace mi { namespace neuraylib { class IBuffer; class IReader; } }
 
 namespace MI {
 
 namespace DISK {
 
 class Buffer_impl;
+
+/// Creates a random-access reader for the given data.
+///
+/// \param data     Pointer to the start of the data block.
+/// \param length   Length of the data block.
+/// \return         A reader for the data block. The reader wraps the data block, it does not copy
+///                 the data.
+mi::neuraylib::IReader* create_reader( const char* data, mi::Size length);
 
 /// Base class of Memory_reader_impl and Memory_writer_impl.
 template <typename T, typename B>

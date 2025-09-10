@@ -1154,9 +1154,32 @@ bool Comparator::compare_types(
     case IType::TK_EDF:
     case IType::TK_VDF:
     case IType::TK_BSDF_MEASUREMENT:
+    case IType::TK_VOID:
     case IType::TK_AUTO:
     case IType::TK_ERROR:
         return true;
+    case IType::TK_PTR:
+        {
+            IType_pointer const *ptrA = cast<IType_pointer>(typeA);
+            IType_pointer const *ptrB = cast<IType_pointer>(typeB);
+
+            if (ptrA->get_address_space() != ptrB->get_address_space()) {
+                return false;
+            }
+
+            return compare_types(ptrA->get_element_type(), ptrB->get_element_type());
+        }
+    case IType::TK_REF:
+        {
+            IType_ref const *refA = cast<IType_ref>(typeA);
+            IType_ref const *refB = cast<IType_ref>(typeB);
+
+            if (refA->get_address_space() != refB->get_address_space()) {
+                return false;
+            }
+
+            return compare_types(refA->get_element_type(), refB->get_element_type());
+        }
     case IType::TK_ENUM:
         {
             IType_enum const *enumA = cast<IType_enum>(typeA);

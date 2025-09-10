@@ -33,8 +33,6 @@
 #include <sstream>
 #include <utility>
 
-#include <boost/core/ignore_unused.hpp>
-
 #include "dblight_database.h"
 #include "dblight_transaction.h"
 
@@ -64,6 +62,8 @@ Scope_impl::Scope_impl(
 
 Scope_impl::~Scope_impl()
 {
+    Statistics_helper helper( g_scope_destructor);
+
     THREAD::Block block( &m_database->get_lock());
 
     Info_manager* info_manager = m_database->get_info_manager();
@@ -82,6 +82,11 @@ Scope_impl::~Scope_impl()
     block.release();
     if( m_parent)
         m_parent->unpin();
+}
+
+DB::Database* Scope_impl::get_database() const
+{
+    return m_database;
 }
 
 DB::Scope* Scope_impl::create_child(
@@ -370,7 +375,7 @@ void Scope_manager::remove_scope_internal( Scope_impl* scope)
     }
 }
 
-void Scope_manager::dump( std::ostream& s, bool mask_pointer_values)
+void Scope_manager::dump( std::ostream& s, bool verbose, bool mask_pointer_values)
 {
     m_database->get_lock().check_is_owned_shared_or_exclusive();
 
@@ -400,15 +405,17 @@ void Scope_manager::dump( std::ostream& s, bool mask_pointer_values)
             const Scope_impl::Scope_journal& journal = scope.get_journal();
             size_t n = journal.size();
             s << "    Journal size: " << n << std::endl;
-            size_t i = 0;
-            for( const auto& entry: journal) {
-                 s << "    Item " << i++
-                   << ": visibility ID = " << entry.first()
-                   << ", tag = " << entry.second.m_tag()
-                   << ", version = " << entry.second.m_version
-                   << ", transaction ID = " << entry.second.m_transaction_id()
-                   << ", journal type = " << entry.second.m_journal_type.get_type()
-                   << std::endl;
+            if( verbose) {
+                size_t i = 0;
+                for( const auto& entry: journal) {
+                    s << "    Item " << i++
+                    << ": visibility ID = " << entry.first()
+                    << ", tag = " << entry.second.m_tag()
+                    << ", version = " << entry.second.m_version
+                    << ", transaction ID = " << entry.second.m_transaction_id()
+                    << ", journal type = " << entry.second.m_journal_type.get_type()
+                    << std::endl;
+                }
             }
          }
     }

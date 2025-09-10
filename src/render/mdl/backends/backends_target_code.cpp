@@ -28,21 +28,25 @@
 
 #include "pch.h"
 
-#include <cstring>
-#include <base/system/version/i_version.h>
-#include <mi/mdl/mdl_code_generators.h>
-#include <mi/neuraylib/icompiled_material.h>
-#include <mi/neuraylib/ibuffer.h>
-#include <render/mdl/runtime/i_mdlrt_resource_handler.h>
-#include <io/scene/mdl_elements/i_mdl_elements_compiled_material.h>
-#include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
-#include <mdl/jit/generator_jit/generator_jit_libbsdf_data.h>
-#include <mdl/jit/generator_jit/generator_jit_generated_code_value_layout.h>
-#include <api/api/neuray/neuray_mdl_execution_context_impl.h>
-#include <api/api/neuray/neuray_transaction_impl.h>
-#include <api/api/neuray/neuray_value_impl.h>
 #include "backends_backends.h"
 #include "backends_target_code.h"
+
+#include <cstring>
+
+#include <mi/mdl/mdl_code_generators.h>
+#include <mi/neuraylib/ibuffer.h>
+#include <mi/neuraylib/icompiled_material.h>
+#include <mi/neuraylib/imdl_execution_context.h>
+
+#include <base/system/version/i_version.h>
+#include <mdl/jit/generator_jit/generator_jit_libbsdf_data.h>
+#include <mdl/jit/generator_jit/generator_jit_generated_code_value_layout.h>
+#include <io/scene/mdl_elements/i_mdl_elements_compiled_material.h>
+#include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
+#include <render/mdl/runtime/i_mdlrt_resource_handler.h>
+
+#include <api/api/neuray/neuray_transaction_impl.h> // TODO avoid dependency
+#include <api/api/neuray/neuray_value_impl.h>       // TODO avoid dependency
 
 namespace MI {
 
@@ -331,11 +335,6 @@ mi::Size Target_code::get_texture_count() const
     return m_texture_table.size();
 }
 
-mi::Size Target_code::deprecated_get_body_texture_count() const
-{
-    return m_body_texture_count;
-}
-
 const char* Target_code::get_texture( mi::Size index) const
 {
     if( index < m_texture_table.size()) {
@@ -455,11 +454,6 @@ mi::Size Target_code::get_light_profile_count() const
     return m_light_profile_table.size();
 }
 
-mi::Size Target_code::deprecated_get_body_light_profile_count() const
-{
-    return m_body_light_profile_count;
-}
-
 const char* Target_code::get_light_profile(mi::Size index) const
 {
     if( index < m_light_profile_table.size()) {
@@ -495,11 +489,6 @@ const char* Target_code::get_light_profile_owner_module(mi::Size index) const
 Size Target_code::get_bsdf_measurement_count() const
 {
     return m_bsdf_measurement_table.size();
-}
-
-Size Target_code::deprecated_get_body_bsdf_measurement_count() const
-{
-    return m_body_bsdf_measurement_count;
 }
 
 const char* Target_code::get_bsdf_measurement(mi::Size index) const
@@ -1288,7 +1277,6 @@ mi::Uint32 Target_code::get_known_resource_index(
     case MDL::IValue::VK_ARRAY:
     case MDL::IValue::VK_STRUCT:
     case MDL::IValue::VK_INVALID_DF:
-    case MDL::IValue::VK_FORCE_32_BIT:
         ASSERT(M_BACKENDS, !"Unsupported MDL resource type");
         break;
     }
@@ -1455,7 +1443,7 @@ const mi::neuraylib::IBuffer* Target_code::serialize(mi::neuraylib::IMdl_executi
     if (!supports_serialization())
     {
         if (context)
-            context->add_message(mi::neuraylib::IMessage::MSG_COMILER_BACKEND,
+            context->add_message(mi::neuraylib::IMessage::MSG_COMPILER_BACKEND,
                 mi::base::details::MESSAGE_SEVERITY_ERROR, -1, "Serialization failed. "
                 "The back-end that produces this target code does not support serialization.");
         return nullptr;
@@ -1550,7 +1538,7 @@ bool Target_code::deserialize(
     if (memcmp(mdl_tci_header.data(), MDL_TCI_HEADER, mdl_tci_header.size()) != 0)
     {
         if (context)
-            context->add_message(mi::neuraylib::IMessage::MSG_COMILER_BACKEND,
+            context->add_message(mi::neuraylib::IMessage::MSG_COMPILER_BACKEND,
                 mi::base::details::MESSAGE_SEVERITY_ERROR, -2, "Deserialization failed. "
                 "Corrupt input data, invalid header.");
         return false;
@@ -1561,7 +1549,7 @@ bool Target_code::deserialize(
     if (mdl_tci_protocol_version != MDL_TCI_CURRENT_PROTOCOL)
     {
         if (context)
-            context->add_message(mi::neuraylib::IMessage::MSG_COMILER_BACKEND,
+            context->add_message(mi::neuraylib::IMessage::MSG_COMPILER_BACKEND,
                 mi::base::details::MESSAGE_SEVERITY_INFO, 1, "Deserialization invalid. "
                 "Protocol version mismatch.");
         return false;
@@ -1574,7 +1562,7 @@ bool Target_code::deserialize(
     if (mdl_sdk_version != MDL_SDK_VERSION || mdl_sdk_os != MDL_SDK_OS)
     {
         if (context)
-            context->add_message(mi::neuraylib::IMessage::MSG_COMILER_BACKEND,
+            context->add_message(mi::neuraylib::IMessage::MSG_COMPILER_BACKEND,
                 mi::base::details::MESSAGE_SEVERITY_INFO, 2, "Deserialization invalid. "
                 "MDL SDK version mismatch.");
         return false;

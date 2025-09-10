@@ -60,8 +60,7 @@ public:
         EK_CALL,
         EK_PARAMETER,
         EK_DIRECT_CALL,
-        EK_TEMPORARY,
-        EK_FORCE_32_BIT = 0xffffffffU
+        EK_TEMPORARY
     };
 
     virtual Kind get_kind() const = 0;

@@ -35,6 +35,7 @@
 
 #include <mi/neuraylib/iexpression.h>
 #include <mi/neuraylib/iscene_element.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -74,7 +75,7 @@ public:
     ///
     /// \note Do not rely on the numeric values of the enumerators since they may change without
     ///       further notice.
-    enum Semantics
+    enum Semantics : Uint32
     {
         DS_UNKNOWN = 0,                           ///< Unknown semantics.
 
@@ -403,9 +404,9 @@ public:
         DS_INTRINSIC_DAG_ARRAY_LENGTH,
         /// The decl_cast operator. See \ref mi_neuray_mdl_decl_cast_operator.
         DS_INTRINSIC_DAG_DECL_CAST,
-        DS_INTRINSIC_DAG_LAST = DS_INTRINSIC_DAG_DECL_CAST,
+        DS_INTRINSIC_DAG_LAST = DS_INTRINSIC_DAG_DECL_CAST
 
-        DS_FORCE_32_BIT = 0xffffffffU             //   Undocumented, for alignment only.
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(DS_FORCE_32_BIT, 0xffffffffU)
     };
 
     /// Returns the DB name of the module containing this function definition.
@@ -708,8 +709,6 @@ public:
     inline const char* get_mdl_mangled_name() const { return get_mangled_name(); }
 #endif // MI_NEURAYLIB_DEPRECATED_15_0
 };
-
-mi_static_assert( sizeof( IFunction_definition::Semantics) == sizeof( Uint32));
 
 /**@}*/ // end group mi_neuray_mdl_elements
 

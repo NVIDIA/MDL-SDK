@@ -36,8 +36,6 @@
 
 #include <iomanip>
 
-#include <boost/core/ignore_unused.hpp>
-
 #include <base/system/main/i_assert.h>
 #include <base/util/string_utils/i_string_lexicographic_cast.h>
 
@@ -59,8 +57,7 @@ namespace IDATA {
 Factory::Factory( ITag_handler* tag_handler)
   : m_tag_handler( tag_handler, mi::base::DUP_INTERFACE)
 {
-    mi::Sint32 result = 0;
-    boost::ignore_unused( result);
+    [[maybe_unused]] mi::Sint32 result = 0;
 
 #define REG2( a, b)    result = register_class( a, b);    MI_ASSERT( result == 0)
 #define REG3( a, b, c) result = register_class( a, b, c); MI_ASSERT( result == 0)
@@ -343,9 +340,9 @@ mi::Sint32 Factory::register_enum_decl( const char* enum_name, const mi::IEnum_d
     mi::base::Handle<mi::IEnum_decl> copy(
         create_registered<mi::IEnum_decl>( nullptr, "Enum_decl"));
     for( mi::Size i = 0; i < n; ++i) {
-        mi::Sint32 result = copy->add_enumerator( decl->get_name( i), decl->get_value( i));
+        [[maybe_unused]] mi::Sint32 result
+            = copy->add_enumerator( decl->get_name( i), decl->get_value( i));
         MI_ASSERT( result == 0);
-        boost::ignore_unused( result);
     }
 
     // Set the type name
@@ -425,10 +422,9 @@ mi::Sint32 Factory::register_structure_decl(
         create_registered<mi::IStructure_decl>( nullptr, "Structure_decl"));
     mi::Size n = decl->get_length();
     for( mi::Size i = 0; i < n; ++i) {
-        mi::Sint32 result
+        [[maybe_unused]] mi::Sint32 result
             = copy->add_member( decl->get_member_type_name( i), decl->get_member_name( i));
         MI_ASSERT( result == 0);
-        boost::ignore_unused( result);
     }
 
     // Set the type name
@@ -1064,9 +1060,8 @@ mi::Uint32 Factory::assign_from_to(
                 if( !target_value)
                     continue;
 
-                mi::Sint32 result2 = target_map->insert( key, target_value.get());
+                [[maybe_unused]] mi::Sint32 result2 = target_map->insert( key, target_value.get());
                 MI_ASSERT( result2 == 0);
-                boost::ignore_unused( result2);
             }
         }
     }
@@ -1102,9 +1097,8 @@ mi::Uint32 Factory::assign_from_to(
 
         // invoke assign_from_to() for this key, and set the target value for this key again
         result |= assign_from_to( source_element.get(), target_element.get(), options);
-        mi::Uint32 result2 = target->set_value( key, target_element.get());
+        [[maybe_unused]] mi::Uint32 result2 = target->set_value( key, target_element.get());
         MI_ASSERT( result2 == 0);
-        boost::ignore_unused( result2);
     }
 
     if( keys_missing_in_target > 0)
@@ -1184,9 +1178,8 @@ mi::Uint32 Factory::assign_from_to(
         return mi::neuraylib::IFactory::INCOMPATIBLE_ENUM_TYPES;
 
     const char* name = source->get_value_by_name();
-    mi::Uint32 result = target->set_value_by_name( name);
+    [[maybe_unused]] mi::Uint32 result = target->set_value_by_name( name);
     MI_ASSERT( result == 0);
-    boost::ignore_unused( result);
     return 0;
 }
 
@@ -1340,9 +1333,8 @@ mi::IData_simple* Factory::clone( const mi::IData_simple* source, mi::Uint32 opt
 
     // handle other subtypes of IData_simple
     auto* target = create<mi::IData_simple>( /*transaction*/ nullptr, source->get_type_name());
-    mi::Uint32 result = assign_from_to( source, target, options);
+    [[maybe_unused]] mi::Uint32 result = assign_from_to( source, target, options);
     MI_ASSERT( result == 0);
-    boost::ignore_unused( result);
     return target;
 }
 
@@ -1385,9 +1377,8 @@ mi::IRef* Factory::clone( const mi::IRef* source, mi::Uint32 options)
 
     DB::Transaction* transaction = get_transaction( source);
     auto* target = create<mi::IRef>( transaction, source->get_type_name());
-    mi::Uint32 result = assign_from_to( source, target, options);
+    [[maybe_unused]] mi::Uint32 result = assign_from_to( source, target, options);
     MI_ASSERT( result == 0);
-    boost::ignore_unused( result);
     return target;
 }
 
@@ -1403,9 +1394,8 @@ mi::IPointer* Factory::clone( const mi::IPointer* source, mi::Uint32 options)
         if( !target)
             return nullptr;
         mi::base::Handle<mi::base::IInterface> pointer( source->get_pointer());
-        mi::Uint32 result = target->set_pointer( pointer.get());
+        [[maybe_unused]] mi::Uint32 result = target->set_pointer( pointer.get());
         MI_ASSERT( result == 0);
-        boost::ignore_unused( result);
         return target;
     }
 
@@ -1426,9 +1416,8 @@ mi::IPointer* Factory::clone( const mi::IPointer* source, mi::Uint32 options)
     auto* target = create_with_transaction<mi::IPointer>( source_type_name, source);
     if( !target)
         return nullptr;
-    mi::Uint32 result = target->set_pointer( target_pointer_data.get());
+    [[maybe_unused]] mi::Uint32 result = target->set_pointer( target_pointer_data.get());
     MI_ASSERT( result == 0);
-    boost::ignore_unused( result);
     return target;
 }
 
@@ -1444,9 +1433,8 @@ mi::IConst_pointer* Factory::clone( const mi::IConst_pointer* source, mi::Uint32
         if( !target)
             return nullptr;
         mi::base::Handle<const mi::base::IInterface> pointer( source->get_pointer());
-        mi::Uint32 result = target->set_pointer( pointer.get());
+        [[maybe_unused]] mi::Uint32 result = target->set_pointer( pointer.get());
         MI_ASSERT( result == 0);
-        boost::ignore_unused( result);
         return target;
     }
 
@@ -1467,9 +1455,8 @@ mi::IConst_pointer* Factory::clone( const mi::IConst_pointer* source, mi::Uint32
     auto* target = create_with_transaction<mi::IConst_pointer>( source_type_name, source);
     if( !target)
         return nullptr;
-    mi::Uint32 result = target->set_pointer( target_pointer_data.get());
+    [[maybe_unused]] mi::Uint32 result = target->set_pointer( target_pointer_data.get());
     MI_ASSERT( result == 0);
-    boost::ignore_unused( result);
     return target;
 }
 
@@ -1478,9 +1465,8 @@ mi::ICompound* Factory::clone( const mi::ICompound* source, mi::Uint32 options)
      MI_ASSERT( source);
 
      auto* target = create<mi::ICompound>( /*transaction*/ nullptr, source->get_type_name());
-     mi::Uint32 result = assign_from_to( source, target, options);
+     [[maybe_unused]] mi::Uint32 result = assign_from_to( source, target, options);
      MI_ASSERT( result == 0);
-     boost::ignore_unused( result);
      return target;
 }
 

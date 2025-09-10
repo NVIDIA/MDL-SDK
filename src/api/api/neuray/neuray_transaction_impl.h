@@ -33,6 +33,8 @@
 #ifndef API_API_NEURAY_NEURAY_TRANSACTION_IMPL_H
 #define API_API_NEURAY_NEURAY_TRANSACTION_IMPL_H
 
+// #define MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
+
 #include <mi/neuraylib/itransaction.h>
 
 #include <regex>
@@ -46,7 +48,7 @@
 
 #include <base/data/db/i_db_tag.h>
 #include <base/data/serial/i_serial_classid.h>
-#include <base/lib/robin_hood/robin_hood.h>
+#include <base/lib/unordered_dense/unordered_dense.h>
 
 #include "i_neuray_transaction.h"
 
@@ -201,6 +203,7 @@ public:
     /// \note This method does \em not increase the reference count of the return value.
     const Class_factory* get_class_factory() const;
 
+#ifdef MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
     /// Returns the tag to be used for storing a DB element of that name.
     ///
     /// Calls DB::Transaction::name_to_tag() followed by get_tag_for_store(DB::Tag).
@@ -216,6 +219,7 @@ public:
     /// requested for removal, must not be reused (at least those tags with reference count 0 might
     /// disappear at any time -- even within a transaction).
     DB::Tag get_tag_for_store( DB::Tag tag);
+#endif // MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
 
     /// Record the construction of (an API class for) a DB element.
     ///
@@ -258,7 +262,7 @@ private:
         const std::wregex* name_regex,
         const std::set<SERIAL::Class_id>* class_ids,
         mi::IDynamic_array* result,
-        robin_hood::unordered_set<DB::Tag>& tags_seen) const;
+        ankerl::unordered_dense::set<DB::Tag>& tags_seen) const;
 
     /// The DB transaction used by this instance.
     DB::Transaction* m_db_transaction;

@@ -136,6 +136,9 @@ private:
     /// The pixel type of the subimage (after applying the selector).
     IMAGE::Pixel_type m_pixel_type = IMAGE::PT_UNDEF;
 
+    /// The gamma value.
+    mi::Float32 m_gamma = 0.0;
+
     /// The channel names (for layers: after stripping the selector prefix plus dot).
     std::vector<std::string> m_channel_names;
 

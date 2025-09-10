@@ -89,6 +89,7 @@ Function_context::Function_context(
 , m_di_function(NULL)
 , m_dilb_stack(DILB_stack::container_type(alloc))
 , m_accesible_parameters(alloc)
+, m_prev_ctx(NULL)
 {
     // fill the array type map
     Function_instance::Array_instances const &ais(func_inst.get_array_instances());
@@ -102,10 +103,15 @@ Function_context::Function_context(
 
     // set fast-math flags
     llvm::FastMathFlags FMF;
-    if (func_def != NULL &&
-            (func_def->get_semantics() == mi::mdl::IDefinition::DS_INTRINSIC_MATH_ISNAN ||
-            func_def->get_semantics() == mi::mdl::IDefinition::DS_INTRINSIC_MATH_ISFINITE) ) {
-        // isnan and isfinite may not use fast-math, otherwise functions will be optimized away
+    Definition::Semantics sema =
+        func_def != NULL ? func_def->get_semantics() : Definition::DS_UNKNOWN;
+    if (sema == Definition::DS_INTRINSIC_MATH_ISNAN ||
+        sema == Definition::DS_INTRINSIC_MATH_ISFINITE ||
+        sema == Definition::DS_INTRINSIC_MATH_SQRT)
+    {
+        // isnan and isfinite may not use fast-math, otherwise functions will be optimized away.
+        // sqrt may not use NoInfs (included in fast-math), because the estimation for +Inf
+        // results in NaN instead of +Inf
     } else {
         if (code_gen.is_fast_math_enabled()) {
             FMF.setFast();
@@ -230,7 +236,10 @@ Function_context::Function_context(
     // create the function scope
     push_block_scope(func_def != NULL ? func_def->get_position() : &one_pos);
 
-    code_gen.enter_function(*this, func);
+    code_gen.create_enter_function_call(func);
+
+    // must be the last call
+    m_prev_ctx = code_gen.enter_function_context(*this);
 }
 
 // Constructor, creates a context for modification of an already existing function.
@@ -269,6 +278,7 @@ Function_context::Function_context(
  , m_di_function(func->getSubprogram())
  , m_dilb_stack(DILB_stack::container_type(alloc))
  , m_accesible_parameters(alloc)
+, m_prev_ctx(NULL)
 {
     // set fast-math flags
     llvm::FastMathFlags FMF;
@@ -308,6 +318,9 @@ Function_context::Function_context(
         // debug info is not possible without a function with a DISubprogram
         m_full_debug_info = false;
     }
+
+    // must be the last call
+    m_prev_ctx = code_gen.enter_function_context(*this);
 }
 
  // Destructor, closes the last scope and fills the end block, if the context was not
@@ -367,8 +380,12 @@ Function_context::~Function_context()
     }
 
     // optimize function to improve inlining, if requested
-    if (m_optimize_on_finalize)
+    if (m_optimize_on_finalize) {
         m_code_gen.optimize(m_function);
+    }
+
+    // must be the last call
+    m_code_gen.leave_function_context(m_prev_ctx);
 }
 
 // Get the first (real) parameter of the current function.
@@ -602,7 +619,7 @@ llvm::Value *Function_context::get_object_id_value()
         return arg_it;
     } else {
         // object_id is a constant taken from the code generator
-        return m_code_gen.get_current_object_id(*this);
+        return m_code_gen.get_current_object_id();
     }
 }
 
@@ -643,7 +660,7 @@ llvm::Value *Function_context::get_w2o_transform_value()
         return arg_it;
     } else {
         // world-to-object transform is a constant taken from the code generator
-        return m_code_gen.get_w2o_transform_value(*this);
+        return m_code_gen.get_w2o_transform_value();
     }
 }
 
@@ -685,7 +702,7 @@ llvm::Value *Function_context::get_o2w_transform_value()
         return arg_it;
     } else {
         // object-to-world transform is a constant taken from the code generator
-        return m_code_gen.get_o2w_transform_value(*this);
+        return m_code_gen.get_o2w_transform_value();
     }
 }
 

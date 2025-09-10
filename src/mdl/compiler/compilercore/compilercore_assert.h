@@ -68,13 +68,13 @@ void report_assertion_failure(
     do {                                                                \
      if (!(EXP))                                                        \
        ::mi::mdl::report_assertion_failure(#EXP,__FILE__,__LINE__);     \
-    } while(0)
+    } while(false)
 #  ifdef DEBUG
 #    define DEBUG_MDL_ASSERT(EXP)                                           \
       do {                                                              \
        if (!(EXP))                                                      \
          ::mi::mdl::report_assertion_failure(#EXP,__FILE__,__LINE__);   \
-      } while(0)
+      } while(false)
 #  else
 #    define DEBUG_MDL_ASSERT(EXP) ((void)0)
 #  endif

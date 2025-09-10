@@ -343,8 +343,7 @@ size_t DAG_node_factory_impl::Hash_dag_node::operator()(
     DAG_node const *node) const
 {
     DAG_node::Kind kind = node->get_kind();
-    auto           it   = m_temp_name_map.find(node);
-    size_t         hash = it != m_temp_name_map.end() ? calc_name_hash(it->second) : 0;
+    size_t         hash = 0;               // the hash does not include a name, because it could change
 
     // Note: Debug info is ignored, two nodes are NOT different just because of different dbg info
 
@@ -396,15 +395,9 @@ bool DAG_node_factory_impl::Equal_dag_node::operator()(
     // This is ugly: To preserve "temporary names" we do not merge nodes if they have
     // different names.
     {
-        auto it_a = m_temp_name_map.find(a);
-        auto it_b = m_temp_name_map.find(b);
-        bool has_name_a = it_a != m_temp_name_map.end();
-        bool has_name_b = it_b != m_temp_name_map.end();
-        if (has_name_a != has_name_b) {
-            return false;
-        }
-
-        if (has_name_a && strcmp(it_a->second, it_b->second) != 0) {
+        ISymbol const *sym_a = m_unit.get_cse_node_name(a);
+        ISymbol const *sym_b = m_unit.get_cse_node_name(b);
+        if (sym_a != nullptr && sym_b != nullptr && sym_a != sym_b) {
             return false;
         }
     }
@@ -494,15 +487,10 @@ DAG_node_factory_impl::DAG_node_factory_impl(
 , m_mdl_meters_per_scene_unit(1.0f)
 , m_state_wavelength_min(380.0f)
 , m_state_wavelength_max(780.0f)
-, m_temp_name_map(
-    0,
-    Definition_temporary_name_map::hasher(),
-    Definition_temporary_name_map::key_equal(),
-    unit.get_arena().get_allocator())
 , m_value_table(
     0,
-    Value_table::hasher(m_temp_name_map),
-    Value_table::key_equal(m_temp_name_map),
+    Value_table::hasher(),
+    Value_table::key_equal(m_dag_unit),
     unit.get_arena().get_allocator())
 {
 }
@@ -3763,26 +3751,17 @@ bool DAG_node_factory_impl::is_owner(DAG_node const *n) const
     return m_builder.get_arena()->contains(n);
 }
 
-// Adds a name to a given DAG node.
-void DAG_node_factory_impl::add_node_name(
-    DAG_node const *node,
-    char const     *name)
-{
-    m_temp_name_map[node] = Arena_strdup(*m_builder.get_arena(), name);
-}
-
 // Return true iff all arguments are without name.
 bool DAG_node_factory_impl::all_args_without_name(
     DAG_node const *args[],
     size_t         n_args) const
 {
     if (!m_expose_names_of_let_expressions) {
-        MDL_ASSERT(m_temp_name_map.empty());
         return true;
     }
 
     for (size_t i = 0; i < n_args; ++i) {
-        if (m_temp_name_map.find(args[i]) != m_temp_name_map.end()) {
+        if (m_dag_unit.get_node_name(args[i]) != nullptr) {
             return false;
         }
     }
@@ -3795,12 +3774,11 @@ bool DAG_node_factory_impl::all_args_without_name(
     size_t                        n_args) const
 {
     if (!m_expose_names_of_let_expressions) {
-        MDL_ASSERT(m_temp_name_map.empty());
         return true;
     }
 
     for (size_t i = 0; i < n_args; ++i) {
-        if (m_temp_name_map.find(args[i].arg) != m_temp_name_map.end()) {
+        if (m_dag_unit.get_node_name(args[i].arg) != nullptr) {
             return false;
         }
     }
@@ -4949,6 +4927,13 @@ DAG_node *DAG_node_factory_impl::identify_remember(
         // recover the ID
         --m_next_id;
     }
+
+    // preserve the name of the node if the known node has no name
+    ISymbol const *sym = m_dag_unit.get_node_name(node);
+    if (sym != nullptr && m_dag_unit.get_node_name(*it) == nullptr) {
+        m_dag_unit.set_node_name(*it, sym);
+    }
+
     m_builder.get_arena()->drop(node);
     return *it;
 }

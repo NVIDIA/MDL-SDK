@@ -91,7 +91,7 @@ Database_impl::Database_impl(
     CONFIG::update_value( registry, "check_serializer_store", m_check_serialization_store);
     if( m_check_serialization_store)
         LOG::mod_log->info( M_DB, LOG::Mod_log::C_DATABASE,
-            "Testing of serialization for database elements during store enabled.");
+            "Testing of serialization for database elements and jobs during store enabled.");
 
     CONFIG::update_value( registry, "check_serializer_edit", m_check_serialization_edit);
     if( m_check_serialization_edit)
@@ -115,6 +115,11 @@ Database_impl::Database_impl(
         LOG::mod_log->info( M_DB, LOG::Mod_log::C_DATABASE,
             "Testing of reference cycles for database elements after edits enabled.");
 
+    CONFIG::update_value( registry, "unsafe_name_to_tag", m_unsafe_name_to_tag);
+    if( m_unsafe_name_to_tag)
+        LOG::mod_log->info( M_DB, LOG::Mod_log::C_DATABASE,
+            "Unsafe implementation of DB::Transaction::name_to_tag() enabled.");
+
     CONFIG::update_value( registry, "dblight_journal_max_size", m_journal_max_size);
 
 #if defined( DBLIGHT_NO_SHARED_LOCK)
@@ -130,7 +135,7 @@ Database_impl::~Database_impl()
 {
     // Dumping the database content here might provide some insights into assertions during
     // destruction.
-    // dump( std::cerr);
+    // dump( std::cerr, /*verbose*/ true, /*mask_pointer_values*/ true);
 
     // Removing all scopes should leave no transactions or infos behind.
     m_scope_manager.reset();
@@ -175,11 +180,103 @@ void Database_impl::garbage_collection( int priority)
     m_info_manager->garbage_collection( m_transaction_manager->get_lowest_open_transaction_id());
 }
 
-void Database_impl::lock( mi::Uint32 lock_id) { MI_ASSERT( !"Not implemented"); }
+void Database_impl::lock( mi::Uint32 lock_id)
+{
+    THREAD::Block block( &m_lock);
 
-bool Database_impl::unlock( mi::Uint32 lock_id) { MI_ASSERT( !"Not implemented"); return false; }
+    auto it = m_db_locks.find( lock_id);
 
-void Database_impl::check_is_locked( mi::Uint32 lock_id) { MI_ASSERT( !"Not implemented"); }
+    // If the lock ID is unknown, create the lock and lock it.
+    if( it == m_db_locks.end()) {
+        m_db_locks.emplace( std::make_pair( lock_id, Db_lock()));
+        return;
+    }
+
+    Db_lock& lock = it->second;
+    std::thread::id own_thread_id = std::this_thread::get_id();
+
+    // If the lock is already locked by this thread, just increase the lock count.
+    if( lock.m_thread_id == own_thread_id) {
+        ++lock.m_counter;
+        return;
+    }
+
+    // Otherwise, enqueue a lock request.
+    MI_ASSERT( lock.m_counter > 0);
+    Db_lock_request request( own_thread_id);
+    lock.m_requests.push_back( &request);
+
+    // Release global lock and block on the request.
+    block.release();
+    request.m_condition.wait();
+}
+
+bool Database_impl::unlock( mi::Uint32 lock_id)
+{
+    THREAD::Block block( &m_lock);
+
+    auto it = m_db_locks.find( lock_id);
+
+    if( it == m_db_locks.end()) {
+        LOG::mod_log->error(
+            M_DB, LOG::Mod_log::C_DATABASE,
+            "Attempt to unlock unknown DB lock with ID %u.", lock_id);
+        return false;
+    }
+
+    Db_lock& lock = it->second;
+    std::thread::id own_thread_id = std::this_thread::get_id();
+
+    if( lock.m_thread_id != own_thread_id) {
+        LOG::mod_log->error(
+            M_DB, LOG::Mod_log::C_DATABASE,
+            "Attempt to unlock DB lock with ID %u from another thread.", lock_id);
+        return false;
+    }
+
+    // Decrease the lock count. Return if the lock is still locked recursively by this thread.
+    --lock.m_counter;
+    if( lock.m_counter > 0)
+        return true;
+
+    // This thread just unlocked the lock (including recursively). If there are no outstanding
+    // request, remove the lock itself.
+    if( lock.m_requests.empty()) {
+        m_db_locks.erase( it);
+        return true;
+    }
+
+    // Otherwise, wake up oldest request and remove it from the queue.
+    Db_lock_request* request = lock.m_requests.front();
+    lock.m_requests.pop_front();
+    lock.m_thread_id = request->m_thread_id;
+    lock.m_counter = 1;
+    request->m_condition.signal();
+
+    return true;
+}
+
+void Database_impl::check_is_locked( mi::Uint32 lock_id)
+{
+    auto it = m_db_locks.find( lock_id);
+
+    if( it == m_db_locks.end()) {
+        LOG::mod_log->error(
+            M_DB, LOG::Mod_log::C_DATABASE, "DB lock with ID %u is not locked.", lock_id);
+        MI_ASSERT( !"DB lock not locked");
+        return;
+    }
+
+    Db_lock& lock = it->second;
+    std::thread::id own_thread_id = std::this_thread::get_id();
+
+    if( lock.m_thread_id != own_thread_id) {
+        LOG::mod_log->error(
+            M_DB, LOG::Mod_log::C_DATABASE, "DB lock with ID %u is locked from another thread.",
+            lock_id);
+        MI_ASSERT( !"DB lock locked from other thread");
+    }
+}
 
 mi::Sint32 Database_impl::set_memory_limits( size_t low_water, size_t high_water)
 {
@@ -332,13 +429,13 @@ DB::Tag Database_impl::allocate_tag()
     return DB::Tag( result);
 }
 
-void Database_impl::dump( std::ostream& s, bool mask_pointer_values)
+void Database_impl::dump( std::ostream& s, bool verbose, bool mask_pointer_values)
 {
     THREAD::Block_shared block( &m_lock);
 
-    m_scope_manager->dump( s, mask_pointer_values);
-    m_transaction_manager->dump( s, mask_pointer_values);
-    m_info_manager->dump( s, mask_pointer_values);
+    m_scope_manager->dump( s, verbose, mask_pointer_values);
+    m_transaction_manager->dump( s, verbose, mask_pointer_values);
+    m_info_manager->dump( s, verbose, mask_pointer_values);
 }
 
 DB::Database* factory(

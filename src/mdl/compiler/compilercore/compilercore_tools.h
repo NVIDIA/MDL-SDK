@@ -362,6 +362,16 @@ IDefinition const *skip_presets(
     IDeclaration_function const   *func_decl,
     mi::base::Handle<Module const> &owner_mod);
 
+/// Skip all presets returning the original function declaration.
+///
+/// \param[in]    func_decl  a function declaration
+/// \param[inout] owner_mod  the owner module of the function declaration
+///
+/// \return func_decl's definition if this is not a preset, the original definition otherwise
+IDefinition const *skip_presets(
+    IDeclaration_function const     *func_decl,
+    mi::base::Handle<IModule const> &owner_mod);
+
 /// Skip all presets returning the original function definition.
 ///
 /// \param[in]    func_def   a function definition
@@ -371,6 +381,16 @@ IDefinition const *skip_presets(
 IDefinition const *skip_presets(
     IDefinition const              *func_def,
     mi::base::Handle<Module const> &owner_mod);
+
+/// Skip all presets returning the original function definition.
+///
+/// \param[in]    func_def   a function definition
+/// \param[inout] owner_mod  the owner module of the function definition
+///
+/// \return func_decl itself if this is not a preset, the original definition otherwise
+IDefinition const *skip_presets(
+    IDefinition const               *func_def,
+    mi::base::Handle<IModule const> &owner_mod);
 
 /// Copy the position from one AST element to another.
 /// \tparam IAst   type of the AST element

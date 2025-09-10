@@ -45,6 +45,7 @@
 #include <mi/mdl/mdl_modules.h>
 #include <mi/mdl/mdl_streams.h>
 
+#include <base/hal/disk/disk_utils.h>
 #include <base/hal/hal/i_hal_ospath.h>
 #include <base/lib/path/i_path.h>
 #include <base/system/main/i_module_id.h>
@@ -794,8 +795,8 @@ bool Mdl_discovery_api_impl::discover_filesystem_recursive(
     package_path += "::";
 
     for (auto& fs_entry: fs::directory_iterator(dir)) {
-        std::string entry = fs_entry.path().filename().u8string();
-        std::string resolved_path = fs_entry.path().u8string();
+        std::string entry = DISK::to_string(fs_entry.path().filename());
+        std::string resolved_path = DISK::to_string(fs_entry.path());
         if (fs::is_directory(fs_entry)) {
             if (!is_valid_path(
                 invalid_dirs,
@@ -978,17 +979,18 @@ const mi::neuraylib::IMdl_discovery_result* Mdl_discovery_api_impl::discover(
 
         std::map<std::string, bool> archives;
         for (const auto& entry: fs::directory_iterator(fs_path))
-            if (fs::is_regular_file(entry) && entry.path().extension().u8string() == ".mdr")
-                archives.insert(std::make_pair(entry.path().stem().u8string(), true));
+            if (fs::is_regular_file(entry) && DISK::to_string(entry.path().extension()) == ".mdr")
+                archives.insert(std::make_pair(DISK::to_string(entry.path().stem()), true));
 
         // Discover archives
+        std::string fs_path_str = DISK::to_string(fs_path);
         std::vector<std::string> invalid_directories;
         for (auto& archive : archives) {
-            if (validate_archive(archive, archives, invalid_directories, fs_path.u8string())) {
-                std::string resolved_path = (fs_path / (archive.first + ".mdr")).u8string();
+            if (validate_archive(archive, archives, invalid_directories, fs_path_str)) {
+                std::string resolved_path = DISK::to_string((fs_path / (archive.first + ".mdr")));
                 discover_archive(
                     root_package,
-                    fs_path.u8string().c_str(),
+                    fs_path_str.c_str(),
                     i,
                     resolved_path.c_str(),
                     filter);
@@ -998,9 +1000,9 @@ const mi::neuraylib::IMdl_discovery_result* Mdl_discovery_api_impl::discover(
         // Discover file system
         discover_filesystem_recursive(
             root_package,
-            fs_path.u8string().c_str(),
+            fs_path_str.c_str(),
             i,
-            fs_path.u8string().c_str(),
+            fs_path_str.c_str(),
             invalid_directories,
             filter);
     }

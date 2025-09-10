@@ -45,12 +45,13 @@
 #include <mi/neuraylib/istring.h>
 #include <mi/mdl/mdl_archiver.h>
 
-#include <base/system/main/access_module.h>
-#include <base/util/string_utils/i_string_lexicographic_cast.h>
-#include <base/lib/log/i_log_logger.h>
 #include <base/data/serial/i_serializer.h>
 #include <base/data/db/i_db_access.h>
 #include <base/data/db/i_db_transaction.h>
+#include <base/hal/disk/disk_utils.h>
+#include <base/lib/log/i_log_logger.h>
+#include <base/util/string_utils/i_string_lexicographic_cast.h>
+#include <base/system/main/access_module.h>
 #include <mdl/compiler/compilercore/compilercore_modules.h>
 #include <mdl/compiler/compilercore/compilercore_tools.h>
 #include <mdl/compiler/compilercore/compilercore_mangle.h>
@@ -1472,7 +1473,7 @@ SERIAL::Serializable* Mdl_function_definition::deserialize( SERIAL::Deserializer
     Scene_element_base::deserialize( deserializer);
 
     SERIAL::read( deserializer, &m_module_filename);
-    m_module_filename = fs::u8path( m_module_filename).u8string();
+    m_module_filename = DISK::to_string( fs::u8path( m_module_filename));
     std::error_code ec;
     if( !m_module_filename.empty() && !fs::exists( fs::u8path( m_module_filename), ec))
         m_module_filename.clear();
@@ -1703,7 +1704,7 @@ IExpression_list* Mdl_function_definition::check_and_prepare_arguments(
             if( needs_cast[i]) {
                 mi::base::Handle<const IType> expected_type(
                     m_parameter_types->get_type( i));
-                mi::Sint32 errors = 0;
+                mi::Sint32 tmp_errors = 0;
                 argument_copy = m_ef->create_cast(
                     transaction,
                     argument_copy.get(),
@@ -1711,7 +1712,7 @@ IExpression_list* Mdl_function_definition::check_and_prepare_arguments(
                     /*cast_db_name*/ nullptr,
                     /*force_cast*/ false,
                     create_direct_calls,
-                    &errors);
+                    &tmp_errors);
                 ASSERT( M_SCENE, argument_copy); // should always succeed.
             }
             argument = argument_copy;
@@ -2016,9 +2017,8 @@ Mdl_function_definition::check_and_prepare_arguments_array_index_operator(
     // result type is uniform if array and index type are uniform
     if(    (base_type->get_all_type_modifiers()  & IType::MK_UNIFORM) != 0
         && (index_type->get_all_type_modifiers() & IType::MK_UNIFORM) != 0) {
-        IType_factory *tf = get_type_factory();
-        ret_type = mi::base::make_handle(
-            tf->create_alias( ret_type.get(), IType::MK_UNIFORM, nullptr));
+        mi::base::Handle<IType_factory> tf( get_type_factory());
+        ret_type = tf->create_alias( ret_type.get(), IType::MK_UNIFORM, nullptr);
     }
 
     // clone arguments
@@ -2080,10 +2080,9 @@ Mdl_function_definition::check_and_prepare_arguments_array_length_operator(
     }
 
     // result type is "uniform int"
-    IType_factory *tf = get_type_factory();
+    mi::base::Handle<IType_factory> tf( get_type_factory());
     mi::base::Handle<const IType> ret_type( tf->create_int());
-    ret_type = mi::base::make_handle(
-        tf->create_alias( ret_type.get(), IType::MK_UNIFORM, nullptr));
+    ret_type = tf->create_alias( ret_type.get(), IType::MK_UNIFORM, nullptr);
 
     // clone arguments
     mi::base::Handle<IExpression_list> new_arguments(

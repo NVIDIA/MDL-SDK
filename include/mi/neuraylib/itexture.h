@@ -33,6 +33,7 @@
 
 #include <mi/neuraylib/iscene_element.h>
 #include <mi/neuraylib/typedefs.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -45,15 +46,13 @@ class IImage;
 */
 
 /// Texture compression method.
-enum Texture_compression
+enum Texture_compression : Uint32
 {
     TEXTURE_NO_COMPRESSION     = 0, ///< no compression
     TEXTURE_MEDIUM_COMPRESSION = 1, ///< medium compression ratio
-    TEXTURE_HIGH_COMPRESSION   = 2, ///< high compression ratio
-    TEXTURE_COMPRESSION_FORCE_32_BIT = 0xffffffffU
+    TEXTURE_HIGH_COMPRESSION   = 2  ///< high compression ratio
+    MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(TEXTURE_COMPRESSION_FORCE_32_BIT, 0xffffffffU)
 };
-
-mi_static_assert( sizeof( Texture_compression) == sizeof( Uint32));
 
 /// Supported filter types.
 ///
@@ -61,18 +60,16 @@ mi_static_assert( sizeof( Texture_compression) == sizeof( Uint32));
 /// a single pixel value.
 ///
 /// \if IRAY_API \see attribute \c filter on #mi::neuraylib::IOptions \endif
-enum Filter_type
+enum Filter_type : Uint32
 {
     FILTER_BOX          = 0,    ///< box filter
     FILTER_TRIANGLE     = 1,    ///< triangle filter
     FILTER_GAUSS        = 2,    ///< Gaussian filter
     FILTER_CMITCHELL    = 3,    ///< clipped Mitchell filter
     FILTER_CLANCZOS     = 4,    ///< clipped Lanczos filter
-    FILTER_FAST         = 5,    ///< a fast filter, could be GPU anti-aliasing, or any
-    FILTER_FORCE_32_BIT = 0xffffffffU
+    FILTER_FAST         = 5     ///< a fast filter, could be GPU anti-aliasing, or any
+    MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(FILTER_FORCE_32_BIT, 0xffffffffU)
 };
-
-mi_static_assert( sizeof( Filter_type) == sizeof( Uint32));
 
 /// Textures add image processing options to images.
 ///

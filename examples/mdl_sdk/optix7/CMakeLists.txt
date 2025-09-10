@@ -52,7 +52,6 @@ set_source_files_properties(${_GENERATED_SOURCES} PROPERTIES GENERATED TRUE)
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
     TYPE EXECUTABLE
-    NAMESPACE mdl_sdk
     OUTPUT_NAME "optix7"
     SOURCES
         ${PROJECT_SOURCES}
@@ -154,4 +153,5 @@ target_add_cuda_ptx_rule(TARGET ${PROJECT_NAME}
 add_target_install(
     TARGET ${PROJECT_NAME}
     DESTINATION "examples/mdl_sdk/optix7"
+    INCLUDE ${_GENERATED_SOURCES} "*.ptx"
     )

@@ -33,6 +33,7 @@
 
 #include <mi/neuraylib/iexpression.h>
 #include <mi/neuraylib/iscene_element.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -47,7 +48,7 @@ class IMdl_execution_context;
 /// Material slots identify parts of a compiled material.
 ///
 /// \see #mi::neuraylib::ICompiled_material and #mi::neuraylib::ICompiled_material::get_slot_hash()
-enum Material_slot {
+enum Material_slot : Uint32 {
     SLOT_THIN_WALLED,                     ///< Slot \c "thin_walled"
     SLOT_SURFACE_SCATTERING,              ///< Slot \c "surface.scattering"
     SLOT_SURFACE_EMISSION_EDF_EMISSION,   ///< Slot \c "surface.emission.emission"
@@ -67,27 +68,23 @@ enum Material_slot {
     SLOT_GEOMETRY_NORMAL,                 ///< Slot \c "geometry.normal"
     SLOT_HAIR,                            ///< Slot \c "hair"
     SLOT_FIRST = SLOT_THIN_WALLED,        ///< First slot
-    SLOT_LAST  = SLOT_HAIR,               ///< Last slot
-    SLOT_FORCE_32_BIT = 0xffffffffU
+    SLOT_LAST  = SLOT_HAIR                ///< Last slot
+    MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(SLOT_FORCE_32_BIT, 0xffffffffU)
 };
-
-mi_static_assert( sizeof( Material_slot) == sizeof( mi::Uint32));
 
 /// The opacity of a compiled material.
 ///
 /// See #mi::neuraylib::ICompiled_material::get_opacity() and
 /// #mi::neuraylib::ICompiled_material::get_surface_opacity().
-enum Material_opacity {
+enum Material_opacity : Uint32 {
     /// The material is opaque.
     OPACITY_OPAQUE,
     /// The material is transparent.
     OPACITY_TRANSPARENT,
     /// The opacity of the material is unknown, e.g., because it depends on parameters.
-    OPACITY_UNKNOWN,
-    OPACITY_FORCE_32_BIT = 0xffffffffU
+    OPACITY_UNKNOWN
+    MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(OPACITY_FORCE_32_BIT, 0xffffffffU)
 };
-
-mi_static_assert( sizeof( Material_opacity) == sizeof( mi::Uint32));
 
 /// This interface represents a compiled material.
 ///
@@ -161,9 +158,31 @@ public:
     ///
     /// \param path    The path from the material root to the expression that should be returned,
     ///                e.g., \c "surface.scattering.tint".
-    /// \return        A sub-expression for \p expr according to \p path, or \c nullptr in case of
-    ///                errors.
+    /// \return        The sub-expression specificed by \p path, or \c nullptr in case of errors.
     virtual const IExpression* lookup_sub_expression( const char* path) const = 0;
+
+    /// Looks up a sub-expression of the compiled material.
+    ///
+    /// This templated member function is a wrapper of the non-template variant for the user's
+    /// convenience. It eliminates the need to call
+    /// #mi::base::IInterface::get_interface(const Uuid &)
+    /// on the returned pointer, since the return type already is a pointer to the type \p T
+    /// specified as template parameter.
+    ///
+    /// \tparam T      The interface type of the requested sub-expression.
+    /// \param path    The path from the material root to the expression that should be returned,
+    ///                e.g., \c "surface.scattering.tint".
+    /// \return        The sub-expression specificed by \p path, or \c nullptr in case of errors.
+    template<class T>
+    const T* lookup_sub_expression( const char* path) const
+    {
+        const IExpression* ptr_iexpression = lookup_sub_expression( path);
+        if ( !ptr_iexpression)
+            return 0;
+        const T* ptr_T = static_cast<const T*>( ptr_iexpression->get_interface( typename T::IID()));
+        ptr_iexpression->release();
+        return ptr_T;
+    }
 
     /// Indicates whether the compiled material is valid.
     ///

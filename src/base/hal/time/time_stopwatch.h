@@ -27,10 +27,7 @@
  *****************************************************************************/
 
 /// \file
-/// \brief Stop Watch for statistics.
-///
-/// A stop watch is a system timer that can be started, resumed, stopped, reset,
-/// and queried for the time period the instance was running.
+/// \brief Stop watch for statistics.
 
 #ifndef BASE_HAL_TIME_STOPWATCH_H
 #define BASE_HAL_TIME_STOPWATCH_H
@@ -40,115 +37,180 @@
 namespace MI {
 namespace TIME {
 
-//////////////////////////////////////////////////////////////////////////
-/// Class for statistic, simulate a StopWatch
-//////////////////////////////////////////////////////////////////////////
 class Stopwatch
 {
 public:
-    /// Constructor, initializes the time module member
-    Stopwatch();
-    
-    /// Reset the stopwatch and start the counter.
-    inline void         restart();
+    /// Starts the stopwatch. No effect if already running.
+    inline void start();
 
-    /// Resume the stopwatch and start the counter.
-    inline void         resume();
-    /// Same as resume. Here for backwards compatibility.
-    inline void         start();
+    /// Stops the stopwatch. No effect if already stopped.
+    inline void stop();
 
-    /// Stop the counter. Do nothing if already stopped.
-    inline void         stop();
+    /// Identical to #start().
+    inline void resume() { return start(); }
 
-    /// Reset the counter.
-    inline void         reset(Time time = 0);
+    /// Sets the cumulative time to \p time. Does not affect the running status.
+    inline void reset( double time = 0);
 
-    /// Get elapsed time.
-    /// \return elapsed time
-    inline double       elapsed() const;
+    /// Stops the stopwatch, set the cumulative time to 0, and starts it again.
+    inline void restart();
 
-    /// return true iff counting
-    inline bool         is_running() const;
+    /// Returns the total elapsed time so far.
+    inline double elapsed() const;
 
-    /// Scoped operations on Stopwatch.
+    /// Indicates whether the stopwatch is currently running.
+    inline bool is_running() const { return m_is_running; }
+
+    /// Scoped operations on a stopwatch.
     class Scoped_run;
     class Scoped_stop;
 
 private:
-    bool                m_is_running;   ///< true if running
-    Time                m_ctime;        ///< cumulative time
-    Time                m_time;         ///< start time
+    /// Returns the current time used by the stopwatch (in seconds).
+    inline static double get_current_time();
+
+    bool m_is_running = false;     ///< Indicates whether the stopwatch is running.
+    double m_accumulated_time = 0; ///< Time accumulated up to the last stop in seconds.
+    double m_start_time = 0;       ///< Time of the last start/resume/reset/restart call in seconds.
 };
 
-/// Run a stopwatch for the lifetime of this object. Use the class as follows:
+/// Run a stopwatch for the lifetime of this object.
 ///
+/// Run scopes can be nested. If the stopwatch was already running, this object will have no effect.
+///
+/// Example:
 /// \code
-///
 ///   Stopwatch watch;
 ///   {
 ///       Stopwatch::Scoped_run timer(watch);
 ///       run_some_elaborate_function();
 ///   }
-///   cout << watch.elapsed() << endl;
-///
+///   std::cout << watch.elapsed() << std::endl;
 /// \endcode
-///
-/// Run scopes can be nested. If the stopwatch was already running, 
-/// this objects will have no effect.
-
 class Stopwatch::Scoped_run
 {
 public:
     /// \param watch stopwatch to run in current scope
-    Scoped_run(
-        Stopwatch &     watch);
+    Scoped_run( Stopwatch &watch);
     ~Scoped_run();
 
+    Scoped_run( const Scoped_run&) = delete;
+    Scoped_run& operator=( const Scoped_run&) = delete;
+
 private:
-    Stopwatch & m_watch;
+    Stopwatch& m_watch;
     bool m_was_running;
 };
 
-/// This class implements a timer scope similar to Scoped_run, but instead it
-/// will stop a running watch for the lifetime of the class. Here is a usage
-/// example:
+/// Stop a stopwatch for the lifetime of this object.
 ///
+/// Stop scopes can be nested. If the stopwatch was not running, this object will have no effect.
+///
+/// Example:
 /// \code
-///
 ///   Stopwatch watch;
 ///   {
-///       Stopwatch::Scoped_run timer(watch);
+///       Stopwatch::Scoped_run timer1(watch);
 ///       {
 ///           run_some_elaborate_function();
 ///           {
-///               Stopwatch::Scoped_stop timer(watch);
+///               Stopwatch::Scoped_stop timer1(watch);
 ///               run_an_elaborate_function_but_dont_time_it();
 ///           }
 ///           run_another_elaborate_function();
 ///       }
 ///   }
-///   cout << watch.elapsed() << endl;
-///
+///   std::cout << watch.elapsed() << std::endl;
 /// \endcode
-///
-/// Stop scopes can be nested. If the stopwatch was not running, 
-/// this objects will have no effect.
 
 class Stopwatch::Scoped_stop
 {
 public:
     /// \param watch stopwatch to pause in current scope
-    Scoped_stop(
-        Stopwatch &     watch);
+    Scoped_stop( Stopwatch& watch);
     ~Scoped_stop();
 
+    Scoped_stop( const Scoped_stop&) = delete;
+    Scoped_stop& operator=( const Scoped_stop&) = delete;
+
 private:
-    Stopwatch & m_watch;
+    Stopwatch& m_watch;
     bool m_was_running;
 };
 
-}} // MI::TIME
+inline void Stopwatch::start()
+{
+    if( m_is_running)
+        return;
 
-#include "time_stopwatch_inline.h"
+    m_is_running = true;
+    m_start_time = get_current_time();
+}
+
+inline void Stopwatch::stop()
+{
+    if( !m_is_running)
+        return;
+
+    m_is_running = false;
+    m_accumulated_time += get_current_time() - m_start_time;
+}
+
+inline void Stopwatch::reset( double time)
+{
+    m_accumulated_time = time;
+    if( m_is_running)
+        m_start_time = get_current_time();
+}
+
+inline void Stopwatch::restart()
+{
+    m_is_running = true;
+    m_accumulated_time = 0;
+    m_start_time = get_current_time();
+}
+
+inline double Stopwatch::elapsed() const
+{
+    double time = m_accumulated_time;
+    if( m_is_running )
+        time += get_current_time() - m_start_time;
+
+    // Avoid returning negative values in case the clock is not monotonic.
+    return time > 0 ? time : 0;
+}
+
+inline double Stopwatch::get_current_time()
+{
+    return TIME::get_time().get_seconds();
+}
+
+inline Stopwatch::Scoped_run::Scoped_run( Stopwatch& watch)
+  : m_watch( watch)
+{
+    m_was_running = m_watch.is_running();
+    m_watch.resume();
+}
+
+inline Stopwatch::Scoped_run::~Scoped_run()
+{
+    if( !m_was_running)
+        m_watch.stop();
+}
+
+inline Stopwatch::Scoped_stop::Scoped_stop( Stopwatch& watch)
+  : m_watch( watch)
+{
+    m_was_running = m_watch.is_running();
+    m_watch.stop();
+}
+
+inline Stopwatch::Scoped_stop::~Scoped_stop()
+{
+    if( m_was_running)
+        m_watch.resume();
+}
+
+}} // MI::TIME
 
 #endif // BASE_HAL_TIME_STOPWATCH_H

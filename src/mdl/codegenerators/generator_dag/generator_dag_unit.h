@@ -50,6 +50,9 @@ public:
     typedef unsigned File_ID;
     typedef unsigned Lineno_type;
 
+    /// The type of maps from DAG nodes to names.
+    typedef ptr_hash_map<DAG_node const, ISymbol const *>::Type Node_name_map;
+
     /// True, if debug info is enabled.
     bool has_dbg_info() const { return m_has_dbg_info; }
 
@@ -60,11 +63,13 @@ public:
     DAG_unit(
         MDL  *compiler,
         bool enable_debug_info)
-    : m_arena(compiler->get_mdl_allocator())
+    : m_arena(compiler->get_allocator())
     , m_sym_tab(m_arena)
-    , m_type_factory(m_arena, *compiler, m_sym_tab)
+    , m_type_factory(m_arena, compiler->get_type_factory(), m_sym_tab)
     , m_value_factory(m_arena, m_type_factory)
-    , m_dbg_fnames(compiler->get_mdl_allocator())
+    , m_node_name_map(compiler->get_allocator())
+    , m_cse_nodes_with_different_names(false)
+    , m_dbg_fnames(compiler->get_allocator())
     , m_has_dbg_info(enable_debug_info)
     {}
 
@@ -173,15 +178,80 @@ public:
     /// Check if this unit owns the given DAG node.
     MDL_CHECK_RESULT bool is_owner(DAG_node const *n) const { return m_arena.contains(n); }
 
-    /// Serialize the unit.
+    /// Import a symbol.
+    ///
+    /// \param sym  the symbol to import
+    ///
+    /// \return the imported symbol
+    ISymbol const *import_symbol(ISymbol const *sym) {
+        return m_sym_tab.get_symbol(sym->get_name());
+    }
+
+    /// Get the node name map.
+    ///
+    /// \return the node name map
+    DAG_unit::Node_name_map const &get_node_name_map() const {
+        return m_node_name_map;
+    }
+
+    /// Set the name for a DAG node.
+    ///
+    /// \param n  the DAG node
+    /// \param sym  the symbol of the name
+    void set_node_name(DAG_node const *n, ISymbol const *sym) {
+        m_node_name_map[n] = sym;
+    }
+
+    /// Get the name for a DAG node if there is any.
+    ///
+    /// \param n  the DAG node
+    ///
+    /// \return  the symbol of the name or nullptr if there is no associated name for the node
+    ISymbol const *get_node_name(DAG_node const *n) const;
+
+    /// Get the name for a DAG node if there is any and the name should influence CSE.
+    ///
+    /// \param n  the DAG node
+    ///
+    /// \return  the symbol of the name or nullptr if there is no associated name for the node
+    ///          or the name should not influence CSE
+    ISymbol const *get_cse_node_name(DAG_node const *n) const {
+        if (m_cse_nodes_with_different_names) {
+            return get_node_name(n);
+        }
+        return nullptr;
+    }
+
+    /// Set whether nodes with different names should be CSE'd.
+    ///
+    /// \param flag  if true, CSE nodes with different names, otherwise don't
+    ///
+    /// \return the previous value
+    bool set_cse_nodes_with_different_names(bool flag) {
+        bool old = m_cse_nodes_with_different_names;
+        m_cse_nodes_with_different_names = flag;
+        return old;
+    }
+
+    /// Serialize the factories of the unit. Must be called before the DAG nodes are serialized.
     ///
     /// \param serializer  the DAG IR serializer
-    void serialize(DAG_serializer &serializer) const;
+    void serialize_factories(DAG_serializer &serializer) const;
 
-    /// Deserialize the unit.
+    /// Serialize the rest of the unit.
+    ///
+    /// \param serializer  the DAG IR serializer
+    void serialize_attributes(DAG_serializer &serializer) const;
+
+    /// Deserialize the factories of the unit. Must be called before the DAG nodes are deserialized.
     ///
     /// \param deserializer  the DAG IR deserializer
-    void deserialize(DAG_deserializer &deserializer);
+    void deserialize_factories(DAG_deserializer &deserializer);
+
+    /// Deserialize the rest of the unit.
+    ///
+    /// \param deserializer  the DAG IR deserializer
+    void deserialize_attributes(DAG_deserializer &deserializer);
 
 private:
     /// The memory arena that contains all entities owned by this unit.
@@ -195,6 +265,12 @@ private:
 
     /// The value factory of this unit.
     Value_factory m_value_factory;
+
+    /// The map for node names.
+    Node_name_map m_node_name_map;
+
+    /// If true, CSE nodes with different names.
+    bool m_cse_nodes_with_different_names;
 
     typedef vector<char const *>::Type  Cstr_vector;
 

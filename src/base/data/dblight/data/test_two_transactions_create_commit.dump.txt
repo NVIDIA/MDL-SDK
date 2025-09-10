@@ -7,6 +7,8 @@ ID 0: pin count = 2, state = OPEN, next sequence number = 0, visibility ID = 429
 
 Count of infos by distinct names: 0
 Count of infos by distinct tags: 0
+Count of all infos: 0
+Count of infos by class IDs:
 
 Count of all scopes: 1
 ID 0: name = (null), pin count = 3, level = 0, parent ID = (null), removed = 0
@@ -18,6 +20,8 @@ ID 1: pin count = 2, state = OPEN, next sequence number = 0, visibility ID = 429
 
 Count of infos by distinct names: 0
 Count of infos by distinct tags: 0
+Count of all infos: 0
+Count of infos by class IDs:
 
 Count of all scopes: 1
 ID 0: name = (null), pin count = 3, level = 0, parent ID = (null), removed = 0
@@ -29,6 +33,8 @@ ID 1: pin count = 2, state = OPEN, next sequence number = 0, visibility ID = 429
 
 Count of infos by distinct names: 0
 Count of infos by distinct tags: 0
+Count of all infos: 0
+Count of infos by class IDs:
 
 Count of all scopes: 1
 ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
@@ -39,6 +45,8 @@ ID 1: pin count = 2, state = OPEN, next sequence number = 0, visibility ID = 429
 
 Count of infos by distinct names: 0
 Count of infos by distinct tags: 0
+Count of all infos: 0
+Count of infos by class IDs:
 
 Count of all scopes: 1
 ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
@@ -49,6 +57,8 @@ ID 1: pin count = 1, state = COMMITTED, next sequence number = 0, visibility ID 
 
 Count of infos by distinct names: 0
 Count of infos by distinct tags: 0
+Count of all infos: 0
+Count of infos by class IDs:
 
 Count of all scopes: 1
 ID 0: name = (null), pin count = 1, level = 0, parent ID = (null), removed = 0
@@ -57,4 +67,6 @@ Count of all transactions: 0
 Count of open transactions: 0
 Count of infos by distinct names: 0
 Count of infos by distinct tags: 0
+Count of all infos: 0
+Count of infos by class IDs:
 

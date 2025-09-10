@@ -531,6 +531,30 @@ private:
 
         IExpression_binary::Operator op = expr->get_operator();
 
+        if (IExpression_binary::is_assign_operator(op)) {
+            IExpression const *left = expr->get_left_argument();
+            if (is_simple_select_expr(left)) {
+                IExpression_binary const *select = cast<IExpression_binary>(left);
+                IExpression_reference const *ref =
+                    cast<IExpression_reference>(select->get_left_argument());
+
+                IType const *c_tp = ref->get_type()->skip_type_alias();
+
+                if (IType_struct const *s_tp = as<IType_struct>(c_tp)) {
+                    // the code generator will create a struct insert here,
+                    // which requires ALL struct access functions to be generated.
+                    bool is_imported_type = false;
+
+                    Scope *type_scope = m_module->get_definition_table().get_type_scope(s_tp);
+                    Definition const *type_def = type_scope->get_owner_definition();
+                    is_imported_type = type_def->has_flag(Definition::DEF_IS_IMPORTED);
+
+                    m_dg.create_all_field_access_functions(
+                        m_module, m_curr, s_tp, is_imported_type, m_inside_parameter);
+                }
+            }
+        }
+
         if (op == IExpression_binary::OK_ASSIGN) {
             IExpression const *lvalue = expr->get_left_argument();
 
@@ -1668,6 +1692,78 @@ void DAG_dependence_graph::has_dependence_loop(Node_vec const &nodes)
     }
 }
 
+// Create all field access functions for a given struct type.
+void DAG_dependence_graph::create_all_field_access_functions(
+    IModule const      *module,
+    Dependence_node    *curr,
+    IType_struct const *s_type,
+    bool               is_imported_type,
+    bool               is_def_arg)
+{
+    // create field access nodes here
+    string name = m_dag_builder.type_to_name(s_type);
+    string simple_name(m_arena.get_allocator());
+
+    size_t pos = name.find_last_of(':');
+    if (pos != string::npos) {
+        simple_name = name.substr(pos + 1);
+    } else {
+        simple_name = name;
+    }
+
+    string alias(m_arena.get_allocator());
+
+    if (is_imported_type) {
+        // remap the type name here, it is imported, we need an alias
+        alias = name;
+        name = module->get_name();
+        name += "::";
+        name += simple_name;
+    }
+
+    unsigned flags = Dependence_node::FL_IS_EXPORTED;
+    if (s_type->is_declarative()) {
+        flags |= Dependence_node::FL_IS_DECLARATIVE;
+    }
+    for (size_t l = 0, n_fields = s_type->get_field_count(); l < n_fields; ++l) {
+        IType_struct::Field const *field = s_type->get_field(l);
+
+        string field_access(m_arena.get_allocator());
+        field_access += '.';
+        field_access += field->get_symbol()->get_name();
+
+        string signature_suffix(m_arena.get_allocator());
+        signature_suffix += '(';
+        signature_suffix += m_dag_builder.type_to_name(s_type->skip_type_alias());
+        signature_suffix += ')';
+
+        string dag_name = name + field_access + signature_suffix;
+        string dag_simple_name = simple_name + field_access;
+        string dag_alias_name(m_arena.get_allocator());
+        if (!alias.empty()) {
+            dag_alias_name = alias + field_access + signature_suffix;
+        }
+
+        // we don't have the symbol here
+        Dependence_node::Parameter param(s_type, "s");
+
+        Dependence_node *n = get_node(
+            dag_name.c_str(),
+            dag_simple_name.c_str(),
+            dag_alias_name.empty() ? NULL : dag_alias_name.c_str(),
+            /*dag_preset_name=*/NULL,
+            IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS,
+            field->get_type(),
+            param,
+            flags);
+        m_exported_nodes.push_back(n);
+
+        if (curr != NULL) {
+            curr->add_edge(m_arena, n, is_def_arg);
+        }
+    }
+}
+
 // Create a node.
 void DAG_dependence_graph::create_exported_nodes(
     IModule const     *module,
@@ -1713,7 +1809,7 @@ void DAG_dependence_graph::create_exported_nodes(
                         // we don't have the symbol here
                         Dependence_node::Parameter param(ret_type, "s");
 
-                        n = get_node(
+                        Dependence_node *n = get_node(
                             dag_name.c_str(),
                             dag_simple_name.c_str(),
                             /*dag_alias_name=*/NULL,
@@ -1734,6 +1830,7 @@ void DAG_dependence_graph::create_exported_nodes(
             int ctor_count = module->get_type_constructor_count(s_type);
 
             // add all constructors of the struct type
+            bool is_imported_type = def->get_property(IDefinition::DP_IS_IMPORTED);
             for (int k = 0; k < ctor_count; ++k) {
                 IDefinition const *ctor_def = module->get_type_constructor(s_type, k);
 
@@ -1742,64 +1839,8 @@ void DAG_dependence_graph::create_exported_nodes(
 
                 IDefinition::Semantics sema = ctor_def->get_semantics();
                 if (sema == IDefinition::DS_ELEM_CONSTRUCTOR) {
-                    // create field access nodes here
-                    string name        = m_dag_builder.type_to_name(s_type);
-                    string simple_name(m_arena.get_allocator());
-
-                    size_t pos = name.find_last_of(':');
-                    if (pos != string::npos) {
-                        simple_name = name.substr(pos + 1);
-                    } else {
-                        simple_name = name;
-                    }
-
-                    string alias(m_arena.get_allocator());
-
-                    if (def->get_property(IDefinition::DP_IS_IMPORTED)) {
-                        // remap the type name here, it is imported, we need an alias
-                        alias = name;
-                        name = module->get_name();
-                        name += "::";
-                        name += simple_name;
-                    }
-
-                    unsigned flags = Dependence_node::FL_IS_EXPORTED;
-                    if (s_type->is_declarative()) {
-                        flags |= Dependence_node::FL_IS_DECLARATIVE;
-                    }
-                    for (size_t l = 0, n_fields = s_type->get_field_count(); l < n_fields; ++l) {
-                        IType_struct::Field const *field = s_type->get_field(l);
-
-                        string field_access(m_arena.get_allocator());
-                        field_access += '.';
-                        field_access += field->get_symbol()->get_name();
-
-                        string signature_suffix(m_arena.get_allocator());
-                        signature_suffix += '(';
-                        signature_suffix += m_dag_builder.type_to_name(s_type->skip_type_alias());
-                        signature_suffix += ')';
-
-                        string dag_name        = name + field_access + signature_suffix;
-                        string dag_simple_name = simple_name + field_access;
-                        string dag_alias_name(m_arena.get_allocator());
-                        if (!alias.empty()) {
-                            dag_alias_name = alias + field_access + signature_suffix;
-                        }
-
-                        // we don't have the symbol here
-                        Dependence_node::Parameter param(s_type, "s");
-
-                        n = get_node(
-                            dag_name.c_str(),
-                            dag_simple_name.c_str(),
-                            dag_alias_name.empty() ? NULL : dag_alias_name.c_str(),
-                            /*dag_preset_name=*/NULL,
-                            IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS,
-                            field->get_type(),
-                            param,
-                            flags);
-                        m_exported_nodes.push_back(n);
-                    }
+                    create_all_field_access_functions(
+                        module, /*curr=*/NULL, s_type, is_imported_type, /*is_def_arg=*/false);
                 }
             }
         }

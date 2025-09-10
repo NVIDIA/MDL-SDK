@@ -51,10 +51,9 @@ using Container_based = const Container_based_helper*;
 struct Memory_based_helper {};
 using Memory_based = const Memory_based_helper*;
 
-constexpr mi::Uint32 default_tile_width  = 64;
-constexpr mi::Uint32 default_tile_height = 64;
-
 /// The supported pixel types.
+///
+/// See mi/neuraylib/idata.h for details.
 enum Pixel_type {
     PT_UNDEF,      /// undefined/invalid pixel type
     PT_SINT8,      /// pixel type "Sint8"

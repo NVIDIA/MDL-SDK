@@ -277,7 +277,7 @@ private:
     bool m_avoid_resource_urls;
 
     /// Set of indirect calls in the current call stack, used to check for cycles.
-    robin_hood::unordered_set<DB::Tag> m_set_indirect_calls;
+    ankerl::unordered_dense::set<DB::Tag> m_set_indirect_calls;
 };
 
 } // namespace MDL

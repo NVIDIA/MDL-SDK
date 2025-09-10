@@ -61,6 +61,41 @@ bool access( const char* path, bool for_writing)
     return success;
 }
 
+std::string to_string( const std::filesystem::path& path)
+{
+#ifdef MI_PLATFORM_WINDOWS
+#if (__cplusplus >= 202002L)
+    std::u8string tmp( path.u8string());
+    return { reinterpret_cast<char*>( tmp.c_str()), tmp.size() };
+#else
+    return path.u8string();
+#endif
+#else
+    return path.string();
+#endif
+}
+
+std::string get_extension( const std::string& filename)
+{
+    if( filename.empty())
+        return {};
+
+    size_t i = filename.size() - 1;
+
+    while( true) {
+        char c = filename[i];
+        if( (c == '.') && (i > 0))
+            return filename.substr( i+1);
+        if( c == '/' || c == '\\')
+            break;
+        if( i == 0)
+            break;
+        --i;
+    }
+
+    return {};
+}
+
 } // namespace DISK
 
 } // namespace MI

@@ -49,7 +49,7 @@ function(CREATE_UNIT_TEST_TEMPLATE)
             ../test_shared.h
         DEPENDS
             ${LINKER_START_GROUP}
-            mdl::io-image-image
+            io-image-image
             ${LINKER_DEPENDENCIES_BASE}
             ${LINKER_END_GROUP}
             boost

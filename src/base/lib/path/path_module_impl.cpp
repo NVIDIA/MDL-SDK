@@ -236,8 +236,10 @@ std::string Path_module_impl::search(
 
     fs::path path( fs::u8path( normalized_file_name));
 
-    if( path.is_absolute())
-        return DISK::access( path.u8string().c_str()) ? normalized_file_name : s_empty_string;
+    if( path.is_absolute()) {
+        bool exists = DISK::access( DISK::to_string( path).c_str());
+        return exists ? normalized_file_name : s_empty_string;
+    }
 
     mi::base::Lock::Block block( &m_lock);
 
@@ -246,8 +248,9 @@ std::string Path_module_impl::search(
 
     for( size_t i = 0; i < n; ++i) {
         fs::path candidate = fs::u8path( search_path[i]) / path;
-        if( DISK::access( candidate.u8string().c_str()))
-            return candidate.u8string();
+        std::string candidate_str = DISK::to_string( candidate);
+        if( DISK::access( candidate_str.c_str()))
+            return candidate_str;
     }
 
     return {};

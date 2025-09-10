@@ -42,6 +42,7 @@ namespace MI {
 
 namespace DB {
 
+class Database;
 class Transaction;
 
 /// The privacy level defines to which level changes to an element go.
@@ -97,6 +98,9 @@ public:
 
     /// Returns the privacy level of this scope.
     virtual Privacy_level get_level() const = 0;
+
+    /// Return the database this scope belongs to.
+    virtual Database* get_database() const = 0;
 
     /// Creates a new scope (or retrieves an already existing named scope).
     ///

@@ -152,6 +152,17 @@ public:
         write_cstring(s);
     }
 
+    /// Write a symbol.
+    void write_encoded(ISymbol const *sym) {
+        if (sym == nullptr) {
+            // The NULL tag is used as no symbol
+            write_encoded_tag(Tag_t(0));
+        } else {
+            Tag_t t = get_symbol_tag(sym);
+            write_encoded_tag(t);
+        }
+    }
+
     /// Write a DAG node.
     void write_encoded(DAG_node const *node) {
         Tag_t t = get_ir_node_tag(node);
@@ -332,6 +343,17 @@ inline bool DAG_deserializer::read_encoded() {
 template<>
 inline unsigned char DAG_deserializer::read_encoded() {
     return read_byte();
+}
+
+/// Read a symbol.
+template<>
+inline ISymbol const *DAG_deserializer::read_encoded() {
+    Tag_t t = read_encoded_tag();
+    // The NULL tag is used as no symbol
+    if (t == Tag_t(0)) {
+        return nullptr;
+    }
+    return get_symbol(t);
 }
 
 /// Read a DAG node.

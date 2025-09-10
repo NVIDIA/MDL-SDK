@@ -34,7 +34,7 @@ namespace mdl {
 <div align="right">
     [\link mi_mdl_core_example_shared Previous\endlink]
     [\link mi_mdl_core_examples Up\endlink]
-    [\link mi_mdl_core_example_calls Next\endlink]
+    [\link mi_mdl_core_example_distilling_shared Next\endlink]
 </div>
 
 This page explains the Material_backend_compiler helper class.
@@ -127,7 +127,7 @@ All information like generated source code and used resources is then returned i
 <div align="right">
     [\link mi_mdl_core_example_shared Previous\endlink]
     [\link mi_mdl_core_examples Up\endlink]
-    [\link mi_mdl_core_example_calls Next\endlink]
+    [\link mi_mdl_core_example_distilling_shared Next\endlink]
 </div>
 
 */

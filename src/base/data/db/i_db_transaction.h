@@ -70,7 +70,19 @@ class Scope;
 /// See #mi::neuraylib::ITransaction for semantics of concurrent transactions, and for concurrent
 /// accesses to the very same database element within one particular transaction.
 ///
-/// \section Store level and privacy level
+/// \section tags_and_names Tags and names
+///
+/// Tags are mandatory and the primary key to identify DB element/jobs, names are optional and a
+/// secondary key. Most methods and reference counting operates on tags, only few methods also work
+/// on names. Conversion methods name_to_tag() and tag_to_name() exist on DB::Transaction.
+///
+/// Usually there is a 1:1 relation between the used (named) tags and names, however that is not
+/// required. Processing similar content in independent scopes often leads to m:1 relations. Also,
+/// when storing a DB element with a name that is eligible for GC one often allocates a new tag,
+/// leading to an m:1 relation. Even 1:n or m:n relations are legal from a DB point of view.
+/// However, the effects can be quite confusing for users, and its recommended to avoid them.
+///
+/// \section levels Store level and privacy level
 ///
 /// When storing database elements one can specify two parameters, the store level and the privacy
 /// level. These two parameters control in which scope the element is stored, from which scopes it
@@ -192,11 +204,18 @@ public:
     ///
     /// Low-level interface function, using DB::Access instead is strongly recommended.
     ///
-    /// \param tag   The tag to look up.
-    /// \return      The info for that tag. RCS:ICE
+    /// \param tag     The tag to look up.
+    /// \return        The info for that tag. RCS:ICE
     virtual Info* access_element( Tag tag) = 0;
 
-    /// Returns the info for the requested tag, intended for access and edit (non-const) operations.
+    /// Returns the info for the requested name, intended for access (const) operations.
+    ///
+    /// \param name    The name to look up.
+    /// \return        The info for that name, or \c nullptr if there is no info for that name.
+    ///                RCS:ICE
+    virtual Info* access_element( const char* name) = 0;
+
+    /// Returns the info for the requested tag, intended for edit (non-const) operations.
     ///
     /// Needs a call to #finish_edit() when done editing.
     ///
@@ -207,9 +226,20 @@ public:
     ///
     /// \note It is not possible to edit database elements representing job results.
     ///
-    /// \param tag   The tag to look up.
-    /// \return      The info for that tag. RCS:ICE
+    /// \param tag     The tag to look up.
+    /// \return        The info for that tag. RCS:ICE
     virtual Info* edit_element( Tag tag) = 0;
+
+    /// Returns the info for the requested name, intended for edit (non-const) operations.
+    ///
+    /// Needs a call to #finish_edit() when done editing.
+    ///
+    /// \note It is not possible to edit database elements representing job results.
+    ///
+    /// \param name    The name to look up.
+    /// \return        The info for that name, or \c nullptr if there is no info for that name.
+    ///                RCS:ICE
+    virtual Info* edit_element( const char* name) = 0;
 
     /// Finishes a previously started edit operation started with #edit_element().
     ///
@@ -278,7 +308,7 @@ public:
 
     /// Stores a DB element in the database (tag as return value).
     ///
-    /// Same as #store(Element_base,...) above, but with an additional call to #remove().
+    /// Same as #store(Element_base*,...) above, but with an additional call to #remove().
     virtual Tag store_for_reference_counting(
         Element_base* element,
         const char* name = nullptr,
@@ -370,7 +400,7 @@ public:
 
     /// Stores a DB job in the database (tag as return value).
     ///
-    /// Same as #store(Job,...) above, but with an additional call to #remove().
+    /// Same as #store(Job_base*,...) above, but with an additional call to #remove().
     virtual Tag store_for_reference_counting(
         SCHED::Job_base* job,
         const char* name = nullptr,
@@ -379,7 +409,7 @@ public:
 
     /// Stores a DB job in the database (tag as parameter).
     ///
-    /// Same as #store(Tag,Job,...) above, but with an additional call to #remove().
+    /// Same as #store(Tag,Job_base*,...) above, but with an additional call to #remove().
     virtual void store_for_reference_counting(
         Tag tag,
         SCHED::Job_base* job,
@@ -451,14 +481,61 @@ public:
     /// \return      The corresponding name, or \c nullptr if the tag has no associated name.
     virtual const char* tag_to_name( Tag tag) = 0;
 
-    /// Looks up the tag for a name (within the context of this transaction).
+    /// Provides context information for #name_to_tag().
+    enum Name_to_tag_context {
+        /// The call happens in the context of a store operation (including targets of copy
+        /// operations).
+        STORE_CONTEXT,
+        /// The call happens in the context of a lookup operation.
+        LOOKUP_CONTEXT,
+        /// The call happens in an unknown context.
+        UNKNOWN_CONTEXT
+    };
+
+    /// Looks up the tag for a name (within the context of this transaction, safe version).
     ///
-    /// \note There is no guarantee that name_to_tag() followed by tag_to_name() produces the
-    ///       original name.
+    /// This method differs from #name_to_tag() in the following way:
+    /// - (1) No difference if no tag is found for the given name.
+    /// - (2) No difference if the found tag is not flagged for removal.
+    /// - (3) If flagged for removal and (the reference count is equal to 0 and \p context
+    ///       is \c STORE_CONTEXT), pretend that no tag was found.
+    /// - (4) If flagged for removal and (the reference count is larger than 0 or \p context
+    ///       is not \c STORE_CONTEXT), keep the found info pinned until the end of the transaction.
     ///
-    /// \param name  The name to look up.
-    /// \return      The corresponding tag, or the invalid tag if the name was not found.
-    virtual Tag name_to_tag( const char* name) = 0;
+    /// Case (3): The tag can be garbage collected at any time after this method returned. Instead
+    /// of handing out a tag that might lead to an invalid tag access, pretend that the lookup
+    /// failed, with the intention that the caller requests a new tag for store or copy operations.
+    /// A new tag also avoids that the removal flag carries over to a new version of that database
+    /// element.
+    ///
+    /// Case (4): A garbage collection of all referencing elements would decrease the reference
+    /// count of this tag to 0, and then it can be garbage collected, too. However, we do not know
+    /// whether the referencing elements will be garbage collected at all, and unconditionally
+    /// letting the look up fail is logically wrong. Instead we pin the info until the end of the
+    /// transaction. This gives callers a chance to store a new version of that database element,
+    /// and to reference it again (or keep it referenced). The removal flag will carry over to a
+    /// potentially new version of that database element.
+    ///
+    /// \note There is no guarantee that name_to_tag() followed by tag_to_name() produces
+    ///       the original name.
+    ///
+    /// \see #name_to_tag()
+    ///
+    /// \param name      The name to look up.
+    /// \param context   The context of the operation controls whether case (3) above is a feasible
+    ///                  outcome. Note that \c LOOKUP_CONTEXT and \c UNKNOWN_CONTEXT are currently
+    ///                  treated the same way.
+    /// \return          The corresponding tag, or the invalid tag if the name was not found.
+    virtual Tag name_to_tag( const char* name, Name_to_tag_context context = UNKNOWN_CONTEXT) = 0;
+
+    /// Looks up the name of a tag (within the context of this transaction, unsafe version).
+    ///
+    /// \note There is no guarantee that #tag_to_name_unsafe () followed by #name_to_tag() produces
+    ///       the original tag.
+    ///
+    /// \param tag   The tag to look up.
+    /// \return      The corresponding name, or \c nullptr if the tag has no associated name.
+    virtual Tag name_to_tag_unsafe( const char* name) = 0;
 
     //@}
     /// \name Information about a specific tag
@@ -636,12 +713,16 @@ public:
 
     /// Invalidates the result of a DB job.
     ///
-    /// The invalidation is visible for the current and all later transactions. ("Later" probably
-    /// in the sense of started after this one has been committed.) This can be used when the
-    /// results are no longer valid because some other tag's data has been changed which directly
-    /// or indirectly influences the job's results.
+    /// This can be used when the results are no longer valid because some other tag's data has
+    /// been changed which directly or indirectly influences the job's results. The visibility of
+    /// the invalidation follows the usual rules.
     ///
-    /// \param tag    The job tag whose results should be invalidated.
+    /// Similarly, results of DB jobs invalidated previously in the current transaction cannot be
+    /// invalidated once again.
+    ///
+    /// \param tag    The job tag whose results should be invalidated. Results of DB jobs created/
+    ///               previously invalidated in the current transaction are never invalidated
+    ///               (again).
     virtual void invalidate_job_results( Tag tag) = 0;
 
     //@}

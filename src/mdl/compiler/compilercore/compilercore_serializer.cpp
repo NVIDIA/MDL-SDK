@@ -198,18 +198,10 @@ void Base_serializer::write_encoded_tag(size_t tag)
     }
     // full range
     write(byte(0xE0));
-#ifdef BIT64
     write(byte(tag >> 56));
     write(byte(tag >> 48));
     write(byte(tag >> 40));
     write(byte(tag >> 32));
-#else
-    // on 32bit, size_t is 32bit only
-    write(byte(0));
-    write(byte(0));
-    write(byte(0));
-    write(byte(0));
-#endif
     write(byte(tag >> 24));
     write(byte(tag >> 16));
     write(byte(tag >> 8));
@@ -633,6 +625,7 @@ void Factory_serializer::dfs_type(IType const *type, bool is_child_type)
     case IType::TK_COLOR:
     case IType::TK_TEXTURE:
     case IType::TK_BSDF_MEASUREMENT:
+    case IType::TK_VOID:
     case IType::TK_AUTO:
     case IType::TK_ERROR:
         // these types are builtin, no need to serialize them
@@ -677,6 +670,7 @@ void Factory_serializer::dfs_type(IType const *type, bool is_child_type)
             push_type(f_type);
         }
         break;
+
     case IType::TK_STRUCT:
         {
             IType_struct const *s_type = cast<IType_struct>(type);
@@ -686,6 +680,24 @@ void Factory_serializer::dfs_type(IType const *type, bool is_child_type)
                 dfs_type(field->get_type());
             }
             push_type(s_type);
+        }
+        break;
+
+    case IType::TK_PTR:
+        {
+            IType_pointer const *p_type = cast<IType_pointer>(type);
+
+            dfs_type(p_type->get_element_type());
+            push_type(p_type);
+        }
+        break;
+
+    case IType::TK_REF:
+        {
+            IType_ref const *r_type = cast<IType_ref>(type);
+
+            dfs_type(r_type->get_element_type());
+            push_type(r_type);
         }
         break;
     }
@@ -800,6 +812,7 @@ struct IType_less {
             case IType::TK_VDF:
             case IType::TK_COLOR:
             case IType::TK_BSDF_MEASUREMENT:
+            case IType::TK_VOID:
             case IType::TK_AUTO:
             case IType::TK_ERROR:
                 // these types are singletons, so it should never happen
@@ -1009,6 +1022,38 @@ struct IType_less {
                         return operator()(c_s, c_t);
                     }
                     return shape_s < shape_t;
+                }
+
+            case IType::TK_PTR:
+                {
+                    IType_pointer const *p_s = cast<IType_pointer>(s);
+                    IType_pointer const *p_t = cast<IType_pointer>(t);
+
+                    // check address space first
+                    unsigned as_s = p_s->get_address_space();
+                    unsigned as_t = p_t->get_address_space();
+
+                    if (as_s == as_t) {
+                        return operator()(
+                            p_s->get_element_type(), p_t->get_element_type());
+                    }
+                    return as_s < as_t;
+                }
+
+            case IType::TK_REF:
+                {
+                    IType_ref const *r_s = cast<IType_ref>(s);
+                    IType_ref const *r_t = cast<IType_ref>(t);
+
+                    // check address space first
+                    unsigned as_s = r_s->get_address_space();
+                    unsigned as_t = r_t->get_address_space();
+
+                    if (as_s == as_t) {
+                        return operator()(
+                            r_s->get_element_type(), r_t->get_element_type());
+                    }
+                    return as_s < as_t;
                 }
             }
         }
@@ -1549,6 +1594,7 @@ void Factory_serializer::write_type(IType const *type)
     case IType::TK_COLOR:
     case IType::TK_TEXTURE:
     case IType::TK_BSDF_MEASUREMENT:
+    case IType::TK_VOID:
     case IType::TK_AUTO:
     case IType::TK_ERROR:
         {
@@ -1778,6 +1824,71 @@ void Factory_serializer::write_type(IType const *type)
             }
         }
         break;
+
+    case IType::TK_PTR:
+        {
+            IType_pointer const *p_type = cast<IType_pointer>(type);
+            IType const         *e_type = p_type->get_element_type();
+
+            Tag_t type_tag = register_type(p_type);
+            write_encoded_tag(type_tag);
+
+            DOUT(("type tag %u\n", unsigned(type_tag)));
+
+            // write the element type
+            Tag_t e_type_tag = get_type_tag(e_type);
+            write_encoded_tag(e_type_tag);
+
+            DOUT(("e_type %u\n", unsigned(e_type_tag)));
+
+            // write the address space
+            write_unsigned(p_type->get_address_space());
+
+            DOUT(("address space %u\n", p_type->get_address_space()));
+        }
+        break;
+
+    case IType::TK_REF:
+        {
+            IType_ref const *r_type = cast<IType_ref>(type);
+            IType const     *e_type = r_type->get_element_type();
+
+            Tag_t type_tag = register_type(r_type);
+            write_encoded_tag(type_tag);
+
+            DOUT(("type tag %u\n", unsigned(type_tag)));
+
+            // write the element type
+            Tag_t e_type_tag = get_type_tag(e_type);
+            write_encoded_tag(e_type_tag);
+
+            DOUT(("e_type %u\n", unsigned(e_type_tag)));
+
+            // write the address space
+            write_unsigned(r_type->get_address_space());
+
+            DOUT(("address space %u\n", r_type->get_address_space()));
+        }
+        break;
+    }
+}
+
+// Serialize a ISymbol vector.
+void Factory_serializer::serialize(vector<ISymbol const *>::Type const &vec)
+{
+    size_t l = vec.size();
+
+    write_encoded_tag(l);
+    for (size_t i = 0; i < l; ++i) {
+        ISymbol const *sym = vec[i];
+
+        // we must support NULL pointer here
+        if (sym == NULL)
+            write_encoded_tag(Tag_t(0));
+        else {
+            Tag_t sym_tag = get_symbol_tag(sym);
+            write_encoded_tag(sym_tag);
+        }
     }
 }
 
@@ -2945,18 +3056,27 @@ Entity_deserializer::Entity_deserializer(
 MDL_binary_deserializer::MDL_binary_deserializer(
     IAllocator    *alloc,
     IDeserializer *deserializer,
-    MDL           *compiler)
+    MDL           &compiler)
 : Entity_deserializer(alloc, deserializer)
 , m_modules(alloc)
 {
     // register all builtin modules
     Tag_t t = Tag_t(0);
 
-    for (size_t i = 0, n = compiler->get_builtin_module_count(); i < n; ++i) {
-        Module const *builtin_mod = compiler->get_builtin_module(i);
+    for (size_t i = 0, n = compiler.get_builtin_module_count(); i < n; ++i) {
+        Module const *builtin_mod = compiler.get_builtin_module(i);
 
         register_module(++t, builtin_mod);
     }
+}
+
+// Constructor.
+MDL_binary_deserializer::MDL_binary_deserializer(
+    IAllocator    *alloc,
+    IDeserializer *deserializer)
+: Entity_deserializer(alloc, deserializer)
+, m_modules(alloc)
+{
 }
 
 // --------------------- Factory deserializer ---------------------
@@ -3019,6 +3139,7 @@ IType const *Factory_deserializer::read_type(Type_factory &tf)
     case IType::TK_COLOR:
     case IType::TK_TEXTURE:
     case IType::TK_BSDF_MEASUREMENT:
+    case IType::TK_VOID:
     case IType::TK_AUTO:
     case IType::TK_ERROR:
         {
@@ -3228,6 +3349,46 @@ IType const *Factory_deserializer::read_type(Type_factory &tf)
 
             register_type(s_type_tag, s_type);
             return s_type;
+        }
+
+    case IType::TK_PTR:
+        {
+            Tag_t p_type_tag = read_encoded_tag();
+
+            DOUT(("type tag %u\n", unsigned(p_type_tag)));
+
+            // read the element type
+            Tag_t e_type_tag = read_encoded_tag();
+            IType const *e_type = get_type(e_type_tag);
+
+            DOUT(("e_type %u\n", unsigned(e_type_tag)));
+
+            unsigned addr_space = read_unsigned();
+            IType const *p_type = tf.create_pointer(e_type, addr_space);
+
+            DOUT(("address space % u\n", addr_space));
+            register_type(p_type_tag, p_type);
+            return p_type;
+        }
+
+    case IType::TK_REF:
+        {
+            Tag_t r_type_tag = read_encoded_tag();
+
+            DOUT(("type tag %u\n", unsigned(r_type_tag)));
+
+            // read the element type
+            Tag_t e_type_tag = read_encoded_tag();
+            IType const *e_type = get_type(e_type_tag);
+
+            DOUT(("e_type %u\n", unsigned(e_type_tag)));
+
+            unsigned addr_space = read_unsigned();
+            IType const *r_type = tf.create_reference(e_type, addr_space);
+
+            DOUT(("address space % u\n", addr_space));
+            register_type(r_type_tag, r_type);
+            return r_type;
         }
     }
     MDL_ASSERT(!"Unknown type kind");
@@ -3498,6 +3659,19 @@ IValue const *Factory_deserializer::read_value(Value_factory &vf)
     }
     MDL_ASSERT(!"Unknown value kind");
     return NULL;
+}
+
+// Deserialize a ISymbol vector.
+void Factory_deserializer::deserialize(vector<ISymbol const *>::Type &vec)
+{
+    size_t l = read_encoded_tag();
+    vec.reserve(l);
+
+    for (size_t i = 0; i < l; ++i) {
+        Tag_t t = read_encoded_tag();
+        ISymbol const *sym = t == Tag_t(0) ? NULL : get_symbol(t);
+        vec.push_back(sym);
+    }
 }
 
 // --------------------- Module deserializer ---------------------

@@ -35,27 +35,14 @@
 #include "pch.h"
 
 #include "mdl_mdl_compiler_impl.h"
-#include "mdl_neuray_impl.h"
 
-#include "neuray_impexp_utilities.h"
-
-#include "neuray_module_impl.h"
-#include "neuray_transaction_impl.h"
-#include "neuray_mdl_execution_context_impl.h"
-
-#include <mi/neuraylib/imdl_backend_api.h>
-#include <mi/neuraylib/imdl_impexp_api.h>
-
-#include <mi/mdl/mdl_modules.h>
 #include <mi/mdl/mdl_mdl.h>
-#include <mi/mdl/mdl_entity_resolver.h>
 
-#include <base/hal/disk/disk_memory_reader_writer_impl.h>
-#include <base/lib/log/i_log_logger.h>
+#include <base/lib/mem/mem.h>
 #include <base/lib/path/i_path.h>
 #include <base/lib/plug/i_plug.h>
+#include <base/data/attr/attr.h>
 #include <mdl/integration/mdlnr/i_mdlnr.h>
-#include <io/scene/mdl_elements/i_mdl_elements_module.h>
 
 
 namespace MI {

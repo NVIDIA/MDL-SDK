@@ -845,6 +845,9 @@ private:
     /// Specified the layout of the BSDF_evaluate_data and BSDF_auxiliary_data structs.
     mi::mdl::Df_handle_slot_mode m_df_handle_slot_mode;
 
+    /// If true, requested functions should be marked as exports.
+    bool m_export_requested_functions;
+
     /// The data layout of the current module.
     llvm::DataLayout const *m_cur_data_layout;
 };

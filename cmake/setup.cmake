@@ -44,15 +44,14 @@ endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
+#  Enable compilation database
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # IDE Setup
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)  # Generate folders for IDE targets
 set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "_cmake")
 # Find includes in corresponding build directories
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
-
-# Instruct CMake to run not moc automatically (Qt)
-# We select the files manually and add the generated files to the project and the IDEs.
-# set(CMAKE_AUTOMOC ON)
 
 # custom properties
 define_property(TARGET PROPERTY VS_DEBUGGER_PATHS
@@ -215,12 +214,12 @@ if(MDL_LOG_PLATFORM_INFOS)
     MESSAGE(STATUS "[INFO] CMAKE_TOOLCHAIN_FILE:                     ${CMAKE_TOOLCHAIN_FILE}")
     MESSAGE(STATUS "[INFO] VCPKG_TARGET_TRIPLET:                     ${VCPKG_TARGET_TRIPLET}")
     MESSAGE(STATUS "[INFO] Qt5_DIR:                                  ${Qt5_DIR}")
-	if(WINDOWS)
-		MESSAGE(STATUS "[INFO] CMAKE_VS_PLATFORM_TOOLSET_CUDA_CUSTOM_DIR ${CMAKE_VS_PLATFORM_TOOLSET_CUDA_CUSTOM_DIR}")
-	else()
-		MESSAGE(STATUS "[INFO] CMAKE_CUDA_COMPILER:                      ${CMAKE_CUDA_COMPILER}")
+    if(WINDOWS)
+        MESSAGE(STATUS "[INFO] CMAKE_VS_PLATFORM_TOOLSET_CUDA_CUSTOM_DIR ${CMAKE_VS_PLATFORM_TOOLSET_CUDA_CUSTOM_DIR}")
+    else()
+        MESSAGE(STATUS "[INFO] CMAKE_CUDA_COMPILER:                      ${CMAKE_CUDA_COMPILER}")
     endif()
-	MESSAGE(STATUS "[INFO] PYTHON_DIR:                               ${PYTHON_DIR}")
+    MESSAGE(STATUS "[INFO] PYTHON_DIR:                               ${PYTHON_DIR}")
     MESSAGE(STATUS "[INFO] python_PATH:                              ${python_PATH}")
     MESSAGE(STATUS "[INFO] clang_PATH:                               ${clang_PATH}")
     MESSAGE(STATUS "[INFO] swig_PATH:                                ${swig_PATH}")
@@ -239,7 +238,8 @@ if(MDL_LOG_PLATFORM_INFOS)
     MESSAGE(STATUS "[INFO] GRAPHVIZ_DIR:                             ${GRAPHVIZ_DIR}")
 endif()
 
-option(MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES "Links the MSCV dynamic runtime (\\MD) instead of static (\\MT)." ON)
+option(MDL_MSVC_DYNAMIC_RUNTIME "Links most binaries with the MSVC dynamic runtime (/MD or /MDd) instead of the static one (/MT or /MTd)." OFF)
+option(MDL_MSVC_DYNAMIC_RUNTIME_DXR_EXAMPLE "Links the DXR example with the MSVC dynamic runtime (/MD or /MDd) instead of the static one (/MT or /MTd)." ON)
 
 # check for dependencies
 # pre-declare all options that are used
@@ -266,6 +266,13 @@ if(EXISTS ${MDL_SRC_FOLDER}/api)
     option(MDL_ENABLE_UNIT_TESTS "Generates unit tests." ON)
 else()
     set(MDL_ENABLE_UNIT_TESTS OFF CACHE INTERNAL "Generates unit tests." FORCE)
+endif()
+
+if(MDL_LOG_PLATFORM_INFOS)
+    if(MSVC)
+        MESSAGE(STATUS "[INFO] MDL_MSVC_DYNAMIC_RUNTIME:                 ${MDL_MSVC_DYNAMIC_RUNTIME}")
+        MESSAGE(STATUS "[INFO] MDL_MSVC_DYNAMIC_RUNTIME_DXR_EXAMPLE:     ${MDL_MSVC_DYNAMIC_RUNTIME_DXR_EXAMPLE}")
+    endif()
 endif()
 
 # list of tests that can be defined only after all other targets are setup (clear that list here)

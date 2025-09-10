@@ -87,8 +87,6 @@ enum Df_flags {
     DF_FLAGS_ALLOW_TRANSMIT = 2,
     DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT = DF_FLAGS_ALLOW_REFLECT | DF_FLAGS_ALLOW_TRANSMIT,
     DF_FLAGS_ALLOWED_SCATTER_MODE_MASK = DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT,
-
-    DF_FLAGS_FORCE_32_BIT = 0xffffffffU
 };
 
 
@@ -113,7 +111,7 @@ struct __align__(16) BSDF_sample_data
 
     float3 k2;                  // output:  incoming direction
     float4 xi;                  // input:   pseudo-random sample numbers
-    
+
     float  pdf;                 // output:  pdf (non-projected hemisphere)
     float3 bsdf_over_pdf;       // output:  bsdf * dot(normal, k2) / pdf
     int event_type;             // output:  BSDF_event_type
@@ -131,7 +129,7 @@ struct __align__(16) BSDF_evaluate_data
 
     float3 k2;
     #if MDL_DF_HANDLE_SLOT_MODE != BSDF_HSMN
-        int handle_offset;      // input: handle offset to allow the evaluation of multiple handles 
+        int handle_offset;      // input: handle offset to allow the evaluation of multiple handles
     #endif
     #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMP
         int handle_count;       // input: number of elements of 'bsdf_diffuse' and 'bsdf_glossy'
@@ -173,7 +171,7 @@ struct __align__(16) BSDF_auxiliary_data
     float3 k1;                  // mutual input: outgoing direction
 
     #if MDL_DF_HANDLE_SLOT_MODE != BSDF_HSMN
-        int handle_offset;      // input: handle offset to allow the evaluation of multiple handles 
+        int handle_offset;      // input: handle offset to allow the evaluation of multiple handles
     #endif
     #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMP
         int handle_count;       // input: number of elements of 'albedo' and 'normal'
@@ -216,7 +214,7 @@ struct __align__(16) BSDF_auxiliary_data
     // If only a single BSDF is used in the material or is evaluated using handles, x and y reproduce
     // exactly the arguments passed to the BSDF. The z component will hold the weight of the evaluated
     // BSDF in the layering tree. When aggregating roughness values over multiple calls to the auxiliary
-    // function, one could compute a weighted average by: 
+    // function, one could compute a weighted average by:
     //      sum(roughness_i.xy * roughness_i.z) / sum(roughness_i.z)
     //
     // When multiple elemental BSDF are evaluated at once (e.g. without handles), the components x and y
@@ -267,7 +265,7 @@ struct __align__(16) EDF_evaluate_data
 {
     float3 k1;                  // input: outgoing direction
     #if MDL_DF_HANDLE_SLOT_MODE != BSDF_HSMN
-        int handle_offset;      // input: handle offset to allow the evaluation of multiple handles 
+        int handle_offset;      // input: handle offset to allow the evaluation of multiple handles
     #endif
     #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMP
         int handle_count;       // input: number of elements of 'edf'
@@ -295,7 +293,7 @@ struct __align__(16) EDF_auxiliary_data
 {
     float3 k1;                  // input: outgoing direction
     #if MDL_DF_HANDLE_SLOT_MODE != BSDF_HSMN
-        int handle_offset;      // input: handle offset to allow the evaluation of multiple handles 
+        int handle_offset;      // input: handle offset to allow the evaluation of multiple handles
     #endif
     #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMP
         int handle_count;       // input: number of elements of 'output buffer fields'

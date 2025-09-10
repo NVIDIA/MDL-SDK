@@ -59,7 +59,7 @@ char *coco_string_create(const char *value, int startIndex, int length) {
 
 	if (value) { len = length; }
 	data = new char[len + 1];
-	strncpy(data, &(value[startIndex]), len);
+	strncpy(data, &(value[startIndex]), len+1);
 	data[len] = 0;
 
 	return data;

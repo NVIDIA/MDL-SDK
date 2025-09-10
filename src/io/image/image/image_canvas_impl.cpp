@@ -44,6 +44,7 @@
 #include <base/lib/log/i_log_logger.h>
 #include <base/hal/disk/disk_file_reader_writer_impl.h>
 #include <base/hal/disk/disk_memory_reader_writer_impl.h>
+#include <base/hal/disk/disk_utils.h>
 
 namespace fs = std::filesystem;
 
@@ -143,9 +144,7 @@ Canvas_impl::Canvas_impl(
         return;
     }
 
-    std::string extension = fs::u8path( filename).extension().u8string();
-    if( !extension.empty())
-        extension = extension.substr( 1);
+    std::string extension = DISK::get_extension( filename);
 
     SYSTEM::Access_module<Image_module> image_module( false);
     mi::neuraylib::IImage_plugin* plugin
@@ -303,9 +302,7 @@ Canvas_impl::Canvas_impl(
         return;
     }
 
-    std::string extension = fs::u8path( member_filename).extension().u8string();
-    if( !extension.empty() && extension[0] == '.' )
-        extension = extension.substr( 1);
+    std::string extension = DISK::get_extension( member_filename);
 
     SYSTEM::Access_module<Image_module> image_module( false);
     mi::neuraylib::IImage_plugin* plugin
@@ -672,12 +669,29 @@ Canvas_impl::Canvas_impl(
     m_gamma          = gamma == 0.0f ? get_default_gamma( m_pixel_type) : gamma;
 
     // check incorrect arguments
-    for( size_t i = 1; i < tiles.size(); ++i) {
+#ifdef ENABLE_ASSERT
+    for( size_t i = 1, cnt = tiles.size(); i < cnt; ++i) {
         ASSERT( M_IMAGE, tiles[i]->get_resolution_x() == m_width);
         ASSERT( M_IMAGE, tiles[i]->get_resolution_y() == m_height);
         ASSERT( M_IMAGE, strcmp( tiles[i]->get_type(), tiles[0]->get_type()) == 0);
     }
+#endif
 }
+
+void Canvas_impl::reset(
+        const mi::Uint32 width,
+        const mi::Uint32 height,
+        const Pixel_type pt)
+{
+    for ( auto& tile : m_tiles) {
+        static_cast<Tile_impl*>(tile.get())->reset( width, height, pt);
+    }
+
+    m_pixel_type = pt;
+    m_width = width;
+    m_height = height;
+}
+
 
 const char* Canvas_impl::get_type() const
 {
@@ -804,9 +818,7 @@ mi::neuraylib::ITile* Canvas_impl::do_load_tile( mi::Uint32 z) const
         return nullptr;
 
     std::string extension
-        = fs::u8path( !m_filename.empty() ? m_filename : m_member_filename).extension().u8string();
-    if( !extension.empty() && extension[0] == '.' )
-        extension = extension.substr( 1);
+        = DISK::get_extension( !m_filename.empty() ? m_filename : m_member_filename);
 
     SYSTEM::Access_module<Image_module> image_module( false);
     mi::neuraylib::IImage_plugin* plugin

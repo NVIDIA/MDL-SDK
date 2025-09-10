@@ -34,13 +34,13 @@
 //#define DUMP_TEXTURES
 
 #include "axf_importer_reader.h"
-#include "axf_importer_state.h"
 
+#include "axf_importer_state.h"
 #include "axf_importer_clearcoat_brdf_utils.h"
 
 #include "example_shared.h"
+#include "utils/io.h"
 #include "utils/strings.h"
-#include "utils/ospath.h"
 
 #include <AxF/decoding/AxF_basic_io.h>
 #include <AxF/decoding/Sampler.h>
@@ -48,6 +48,7 @@
 
 #include <cassert>
 #include <cctype>
+#include <filesystem>
 #include <sstream>
 #include <vector>
 
@@ -58,7 +59,6 @@
 #endif
 
 using namespace mi::examples::strings;
-using namespace mi::examples::ospath;
 
 namespace mi {
 namespace examples {
@@ -1347,7 +1347,7 @@ bool Axf_reader::handle_svbrdf_representation(
                     spec_model_h, fresnel_type, AXF::AXF_MAX_KEY_SIZE))
             {
                 ostringstream str;
-                str << "Failed to retrieve Fresnel type " << " for AxF material " 
+                str << "Failed to retrieve Fresnel type " << " for AxF material "
                     << m_material_name;
                 Axf_importer::report_message(6022,
                                              mi::base::MESSAGE_SEVERITY_WARNING,
@@ -1357,7 +1357,7 @@ bool Axf_reader::handle_svbrdf_representation(
             if (strcmp(fresnel_type, AXF_SVBRDF_FRESNEL_VARIANT_SCHLICK) == 0)
                 m_fresnel_type = FRESNEL_SCHLICK;
             else if (strcmp(fresnel_type, AXF_SVBRDF_FRESNEL_VARIANT_SCHLICK_COLORED) == 0) {
-                // should only appear for EPSVBRDF 
+                // should only appear for EPSVBRDF
                 // and then be converted to non-colored SVBRDF Schlick
                 assert((conversion_flags & AXF::CONVERT_EPSVBRDF_TO_SVBRDF) != 0);
                 m_fresnel_type = FRESNEL_SCHLICK;
@@ -1527,8 +1527,8 @@ bool Axf_reader::handle_svbrdf_representation(
             if (is_aniso_rotation) {
                 // source values are in [-pi/2,pi/2], we want [0,1].
                 for (size_t i = 0; i < tex_buffer.size(); ++i) {
-                    const float angle = tex_buffer[i] >= 0.0f 
-                        ? tex_buffer[i] 
+                    const float angle = tex_buffer[i] >= 0.0f
+                        ? tex_buffer[i]
                         : (float)(2.0 * M_PI) + tex_buffer[i];
                     tex_buffer[i] = angle * (float)(0.5 / M_PI);
                 }
@@ -1877,10 +1877,10 @@ string Axf_reader::write_texture(
         layers = channels;
         size_t spectral_offset0;
         meta_layers = compute_num_spectral_meta_layers(
-            spectral_offset0, width * height * sizeof(float), channels, 
+            spectral_offset0, width * height * sizeof(float), channels,
             m_spectral_tex_meta_data.size());
         //!! TODO: would need to be handled if pixel type wouldn't be float
-        assert(spectral_offset0 == 0); 
+        assert(spectral_offset0 == 0);
     } else if (type == TEXTURE_NORMAL) {
         // use Rgb_16 for normal maps, because that will typically yield best precision through
         // the usage of the RGBAD type in iray core
@@ -2038,7 +2038,7 @@ bool Axf_reader::access_mdl_material_definitions(
                 if (annotation) {
                     mi::base::Handle<const mi::neuraylib::IAnnotation_definition> def(
                         annotation->get_definition());
-                    if (def && def->get_semantic() == 
+                    if (def && def->get_semantic() ==
                         mi::neuraylib::IAnnotation_definition::AS_VERSION_ANNOTATION) {
                         mi::base::Handle<const mi::neuraylib::IExpression_list> expr_list(
                             annotation->get_arguments());
@@ -2061,10 +2061,10 @@ bool Axf_reader::access_mdl_material_definitions(
             impexp_state);
         return false;
     }
-    if (major < 1 || (major == 1 && minor < 9) || (major == 1 && minor == 9 && patch < 0)) {
+    if (major < 1 || (major == 1 && minor < 9) || (major == 1 && minor == 9 && patch < 2)) {
         ostringstream str;
         str << "Insufficient version (" << major << '.' << minor << '.' << patch << ") of "
-            "nvidia::axf_importer::axf_importer, required version is (1.9.0)";
+            "nvidia::axf_importer::axf_importer, required version is (1.9.2)";
         Axf_importer::report_message(
             6031, mi::base::MESSAGE_SEVERITY_ERROR,
             str.str(), impexp_state);
@@ -2765,7 +2765,7 @@ void Axf_reader::create_variant(
             param_name = "sigma_a";
             set_spectral_param(
                 impexp_state,
-                default_parameters.get(), mdl_factory.get(), 
+                default_parameters.get(), mdl_factory.get(),
                 expr_factory.get(), m_volumetric_material.get(), material_name.c_str(),
                 m_transaction, param_name, m_wavelengths, m_sigma_a);
         }
@@ -3055,14 +3055,14 @@ static const mi::neuraylib::IAnnotation_block* copy_annotations(
         auto anno = mi::base::make_handle(annos->get_annotation(i));
         auto anno_def = mi::base::make_handle(anno->get_definition());
         // don't hide materials
-        if (anno_def &&(anno_def->get_semantic() == 
-            mi::neuraylib::IAnnotation_definition::AS_HIDDEN_ANNOTATION)) 
+        if (anno_def &&(anno_def->get_semantic() ==
+            mi::neuraylib::IAnnotation_definition::AS_HIDDEN_ANNOTATION))
         {
              continue;
         }
 
         // set a meaningful display name
-        if (anno_def && (anno_def->get_semantic() == 
+        if (anno_def && (anno_def->get_semantic() ==
             mi::neuraylib::IAnnotation_definition::AS_DISPLAY_NAME_ANNOTATION))
         {
             auto name = mi::base::make_handle(value_factory->create_string(display_name));
@@ -3096,9 +3096,9 @@ unsigned int Axf_reader::handle_collected_variants(
     // create module name name
     mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
         m_neuray->get_api_component<mi::neuraylib::IMdl_factory>());
-    string axf_name = Ospath::basename(m_filename);
-    string mat_name(axf_name), dummy;
-    Ospath::splitext(mat_name, axf_name, dummy);
+
+    std::filesystem::path filename(m_filename);
+    string axf_name = mi::examples::io::to_string(filename.stem());
     string module_name
         = make_valid_mdl_module_path(mdl_factory.get(), impexp_state->get_module_prefix())
         + make_valid_mdl_id(mdl_factory.get(), axf_name);

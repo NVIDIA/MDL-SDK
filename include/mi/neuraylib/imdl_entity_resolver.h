@@ -32,6 +32,7 @@
 #define MI_NEURAYLIB_IMDL_ENTITY_RESOLVER_H
 
 #include <mi/base/interface_declare.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -118,12 +119,12 @@ public:
 /// For light profiles and BSDF measurements only #mi::neuraylib::UVTILE_MODE_NONE is valid.
 ///
 /// \see #mi::neuraylib::IImage::reset_file() for details about the different modes.
-enum Uvtile_mode {
+enum Uvtile_mode : Uint32 {
     UVTILE_MODE_NONE         = 0, ///< No uvtile mode.
     UVTILE_MODE_UDIM         = 1, ///< The UDIM uvtile mode.
     UVTILE_MODE_UVTILE0      = 2, ///< The UVTILE0 uvtile mode.
-    UVTILE_MODE_UVTILE1      = 3, ///< The UVTILE1 uvtile mode.
-    UVTILE_MODE_FORCE_32_BIT = 0xffffffffU
+    UVTILE_MODE_UVTILE1      = 3  ///< The UVTILE1 uvtile mode.
+    MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(UVTILE_MODE_FORCE_32_BIT, 0xffffffffU)
 };
 
 /// Describes a resolved module (or a failed attempt).

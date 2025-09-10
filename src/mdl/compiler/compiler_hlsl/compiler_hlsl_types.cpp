@@ -35,14 +35,10 @@
 #include "compiler_hlsl_symbols.h"
 #include "compiler_hlsl_types.h"
 
-#if defined(BIT64) || defined(MACOSX)
 #ifdef WIN_NT
 #  define FMT_SIZE_T        "llu"
 #else
 #  define FMT_SIZE_T        "zu"
-#endif
-#else
-#  define FMT_SIZE_T        "u"
 #endif
 
 namespace mi {

@@ -18,6 +18,9 @@ Index 0: tag = 1, count = 2, pin count = 1, removed = 0
     Index 0: scope ID = 1, transaction ID = 0 (cleared), version = 0, pin count = 0, tag = 1, privacy level = 1, removal = 0, name = "foo", references = { }
     Index 1: scope ID = 1, transaction ID = 2 (set), version = 0, pin count = 0, tag = 1, privacy level = 1, removal = 0, name = "foo", references = { }
 
+Count of all infos: 2
+Count of infos by class IDs:
+     2 0x4d79656c "Myel"
 
 Count of all scopes: 3
 ID 0: name = (null), pin count = 3, level = 0, parent ID = (null), removed = 0
@@ -34,4 +37,7 @@ Count of infos by distinct tags: 1
 Index 0: tag = 1, count = 1, pin count = 1, removed = 0
     Index 0: scope ID = 1, transaction ID = 2 (cleared), version = 0, pin count = 0, tag = 1, privacy level = 1, removal = 0, name = "foo", references = { }
 
+Count of all infos: 1
+Count of infos by class IDs:
+     1 0x4d79656c "Myel"
 

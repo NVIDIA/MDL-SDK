@@ -37,6 +37,7 @@
 
 #include <cstring>
 #include <filesystem>
+#include <memory>
 
 #include <base/system/main/i_assert.h>
 #include <base/hal/hal/hal.h>
@@ -46,6 +47,24 @@ namespace fs = std::filesystem;
 namespace MI {
 
 namespace DISK {
+
+mi::neuraylib::IReader* create_reader( const char* path)
+{
+    std::unique_ptr<File_reader_impl> file_reader_impl( new File_reader_impl());
+    if( !file_reader_impl->open( path))
+        return nullptr;
+
+    return file_reader_impl.release();
+}
+
+mi::neuraylib::IWriter* create_writer( const char* path)
+{
+    std::unique_ptr<File_writer_impl> file_writer_impl( new File_writer_impl());
+    if( !file_writer_impl->open( path))
+        return nullptr;
+
+    return file_writer_impl.release();
+}
 
 template <typename T>
 File_reader_writer_base_impl<T>::~File_reader_writer_base_impl()

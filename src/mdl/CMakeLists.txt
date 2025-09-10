@@ -45,14 +45,14 @@ add_subdirectory(${MDL_SRC_FOLDER}/mdl/no_jit/generator_stub)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/runtime)
 
 set(LINKER_DEPENDENCIES_MDL_JIT
-    mdl::mdl-codegenerators-generator_code
-    mdl::mdl-codegenerators-generator_dag
-    mdl::mdl-compiler-compiler_glsl
-    mdl::mdl-compiler-compiler_hlsl
-    mdl::mdl-compiler-compilercore
-    mdl::mdl-distiller-dist
-    mdl::mdl-integration-i18n
-    mdl::mdl-integration-mdlnr
-    mdl::mdl-jit-generator_jit
-    mdl::mdl-runtime
+    mdl-codegenerators-generator_code
+    mdl-codegenerators-generator_dag
+    mdl-compiler-compiler_glsl
+    mdl-compiler-compiler_hlsl
+    mdl-compiler-compilercore
+    mdl-distiller-dist
+    mdl-integration-i18n
+    mdl-integration-mdlnr
+    mdl-jit-generator_jit
+    mdl-runtime
     CACHE INTERNAL "" FORCE)

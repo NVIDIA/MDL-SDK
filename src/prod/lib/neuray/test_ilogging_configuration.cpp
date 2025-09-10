@@ -133,9 +133,17 @@ void run_tests (
         logging_configuration->get_forwarding_logger());
     MI_CHECK( forwarding_logger);
 
-    forwarding_logger->message( mi::base::MESSAGE_SEVERITY_INFO, "TEST:MISC", "foo");
+    // raise level to suppress the startup messages
+    logging_configuration->set_log_level( mi::base::MESSAGE_SEVERITY_WARNING);
+
+    // first message (or set_receiving_logger() or start() triggers startup messages to be emitted)
+    forwarding_logger->message( mi::base::MESSAGE_SEVERITY_WARNING, "TEST:MISC", "foo");
     forwarding_logger->printf(
-        mi::base::MESSAGE_SEVERITY_INFO, "TEST:MISC", "bar %d %s %f %lf", 42, "baz", 1.0f, 1.0);
+        mi::base::MESSAGE_SEVERITY_WARNING, "TEST:MISC", "bar %d %s %f %lf", 42, "baz", 1.0f, 1.0);
+
+    // restore default level again
+    logging_configuration->set_log_level( mi::base::MESSAGE_SEVERITY_INFO);
+
     receiving_logger->message( mi::base::MESSAGE_SEVERITY_INFO, "TEST:MISC", {}, "foo");
     receiving_logger->printf(
         mi::base::MESSAGE_SEVERITY_INFO, "TEST:MISC", "bar %d %s %f %lf", 42, "baz", 1.0f, 1.0);
@@ -145,6 +153,8 @@ void run_tests (
     logging_configuration->set_receiving_logger( receiving_logger);
     mi::base::Handle<mi::base::ILogger> logger( logging_configuration->get_receiving_logger());
     MI_CHECK( logger.get() == receiving_logger);
+
+    logging_configuration->set_log_level( mi::base::MESSAGE_SEVERITY_INFO);
 
     logging_configuration->set_receiving_logger( nullptr);
     logger = logging_configuration->get_receiving_logger();

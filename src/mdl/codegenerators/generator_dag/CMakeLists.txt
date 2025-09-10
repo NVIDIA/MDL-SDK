@@ -42,6 +42,7 @@ set(PROJECT_HEADERS
     "generator_dag_ir.h"
     "generator_dag_ir_checker.h"
     "generator_dag_lambda_function.h"
+    "generator_dag_phen_out.h"
     "generator_dag_serializer.h"
     "generator_dag_tools.h"
     "generator_dag_walker.h"

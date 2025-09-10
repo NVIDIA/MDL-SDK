@@ -50,7 +50,7 @@
 ///           Transaction::finish_edit()
 /// - RCS:TRO transfers ownership, for parameters and return values, rare, e.g.,
 ///           Transaction::store(), Transaction::construct_empty_element(),
-///           Element_base::copy(), and Element::copy().
+///           Element_base::copy() and Element::copy(), Job_base::copy(), and Job::copy().
 ///
 /// Pointers of classes derived from mi::base::IInterface are not annotated since the standard
 /// reference counting strategy as in the public APIs is assumed (RCS:NEU for parameters and
@@ -152,8 +152,8 @@ public:
 
     /// Acquires a DB lock.
     ///
-    /// The method blocks until the requested lock has been obtained. Recursively locking the
-    /// same lock from within the same thread on the same host is supported.
+    /// The method blocks until the requested lock has been obtained. Recursively locking the same
+    /// lock from within the same thread on the same host is supported.
     ///
     /// If the host holding a lock leaves the cluster, the lock is automatically released.
     ///
@@ -171,17 +171,17 @@ public:
 
     /// Releases a previously obtained DB lock.
     ///
-    /// If the lock has been locked several times from within the same thread on the same host,
-    /// it simply decrements the lock count. If the lock count reaches zero, the lock is released.
+    /// If the lock has been locked several times from within the same thread on the same host, it
+    /// simply decrements the lock count. If the lock count reaches zero, the lock is released.
     ///
     /// \param lock_id   The lock to release.
-    /// \return          0, in case of success, -1 in case of failure, i.e, the lock is not held
-    ///                  by this thread on this host
+    /// \return          0, in case of success, -1 in case of failure, i.e, the lock is not held by
+    ///                  this thread on this host.
     virtual bool unlock( mi::Uint32 lock_id) = 0;
 
-    /// Checks whether a DB lock is locked.
+    /// Checks whether a DB lock is locked by this thread.
     ///
-    /// In the debug mode, abort if not. In release mode, just log an error.
+    /// If the lock is not locked by this thread, an error is logged and the method asserts.
     ///
     /// \param lock_id   The lock to check.
     virtual void check_is_locked( mi::Uint32 lock_id) = 0;

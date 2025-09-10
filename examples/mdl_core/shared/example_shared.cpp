@@ -46,7 +46,7 @@ char sep()
 /// Indicates whether that directory has a mdl/nvidia/sdk_examples subdirectory.
 bool is_samples_root(const std::string& path)
 {
-    std::string subdirectory = path + sep() + "mdl/nvidia/sdk_examples";
+    std::string subdirectory = path + sep() + "mdl" + sep() + "nvidia" + sep() + "sdk_examples";
     return dir_exists(subdirectory.c_str());
 }
 
@@ -74,18 +74,11 @@ std::string get_samples_root()
     return ".";
 }
 
-/// Indicates whether that directory contains nvidia/core_definitions.mdl and nvidia/axf_to_mdl.mdl.
+/// Indicates whether that directory has a /nvidia subdirectory.
 bool is_src_shaders_mdl(const std::string& path)
 {
-    std::string file1 = path + sep() + "nvidia" + sep() + "core_definitions.mdl";
-    if (!file_exists(file1.c_str()))
-        return false;
-
-    std::string file2 = path + sep() + "nvidia" + sep() + "axf_to_mdl.mdl";
-    if (!file_exists(file2.c_str()))
-        return false;
-
-    return true;
+    std::string subdirectory = path + sep() + "nvidia";
+    return dir_exists(subdirectory.c_str());
 }
 
 /// Intentionally not implemented inline which would require callers to define MDL_SRC_SHADERS_MDL.

@@ -32,7 +32,7 @@
 
 #include "pch.h"
 
-//#define VERBOSE_TX // extra verbose info messages to track transactions
+// #define VERBOSE_TX // extra verbose info messages to track transactions
 
 #include "neuray_transaction_impl.h"
 
@@ -60,6 +60,7 @@
 #include <io/scene/dbimage/i_dbimage.h>
 #include <io/scene/bsdf_measurement/i_bsdf_measurement.h>
 #include <io/scene/lightprofile/i_lightprofile.h>
+#include <io/scene/mdl_elements/i_mdl_elements_annotation_definition_proxy.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_call.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
@@ -211,16 +212,12 @@ const mi::base::IInterface* Transaction_impl::access(
     if( !is_open())
         return nullptr;
 
-    DB::Tag tag = m_db_transaction->name_to_tag( name);
-    if( !tag.is_valid())
-        return nullptr;
-
 #ifdef VERBOSE_TX
     LOG::mod_log->info( SYSTEM::M_NEURAY_API, LOG::Mod_log::C_DATABASE,
-        "TX %u accessing \"%s\" tag %u ...", m_id_as_uint, name, tag.get_uint());
+        "TX %u accessing \"%s\" ...", m_id_as_uint, name);
 #endif
 
-    return access( tag);
+    return m_class_factory->create_class_instance( this, name, /*is_edit*/ false);
 }
 
 mi::base::IInterface* Transaction_impl::edit(
@@ -229,20 +226,12 @@ mi::base::IInterface* Transaction_impl::edit(
     if( !is_open())
         return nullptr;
 
-    DB::Tag tag = m_db_transaction->name_to_tag( name);
-    if( !tag.is_valid())
-        return nullptr;
-
-    SERIAL::Class_id id = m_db_transaction->get_class_id(tag);
-    if( id == MDL::ID_MDL_FUNCTION_DEFINITION)
-        return nullptr;
-
 #ifdef VERBOSE_TX
     LOG::mod_log->info( SYSTEM::M_NEURAY_API, LOG::Mod_log::C_DATABASE,
-        "TX %u editing \"%s\" tag %u ...", m_id_as_uint, name, tag.get_uint());
+        "TX %u editing \"%s\" ...", m_id_as_uint, name);
 #endif
 
-    return edit( tag);
+    return m_class_factory->create_class_instance( this, name, /*is_edit*/ true);
 }
 
 mi::Sint32 Transaction_impl::copy( const char* source, const char* target, mi::Uint8 privacy)
@@ -267,7 +256,8 @@ mi::Sint32 Transaction_impl::copy( const char* source, const char* target, mi::U
 
     // prevent any copies of IMdl_module, IMdl_material_definition, IMdl_function_definition
     if(     (class_id == MDL::ID_MDL_MODULE)
-         || (class_id == MDL::ID_MDL_FUNCTION_DEFINITION))
+         || (class_id == MDL::ID_MDL_FUNCTION_DEFINITION)
+         || (class_id == MDL::ID_MDL_ANNOTATION_DEFINITION_PROXY))
         return -6;
 
     if( class_id == MDL::ID_MDL_FUNCTION_CALL) {
@@ -290,7 +280,12 @@ mi::Sint32 Transaction_impl::copy( const char* source, const char* target, mi::U
     } else {
         // If source and target names are different, lookup target tag.
         // Prevent overwriting an existing DB element with one of a different type
-        DB::Tag target_tag = m_db_transaction->name_to_tag( target);
+#ifndef MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
+        DB::Tag target_tag
+            = m_db_transaction->name_to_tag( target, DB::Transaction::STORE_CONTEXT);
+#else // MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
+        DB::Tag target_tag = m_db_transaction->name_to_tag_unsafe( target);
+#endif // MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
         if( target_tag) {
             SERIAL::Class_id target_class_id = m_db_transaction->get_class_id( target_tag);
             if(    (target_class_id == MDL::ID_MDL_MODULE)
@@ -304,11 +299,16 @@ mi::Sint32 Transaction_impl::copy( const char* source, const char* target, mi::U
             }
         }
 
-        DB::Access<DB::Element_base> access(source_tag, m_db_transaction);
+        DB::Access<DB::Element_base> access( source_tag, m_db_transaction);
         // Create a copy of the DB element.
         DB::Element_base* element = access->copy();
         // And store it.
+#ifndef MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
+        if( !target_tag)
+            target_tag = m_db_transaction->reserve_tag();
+#else // MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
         target_tag = get_tag_for_store( target_tag);
+#endif // MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
 #ifdef VERBOSE_TX
         LOG::mod_log->info( SYSTEM::M_NEURAY_API, LOG::Mod_log::C_DATABASE,
             "TX %u copying \"%s\" to \"%s\" ...", m_id_as_uint, source, target);
@@ -485,7 +485,7 @@ mi::IArray* Transaction_impl::list_elements(
             nullptr, "String[]", 0, nullptr));
 
     // start DFS post-order graph traversal at root_tag
-    robin_hood::unordered_set<DB::Tag> tags_seen;
+    ankerl::unordered_dense::set<DB::Tag> tags_seen;
     tags_seen.insert( root_tag); // not really needed if the graph is acyclic
     list_elements_internal(
         root_tag, name_pattern ? &name_regex : nullptr, type_names ? &class_ids : nullptr,
@@ -534,7 +534,7 @@ mi::base::IInterface* Transaction_impl::edit( DB::Tag tag)
     if( !is_open())
         return nullptr;
 
-    return m_class_factory->create_class_instance( this, tag, true);
+    return m_class_factory->create_class_instance( this, tag, /*is_edit*/ true);
 }
 
 const mi::base::IInterface* Transaction_impl::access( DB::Tag tag)
@@ -542,7 +542,7 @@ const mi::base::IInterface* Transaction_impl::access( DB::Tag tag)
     if( !is_open())
         return nullptr;
 
-    return m_class_factory->create_class_instance( this, tag, false);
+    return m_class_factory->create_class_instance( this, tag, /*is_edit*/ false);
 }
 
 const char* Transaction_impl::get_time_stamp( DB::Tag tag) const
@@ -590,9 +590,10 @@ const Class_factory* Transaction_impl::get_class_factory() const
     return m_class_factory;
 }
 
+#ifdef MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
 DB::Tag Transaction_impl::get_tag_for_store( const char* name)
 {
-    return get_tag_for_store( m_db_transaction->name_to_tag( name));
+    return get_tag_for_store( m_db_transaction->name_to_tag_unsafe( name));
 }
 
 DB::Tag Transaction_impl::get_tag_for_store( DB::Tag tag)
@@ -603,6 +604,7 @@ DB::Tag Transaction_impl::get_tag_for_store( DB::Tag tag)
 
     return m_db_transaction->reserve_tag();
 }
+#endif // MI_API_API_NEURAY_USE_NAME_TO_TAG_UNSAFE
 
 void Transaction_impl::add_element( const Db_element_impl_base* db_element)
 {
@@ -669,7 +671,7 @@ void Transaction_impl::list_elements_internal(
     const std::wregex* name_regex,
     const std::set<SERIAL::Class_id>* class_ids,
     mi::IDynamic_array* result,
-    robin_hood::unordered_set<DB::Tag>& tags_seen) const
+    ankerl::unordered_dense::set<DB::Tag>& tags_seen) const
 {
     // Skip DB elements that have not been registered with the API's class factory.
     SERIAL::Class_id class_id = m_class_factory->get_class_id( this, tag);

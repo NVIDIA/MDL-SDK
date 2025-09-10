@@ -45,53 +45,45 @@ set(PROJECT_SOURCES
     "utils/strings.h"
     )
 
-if (MDL_BUILD_SDK_EXAMPLES OR MDL_BUILD_CORE_EXAMPLES)
-    if (TARGET imgui)
-        set(PROJECT_SOURCES
-            ${PROJECT_SOURCES}
-            "gui/gui.h"
-            "gui/gui.cpp"
-            "gui/gui_material_properties.h"
-            "gui/gui_material_properties.cpp"
-            )
-    endif()
-
-    if(MDL_ENABLE_AXF_EXAMPLES)
-        set(PROJECT_SOURCES
-            ${PROJECT_SOURCES}
-            "utils/ospath.h"
-            "utils/ospath.cpp"
-            )
-    endif()
+if (MDL_BUILD_SDK_EXAMPLES)
+    list(APPEND PROJECT_SOURCES
+        "gui/gui.h"
+        "gui/gui.cpp"
+        "gui/gui_material_properties.h"
+        "gui/gui_material_properties.cpp"
+        )
 
     if(MDL_ENABLE_CUDA_EXAMPLES)
-        set(PROJECT_SOURCES
-            ${PROJECT_SOURCES}
+        list(APPEND PROJECT_SOURCES_NON_DXR
             "example_cuda_shared.h"
             "texture_support_cuda.h"
             )
     endif()
 
+    if(MDL_ENABLE_D3D11_EXAMPLES)
+        list(APPEND PROJECT_SOURCES
+            "gui/gui_api_interface_dx11.h"
+            )
+    endif()
+
+    if(MDL_ENABLE_D3D12_EXAMPLES)
+        list(APPEND PROJECT_SOURCES
+            "gui/gui_api_interface_dx12.h"
+            )
+    endif()
+
     if(MDL_ENABLE_OPENGL_EXAMPLES)
-        set(PROJECT_SOURCES
-            ${PROJECT_SOURCES}
+        list(APPEND PROJECT_SOURCES_NON_DXR
             "utils/gl_display.h"
             "gui/gui_api_interface_glfw.h"
             "example_glsl_shared.h"
             )
     endif()
 
-    if(MDL_ENABLE_D3D11_EXAMPLES)
-        set(PROJECT_SOURCES
-            ${PROJECT_SOURCES}
-            "gui/gui_api_interface_dx11.h"
-            )
-    endif()
-
-    if(MDL_ENABLE_D3D12_EXAMPLES)
-        set(PROJECT_SOURCES
-            ${PROJECT_SOURCES}
-            "gui/gui_api_interface_dx12.h"
+    if(MDL_ENABLE_VULKAN_EXAMPLES)
+        list(APPEND PROJECT_SOURCES_NON_DXR
+            "example_vulkan_shared.h"
+            "example_vulkan_shared.cpp"
             )
     endif()
 endif()
@@ -130,8 +122,7 @@ function(ADD_COMMON_TARGET_PROPERTIES TARGET_NAME)
     # add include directories
     target_include_directories(${TARGET_NAME}
         INTERFACE
-            # the template makes non public headers private by default
-            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+            ${CMAKE_CURRENT_SOURCE_DIR}
         )
 
     # add dependencies
@@ -143,96 +134,53 @@ function(ADD_COMMON_TARGET_PROPERTIES TARGET_NAME)
 endfunction()
 
 
+
 # name of the target and the resulting library
 #
-# This variant is used by almost all examples which use a dynamic MSVC runtime.
+# This variant is used by all examples except the DXR example.
 set(PROJECT_NAME examples-mdl_sdk-shared)
+
+# Select MSVC runtime based on MDL_MSVC_DYNAMIC_RUNTIME. This is the default behavior from
+# target_build_setup(), just for consistency with DXR case below.
+if(MDL_MSVC_DYNAMIC_RUNTIME)
+    set(_SHARED_MSVC_RUNTIME "DYNAMIC_MSVC_RUNTIME")
+else()
+    set(_SHARED_MSVC_RUNTIME "STATIC_MSVC_RUNTIME")
+endif()
 
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
-    NAMESPACE mdl_sdk
     OUTPUT_NAME "shared"
-    SOURCES ${PROJECT_SOURCES}
+    SOURCES ${PROJECT_SOURCES} ${PROJECT_SOURCES_NON_DXR}
     EXAMPLE
+    ${_SHARED_MSVC_RUNTIME}
 )
+
 add_library(mdl_sdk::shared ALIAS ${PROJECT_NAME})
 
 add_common_target_properties(${PROJECT_NAME})
 
 # add dependencies
-if(MDL_BUILD_SDK_EXAMPLES OR MDL_BUILD_CORE_EXAMPLES)
-    if(TARGET imgui)
+if(MDL_BUILD_SDK_EXAMPLES)
+    target_add_dependencies(TARGET ${PROJECT_NAME}
+        DEPENDS
+            imgui
+        NO_RUNTIME_COPY
+        )
+
+    if(MDL_ENABLE_OPENGL_EXAMPLES OR MDL_ENABLE_VULKAN_EXAMPLES)
         target_add_dependencies(TARGET ${PROJECT_NAME}
             DEPENDS
-                imgui
+                glfw
             NO_RUNTIME_COPY
-            )
-        target_compile_definitions(${PROJECT_NAME}
-            PUBLIC
-                "USE_IMGUI"
             )
     endif()
 
     if(MDL_ENABLE_OPENGL_EXAMPLES)
         target_add_dependencies(TARGET ${PROJECT_NAME}
             DEPENDS
-                glfw
-            NO_RUNTIME_COPY
-            )
-    endif()
-endif()
-
-
-# name of the target and the resulting library
-#
-# This variant is used by the mdl_core and Vulkan examples which
-# need to use a static MSVC runtime.
-set(PROJECT_NAME examples-mdl_sdk-shared_static)
-
-# vulkan is only in the static variant
-if(MDL_BUILD_SDK_EXAMPLES OR MDL_BUILD_CORE_EXAMPLES)
-    if(MDL_ENABLE_VULKAN_EXAMPLES)
-        set(PROJECT_SOURCES
-            ${PROJECT_SOURCES}
-            "example_vulkan_shared.h"
-            "example_vulkan_shared.cpp"
-            )
-    endif()
-endif()
-
-# create target from template
-create_from_base_preset(
-    TARGET ${PROJECT_NAME}
-    NAMESPACE mdl_sdk
-    OUTPUT_NAME "shared_static"
-    SOURCES ${PROJECT_SOURCES}
-    EXAMPLE
-    STATIC_MSVC_RUNTIME
-)
-add_library(mdl_sdk::shared_static ALIAS ${PROJECT_NAME})
-set_target_properties(${PROJECT_NAME} PROPERTIES PROJECT_LABEL "shared_static")
-
-add_common_target_properties(${PROJECT_NAME})
-
-# add dependencies
-if(MDL_BUILD_SDK_EXAMPLES OR MDL_BUILD_CORE_EXAMPLES)
-    if(TARGET imgui)
-        target_add_dependencies(TARGET ${PROJECT_NAME}
-            DEPENDS
-                imgui_static
-            NO_RUNTIME_COPY
-            )
-        target_compile_definitions(${PROJECT_NAME}
-            PUBLIC
-                "USE_IMGUI"
-            )
-    endif()
-
-    if(MDL_ENABLE_OPENGL_EXAMPLES OR MDL_ENABLE_VULKAN_EXAMPLES)
-        target_add_dependencies(TARGET ${PROJECT_NAME}
-            DEPENDS
-                glfw
+                opengl
             NO_RUNTIME_COPY
             )
     endif()
@@ -244,4 +192,48 @@ if(MDL_BUILD_SDK_EXAMPLES OR MDL_BUILD_CORE_EXAMPLES)
             NO_RUNTIME_COPY
             )
     endif()
+endif()
+
+
+
+if(MDL_ENABLE_D3D12_EXAMPLES)
+
+# name of the target and the resulting library
+#
+# This variant is used by the MDL SDK DXR example.
+set(PROJECT_NAME examples-mdl_sdk-shared_dxr)
+
+# Select MSVC runtime based on MDL_MSVC_DYNAMIC_RUNTIME_DXR_EXAMPLE.
+if(MDL_MSVC_DYNAMIC_RUNTIME_DXR_EXAMPLE)
+    set(_SHARED_DXR_MSVC_RUNTIME "DYNAMIC_MSVC_RUNTIME")
+else()
+    set(_SHARED_DXR_MSVC_RUNTIME "STATIC_MSVC_RUNTIME")
+endif()
+
+# create target from template
+create_from_base_preset(
+    TARGET ${PROJECT_NAME}
+    OUTPUT_NAME "shared_dxr"
+    SOURCES ${PROJECT_SOURCES}
+    EXAMPLE
+    ${_SHARED_DXR_MSVC_RUNTIME}
+)
+
+add_library(mdl_sdk::shared_dxr ALIAS ${PROJECT_NAME})
+
+set_target_properties(${PROJECT_NAME} PROPERTIES PROJECT_LABEL "shared_dxr")
+
+add_common_target_properties(${PROJECT_NAME})
+
+# add dependencies
+if(MDL_BUILD_SDK_EXAMPLES)
+    target_add_dependencies(TARGET ${PROJECT_NAME}
+        DEPENDS
+            imgui_dxr
+        NO_RUNTIME_COPY
+        )
+
+    # OpenGL/Vulkan dependencies not relevant for the MDL SDK DXR example.
+endif()
+
 endif()

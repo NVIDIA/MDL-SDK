@@ -39,7 +39,7 @@ set(PROJECT_SOURCES
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
-    TYPE SHARED
+    TYPE MODULE
     SOURCES ${PROJECT_SOURCES}
     EMBED_RC "mdl_sdk.rc"
     OUTPUT_NAME "mdl_sdk"
@@ -67,7 +67,7 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         boost
         ${LINKER_WHOLE_ARCHIVE}
         ${LINKER_START_GROUP}
-        mdl::include-mi
+        include-mi
         ${LINKER_DEPENDENCIES_API}
         ${LINKER_DEPENDENCIES_BASE}
         ${LINKER_DEPENDENCIES_IO}

@@ -32,6 +32,7 @@
 #define MI_NEURAYLIB_IIMPEXP_BASE_H
 
 #include <mi/base/interface_declare.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -51,7 +52,7 @@ class IImpexp_state;
 /// or exporter with the highest priority is taken. Tie-breaking is unspecified.
 ///
 /// \see #mi::neuraylib::IImpexp_base::get_priority()
-enum Impexp_priority
+enum Impexp_priority : Uint32
 {
     /// The highest priority, reserved for importers and exporters from user plugins.
     IMPEXP_PRIORITY_OVERRIDE        = 4,
@@ -63,12 +64,9 @@ enum Impexp_priority
     IMPEXP_PRIORITY_AMBIGUOUS       = 2,
     /// The importer or exporter does not have a good way of detecting the format or the support
     /// is very preliminary or incomplete.
-    IMPEXP_PRIORITY_GUESS           = 1,
-    //  Undocumented, for alignment only
-    IMPEXP_PRIORITY_FORCE_32_BIT    = 0xffffffffU
+    IMPEXP_PRIORITY_GUESS           = 1
+    MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(IMPEXP_PRIORITY_FORCE_32_BIT, 0xffffffffU)
 };
-
-mi_static_assert( sizeof( Impexp_priority) == sizeof( Uint32));
 
 /// Abstract %base interface common for importers and exporters.
 ///

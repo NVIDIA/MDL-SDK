@@ -33,6 +33,7 @@
 #include <mdl/compiler/compilercore/compilercore_allocator.h>
 #include <mdl/compiler/compilercore/compilercore_options.h>
 #include <mdl/codegenerators/generator_code/generator_code.h>
+#include <mdl/codegenerators/generator_code/generator_code_thread_context.h>
 
 #include "generator_jit_type_map.h"
 #include "generator_jit_llvm.h"
@@ -362,56 +363,6 @@ private:
     Resource_tag_map m_resource_tag_map;
 };
 
-/// Implementation of the ICode_genenator_thread_context interface.
-class Code_generator_thread_context :
-    public Allocator_interface_implement<ICode_generator_thread_context>
-{
-    typedef Allocator_interface_implement<ICode_generator_thread_context> Base;
-    friend class Allocator_builder;
-public:
-    /// Access code generator messages of last operation.
-    Messages_impl const &access_messages() const MDL_FINAL;
-
-    /// Access code generator messages of last operation.
-    Messages_impl &access_messages() MDL_FINAL;
-
-    /// Access code generator options for the invocation.
-    ///
-    /// \note Options set in the thread context will overwrite options set on the backend
-    ///       directly but are not persistent, i.e. only valid during the time this thread
-    ///       context is in use.
-    ///
-    Options_impl const &access_options() const MDL_FINAL;
-
-    /// Access code generator options for the invocation.
-    ///
-    /// \note Options set in the thread context will overwrite options set on the backend
-    ///       directly but are not persistent, i.e. only valid during the time this thread
-    ///       context is in use.
-    ///
-    Options_impl &access_options() MDL_FINAL;
-
-public:
-    /// Clear the compiler messages.
-    void clear_messages() { m_msg_list.clear(); }
-
-private:
-    /// Constructor.
-    ///
-    /// \param alloc     the allocator
-    /// \param options   the compiler options to inherit from
-    explicit Code_generator_thread_context(
-        IAllocator         *alloc,
-        Options_impl const *options);
-
-private:
-    /// Messages.
-    Messages_impl m_msg_list;
-
-    /// Options.
-    Options_impl m_options;
-};
-
 ///
 /// Implementation of the code generator for executable code.
 ///
@@ -444,7 +395,7 @@ public:
     /// Get the name of the target language.
     char const *get_target_language() const MDL_FINAL;
 
-    /// Creates a new thread context.
+    /// Creates a new code generator thread context.
     Code_generator_thread_context *create_thread_context() MDL_FINAL;
 
     /// Compile a whole module.

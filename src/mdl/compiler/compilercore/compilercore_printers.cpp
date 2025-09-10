@@ -330,6 +330,7 @@ restart:
     case IType::TK_COLOR:            tn = "color"; break;
     case IType::TK_LIGHT_PROFILE:    tn = "light_profile"; break;
     case IType::TK_BSDF_MEASUREMENT: tn = "bsdf_measurement"; break;
+    case IType::TK_VOID:             tn = "void"; break;
     case IType::TK_AUTO:             tn = "auto"; break;
     case IType::TK_ENUM:             tn = cast<IType_enum>(type)->get_symbol()->get_name(); break;
     case IType::TK_ALIAS:
@@ -449,6 +450,40 @@ restart:
             case IType_texture::TS_BSDF_DATA: s = "texture_bsdf_data"; break;
             }
             this->write(s);
+            break;
+        }
+    case IType::TK_PTR:
+        {
+            IType_pointer const *p_type = cast<IType_pointer>(type);
+            IType const *e_type = p_type->get_element_type();
+
+            this->redirect_print_type(e_type);
+            this->write(' ');
+            if (p_type->get_address_space() != 0) {
+                this->write('<');
+                this->push_color(ISyntax_coloring::C_LITERAL);
+                this->write(long(p_type->get_address_space()));
+                this->pop_color();
+                this->write('>');
+            }
+            this->write('*');
+            break;
+        }
+    case IType::TK_REF:
+        {
+            IType_ref const *r_type = cast<IType_ref>(type);
+            IType const     *e_type = r_type->get_element_type();
+
+            this->redirect_print_type(e_type);
+            this->write(' ');
+            if (r_type->get_address_space() != 0) {
+                this->write('<');
+                this->push_color(ISyntax_coloring::C_LITERAL);
+                this->write(long(r_type->get_address_space()));
+                this->pop_color();
+                this->write('>');
+            }
+            this->write('*');
             break;
         }
     }
@@ -583,15 +618,21 @@ Printer::~Printer()
 }
 
 // Format print.
-void Printer::printf(char const *format, ...)
+void Printer::vprintf(char const *format, va_list ap)
 {
     char buffer[1024];
-    va_list ap;
-    va_start(ap, format);
     vsnprintf(buffer, sizeof(buffer), format, ap);
     buffer[sizeof(buffer) - 1] = '\0';
-    va_end(ap);
     m_type_printer.write(buffer);
+}
+
+// Format print.
+void Printer::printf(char const *format, ...)
+{
+    va_list ap;
+    va_start(ap, format);
+    vprintf(format, ap);
+    va_end(ap);
 }
 
 // Prints a newline and do indentation.

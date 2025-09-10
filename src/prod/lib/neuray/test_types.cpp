@@ -79,7 +79,7 @@ void test_value(
 
     // check initial value
     tmp = value->template get_value<T>();
-    MI_CHECK_EQUAL( 0, tmp);
+    MI_CHECK_EQUAL( T(0), tmp);
 
     // modify value
     value->set_value( new_value);

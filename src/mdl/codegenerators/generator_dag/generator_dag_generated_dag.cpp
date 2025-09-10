@@ -43,6 +43,7 @@
 
 #include <mdl/codegenerators/generator_code/generator_code.h>
 
+#include <cstdint>
 #include <cstring>
 
 #include "generator_dag_generated_dag.h"
@@ -53,6 +54,7 @@
 #include "generator_dag_serializer.h"
 #include "generator_dag_dumper.h"
 #include "generator_dag_builder.h"
+#include "generator_dag_phen_out.h"
 
 namespace mi {
 namespace mdl {
@@ -321,80 +323,31 @@ const char *Instance_dumper::get_parameter_name(int index)
     return m_inst.get_parameter_name(index);
 }
 
-typedef ptr_hash_map<DAG_node const, size_t>::Type Phen_out_map;
-
-/// A helper class computing the phen-out for every expression that is visited.
-class Calc_phen_out : public IDAG_ir_visitor
-{
-public:
-    /// Constructor.
-    ///
-    /// \param phen_outs  the phen-out map will be filled
-    Calc_phen_out(Phen_out_map &phen_outs)
-    : m_phen_outs(phen_outs)
-    {
-    }
-
-    // Post-visit a Constant.
-    void visit(DAG_constant *cnst) MDL_FINAL {}
-
-    // Post-visit a variable (temporary).
-    void visit(DAG_temporary *tmp) MDL_FINAL {
-        MDL_ASSERT(!"There should be no temporaries at this point");
-    }
-
-    // Post-visit a call.
-    void visit(DAG_call *call) MDL_FINAL
-    {
-        for (int i = 0, n = call->get_argument_count(); i < n; ++i) {
-            DAG_node const *arg = call->get_argument(i);
-
-            Phen_out_map::iterator it = m_phen_outs.find(arg);
-            if (it == m_phen_outs.end()) {
-                m_phen_outs[arg] = 1;
-            } else {
-                it->second += 1;
-            }
-        }
-    }
-
-    // Post-visit a Parameter.
-    void visit(DAG_parameter *param) MDL_FINAL {}
-
-    // Post-visit a Temporary.
-    void visit(int index, DAG_node *init) MDL_FINAL {}
-
-private:
-
-    /// The phen-out count;
-    Phen_out_map &m_phen_outs;
-};
-
 /// Helper class: creates temporaries for node when phen-out > 1.
 class Abstract_temporary_inserter : public IDAG_ir_visitor
 {
     typedef ptr_hash_map<DAG_node const, DAG_node const *>::Type Temporary_map;
 
 public:
-    typedef ptr_hash_map<DAG_node const, char const *>::Type Temporary_name_map;
+    typedef ptr_hash_map<DAG_node const, ISymbol const *>::Type Temporary_name_map;
 
     /// Constructor.
     ///
     /// \param alloc               the allocator for temporary memory
     /// \param expression_factory  the expression factory to create temporaries on
     /// \param phen_outs           the phen-out map for the visited expression DAG
-    /// \param temp_name_map       the desired temporary names
+    /// \param dag_unit            the DAG unit holding the node names
     Abstract_temporary_inserter(
         IAllocator               *alloc,
         DAG_node_factory_impl    &expression_factory,
         Phen_out_map const       &phen_outs,
-        Temporary_name_map const &temp_name_map)
+        DAG_unit const           &dag_unit)
     : m_node_factory(expression_factory)
     , m_phen_outs(phen_outs)
     , m_process_constants(false)
     , m_process_parameters(true)
     , m_temp_map(0, Temporary_map::hasher(), Temporary_map::key_equal(), alloc)
-    , m_temp_name_map(temp_name_map)
+    , m_dag_unit(dag_unit)
     {
     }
 
@@ -412,9 +365,8 @@ public:
         for (int i = 0, n = call->get_argument_count(); i < n; ++i) {
             DAG_node const *arg = call->get_argument(i);
 
-            Temporary_name_map::const_iterator it_name  = m_temp_name_map.find(arg);
-            bool has_name = it_name != m_temp_name_map.end();
-            char const *name = has_name ? it_name->second : "";
+            ISymbol const *symbol = m_dag_unit.get_node_name(arg);
+            bool has_name = symbol != nullptr;
 
             switch (arg->get_kind()) {
             case DAG_node::EK_CONSTANT:
@@ -437,7 +389,7 @@ public:
             } else {
                 if ((it->second > 1) || has_name) {
                     // multiple use or name found, replace
-                    DAG_node const *temp = create_temporary(arg, name);
+                    DAG_node const *temp = create_temporary(arg, symbol);
 
                     call->set_argument(i, temp);
                 }
@@ -452,13 +404,13 @@ public:
     void visit(int index, DAG_node *init) MDL_FINAL {}
 
     // Create a temporary.
-    DAG_node const *create_temporary(DAG_node const *node, char const *name)
+    DAG_node const *create_temporary(DAG_node const *node, ISymbol const *symbol)
     {
         Temporary_map::iterator it = m_temp_map.find(node);
         if (it != m_temp_map.end()) {
             return it->second;
         }
-        int index = add_temporary(node, name);
+        int index = add_temporary(node, symbol);
         DAG_node const *temp = m_node_factory.create_temporary(node, index);
 
         m_temp_map[node] = temp;
@@ -467,9 +419,9 @@ public:
 
     /// Create and register a new temporary.
     ///
-    /// \param node  the initializer for the temporary
-    /// \param name  the name for the temporary
-    virtual int add_temporary(DAG_node const *node, char const *name) = 0;
+    /// \param node    the initializer for the temporary
+    /// \param symbol  the name for the temporary
+    virtual int add_temporary(DAG_node const *node, ISymbol const *symbol) = 0;
 
 private:
     /// The expression factory to create temporaries on.
@@ -487,8 +439,8 @@ private:
     /// Map of created temporaries.
     Temporary_map m_temp_map;
 
-    /// Map of desired temporary names.
-    const Temporary_name_map &m_temp_name_map;
+    /// The DAG unit.
+    DAG_unit const &m_dag_unit;
 };
 
 /// Helper class: visit a DAG and collect all parameter
@@ -1391,8 +1343,10 @@ void Generated_code_dag::compile_function(
             for (size_t k = 0; k < parameter_count; ++k) {
                 Parameter_info &param = func.get_parameter(k);
 
-                param.set_default(
-                    dag_builder.expr_to_dag(orig_f_def->get_default_param_initializer(k)));
+                DAG_node const *init = dag_builder.expr_to_dag(
+                    param.get_type(),
+                    orig_f_def->get_default_param_initializer(k));
+                param.set_default(init);
             }
         }
     } else {
@@ -1428,8 +1382,10 @@ void Generated_code_dag::compile_function(
                     dag_builder.make_accessible(parameter);
                 }
 
-                param.set_default(
-                    dag_builder.expr_to_dag(orig_f_def->get_default_param_initializer(k)));
+                DAG_node const *init = dag_builder.expr_to_dag(
+                    param.get_type(),
+                    orig_f_def->get_default_param_initializer(k));
+                param.set_default(init);
             }
         }
 
@@ -1452,6 +1408,8 @@ void Generated_code_dag::compile_function(
 
     build_function_temporaries(m_current_function_index);
     ++m_current_function_index;
+
+    m_node_factory.identify_clear();
 }
 
 // Compile an annotation (declaration).
@@ -1526,8 +1484,10 @@ void Generated_code_dag::compile_annotation(
             IParameter const *parameter = decl->get_parameter(k);
             dag_builder.make_accessible(parameter);
 
-            param.set_default(
-                dag_builder.expr_to_dag(orig_f_def->get_default_param_initializer(k)));
+            DAG_node const *init = dag_builder.expr_to_dag(
+                param.get_type(),
+                orig_f_def->get_default_param_initializer(k));
+            param.set_default(init);
         }
     }
 
@@ -1716,6 +1676,8 @@ void Generated_code_dag::compile_local_function(
 
     build_function_temporaries(m_current_function_index);
     ++m_current_function_index;
+
+    m_node_factory.identify_clear();
 }
 
 namespace {
@@ -1897,8 +1859,10 @@ void Generated_code_dag::compile_material(
                     No_INLINE_scope no_inline(m_node_factory);
 
                     Parameter_info &param = mat.get_parameter(k);
-                    param.set_default(
-                        dag_builder.expr_to_dag(orig_mat_def->get_default_param_initializer(k)));
+                    DAG_node const *init = dag_builder.expr_to_dag(
+                        param.get_type(),
+                        orig_mat_def->get_default_param_initializer(k));
+                    param.set_default(init);
                 }
             }
 
@@ -2051,8 +2015,10 @@ void Generated_code_dag::compile_material(
                 {
                     No_INLINE_scope no_inline(m_node_factory);
 
-                    param.set_default(
-                        dag_builder.expr_to_dag(orig_mat_def->get_default_param_initializer(k)));
+                    DAG_node const *init = dag_builder.expr_to_dag(
+                        param.get_type(),
+                        orig_mat_def->get_default_param_initializer(k));
+                    param.set_default(init);
                 }
             }
 
@@ -2099,6 +2065,8 @@ void Generated_code_dag::compile_material(
 
         ++m_current_material_index;
     }
+
+    m_node_factory.identify_clear();
 }
 
 // Compile a local material.
@@ -2670,17 +2638,17 @@ void Generated_code_dag::build_material_temporaries(int mat_index)
         /// \param dag                 the code DAG
         /// \param mat_index           the material index
         /// \param phen_outs           the phen-out map for the visited DAG IR
-        /// \param temp_name_map       the desired temporary names
+        /// \param dag_unit            the DAG unit
         Temporary_inserter(
             Generated_code_dag       &dag,
             int                      mat_index,
             Phen_out_map const       &phen_outs,
-            Temporary_name_map const &temp_name_map)
+            DAG_unit const           &dag_unit)
         : Abstract_temporary_inserter(
             dag.get_allocator(),
             *dag.get_node_factory(),
             phen_outs,
-            temp_name_map)
+            dag_unit)
         , m_dag(dag)
         , m_mat_index(mat_index)
         {
@@ -2688,10 +2656,11 @@ void Generated_code_dag::build_material_temporaries(int mat_index)
 
         /// Create and register a new temporary.
         ///
-        /// \param node  the initializer for the temporary
-        int add_temporary(DAG_node const *node, char const *name) MDL_FINAL
+        /// \param node    the initializer for the temporary
+        /// \param symbol  the name for the temporary
+        int add_temporary(DAG_node const *node, ISymbol const *symbol) MDL_FINAL
         {
-            return m_dag.add_material_temporary(m_mat_index, node, name);
+            return m_dag.add_material_temporary(m_mat_index, node, symbol);
         }
 
     private:
@@ -2701,11 +2670,6 @@ void Generated_code_dag::build_material_temporaries(int mat_index)
         int m_mat_index;
     };
 
-    // we will modify the identify table, so clear it here, but safe the name map first
-    DAG_node_factory_impl::Definition_temporary_name_map temp_name_map
-        = m_node_factory.get_temp_name_map();
-    m_node_factory.identify_clear();
-
     Phen_out_map phen_outs(0, Phen_out_map::hasher(), Phen_out_map::key_equal(), get_allocator());
 
     DAG_ir_walker walker(get_allocator());
@@ -2713,7 +2677,7 @@ void Generated_code_dag::build_material_temporaries(int mat_index)
 
     walker.walk_material(this, mat_index, &phen_counter);
 
-    Temporary_inserter inserter(*this, mat_index, phen_outs, temp_name_map);
+    Temporary_inserter inserter(*this, mat_index, phen_outs, m_dag_unit);
 
     walker.walk_material(this, mat_index, &inserter);
 }
@@ -2731,28 +2695,29 @@ void Generated_code_dag::build_function_temporaries(int func_index)
         /// \param dag                 the code DAG
         /// \param func_index          the function index
         /// \param phen_outs           the phen-out map for the visited DAG IR
-        /// \param temp_name_map       the desired temporary names
+        /// \param dag_unit            the DAG unit
         Temporary_inserter(
             Generated_code_dag &dag,
             int                func_index,
             Phen_out_map const &phen_outs,
-            Temporary_name_map const &temp_name_map)
-            : Abstract_temporary_inserter(
-                dag.get_allocator(),
-                *dag.get_node_factory(),
-                phen_outs,
-                temp_name_map)
-            , m_dag(dag)
-            , m_func_index(func_index)
+            DAG_unit const     &dag_unit)
+        : Abstract_temporary_inserter(
+            dag.get_allocator(),
+            *dag.get_node_factory(),
+            phen_outs,
+            dag_unit)
+        , m_dag(dag)
+        , m_func_index(func_index)
         {
         }
 
         /// Create and register a new temporary.
         ///
-        /// \param node  the initializer for the temporary
-        int add_temporary(DAG_node const *node, char const *name) MDL_FINAL
+        /// \param node    the initializer for the temporary
+        /// \param symbol  the name for the temporary
+        int add_temporary(DAG_node const *node, ISymbol const *symbol) MDL_FINAL
         {
-            return m_dag.add_function_temporary(m_func_index, node, name);
+            return m_dag.add_function_temporary(m_func_index, node, symbol);
         }
 
     private:
@@ -2767,11 +2732,6 @@ void Generated_code_dag::build_function_temporaries(int func_index)
         return;
     }
 
-    // we will modify the identify table, so clear it here, but safe the name map first
-    DAG_node_factory_impl::Definition_temporary_name_map temp_name_map
-        = m_node_factory.get_temp_name_map();
-    m_node_factory.identify_clear();
-
     Phen_out_map phen_outs(0, Phen_out_map::hasher(), Phen_out_map::key_equal(), get_allocator());
 
     DAG_ir_walker walker(get_allocator());
@@ -2779,7 +2739,7 @@ void Generated_code_dag::build_function_temporaries(int func_index)
 
     walker.walk_function(this, func_index, &phen_counter);
 
-    Temporary_inserter inserter(*this, func_index, phen_outs, temp_name_map);
+    Temporary_inserter inserter(*this, func_index, phen_outs, m_dag_unit);
 
     walker.walk_function(this, func_index, &inserter);
 }
@@ -3311,7 +3271,7 @@ DAG_node const *Generated_code_dag::get_function_temporary(
 }
 
 // Get the temporary name at temporary_index used by the function at function_index.
-char const *Generated_code_dag::get_function_temporary_name(
+ISymbol const *Generated_code_dag::get_function_temporary_name(
     size_t function_index,
     size_t temporary_index) const
 {
@@ -3459,7 +3419,7 @@ DAG_node const *Generated_code_dag::get_material_temporary(
 }
 
 // Get the temporary name at temporary_index used by the material at material_index.
-char const *Generated_code_dag::get_material_temporary_name(
+ISymbol const *Generated_code_dag::get_material_temporary_name(
     size_t material_index,
     size_t temporary_index) const
 {
@@ -4348,10 +4308,12 @@ void Generated_code_dag::Material_instance::serialize(
     dag_serializer.write_bool(m_node_factory.get_unsafe_math_opt());
     dag_serializer.write_bool(m_dag_unit.has_dbg_info());
 
-    m_dag_unit.serialize(dag_serializer);
+    m_dag_unit.serialize_factories(dag_serializer);
 
     // serialize the node factory m_node_factory by serializing all reachable DAGs
     serialize_dags(dag_serializer);
+
+    m_dag_unit.serialize_attributes(dag_serializer);
 
     dag_serializer.write_encoded(m_constructor);
     dag_serializer.serialize(m_temporaries);
@@ -4376,7 +4338,7 @@ void Generated_code_dag::Material_instance::serialize(
     
     // serialize the resource table
     size_t n_entries = m_resource_tag_map.size();
-    dag_serializer.write_unsigned(n_entries);
+    dag_serializer.write_size_t(n_entries);
 
     for (size_t i = 0; i < n_entries; ++i) {
         Resource_tag_tuple const &e = m_resource_tag_map[i];
@@ -4424,10 +4386,12 @@ Generated_code_dag::Material_instance const *Generated_code_dag::Material_instan
             math_opt,
             enable_debug));
 
-    instance->m_dag_unit.deserialize(dag_deserializer);
+    instance->m_dag_unit.deserialize_factories(dag_deserializer);
 
     // Deserialize the node factory m_node_factory by deserializing all reachable DAGs
     instance->deserialize_dags(dag_deserializer);
+
+    instance->m_dag_unit.deserialize_attributes(dag_deserializer);
 
     instance->m_constructor = cast<DAG_call>(dag_deserializer.read_encoded<DAG_node const *>());
     dag_deserializer.deserialize(instance->m_temporaries);
@@ -4451,7 +4415,7 @@ Generated_code_dag::Material_instance const *Generated_code_dag::Material_instan
     dag_deserializer.deserialize(instance->m_referenced_scene_data);
 
     // Deserialize the resource table.
-    size_t n_entries = dag_deserializer.read_unsigned();
+    size_t n_entries = dag_deserializer.read_size_t();
     instance->m_resource_tag_map.clear();
     for (size_t i = 0; i < n_entries; ++i) {
         Resource_tag_tuple::Kind kind = Resource_tag_tuple::Kind(dag_deserializer.read_byte());
@@ -4827,24 +4791,25 @@ void Generated_code_dag::Material_instance::build_temporaries()
         ///
         /// \param instance      the material instance
         /// \param phen_outs     the phen-out map for the visited expression DAG
-        /// \param temp_name_map the desired temporary names
+        /// \param dag_unit      the DAG unit
         Temporary_inserter(
             Material_instance &instance,
             Phen_out_map const &phen_outs,
-            Temporary_name_map const &temp_name_map)
+            DAG_unit const &dag_unit)
         : Abstract_temporary_inserter(
             instance.get_allocator(),
             *instance.get_node_factory(),
             phen_outs,
-            temp_name_map)
+            dag_unit)
         , m_instance(instance)
         {
         }
 
         /// Create and register a new temporary.
         ///
-        /// \param node  the initializer for the temporary
-        int add_temporary(DAG_node const *node, char const *name) MDL_FINAL
+        /// \param node    the initializer for the temporary
+        /// \param symbol  the name for the temporary
+        int add_temporary(DAG_node const *node, ISymbol const *symbol) MDL_FINAL
         {
             return m_instance.add_temporary(node);
         }
@@ -4854,10 +4819,6 @@ void Generated_code_dag::Material_instance::build_temporaries()
         Material_instance &m_instance;
     };
 
-    // we will modify the identify table, so clear it here
-    MDL_ASSERT(m_node_factory.get_temp_name_map().empty());
-    m_node_factory.identify_clear();
-
     Phen_out_map phen_outs(0, Phen_out_map::hasher(), Phen_out_map::key_equal(), get_allocator());
 
     DAG_ir_walker walker(get_allocator());
@@ -4865,10 +4826,7 @@ void Generated_code_dag::Material_instance::build_temporaries()
 
     walker.walk_instance(this, &phen_counter);
 
-    // empty name map since we do not want to keep names of let expressions for material instances
-    // (the map in the factory should be empty anyway, see assertion above)
-    Abstract_temporary_inserter::Temporary_name_map temporary_names(get_allocator());
-    Temporary_inserter inserter(*this, phen_outs, temporary_names);
+    Temporary_inserter inserter(*this, phen_outs, m_dag_unit);
 
     walker.walk_instance(this, &inserter);
 }
@@ -5423,6 +5381,7 @@ static bool is_uniform_call(
     case IDefinition::DS_INTRINSIC_DAG_ARRAY_LENGTH:
     case IDefinition::DS_INTRINSIC_DAG_SET_OBJECT_ID:
     case IDefinition::DS_INTRINSIC_DAG_SET_TRANSFORMS:
+    case IDefinition::DS_INTRINSIC_DAG_DECL_CAST:
         // these are always uniform
         return true;
 
@@ -6953,7 +6912,7 @@ Generated_code_dag::Material_instance::Instantiate_helper::insert_elemental_cons
                 IExpression const *init = elem_constr->get_default_param_initializer(i);
                 if (init != NULL) {
                     Module_scope scope(m_dag_builder, owner.get());
-                    f_node = m_dag_builder.expr_to_dag(init);
+                    f_node = m_dag_builder.expr_to_dag(f_type, init);
                 } else {
                     // default construct
                     if (is<IType_struct>(f_type)) {
@@ -6985,16 +6944,19 @@ Generated_code_dag::Material_instance::Instantiate_helper::insert_elemental_cons
     return res;
 }
 
+// Translate a decl_cast expression into a combination of a constructor call
+// of the target type, field selections and default initializers, converting
+// the expression between two compatible struct types.
 DAG_node const *
 Generated_code_dag::Material_instance::Instantiate_helper::translate_decl_cast_call(
     DAG_call const *call)
 {
     DAG_node const *arg = call->get_argument(0);
 
-    IType_struct const *dst_type =
-        cast<IType_struct>(call->get_type()->skip_type_alias());
+    IType const *dst_type = call->get_type()->skip_type_alias();
+    dst_type = m_type_factory.import(dst_type);
 
-    return insert_elemental_constructor(arg, dst_type, call->get_dbg_info());
+    return insert_elemental_constructor(arg, cast<IType_struct>(dst_type), call->get_dbg_info());
 }
 
 // Instantiate a DAG expression.
@@ -7036,6 +6998,12 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag(
             int index = tmp->get_index();
             DAG_node const *init = m_code_dag.get_material_temporary(m_material_index, index);
             res = instantiate_dag(init);
+
+            if (ISymbol const *tmp_sym = m_code_dag.get_material_temporary_name(
+                    m_material_index, index)) {
+                DAG_unit &dag_unit = m_node_factory.get_dag_unit();
+                dag_unit.set_node_name(res, dag_unit.import_symbol(tmp_sym));
+            }
         }
         break;
     case DAG_node::EK_CALL:
@@ -7278,6 +7246,22 @@ restart:
             }
             return false;
         }
+
+    case IType::TK_PTR:
+        {
+            MDL_ASSERT(!"unexpected pointer type occured");
+            IType_pointer const *p_tp = cast<IType_pointer>(tp);
+            return contains_string_type(p_tp->get_element_type());
+        }
+    case IType::TK_REF:
+        {
+            MDL_ASSERT(!"unexpected reference type occured");
+            IType_ref const *r_tp = cast<IType_ref>(tp);
+            return contains_string_type(r_tp->get_element_type());
+        }
+    case IType::TK_VOID:
+        MDL_ASSERT(!"unexpected void type occured");
+        return false;
     case IType::TK_FUNCTION:
     case IType::TK_AUTO:
     case IType::TK_ERROR:
@@ -7909,7 +7893,7 @@ void Generated_code_dag::serialize(
 
     // Serialize the Generated_code<> first
     // no need to serialize: m_printer
-    m_dag_unit.serialize(dag_serializer);
+    m_dag_unit.serialize_factories(dag_serializer);
     m_messages.serialize(dag_serializer);
 
     dag_serializer.serialize(m_module_imports);
@@ -7925,6 +7909,8 @@ void Generated_code_dag::serialize(
 
     // serialize the node factory m_node_factory by serializing all reachable DAGs
     serialize_dags(dag_serializer);
+
+    m_dag_unit.serialize_attributes(dag_serializer);
 
     dag_serializer.serialize(m_module_annotations);
 
@@ -8466,7 +8452,7 @@ Generated_code_dag const *Generated_code_dag::deserialize(
 
     // Deserialize the Generated_code<> first
     // no need to deserialize: m_printer
-    code->m_dag_unit.deserialize(dag_deserializer);
+    code->m_dag_unit.deserialize_factories(dag_deserializer);
     code->m_messages.deserialize(dag_deserializer);
 
     dag_deserializer.deserialize(code->m_module_imports);
@@ -8482,6 +8468,8 @@ Generated_code_dag const *Generated_code_dag::deserialize(
 
     // deserialize the node factory m_node_factory by deserializing all reachable DAGs
     code->deserialize_dags(dag_deserializer);
+
+    code->m_dag_unit.deserialize_attributes(dag_deserializer);
 
     dag_deserializer.deserialize(code->m_module_annotations);
 
@@ -8528,10 +8516,10 @@ Generated_code_dag const *Generated_code_dag::deserialize(
 int Generated_code_dag::add_material_temporary(
     int            mat_index,
     DAG_node const *node,
-    char const     *name)
+    ISymbol const  *symbol)
 {
     Function_info &mat = m_function_infos[m_materials[mat_index]];
-    size_t idx = mat.add_temporary(node, name);
+    size_t idx = mat.add_temporary(node, symbol);
     return int(idx);
 }
 
@@ -8539,10 +8527,10 @@ int Generated_code_dag::add_material_temporary(
 int Generated_code_dag::add_function_temporary(
     int            func_index,
     DAG_node const *node,
-    char const     *name)
+    ISymbol const  *symbol)
 {
     Function_info &func = m_function_infos[m_functions[func_index]];
-    size_t idx = func.add_temporary(node, name);
+    size_t idx = func.add_temporary(node, symbol);
     return int(idx);
 }
 

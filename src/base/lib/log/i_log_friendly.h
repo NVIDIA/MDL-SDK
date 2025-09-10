@@ -379,10 +379,19 @@ inline std::ostream& operator<<(std::ostream& str, const Seconds& value)
         const auto s = std::chrono::duration_cast<std::chrono::seconds>(rest -= min);
         const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(rest -= s);
 
+        auto twodigit = [&] (const auto t) -> std::ostream& {
+            if (t.count() < 10) str << '0';
+            return str << t.count();
+        };
+        auto threedigit = [&] (const auto t) {
+            if (t.count() < 100) str << '0';
+            twodigit(t);
+        };
+
         if (h.count()) str << h.count() << ':';
-        if (h.count() || min.count()) str << std::setw(2) << std::setfill('0') << min.count() << ':';
-        str << std::setw(2) << std::setfill('0') << s.count();
-        if (ms.count()) str << '.' << std::setw(3) << std::setfill('0') << ms.count();
+        if (h.count() || min.count()) twodigit(min) << ':';
+        twodigit(s);
+        if (ms.count()) { str << '.'; threedigit(ms); }
         return str;
     }
     else {

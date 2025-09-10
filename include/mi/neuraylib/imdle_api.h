@@ -87,7 +87,7 @@ public:
     ///                        - #mi::base::IInterface* \b user_files \n
     ///                          A static or dynamic array of structures of type \c Mdle_user_file
     ///                          pointing to additional user content (files) that should be added to
-    ///                          the MDLE archive. Can be \c nullptr.\n
+    ///                          the MDLE module. Can be \c nullptr.\n
     ///                          The structure has the two members
     ///                             - #mi::IString \b source_path \n
     ///                               MDL file path or file system path pointing to the file.
@@ -154,7 +154,7 @@ public:
         const char* mdle_file_name_b,
         IMdl_execution_context* context) const = 0;
 
-    /// Extracts the hash of the MDLE archive.
+    /// Extracts the hash of the MDLE.
     ///
     /// \param mdle_file_name   The file name of the MDLE.
     /// \param[out] hash        The returned hash value.

@@ -48,15 +48,14 @@ class IMdl_info : public
 public:
 
     /// The kinds of the graph nodes.
-    enum Kind {
-        DK_PACKAGE = 0,
-        DK_MODULE = 1,
-        DK_XLIFF = 2,
-        DK_TEXTURE = 4,
-        DK_LIGHTPROFILE = 8,
+    enum Kind : Uint32 {
+        DK_PACKAGE       =  0,
+        DK_MODULE        =  1,
+        DK_XLIFF         =  2,
+        DK_TEXTURE       =  4,
+        DK_LIGHTPROFILE  =  8,
         DK_MEASURED_BSDF = 16,
-        DK_DIRECTORY = 32,
-        // next = 64
+        DK_DIRECTORY     = 32,
         DK_ALL = 0xffffffffU
     };
 
@@ -69,8 +68,6 @@ public:
     /// Returns the simple_name (tail of the qualified_name) of the graph node.
     virtual const char*             get_simple_name() const = 0;
 };
-
-mi_static_assert(sizeof(IMdl_info::Kind) == sizeof(Uint32));
 
 /// Interface for a graph node representing an MDL module.
 class IMdl_module_info : public

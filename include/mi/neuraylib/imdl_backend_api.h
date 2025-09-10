@@ -32,6 +32,7 @@
 #define MI_NEURAYLIB_IMDL_BACKEND_API_H
 
 #include <mi/base/interface_declare.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -58,7 +59,7 @@ class IMdl_backend;
 
 
 /// Possible kinds of distribution function data.
-enum Df_data_kind {
+enum Df_data_kind : Uint32 {
     DFK_NONE,
     DFK_INVALID,
     DFK_SIMPLE_GLOSSY_MULTISCATTER,
@@ -70,11 +71,9 @@ enum Df_data_kind {
     DFK_WARD_GEISLER_MORODER_MULTISCATTER,
     DFK_SHEEN_MULTISCATTER,
     DFK_MICROFLAKE_SHEEN_GENERAL,
-    DFK_MICROFLAKE_SHEEN_MULTISCATTER,
-    DFK_FORCE_32_BIT = 0xffffffffU
+    DFK_MICROFLAKE_SHEEN_MULTISCATTER
+    MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(DFK_FORCE_32_BIT, 0xffffffffU)
 };
-
-mi_static_assert(sizeof(Df_data_kind) == sizeof(Uint32));
 
 /// This interface can be used to obtain the MDL backends.
 class IMdl_backend_api : public
@@ -83,13 +82,13 @@ class IMdl_backend_api : public
 public:
 
     /// Currently available MDL backends.
-    enum Mdl_backend_kind {
-        MB_CUDA_PTX,          ///< Generate CUDA PTX code.
-        MB_LLVM_IR,           ///< Generate LLVM IR (LLVM 12.0 compatible).
-        MB_GLSL,              ///< Generate GLSL code.
-        MB_NATIVE,            ///< Generate native code.
-        MB_HLSL,              ///< Generate HLSL code.
-        MB_FORCE_32_BIT = 0xffffffffU //   Undocumented, for alignment only
+    enum Mdl_backend_kind : Uint32 {
+        MB_CUDA_PTX,   ///< Generate CUDA PTX code.
+        MB_LLVM_IR,    ///< Generate LLVM IR (LLVM 12.0 compatible).
+        MB_GLSL,       ///< Generate GLSL code.
+        MB_NATIVE,     ///< Generate native code.
+        MB_HLSL        ///< Generate HLSL code.
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(MB_FORCE_32_BIT, 0xffffffffU)
     };
 
     /// Returns an MDL backend generator.

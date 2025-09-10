@@ -34,7 +34,7 @@
 #include <mi/base/types.h>
 #include <mi/base/uuid.h>
 #include <mi/base/handle.h>
-#include <mi/neuraylib/version.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 

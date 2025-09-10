@@ -30,13 +30,13 @@
 
 #include "dblight_info.h"
 
+#include <iomanip>
 #include <numeric>
 #include <set>
 #include <sstream>
 
-#include <boost/core/ignore_unused.hpp>
-
 #include <base/data/db/i_db_element.h>
+#include <base/data/sched/i_sched.h>
 #include <base/lib/config/config.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/util/registry/i_config_registry.h>
@@ -105,12 +105,10 @@ Info_impl::Info_impl(
     mi::Uint32 version,
     DB::Tag tag,
     DB::Privacy_level privacy_level,
-    const char* name,
     DB::Tag_set& references)
   : Info_base( scope->get_id(), transaction->get_id(), version),
     m_element( element),
     m_tag( tag),
-    m_name( name),
     m_scope( scope),
     m_references( std::move( references)),
     m_transaction( transaction),
@@ -118,6 +116,24 @@ Info_impl::Info_impl(
 {
     MI_ASSERT( m_references.find( m_tag) == m_references.end());
     MI_ASSERT( m_references.find( DB::Tag()) == m_references.end());
+}
+
+Info_impl::Info_impl(
+    SCHED::Job_base* job,
+    Scope_impl* scope,
+    Transaction_impl* transaction,
+    mi::Uint32 version,
+    DB::Tag tag,
+    DB::Privacy_level privacy_level,
+    bool temporary)
+  : Info_base( scope->get_id(), transaction->get_id(), version),
+    m_job( job),
+    m_tag( tag),
+    m_scope( scope),
+    m_transaction( transaction),
+    m_privacy_level( privacy_level),
+    m_temporary( temporary)
+{
 }
 
 Info_impl::Info_impl(
@@ -129,27 +145,36 @@ Info_impl::Info_impl(
     m_tag( tag),
     m_scope( scope),
     m_transaction( transaction),
-    m_privacy_level( scope->get_level())
+    m_privacy_level( scope->get_level()),
+    m_removal( true)
 {
 }
 
 Info_impl::~Info_impl()
 {
+    Statistics_helper helper( g_element_job_destructors);
+
     delete m_element;
+    delete m_job;
 }
 
 void Info_impl::pin()
 {
-    MI_ASSERT( m_element);
+    MI_ASSERT( m_element || m_job);
     ++m_pin_count;
 }
 
 void Info_impl::unpin()
 {
-    // No assertion for m_element to allow unpinning a just constructed instance for removal
-    // operations with pin count 1. (We could initialize m_pin_count to 0 in that particular
-    // constructor, but that would be inconsistent and counter-intuitive for callers.)
+    // No assertion for m_element or m_job to allow unpinning a just constructed instance for
+    // removal operations with pin count 1. (We could initialize m_pin_count to 0 in that
+    // particular constructor, but that would be inconsistent and counter-intuitive for callers.)
     --m_pin_count;
+}
+
+const char* Info_impl::get_name() const
+{
+    return m_infos_per_name ? m_infos_per_name->get_name().c_str() : nullptr;
 }
 
 void Info_impl::update_references()
@@ -163,18 +188,25 @@ void Info_impl::update_references()
 
 void Info_impl::set_infos_per_name( Infos_per_name* infos_per_name)
 {
-    MI_ASSERT( m_name);
     MI_ASSERT( !!infos_per_name ^ !!m_infos_per_name);
 
     m_infos_per_name = infos_per_name;
 }
 
-void Info_impl::set_element( DB::Element_base* element)
+void Info_impl::set_element_from_serialization_check( DB::Element_base* element)
 {
     MI_ASSERT( m_element);
     MI_ASSERT( element);
 
     delete m_element;
+    m_element = element;
+}
+
+void Info_impl::set_element_from_job_execution( DB::Element_base* element)
+{
+    MI_ASSERT( !m_element);
+    MI_ASSERT( element);
+
     m_element = element;
 }
 
@@ -214,6 +246,8 @@ bool same_visibility( const Transaction_impl_ptr& lhs, const Transaction_impl_pt
 }
 
 /// Indicates whether the info is a removal info.
+///
+/// Template to support iterators from Infos_per_tag_set and Infos_per_name_set.
 template <class T>
 bool is_removal( T info)
 {
@@ -221,6 +255,8 @@ bool is_removal( T info)
 }
 
 /// Indicates whether the info is a global removal info.
+///
+/// Template to support iterators from Infos_per_tag_set and Infos_per_name_set.
 template <class T>
 bool is_global_removal( T info)
 {
@@ -228,6 +264,8 @@ bool is_global_removal( T info)
 }
 
 /// Indicates whether the info is a local removal info.
+///
+/// Template to support iterators from Infos_per_tag_set and Infos_per_name_set.
 template <class T>
 bool is_local_removal( T info)
 {
@@ -348,19 +386,14 @@ Info_impl* lookup_info(
 
 void Infos_per_name::insert_info( Info_impl* info)
 {
-    MI_ASSERT( info->get_name() == m_name.c_str());
-
-    auto result = m_infos.insert( *info);
+    [[maybe_unused]] auto result = m_infos.insert( *info);
     MI_ASSERT( result.second);
-    boost::ignore_unused( result);
 
     info->set_infos_per_name( this);
 }
 
 Infos_per_name::Infos_per_name_set::iterator Infos_per_name::erase_info( Info_impl* info)
 {
-    MI_ASSERT( info->get_name() == m_name.c_str());
-
     info->set_infos_per_name( nullptr);
     auto it = Infos_per_name_set::s_iterator_to( *info);
     return m_infos.erase( it);
@@ -376,9 +409,8 @@ void Infos_per_tag::insert_info( Info_impl* info)
 {
     MI_ASSERT( info->get_tag() == m_tag);
 
-    auto result = m_infos.insert( *info);
+    [[maybe_unused]] auto result = m_infos.insert( *info);
     MI_ASSERT( result.second);
-    boost::ignore_unused( result);
 }
 
 Infos_per_tag::Infos_per_tag_set::iterator Infos_per_tag::erase_info( Info_impl* info)
@@ -639,8 +671,6 @@ void Info_manager::store(
         } else {
             infos_per_name = it_by_name->second;
         }
-        // Re-map name to a pointer that is guaranteed to exist as long as we need it.
-        name = infos_per_name->get_name().c_str();
     }
 
     // Record DB element references of this info.
@@ -648,7 +678,54 @@ void Info_manager::store(
 
     // Create info (destroys references).
     auto* info = new Info_impl(
-        element, scope, transaction, version, tag, privacy_level, name, references);
+        element, scope, transaction, version, tag, privacy_level, references);
+
+    // Insert info into the sets of infos for that tag/name/scope.
+    infos_per_tag->insert_info( info);
+    if( infos_per_name)
+        infos_per_name->insert_info( info);
+    scope->insert_info( info);
+
+    // Consider tag as a candidate for garbage collection.
+    if( m_gc_method == GC_GENERAL_CANDIDATES_THEN_PIN_COUNT_ZERO)
+        m_gc_candidates_general.insert( tag);
+
+    info->unpin();
+}
+
+void Info_manager::store(
+    SCHED::Job_base* job,
+    Scope_impl* scope,
+    Transaction_impl* transaction,
+    mi::Uint32 version,
+    DB::Tag tag,
+    DB::Privacy_level privacy_level,
+    const char* name,
+    bool temporary)
+{
+    m_database->get_lock().check_is_owned();
+
+    // Retrieve (or create) set of infos for \p tag.
+    Infos_per_tag* infos_per_tag = m_infos_by_tag.find( tag);
+    if( !infos_per_tag) {
+        infos_per_tag = new Infos_per_tag( tag);
+        m_infos_by_tag.insert( tag, infos_per_tag);
+    }
+
+    // Retrieve (or create) set of infos for \p name (if not \c nullptr).
+    Infos_per_name* infos_per_name = nullptr;
+    if( name) {
+        auto it_by_name = m_infos_by_name.find( name);
+        if( it_by_name == m_infos_by_name.end()) {
+            infos_per_name = new Infos_per_name( name);
+            m_infos_by_name[name] = infos_per_name;
+        } else {
+            infos_per_name = it_by_name->second;
+        }
+    }
+
+    // Create info.
+    auto* info = new Info_impl( job, scope, transaction, version, tag, privacy_level, temporary);
 
     // Insert info into the sets of infos for that tag/name/scope.
     infos_per_tag->insert_info( info);
@@ -690,7 +767,8 @@ Info_impl* Info_manager::lookup_info(
 
     m_database->get_lock().check_is_owned_shared_or_exclusive();
 
-    MI_ASSERT( name);
+    if( !name)
+        return nullptr;
 
     auto it = m_infos_by_name.find( name);
     if( it == m_infos_by_name.end())
@@ -706,26 +784,17 @@ Info_impl* Info_manager::start_edit(
     mi::Uint32 version,
     DB::Tag tag,
     DB::Privacy_level privacy_level,
-    const char* name,
-    const DB::Tag_set& references)
+    Infos_per_name* infos_per_name)
 {
     m_database->get_lock().check_is_owned();
 
     // Retrieve set of infos for \p tag.
     Infos_per_tag* infos_per_tag = m_infos_by_tag.find( tag);
 
-    // Retrieve set of infos for \p name (if not \c nullptr).
-    Infos_per_name* infos_per_name = nullptr;
-    if( name) {
-        infos_per_name = m_infos_by_name.find( name)->second;
-        // No need to re-map name (it points already to the re-mapped destination).
-        MI_ASSERT( name == infos_per_name->get_name().c_str());
-    }
-
     // Create info (modifies empty_references).
     DB::Tag_set empty_references;
     auto* info = new Info_impl(
-        element, scope, transaction, version, tag, privacy_level, name, empty_references);
+        element, scope, transaction, version, tag, privacy_level, empty_references);
 
     // Insert info into the sets of infos for that tag/name/scope.
     infos_per_tag->insert_info( info);
@@ -786,6 +855,7 @@ bool Info_manager::remove(
     if( !ipt)
         return false;
 
+    Infos_per_name* ipn = nullptr;
     if( is_global_removal) {
 
         // Prevent double global removals (still counts as successful request).
@@ -808,6 +878,7 @@ bool Info_manager::remove(
             return false;
         }
 
+        ipn = info->get_infos_per_name();
         info->unpin();
 
         // Reject local removals without another version in a more global scope (otherwise we can
@@ -823,9 +894,12 @@ bool Info_manager::remove(
     // Create removal info.
     auto* info = new Info_impl( scope, transaction, version, tag);
 
-    // Insert info into the sets of infos for that tag/scope (not name).
+    // Insert info into the sets of infos for that tag/scope (name only for local removals and if
+    // present).
     ipt->insert_info( info);
     scope->insert_info( info);
+    if( ipn)
+        ipn->insert_info( info);
 
     // Consider tag as a candidate for garbage collection.
     if( m_gc_method == GC_GENERAL_CANDIDATES_THEN_PIN_COUNT_ZERO)
@@ -847,6 +921,8 @@ void Info_manager::consider_tag_for_gc( DB::Tag tag)
 
 void Info_manager::garbage_collection( DB::Transaction_id lowest_open)
 {
+    Statistics_helper helper( g_garbage_collection);
+
     m_database->get_lock().check_is_owned();
 
     if( m_gc_method == GC_FULL_SWEEPS_ONLY) {
@@ -891,8 +967,10 @@ void Info_manager::garbage_collection( DB::Transaction_id lowest_open)
             progress = false;
 
             for( const auto& tag: tags2) {
+                Infos_per_tag* infos_per_tag = m_infos_by_tag.find( tag);
+                MI_ASSERT( infos_per_tag);
                 bool progress_tag = false;
-                cleanup_tag_with_pin_count_zero( tag, progress_tag);
+                cleanup_tag_with_pin_count_zero( infos_per_tag, progress_tag);
                 progress |= progress_tag;
             }
         }
@@ -925,8 +1003,10 @@ void Info_manager::garbage_collection( DB::Transaction_id lowest_open)
             progress = false;
 
             for( const auto& tag: tags2) {
+                Infos_per_tag* infos_per_tag = m_infos_by_tag.find( tag);
+                MI_ASSERT( infos_per_tag);
                 bool progress_tag = false;
-                cleanup_tag_with_pin_count_zero( tag, progress_tag);
+                cleanup_tag_with_pin_count_zero( infos_per_tag, progress_tag);
                 progress |= progress_tag;
             }
         }
@@ -1022,8 +1102,33 @@ void dump( std::ostream& s, bool mask_pointer_values, const Infos_per_name* ipn,
         s << ", tag = " << i.get_tag()();
         s << ", privacy level = " << static_cast<mi::Uint32>( i.get_privacy_level());
         s << ", removal = " << i.get_is_removal();
-        if( !mask_pointer_values)
-            s << ", element = " << i.get_element();
+
+        if( i.get_is_job()) {
+            // Extra information only for jobs to keep common case short.
+            s << ", job = ";
+            SCHED::Job_base* job = i.get_job();
+            if( mask_pointer_values)
+                s << "(set)";
+            else
+                s << job;
+            s << ", shared = " << job->get_is_shared();
+            s << ", parent = " << job->get_is_parent();
+            s << ", temporary = " << i.get_is_temporary();
+            s << ", element = ";
+            DB::Element_base* element = i.get_element();
+            if( !element)
+                s << "(cleared)";
+            else if( mask_pointer_values)
+                s << "(set)";
+            else
+                s << element;
+        } else if( !mask_pointer_values) {
+            // Element pointer only if not masked.
+            s << ", element = ";
+            DB::Element_base* element = i.get_element();
+            s << element;
+        }
+
         s << ", references = " << i.get_references();
         s << std::endl;
     }
@@ -1066,40 +1171,116 @@ void dump( std::ostream& s, bool mask_pointer_values, const Infos_per_tag* ipt, 
         s << ", tag = " << i.get_tag()();
         s << ", privacy level = " << static_cast<mi::Uint32>( i.get_privacy_level());
         s << ", removal = " << i.get_is_removal();
-        if( !mask_pointer_values)
-            s << ", element = " << i.get_element();
+
+        if( i.get_is_job()) {
+            // Extra information only for jobs to keep common case short.
+            s << ", job = ";
+            SCHED::Job_base* job = i.get_job();
+            if( mask_pointer_values)
+                s << "(set)";
+            else
+                s << job;
+            s << ", shared = " << job->get_is_shared();
+            s << ", parent = " << job->get_is_parent();
+            s << ", temporary = " << i.get_is_temporary();
+            s << ", element = ";
+            DB::Element_base* element = i.get_element();
+            if( !element)
+                s << "(cleared)";
+            else if( mask_pointer_values)
+                s << "(set)";
+            else
+                s << element;
+        } else if( !mask_pointer_values) {
+            // Element pointer only if not masked.
+            s << ", element = ";
+            DB::Element_base* element = i.get_element();
+            if( !element)
+                s << "(cleared)";
+            else
+                s << element;
+        }
+
         s << ", name = " << name_str;
         s << ", references = " << i.get_references();
         s << std::endl;
     }
 }
 
+std::string decode_class_id( SERIAL::Class_id class_id)
+{
+    if( class_id == SERIAL::class_id_unknown)
+        return "(unknown)";
+
+    std::string result = "\"????\"";
+    for( int i = 0; i < 4; ++i) {
+        result[4-i] = static_cast<char>( class_id % 256);
+        class_id /= 256;
+    }
+    return result;
+}
+
 } // namespace
 
-void Info_manager::dump( std::ostream& s, bool mask_pointer_values)
+void Info_manager::dump( std::ostream& s, bool verbose, bool mask_pointer_values)
 {
     m_database->get_lock().check_is_owned_shared_or_exclusive();
 
     s << "Count of infos by distinct names: " << m_infos_by_name.size() << std::endl;
 
-    size_t j1 = 0;
-    // Dump by order of names, not by order of hashes.
-    std::set<std::string> names;
-    for( const auto& ipn: m_infos_by_name)
-        names.insert( ipn.first);
-    for( const auto& name: names)
-        DBLIGHT::dump( s, mask_pointer_values, m_infos_by_name[name], j1++);
-    if( !m_infos_by_name.empty())
-        s << std::endl;
+    if( verbose) {
+        size_t j1 = 0;
+        // Dump by order of names, not by order of hashes.
+        std::set<std::string> names;
+        for( const auto& ipn: m_infos_by_name)
+            names.insert( ipn.first);
+        for( const auto& name: names)
+            DBLIGHT::dump( s, mask_pointer_values, m_infos_by_name[name], j1++);
+        if( !m_infos_by_name.empty())
+            s << std::endl;
+    }
 
     s << "Count of infos by distinct tags: " << m_infos_by_tag.size() << std::endl;
 
-    j1 = 0;
-    auto dump_as_lambda = [&s, mask_pointer_values, &j1]( Infos_per_tag* ipt)
-    { DBLIGHT::dump( s, mask_pointer_values, ipt, j1++); };
-    m_infos_by_tag.apply( dump_as_lambda);
-    if( !m_infos_by_tag.empty())
-        s << std::endl;
+    if( verbose) {
+        size_t j1 = 0;
+        auto dump_as_lambda = [&s, mask_pointer_values, &j1]( Infos_per_tag* ipt)
+        { DBLIGHT::dump( s, mask_pointer_values, ipt, j1++); };
+        m_infos_by_tag.apply( dump_as_lambda);
+        if( !m_infos_by_tag.empty())
+            s << std::endl;
+    }
+
+    std::map<SERIAL::Class_id, size_t> counts;
+    auto count_as_lambda = [&s, &counts]( Infos_per_tag* ipt)
+    {
+        for( const Info_impl& info: ipt->get_infos()) {
+            DB::Element_base* element = info.get_element();
+            SERIAL::Class_id class_id
+                = element ? element->get_class_id() : SERIAL::class_id_unknown;
+            ++counts[class_id];
+        }
+    };
+    m_infos_by_tag.apply( count_as_lambda);
+
+    size_t sum_count = 0;
+    for( const auto& count: counts)
+        sum_count += count.second;
+
+    s << "Count of all infos: " << sum_count << std::endl;
+    s << "Count of infos by class IDs:" << std::endl;
+
+    std::ios old_state( nullptr);
+    old_state.copyfmt( s);
+
+    for( const auto& entry: counts) {
+        s << std::setbase( 10) << std::noshowbase << std::setfill( ' ') << std::setw( 6);
+        s << entry.second << " ";
+        s << std::setbase( 16) << std::showbase << std::setfill( '0') << std::setw( 10);
+        s << entry.first << " ";
+        s << decode_class_id( entry.first) << std::endl;
+    }
+    s.copyfmt( old_state);
 
     s << std::endl;
 }
@@ -1132,6 +1313,13 @@ void Info_manager::cleanup_tag_general( DB::Tag tag, DB::Transaction_id lowest_o
         // Erase infos from aborted transactions.
         const Transaction_impl_ptr& transaction = current->get_transaction();
         if( is_aborted( transaction)) {
+            current = cleanup_info( infos_per_tag, current);
+            progress = true;
+            continue;
+        }
+
+        // Erase temporary infos from committed transactions.
+        if( is_committed( transaction) && current->get_is_temporary()) {
             current = cleanup_info( infos_per_tag, current);
             progress = true;
             continue;
@@ -1187,7 +1375,7 @@ void Info_manager::cleanup_tag_general( DB::Tag tag, DB::Transaction_id lowest_o
     // Remove sets that are marked for removal and are not referenced.
     if( infos_per_tag->get_pin_count() == 0) {
         bool progress_pin_count_zero = false;
-        cleanup_tag_with_pin_count_zero( tag, progress_pin_count_zero);
+        cleanup_tag_with_pin_count_zero( infos_per_tag, progress_pin_count_zero);
         if( progress_pin_count_zero) {
             progress = true;
             return;
@@ -1223,11 +1411,14 @@ void Info_manager::cleanup_tag_general( DB::Tag tag, DB::Transaction_id lowest_o
 
             // Remove current info in favor of next one if both are from the same scope and have
             // the same visibility, unless one of them is a global removal (which are processed
-            // individually further up) or the current info is a local removal (processed further
-            // down in a different iteration of the loop).
+            // individually further up), the current info is a local removal (processed further
+            // down in a different iteration of the loop), or the next info is temporary.
             const Transaction_impl_ptr& current_transaction = current->get_transaction();
             const Transaction_impl_ptr& next_transaction = next->get_transaction();
-            if( same_scope && !is_removal( current) && !is_global_removal( next)) {
+            if(    same_scope
+                && !is_removal( current)
+                && !is_global_removal( next)
+                && !next->get_is_temporary()) {
                 if(    same_visibility( current_transaction, next_transaction)
                     && (current->get_pin_count() == 0)) {
                     current = cleanup_info( infos_per_tag, current);
@@ -1262,21 +1453,20 @@ void Info_manager::cleanup_tag_general( DB::Tag tag, DB::Transaction_id lowest_o
             break;
     }
 
-    if(    (m_gc_method == GC_GENERAL_CANDIDATES_THEN_PIN_COUNT_ZERO)
-        && (infos.get_size() == 1)
-        && !temporarily_skipped)
+    if( (m_gc_method == GC_GENERAL_CANDIDATES_THEN_PIN_COUNT_ZERO) && !temporarily_skipped)
         m_gc_candidates_general.erase( tag);
 
     MI_ASSERT( !infos.empty());
 }
 
-void Info_manager::cleanup_tag_with_pin_count_zero( DB::Tag tag, bool& progress)
+void Info_manager::cleanup_tag_with_pin_count_zero( Infos_per_tag* infos_per_tag, bool& progress)
 {
     m_database->get_lock().check_is_owned();
 
-    Infos_per_tag* infos_per_tag = m_infos_by_tag.find( tag);
     MI_ASSERT( infos_per_tag);
     MI_ASSERT( infos_per_tag->get_pin_count() == 0);
+
+    DB::Tag tag = infos_per_tag->get_tag();
     Infos_per_tag::Infos_per_tag_set& infos = infos_per_tag->get_infos();
 
     auto add = []( mi::Uint32 sum, const Info_impl& i) { return sum + i.get_pin_count(); };

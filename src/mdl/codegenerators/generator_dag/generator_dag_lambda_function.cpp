@@ -435,7 +435,23 @@ DAG_node const *Lambda_function::import_expr(
 
     Import_helper helper(m_dag_unit, owner);
 
-    return do_import_expr(expr, helper);
+    DAG_node const *imported_expr = do_import_expr(expr, helper);
+
+    // now map node names
+    DAG_unit::Node_name_map const &owner_name_map =
+        owner.get_node_name_map();
+    for (auto const &it : owner_name_map) {
+        DAG_node const *owner_node = it.first;
+        ISymbol const *node_name = it.second;
+
+        auto nc_it = helper.find(owner_node);
+        if (nc_it != helper.end()) {
+            DAG_node const *imported_node = nc_it->second;
+            m_dag_unit.set_node_name(imported_node, m_dag_unit.import_symbol(node_name));
+        }
+    }
+
+    return imported_expr;
 }
 
 // Import (i.e. deep-copy) a DAG expression into this lambda function.
@@ -2706,7 +2722,7 @@ void Lambda_function::serialize(ISerializer *is) const
 
     // will be automatically set on deserialization.
     // m_mdl, m_arena
-    m_dag_unit.serialize(dag_serializer);
+    m_dag_unit.serialize_factories(dag_serializer);
 
     // The jitted code singleton will be set on deserialization.
     // m_jitted_code;
@@ -2725,6 +2741,8 @@ void Lambda_function::serialize(ISerializer *is) const
     };
 
     dag_serializer.write_dags(roots, dimension_of(roots));
+
+    m_dag_unit.serialize_attributes(dag_serializer);
 
     // serialize m_roots
     size_t n_roots = m_roots.size();
@@ -2844,7 +2862,7 @@ Lambda_function *Lambda_function::deserialize(
     MDL           *mdl,
     IDeserializer *ds)
 {
-    MDL_binary_deserializer bin_deserializer(alloc, ds, mdl);
+    MDL_binary_deserializer bin_deserializer(alloc, ds, *mdl);
     DAG_deserializer        dag_deserializer(ds, &bin_deserializer);
 
     Tag_t tag;
@@ -2865,7 +2883,7 @@ Lambda_function *Lambda_function::deserialize(
     // already set during creation:
     // m_mdl, m_arena
 
-    res->m_dag_unit.deserialize(dag_deserializer);
+    res->m_dag_unit.deserialize_factories(dag_deserializer);
 
     // Already set during creation.
     // m_jitted_code
@@ -2874,6 +2892,8 @@ Lambda_function *Lambda_function::deserialize(
 
     // deserialize the node factory m_node_factory by deserializing all reachable DAGs
     dag_deserializer.read_dags(res->m_node_factory);
+
+    res->m_dag_unit.deserialize_attributes(dag_deserializer);
 
     // deserialize m_roots
     size_t n_roots = dag_deserializer.read_encoded_tag();
@@ -3615,6 +3635,9 @@ public:
 
             case IType::TK_ALIAS:
             case IType::TK_FUNCTION:
+            case IType::TK_PTR:
+            case IType::TK_REF:
+            case IType::TK_VOID:
             case IType::TK_AUTO:
             case IType::TK_ERROR:
                 // should not happen
@@ -4886,6 +4909,9 @@ char const *Distribution_function_dumper::get_type_name(
         }
 
     case IType::TK_ALIAS:
+    case IType::TK_PTR:
+    case IType::TK_REF:
+    case IType::TK_VOID:
     case IType::TK_AUTO:
     case IType::TK_ERROR:
     case IType::TK_FUNCTION:

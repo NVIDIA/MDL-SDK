@@ -110,37 +110,37 @@ class Processor:
 
         lines = open(filename).readlines()
         for line in lines:
-            match = regex_swig_include.match(line)
-            if match:
-               self.process_swig_file(match.group(1), level + 1)
+            m = regex_swig_include.match(line)
+            if m:
+               self.process_swig_file(m.group(1), level + 1)
 
-            match = regex_header_include.match(line)
-            if match:
-                self.headers.add(match.group(1))
+            m = regex_header_include.match(line)
+            if m:
+                self.headers.add(m.group(1))
 
-            match = regex_header_include_nvindex.match(line)
-            if match:
-                self.headers.add("nv/index/" + match.group(1))
+            m = regex_header_include_nvindex.match(line)
+            if m:
+                self.headers.add("nv/index/" + m.group(1))
 
-            match = regex_nvindex_interface.match(line)
-            if match and match.group(1) != "CLASS_TYPE":  # skip internal definition
-                self.nvindex_interfaces[match.group(1)] = 'nv::index'
+            m = regex_nvindex_interface.match(line)
+            if m and m.group(1) != "CLASS_TYPE":  # skip internal definition
+                self.nvindex_interfaces[m.group(1)] = 'nv::index'
 
-            match = regex_dice_interface.match(line)
-            if match:
-                cmd = match.group(1)
+            m = regex_dice_interface.match(line)
+            if m:
+                cmd = m.group(1)
                 if not cmd: prefix = 'mi::neuraylib'
                 elif cmd == '_BASE': prefix = 'mi::base'
                 elif cmd == '_MI': prefix = 'mi'
-                self.dice_interfaces[match.group(2)] = prefix
+                self.dice_interfaces[m.group(2)] = prefix
 
-            match = regex_dice_implement.match(line)
-            if match:
-                self.dice_interfaces[match.group(1)] = 'mi::neuraylib'
+            m = regex_dice_implement.match(line)
+            if m:
+                self.dice_interfaces[m.group(1)] = 'mi::neuraylib'
 
-            match = regex_index_implement.match(line)
-            if match:
-                self.nvindex_interfaces[match.group(1)] = 'nv::index'
+            m = regex_index_implement.match(line)
+            if m:
+                self.nvindex_interfaces[m.group(1)] = 'nv::index'
 
 
     def process_header_file(self, filename, base_dir, interfaces):
@@ -160,6 +160,8 @@ class Processor:
                                                      r'([\w::]*)Interface_implement<\s*([\w_:]+)\s*>' )
         # Matche the start of a "{"-block
         regex_block_begin = re.compile(r'^([^{]*){')
+        # Matches a deprecated FORCE_32_BIT enum value
+        regex_force_32_bit_enum = re.compile(r'\s*MI_NEURAYLIB_DEPRECATED_ENUM_VALUE\(.+,.+\)')
 
         class_declaration = ""
         class_name        = ""
@@ -179,14 +181,18 @@ class Processor:
         # Iterate over the lines in the header files
         lines = open(base_dir + "/" + filename).readlines()
         for line in lines:
+            # Skip lines with deprecated enum values
+            m = regex_force_32_bit_enum.match(line)
+            if m:
+                continue
             # We are currently not inside a class declaration
             if class_name == "":
                 # Look for class declaration
-                match = regex_class_only.match(line)
-                if match and match.group(1) in interfaces:
+                m = regex_class_only.match(line)
+                if m and m.group(1) in interfaces:
                     # Found declaration of a class that should be wrapped
                     class_declaration = line
-                    class_name = match.group(1)
+                    class_name = m.group(1)
                     class_prefix = interfaces[class_name] # e.g. "nv::index" or "mi::base"
 
                     # Set up the current namespace
@@ -199,8 +205,8 @@ class Processor:
 
                 else:
                     # Look for a template declaration
-                    match = regex_template.match(line)
-                    if match:
+                    m = regex_template.match(line)
+                    if m:
                         # Template declaration found: Delay output, as a
                         # relevant class declaration may follow, and the SWIG
                         # statements need to be added before the template
@@ -217,11 +223,11 @@ class Processor:
                 # We are inside a class declaration for a class that should be wrapped
 
                 # Look for first "{" after "class"
-                match = regex_block_begin.match(line)
-                if match:
+                m = regex_block_begin.match(line)
+                if m:
                     # Collect everything starting at "class"
                     output_todo = class_declaration + line
-                    class_declaration += match.group(1)
+                    class_declaration += m.group(1)
 
                     done = False
 
@@ -242,9 +248,9 @@ class Processor:
                     #
                     # Handle Interface_declare
                     #
-                    match = regex_class_interface_declare.match(class_declaration)
-                    if match and not done:
-                        (name, uuid, base) = match.group(1, 3, 4)
+                    m = regex_class_interface_declare.match(class_declaration)
+                    if m and not done:
+                        (name, uuid, base) = m.group(1, 3, 4)
                         base = fixup_base(base)
                         uuid = remove_extra_whitespace(uuid)
 
@@ -285,9 +291,9 @@ class Processor:
                     #
                     # Handle Interface_implement
                     #
-                    match = regex_class_interface_implement.match(class_declaration)
-                    if match and not done:
-                        (name, base) = match.group(1, 3)
+                    m = regex_class_interface_implement.match(class_declaration)
+                    if m and not done:
+                        (name, base) = m.group(1, 3)
                         base = fixup_base(base)
                         base = remove_extra_whitespace(base)
 

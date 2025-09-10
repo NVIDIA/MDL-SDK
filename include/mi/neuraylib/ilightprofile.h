@@ -32,6 +32,7 @@
 #define MI_NEURAYLIB_ILIGHTPROFILE_H
 
 #include <mi/neuraylib/iscene_element.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -54,7 +55,7 @@ class IReader;
 /// not supported.
 ///
 /// \see #mi::neuraylib::ILightprofile::reset_file(), #mi::neuraylib::ILightprofile::get_flags()
-enum Lightprofile_flags {
+enum Lightprofile_flags : Uint32 {
     /// Clockwise order, contrary to the IES standard for these (incorrect) type B files.
     LIGHTPROFILE_CLOCKWISE            = 1,
     /// Counter-clockwise, standard-conforming order (default).
@@ -62,11 +63,9 @@ enum Lightprofile_flags {
     /// For 3dsmax
     LIGHTPROFILE_ROTATE_TYPE_B        = 4,
     /// For 3dsmax
-    LIGHTPROFILE_ROTATE_TYPE_C_90_270 = 8,
-    LIGHTPROFILE_FLAGS_FORCE_32_BIT   = 0xffffffffU
+    LIGHTPROFILE_ROTATE_TYPE_C_90_270 = 8
+    MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(LIGHTPROFILE_FLAGS_FORCE_32_BIT, 0xffffffffU)
 };
-
-mi_static_assert( sizeof( Lightprofile_flags) == sizeof( Uint32));
 
 /// Degree of hermite interpolation.
 ///
@@ -74,13 +73,11 @@ mi_static_assert( sizeof( Lightprofile_flags) == sizeof( Uint32));
 /// (see also [\ref DH05]).
 ///
 /// \see #mi::neuraylib::ILightprofile::reset_file(), #mi::neuraylib::ILightprofile::get_degree()
-enum Lightprofile_degree {
-    LIGHTPROFILE_HERMITE_BASE_1      = 1,   ///< Degree 1 = linear interpolation
-    LIGHTPROFILE_HERMITE_BASE_3      = 3,   ///< Degree 3 = cubic interpolation
-    LIGHTPROFILE_DEGREE_FORCE_32_BIT = 0xffffffffU
+enum Lightprofile_degree : Uint32 {
+    LIGHTPROFILE_HERMITE_BASE_1 = 1,   ///< Degree 1 = linear interpolation
+    LIGHTPROFILE_HERMITE_BASE_3 = 3    ///< Degree 3 = cubic interpolation
+    MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(LIGHTPROFILE_DEGREE_FORCE_32_BIT, 0xffffffffU)
 };
-
-mi_static_assert( sizeof( Lightprofile_degree) == sizeof( Uint32));
 
 /// This interface represents light profiles.
 ///

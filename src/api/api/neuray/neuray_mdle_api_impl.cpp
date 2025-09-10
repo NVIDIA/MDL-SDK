@@ -306,7 +306,7 @@ mi::mdl::IMDL_resource_reader* Mdle_resource_mapper::get_resource_reader(size_t 
             fn.substr(0, p_mdr + 4).c_str(), fn.substr(p_mdr + 5).c_str()));
 
         const mi::mdl::Messages& messages = archive_tool->access_messages();
-        MDL::convert_and_log_messages(messages, /*context*/ nullptr);
+        MDL::log_messages(messages);
         if (!input_stream || messages.get_error_message_count() > 0)
             return nullptr;
 
@@ -321,7 +321,7 @@ mi::mdl::IMDL_resource_reader* Mdle_resource_mapper::get_resource_reader(size_t 
             fn.substr(0, p_mdle + 5).c_str(), fn.substr(p_mdle + 6).c_str()));
 
         const mi::mdl::Messages& messages = mdle_tool->access_messages();
-        MDL::convert_and_log_messages(messages, /*context*/ nullptr);
+        MDL::log_messages(messages);
         if (!input_stream || messages.get_error_message_count() > 0)
             return nullptr;
 

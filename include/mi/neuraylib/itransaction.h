@@ -33,7 +33,7 @@
 
 #include <mi/base/interface_declare.h>
 #include <mi/neuraylib/type_traits.h>
-#include <mi/neuraylib/version.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -60,8 +60,8 @@ class IScope;
 /// then you have to serialize all transaction uses. This does not only apply to methods of
 /// #mi::neuraylib::ITransaction, but all methods that implicitly use the transaction. For example,
 /// such a use can happen by methods of DB elements returned from #access() or #edit() calls, or by
-/// objects returned from factories taking the transaction as an \ifnot DICE_API argument, like
-/// #mi::neuraylib::IMdl_factory::create_module_builder(). \else argument. \endif
+/// objects returned from factories taking the transaction as an argument, like
+/// #mi::neuraylib::IMdl_factory::create_module_builder().
 ///
 /// \par Concurrent accesses to database elements within a transaction
 ///
@@ -99,7 +99,7 @@ class IScope;
 ///
 /// If the same database element is edited in multiple overlapping transactions, the changes from
 /// the transaction created last survive, independent of the order in which the transactions are
-/// committed. \ifnot MDL_SDK_API If needed, the lifetime of transactions can be serialized across
+/// committed. \if IRAY_API If needed, the lifetime of transactions can be serialized across
 /// hosts (see #mi::neuraylib::IDatabase::lock() for details). \endif
 class ITransaction : public
     mi::base::Interface_declare<0x6ca1f0c2,0xb262,0x4f09,0xa6,0xa5,0x05,0xae,0x14,0x45,0xed,0xfa>
@@ -321,8 +321,8 @@ public:
     ///
     /// \param db_element The #mi::base::IInterface to store.
     /// \param name       The name under which to store \p db_element. If there exists already a DB
-    ///                   element with that name then it will be overwritten \if IRAY_API (but see
-    ///                   also return code -9 below) \endif
+    ///                   element with that name then it will be overwritten (but see also return
+    ///                   code -9 below),
     /// \param privacy    The privacy level under which to store \p db_element (in the range from 0
     ///                   to the privacy level of the scope of this transaction). In addition, the
     ///                   constant #LOCAL_SCOPE can be used as a shortcut to indicate the privacy
@@ -483,10 +483,6 @@ public:
     /// avoided by using #mi::neuraylib::IDatabase::garbage_collection() after a transaction was
     /// committed and before starting the next one to force garbage collection of all possible
     /// elements.
-    ///
-    /// \if IRAY_API
-    /// See also \ref mi_neuray_database_reuse_of_names for more details and correct usage patterns.
-    /// \endif
     ///
     /// \par Local removals
     ///

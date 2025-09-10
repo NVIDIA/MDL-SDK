@@ -58,7 +58,7 @@ namespace neuraylib { class ISerializable; class ITransaction; }
 
 namespace MI {
 
-namespace DB { class Element_base; }
+namespace DB { class Element_base; class Info; }
 namespace IDATA { class Factory; }
 
 namespace NEURAY {
@@ -303,7 +303,7 @@ public:
 
     // class instance creation
 
-    /// Creates an instance of a class (independent DB element).
+    /// Creates an instance of a class (access/edit of a DB element, by tag).
     ///
     /// Used by #ITransaction::access() and ITransaction::edit() to create instances of classes
     /// stored in the database.
@@ -318,6 +318,31 @@ public:
     mi::base::IInterface* create_class_instance(
         Transaction_impl* transaction,
         DB::Tag tag,
+        bool is_edit) const;
+
+    /// Creates an instance of a class (access/edit of a DB element, by name).
+    ///
+    /// Used by #ITransaction::access() and ITransaction::edit() to create instances of classes
+    /// stored in the database.
+    ///
+    /// \param transaction          The transaction.
+    /// \param name                 The name of the DB element which is connected with the to be
+    ///                             created API class.
+    /// \param is_edit              Indicates whether the DB element should get accessed via an
+    ///                             Access or Edit. The caller is responsible not to hand out
+    ///                             mutable pointers of the return value if \p is_edit is \c false.
+    /// \return                     An instance of the requested class, or \c nullptr on failure.
+    mi::base::IInterface* create_class_instance(
+        Transaction_impl* transaction,
+        const char* name,
+        bool is_edit) const;
+
+    /// Creates an instance of a class (access/edit of a DB element, by info).
+    ///
+    /// Common code shared by both overloads of #create_class_instance() above.
+    mi::base::IInterface* create_class_instance_shared(
+        Transaction_impl* transaction,
+        DB::Info* info,
         bool is_edit) const;
 
     /// Creates an instance of a type (not (yet) connected with DB).

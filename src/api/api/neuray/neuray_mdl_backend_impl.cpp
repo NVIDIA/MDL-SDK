@@ -106,15 +106,6 @@ Link_unit::Link_unit(
 {
 }
 
-// Add an MDL environment function call as a function to this link unit.
-mi::Sint32 Link_unit::deprecated_add_environment(
-    mi::neuraylib::IFunction_call const   *call,
-    char const                            *fname,
-    mi::neuraylib::IMdl_execution_context *context)
-{
-    return add_function(call, mi::neuraylib::ILink_unit::FEC_ENVIRONMENT, fname, context);
-}
-
 // Add an expression that is part of an MDL material instance as a function to this link unit.
 mi::Sint32 Link_unit::add_material_expression(
     mi::neuraylib::ICompiled_material const *material,
@@ -186,8 +177,6 @@ mi::Sint32 Link_unit::add_function(
     case mi::neuraylib::ILink_unit::FEC_DISPLACEMENT:
         bfexc = BACKENDS::Link_unit::FEC_DISPLACEMENT;
         break;
-    case mi::neuraylib::ILink_unit::FEC_FORCE_32_BIT:
-        return MDL::add_error_message(context_impl, "Invalid parameters.", -1);
     }
     return m_link_unit.add_function(
         unwrap(call),
@@ -216,8 +205,6 @@ Sint32 Link_unit::add_function(
     case mi::neuraylib::ILink_unit::FEC_DISPLACEMENT:
         bfexc = BACKENDS::Link_unit::FEC_DISPLACEMENT;
         break;
-    case mi::neuraylib::ILink_unit::FEC_FORCE_32_BIT:
-        return MDL::add_error_message(context_impl, "Invalid parameters.", -1);
     }
     return m_link_unit.add_function(
         unwrap(function),
@@ -377,7 +364,7 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::deserialize_target_code(
     // make sure the info is of the same back-end kind
     if (info->get_backend_kind() != m_backend.get_kind()) {
         if (context)
-            context->add_message(mi::neuraylib::IMessage::MSG_COMILER_BACKEND,
+            context->add_message(mi::neuraylib::IMessage::MSG_COMPILER_BACKEND,
                 mi::base::details::MESSAGE_SEVERITY_ERROR, -1,
                 "Deserialization failed. The deserialized object was created by different kind of "
                 "backend.");

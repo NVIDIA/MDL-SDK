@@ -64,18 +64,13 @@ public:
 
 /// A simple implementation of the ITile interface.
 ///
-/// Note that only a fixed set of types is permitted for the template parameter T.
-/// Hence we use explicit template instantiation in the corresponding .cpp file.
-template <Pixel_type T>
-class Tile_impl
-  : public mi::base::Interface_implement<ITile>,
-    public boost::noncopyable
+class Tile_impl : public mi::base::Interface_implement<ITile>
 {
 public:
     /// Constructor.
     ///
-    /// Creates a tile of the given width and height.
-    Tile_impl( mi::Uint32 width, mi::Uint32 height);
+    /// Creates a tile of the given dimensions and type.
+    Tile_impl( mi::Uint32 width, mi::Uint32 height, Pixel_type pixel_type);
 
     /// Constructor.
     ///
@@ -105,17 +100,30 @@ public:
     /// Used to implement DB::Element_base::get_size() for DBIMAGE::Image.
     mi::Size get_size() const;
 
+    /// Reallocates this tile if necessary.
+    void reset( mi::Uint32 width, mi::Uint32 height, Pixel_type pixel_type);
+
 private:
-
-    /// Number of components per pixel.
-    static const int s_components_per_pixel = Pixel_type_traits<T>::s_components_per_pixel;
-
     /// Width of the tile
     mi::Uint32 m_width;
     /// Height of the tile
     mi::Uint32 m_height;
+    /// Pixel type
+    Pixel_type m_type;
     /// The data of this tile
-    std::vector<typename Pixel_type_traits<T>::Base_type> m_data;
+    std::vector<char> m_data;
+
+    template <Pixel_type PT>
+    void set_pixel( mi::Uint32 x_offset, mi::Uint32 y_offset, const mi::Float32* floats);
+
+    template <Pixel_type PT>
+    void get_pixel( mi::Uint32 x_offset, mi::Uint32 y_offset, mi::Float32* floats) const;
+
+    template <Pixel_type PT>
+    auto* get_position( mi::Uint32 x_offset, mi::Uint32 y_offset);
+
+    template <Pixel_type PT>
+    auto* get_position( mi::Uint32 x_offset, mi::Uint32 y_offset) const;
 };
 
 } // namespace IMAGE

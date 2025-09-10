@@ -33,7 +33,6 @@
 #include "pch.h"
 
 #include "neuray_expression_impl.h"
-#include "neuray_impexp_utilities.h"
 #include "neuray_mdl_execution_context_impl.h"
 #include "neuray_module_impl.h"
 #include "neuray_transaction_impl.h"
@@ -46,6 +45,8 @@
 #include <mi/neuraylib/idynamic_array.h>
 #include <mi/neuraylib/ireader.h>
 #include <mi/neuraylib/istring.h>
+
+#include <base/hal/disk/disk_memory_reader_writer_impl.h>
 #include <base/system/main/access_module.h>
 #include <mdl/integration/mdlnr/i_mdlnr.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
@@ -316,7 +317,7 @@ mi::Sint32 Module_impl::reload_from_string(
     }
 
     mi::base::Handle<mi::neuraylib::IReader> reader(
-        Impexp_utilities::create_reader( module_source, strlen( module_source)));
+        DISK::create_reader( module_source, strlen( module_source)));
     mi::Sint32 result = get_db_element()->reload_from_string(
         get_db_transaction(),
         reader.get(),

@@ -135,7 +135,7 @@ mi::neuraylib::INeuray* load_and_get_ineuray( const char* filename = 0, bool aut
             FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
             MAKELANGID( LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buffer, 0, 0))
             message = buffer;
-        printf( "Failed to load library (%u): " FMT_LPTSTR, error_code, message);
+        printf( "Failed to load library (%lu): " FMT_LPTSTR, error_code, message);
         if( buffer)
             LocalFree( buffer);
         return 0;
@@ -149,7 +149,7 @@ mi::neuraylib::INeuray* load_and_get_ineuray( const char* filename = 0, bool aut
             FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
             MAKELANGID( LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buffer, 0, 0))
             message = buffer;
-        printf( "GetProcAddress error (%u): " FMT_LPTSTR, error_code, message);
+        printf( "GetProcAddress error (%lu): " FMT_LPTSTR, error_code, message);
         if( buffer)
             LocalFree( buffer);
         return 0;
@@ -190,7 +190,7 @@ bool unload()
             FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
             MAKELANGID( LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buffer, 0, 0))
             message = buffer;
-        printf( "Failed to unload library (%u): " FMT_LPTSTR, error_code, message);
+        printf( "Failed to unload library (%lu): " FMT_LPTSTR, error_code, message);
         if( buffer)
             LocalFree( buffer);
         return false;

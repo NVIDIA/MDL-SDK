@@ -52,7 +52,6 @@ set(PROJECT_HEADERS
     "../neuray/neuray_function_definition_impl.h"
     "../neuray/neuray_image_api_impl.h"
     "../neuray/neuray_image_impl.h"
-    "../neuray/neuray_impexp_utilities.h"
     "../neuray/neuray_lightprofile_impl.h"
     "../neuray/neuray_logging_configuration_impl.h"
     "../neuray/neuray_material_instance_impl.h"
@@ -82,7 +81,6 @@ set(PROJECT_HEADERS
     "../neuray/neuray_transaction_impl.h"
     "../neuray/neuray_type_impl.h"
     "../neuray/neuray_type_utilities.h"
-    "../neuray/neuray_uri.h"
     "../neuray/neuray_value_impl.h"
     "../neuray/neuray_version_impl.h"
 )
@@ -107,7 +105,6 @@ set(PROJECT_SOURCES
     "../neuray/neuray_function_definition_impl.cpp"
     "../neuray/neuray_image_impl.cpp"
     "../neuray/neuray_image_api_impl.cpp"
-    "../neuray/neuray_impexp_utilities.cpp"
     "../neuray/neuray_lightprofile_impl.cpp"
     "../neuray/neuray_logging_configuration_impl.cpp"
     "../neuray/neuray_material_instance_impl.cpp"
@@ -136,7 +133,6 @@ set(PROJECT_SOURCES
     "../neuray/neuray_transaction_impl.cpp"
     "../neuray/neuray_type_impl.cpp"
     "../neuray/neuray_type_utilities.cpp"
-    "../neuray/neuray_uri.cpp"
     "../neuray/neuray_value_impl.cpp"
     "../neuray/neuray_version_impl.cpp"
     ${PROJECT_HEADERS}

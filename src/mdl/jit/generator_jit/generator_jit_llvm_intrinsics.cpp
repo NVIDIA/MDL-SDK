@@ -3398,7 +3398,7 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         break;
     case RT_MDL_ROUND_AWAY_FROM_ZERO:
     case RT_MDL_ROUND_AWAY_FROM_ZEROF:
-        // round(x) = floor(x + 0.5)
+        // round_away_from_zero(x) = floor(x + sign(x) * 0.5)
         {
             llvm::Value    *x       = arg_it;
             bool           is_float = code == RT_MDL_ROUND_AWAY_FROM_ZEROF;
@@ -3680,9 +3680,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             llvm::Value *res = arg_it;
             if (m_code_gen.m_type_mapper.strings_mapped_to_ids()) {
                 llvm::Value *lut = m_code_gen.get_attribute_table(
-                    ctx, LLVM_code_generator::RTK_STRINGS);
+                    LLVM_code_generator::RTK_STRINGS);
                 llvm::Value *lut_size = m_code_gen.get_attribute_table_size(
-                    ctx, LLVM_code_generator::RTK_STRINGS);
+                    LLVM_code_generator::RTK_STRINGS);
 
                 llvm::Value *cond = ctx->CreateICmpULT(res, lut_size);
 
@@ -4858,10 +4858,11 @@ int LLVM_code_generator::is_index_argument(mi::mdl::IDefinition::Semantics sema,
 
 // Translate a call to a compiler known function to LLVM IR.
 Expression_result LLVM_code_generator::translate_call_intrinsic_function(
-    Function_context          &ctx,
     mi::mdl::ICall_expr const *call_expr)
 {
-    mi::mdl::IDefinition const      *callee_def = call_expr->get_callee_definition(*this);
+    Function_context &ctx = *m_ctx;
+
+    mi::mdl::IDefinition const      *callee_def = call_expr->get_callee_definition();
     mi::mdl::IDefinition::Semantics sema        = callee_def->get_semantics();
 
     State_usage usage;
@@ -4925,10 +4926,10 @@ Expression_result LLVM_code_generator::translate_call_intrinsic_function(
 
     if (fdecl != NULL && fdecl->get_body() != NULL) {
         // intrinsic function WITH body, compile like user defined one
-        return translate_call_user_defined_function(ctx, call_expr);
+        return translate_call_user_defined_function(call_expr);
     }
 
-    bool return_derivs = call_expr->returns_derivatives(*this);
+    bool return_derivs = call_expr->returns_derivatives();
 
     llvm::Function *callee = NULL;
     unsigned promote = PR_NONE;
@@ -5007,7 +5008,7 @@ Expression_result LLVM_code_generator::translate_call_intrinsic_function(
         bool arg_is_deriv =
             func_deriv_info != NULL && func_deriv_info->args_want_derivatives.test_bit(i + 1);
 
-        Expression_result expr_res = call_expr->translate_argument(*this, ctx, i, arg_is_deriv);
+        Expression_result expr_res = call_expr->translate_argument(i, arg_is_deriv);
 
         // make sure, the argument is a derivative if needed
         expr_res.ensure_deriv_result(ctx, arg_is_deriv);
@@ -5068,7 +5069,7 @@ Expression_result LLVM_code_generator::translate_call_intrinsic_function(
         }
     }
 
-    add_promoted_arguments(ctx, promote, args);
+    add_promoted_arguments(promote, args);
 
     llvm::BasicBlock *end_bb = NULL;
     llvm::Value      *tmp    = NULL;
@@ -5421,8 +5422,10 @@ void LLVM_code_generator::mdl_div_by_zero(
 }
 
 // Get the texture results pointer from the state.
-llvm::Value *LLVM_code_generator::get_texture_results(Function_context &ctx)
+llvm::Value *LLVM_code_generator::get_texture_results()
 {
+    Function_context &ctx = *m_ctx;
+
     if (target_is_structured_language()) {
         llvm::Value *state = ctx.get_state_parameter();
         llvm::Value *res   = ctx.create_simple_gep_in_bounds(
@@ -5442,16 +5445,20 @@ llvm::Value *LLVM_code_generator::get_texture_results(Function_context &ctx)
 }
 
 // Get the read-only data segment pointer from the state.
-llvm::Value *LLVM_code_generator::get_ro_data_segment(Function_context &ctx)
+llvm::Value *LLVM_code_generator::get_ro_data_segment()
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::Function *func = m_runtime->get_internal_function(m_int_func_state_get_ro_data_segment);
     llvm::Value *args[] = { ctx.get_state_parameter() };
     return m_runtime->call_rt_func(ctx, func, args);
 }
 
 // Get the LLVM value of the current object_id value from the uniform state.
-llvm::Value *LLVM_code_generator::get_current_object_id(Function_context &ctx)
+llvm::Value *LLVM_code_generator::get_current_object_id()
 {
+    Function_context &ctx = *m_ctx;
+
     if (state_include_uniform_state()) {
         // get it from the state
         llvm::Function *func = m_runtime->get_internal_function(m_int_func_state_object_id);
@@ -5698,9 +5705,10 @@ bool LLVM_code_generator::init_user_modules()
 
 // Translate a JIT intrinsic call expression to LLVM IR.
 Expression_result LLVM_code_generator::translate_jit_intrinsic(
-    Function_context &ctx,
     ICall_expr const *call_expr)
 {
+    Function_context &ctx = *m_ctx;
+
     if (call_expr->get_semantics() == IDefinition::DS_INTRINSIC_JIT_LOOKUP) {
         IType const *ret_type = call_expr->get_type()->skip_type_alias();
 
@@ -5730,8 +5738,8 @@ Expression_result LLVM_code_generator::translate_jit_intrinsic(
 
             args.push_back(ctx.get_state_parameter());
 
-            llvm::Value *index = call_expr->translate_argument_value(
-                *this, ctx, 0, /*wants_derivs=*/ false);
+            llvm::Value *index = call_expr->translate_argument(
+                0, /*wants_derivs=*/ false).as_value(ctx);
             args.push_back(index);
 
             llvm::Value *max_index = ctx.get_constant(int(m_num_texture_results));
@@ -5836,20 +5844,18 @@ llvm::Function *LLVM_code_generator::get_internal_function(Internal_function con
 
 // Call a void runtime function.
 void LLVM_code_generator::call_rt_func_void(
-    Function_context              &ctx,
     llvm::Function                *callee,
     llvm::ArrayRef<llvm::Value *> args)
 {
-    m_runtime->call_rt_func_void(ctx, callee, args);
+    m_runtime->call_rt_func_void(*m_ctx, callee, args);
 }
 
 // Call a runtime function.
 llvm::Value *LLVM_code_generator::call_rt_func(
-    Function_context              &ctx,
     llvm::Function                *callee,
     llvm::ArrayRef<llvm::Value *> args)
 {
-    return m_runtime->call_rt_func(ctx, callee, args);
+    return m_runtime->call_rt_func(*m_ctx, callee, args);
 }
 
 } // mdl

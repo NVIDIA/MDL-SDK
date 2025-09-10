@@ -42,6 +42,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <regex>
 
 #include "mdltlc_compiler_options.h"
 #include "mdltlc_compiler.h"
@@ -447,6 +448,13 @@ bool compare_files(std::ifstream &golden_f, std::ifstream &under_test_f) {
     std::string golden_line;
     std::string under_test_line;
 
+    // Pattern to match lines that are allowed to differ by line numbers.
+    std::regex ignore_regex(
+        // "// 003_simple.mdltl:10"
+        "^(// [0-9][0-9][0-9]_[a-z._0-9]+:[0-9]+)|"
+        // "{ 28195, "bsdf", "003_simple.mdltl", 10 }"
+        "(    \\{ [0-9]+,.*, [0-9]+ \\})");
+
     // First, skip copyrights.
     while (true) {
         bool golden_eof = !std::getline(golden_f, golden_line);
@@ -496,26 +504,33 @@ bool compare_files(std::ifstream &golden_f, std::ifstream &under_test_f) {
             return false;
         }
         if (golden_line != under_test_line) {
-            std::cerr << "error: files differ\n";
-            std::cerr << "  golden: line " << golden_line_no << ":    \"";
-            for (auto c : golden_line) {
-                if (::isprint(c)) {
-                    std::cerr << c;
-                } else {
-                    std::cerr << std::hex << "\\x" << unsigned(c);
-                }
+            bool skip = false;
+            if (std::regex_search(golden_line, ignore_regex)) {
+                skip = true;
             }
-            std::cerr << "\"\n";
-            std::cerr << "  under test: line " << under_test_line_no << ": \"";
-            for (auto c : under_test_line) {
-                if (::isprint(c)) {
-                    std::cerr << c;
-                } else {
-                    std::cerr << std::hex << "\\x" << unsigned(c);
+
+            if (!skip) {
+                std::cerr << "error: files differ\n";
+                std::cerr << "  golden: line " << golden_line_no << ":    \"";
+                for (auto c : golden_line) {
+                    if (::isprint(c)) {
+                        std::cerr << c;
+                    } else {
+                        std::cerr << std::hex << "\\x" << unsigned(c);
+                    }
                 }
+                std::cerr << "\"\n";
+                std::cerr << "  under test: line " << under_test_line_no << ": \"";
+                for (auto c : under_test_line) {
+                    if (::isprint(c)) {
+                        std::cerr << c;
+                    } else {
+                    std::cerr << std::hex << "\\x" << unsigned(c);
+                    }
+                }
+                std::cerr << "\"\n";
+                return false;
             }
-            std::cerr << "\"\n";
-            return false;
         }
         golden_line_no++;
         under_test_line_no++;

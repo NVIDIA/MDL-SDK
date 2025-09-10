@@ -161,7 +161,6 @@ std::string get_dxgi_format_string( Dxgi_format value)
         CASE(SAMPLER_FEEDBACK_MIN_MIP_OPAQUE);
         CASE(SAMPLER_FEEDBACK_MIP_REGION_USED_OPAQUE);
 
-        case DXGI_FORMAT_FORCE_UINT:
         default:
             return std::to_string( value);
     }

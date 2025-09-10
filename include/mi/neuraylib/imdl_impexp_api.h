@@ -32,7 +32,7 @@
 #define MI_NEURAYLIB_IMDL_IMPEXP_API_H
 
 #include <mi/base/interface_declare.h>
-#include <mi/neuraylib/version.h>
+#include <mi/neuraylib/version.h> // MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -159,18 +159,43 @@ public:
     /// Exports an MDL module from the database to disk.
     ///
     /// The following options are supported:
-    /// - \c "bundle_resources" of type bool: If \c true, referenced resources are exported
+    /// - \c bool "bundle_resources": If \c true, referenced resources are exported
     ///   into the same directory as the module, even if they can be found via the module search
     ///   path. Default: \c false.
     /// - \c bool "export_resources_with_module_prefix": If \c true, the name of the exported
     ///   resources start with the module name as prefix. Default: \c true.
+    /// - \c std::string "handle_filename_conflicts": Controls what to do in case of filename
+    ///   conflicts for resources during export. Possible values:
+    ///   - \c "generate_unique": Always generates a unique filename that does not conflict with an
+    ///     existing resource file (adding a counter suffix if necessary).
+    ///   - \c "fail_if_existing": The export fails if an existing resource file would be
+    ///     overwritten by the export operation.
+    ///   - \c "overwrite_existing": The export operation silently overwrites existing resource
+    ///     files. Note that using this setting might destroy other modules. Setting the option
+    ///     "export_resources_with_module_prefix" (see above) to \c true reduces that risk (but does
+    ///     not eliminate it).
+    ///   Default: \c "generate_unique".
+    /// - #mi::IMap* "filename_hints": A user-supplied map with typename \c "Map<String>". The
+    ///   option allows to suggest filenames for resource files being created during export, in
+    ///   particular if there are no other hints available. This happens e.g. when using the module
+    ///   builder with in-memory textures obtained from distilling. \n
+    ///   The keys of the map entries identify the resources by the name of the corresponding DB
+    ///   elements (for textures, the instance of #mi::neuraylib::IImage, not
+    ///   #mi::neuraylib::ITexture). The values are the suggested filenames including extension, but
+    ///   without any directory components (and not empty). For animated and/or uvtile textures, the
+    ///   string needs to contain the required markers. \n
+    ///   Note that the provided filenames are just hints, other context options also affect the
+    ///   final filenames, and there is no guarantee that the hints of this option are actually
+    ///   used. Do not base application logic on such an assumption. Default: \c nullptr.
     ///
     /// \param transaction       The transaction to be used.
     /// \param module_name       The DB name of the MDL module to export.
-    /// \param filename          The name of the file to be used for the export.
+    /// \param filename          The name of the file to be used for the export. Note that the
+    ///                          context option "handle_filename_conflicts" affects only resources,
+    ///                          not modules: if this file exists already, it will be overwritten.
     /// \param context           The execution context can be used to pass options to control the
-    ///                          behavior of the MDL compiler. During module loading, compiler
-    ///                          messages like errors or warnings are stored in the context.
+    ///                          behavior of the export operation. Messages like errors or warnings
+    ///                          are stored in the context.
     ///                          Can be \c nullptr.
     /// \return
     ///                          -     0: Success.
@@ -185,7 +210,7 @@ public:
     ///                          - -6010: Incorrect type for a referenced resource.
     ///                          - -6013: The export of a file-based resource failed.
     ///                          - -6014: The export of a memory-based resource failed.
-    ///                          - -6016: The export of an archive-based resource failed.
+    ///                          - -6016: The export of an container-based resource failed.
     virtual Sint32 export_module(
         ITransaction* transaction,
         const char* module_name,
@@ -200,8 +225,8 @@ public:
     /// \param module_name       The DB name of the MDL module to export.
     /// \param exported_module   The exported module source code is written to this string.
     /// \param context           The execution context can be used to pass options to control the
-    ///                          behavior of the MDL compiler. During module loading, compiler
-    ///                          messages like errors or warnings are stored in the context.
+    ///                          behavior of the export operation. Messages like errors or warnings
+    ///                          are stored in the context.
     ///                          Can be \c nullptr.
     /// \return
     ///                          -     0: Success.
@@ -219,9 +244,9 @@ public:
     ///                                   string-based exports.
     ///                          - -6013: The export of a file-based resource failed.
     ///                          - -6014: The export of a memory-based resource failed.
-    ///                          - -6015: The export of archive-based resources is not supported for
-    ///                                   string-based exports.
-    ///                          - -6016: The export of an archive-based resource failed.
+    ///                          - -6015: The export of container-based resources is not supported
+    ///                                   for string-based exports.
+    ///                          - -6016: The export of an container-based resource failed.
     virtual Sint32 export_module_to_string(
         ITransaction* transaction,
         const char* module_name,
@@ -293,16 +318,15 @@ public:
     //@{
 
     /// Controls the behavior of #mi::neuraylib::IMdl_impexp_api::get_mdl_module_name().
-    enum Search_option
+    enum Search_option : Uint32
     {
         /// Derive module name from the first search path that matches.
         SEARCH_OPTION_USE_FIRST    = 0,
         /// Derive module name from the shortest search path that matches.
         SEARCH_OPTION_USE_SHORTEST = 1,
         /// Derive module name from the longest search path that matches.
-        SEARCH_OPTION_USE_LONGEST  = 2,
-        //  Undocumented, for alignment only.
-        SEARCH_OPTION_FORCE_32_BIT = 0xffffffffU
+        SEARCH_OPTION_USE_LONGEST  = 2
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(SEARCH_OPTION_FORCE_32_BIT, 0xffffffffU)
     };
 
     /// Returns the MDL name for an MDL module identified by its filename.
@@ -466,8 +490,6 @@ public:
     { return deprecated_export_canvas( filename, canvas, quality, force_default_gamma); }
 #endif
 };
-
-mi_static_assert( sizeof( IMdl_impexp_api::Search_option) == sizeof( Uint32));
 
 /// Represents a serialized function name.
 ///

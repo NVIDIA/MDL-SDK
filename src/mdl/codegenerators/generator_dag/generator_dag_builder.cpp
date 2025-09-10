@@ -38,6 +38,31 @@
 namespace mi {
 namespace mdl {
 
+// Check if the given expression is a "simple" select.
+bool is_simple_select_expr(IExpression const *expr)
+{
+    if (!is<IExpression_binary>(expr)) {
+        return false;
+    }
+    IExpression_binary const *b_expr = cast<IExpression_binary>(expr);
+    if (b_expr->get_operator() != IExpression_binary::OK_SELECT) {
+        return false;
+    }
+
+    IExpression const *left = b_expr->get_left_argument();
+    if (!is<IExpression_reference>(left)) {
+        return false;
+    }
+
+    MDL_ASSERT(is<IExpression_reference>(b_expr->get_right_argument()));
+
+    IType const *l_tp = left->get_type()->skip_type_alias();
+
+    // so far, we support structs and vectors only
+    IType::Kind kind = l_tp->get_kind();
+    return kind == IType::TK_STRUCT || kind == IType::TK_VECTOR;
+}
+
 namespace {
 
 /// A resource modifier that uses the resource table of a code_dag.
@@ -120,33 +145,6 @@ private:
     Generated_code_dag const &m_dag;
     IResource_modifier       &m_chain;
 };
-
-/// Check if the given expression is a "simple" select.
-///
-/// \param expr  the expression to check
-static bool is_simple_select(IExpression const *expr)
-{
-    if (!is<IExpression_binary>(expr)) {
-        return false;
-    }
-    IExpression_binary const *b_expr = cast<IExpression_binary>(expr);
-    if (b_expr->get_operator() != IExpression_binary::OK_SELECT) {
-        return false;
-    }
-
-    IExpression const *left  = b_expr->get_left_argument();
-    if (!is<IExpression_reference>(left)) {
-        return false;
-    }
-
-    MDL_ASSERT(is<IExpression_reference>(b_expr->get_right_argument()));
-
-    IType const *l_tp = left->get_type()->skip_type_alias();
-
-    // so far, we support structs and vectors only
-    IType::Kind kind = l_tp->get_kind();
-    return kind == IType::TK_STRUCT || kind == IType::TK_VECTOR;
-}
 
 /// Creates a one constant for the given type to be used in a pre/post inc/decrement operation.
 ///
@@ -573,7 +571,7 @@ bool Inline_checker::is_allowed_assign_target(IExpression const *expr)
     if (IExpression_reference const *ref = as<IExpression_reference>(expr)) {
         return ref->get_definition() != m_var_lookup_handler.get_iteration_variable();
     }
-    return is_simple_select(expr);
+    return is_simple_select_expr(expr);
 }
 
 // Check if we support inlining of the given expression.
@@ -1202,7 +1200,6 @@ void DAG_builder::reset()
 {
     m_accesible_parameters.clear();
     m_tmp_value_map.clear();
-    m_node_factory.clear_node_names();
 }
 
 // Make the given function/material parameter accessible.
@@ -1908,6 +1905,18 @@ DAG_node const *DAG_builder::expr_to_dag(
     return NULL;
 }
 
+// Convert an MDL expression to a DAG IR node and decl_cast it to dst_type if necessary.
+DAG_node const *DAG_builder::expr_to_dag(
+    IType const       *dst_type,
+    IExpression const *expr)
+{
+    DAG_node const *res = expr_to_dag(expr);
+    if (res != NULL) {
+        res = maybe_insert_decl_cast(dst_type, res);
+    }
+    return res;
+}
+
 // Convert an MDL literal expression to a DAG constant.
 DAG_constant const *DAG_builder::lit_to_dag(
     IExpression_literal const *lit)
@@ -2161,7 +2170,7 @@ DAG_node const *DAG_builder::unary_to_dag(
             dbg_info);
     }
 
-    if (is_simple_select(arg)) {
+    if (is_simple_select_expr(arg)) {
         IExpression_binary const    *select = cast<IExpression_binary>(arg);
         IExpression_reference const *ref    =
             cast<IExpression_reference>(select->get_left_argument());
@@ -2859,7 +2868,7 @@ DAG_node const *DAG_builder::binary_to_dag(
     }
 
     if (is_assign) {
-        if (is_simple_select(left)) {
+        if (is_simple_select_expr(left)) {
             IExpression_binary const    *select = cast<IExpression_binary>(left);
             IExpression_reference const *ref    =
                 cast<IExpression_reference>(select->get_left_argument());
@@ -3043,6 +3052,16 @@ DAG_node const *DAG_builder::try_inline(
                 // do not inline
                 return NULL;
             }
+            // check annotations on presets too
+            if (orig_call_def != f_def) {
+                IDeclaration_function const *orig_f_decl = cast<IDeclaration_function>(
+                    orig_call_def->get_declaration());
+                if (orig_f_decl != NULL &&
+                    has_target_material_model_anno(orig_f_decl->get_annotations())) {
+                    // do not inline
+                    return NULL;
+                }
+            }
         }
     }
 
@@ -3090,7 +3109,7 @@ DAG_node const *DAG_builder::try_inline(
         }
     }
 
-    Module_scope mod_scope(*this, owner_mod.get());
+    MDL_module_scope mod_scope(*this, owner_mod.get());
 
     DAG_node const *res = stmt_to_dag(f_decl->get_body());
     MDL_ASSERT((m_skip_flags & INL_SKIP_BREAK) == 0 && "break was not properly handled");
@@ -3187,7 +3206,7 @@ DAG_node const *DAG_builder::try_inline(
         }
     }
 
-    Module_scope mod_scope(*this, owner_mod.get());
+    MDL_module_scope mod_scope(*this, owner_mod.get());
 
     DAG_node const *res = stmt_to_dag(func_decl->get_body());
     MDL_ASSERT((m_skip_flags & INL_SKIP_BREAK) == 0 && "break was not properly handled");
@@ -3377,7 +3396,6 @@ DAG_node const *DAG_builder::let_to_dag(
                 IDefinition const  *var_def  = var_name->get_definition();
                 IType_name const   *t_name = vd->get_type_name();
                 ISymbol const      *var_symbol  = var_name->get_symbol();
-                char const         *symbol_name = var_symbol->get_name();
 
                 if (m_node_factory.is_exposing_names_of_let_expressions_enabled()) {
                     // We need to ensure that CSE does not identify the to-be-created named
@@ -3388,7 +3406,7 @@ DAG_node const *DAG_builder::let_to_dag(
                     // clone of the top-level node with CSE disabled.
                     size_t next_id = m_node_factory.get_next_id();
                     DAG_node const *expr_dag = expr_to_dag(var_exp);
-                    DAG_node const *node = t_name->is_array() 
+                    DAG_node const *node = t_name->is_array()
                         ? expr_dag
                         : maybe_insert_decl_cast(t_name->get_type(), expr_dag);
                     if (node->get_id() < next_id) {
@@ -3396,7 +3414,8 @@ DAG_node const *DAG_builder::let_to_dag(
                     }
 
                     m_tmp_value_map[var_def] = node;
-                    m_node_factory.add_node_name(node, symbol_name);
+                    DAG_unit &dag_unit = m_node_factory.get_dag_unit();
+                    dag_unit.set_node_name(node, dag_unit.import_symbol(var_symbol));
                 } else {
                     DAG_node const *expr_dag = expr_to_dag(var_exp);
                     DAG_node const *node = t_name->is_array()
@@ -3617,6 +3636,9 @@ IValue const *DAG_builder::default_initializer_value(IType const *type)
     case IType::TK_BSDF_MEASUREMENT:
         return m_value_factory.create_invalid_ref(cast<IType_reference>(type));
     case IType::TK_FUNCTION:
+    case IType::TK_PTR:
+    case IType::TK_REF:
+    case IType::TK_VOID:
     case IType::TK_AUTO:
     case IType::TK_ERROR:
         return m_value_factory.create_bad();

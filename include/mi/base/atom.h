@@ -36,11 +36,22 @@
 #include <mi/base/config.h>
 #include <mi/base/types.h>
 
-// Select implementation to use
+// Select implementation to use.
+#if !defined( MI_BASE_ATOM32_USE_ATOMIC) && !defined( MI_BASE_ATOM32_USE_ASSEMBLY)
 #if defined( MI_ARCH_X86) && (defined( MI_COMPILER_GCC) || defined( MI_COMPILER_ICC))
-#  define MI_ATOM32_X86GCC
+#  define MI_BASE_ATOM32_USE_ASSEMBLY
 #else
-#  include <atomic>
+#  define MI_BASE_ATOM32_USE_ATOMIC
+#endif
+#endif
+
+// Sanity check.
+#if ! (defined( MI_BASE_ATOM32_USE_ATOMIC) ^ defined( MI_BASE_ATOM32_USE_ASSEMBLY))
+#error Exactly one of MI_BASE_ATOM32_USE_ATOMIC and MI_BASE_ATOM32_USE_ASSEMBLY should be defined.
+#endif
+
+#if defined( MI_BASE_ATOM32_USE_ATOMIC)
+#include <atomic>
 #endif
 
 namespace mi {
@@ -61,7 +72,7 @@ public:
     /// This constructor initializes the counter to \p value.
     Atom32( const Uint32 value) : m_value( value) { }
 
-#ifndef MI_ATOM32_X86GCC
+#ifndef MI_BASE_ATOM32_USE_ASSEMBLY
     /// The copy constructor assigns the value of \p other to the counter.
     Atom32( const Atom32& other);
 
@@ -97,7 +108,7 @@ public:
     Uint32 swap( const Uint32 rhs);
 
 private:
-#ifdef MI_ATOM32_X86GCC
+#ifdef MI_BASE_ATOM32_USE_ASSEMBLY
     // The counter.
     volatile Uint32 m_value;
 #else
@@ -108,7 +119,7 @@ private:
 
 #ifndef MI_FOR_DOXYGEN_ONLY
 
-#ifdef MI_ATOM32_X86GCC
+#ifdef MI_BASE_ATOM32_USE_ASSEMBLY
 
 inline Uint32 Atom32::operator+=( const Uint32 rhs)
 {
@@ -255,9 +266,7 @@ inline Uint32 Atom32::swap( const Uint32 rhs)
     return m_value.exchange( rhs);
 }
 
-#endif // MI_ATOM32_X86GCC
-
-#undef MI_ATOM32_X86GCC
+#endif // MI_BASE_ATOM32_USE_ASSEMBLY
 
 #endif // !MI_FOR_DOXYGEN_ONLY
 

@@ -48,10 +48,10 @@ and compiling materials, and generating target code for a compiled material.
 - **Loading a module and inspecting materials and functions exported from the module:**
 
   \subpage mi_neuray_example_modules 
-  shows how to load an MDL module and inspect its contents
+  shows how to load an MDL module and scan for selected information, such as imports, resource dependencies and more.
 
   \subpage mi_neuray_example_instantiation
-  shows hot to instantiate material and function definitions
+  shows how to instantiate material and function definitions
 
 - **Creating call graphs and attaching functions to material parameters:**
 
@@ -189,6 +189,11 @@ The following examples cover topics and use cases that may be important to your 
 
   \subpage mi_neuray_example_mdl_browser
   shows how to implement a material selection dialog for a material library
+  
+- **Inspecting all dependencies of an MDL module:**
+
+  \subpage mi_neuray_example_dependency_inspector
+  shows how to inspect an MDL module to identify all its imports and resource dependencies.
 
 - **Encapsulating an MDL material in MDLE:**
 

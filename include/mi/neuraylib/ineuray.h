@@ -32,6 +32,7 @@
 #define MI_NEURAYLIB_INEURAY_H
 
 #include <mi/base/interface_declare.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 // X11/Xlib.h defines Status to int
 #if defined(_XLIB_H_) || defined(_X11_XLIB_H_)
@@ -64,7 +65,7 @@ namespace neuraylib {
 /// This is an object representing the \neurayLibraryName. Only one object of this type will exist
 /// at a time. It is used for configuration, startup and shutdown of the \neurayLibraryName.
 class INeuray : public
-    mi::base::Interface_declare<0x14364c6b,0x0220,0x4438,0xa5,0x3e,0xd8,0xef,0xc8,0x72,0xa9,0x8f>
+    mi::base::Interface_declare<0xc31b49fc,0xc499,0x4d70,0x93,0x01,0x67,0xbb,0x72,0x62,0xe7,0xef>
 {
 public:
     /// Returns the interface version of the \neurayLibraryName.
@@ -112,22 +113,21 @@ public:
     /// The operational status of the library \if DICE_API or additional clusters \endif
     ///
     /// \if DICE_API \see #mi::neuraylib::ICluster \endif
-    enum Status
+    enum Status : Uint32
     {
         /// The library or the cluster has not yet been started.
-        PRE_STARTING     = 0,
+        PRE_STARTING = 0,
         /// The library or the cluster is starting.
-        STARTING         = 1,
+        STARTING     = 1,
         /// The library or the cluster is ready for operation.
-        STARTED          = 2,
+        STARTED      = 2,
         /// The library or the cluster is shutting down.
-        SHUTTINGDOWN     = 3,
+        SHUTTINGDOWN = 3,
         /// The library or the cluster has been shut down.
-        SHUTDOWN         = 4,
+        SHUTDOWN     = 4,
         /// There was a failure during operation.
-        FAILURE          = 5,
-        //  Undocumented, for alignment only.
-        FORCE_32_BIT     = 0xffffffffU
+        FAILURE      = 5
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(FORCE_32_BIT, 0xffffffffU)
     };
 
     /// Shuts down the library.
@@ -257,8 +257,6 @@ public:
         return unregister_api_component( typename T::IID());
     }
 };
-
-mi_static_assert( sizeof( INeuray::Status) == sizeof( Uint32));
 
 /**@}*/ // end group mi_neuray_ineuray
 

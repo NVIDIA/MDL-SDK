@@ -34,6 +34,7 @@
 #include <mi/base/interface_declare.h>
 #include <mi/neuraylib/idata.h>
 #include <mi/neuraylib/type_traits.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -183,7 +184,7 @@ public:
     ///
     /// The enum values are powers of two such that they can be combined in a bitmask. Such a
     /// bitmask is returned by #assign_from_to().
-    enum Assign_result
+    enum Assign_result : Uint32
     {
         /// One of the arguments \p source or \p target is \c nullptr. Alternatively, a deep
         /// assignment to an instance of #mi::IPointer failed due to a \c nullptr value.
@@ -237,17 +238,15 @@ public:
         INCOMPATIBLE_ENUM_TYPES          = 2048,
 
         /// The assignment failed due to incompatible options.
-        INCOMPATIBLE_OPTIONS             = 4096,
-
-        //  Undocumented, for alignment only
-        FORCE_32_BIT_RESULT              = 0xffffffffU
+        INCOMPATIBLE_OPTIONS             = 4096
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(FORCE_32_BIT_RESULT, 0xffffffffU)
     };
 
     /// This enum represents various options for the assignment or cloning of types.
     ///
     /// The enum values are powers of two such that they can be combined in a bitmask. Such a
     /// bitmask van be is passed to #assign_from_to() and #clone().
-    enum Assign_clone_options
+    enum Assign_clone_options : Uint32
     {
         /// By default, assignment or cloning of instances of #mi::IPointer and #mi::IConst_pointer
         /// is shallow, i.e., the pointer represented by these interfaces is assigned or cloned as a
@@ -258,10 +257,8 @@ public:
 
         /// By default, assignment might change the set of keys if the for target is a dynamic array
         /// or map.  If this option is given the set of keys in the target remains fixed.
-        FIX_SET_OF_TARGET_KEYS = 4,
-
-        //  Undocumented, for alignment only
-        FORCE_32_BIT_OPTIONS     = 0xffffffffU
+        FIX_SET_OF_TARGET_KEYS = 4
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(FORCE_32_BIT_OPTIONS, 0xffffffffU)
     };
 
     /// Assigns the value(s) of \p source to \p target.
@@ -394,9 +391,6 @@ public:
     ///                         enum declaration for that name.
     virtual const IEnum_decl* get_enum_decl( const char* enum_name) const = 0;
 };
-
-mi_static_assert( sizeof( IFactory::Assign_result) == sizeof( Uint32));
-mi_static_assert( sizeof( IFactory::Assign_clone_options) == sizeof( Uint32));
 
 /**@}*/ // end group mi_neuray_types
 

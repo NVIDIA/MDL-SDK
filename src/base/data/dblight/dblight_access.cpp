@@ -101,6 +101,37 @@ Element_base* Access_base::set_access( Tag tag, Transaction* transaction, SERIAL
     return m_element;
 }
 
+Element_base* Access_base::set_access(
+    const char* name, Transaction* transaction, SERIAL::Class_id id)
+{
+    cleanup();
+
+    if( transaction) {
+        if( m_transaction)
+            m_transaction->unpin();
+        m_transaction = transaction;
+        m_transaction->pin();
+    }
+
+    if( !name)
+        return nullptr;
+
+    m_info = m_transaction->access_element( name);
+    if( m_info) {
+        m_element = m_info->get_element();
+        m_tag = m_info->get_tag();
+        return m_element;
+    }
+
+    // This location can be reached when results of DB jobs are accessed, but the jobs are no longer
+    // executed since the transaction is in the process of being committed or aborted.
+    LOG::mod_log->debug(
+        M_DB, LOG::Mod_log::C_DATABASE, "Access of name \"%s\" will return an empty element.",
+        name);
+    m_element = m_transaction->construct_empty_element( id);
+    return m_element;
+}
+
 Element_base* Access_base::set_edit(
     Tag tag,
     Transaction* transaction,
@@ -120,11 +151,8 @@ Element_base* Access_base::set_edit(
         m_transaction->pin();
     }
 
-    if( !tag) {
-        m_element = nullptr;
-        m_info = nullptr;
+    if( !tag)
         return nullptr;
-    }
 
     m_info = m_transaction->edit_element( tag);
     if( m_info) {
@@ -137,6 +165,42 @@ Element_base* Access_base::set_edit(
     MI_ASSERT( !"Unexpected creation of dummy element");
     LOG::mod_log->debug(
         M_DB, LOG::Mod_log::C_DATABASE, "Edit of tag %u will return an empty element.", tag());
+    m_element = m_transaction->construct_empty_element( id);
+    return m_element;
+}
+
+Element_base* Access_base::set_edit(
+    const char* name,
+    Transaction* transaction,
+    SERIAL::Class_id id,
+    Journal_type journal_type)
+{
+    cleanup();
+
+    m_journal_type = journal_type;
+    m_is_edit = true;
+
+    if( transaction) {
+        if( m_transaction)
+            m_transaction->unpin();
+        m_transaction = transaction;
+        m_transaction->pin();
+    }
+
+    if( !name)
+        return nullptr;
+
+    m_info = m_transaction->edit_element( name);
+    if( m_info) {
+        m_element = m_info->get_element();
+        m_tag = m_info->get_tag();
+        return m_element;
+    }
+
+    // This location can probably be reached when results of DB jobs are attempted to be edited
+    // (which is forbidden), or with unknown names.
+    LOG::mod_log->debug(
+        M_DB, LOG::Mod_log::C_DATABASE, "Edit of name \"%s\" will return an empty element.", name);
     m_element = m_transaction->construct_empty_element( id);
     return m_element;
 }
@@ -180,6 +244,7 @@ void Access_base::cleanup()
     }
 
     m_journal_type = JOURNAL_NONE;
+    m_tag = {};
 }
 
 Element_base* Access_base::set_access( const Access_base& other)

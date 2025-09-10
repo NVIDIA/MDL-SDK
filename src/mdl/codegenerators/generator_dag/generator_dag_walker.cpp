@@ -716,7 +716,22 @@ void Dag_hasher::hash(IType const *tp) {
             m_hasher.update(tt->get_shape());
         }
         break;
+    case IType::TK_PTR:
+        {
+            IType_pointer const *p_tp = cast<IType_pointer>(tp);
+            m_hasher.update(p_tp->get_address_space());
+            hash(p_tp->get_element_type());
+        }
+        break;
+    case IType::TK_REF:
+        {
+            IType_ref const *r_tp = cast<IType_ref>(tp);
+            m_hasher.update(r_tp->get_address_space());
+            hash(r_tp->get_element_type());
+        }
+        break;
     case IType::TK_BSDF_MEASUREMENT:
+    case IType::TK_VOID:
     case IType::TK_AUTO:
     case IType::TK_ERROR:
         break;

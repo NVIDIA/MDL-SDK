@@ -294,6 +294,13 @@ public:
 
     bool release_tiles() const;
 
+    /// Reallocates a memory-based canvas if necessary, otherwise just changes fields as appropriate.
+    ///
+    void reset(
+        mi::Uint32 width,
+        mi::Uint32 height,
+        Pixel_type pixel_type);
+
 private:
     /// See constructors #Canvas_impl(File_based,...),
     void do_init(

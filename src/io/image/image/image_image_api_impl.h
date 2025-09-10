@@ -197,8 +197,8 @@ private:
     IMAGE::Image_module* m_image_module;
 };
 
-/// A dummy implementation of mi::neuraylib::IPlugin_api, which is used if the real implementation
-/// has not been registered with the PLUG module, e.g., in unit tests.
+/// A dummy implementation of mi::neuraylib::ILogging_configuration, which is used if the real
+/// implementation has not been registered with the PLUG module, e.g., in unit tests.
 ///
 /// The only purpose of this dummy implementation is to provide access to the forwarding logger.
 class Logging_configuration_impl

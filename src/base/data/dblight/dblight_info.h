@@ -40,7 +40,7 @@
 #include <boost/intrusive/set.hpp>
 
 #include <base/data/db/i_db_scope.h>
-#include <base/lib/robin_hood/robin_hood.h>
+#include <base/lib/unordered_dense/unordered_dense.h>
 
 #include "dblight_transaction.h"
 #include "dblight_util.h"
@@ -104,7 +104,7 @@ bool operator>=( const Info_base& lhs, const Info_base& rhs);
 class Info_impl : public DB::Info, public Info_base
 {
 public:
-    /// Regular constructor (used for store and edit operations).
+    /// Regular constructor (used for store and edit operations of elements).
     ///
     /// \note The constructor moves the content of \p references into \c m_references.
     Info_impl(
@@ -114,8 +114,17 @@ public:
         mi::Uint32 version,
         DB::Tag tag,
         DB::Privacy_level privacy_level,
-        const char* name,
         DB::Tag_set& references);
+
+    /// Regular constructor (used for store operations of jobs).
+    Info_impl(
+        SCHED::Job_base* job,
+        Scope_impl* scope,
+        Transaction_impl* transaction,
+        mi::Uint32 version,
+        DB::Tag tag,
+        DB::Privacy_level privacy_level,
+        bool temporary);
 
     /// Regular constructor (used for removal operations).
     Info_impl(
@@ -137,12 +146,12 @@ public:
     /// Does \em not invoke the destructor if the pin count drops to zero.
     void unpin() override;
 
-    bool get_is_job() const override { return false; }
+    bool get_is_job() const override { return !!m_job; }
 
-    /// Returns \c nullptr for removal infos.
+    /// Returns \c nullptr for removal infos or not yet executed jobs.
     DB::Element_base* get_element() const override { return m_element; }
 
-    SCHED::Job_base* get_job() const override { return nullptr; }
+    SCHED::Job_base* get_job() const override { return m_job; }
 
     DB::Tag get_tag() const override { return m_tag; }
 
@@ -154,7 +163,7 @@ public:
 
     DB::Privacy_level get_privacy_level() const override { return m_privacy_level; }
 
-    const char* get_name() const override { return m_name; }
+    const char* get_name() const override;
 
     // internal methods
 
@@ -162,7 +171,10 @@ public:
     mi::Uint32 get_pin_count() const { return m_pin_count; }
 
     /// Indicates whether this is a removal info.
-    bool get_is_removal() const { return !m_element; }
+    bool get_is_removal() const { return m_removal; }
+
+    /// Indicates whether this is a temporary info.
+    bool get_is_temporary() const { return m_temporary; }
 
     /// Returns the set of tags referenced by the DB element.
     const DB::Tag_set& get_references() const { return m_references; }
@@ -178,7 +190,7 @@ public:
     /// Updates #m_references to hold the set of references of the DB element.
     void update_references();
 
-    /// Returns the pointer to containing name set.
+    /// Returns the pointer to the containing name set.
     Infos_per_name* get_infos_per_name() const { return m_infos_per_name; }
 
     /// Sets the pointer to the containing name set.
@@ -194,11 +206,23 @@ public:
     /// Replaces the referenced element.
     ///
     /// Only to be used for serialization checks.
-    void set_element( DB::Element_base* element);
+    void set_element_from_serialization_check( DB::Element_base* element);
+
+    /// Replaces the referenced element.
+    ///
+    /// Only to be used for job results.
+    void set_element_from_job_execution( DB::Element_base* element);
+
+    /// Hook for Infos_per_name::m_infos.
+    bi::set_member_hook<> m_infos_per_name_hook;
+    /// Hook for Infos_per_tag::m_infos.
+    bi::set_member_hook<> m_infos_per_tag_hook;
+    /// Hook for Scope_impl::m_infos.
+    bi::list_member_hook<> m_scope_hook;
 
 private:
     /// The only members that can change after construction are
-    /// - the element pointer (if serialization checks for edits are enabled),
+    /// - the element pointer (if serialization checks for edits are enabled, or for job results),
     /// - the pin count,
     /// - the name set pointer (if the info has a name),
     /// - the scope pointer (when the scope is removed),
@@ -206,8 +230,12 @@ private:
     /// - the transaction pointer (reset only), and
     /// - the hooks for the intrusive sets.
 
-    /// The DB element managed (and owned) by this instance, \c nullptr for removals.
+    /// The DB element (or job result) managed (and owned) by this instance, \c nullptr for removal
+    /// requests or not yet executed jobs.
     DB::Element_base* /*almost const*/ m_element = nullptr;
+
+    /// The DB job managed by this instance, \c nullptr for plain DB elements of removal requests.
+    SCHED::Job_base* const m_job = nullptr;
 
     /// Pin count of this info.
     std::atomic_uint32_t m_pin_count = 1;
@@ -217,8 +245,6 @@ private:
 
     /// The tag of this info (never invalid), same as in Infos_per_tag::m_tag.
     const DB::Tag m_tag;
-    /// The name of this info. Either \c nullptr or points to m_infos_per_name->m_name.c_str().
-    const char* const m_name = nullptr;
     /// The corresponding name set that contains this info (or \c nullptr iff \c m_name is
     /// \c nullptr).
     Infos_per_name* m_infos_per_name = nullptr;
@@ -231,8 +257,9 @@ private:
     ///
     /// \note When editing the referenced element, i.e., between DB::Transaction::edit_element()
     ///       and DB::Transaction::finish_edit(), this value here might be out of sync with the
-    ///       return value of DB::Element::get_references(). At other times, this value here serves
-    ///       as cache to avoid potential costly calls of DB::Element::get_references().
+    ///       return value of DB::Element_base::get_references(). At other times, this value here
+    ///       serves as cache to avoid potential costly calls of
+    ///       DB::Element_base::get_references().
     DB::Tag_set m_references;
 
     /// The creator transaction.
@@ -243,13 +270,11 @@ private:
     /// Privacy level of this info.
     const DB::Privacy_level m_privacy_level;
 
-public:
-    /// Hook for Infos_per_name::m_infos.
-    bi::set_member_hook<> m_infos_per_name_hook;
-    /// Hook for Infos_per_tag::m_infos.
-    bi::set_member_hook<> m_infos_per_tag_hook;
-    /// Hook for Scope_impl::m_infos.
-    bi::list_member_hook<> m_scope_hook;
+    /// Indicates removal requests.
+    const bool m_removal = false;
+
+    /// Indicates a temporary info.
+    const bool m_temporary = false;
 };
 
 /// Set of all infos with a given name.
@@ -612,6 +637,26 @@ public:
         const char* name,
         DB::Tag_set& references);
 
+    /// Creates an info for the given job and stores it under the given tag/name.
+    ///
+    /// \param job             The job to store. RCS:TRO
+    /// \param scope           The scope the element belongs to. RCS:NEU
+    /// \param transaction     The transaction creating this info. RCS:NEU
+    /// \param version         Sequence number of the operation within the creator transaction.
+    /// \param tag             The tag to be used for lookup.
+    /// \param privacy_level   Privacy level of the DB element.
+    /// \param name            The name to be used for lookup.
+    /// \param temporary       Indicates whether this is a temporary info.
+    void store(
+        SCHED::Job_base* job,
+        Scope_impl* scope,
+        Transaction_impl* transaction,
+        mi::Uint32 version,
+        DB::Tag tag,
+        DB::Privacy_level privacy_level,
+        const char* name,
+        bool temporary);
+
     /// Looks up an info for the given tag.
     ///
     /// \param tag                The tag to look up.
@@ -643,7 +688,7 @@ public:
     /// Creates an info for the given element and stores it under the given tag/name.
     ///
     /// Quite similar to store(), except that the implementation is slightly more efficient w.r.t.
-    /// the references to other DB elements.
+    /// the name lookup and references to other DB elements.
     ///
     /// \param element         The element to edit (this is already the copy). RCS:TRO
     /// \param scope           The scope the element belongs to. RCS:NEU
@@ -651,8 +696,7 @@ public:
     /// \param version         Sequence number of the operation within the creator transaction.
     /// \param tag             The tag to be used for lookup.
     /// \param privacy_level   Privacy level of the DB element.
-    /// \param name            The name to be used for lookup.
-    /// \param references      The set of tags referenced by the DB element.
+    /// \param infos_per_name  The name to be used for lookup (actually the corresponding name set).
     Info_impl* start_edit(
         DB::Element_base* element,
         Scope_impl* scope,
@@ -660,8 +704,7 @@ public:
         mi::Uint32 version,
         DB::Tag tag,
         DB::Privacy_level privacy_level,
-        const char* name,
-        const DB::Tag_set& references);
+        Infos_per_name* infos_per_name);
 
     /// Finishes an edit operation.
     ///
@@ -704,7 +747,7 @@ public:
     bool get_tag_is_removed( DB::Tag tag);
 
     /// Dumps the state of the info manager to the stream.
-    void dump( std::ostream& s, bool mask_pointer_values);
+    void dump( std::ostream& s, bool verbose, bool mask_pointer_values);
 
 private:
     /// Runs the garbage collection for a particular tag.
@@ -720,9 +763,9 @@ private:
 
     /// Runs the garbage collection for a particular tag with pin count zero.
     ///
-    /// \param tag             The tag to run the garbage collection on.
+    /// \param infos_per_tag   The set of infos corresponding to the tag.
     /// \param[out] progress   Indicates whether any progress was made.
-    void cleanup_tag_with_pin_count_zero( DB::Tag, bool& progress);
+    void cleanup_tag_with_pin_count_zero( Infos_per_tag* infos_per_tag, bool& progress);
 
     /// Performs all required steps to destroy a particular info.
     ///
@@ -732,7 +775,7 @@ private:
     /// - If the info is still tracked by its scope, then the info is removed from the corresponding
     ///   \c Scope_impl::m_infos.
     /// - Decrements the pin counts of the DB elements referenced by \p it.
-    /// - Destroys the info (which in turn destroys the DB element managed by the info).
+    /// - Destroys the info (which in turn destroys the DB element/job managed by the info).
     /// - Returns an iterator to the next info in \p infos_per_tag.
     ///
     /// Tag sets becoming empty are \em not handled by this method, but are supposed to be handled
@@ -756,7 +799,16 @@ private:
     /// \name Data structures holding all the infos
     //@{
 
-    using Infos_by_name = robin_hood::unordered_map<std::string, Infos_per_name*>;
+    /// Support heterogeneous comparison lookup in Infos_by_name.
+    struct String_hash {
+        using is_transparent = void;
+        using is_avalanching = void;
+        uint64_t operator()( std::string_view s) const noexcept
+        { return ankerl::unordered_dense::hash<std::string_view>{}( s); }
+    };
+
+    using Infos_by_name = ankerl::unordered_dense::map<
+        std::string, Infos_per_name*, String_hash, std::equal_to<>>;
 
     using Infos_by_tag = Tag_tree;
 

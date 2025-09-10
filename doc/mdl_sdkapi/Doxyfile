@@ -417,7 +417,9 @@ PREDEFINED             = MI_FOR_DOXYGEN_ONLY=1 \
 EXPAND_AS_DEFINED      = MI_DLL_EXPORT \
                          MI_DLL_LOCAL \
                          __cplusplus \
-                         MI_PREVENT_MACRO_EXPAND
+                         MI_PREVENT_MACRO_EXPAND \
+                         MI_BASE_DEPRECATED_ENUM_VALUE \
+                         MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 SKIP_FUNCTION_MACROS   = YES
 #---------------------------------------------------------------------------
 # Configuration options related to external references
@@ -452,7 +454,7 @@ CALLER_GRAPH           = NO
 GRAPHICAL_HIERARCHY    = YES
 DIRECTORY_GRAPH        = NO
 DIR_GRAPH_MAX_DEPTH    = 1
-DOT_IMAGE_FORMAT       = png
+DOT_IMAGE_FORMAT       = svg
 INTERACTIVE_SVG        = NO
 DOT_PATH               = 
 DOTFILE_DIRS           =

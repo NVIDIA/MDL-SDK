@@ -121,10 +121,6 @@ public:
     void set_entity_resolver( mi::neuraylib::IMdl_entity_resolver* resolver) final;
 
 
-    void deprecated_set_logger( mi::base::ILogger* logger) final;
-
-    mi::base::ILogger* deprecated_get_logger() final;
-
     // internal methods
 
     /// Starts this API component.

@@ -33,6 +33,7 @@
 #ifndef EXAMPLE_SHARED_UTILS_IO_H
 #define EXAMPLE_SHARED_UTILS_IO_H
 
+#include <filesystem>
 #include <fstream>
 #include <algorithm>
 #include <sstream>
@@ -43,7 +44,8 @@
 #include <stack>
 
 #include <mi/base/config.h>
-#include "strings.h"
+
+#include "utils/strings.h"
 
 #ifdef MI_PLATFORM_WINDOWS
     #include <windows.h>
@@ -52,7 +54,6 @@
     #include <Shlobj.h>
     #include <Knownfolders.h>
 #else
-    #include <dlfcn.h>
     #include <unistd.h>
     #include <dirent.h>
     #include <sys/types.h>
@@ -318,10 +319,12 @@ namespace mi { namespace examples { namespace io
     {
         char current_path[FILENAME_MAX];
         #ifdef MI_PLATFORM_WINDOWS
-            _getcwd(current_path, FILENAME_MAX);
+            char* result = _getcwd(current_path, FILENAME_MAX);
         #else
-            getcwd(current_path, FILENAME_MAX); // TODO
+            char* result = getcwd(current_path, FILENAME_MAX);
         #endif
+        if (!result)
+            return {};
         return normalize(current_path);
     }
 
@@ -486,6 +489,29 @@ namespace mi { namespace examples { namespace io
             HWND m_parent_window;
         #endif
     };
+
+/// Converts a std::filesystem::path into an UTF8 encoded std::string with native separators.
+///
+/// On Windows, calls path::u8string() to trigger the correct UTF8 conversion code (on C++20 and
+/// later this requires unfortunately a detour of a temporary std::u8string).
+///
+/// On other platforms, there is no difference in the encoding between path::string() and
+/// path::u8string() (only in the return type in C++20 and later), and we simply call
+/// path::string() to avoid the temporary.
+inline std::string to_string( const std::filesystem::path& path)
+{
+#ifdef MI_PLATFORM_WINDOWS
+#if (__cplusplus >= 202002L)
+    std::u8string tmp( path.u8string());
+    return { reinterpret_cast<char*>( tmp.c_str()), tmp.size() };
+#else
+    return path.u8string();
+#endif
+#else
+    return path.string();
+#endif
+
+}
 
 }}}
 #endif

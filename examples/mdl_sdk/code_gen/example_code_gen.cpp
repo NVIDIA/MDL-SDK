@@ -68,6 +68,8 @@ public:
     bool m_disable_pdf = false;
     bool m_enable_aux = false;
     bool m_enable_bsdf_flags = false;
+    bool m_inline_aggressively = false;
+    bool m_tex_direct_call = false;
     bool m_glsl_place_uniforms_into_ssbo = false;
     bool m_enable_ro_segment = false;
     bool m_disable_ro_segment = false;
@@ -80,6 +82,7 @@ public:
     bool m_dump_metadata = false;
     bool m_adapt_normal = false;
     bool m_adapt_microfacet_roughness = false;
+    bool m_export_requested_functions = false;
     bool m_mdl_next = false;
     bool m_experimental = false;
     bool m_run_material_analysis = false;
@@ -440,12 +443,19 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
                 options.m_adapt_normal ? "on" : "off");
             backend->set_option("use_renderer_adapt_microfacet_roughness",
                 options.m_adapt_microfacet_roughness ? "on" : "off");
+            backend->set_option("export_requested_functions",
+                options.m_export_requested_functions ? "on" : "off");
             backend->set_option("enable_pdf",
                 !options.m_disable_pdf ? "on" : "off");
             backend->set_option("enable_auxiliary",
                 options.m_enable_aux ? "on" : "off");
             backend->set_option("libbsdf_flags_in_bsdf_data",
                 options.m_enable_bsdf_flags ? "on" : "off");
+            backend->set_option("inline_aggressively",
+                options.m_inline_aggressively ? "on" : "off");
+            if (options.m_tex_direct_call) {
+                backend->set_option("tex_lookup_call_mode", "direct_call");
+            }
             if (options.m_glsl_place_uniforms_into_ssbo) {
                 backend->set_option("glsl_place_uniforms_into_ssbo", "on");
                 backend->set_option("glsl_max_const_data", options.m_max_const_data.c_str());
@@ -696,6 +706,9 @@ options:
   --disable_pdf                 Disable generation of separate PDF function.
   --enable_aux                  Enable generation of auxiliary function.
   --enable_bsdf_flags           Enable "flags" field in BSDF data structures in generated code.
+  --inline_aggressively         Aggressively inline all code.
+  --tex_direct_call             Generate direct calls to texture runtime functions instead of
+                                vtable calls.
   --glsl_place_uniforms_into_ssbo    Enable placing constants into a shader storage buffer object.
   --enable_ro_segment           Enable storing bigger constants in a read-only data segment
                                 (enabled by default for HLSL backend).
@@ -708,6 +721,7 @@ options:
   --adapt_normal                Enable renderer callback to adapt the normal.
   --adapt_microfacet_roughness  Enable renderer callback to adapt the roughness for
                                 microfacet BSDFs.
+  --export_req_funcs            Export requested functions (HLSL only).
   --mdl_next                    Enable (incomplete) features from the next MDL version.
   --experimental                Enable experimental compiler features (for internal testing).
   --warn-spectrum-conv          Warn if a spectrum constructor is converted into RGB.
@@ -749,6 +763,10 @@ bool Options::parse(int argc, char* argv[])
                 m_enable_aux = true;
             else if (arg == "--enable_bsdf_flags")
                 m_enable_bsdf_flags = true;
+            else if (arg == "--inline_aggressively")
+                m_inline_aggressively = true;
+            else if (arg == "--tex_direct_call")
+                m_tex_direct_call = true;
             else if (arg == "--glsl_place_uniforms_into_ssbo")
                 m_glsl_place_uniforms_into_ssbo = true;
             else if (arg == "--enable_ro_segment")
@@ -777,6 +795,8 @@ bool Options::parse(int argc, char* argv[])
                 m_adapt_normal = true;
             else if (arg == "--adapt_microfacet_roughness")
                 m_adapt_microfacet_roughness = true;
+            else if (arg == "--export_req_funcs")
+                m_export_requested_functions = true;
             else if (arg == "--analyze")
                 m_run_material_analysis = true;
             else if (arg == "--mdl_next")

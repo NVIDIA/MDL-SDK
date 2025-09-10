@@ -48,7 +48,7 @@ set(PROJECT_SOURCES
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
-    TYPE SHARED
+    TYPE MODULE
     SOURCES ${PROJECT_SOURCES}
     EMBED_RC "openimageio.rc"
     OUTPUT_NAME "nv_openimageio"
@@ -73,7 +73,7 @@ add_library(mdl::nv_openimageio ALIAS ${PROJECT_NAME})
 target_add_dependencies(TARGET ${PROJECT_NAME}
     DEPENDS
         openimageio
-        mdl::base-system-version
+        base-system-version
     )
 
 # create installation rules

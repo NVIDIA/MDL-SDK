@@ -1019,6 +1019,7 @@ struct Render_context
     mi::Size backface_emission_intensity_function_index;
     mi::Size cutout_opacity_function_index;
     mi::Size thin_walled_function_index;
+    mi::Size cutout_opacity_standalone_function_index;
 
     Render_context(bool use_derivatives)
         : use_derivatives(use_derivatives)
@@ -1081,6 +1082,7 @@ struct Render_context
         }
         env.map = nullptr;
         target_code = nullptr;
+        argument_block = nullptr;
     }
 
     inline void update_light(
@@ -1649,6 +1651,13 @@ void generate_native(
         context);
     check_success(print_messages(context));
 
+    // add standalone version of cutout_opacity to be used in trace_shadow
+    mi::neuraylib::Target_function_description cutout_opacity_func_desc(
+        "geometry.cutout_opacity", "mdl_standalone_cutout_opacity");
+    link_unit->add_material(
+        compiled_material.get(), &cutout_opacity_func_desc, 1, context);
+    check_success(print_messages(context));
+
     mi::Size argument_block_index = descs[0].argument_block_index;
 
 #ifdef ADD_EXTRA_TIMERS
@@ -1697,6 +1706,9 @@ void generate_native(
 
     render_context.thin_walled_function_index = !render_context.thin_walled.is_constant
         ? descs[thin_walled_desc_index].function_index : ~0;
+
+    render_context.cutout_opacity_standalone_function_index = !render_context.cutout.is_constant
+        ? cutout_opacity_func_desc.function_index : ~0;
 
 #ifdef ADD_EXTRA_TIMERS
     std::chrono::steady_clock::time_point t10 = std::chrono::steady_clock::now();
@@ -2033,13 +2045,14 @@ bool trace_shadow(Render_context& rc, Render_context::Ray& shadow_ray, unsigned 
         shading_state.text_coords = &isect_info.uvw;
         shading_state.tangent_u = &isect_info.tan_u;
         shading_state.tangent_v = &isect_info.tan_v;
+        shading_state.text_results = nullptr;  // no init function used
 
         // evaluate material cutout opacity
         float cutout_opacity = rc.cutout.constant_opacity;
         if (!rc.cutout.is_constant)
         {
             mi::Sint32 ret_code = rc.target_code->execute(
-                rc.cutout_opacity_function_index,
+                rc.cutout_opacity_standalone_function_index,
                 shading_state,
                 rc.tex_handler,
                 rc.argument_block.get(),
@@ -2183,7 +2196,7 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
 
             // evaluate material surface emission contribution
             {
-                uint64_t edf_function_index = (is_thin_walled && ray.is_inside) ? 
+                uint64_t edf_function_index = (is_thin_walled && ray.is_inside) ?
                     rc.backface_edf_function_index : rc.surface_edf_function_index;
 
                 mi::neuraylib::Edf_evaluate_data<mi::neuraylib::DF_HSM_NONE> eval_data;
@@ -2260,8 +2273,8 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
                 mi::Float32_3 radiance_over_pdf = rc.sample_lights(isect_info.pos, light_dir, light_pdf, seed);
 
                 bool light_culled = !(
-                    (ray.level < rc.max_ray_length) && 
-                    (light_pdf != 0.0f) && 
+                    (ray.level < rc.max_ray_length) &&
+                    (light_pdf != 0.0f) &&
                     ((dot(normal, light_dir) > 0.f) != (ray.is_inside && !ray.is_inside_cutout)) );
 
                 // check if light is visible from inside a cutout by checking if a shadow ray can leave the object.

@@ -55,7 +55,7 @@
 #include <mi/neuraylib/imdl_impexp_api.h>
 
 #include <base/lib/log/i_log_assert.h>
-#include <base/lib/robin_hood/robin_hood.h>
+#include <base/lib/unordered_dense/unordered_dense.h>
 #include <base/data/db/i_db_tag.h>
 
 #include "i_mdl_elements_type.h"
@@ -518,14 +518,13 @@ class Message
 {
 public:
     enum Kind {
-        MSG_COMILER_CORE,
-        MSG_COMILER_BACKEND,
+        MSG_COMPILER_CORE,
+        MSG_COMPILER_BACKEND,
         MSG_COMPILER_DAG,
         MSG_COMPILER_ARCHIVE_TOOL,
         MSG_IMP_EXP,
         MSG_INTEGRATION,
         MSG_UNCATEGORIZED,
-        MSG_FORCE_32_BIT = 0xffffffffU
     };
 
     Message(
@@ -599,6 +598,8 @@ private:
 #define MDL_CTX_OPTION_INCLUDE_GEO_NORMAL                  "include_geometry_normal"
 #define MDL_CTX_OPTION_BUNDLE_RESOURCES                    "bundle_resources"
 #define MDL_CTX_OPTION_EXPORT_RESOURCES_WITH_MODULE_PREFIX "export_resources_with_module_prefix"
+#define MDL_CTX_OPTION_HANDLE_FILENAME_CONFLICTS           "handle_filename_conflicts"
+#define MDL_CTX_OPTION_FILENAME_HINTS                      "filename_hints"
 #define MDL_CTX_OPTION_MDL_NEXT                            "mdl_next"
 #define MDL_CTX_OPTION_EXPERIMENTAL                        "experimental"
 #define MDL_CTX_OPTION_RESOLVE_RESOURCES                   "resolve_resources"
@@ -720,27 +721,27 @@ private:
     const Execution_context* m_default_options = nullptr;
 
     /// The currently set options (or all default options, see \c m_default_options).
-    robin_hood::unordered_map<std::string, Option> m_options;
+    ankerl::unordered_dense::map<std::string, Option> m_options;
 
     /// Names of all default options (only valid for the instance holding the default options).
     std::vector<std::string> m_names;
 
 };
 
-/// Adds MDL messages to an execution context.
+/// Adds core messages to an execution context.
 void convert_messages( const mi::mdl::Messages& in_messages, Execution_context* context);
+
+/// Adds messages from an execution context to the core messages.
+void convert_messages( const Execution_context* context, mi::mdl::Messages& out_messages);
 
 /// Logs the messages in an execution context.
 void log_messages( const Execution_context* context, mi::Size start_index);
 
-/// Adds MDL messages to an optional execution context and logs them.
-///
-/// Similar to #convert_messages() followed by #log_messages(), except that context can be
-/// \c nullptr.
-void convert_and_log_messages( const mi::mdl::Messages& in_messages, Execution_context* context);
+/// Logs the core messages.
+void log_messages( const mi::mdl::Messages& messages);
 
-/// Adds messages from an execution context to the mi::mdl::Messages.
-void convert_messages( const Execution_context* context, mi::mdl::Messages& out_messages);
+/// Adds core messages to an optional execution context and logs them.
+void convert_and_log_messages( const mi::mdl::Messages& in_messages, Execution_context* context);
 
 /// Adds \p message as message to the context.
 ///
@@ -1121,7 +1122,7 @@ private:
         const Mdl_module* module,
         bool is_material,
         mi::Size definition_index,
-        const char* call_name,
+        DB::Tag call_tag,
         const IExpression_list* arguments);
 
     /// Adds \p value to m_converted_call_expressions and returns it.
@@ -1134,7 +1135,7 @@ private:
     /// The core types of the parameter references.
     std::vector<const mi::mdl::IType*> m_parameter_types;
     /// Set of indirect calls in the current call stack, used to check for cycles.
-    robin_hood::unordered_set<DB::Tag> m_set_indirect_calls;
+    ankerl::unordered_dense::set<DB::Tag> m_set_indirect_calls;
     /// Cache of already converted function calls or material instances.
     std::map<DB::Tag, const mi::mdl::DAG_node*> m_converted_call_expressions;
 };
@@ -1312,7 +1313,7 @@ private:
 
     private:
         std::mutex m_mutex;
-        robin_hood::unordered_map<std::string, Entry*> m_elements;
+        ankerl::unordered_dense::map<std::string, Entry*> m_elements;
     };
 
 
@@ -1375,7 +1376,7 @@ public:
     void cleanup_table(size_t transaction);
 
 private:
-    robin_hood::unordered_map<size_t, Table*> m_tables;
+    ankerl::unordered_dense::map<size_t, Table*> m_tables;
     std::mutex m_mutex;
 };
 
@@ -1549,8 +1550,8 @@ public:
     /// Destructor.
     virtual ~Call_evaluator() {}
 
-    /// Check whether evaluate_intrinsic_function() should be called for an unhandled
-    /// intrinsic functions with the given semantic.
+    /// Checks whether evaluate_intrinsic_function() should be called for an unhandled
+    /// intrinsic function with the given semantic.
     ///
     /// \param semantic  the semantic to check for
     bool is_evaluate_intrinsic_function_enabled(
@@ -1558,12 +1559,13 @@ public:
 
     /// Called by IExpression_call::fold() to evaluate unhandled intrinsic functions.
     ///
-    /// \param value_factory  the value factory used to create the result value
-    /// \param semantic       the semantic of the function to call
-    /// \param arguments      the arguments for the call
-    /// \param n_arguments    the number of arguments
+    /// \param value_factory  The value factory used to create the result value
+    /// \param semantic       The semantic of the function to call
+    /// \param arguments      The arguments for the call
+    /// \param n_arguments    The number of arguments
     ///
-    /// \return IValue_bad if this function could not be evaluated, its value otherwise
+    /// \return               IValue_bad if this function could not be evaluated, otherwise
+    ///                       its folded value.
     const mi::mdl::IValue* evaluate_intrinsic_function(
         mi::mdl::IValue_factory* value_factory,
         mi::mdl::IDefinition::Semantics semantic,
@@ -1586,7 +1588,8 @@ private:
         mi::mdl::IValue_factory* value_factory,
         const mi::mdl::IValue* argument) const;
 
-    /// Folds df::bsdf_measurement_isvalid() to a constant, or returns IValue_bad in case of errors.
+    /// Folds df::bsdf_measurement_isvalid() to a constant, or returns IValue_bad in case of
+    /// errors.
     const mi::mdl::IValue* fold_df_bsdf_measurement_isvalid(
         mi::mdl::IValue_factory* value_factory,
         const mi::mdl::IValue* argument) const;
@@ -1625,18 +1628,24 @@ private:
         const mi::mdl::IValue* argument) const;
 
     /// Folds tex::width_offset() to a constant, or returns IValue_bad in case of errors.
+    ///
+    /// The current implementation always returns an IValue_int with 0.
     const mi::mdl::IValue* fold_tex_width_offset(
         mi::mdl::IValue_factory* value_factory,
         const mi::mdl::IValue* tex,
         const mi::mdl::IValue* offset) const;
 
     /// Folds tex::height_offset() to a constant, or returns IValue_bad in case of errors.
+    ///
+    /// The current implementation always returns an IValue_int with 0.
     const mi::mdl::IValue* fold_tex_height_offset(
         mi::mdl::IValue_factory* value_factory,
         const mi::mdl::IValue* tex,
         const mi::mdl::IValue* offset) const;
 
     /// Folds tex::depth_offset() to a constant, or returns IValue_bad in case of errors.
+    ///
+    /// The current implementation always returns an IValue_int with 0.
     const mi::mdl::IValue* fold_tex_depth_offset(
         mi::mdl::IValue_factory* value_factory,
         const mi::mdl::IValue* tex,
@@ -1653,7 +1662,9 @@ private:
         const mi::mdl::IValue* argument) const;
 
     /// Folds tex::grid_to_object_space() to a constant, or returns IValue_bad in case of errors.
-    const mi::mdl::IValue* fold_tex_grid_to_object_space(
+    ///
+    /// The current implementation always returns a 4x4 all-zero float matrix.
+        const mi::mdl::IValue* fold_tex_grid_to_object_space(
         mi::mdl::IValue_factory* value_factory,
         const mi::mdl::IValue* tex,
         const mi::mdl::IValue* offset) const;

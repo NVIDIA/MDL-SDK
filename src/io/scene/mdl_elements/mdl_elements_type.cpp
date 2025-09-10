@@ -38,8 +38,6 @@
 #include <sstream>
 #include <utility>
 
-#include <boost/core/ignore_unused.hpp>
-
 #include <base/system/main/access_module.h>
 #include <base/util/string_utils/i_string_lexicographic_cast.h>
 #include <base/lib/log/i_log_logger.h>
@@ -1239,13 +1237,11 @@ const IType_texture* Type_factory::create_texture(
     IType_texture::Shape shape) const
 {
     switch( shape) {
-    case IType_texture::TS_2D:        return &TYPES::the_texture_2d_type;
-    case IType_texture::TS_3D:        return &TYPES::the_texture_3d_type;
-    case IType_texture::TS_CUBE:      return &TYPES::the_texture_cube_type;
-    case IType_texture::TS_PTEX:      return &TYPES::the_texture_ptex_type;
-    case IType_texture::TS_BSDF_DATA: return &TYPES::the_texture_bsdf_data_type;
-    case IType_texture::TS_FORCE_32_BIT:
-        break;
+        case IType_texture::TS_2D:        return &TYPES::the_texture_2d_type;
+        case IType_texture::TS_3D:        return &TYPES::the_texture_3d_type;
+        case IType_texture::TS_CUBE:      return &TYPES::the_texture_cube_type;
+        case IType_texture::TS_PTEX:      return &TYPES::the_texture_ptex_type;
+        case IType_texture::TS_BSDF_DATA: return &TYPES::the_texture_bsdf_data_type;
     }
     return nullptr;
 }
@@ -1964,9 +1960,6 @@ void Type_factory::serialize( SERIAL::Serializer* serializer, const IType* type)
             SERIAL::write( serializer, shape);
             return;
         }
-
-        case IType::TK_FORCE_32_BIT:
-        ASSERT( M_SCENE, false);
     }
 
     ASSERT( M_SCENE, false);
@@ -2131,11 +2124,7 @@ const IType* Type_factory::deserialize( SERIAL::Deserializer* deserializer)
             auto shape = static_cast<IType_texture::Shape>( shape_as_uint32);
             return create_texture( shape);
         }
-
-        case IType::TK_FORCE_32_BIT:
-            ASSERT( M_SCENE, false);
-            return nullptr;
-        }
+    }
 
     ASSERT( M_SCENE, false);
     return nullptr;
@@ -2297,9 +2286,6 @@ mi::Sint32 Type_factory::compare_static( const IType* lhs, const IType* rhs)
                 rhs->get_interface<IType_texture>());
             return compare_static( lhs_texture.get(), rhs_texture.get());
         }
-        case IType::TK_FORCE_32_BIT:
-            ASSERT( M_SCENE, false);
-            return 0;
     }
 
     ASSERT( M_SCENE, false);
@@ -2393,7 +2379,6 @@ std::string Type_factory::get_dump_type_name( const IType* type, bool include_al
         case IType::TK_HAIR_BSDF:
         case IType::TK_EDF:
         case IType::TK_VDF:
-        case IType::TK_FORCE_32_BIT:
             return get_mdl_type_name_static( type);
 
     }
@@ -2429,15 +2414,13 @@ std::string Type_factory::get_mdl_type_name_static( const IType* type)
             // if( symbol)
             //     return symbol;
             std::string result;
-            bool found = false;
+            [[maybe_unused]] bool found = false;
             switch( type_alias->get_type_modifiers()) {
                 case IType::MK_NONE:         found = true; break;
                 case IType::MK_UNIFORM:      found = true; result += "uniform "; break;
                 case IType::MK_VARYING:      found = true; result += "varying "; break;
-                case IType::MK_FORCE_32_BIT: break;
             }
             ASSERT( M_SCENE, found); // Handle combination of flags if this fails.
-            boost::ignore_unused( found);
             mi::base::Handle<const IType> aliased_type(
                 type_alias->get_aliased_type());
             result += get_mdl_type_name_static( aliased_type.get());
@@ -2453,8 +2436,6 @@ std::string Type_factory::get_mdl_type_name_static( const IType* type)
                     return symbol;
                 case IType_enum::EID_INTENSITY_MODE:
                     return remove_prefix_for_builtin_type_name( symbol, /*check_string*/ false);
-                case IType_enum::EID_FORCE_32_BIT:
-                    break;
             }
             ASSERT( M_SCENE, false);
             return {};
@@ -2494,8 +2475,6 @@ std::string Type_factory::get_mdl_type_name_static( const IType* type)
                 case IType_struct::SID_MATERIAL_GEOMETRY:
                 case IType_struct::SID_MATERIAL:
                     return remove_prefix_for_builtin_type_name( symbol, /*check_string*/ false);
-                case IType_struct::SID_FORCE_32_BIT:
-                    break;
             }
             ASSERT( M_SCENE, false);
             return {};
@@ -2525,15 +2504,10 @@ std::string Type_factory::get_mdl_type_name_static( const IType* type)
                 case IType_texture::TS_PTEX: return "texture_ptex";
                 case IType_texture::TS_BSDF_DATA:
                     ASSERT( M_SCENE, false); return {};
-                case IType_texture::TS_FORCE_32_BIT:
-                    ASSERT( M_SCENE, false); return {};
             }
             ASSERT( M_SCENE, false);
             return {};
         }
-        case IType::TK_FORCE_32_BIT:
-            ASSERT( M_SCENE, false);
-            return {};
     }
 
     ASSERT( M_SCENE, false);
@@ -2759,9 +2733,6 @@ void Type_factory::dump( const IType* type, mi::Size depth, std::ostringstream& 
             s << prefix << '}';
             return;
         }
-        case IType::TK_FORCE_32_BIT:
-            ASSERT( M_SCENE, false);
-            return;
     }
 
     ASSERT( M_SCENE, false);

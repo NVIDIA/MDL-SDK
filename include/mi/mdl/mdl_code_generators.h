@@ -1274,6 +1274,11 @@ class ICode_generator_jit : public
     /// the number of functions for which target code will be generated.
     #define MDL_JIT_OPTION_VISIBLE_FUNCTIONS "jit_visible_functions"
 
+    /// The name of the option to enable marking functions explicitly requested for code generation
+    /// as exports in the generated code.
+    #define MDL_JIT_OPTION_EXPORT_REQUESTED_FUNCTIONS \
+        "jit_export_requested_functions"
+
     /// The name of the option to set the GLSL target language version for every
     /// compiled module when selecting GLSL target language.
     #define MDL_JIT_OPTION_GLSL_VERSION "jit_glsl_version"

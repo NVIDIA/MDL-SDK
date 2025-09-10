@@ -38,8 +38,6 @@
 #include <cstring>
 #include <sstream>
 
-#include <boost/core/ignore_unused.hpp>
-
 #include <mi/neuraylib/istring.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/mem/i_mem_consumption.h>
@@ -815,9 +813,6 @@ IValue* Value_factory::create( const IType* type) const
                 type->skip_all_type_aliases());
             return value_factory->create( type_base.get());
         }
-        case IType::TK_FORCE_32_BIT:
-            ASSERT( M_SCENE, false);
-            return nullptr;
     }
 
     ASSERT( M_SCENE, false);
@@ -883,7 +878,6 @@ void get_average( const IValue* min, const IValue* max, IValue* average)
         case IType::TK_HAIR_BSDF:
         case IType::TK_EDF:
         case IType::TK_VDF:
-        case IType::TK_FORCE_32_BIT:
             ASSERT( M_SCENE, false);
             break;
     }
@@ -916,9 +910,8 @@ IValue* Value_factory::create( const IAnnotation* annotation) const
      mi::base::Handle<const IType> min_type( min_value->get_type());
      mi::base::Handle<const IType> max_type( max_value->get_type());
      IType::Kind min_kind = min_type->get_kind();
-     IType::Kind max_kind = max_type->get_kind();
+     [[maybe_unused]] IType::Kind max_kind = max_type->get_kind();
      ASSERT( M_SCENE, min_kind == max_kind);
-     boost::ignore_unused( max_kind);
 
      switch( min_kind) {
 
@@ -967,11 +960,9 @@ IValue* Value_factory::create( const IAnnotation* annotation) const
                min_vector_type->get_element_type());
            mi::base::Handle<const IType_atomic> max_element_type(
                max_vector_type->get_element_type());
-           IType::Kind min_element_kind = min_element_type->get_kind();
-           IType::Kind max_element_kind = max_element_type->get_kind();
+           [[maybe_unused]] IType::Kind min_element_kind = min_element_type->get_kind();
+           [[maybe_unused]] IType::Kind max_element_kind = max_element_type->get_kind();
            ASSERT( M_SCENE, min_element_kind == max_element_kind);
-           boost::ignore_unused( min_element_kind);
-           boost::ignore_unused( max_element_kind);
 
            mi::base::Handle<const IValue_vector> min_vector(
                min_value->get_interface<IValue_vector>());
@@ -1004,7 +995,6 @@ IValue* Value_factory::create( const IAnnotation* annotation) const
         case IType::TK_HAIR_BSDF:
         case IType::TK_EDF:
         case IType::TK_VDF:
-        case IType::TK_FORCE_32_BIT:
             break;
      }
 
@@ -1148,9 +1138,6 @@ IValue* Value_factory::clone( const IValue* value) const
                 value->get_type<IType_reference>());
             return create_invalid_df( type_reference.get());
         }
-        case IValue::VK_FORCE_32_BIT:
-            ASSERT( M_SCENE, false);
-            return nullptr;
     }
 
     ASSERT( M_SCENE, false);
@@ -1350,9 +1337,6 @@ mi::Sint32 Value_factory::compare_static( const IValue* lhs, const IValue* rhs, 
             return 0;
         }
         case IValue::VK_INVALID_DF:
-            return 0;
-        case IValue::VK_FORCE_32_BIT:
-            ASSERT( M_SCENE, false);
             return 0;
     }
 
@@ -1555,9 +1539,6 @@ void Value_factory::dump_static(
         case IValue::VK_INVALID_DF:
             s << "(invalid reference)";
             return;
-        case IValue::VK_FORCE_32_BIT:
-            ASSERT( M_SCENE, false);
-            return;
     }
 
     ASSERT( M_SCENE, false);
@@ -1743,8 +1724,6 @@ void Value_factory::serialize( SERIAL::Serializer* serializer, const IValue* val
             m_type_factory->serialize( serializer, type.get());
             return;
         }
-        case IValue::VK_FORCE_32_BIT:
-            ASSERT( M_SCENE, false);
     }
 
     ASSERT( M_SCENE, false);
@@ -1904,8 +1883,6 @@ IValue* Value_factory::deserialize( SERIAL::Deserializer* deserializer) const
                 m_type_factory->deserialize<IType_reference>( deserializer));
             return create_invalid_df( type.get());
         }
-        case IValue::VK_FORCE_32_BIT:
-            ASSERT( M_SCENE, false);
     }
 
     ASSERT( M_SCENE, false);

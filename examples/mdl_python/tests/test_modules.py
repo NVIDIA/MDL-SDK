@@ -88,7 +88,6 @@ class MainModulesMdl(UnittestBase):
     def run_ISceneElement_test(self, iinterface: pymdlsdk.IScene_element):
         self.assertIsValidInterface(iinterface)
         elementType: pymdlsdk.Element_type = iinterface.get_element_type()
-        self.assertNotEqual(elementType, pymdlsdk.Element_type.ELEMENT_TYPE_FORCE_32_BIT)
         # test type hierarchy because we don't see the inheritance in python, all functions are replicated
         if type(iinterface).IID() != pymdlsdk.IScene_element.IID():
             sceneElement: pymdlsdk.IScene_element = iinterface.get_interface(pymdlsdk.IScene_element)
@@ -171,7 +170,6 @@ class MainModulesMdl(UnittestBase):
             self.assertTrue(isDef == False or isDef == True)
 
             elementType: pymdlsdk.Element_type = call.get_element_type()
-            self.assertNotEqual(elementType, pymdlsdk.Element_type.ELEMENT_TYPE_FORCE_32_BIT)
 
             funDefName: str = call.get_mdl_function_definition()
             self.assertNotNullOrEmpty(funDefName)
@@ -234,6 +232,24 @@ class MainModulesMdl(UnittestBase):
         self.assertIsValidInterface(pTypes)
         fAnnos: pymdlsdk.IAnnotation_block = fDefinition.get_annotations()
         self.assertIsNotNone(fAnnos)
+        if fAnnos.is_valid_interface():
+            for aIndex in range(fAnnos.get_size()):
+                anno: pymdlsdk.IAnnotation = fAnnos.get_annotation(aIndex)
+                self.assertIsValidInterface(anno)
+                annoArgs: pymdlsdk.IExpression_list = anno.get_arguments()
+                for argIndex in range(annoArgs.get_size()):
+                    annoArg: pymdlsdk.IExpression_constant = annoArgs.get_expression_as(pymdlsdk.IExpression_constant, argIndex)
+                    self.assertIsValidInterface(annoArg)
+                    annoArgValue: pymdlsdk.IValue = annoArg.get_value()
+                    self.assertIsValidInterface(annoArgValue)
+                    if annoArgValue.get_kind() == pymdlsdk.IValue.Kind.VK_ARRAY:
+                        annoArgValueArray: pymdlsdk.IValue_array = annoArgValue.get_interface(pymdlsdk.IValue_array)
+                        for arrayIndex in range(annoArgValueArray.get_size()):
+                            arrayElement: pymdlsdk.IValue = annoArgValueArray.get_value(arrayIndex)
+                            self.assertIsValidInterface(arrayElement)
+                            if arrayElement.get_kind() == pymdlsdk.IValue.Kind.VK_STRING:
+                                arrayElementString: pymdlsdk.IValue_string = arrayElement.get_interface(pymdlsdk.IValue_string)
+                                self.assertIsValidInterface(arrayElementString)
         pAnnos: pymdlsdk.IAnnotation_list = fDefinition.get_parameter_annotations()
         self.assertIsValidInterface(pAnnos)
         since: pymdlsdk.IModule
@@ -273,7 +289,6 @@ class MainModulesMdl(UnittestBase):
         self.assertIsInstance(fDefinition.is_material(), bool)
         semantic: pymdlsdk.IFunction_definition.Semantics = fDefinition.get_semantic()
         self.assertIsInstance(semantic, pymdlsdk.IFunction_definition.Semantics)
-        self.assertNotEqual(semantic, pymdlsdk.IFunction_definition.Semantics.DS_FORCE_32_BIT)
         self.assertTrue(fDefinition.is_valid(None))  # no reload of base
         context: pymdlsdk.IMdl_execution_context = self.sdk.mdlFactory.create_execution_context()
         self.assertTrue(fDefinition.is_valid(context))  # no reload of base
@@ -464,8 +479,8 @@ class MainModulesMdl(UnittestBase):
         class AnalysisTestSpec(object):
             cutOutOpacityIsConstant: bool = False
             cutOutOpacityConstantValue: float = -1.0
-            opacity: pymdlsdk.Material_opacity = pymdlsdk.Material_opacity.OPACITY_FORCE_32_BIT
-            surfaceOpacity: pymdlsdk.Material_opacity = pymdlsdk.Material_opacity.OPACITY_FORCE_32_BIT
+            opacity: pymdlsdk.Material_opacity = pymdlsdk.Material_opacity.OPACITY_OPAQUE
+            surfaceOpacity: pymdlsdk.Material_opacity = pymdlsdk.Material_opacity.OPACITY_OPAQUE
 
         simpleName: str = ""
         instanceCompile: AnalysisTestSpec = AnalysisTestSpec()
@@ -564,6 +579,7 @@ class MainModulesMdl(UnittestBase):
         ifirstOverload: pymdlsdk.IString = ioverloads.get_element_as(pymdlsdk.IString, 0)
         definition: pymdlsdk.IFunction_definition = self.sdk.transaction.access_as(pymdlsdk.IFunction_definition, ifirstOverload.get_c_str())
         self.assertIsValidInterface(definition)
+        self.run_function_test(ifirstOverload.get_c_str())
         res: pymdlsdk.ReturnCode = pymdlsdk.ReturnCode()
         call: pymdlsdk.IFunction_call = definition.create_function_call(None, res)
         self.assertEqual(res.value, 0)
@@ -761,20 +777,20 @@ class MainModulesMdl(UnittestBase):
 
     def test_IMessage(self):
         context: pymdlsdk.IMdl_execution_context = self.sdk.mdlFactory.create_execution_context()
-        context.add_message(pymdlsdk.IMessage.Kind.MSG_COMILER_CORE, pymdlsdk.Message_severity.MESSAGE_SEVERITY_WARNING, 23, "this is a warning")
-        context.add_message(pymdlsdk.IMessage.Kind.MSG_COMILER_CORE, pymdlsdk.Message_severity.MESSAGE_SEVERITY_ERROR, 42, "this is an error")
+        context.add_message(pymdlsdk.IMessage.Kind.MSG_COMPILER_CORE, pymdlsdk.Message_severity.MESSAGE_SEVERITY_WARNING, 23, "this is a warning")
+        context.add_message(pymdlsdk.IMessage.Kind.MSG_COMPILER_CORE, pymdlsdk.Message_severity.MESSAGE_SEVERITY_ERROR, 42, "this is an error")
         self.assertEqual(context.get_messages_count(), 2)
         self.assertEqual(context.get_error_messages_count(), 1)
 
         err_msg: pymdlsdk.IMessage = context.get_error_message(0)
         self.assertIsValidInterface(err_msg)
-        self.assertEqual(err_msg.get_kind(), pymdlsdk.IMessage.Kind.MSG_COMILER_CORE)
+        self.assertEqual(err_msg.get_kind(), pymdlsdk.IMessage.Kind.MSG_COMPILER_CORE)
         self.assertEqual(err_msg.get_severity(), pymdlsdk.Message_severity.MESSAGE_SEVERITY_ERROR)
         self.assertEqual(err_msg.get_code(), 42)
 
         warn_msg: pymdlsdk.IMessage = context.get_message(0)
         self.assertIsValidInterface(warn_msg)
-        self.assertEqual(warn_msg.get_kind(), pymdlsdk.IMessage.Kind.MSG_COMILER_CORE)
+        self.assertEqual(warn_msg.get_kind(), pymdlsdk.IMessage.Kind.MSG_COMPILER_CORE)
         self.assertEqual(warn_msg.get_severity(), pymdlsdk.Message_severity.MESSAGE_SEVERITY_WARNING)
 
         self.assertZero(warn_msg.get_notes_count())

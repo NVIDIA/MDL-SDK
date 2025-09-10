@@ -73,8 +73,6 @@ mi::mdl::UDIM_mode convert_mdl_udim_mode_to_api_uvtile_mode( mi::neuraylib::Uvti
         case mi::neuraylib::UVTILE_MODE_UDIM:          return mi::mdl::UM_MARI;
         case mi::neuraylib::UVTILE_MODE_UVTILE0:       return mi::mdl::UM_ZBRUSH;
         case mi::neuraylib::UVTILE_MODE_UVTILE1:       return mi::mdl::UM_MUDBOX;
-        case  mi::neuraylib::UVTILE_MODE_FORCE_32_BIT: ASSERT( M_NEURAY_API, false);
-                                                       return mi::mdl::NO_UDIM;
     }
 
     ASSERT( M_NEURAY_API, false);

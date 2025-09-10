@@ -34,6 +34,7 @@
 #include <mi/base/interface_declare.h>
 #include <mi/neuraylib/idata.h>
 #include <mi/neuraylib/type_traits.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 namespace neuraylib {
@@ -75,13 +76,11 @@ namespace neuraylib {
 ///
 /// \see #mi::neuraylib::IAttribute_set::set_attribute_propagation()
 /// \see #mi::neuraylib::IAttribute_set::get_attribute_propagation()
-enum Propagation_type {
+enum Propagation_type : Uint32 {
     PROPAGATION_STANDARD, ///< Standard inheritance of attributes without any special flags.
-    PROPAGATION_OVERRIDE, ///< The \c override flag for attribute inheritance.
-    PROPAGATION_FORCE_32_BIT = 0xffffffffU
+    PROPAGATION_OVERRIDE  ///< The \c override flag for attribute inheritance.
+    MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(PROPAGATION_FORCE_32_BIT, 0xffffffffU)
 };
-
-mi_static_assert( sizeof( Propagation_type) == sizeof( Uint32));
 
 /// The attribute set comprises all attributes attached to a database element.
 ///
@@ -284,6 +283,14 @@ mi_static_assert( sizeof( Propagation_type) == sizeof( Uint32));
 /// #mi::neuraylib::IPolygon_mesh, #mi::neuraylib::ISubdivision_surface,
 /// #mi::neuraylib::IFreeform_surface, #mi::neuraylib::IOn_demand_mesh,
 /// and via inheritance for instances of #mi::neuraylib::IGroup and #mi::neuraylib::IInstance.
+/// - bool \b crackfree_displacement \n
+///   When enabled, vertices with matching positions are displaced to the same target position
+///   (by averaging their displacement values and normals) in order to prevent cracks.
+///   By default, this option is disabled.
+/// - #mi::Float32 \b crackfree_displacement_point_tolerance \n
+///   Controls epsilon by which points are considered equal when detecting duplicates for
+///   crackfree displacement. The default value of 1e-5 should be sufficient in most cases.
+///   Note that too large values might cause undesired results.
 /// - #mi::IArray \b decals \n
 ///   An array of references (#mi::IRef) that attaches the given decals or instances of decals
 ///   to the scene element. This is similar to the \c material attribute, however, note that

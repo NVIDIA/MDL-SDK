@@ -52,7 +52,7 @@ set(PROJECT_ADDITIONAL_FILES
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
-    TYPE SHARED
+    TYPE MODULE
     SOURCES
         ${SOURCES_HEADERS}
         ${PROJECT_SOURCES}
@@ -157,40 +157,65 @@ if(TARGET mdl::mdl_sdk)
 else()
     # TODO remove this from the binary release
     if(MDL_INTERNAL_BUILD)
-        # copy and rename libraries from the internal build output
-        set(_SDK_BINARY_DIR ${MI_OBJ_${CMAKE_BUILD_TYPE}})
-        set(_OPENIMAGEIO_BINARY_DIR ${_SDK_BINARY_DIR})
-        set(_DDS_BINARY_DIR ${_SDK_BINARY_DIR})
-
-        # prefer the src structure over the tape structure
-        if(EXISTS ${_SDK_BINARY_DIR}/shaders/plugin/openimageio/nv_openimageio${_SHARED_SUFFIX} )
-            set(_OPENIMAGEIO_BINARY_DIR ${_SDK_BINARY_DIR}/shaders/plugin/openimageio)
+        get_property(_GENERATOR_IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+        if(_GENERATOR_IS_MULTI_CONFIG)
+            foreach(_CONFIG ${CMAKE_CONFIGURATION_TYPES})
+                if(EXISTS ${MI_OBJ_${_CONFIG}})
+                    list(APPEND _SDK_BINARY_DIRS
+                        ${MI_OBJ_${_CONFIG}})
+                endif()
+            endforeach()
+        else()
+            list(APPEND _SDK_BINARY_DIRS
+                ${MI_OBJ_${CMAKE_BUILD_TYPE}})
         endif()
 
-        if(EXISTS ${_SDK_BINARY_DIR}/shaders/plugin/dds/dds${_SHARED_SUFFIX}  )
-            set(_DDS_BINARY_DIR ${_SDK_BINARY_DIR}/shaders/plugin/dds)
-        endif()
+        foreach(_SDK_BINARY_DIR ${_SDK_BINARY_DIRS})
+            # copy and rename libraries from the internal build output
+            set(_OPENIMAGEIO_BINARY_DIR ${_SDK_BINARY_DIR})
+            set(_DDS_BINARY_DIR ${_SDK_BINARY_DIR})
 
-        if(EXISTS ${_SDK_BINARY_DIR}/prod/lib/mdl_sdk/libmdl_sdk${_SHARED_SUFFIX} )
-            set(_SDK_BINARY_DIR ${_SDK_BINARY_DIR}/prod/lib/mdl_sdk)
-        endif()
+            # prefer the src structure over the tape structure
+            if(EXISTS ${_SDK_BINARY_DIR}/shaders/plugin/openimageio/nv_openimageio${_SHARED_SUFFIX} )
+                set(_OPENIMAGEIO_BINARY_DIR ${_SDK_BINARY_DIR}/shaders/plugin/openimageio)
+            endif()
+
+            if(EXISTS ${_SDK_BINARY_DIR}/shaders/plugin/dds/dds${_SHARED_SUFFIX}  )
+                set(_DDS_BINARY_DIR ${_SDK_BINARY_DIR}/shaders/plugin/dds)
+            endif()
+
+            if(EXISTS ${_SDK_BINARY_DIR}/prod/lib/mdl_sdk/libmdl_sdk${_SHARED_SUFFIX} )
+                set(_SDK_BINARY_DIR ${_SDK_BINARY_DIR}/prod/lib/mdl_sdk)
+            endif()
+
+            list(APPEND _COMMANDS
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_SDK_BINARY_DIR}/libmdl_sdk${_SHARED_SUFFIX} ${_OUTPUT_DIRECTORY}/libmdl_sdk_ai${_SHARED_SUFFIX}
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_OPENIMAGEIO_BINARY_DIR}/nv_openimageio${_SHARED_SUFFIX} ${_OUTPUT_DIRECTORY}/nv_openimageio_ai${_SHARED_SUFFIX}
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_DDS_BINARY_DIR}/dds${_SHARED_SUFFIX} ${_OUTPUT_DIRECTORY}/dds_ai${_SHARED_SUFFIX}
+            )
+            list(APPEND _DEPENDS
+                ${_SDK_BINARY_DIR}/libmdl_sdk${_SHARED_SUFFIX}
+                ${_OPENIMAGEIO_BINARY_DIR}/nv_openimageio${_SHARED_SUFFIX}
+                ${_DDS_BINARY_DIR}/dds${_SHARED_SUFFIX}
+            )
+        endforeach()
     else()
         # copy and rename libraries shipped in the release bundle
         set(_OPENIMAGEIO_BINARY_DIR ${MDL_BASE_FOLDER}/${MI_PLATFORM_NAME}/lib/)
         set(_DDS_BINARY_DIR ${MDL_BASE_FOLDER}/${MI_PLATFORM_NAME}/lib/)
         set(_SDK_BINARY_DIR ${MDL_BASE_FOLDER}/${MI_PLATFORM_NAME}/lib/)
-    endif()
 
-    list(APPEND _COMMANDS
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_SDK_BINARY_DIR}/libmdl_sdk${_SHARED_SUFFIX} ${_OUTPUT_DIRECTORY}/libmdl_sdk_ai${_SHARED_SUFFIX}
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_OPENIMAGEIO_BINARY_DIR}/nv_openimageio${_SHARED_SUFFIX} ${_OUTPUT_DIRECTORY}/nv_openimageio_ai${_SHARED_SUFFIX}
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_DDS_BINARY_DIR}/dds${_SHARED_SUFFIX} ${_OUTPUT_DIRECTORY}/dds_ai${_SHARED_SUFFIX}
-    )
-    list(APPEND _DEPENDS
-        ${_SDK_BINARY_DIR}/libmdl_sdk${_SHARED_SUFFIX}
-        ${_OPENIMAGEIO_BINARY_DIR}/nv_openimageio${_SHARED_SUFFIX}
-        ${_DDS_BINARY_DIR}/dds${_SHARED_SUFFIX}
-    )
+        list(APPEND _COMMANDS
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_SDK_BINARY_DIR}/libmdl_sdk${_SHARED_SUFFIX} ${_OUTPUT_DIRECTORY}/libmdl_sdk_ai${_SHARED_SUFFIX}
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_OPENIMAGEIO_BINARY_DIR}/nv_openimageio${_SHARED_SUFFIX} ${_OUTPUT_DIRECTORY}/nv_openimageio_ai${_SHARED_SUFFIX}
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_DDS_BINARY_DIR}/dds${_SHARED_SUFFIX} ${_OUTPUT_DIRECTORY}/dds_ai${_SHARED_SUFFIX}
+        )
+        list(APPEND _DEPENDS
+            ${_SDK_BINARY_DIR}/libmdl_sdk${_SHARED_SUFFIX}
+            ${_OPENIMAGEIO_BINARY_DIR}/nv_openimageio${_SHARED_SUFFIX}
+            ${_DDS_BINARY_DIR}/dds${_SHARED_SUFFIX}
+        )
+    endif()
 endif()
 
 # copy the files collected, if not stated otherwise

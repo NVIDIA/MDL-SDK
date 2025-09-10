@@ -64,6 +64,7 @@ create_from_base_preset(
     TARGET ${PROJECT_NAME}
     TYPE EXECUTABLE
     OUTPUT_NAME "i18n"
+    EMBED_RC "../../../base/system/main/mdl_core_sdk.rc"
     SOURCES ${PROJECT_SOURCES}
 )
 

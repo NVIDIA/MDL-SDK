@@ -35,14 +35,15 @@
 #include <memory>
 #include <filesystem>
 
+#include <base/lib/log/i_log_assert.h>
+#include <base/lib/log/i_log_logger.h>
+#include <base/lib/path/i_path.h>
 #include <base/lib/tinyxml2/tinyxml2.h>
 #include <base/system/main/access_module.h>
-#include <base/lib/path/i_path.h>
-#include <base/hal/hal/i_hal_ospath.h>
-#include <base/lib/log/i_log_assert.h>
-#include <base/util/string_utils/i_string_utils.h>
-#include <base/lib/log/i_log_logger.h>
 #include <base/system/main/module_registration.h>
+#include <base/hal/hal/i_hal_ospath.h>
+#include <base/hal/disk/disk_utils.h>
+#include <base/util/string_utils/i_string_utils.h>
 #include <mdl/integration/mdlnr/i_mdlnr.h>
 
 #include <mi/mdl/mdl_mdl.h>
@@ -120,7 +121,7 @@ public:
                 if (fs::is_regular_file(entry_path))
                 {
                     // Search for pattern in the filename
-                    string entry = entry_path.path().filename().u8string();
+                    string entry = MI::DISK::to_string(entry_path.path().filename());
                     if (has_ending(entry, suffix))
                     {
                         // Text prefix
@@ -136,7 +137,7 @@ public:
                         }
                         if (ok)
                         {
-                            filenames.push_back(entry_path.path().u8string());
+                            filenames.push_back(MI::DISK::to_string(entry_path.path()));
                         }
                     }
                 }

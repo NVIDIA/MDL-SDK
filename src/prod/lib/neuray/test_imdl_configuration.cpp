@@ -155,8 +155,6 @@ MI_TEST_AUTO_FUNCTION( test_imdl_configuration )
             mdl_configuration->get_material_ior_frequency());
         MI_CHECK_EQUAL( -2,
             mdl_configuration->set_material_ior_frequency( mi::neuraylib::IType::MK_NONE));
-        MI_CHECK_EQUAL( -2,
-            mdl_configuration->set_material_ior_frequency( mi::neuraylib::IType::MK_FORCE_32_BIT));
 
         // start neuray
 

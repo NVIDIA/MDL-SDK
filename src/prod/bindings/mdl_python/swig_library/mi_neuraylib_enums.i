@@ -1,5 +1,29 @@
 /******************************************************************************
- * Copyright 2024 NVIDIA Corporation. All rights reserved.
+ * Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
 
@@ -35,7 +59,6 @@
             r""" The library or the cluster has been shut down."""
             FAILURE = _pymdlsdk._INeuray_FAILURE
             r""" There was a failure during operation."""
-            FORCE_32_BIT = _pymdlsdk._INeuray_FORCE_32_BIT
     }
 }
 
@@ -81,7 +104,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, INeuray, get_status, INeuray.Status)
         r""" Latest MDL version"""
         MDL_VERSION_INVALID = _pymdlsdk.MDL_VERSION_INVALID
         r""" Invalid MDL version"""
-        MDL_VERSION_FORCE_32_BIT = _pymdlsdk.MDL_VERSION_FORCE_32_BIT
 }
 // Handle all functions that return an Mdl_version
 WRAP_ENUM_RETURN(mi::neuraylib, IModule, get_mdl_version, Mdl_version)
@@ -141,7 +163,6 @@ WRAP_GET_MDL_VERSIONS_FUNCTIONS(mi::neuraylib::IFunction_definition)
         r""" This is a more verbose message."""
         MESSAGE_SEVERITY_DEBUG = _pymdlsdk.MESSAGE_SEVERITY_DEBUG
         r""" This is debug message."""
-        MESSAGE_SEVERITY_FORCE_32_BIT = _pymdlsdk.MESSAGE_SEVERITY_FORCE_32_BIT
 }
 
 // unwrap all usages of the enum values in arguments
@@ -205,7 +226,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, IMessage, get_severity, Message_severity)
         r""" First slot"""
         SLOT_LAST = _pymdlsdk.SLOT_LAST
         r""" Last slot"""
-        SLOT_FORCE_32_BIT = _pymdlsdk.SLOT_FORCE_32_BIT
 }
 
 // unwrap all usages of the enum values in arguments
@@ -237,7 +257,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, IMessage, get_severity, Message_severity)
         r""" material is transparent"""
         OPACITY_UNKNOWN = _pymdlsdk.OPACITY_UNKNOWN
         r""" material might be transparent"""
-        OPACITY_FORCE_32_BIT = _pymdlsdk.OPACITY_FORCE_32_BIT
 }
 
 // unwrap all usages of the enum values in arguments
@@ -271,7 +290,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, ICompiled_material, get_surface_opacity, Materia
         r""" The UVTILE0 uvtile mode."""
         UVTILE_MODE_UVTILE1 = _pymdlsdk.UVTILE_MODE_UVTILE1
         r""" The UVTILE1 uvtile mode."""
-        UVTILE_MODE_FORCE_32_BIT = _pymdlsdk.UVTILE_MODE_FORCE_32_BIT
 }
 
 // unwrap all usages of the enum values in arguments
@@ -304,7 +322,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, IMdl_resolved_resource, get_uvtile_mode, Uvtile_
             r""" A direct call expression. See #mi::neuraylib::IExpression_direct_call."""
             EK_TEMPORARY = _pymdlsdk._IExpression_EK_TEMPORARY
             r""" A temporary reference expression. See #mi::neuraylib::IExpression_temporary."""
-            EK_FORCE_32_BIT = _pymdlsdk._IExpression_EK_FORCE_32_BIT
     }
 }
 
@@ -353,7 +370,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, IExpression_temporary, get_kind, IExpression.Kin
             modifiers, therefore this option is useful if you want to decide whether an argument is
             * semantically* equal to the corresponding default parameter.
             """
-            COMPARISON_OPTIONS_FORCE_32_BIT = _pymdlsdk._IExpression_factory_COMPARISON_OPTIONS_FORCE_32_BIT
     }
 }
 
@@ -381,7 +397,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, IExpression_temporary, get_kind, IExpression.Kin
             r""" Default compilation options (e.g., instance compilation)."""
             CLASS_COMPILATION = _pymdlsdk._IMaterial_instance_CLASS_COMPILATION
             r""" Selects class compilation instead of instance compilation."""
-            COMPILATION_OPTIONS_FORCE_32_BIT = _pymdlsdk._IMaterial_instance_COMPILATION_OPTIONS_FORCE_32_BIT
     }
 }
 
@@ -422,7 +437,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, IExpression_temporary, get_kind, IExpression.Kin
             will experience a large performance drop.Therefore, this priority should not be used
             in multi - user settings.
             """
-            PRIORITY_FORCE_32_BIT = _pymdlsdk._IDatabase_PRIORITY_FORCE_32_BIT
     }
 }
 
@@ -454,9 +468,9 @@ WRAP_ENUM_RETURN(mi::neuraylib, IExpression_temporary, get_kind, IExpression.Kin
             A message can be uniquely identified by the message code and kind, except for uncategorized messages.
             """
 
-            MSG_COMILER_CORE = _pymdlsdk._IMessage_MSG_COMILER_CORE
+            MSG_COMPILER_CORE = _pymdlsdk._IMessage_MSG_COMPILER_CORE
             r""" MDL Core compiler message."""
-            MSG_COMILER_BACKEND = _pymdlsdk._IMessage_MSG_COMILER_BACKEND
+            MSG_COMPILER_BACKEND = _pymdlsdk._IMessage_MSG_COMPILER_BACKEND
             r""" MDL Core compiler backend message."""
             MSG_COMPILER_DAG = _pymdlsdk._IMessage_MSG_COMPILER_DAG
             r""" MDL Core DAG generator message."""
@@ -468,7 +482,11 @@ WRAP_ENUM_RETURN(mi::neuraylib, IExpression_temporary, get_kind, IExpression.Kin
             r""" MDL integration message."""
             MSG_UNCATEGORIZED = _pymdlsdk._IMessage_MSG_UNCATEGORIZED
             r""" Uncategorized messages do not have a code."""
-            MSG_FORCE_32_BIT = _pymdlsdk._IMessage_MSG_FORCE_32_BIT
+
+            MSG_COMILER_CORE = _pymdlsdk._IMessage_MSG_COMPILER_CORE
+            r""" Deprecated, use MSG_COMPILER_CORE instead."""
+            MSG_COMILER_BACKEND = _pymdlsdk._IMessage_MSG_COMPILER_BACKEND
+            r""" Deprecated, use MSG_COMPILER_BACKEND instead."""
     }
 }
 
@@ -550,7 +568,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, IMessage, get_kind, IMessage.Kind)
         r""" #mi::neuraylib::ISection_object"""
         ELEMENT_TYPE_PROXY = _pymdlsdk.ELEMENT_TYPE_PROXY
         r""" #mi::neuraylib::IProxy"""
-        ELEMENT_TYPE_FORCE_32_BIT = _pymdlsdk.ELEMENT_TYPE_FORCE_32_BIT
 }
 
 // unwrap all usages of the enum values in arguments
@@ -735,7 +752,7 @@ WRAP_ENUM_RETURN(mi::neuraylib, ITexture, get_element_type, Element_type)
             DS_INTRINSIC_MATH_EVAL_AT_WAVELENGTH = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_EVAL_AT_WAVELENGTH
             r""" The %math::eval_at_wavelength() intrinsic"""
             DS_INTRINSIC_MATH_EXP = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_EXP
-            r"""  function. The %math::exp() intrinsic function."""
+            r""" The %math::exp() intrinsic function."""
             DS_INTRINSIC_MATH_EXP2 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_EXP2
             r""" The %math::exp2() intrinsic function."""
             DS_INTRINSIC_MATH_FLOOR = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_FLOOR
@@ -767,13 +784,13 @@ WRAP_ENUM_RETURN(mi::neuraylib, ITexture, get_element_type, Element_type)
             DS_INTRINSIC_MATH_MAX_VALUE_WAVELENGTH = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_MAX_VALUE_WAVELENGTH
             r""" The %math::max_value_wavelength() intrinsic"""
             DS_INTRINSIC_MATH_MIN = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_MIN
-            r"""  function. The %math::min() intrinsic function."""
+            r""" The %math::min() intrinsic function."""
             DS_INTRINSIC_MATH_MIN_VALUE = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_MIN_VALUE
             r""" The %math::min_value() intrinsic function."""
             DS_INTRINSIC_MATH_MIN_VALUE_WAVELENGTH = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_MIN_VALUE_WAVELENGTH
             r""" The %math::min_value_wavelength() intrinsic"""
             DS_INTRINSIC_MATH_MODF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_MODF
-            r"""  function. The %math::modf() intrinsic function."""
+            r""" The %math::modf() intrinsic function."""
             DS_INTRINSIC_MATH_NORMALIZE = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_NORMALIZE
             r""" The %math::normalize() intrinsic function."""
             DS_INTRINSIC_MATH_POW = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_POW
@@ -807,17 +824,19 @@ WRAP_ENUM_RETURN(mi::neuraylib, ITexture, get_element_type, Element_type)
             DS_INTRINSIC_MATH_EMISSION_COLOR = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_EMISSION_COLOR
             r""" The %math::emission_color() intrinsic"""
             DS_INTRINSIC_MATH_COSH = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_COSH
-            r"""  function. The %math::cosh() intrinsic function."""
+            r""" The %math::cosh() intrinsic function."""
             DS_INTRINSIC_MATH_SINH = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_SINH
             r""" The %math::sinh() intrinsic function."""
             DS_INTRINSIC_MATH_TANH = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_TANH
             r""" The %math::tanh() intrinsic function."""
             DS_INTRINSIC_MATH_INT_BITS_TO_FLOAT = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_INT_BITS_TO_FLOAT
-            r""" The %math::int_bits_to_float() intrinsic"""
+            r""" The %math::int_bits_to_float() intrinsic function."""
             DS_INTRINSIC_MATH_FLOAT_BITS_TO_INT = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_FLOAT_BITS_TO_INT
-            r"""  function. The %math::float_bits_to_int() intrinsic"""
+            r""" The %math::float_bits_to_int() intrinsic function."""
+            DS_INTRINSIC_MATH_ROUND_AWAY_FROM_ZERO = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_ROUND_AWAY_FROM_ZERO
+            r""" The %math::round_away_from_zero() intrinsic function."""
             DS_INTRINSIC_MATH_DX = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_DX
-            r"""  function. The %math::DX() intrinsic function."""
+            r""" The %math::DX() intrinsic function."""
             DS_INTRINSIC_MATH_DY = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_DY
             r""" The %math::DY() intrinsic function."""
             DS_INTRINSIC_MATH_LAST = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_LAST
@@ -960,6 +979,8 @@ WRAP_ENUM_RETURN(mi::neuraylib, ITexture, get_element_type, Element_type)
             r""" The df::directional_factor() function."""
             DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR
             r""" The df::measured_curve_factor() function."""
+            DS_INTRINSIC_DF_COAT_ABSORPTION_FACTOR = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_COAT_ABSORPTION_FACTOR
+            r""" The df::coat_absorption_factor() function."""
             DS_INTRINSIC_DF_LIGHT_PROFILE_POWER = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_LIGHT_PROFILE_POWER
             r""" The df::light_profile_power() function."""
             DS_INTRINSIC_DF_LIGHT_PROFILE_MAXIMUM = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_LIGHT_PROFILE_MAXIMUM
@@ -998,6 +1019,8 @@ WRAP_ENUM_RETURN(mi::neuraylib, ITexture, get_element_type, Element_type)
             r""" The df::chiang_hair_bsdf() function."""
             DS_INTRINSIC_DF_SHEEN_BSDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_SHEEN_BSDF
             r""" The df::sheen_bsdf() function."""
+            DS_INTRINSIC_DF_MICROFLAKE_SHEEN_BSDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_MICROFLAKE_SHEEN_BSDF
+            r"""  The df::microflake_sheen_bsdf() function."""
             DS_INTRINSIC_DF_UNBOUNDED_MIX = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_UNBOUNDED_MIX
             r""" The df::unbounded_mix() function."""
             DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX
@@ -1065,7 +1088,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, ITexture, get_element_type, Element_type)
             DS_INTRINSIC_DAG_DECL_CAST = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DAG_DECL_CAST
             r"""  The decl_cast operator. See 'mi_neuray_mdl_decl_cast_operator'."""
             DS_INTRINSIC_DAG_LAST = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DAG_LAST
-            DS_FORCE_32_BIT = _pymdlsdk._IFunction_definition_DS_FORCE_32_BIT
     }
 }
 
@@ -1160,7 +1182,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, IFunction_definition, get_semantic, IFunction_de
             r""" This is the node_output_port_default()"""
             AS_ANNOTATION_LAST = _pymdlsdk._IAnnotation_definition_AS_ANNOTATION_LAST
             r"""  annotation."""
-            AS_FORCE_32_BIT = _pymdlsdk._IAnnotation_definition_AS_FORCE_32_BIT
     }
 }
 
@@ -1219,7 +1240,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, IAnnotation_definition, get_semantic, IAnnotatio
             r""" The ``edf`` type. See #mi::neuraylib::IType_edf."""
             TK_VDF = _pymdlsdk._IType_TK_VDF
             r""" The ``vdf`` type. See #mi::neuraylib::IType_vdf."""
-            TK_FORCE_32_BIT = _pymdlsdk._IType_TK_FORCE_32_BIT
 
         @_post_swig_add_type_hint_mapping("mi::neuraylib::IType::Modifier", "IType.Modifier")
         class Modifier(Enum):
@@ -1231,7 +1251,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, IAnnotation_definition, get_semantic, IAnnotatio
             r""" A uniform type."""
             MK_VARYING = _pymdlsdk._IType_MK_VARYING
             r""" A varying type."""
-            MK_FORCE_32_BIT = _pymdlsdk._IType_MK_FORCE_32_BIT
     }
 }
 
@@ -1296,7 +1315,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, IMdl_configuration, get_material_ior_frequency, 
             r""" PTEX texture."""
             TS_BSDF_DATA = _pymdlsdk._IType_texture_TS_BSDF_DATA
             r""" Three-dimensional texture representing a BSDF data table."""
-            TS_FORCE_32_BIT = _pymdlsdk._IType_texture_TS_FORCE_32_BIT
     }
 }
 
@@ -1327,7 +1345,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, IType_texture, get_shape, IType_texture.Shape)
             r"""A user-defined struct category."""
             CID_MATERIAL_CATEGORY = _pymdlsdk._IStruct_category_CID_MATERIAL_CATEGORY
             r"""The ``"::material_category"`` struct category."""
-            CID_FORCE_32_BIT = _pymdlsdk._IStruct_category_CID_FORCE_32_BIT
     }
 }
 
@@ -1357,7 +1374,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, IStruct_category, get_predefined_id, IStruct_cat
             r""" The ``"::tex::gamma_mode"`` enum type."""
             EID_INTENSITY_MODE = _pymdlsdk._IType_enum_EID_INTENSITY_MODE
             r""" The ``"::intensity_mode"`` enum type."""
-            EID_FORCE_32_BIT = _pymdlsdk._IType_enum_EID_FORCE_32_BIT
     }
 }
 
@@ -1394,7 +1410,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, IType_enumeration, get_predefined_id, IType_enum
             r""" The ``"::material_geometry"`` struct type."""
             SID_MATERIAL = _pymdlsdk._IType_struct_SID_MATERIAL
             r""" The ``"::material"`` struct type."""
-            SID_FORCE_32_BIT = _pymdlsdk._IType_struct_SID_FORCE_32_BIT
     }
 }
 
@@ -1448,7 +1463,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, IType_structure, get_predefined_id, IType_struct
             r""" A light_profile value. See #mi::neuraylib::IValue_light_profile."""
             VK_BSDF_MEASUREMENT = _pymdlsdk._IValue_VK_BSDF_MEASUREMENT
             r""" A bsdf_measurement value. See #mi::neuraylib::IValue_bsdf_measurement."""
-            VK_FORCE_32_BIT = _pymdlsdk._IValue_VK_FORCE_32_BIT
     }
 }
 
@@ -1509,7 +1523,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, IValue_resource, get_kind, IValue.Kind)
         r""" For 3dsmax"""
         LIGHTPROFILE_ROTATE_TYPE_C_90_270 = _pymdlsdk.LIGHTPROFILE_ROTATE_TYPE_C_90_270
         r""" For 3dsmax"""
-        LIGHTPROFILE_FLAGS_FORCE_32_BIT = _pymdlsdk.LIGHTPROFILE_FLAGS_FORCE_32_BIT
 }
 
 // unwrap all usages of the enum values
@@ -1541,7 +1554,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, ILightprofile, get_flags, Lightprofile_flags)
         r""" Degree 1 = linear interpolation"""
         LIGHTPROFILE_HERMITE_BASE_3 = _pymdlsdk.LIGHTPROFILE_HERMITE_BASE_3
         r""" Degree 3 = cubic interpolation"""
-        LIGHTPROFILE_DEGREE_FORCE_32_BIT = _pymdlsdk.LIGHTPROFILE_DEGREE_FORCE_32_BIT
 }
 
 // unwrap all usages of the enum values
@@ -1593,7 +1605,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, ILightprofile, get_degree, Lightprofile_degree)
         r""" medium compression ratio"""
         TEXTURE_HIGH_COMPRESSION = _pymdlsdk.TEXTURE_HIGH_COMPRESSION
         r""" high compression ratio"""
-        TEXTURE_COMPRESSION_FORCE_32_BIT = _pymdlsdk.TEXTURE_COMPRESSION_FORCE_32_BIT
 }
 
 // unwrap all usages of the enum values
@@ -1632,7 +1643,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, ITexture, get_compression, Texture_compression)
         r""" clipped Lanczos filter"""
         FILTER_FAST = _pymdlsdk.FILTER_FAST
         r""" a fast filter, could be GPU anti-aliasing, or any"""
-        FILTER_FORCE_32_BIT = _pymdlsdk.FILTER_FORCE_32_BIT
 }
 
 // unwrap all usages of the enum values
@@ -1663,7 +1673,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, ITexture, get_compression, Texture_compression)
         r""" Use only the GPU for texture baking."""
         BAKE_ON_GPU_WITH_CPU_FALLBACK = _pymdlsdk.BAKE_ON_GPU_WITH_CPU_FALLBACK
         r""" Prefer using the GPU for texture baking, use the CPU as fallback."""
-        BAKER_RESOURCE_FORCE_32_BIT = _pymdlsdk.BAKER_RESOURCE_FORCE_32_BIT
 }
 
 // unwrap all usages of the enum values
@@ -1701,7 +1710,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, ITexture, get_compression, Texture_compression)
         r""" Remove an invalid call attached to an argument."""
         MDL_REPAIR_INVALID_ARGUMENTS = _pymdlsdk.MDL_REPAIR_INVALID_ARGUMENTS
         r""" Attempt to repair invalid calls attached to an argument."""
-        MDL_REPAIR_OPTIONS_FORCE_32_BIT = _pymdlsdk.MDL_REPAIR_OPTIONS_FORCE_32_BIT
 }
 
 // unwrap all usages of the enum values
@@ -1725,8 +1733,6 @@ WRAP_ENUM_RETURN(mi::neuraylib, ITexture, get_compression, Texture_compression)
         r""" One scalar per grid value."""
         BSDF_RGB = _pymdlsdk.BSDF_RGB
         r""" Three scalars (RGB) per grid value."""
-
-        BSDF_TYPES_FORCE_32_BIT = _pymdlsdk.BSDF_TYPES_FORCE_32_BIT
     }
 
 // unwrap all usages of the enum values

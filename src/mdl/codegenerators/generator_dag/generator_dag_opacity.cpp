@@ -310,7 +310,6 @@ private:
         case IDefinition::DS_INTRINSIC_DF_MEASURED_BSDF:
             return IMaterial_instance::OPACITY_OPAQUE;
 
-
         default:
             MDL_ASSERT(!"unhandled BSDF");
             return IMaterial_instance::OPACITY_UNKNOWN;

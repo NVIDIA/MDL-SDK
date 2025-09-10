@@ -35,8 +35,6 @@
 #include <regex>
 #include <set>
 
-#include <boost/core/ignore_unused.hpp>
-
 #include <mi/mdl/mdl_modules.h>
 #include <mi/mdl/mdl_names.h>
 #include <mi/mdl/mdl_symbols.h>

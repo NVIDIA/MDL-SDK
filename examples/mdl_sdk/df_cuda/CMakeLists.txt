@@ -30,7 +30,7 @@
 set(PROJECT_NAME examples-mdl_sdk-df_cuda)
 
 # -------------------------------------------------------------------------------------------------
-# Main Target 
+# Main Target
 # -------------------------------------------------------------------------------------------------
 
 # collect sources
@@ -47,7 +47,6 @@ endif()
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
     TYPE EXECUTABLE
-    NAMESPACE mdl_sdk
     OUTPUT_NAME "df_cuda"
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
@@ -69,11 +68,11 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
 target_create_vs_user_settings(TARGET ${PROJECT_NAME})
 
 # -------------------------------------------------------------------------------------------------
-# PTX Target 
+# PTX Target
 # -------------------------------------------------------------------------------------------------
 
-target_add_cuda_ptx_rule(TARGET ${PROJECT_NAME} 
-    DEPENDS 
+target_add_cuda_ptx_rule(TARGET ${PROJECT_NAME}
+    DEPENDS
         mdl::mdl_sdk
         mdl_sdk::shared
     CUDA_SOURCES
@@ -86,4 +85,5 @@ target_add_cuda_ptx_rule(TARGET ${PROJECT_NAME}
 add_target_install(
     TARGET ${PROJECT_NAME}
     DESTINATION "examples/mdl_sdk/df_cuda"
+    INCLUDE "*.ptx"
     )

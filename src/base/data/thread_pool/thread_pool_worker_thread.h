@@ -33,8 +33,11 @@
 #ifndef BASE_DATA_THREAD_POOL_THREAD_POOL_WORKER_THREAD_H
 #define BASE_DATA_THREAD_POOL_THREAD_POOL_WORKER_THREAD_H
 
+#include <atomic>
+
 #include <mi/base/condition.h>
 #include <mi/neuraylib/iserializer.h> // IJob_execution_context
+
 #include <base/system/main/i_module_id.h>
 #include <base/hal/thread/i_thread_thread.h>
 #include <base/lib/log/i_log_assert.h>
@@ -150,7 +153,7 @@ private:
     /// because the pointer to the thread is not available during suspend/resume. This is just a
     /// cosmetic annoyance but has no bad effects. The thread state counters in the thread pool
     /// are updated correctly, though.
-    Thread_state m_state;
+    std::atomic<Thread_state> m_state;
 
     /// If set, the thread will go into state THREAD_SHUTDOWN instead of THREAD_IDLE when woken
     /// up from state THREAD_SLEEPING.

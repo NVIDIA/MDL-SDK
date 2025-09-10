@@ -29,6 +29,7 @@
 #include "pch.h"
 
 #include <mi/base.h>
+#include <mi/neuraylib/idebug_configuration.h>
 #include <mi/neuraylib/iimage_api.h>
 #include <mi/neuraylib/ilogging_configuration.h>
 #include <mi/neuraylib/iplugin_api.h>
@@ -82,6 +83,25 @@ bool Image_plugin_impl::init( mi::neuraylib::IPlugin_api* plugin_api)
     message += ", " + std::string( VERSION::get_platform_date());
     message += ") initialized";
     log( mi::base::MESSAGE_SEVERITY_INFO, message.c_str());
+
+    mi::base::Handle<mi::neuraylib::IDebug_configuration> debugging_configuration(
+        plugin_api->get_api_component<mi::neuraylib::IDebug_configuration>());
+    if( debugging_configuration) {
+        bool success = option_to_flag(
+            debugging_configuration.get(),
+            "ignore_gamma_metadata_on_import",
+            g_ignore_gamma_metadata_on_import);
+        if( !success)
+            log( mi::base::MESSAGE_SEVERITY_WARNING,
+                "Failed to parse the debug option \"ignore_gamma_metadata_on_import\"");
+        success = option_to_flag(
+            debugging_configuration.get(),
+            "linear_gamma_for_single_uint16_channel",
+            g_ignore_gamma_metadata_on_import);
+        if( !success)
+            log( mi::base::MESSAGE_SEVERITY_WARNING,
+                "Failed to parse the debug option \"linear_gamma_for_single_uint16_channel\"");
+    }
 
     // Explicit extensions since we map the OIIO name "jpeg2000" to two different plugins.
     if( m_name == "oiio_jp2")

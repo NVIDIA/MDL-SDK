@@ -41,6 +41,7 @@ set(PROJECT_SOURCES
     "example_shared.h"
     "example_shared.cpp"
     "example_shared_backends.h"
+    "example_shared_distilling.h"
     "texture_support_native.h"
     "texture_support_cuda.h"
     ${DUMMY_CPP}
@@ -57,11 +58,9 @@ endif()
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
-    NAMESPACE mdl_core
     OUTPUT_NAME "shared"
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
-    STATIC_MSVC_RUNTIME
 )
 add_library(mdl_core::shared ALIAS ${PROJECT_NAME})
 

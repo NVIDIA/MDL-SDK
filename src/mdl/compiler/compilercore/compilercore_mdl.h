@@ -29,6 +29,8 @@
 #ifndef MDL_COMPILERCORE_MDL_H
 #define MDL_COMPILERCORE_MDL_H 1
 
+#include <atomic>
+
 #include <mi/base/handle.h>
 #include <mi/base/lock.h>
 #include <mi/mdl/mdl_mdl.h>
@@ -537,9 +539,6 @@ public:
 
     // ------------------- non interface methods ---------------------------
 
-    ///  Returns true if the compiler type factory is valid.
-    bool type_factory_is_valid() const { return m_type_factory_is_valid; }
-
     ///  Returns true if material.ior is varying
     bool mat_ior_is_varying() const { return m_mat_ior_is_varying; }
 
@@ -881,13 +880,10 @@ private:
     mutable Allocator_builder m_builder;
 
     /// Next unique module id.
-    size_t m_next_module_id;
+    std::atomic<size_t> m_next_module_id;
 
     /// True, if material.ior is varying.
     bool const m_mat_ior_is_varying;
-
-    /// false until the compiler factory is initialized.
-    bool m_type_factory_is_valid;
 
     /// Arena for the compiler.
     Memory_arena m_arena;

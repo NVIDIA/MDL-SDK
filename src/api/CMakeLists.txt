@@ -33,5 +33,5 @@ endif()
 add_subdirectory(${MDL_SRC_FOLDER}/api/api/mdl)
 
 set(LINKER_DEPENDENCIES_API
-    mdl::api-api-mdl
+    api-api-mdl
     CACHE INTERNAL "" FORCE)

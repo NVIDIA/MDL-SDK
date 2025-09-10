@@ -37,7 +37,8 @@ assert len(sys.argv) >= 1+5
 input_file     = sys.argv[1]
 output_file    = sys.argv[2]
 have_dot_arg   = sys.argv[3]
-dot_path_arg   = sys.argv[4]
+# Quote backslashes from Windows Paths
+dot_path_arg   = re.sub(r'\\',r'\\\\',sys.argv[4])
 image_path_arg = sys.argv[5]
 
 # A non-empty path causes a warning, even if dot support itself is disabled.

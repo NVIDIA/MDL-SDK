@@ -107,14 +107,14 @@ mi::neuraylib::ICanvas* serialize_deserialize( mi::neuraylib::ICanvas* canvas)
     return g_image_module->deserialize_canvas( &deserializer);
 }
 
-void test_import(
-    const char* file, const char* export_format, const char* reference_format = nullptr)
+void test_import( const char* file, const char* export_format = nullptr)
 {
     std::string root_path  = TEST::mi_src_path( "io/image/image/tests/");
     std::string input_path = root_path + file;
 
-    if( !reference_format)
-        reference_format = export_format;
+    if( !export_format)
+        export_format = "png";
+    const char*  reference_format = export_format;
 
     {
         std::cout << "\nTesting lazy file-based import of " << file << std::endl;
@@ -194,7 +194,8 @@ void test_import(
     }
 }
 
-void test_export( const char* file, const char* export_format)
+void test_export(
+    const char* file, const char* export_format, const char* reference_format = nullptr)
 {
     std::cout << "\nTesting export of " << file << " to " << export_format << std::endl;
 
@@ -214,22 +215,31 @@ void test_export( const char* file, const char* export_format)
         canvas.get(), output_path.c_str(), g_export_options.get());
     MI_CHECK( result);
 
-    // re-import and export as PNG
+    if( !reference_format) {
 
-    canvas = g_image_module->create_canvas(
-        IMAGE::File_based(), output_path, /*selector*/ nullptr);
-    MI_CHECK( canvas);
+        std::string reference_path
+            = root_path + "reference/export_of_" + file + "." + export_format;
+        MI_CHECK_IMG_DIFF( output_path, reference_path);
 
-    std::string png_path
-        = DIR_PREFIX + "/export_of_export_of_" + file + "." + export_format + ".png";
+    } else {
 
-    result = g_image_module->export_canvas(
-        canvas.get(), png_path.c_str(), g_export_options.get());
-    MI_CHECK( result);
+        // re-import and export in reference format, for formats that idiff cannot handle (CT)
 
-    std::string reference_path
-        = root_path + "reference/export_of_export_of_" + file + "." + export_format + ".png";
-    MI_CHECK_IMG_DIFF( png_path, reference_path);
+        canvas = g_image_module->create_canvas(
+            IMAGE::File_based(), output_path, /*selector*/ nullptr);
+        MI_CHECK( canvas);
+
+        std::string png_path
+            = DIR_PREFIX + "/export_of_export_of_" + file + "." + export_format + ".png";
+
+        result = g_image_module->export_canvas(
+            canvas.get(), png_path.c_str(), g_export_options.get());
+        MI_CHECK( result);
+
+        std::string reference_path
+            = root_path + "reference/export_of_export_of_" + file + "." + export_format + ".png";
+        MI_CHECK_IMG_DIFF( png_path, reference_path);
+    }
 }
 
 void test_selector( const char* file, const char* selector)
@@ -277,7 +287,7 @@ void test_selector_fail( const char* file, const char* selector)
 
 void test_exr_data_type()
 {
-    const char* file = "test_simple_oiio.exr";
+    const char* file = "test_simple.exr";
 
     std::string root_path  = TEST::mi_src_path( "io/image/image/tests/");
     std::string input_path = root_path + file;
@@ -317,7 +327,7 @@ void test_exr_data_type()
 
 void test_exr_create_multipart_for_alpha()
 {
-    const char* file = "test_simple_alpha_oiio.exr";
+    const char* file = "test_simple_alpha.exr";
 
     std::string root_path  = TEST::mi_src_path( "io/image/image/tests/");
     std::string input_path = root_path + file;
@@ -368,7 +378,7 @@ void test_exr_create_multipart_for_alpha()
 
 void test_exr_data_type_and_create_multipart_for_alpha()
 {
-    const char* file = "test_simple_alpha_oiio.exr";
+    const char* file = "test_simple_alpha.exr";
 
     std::string root_path  = TEST::mi_src_path( "io/image/image/tests/");
     std::string input_path = root_path + file;
@@ -451,47 +461,42 @@ MI_TEST_AUTO_FUNCTION( test_import_export )
     g_export_options = factory.create<mi::IMap>( nullptr, "Map<Interface>");
     g_export_options->insert( "force_default_gamma", force_default_gamma.get());
 
-    // Note that there are different tests for importing and exporting a certain file format (even
-    // though the export test re-imports that file format again)
-    // - The import test originally only tested those file formats which were supported by GIMP at
-    //   that time (which was used to create those test images).
-    // - The export test only tests those file formats that are supported for exporting by our
-    //   plugins.
+    test_import( "test_simple.bmp");
+    test_import( "test_simple.dds");
+    test_import( "test_simple.exr");
+    test_import( "test_simple.gif");
+    test_import( "test_simple.hdr");
+    test_import( "test_simple.j2k");
+    test_import( "test_simple.jp2");
+    test_import( "test_simple.jpg");
+    test_import( "test_simple.png");
+    test_import( "test_simple.pnm");
+    test_import( "test_simple.tga");
+    test_import( "test_simple_jpeg.tif");
+    test_import( "test_simple_lzw.tif");
+    test_import( "test_simple_none.tif");
+    test_import( "test_simple_packbits.tif");
+    test_import( "test_simple_zip.tif");
+    test_import( "test_simple.webp");
 
-    test_import( "test_simple.bmp", "bmp", "png");
-    test_import( "test_simple_fi.exr", "png");
-    test_import( "test_simple_imf.exr", "png");
-    test_import( "test_simple_oiio.exr", "png");
-    test_import( "test_simple.gif", "png");
-    test_import( "test_simple_fi.hdr", "png");
-    test_import( "test_simple.jpg", "png"); // not lossless
-    test_import( "test_simple.png", "png");
-    test_import( "test_simple.tga", "tga", "png");
-    test_import( "test_simple_deflate.tif", "tif", "png");
-    test_import( "test_simple_jpeg.tif", "tif", "png");
-    test_import( "test_simple_lzw.tif", "tif", "png");
-    test_import( "test_simple_none.tif", "tif", "png");
-    test_import( "test_simple_packbits.tif", "tif", "png");
-
-    test_import( "test_simple_alpha.bmp", "bmp");
-    test_import( "test_simple_alpha_fi.exr", "tif");
-    test_import( "test_simple_alpha_imf.exr", "tif");
-    test_import( "test_simple_alpha_oiio.exr", "tif");
-    test_import( "test_simple_alpha.png", "png");
-    test_import( "test_simple_alpha.tga", "tga");
-    test_import( "test_simple_alpha_deflate.tif", "tif");
-    test_import( "test_simple_alpha_jpeg.tif", "tif");
-    test_import( "test_simple_alpha_lzw.tif", "tif");
-    test_import( "test_simple_alpha_none.tif", "tif");
-    test_import( "test_simple_alpha_packbits.tif", "tif");
+    test_import( "test_simple_alpha.bmp");
+    test_import( "test_simple_alpha.dds");
+    test_import( "test_simple_alpha.exr");
+    test_import( "test_simple_alpha.png");
+    test_import( "test_simple_alpha.tga");
+    test_import( "test_simple_alpha_lzw.tif");
+    test_import( "test_simple_alpha_none.tif");
+    test_import( "test_simple_alpha_packbits.tif");
+    test_import( "test_simple_alpha_zip.tif");
 
     test_export( "test_simple.png", "bmp");
     test_export( "test_simple.png", "dds");
+    test_export( "test_simple.png", "exr");
     test_export( "test_simple.png", "j2k"); // not lossless
     test_export( "test_simple.png", "jp2"); // not lossless
     test_export( "test_simple.png", "jpg"); // not lossless
-    test_export( "test_simple.png", "pbm");
     test_export( "test_simple.png", "png");
+    test_export( "test_simple.png", "pnm");
     test_export( "test_simple.png", "tga");
     test_export( "test_simple.png", "tif");
     test_export( "test_simple.png", "webp"); // not lossless
@@ -502,23 +507,25 @@ MI_TEST_AUTO_FUNCTION( test_import_export )
     test_export( "test_simple_alpha.png", "png");
     test_export( "test_simple_alpha.png", "tga");
     test_export( "test_simple_alpha.png", "tif");
+    test_export( "test_simple_alpha.png", "webp"); // not lossless
+
 
     // Test export with default gamma enabled and exported pixel type gamma (2.2 for Rgb_16 in
     // output file) different from canvas gamma (1.0 for Rgb_fp in input file).
     test_export( "test_gamma.exr", "png");
 
     // Test an EXR image with luminance-chroma channels with different sampling rates.
-    test_import( "test_exr_luminance_chroma.exr", "png");
-    test_import( "test_exr_luminance_chroma_alpha.exr", "png");
+    test_import( "test_exr_luminance_chroma.exr");
+    test_import( "test_exr_luminance_chroma_alpha.exr");
 
 
     // Test images with a gray and alpha channel.
-    test_import( "test_gray_alpha_bpc_2.png", "png");
+    test_import( "test_gray_alpha_bpc_2.png");
 
 
-    // Test that a patched OIIO/libjpeg can still read progressive JPEGs correctly. Export as BMP
-    // to avoid expensive PNG compression for this large texture.
-    test_import( "test_jpg_progressive.jpg", "bmp", "png");
+    // Test that a patched OIIO/libjpeg can still read progressive JPEGs correctly. Export as TIF
+    // to avoid the expensive PNG compression for this large texture.
+    test_import( "test_jpg_progressive.jpg", "tif");
 
 
     // Test pixel type Uint16 (not one of our pixel types, mapped to Float32).
@@ -619,6 +626,8 @@ MI_TEST_AUTO_FUNCTION( test_import_export )
 
     // EXR export options exr:data_type and/or exr:create_multipart_for_alpha.
     test_exr_data_type();
+    test_exr_create_multipart_for_alpha();
+    test_exr_data_type_and_create_multipart_for_alpha();
 
     g_mdl_container_callback = nullptr;
 

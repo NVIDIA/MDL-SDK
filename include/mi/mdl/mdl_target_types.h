@@ -832,7 +832,7 @@ struct Resource_data {
 };
 
 /// The type of events created by BSDF importance sampling.
-enum Bsdf_event_type {
+enum Bsdf_event_type : mi::Uint32 {
     BSDF_EVENT_ABSORB       = 0,
 
     BSDF_EVENT_DIFFUSE      = 1,
@@ -847,8 +847,6 @@ enum Bsdf_event_type {
     BSDF_EVENT_GLOSSY_TRANSMISSION   = BSDF_EVENT_GLOSSY   | BSDF_EVENT_TRANSMISSION,
     BSDF_EVENT_SPECULAR_REFLECTION   = BSDF_EVENT_SPECULAR | BSDF_EVENT_REFLECTION,
     BSDF_EVENT_SPECULAR_TRANSMISSION = BSDF_EVENT_SPECULAR | BSDF_EVENT_TRANSMISSION,
-
-    BSDF_EVENT_FORCE_32_BIT = 0xffffffffU
 };
 
 /// The calling code can mark the \c x component of an IOR field in *_data with
@@ -857,15 +855,13 @@ enum Bsdf_event_type {
 #define MDL_CORE_BSDF_USE_MATERIAL_IOR (-1.0f)
 
 /// Flags controlling the calculation of DF results.
-enum Df_flags {
+enum Df_flags : mi::Uint32 {
     DF_FLAGS_NONE = 0,               ///< allows nothing -> black
 
     DF_FLAGS_ALLOW_REFLECT = 1,
     DF_FLAGS_ALLOW_TRANSMIT = 2,
     DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT = DF_FLAGS_ALLOW_REFLECT | DF_FLAGS_ALLOW_TRANSMIT,
     DF_FLAGS_ALLOWED_SCATTER_MODE_MASK = DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT,
-
-    DF_FLAGS_FORCE_32_BIT = 0xffffffffU
 };
 
 /// Input and output structure for BSDF sampling data.
@@ -1283,12 +1279,10 @@ typedef void (Bsdf_pdf_function_with_derivs)(
     char const                                *arg_block_data);
 
 /// The type of events created by EDF importance sampling.
-enum Edf_event_type
+enum Edf_event_type : mi::Uint32
 {
     EDF_EVENT_NONE = 0,
     EDF_EVENT_EMISSION = 1,
-
-    EDF_EVENT_FORCE_32_BIT = 0xffffffffU
 };
 
 /// Input and output structure for EDF sampling data.

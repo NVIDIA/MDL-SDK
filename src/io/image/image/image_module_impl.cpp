@@ -54,6 +54,7 @@
 #include <base/util/string_utils/i_string_utils.h>
 #include <base/hal/disk/disk_file_reader_writer_impl.h>
 #include <base/hal/disk/disk_memory_reader_writer_impl.h>
+#include <base/hal/disk/disk_utils.h>
 
 #include <base/data/idata/i_idata_factory.h>
 
@@ -940,9 +941,7 @@ bool Image_module_impl::export_canvas(
     mi::base::Handle<const mi::neuraylib::ICanvas> canvas( canvas_ptr, mi::base::DUP_INTERFACE);
     canvas_ptr = nullptr;
 
-    std::string extension = fs::u8path( output_filename).extension().u8string();
-    if( !extension.empty())
-        extension = extension.substr( 1);
+    std::string extension = DISK::get_extension( output_filename);
 
     mi::neuraylib::IImage_plugin* plugin = find_plugin_for_export( extension.c_str());
     if( !plugin) {
@@ -1031,9 +1030,7 @@ bool Image_module_impl::export_mipmap(
     const char* output_filename,
     const mi::IMap* export_options) const
 {
-    std::string extension = fs::u8path( output_filename).extension().u8string();
-    if( !extension.empty())
-        extension = extension.substr( 1);
+    std::string extension = DISK::get_extension( output_filename);
 
     mi::neuraylib::IImage_plugin* plugin = find_plugin_for_export( extension.c_str());
     if( !plugin) {

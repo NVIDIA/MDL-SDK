@@ -98,6 +98,11 @@ extern inline char const *get_array_constructor_signature_without_suffix() { ret
 /// Get the DAG signature of the ternary operator without the suffix.
 extern inline char const *get_ternary_operator_signature_without_suffix() { return "operator?"; }
 
+/// Check if the given expression is a "simple" select.
+///
+/// \param expr  the expression to check
+bool is_simple_select_expr(IExpression const *expr);
+
 } // mdl
 } // mi
 

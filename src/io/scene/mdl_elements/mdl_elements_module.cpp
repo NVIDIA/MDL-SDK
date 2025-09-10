@@ -49,8 +49,6 @@
 #include <thread>
 #include <utility>
 
-#include <boost/core/ignore_unused.hpp>
-
 #include <mi/mdl/mdl_code_generators.h>
 #include <mi/mdl/mdl_generated_dag.h>
 #include <mi/mdl/mdl_mdl.h>
@@ -150,7 +148,7 @@ public:
         std::string mdl_name = encode_module_name(core_name);
         std::string db_name = get_db_name(mdl_name);
         {
-            std::unique_lock<std::mutex> lock(DETAIL::g_transaction_mutex);
+            Transaction_lock lock( m_transaction);
             if (m_transaction->name_to_tag(db_name.c_str()).is_invalid() &&
                 !m_cache->loading_process_started_in_current_context(core_name))
             {
@@ -184,7 +182,7 @@ public:
     /// Called while loading a module to check if the built-in modules are already registered.
     bool is_builtin_module_registered(const char* absname) const override
     {
-        std::unique_lock<std::mutex> lock(DETAIL::g_transaction_mutex);
+        Transaction_lock lock( m_transaction);
 
         // fast check (no db access for recursive loads)
         if (m_registered_builtins.find(absname) != m_registered_builtins.end())
@@ -308,11 +306,13 @@ mi::Sint32 Mdl_module::create_module(
     mi::base::Handle<const mi::mdl::IModule> module(
         mdl->load_module( ctx.get(), core_load_module_arg.c_str(), &module_cache));
 
-    // Report messages even when the module is valid (warnings, notes, ...)
-    convert_and_log_messages( ctx->access_messages(), context);
-
-    if( !module || !module->is_valid())
+    // Consider messages from the thread context only if there is no module at all or it is not
+    // valid. Otherwise, these should have already been handled in create_module_internal() and
+    // generate_dag(), and would lead to a duplication of warnings.
+    if( !module || !module->is_valid()) {
+        convert_and_log_messages( ctx->access_messages(), context);
         return -2;
+    }
 
     // Even if module loading itself did not fail, DB registration could have failed.
     return context->get_result();
@@ -394,12 +394,13 @@ mi::Sint32 Mdl_module::create_module(
     mi::base::Handle<const mi::mdl::IModule> module( mdl->load_module_from_stream(
         ctx.get(), &module_cache, core_module_name.c_str(), module_source_stream.get()));
 
-    // Report messages even when the module is valid (warnings, notes, ...)
-    convert_and_log_messages( ctx->access_messages(), context);
-
+    // Consider messages from the thread context only if there is no module at all or it is not
+    // valid. Otherwise, these should have already been handled in create_module_internal() and
+    // generate_dag(), and would lead to a duplication of warnings.
     if( !module || !module->is_valid()) {
+        convert_and_log_messages( ctx->access_messages(), context);
         return -2;
-     }
+    }
 
     // Even if module loading itself did not fail, DB registration could have failed.
     return context->get_result();
@@ -456,7 +457,7 @@ mi::mdl::IGenerated_code_dag* generate_dag(
 
     {
         // Restore import entries.
-        std::unique_lock<std::mutex> lock( DETAIL::g_transaction_mutex);
+        Transaction_lock lock( transaction);
         Module_cache module_cache( transaction, mdlc_module->get_module_wait_queue(), {});
         if( !module->restore_import_entries( &module_cache)) {
             LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
@@ -514,7 +515,7 @@ mi::Sint32 Mdl_module::create_module_internal(
     Execution_context* context,
     Mdl_tag_ident* module_tag_ident)
 {
-    std::unique_lock<std::mutex> lock( DETAIL::g_transaction_mutex);
+    Transaction_lock lock( transaction);
 
     ASSERT( M_SCENE, mdl);
     ASSERT( M_SCENE, module);
@@ -541,9 +542,9 @@ mi::Sint32 Mdl_module::create_module_internal(
                     core_module_name), -3);
         }
         if( module_tag_ident) {
-            DB::Access<Mdl_module> m( db_module_tag, transaction);
+            DB::Access<Mdl_module> db_module( db_module_tag, transaction);
             module_tag_ident->first  = db_module_tag;
-            module_tag_ident->second = m->get_ident();
+            module_tag_ident->second = db_module->get_ident();
         }
         return 1;
     }
@@ -974,9 +975,8 @@ void Mdl_module::init_module( DB::Transaction* transaction, Execution_context* c
 
     m_resources.clear();
 
-    bool keep_original_resource_file_paths
+    [[maybe_unused]] bool keep_original_resource_file_paths
         = context->get_option<bool>( MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS);
-    boost::ignore_unused( keep_original_resource_file_paths);
 
     // Build map from resource URL to AST index.
     std::map<std::string, size_t> resource_url_2_index;
@@ -1275,7 +1275,7 @@ std::vector<std::string> Mdl_module::get_function_overloads(
 
     std::string name_str( name);
     if( !name_str.empty() && name_str.back() == ')') {
-        LOG::mod_log->warning( M_NEURAY_API, LOG::Mod_log::C_MISC,
+        LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_MISC,
             "Name of function definition \"%s\" passed to mi::neuraylib::IModule::get_function_"
             "overloads() includes the signature. This is deprecated and may fail in the case of "
             "general Unicode names.", name_str.c_str());
@@ -1308,7 +1308,6 @@ std::vector<std::string> Mdl_module::get_function_overloads(
     for( auto& candidate : candidates) {
 
         DB::Tag tag = candidate.first;
-        ASSERT( M_SCENE, tag && transaction->get_class_id( tag) == ID_MDL_FUNCTION_DEFINITION);
         DB::Access<Mdl_function_definition> definition( tag, transaction);
 
         std::string simple_name = definition->get_mdl_simple_name();
@@ -1426,8 +1425,7 @@ std::vector<std::string> Mdl_module::get_function_overloads_by_signature(
 
             std::string prefix = get_db_name( encode_name_without_signature( name)) + '(';
             size_t prefix_len = prefix.size();
-            size_t result_size = result.size();
-            boost::ignore_unused( result_size);
+            [[maybe_unused]] size_t result_size = result.size();
             for( const auto& material_name: m_material_name_to_index) {
                 if( material_name.first.substr( 0, prefix_len) != prefix)
                     continue;
@@ -1515,7 +1513,6 @@ const IValue_resource* Mdl_module::get_resource( mi::Size index) const
         case IType::TK_HAIR_BSDF:
         case IType::TK_EDF:
         case IType::TK_VDF:
-        case IType::TK_FORCE_32_BIT:
             ASSERT( M_SCENE, false);
             return nullptr;
     }
@@ -1595,7 +1592,7 @@ mi::Sint32 Mdl_module::reload(
     DB::Tag tag = transaction->name_to_tag(db_name.c_str());
 
     if (recursive) {
-        robin_hood::unordered_set<DB::Tag> done;
+        ankerl::unordered_dense::set<DB::Tag> done;
         mi::Sint32 result = reload_imports(transaction, tag, /*top_level*/ true, done, context);
         if (result != 0)
             return result;
@@ -1610,18 +1607,18 @@ mi::Sint32 Mdl_module::reload(
 
     std::string core_module_name = decode_module_name( m_mdl_name);
     mi::base::Handle<const mi::mdl::IModule> module(
-        mdl->load_module(ctx.get(), core_module_name.c_str(), recursive ? nullptr : &cache));
+        mdl->load_module( ctx.get(), core_module_name.c_str(), recursive ? nullptr : &cache));
 
-    // report messages even when the module is valid (warnings, notes, ...)
-    convert_and_log_messages(ctx->access_messages(), context);
-
-    if (!module || !module->is_valid()) {
-        add_error_message(
-            context, "The module failed to compile.", -2);
+    // Consider messages from the thread context only if there is no module at all or it is not
+    // valid. Otherwise, these should have already been handled in create_module_internal() and
+    // generate_dag(), and would lead to a duplication of warnings.
+     if( !module || !module->is_valid()) {
+        convert_and_log_messages( ctx->access_messages(), context);
+        add_error_message( context, "The module failed to compile.", -2);
         return -1;
     }
 
-    return reload_module_internal(transaction, mdl.get(), module.get(), context);
+    return reload_module_internal( transaction, mdl.get(), module.get(), context);
 }
 
 mi::Sint32 Mdl_module::reload_from_string(
@@ -1647,7 +1644,7 @@ mi::Sint32 Mdl_module::reload_from_string(
     DB::Tag tag = transaction->name_to_tag(db_name.c_str());
 
     if (recursive) {
-        robin_hood::unordered_set<DB::Tag> done;
+        ankerl::unordered_dense::set<DB::Tag> done;
         mi::Sint32 result = reload_imports(transaction, tag, /*top_level*/ true, done, context);
         if (result != 0)
             return result;
@@ -1670,23 +1667,23 @@ mi::Sint32 Mdl_module::reload_from_string(
         core_module_name.c_str(),
         module_source_stream.get()));
 
-    // report messages even when the module is valid (warnings, notes, ...)
-    convert_and_log_messages(ctx->access_messages(), context);
-
-    if (!module || !module->is_valid()) {
-        add_error_message(
-            context, "The module failed to compile.", -2);
+    // Consider messages from the thread context only if there is no module at all or it is not
+    // valid. Otherwise, these should have already been handled in create_module_internal() and
+    // generate_dag(), and would lead to a duplication of warnings.
+    if( !module || !module->is_valid()) {
+        convert_and_log_messages( ctx->access_messages(), context);
+        add_error_message( context, "The module failed to compile.", -2);
         return -1;
     }
 
-    return reload_module_internal(transaction, mdl.get(), module.get(), context);
+    return reload_module_internal( transaction, mdl.get(), module.get(), context);
 }
 
 mi::Sint32 Mdl_module::reload_imports(
     DB::Transaction* transaction,
     DB::Tag module_tag,
     bool top_level,
-    robin_hood::unordered_set<DB::Tag>& done,
+    ankerl::unordered_dense::set<DB::Tag>& done,
     Execution_context* context)
 {
     // No need to do anything if this module has already been reloaded via some other path in the

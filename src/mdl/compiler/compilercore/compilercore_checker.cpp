@@ -236,6 +236,15 @@ void Code_checker::check_type(
     case IType::TK_BSDF_MEASUREMENT:
     case IType::TK_ERROR:
         break;
+    case IType::TK_PTR:
+        MDL_ASSERT(!"pointer type occured unexpected");
+        break;
+    case IType::TK_REF:
+        MDL_ASSERT(!"reference type occured unexpected");
+        break;
+    case IType::TK_VOID:
+        MDL_ASSERT(!"void type occured unexpected");
+        break;
     case IType::TK_AUTO:
         MDL_ASSERT(!"auto type occured unexpected");
         break;

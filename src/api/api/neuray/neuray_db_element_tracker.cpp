@@ -39,9 +39,13 @@
 
 #include <sstream>
 #include <mi/base/handle.h>
+#include <base/data/db/i_db_element.h>
+#include <base/data/db/i_db_info.h>
+#include <base/data/db/i_db_transaction.h>
 #include <base/lib/log/i_log_assert.h>
-using namespace std::string_literals;
 
+
+using namespace std::string_literals;
 
 namespace MI {
 

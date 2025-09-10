@@ -31,7 +31,7 @@
 #include "compiled_material_traverser_print.h"
 
 #include <iostream>
-#include <algorithm> 
+#include <algorithm>
 #include <utility>
 
 // forward declaration of local helper functions
@@ -453,9 +453,6 @@ void Compiled_material_traverser_print::visit_begin(
                 ctx->m_print << get_temporary_name(material, expr_temp->get_index());
                 return;
             }
-
-            case mi::neuraylib::IExpression::EK_FORCE_32_BIT:
-                return; // not a valid case
         }
         return;
     }

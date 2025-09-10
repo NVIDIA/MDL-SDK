@@ -56,6 +56,27 @@ public:
     std::vector<mi::Uint8> m_buffer;
 };
 
+/// Wraps a memory block identified by a pointer and a length as mi::neuraylib::IBuffer.
+/// Does not copy the data.
+class Buffer_wrapper : public mi::base::Interface_implement<mi::neuraylib::IBuffer>
+{
+public:
+    Buffer_wrapper( const mi::Uint8* data, mi::Size data_size)
+      : m_data( data), m_data_size( data_size) { }
+    const mi::Uint8* get_data() const final { return m_data; }
+    mi::Size get_data_size() const final { return m_data_size; }
+private:
+    const mi::Uint8* m_data;
+    const mi::Size m_data_size;
+};
+
+mi::neuraylib::IReader* create_reader( const char* data, mi::Size length)
+{
+    const auto* d = reinterpret_cast<const mi::Uint8*>( data);
+    mi::base::Handle<mi::neuraylib::IBuffer> buffer( new Buffer_wrapper( d, length));
+    return new Memory_reader_impl( buffer.get());
+}
+
 template <typename T, typename B>
 Memory_reader_writer_base_impl<T,B>::~Memory_reader_writer_base_impl()
 {

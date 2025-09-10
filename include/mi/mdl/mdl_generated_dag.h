@@ -41,12 +41,13 @@ namespace mdl {
 class DAG_unit;
 class ICall_name_resolver;
 class IResource_modifier;
+class ISymbol;
+class IType_factory;
 class IValue;
+class IValue_factory;
 class IValue_float;
 class IValue_resource;
-class IValue_factory;
 class Messages;
-class IType_factory;
 
 /// A hash value.
 ///
@@ -162,6 +163,9 @@ public:
     , file_column((file_id << 20u) | (column & 0x000FFFFFu))
     {
     }
+
+    /// Returns true if this debug info is empty, aka invalid.
+    bool empty() const { return line == 0 && file_column == 0; }
 
     /// Check if the info is invalid.
     operator bool() const { return file_column != 0u && line != 0u; }
@@ -934,7 +938,7 @@ public:
     /// \param function_index      The index of the function.
     /// \param temporary_index     The index of the temporary variable.
     /// \returns                   The name of the temporary variable.
-    virtual char const *get_function_temporary_name(
+    virtual ISymbol const *get_function_temporary_name(
         size_t function_index,
         size_t temporary_index) const = 0;
 
@@ -1076,7 +1080,7 @@ public:
     /// \param material_index      The index of the material.
     /// \param temporary_index     The index of the temporary variable.
     /// \returns                   The name of the temporary variable.
-    virtual char const *get_material_temporary_name(
+    virtual ISymbol const *get_material_temporary_name(
         size_t material_index,
         size_t temporary_index) const = 0;
 

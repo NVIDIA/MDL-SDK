@@ -3073,6 +3073,9 @@ IValue const *Value_factory::create_zero(IType const *type)
         }
     case IType::TK_FUNCTION:
     case IType::TK_STRUCT:
+    case IType::TK_PTR:
+    case IType::TK_REF:
+    case IType::TK_VOID:
     case IType::TK_AUTO:
     case IType::TK_ERROR:
         // these type do not have a zero (or the zero might not exists in all cases)

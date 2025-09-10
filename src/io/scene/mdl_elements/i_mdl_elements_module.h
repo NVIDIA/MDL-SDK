@@ -388,7 +388,7 @@ private:
         DB::Transaction* transaction,
         DB::Tag module_tag,
         bool top_level,
-        robin_hood::unordered_set<DB::Tag>& done,
+        ankerl::unordered_dense::set<DB::Tag>& done,
         Execution_context* context);
 
 public:

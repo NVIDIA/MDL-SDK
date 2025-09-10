@@ -99,6 +99,16 @@
 #endif // MI_BASE_VERSION_QUALIFIER_EMPTY
 
 
+// Re-enables the removed FORCE_32_BIT enumerators.
+// #define MI_BASE_DEPRECATED_FORCE_32_BIT
+
+#ifdef MI_BASE_DEPRECATED_FORCE_32_BIT
+#define MI_BASE_DEPRECATED_ENUM_VALUE(X,Y) , X = Y
+#else
+#define MI_BASE_DEPRECATED_ENUM_VALUE(X,Y)
+#endif
+
+
 /**@}*/ // end group mi_base_version
 
 #endif // MI_BASE_VERSION_H

@@ -736,9 +736,6 @@ mi::neuraylib::IValue* Value_factory::create(
                 value->get_interface<MDL::IValue_bsdf_measurement>());
             return new Value_bsdf_measurement( this, m_transaction.get(), v.get(), owner);
         }
-        case MDL::IValue::VK_FORCE_32_BIT:
-            ASSERT( M_SCENE, false);
-            return nullptr;
     };
 
    ASSERT( M_SCENE, false);

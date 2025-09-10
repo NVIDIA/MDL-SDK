@@ -117,15 +117,6 @@ public:
 
     const mi::IString* get_db_definition_name( const char* mdl_name) final;
 
-    void analyze_uniform(
-        mi::neuraylib::ITransaction* transaction,
-        const char* root_name,
-        bool root_uniform,
-        const mi::neuraylib::IExpression* query_expr,
-        bool& query_result,
-        mi::IString* error_path,
-        mi::neuraylib::IMdl_execution_context* context) const final;
-
     const mi::IString* decode_name( const char* name) final;
 
     const mi::IString* encode_module_name( const char* name) final;
@@ -137,7 +128,16 @@ public:
 
     bool is_valid_mdl_identifier( const char* name) const final;
 
-   // internal methods
+    void analyze_uniform(
+        mi::neuraylib::ITransaction* transaction,
+        const char* root_name,
+        bool root_uniform,
+        const mi::neuraylib::IExpression* query_expr,
+        bool& query_result,
+        mi::IString* error_path,
+        mi::neuraylib::IMdl_execution_context* context) const final;
+
+    // internal methods
 
     /// Starts this API component.
     ///

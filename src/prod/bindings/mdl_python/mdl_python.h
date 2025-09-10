@@ -79,6 +79,8 @@ public:
         return i;
     }
 
+    virtual ~SmartPtrBase() = default;
+
 protected:
     void _assign_open_handle_typename(void* address, const char* type_name)
     {
@@ -168,7 +170,7 @@ public:
         return *this;
     }
 
-    ~SmartPtr()
+    virtual ~SmartPtr()
     {
         decrease_refcount("SmartPtr Destructor");
     }

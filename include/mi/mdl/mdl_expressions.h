@@ -349,6 +349,11 @@ public:
     ///
     /// \param rhs_expr  the new right argument expression
     virtual void set_right_argument(IExpression const *rhs_expr) = 0;
+
+    /// Return true of the given operator is an assign operation.
+    static bool is_assign_operator(Operator op) {
+        return OK_ASSIGN <= op && op <= OK_BITWISE_OR_ASSIGN;
+    }
 };
 
 /// A conditional expression inside the MDL AST (aka ?: operator).

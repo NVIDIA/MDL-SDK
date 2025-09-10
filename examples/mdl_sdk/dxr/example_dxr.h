@@ -133,6 +133,9 @@ namespace mi { namespace examples { namespace dxr
         /// the BSDF data flags to use when executing BSDF functions
         uint32_t bsdf_data_flags;
 
+        /// for counting SSS steps separate from 'max_ray_depth'
+        uint32_t max_sss_depth;
+
         /// resets the progressive iteration counter to restart the rendering in the next frame.
         void restart_progressive_rendering();
 

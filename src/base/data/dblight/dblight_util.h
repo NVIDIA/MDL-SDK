@@ -90,8 +90,10 @@ public:
 
 extern Statistics_data g_commit;
 extern Statistics_data g_abort;
-extern Statistics_data g_access;
-extern Statistics_data g_edit;
+extern Statistics_data g_access_by_name;
+extern Statistics_data g_access_by_tag;
+extern Statistics_data g_edit_by_name;
+extern Statistics_data g_edit_by_tag;
 extern Statistics_data g_finish_edit;
 extern Statistics_data g_store;
 extern Statistics_data g_localize;
@@ -99,21 +101,27 @@ extern Statistics_data g_remove;
 extern Statistics_data g_name_to_tag;
 extern Statistics_data g_tag_to_name;
 extern Statistics_data g_get_class_id;
+extern Statistics_data g_get_tag_is_job;
+extern Statistics_data g_get_tag_is_removed;
 extern Statistics_data g_get_tag_privacy_level;
 extern Statistics_data g_get_tag_store_level;
 extern Statistics_data g_get_tag_reference_count;
 extern Statistics_data g_get_tag_version;
+extern Statistics_data g_invalidate_job_results;
+extern Statistics_data g_advise;
 extern Statistics_data g_can_reference_tag;
-extern Statistics_data g_get_tag_is_removed;
 extern Statistics_data g_block_commit_or_abort;
 extern Statistics_data g_unblock_commit_or_abort;
-extern Statistics_data g_scope_get_journal;
 extern Statistics_data g_transaction_get_journal;
 
-extern Statistics_data g_lookup_info_by_tag;
+extern Statistics_data g_scope_get_journal;
+extern Statistics_data g_scope_destructor;
+
 extern Statistics_data g_lookup_info_by_name;
+extern Statistics_data g_lookup_info_by_tag;
 extern Statistics_data g_garbage_collection;
 
+extern Statistics_data g_element_job_destructors;
 
 } // namespace DBLIGHT
 

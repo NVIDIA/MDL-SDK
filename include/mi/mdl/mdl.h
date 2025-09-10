@@ -84,12 +84,15 @@ extern "C" {
 /// Initializes the MDL Core library and obtains the primary MDL interface.
 /// This function is the entry point to using the MDL Core API.
 ///
-/// \param alloc  If non-NULL, an allocator interface that will be used for all
-///               memory allocations in this compiler.
-///               If NULL, a malloc-based allocator will be used.
+/// \param mat_ior_is_varying  true, if the material.ior field is varying, false if it is uniform
+/// \param alloc               If non-NULL, an allocator interface that will be used for all
+///                            memory allocations in this compiler.
+///                            If NULL, a malloc-based allocator will be used.
 ///
 /// \returns    A pointer to the primary MDL interface.
-DLL_EXPORT mi::mdl::IMDL *mi_mdl_factory(mi::base::IAllocator *alloc);
+DLL_EXPORT mi::mdl::IMDL *mi_mdl_factory(
+    bool                 mat_ior_is_varying,
+    mi::base::IAllocator *alloc);
 
 } // extern "C"
 

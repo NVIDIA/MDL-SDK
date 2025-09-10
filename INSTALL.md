@@ -18,7 +18,7 @@ The build with the following 64-bit platform-compiler combinations has been
 successfully tested:
 
 -   **Windows 10:**            Microsoft Visual Studio 2022 (msvc v143)
--   **CentOS 7, Debian 12:**   GCC 12 (on x86-64 or aarch64)
+-   **CentOS 7, Debian 13:**   GCC 12 (on x86-64 or aarch64)
 -   **Mac OS X 12.6:**         Xcode 14.2 (Apple Clang 14.0.0, on x86-64 or aarch64)
 
 The versions listed with the following dependencies have been
@@ -28,7 +28,7 @@ might work as well.
 <a name="thirdparty-dependencies-libs"></a>
 The following third-party libraries and tools are required to build the MDL SDK:
 
--   <a name="vcpkg">**vcpkg**</a> *(git commit ID 821100d96)*  
+-   <a name="vcpkg">**vcpkg**</a> *(git commit ID ef7dbf9)*  
     [Vcpkg](https://vcpkg.io/en/getting-started.html) is the recommended way to
     install other dependencies like Boost, OpenImageIO, GLEW, GLFW, and Vulkan.
     The vcpkg version mentioned above corresponds to the versions mentioned for
@@ -42,16 +42,18 @@ The following third-party libraries and tools are required to build the MDL SDK:
     for further details. Add the vcpkg option *--triplet=x64-windows-static* to
     the *install* command. There is no need to run the *integrate* command.
 
--   **Boost** *(1.85.0)*  
+-   **Boost** *(1.88.0)*  
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
     packages *boost-algorithm*, *boost-core*, *boost-dynamic-bitset*,
     *boost-functional*, *boost-intrusive*, *boost-tokenizer*, and
     *boost-unordered*. Alternatively, you can also install all Boost modules
     with the *boost* package.
 
--   **OpenImageIO** *(2.5.12.0)*  
+-   **OpenImageIO** *(3.0.1.0)*  
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
-    packages *openimageio[gif,openjpeg,tools,webp]*.  
+    packages *openimageio[gif,openjpeg,tools,webp]*. You might want to install
+    the package *minizip[core,zlib]* first the eliminate some unnecessary
+    dependencies caused by default features.  
 
 -   **Python3** *(3.10.0)*  
     Linux: Install the *python* package.  
@@ -74,7 +76,7 @@ The following tools are used to build the API reference documentation:
     See the [Doxygen project page](https://sourceforge.net/projects/doxygen/) and
     the [archive of all releases](https://sourceforge.net/projects/doxygen/files/).
 
--   **dot from GraphViz** *(2.40.1)*  
+-   **dot from GraphViz** *(12.2.1)*  
     The `dot` tool from GraphViz is optional: it is used to generate nicer
     inheritance diagrams. See the
     [GraphViz project page](https://www.graphviz.org/).
@@ -127,7 +129,7 @@ of examples is of no interest to you.
     Please follow the instructions on the
     [CUDA Developer Website](https://developer.nvidia.com/cuda-toolkit).
 
--   **Vulkan SDK** *(1.3.280.0)*  
+-   **Vulkan SDK** *(1.4.304.0)*  
     Building the Vulkan examples requires the Vulkan headers and validation layers,
     volk, and glslang.  
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
@@ -144,7 +146,7 @@ features.
     [Arnold Website](https://www.arnoldrenderer.com/arnold/download/) to
     download the Arnold SDK.
 
--   **MaterialX** *(github repository, tag: v1.38.9, Windows only)*  
+-   **MaterialX** *(github repository, tag: v1.39.3, Windows only)*  
     This dependency adds MaterialX support to the DXR example.  
     Please download a release from
     [github](https://github.com/AcademySoftwareFoundation/MaterialX/releases).  
@@ -167,7 +169,7 @@ features.
     example.  
     Please follow the instructions on the [Qt Website](https://www.qt.io/).
 
--   **X-Rite AxF SDK** *(1.9.0)*  
+-   **X-Rite AxF SDK** *(1.9.2)*  
     This dependency is required to build the AxF-to-MDL example.  
     Please send the "Request AxF SDK" document from the
     [X-Rite AxF Website](https://www.xrite.com/axf).
@@ -229,10 +231,11 @@ features.
 
     -   **MATERIALX_DIR** in Ungrouped Entries,  
         for example: *C:/projects/thirdparty/git/MaterialX*  
-        For MaterialX support, the option **MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES** has to be enabled.
+        See also the option
+        [**MDL_MSVC_DYNAMIC_RUNTIME_DXR_EXAMPLE**](#mdl-msvc-dynamic-dxr).  
 
     -   **python_PATH** in Ungrouped Entries (only if not found in the PATH),  
-        for example: *C:/projects/thirdparty/python_3_8_0/bin/python.exe*  
+        for example: *C:/projects/thirdparty/python_3_10_0/bin/python.exe*  
 
     -   **swig_PATH** in Ungrouped Entries (only if not found in the PATH),  
         for example: *C:/projects/thirdparty/swigwin-4.2.1/swig.exe*
@@ -567,9 +570,17 @@ The following options affect how various components are built:
     option essentially disables the undefined symbol check for CUDA-based
     examples on Linux, which requires the CUDA driver being installed.
 
--   **MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES**  
-    [ON/OFF] links the MSVC dynamic runtime (/MD) instead of static (/MT) when
-    creating the example executables.
+-   **MDL_MSVC_DYNAMIC_RUNTIME**  
+    [ON/OFF] links all binaries except for the DXR example with the dynamic
+    MSVC runtime (/MD or /MDd) instead of the static one (/MT or /MTd).
+    Default: OFF.
+
+-   <a name="mdl-msvc-dynamic-dxr">**MDL_MSVC_DYNAMIC_RUNTIME_DXR_EXAMPLE**</a>  
+    [ON/OFF] links the DXR example with the dynamic MSVC runtime (/MD or /MDd)
+    instead of the static one (/MT or /MTd). If MaterialX support is enabled
+    (see the option [**MDL_ENABLE_MATERIALX**](#mdl-enable-materialx)), and the
+    pre-built MaterialX libraries are used, then this option needs to be
+    enabled. Default: ON
 
 The following options enable you to select the examples to be built based on
 their required thirdparty dependencies (see also **MDL_BUILD_SDK_EXAMPLES**
@@ -599,8 +610,9 @@ and **MDL_BUILD_CORE_EXAMPLES** above):
 -   **MDL_BUILD_ARNOLD_PLUGIN**  
     [ON/OFF] enable/disable the build of the MDL Arnold Plugin.
 
--   **MDL_ENABLE_MATERIALX**  
-    [ON/OFF] enable/disable MaterialX in examples that support it.
+-   <a name="mdl-enable-materialx">**MDL_ENABLE_MATERIALX**</a>  
+    [ON/OFF] enable/disable MaterialX in examples that support it. See also the
+    option [**MDL_MSVC_DYNAMIC_RUNTIME_DXR_EXAMPLE**](#mdl-msvc-dynamic-dxr).
 
 
 ## Testing the Build

@@ -413,10 +413,9 @@ MDL::MDL(
 , m_builder(alloc)
 , m_next_module_id(0)
 , m_mat_ior_is_varying(mat_ior_is_varying)
-, m_type_factory_is_valid(false)
 , m_arena(alloc)
 , m_sym_tab(m_arena)
-, m_type_factory(m_arena, *this, m_sym_tab)
+, m_type_factory(m_arena, mat_ior_is_varying, m_sym_tab)
 , m_options(alloc)
 , m_builtin_module_indexes(0, Module_map::hasher(), Module_map::key_equal(), alloc)
 , m_builtin_modules(alloc)
@@ -429,8 +428,6 @@ MDL::MDL(
 , m_jitted_code(NULL)
 , m_translator_list(alloc)
 {
-    m_type_factory_is_valid = true;
-
     create_options();
     create_builtin_semantics();
 
@@ -605,7 +602,6 @@ Module *MDL::create_module(
 {
     // FIXME: check for name already in use
 
-    // TODO: this must be thread safe if create_module should be thread safe
     // Don't use number 0, this is reserved for "owner module".
     size_t id = ++m_next_module_id;
 
@@ -1678,7 +1674,7 @@ void MDL::serialize_module(
 // Deserialize a module from a given deserializer.
 Module const *MDL::deserialize_module(IDeserializer *ds)
 {
-    MDL_binary_deserializer bin_deserializer(get_allocator(), ds, this);
+    MDL_binary_deserializer bin_deserializer(get_allocator(), ds, *this);
 
     Tag_t t;
 
@@ -1774,7 +1770,7 @@ void MDL::serialize_code_dag(
 // Deserialize a code DAG from a given deserializer.
 IGenerated_code_dag const *MDL::deserialize_code_dag(IDeserializer *ds)
 {
-    MDL_binary_deserializer bin_deserializer(get_allocator(), ds, this);
+    MDL_binary_deserializer bin_deserializer(get_allocator(), ds, *this);
 
     return mi::mdl::deserialize_code_dag(ds, bin_deserializer, this);
 }
@@ -1792,7 +1788,7 @@ void MDL::serialize_material_instance(
 IMaterial_instance const *MDL::deserialize_material_instance(
     IDeserializer *ds)
 {
-    MDL_binary_deserializer bin_deserializer(get_allocator(), ds, this);
+    MDL_binary_deserializer bin_deserializer(get_allocator(), ds, *this);
 
     return mi::mdl::deserialize_material_instance(ds, bin_deserializer, this);
 }

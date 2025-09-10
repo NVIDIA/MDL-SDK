@@ -859,7 +859,7 @@ float tex_lookup_float_ptex(RES_DATA_PARAM_DECL int tex, int channel)
 }
 
 // ------------------------------------------------------------------------------------------------
-// Light Profiles (not supported by this example)
+// Light Profiles
 // ------------------------------------------------------------------------------------------------
 
 // binary search through CDF

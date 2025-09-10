@@ -172,6 +172,11 @@ static void fill_default_cg_options(
         "",
         "Comma-separated list of names of functions which will be visible in the generated code "
         "(empty string means no special restriction).");
+    options.add_option(
+        MDL_JIT_OPTION_EXPORT_REQUESTED_FUNCTIONS,
+        "false",
+        "Mark functions explicitly requested for code generation as exports in the generated "
+        "code.");
 
     // GLSL/HLSL specific options
     options.add_option(
@@ -189,7 +194,7 @@ static void fill_default_cg_options(
     options.add_option(
         MDL_JIT_OPTION_SL_STATE_GEOMETRY_NORMAL_NAME,
         "geometry_normal",
-        "The name of the entity representingstate::geometry_normal()");
+        "The name of the entity representing state::geometry_normal()");
     options.add_option(
         MDL_JIT_OPTION_SL_STATE_POSITION_MODE,
         "field",
@@ -357,40 +362,6 @@ static void fill_default_cg_options(
         MDL_JIT_WARN_SPECTRUM_CONVERSION,
         "false",
         "Warn if a spectrum color is converted into an RGB value");
-}
-
-// Constructor.
-Code_generator_thread_context::Code_generator_thread_context(
-    IAllocator         *alloc,
-    Options_impl const *options)
-: Base(alloc)
-, m_msg_list(alloc, /*owner_fname=*/"")
-, m_options(alloc, *options)
-{
-}
-
-/// Access code generator messages of last operation.
-Messages_impl const &Code_generator_thread_context::access_messages() const
-{
-    return m_msg_list;
-}
-
-// Access code generator messages of last operation.
-Messages_impl &Code_generator_thread_context::access_messages()
-{
-    return m_msg_list;
-}
-
-// Access code generator options for the invocation.
-Options_impl const &Code_generator_thread_context::access_options() const
-{
-    return m_options;
-}
-
-// Access code generator options for the invocation.
-Options_impl &Code_generator_thread_context::access_options()
-{
-    return m_options;
 }
 
 // Constructor.

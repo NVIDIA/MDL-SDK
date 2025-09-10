@@ -69,7 +69,7 @@ module [[
     anno::display_name("NVIDIA core definitions")
 ]];
 
-const string COPYRIGHT = "Copyright 2024 NVIDIA Corporation. All rights reserved.";
+const string COPYRIGHT = "Copyright 2025 NVIDIA Corporation. All rights reserved.";
 
 //some local functions, dont document
 // blend two normals, similar to

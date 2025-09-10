@@ -112,7 +112,7 @@ const Attribute_spec* Attribute_registry::get_attribute(
     const std::string& name) const
 {
     // find id
-    robin_hood::unordered_map<string, Uint>::const_iterator id_it = m_name_mapping.find(name);
+    ankerl::unordered_dense::map<string, Uint>::const_iterator id_it = m_name_mapping.find(name);
     if (id_it == m_name_mapping.end())
         // this is not an error - all user-defined attributes will go through this
         return nullptr;
@@ -188,7 +188,7 @@ bool Attribute_registry::add_name_mapping(
     const std::string& name,
     Uint id)
 {
-    bool result = m_name_mapping.insert(robin_hood::pair<std::string,Uint>(name, id)).second;
+    bool result = m_name_mapping.insert(std::pair<std::string,Uint>(name, id)).second;
     if (!result)
         mod_log->warning(M_ATTR, Mod_log::C_DATABASE, 1,
             "The attribute name %s does already exist.", name.c_str());
@@ -202,7 +202,7 @@ bool Attribute_registry::add_name_mapping(
 Uint Attribute_registry::get_id(
     const std::string& name)
 {
-    robin_hood::unordered_map<std::string, Uint>::const_iterator it = m_name_mapping.find(name);
+    ankerl::unordered_dense::map<std::string, Uint>::const_iterator it = m_name_mapping.find(name);
     if (it != m_name_mapping.end())
         return it->second;
     else

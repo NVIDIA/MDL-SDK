@@ -33,7 +33,6 @@
 
 #include <mi/base/interface_declare.h>
 #include <mi/neuraylib/itype.h>
-#include <mi/neuraylib/version.h>
 
 namespace mi {
 
@@ -300,11 +299,6 @@ public:
     virtual void set_entity_resolver( IMdl_entity_resolver* resolver) = 0;
 
     //@}
-
-    virtual void MI_NEURAYLIB_DEPRECATED_METHOD_14_1(set_logger)( base::ILogger* logger) = 0;
-
-    virtual base::ILogger* MI_NEURAYLIB_DEPRECATED_METHOD_14_1(get_logger)() = 0;
-
     /// \name Miscellaneous settings
     //@{
 

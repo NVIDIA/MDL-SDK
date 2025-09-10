@@ -57,7 +57,7 @@ set(PROJECT_SOURCES
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
-    TYPE SHARED
+    TYPE MODULE
     SOURCES ${PROJECT_SOURCES}
     EMBED_RC "dds.rc"
     OUTPUT_NAME "dds"
@@ -78,7 +78,7 @@ add_library(mdl::dds ALIAS ${PROJECT_NAME})
 # add dependencies other dependencies
 target_add_dependencies(TARGET ${PROJECT_NAME} 
     DEPENDS 
-        mdl::base-system-version
+        base-system-version
     )
 
 # create installation rules

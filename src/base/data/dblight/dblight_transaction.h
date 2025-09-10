@@ -48,12 +48,14 @@ namespace MI {
 namespace DBLIGHT {
 
 class Database_impl;
+class Info_impl;
 class Scope_impl;
 class Transaction_manager;
 
 namespace bi = boost::intrusive;
 
-/// A journal entry comprises a tag, update version, scope ID, and the journal type.
+/// A transaction journal entry comprises a tag, its version (from the sequence number), scope ID,
+/// and the journal type.
 class Transaction_journal_entry
 {
 public:
@@ -77,8 +79,6 @@ public:
 ///
 /// Transactions are created with pin count 1. The pin count is decremented again in
 /// #Transaction_manager::end_transaction().
-///
-/// "NI" means DBLIGHT does not implement/support that method of the interface.
 class Transaction_impl : public DB::Transaction
 {
 public:
@@ -137,7 +137,11 @@ public:
 
     DB::Info* access_element( DB::Tag tag) override;
 
+    DB::Info* access_element( const char* name) override;
+
     DB::Info* edit_element( DB::Tag tag) override;
+
+    DB::Info* edit_element( const char* name) override;
 
     void finish_edit( DB::Info* info, DB::Journal_type journal_type) override;
 
@@ -171,13 +175,14 @@ public:
         DB::Journal_type journal_type,
         DB::Privacy_level store_level) override;
 
-    /*NI*/ DB::Tag store(
+
+    DB::Tag store(
         SCHED::Job_base* job,
         const char* name,
         DB::Privacy_level privacy_level,
         DB::Privacy_level store_level) override;
 
-    /*NI*/ void store(
+    void store(
         DB::Tag tag,
         SCHED::Job_base* job,
         const char* name,
@@ -185,13 +190,13 @@ public:
         DB::Journal_type journal_type,
         DB::Privacy_level store_level) override;
 
-    /*NI*/ DB::Tag store_for_reference_counting(
+    DB::Tag store_for_reference_counting(
         SCHED::Job_base* job,
         const char* name,
         DB::Privacy_level privacy_level,
         DB::Privacy_level store_level) override;
 
-    /*NI*/ void store_for_reference_counting(
+    void store_for_reference_counting(
         DB::Tag tag,
         SCHED::Job_base* job,
         const char* name,
@@ -206,9 +211,11 @@ public:
 
     const char* tag_to_name( DB::Tag tag) override;
 
-    DB::Tag name_to_tag( const char* name) override;
+    DB::Tag name_to_tag( const char* name, Name_to_tag_context context) override;
 
-    bool get_tag_is_job( DB::Tag tag) override { return false; }
+    DB::Tag name_to_tag_unsafe( const char* name) override;
+
+    bool get_tag_is_job( DB::Tag tag) override;
 
     SERIAL::Class_id get_class_id( DB::Tag tag) override;
 
@@ -232,10 +239,8 @@ public:
          DB::Journal_type journal_type,
          bool lookup_parents) override;
 
-    /// Only the scheduling mode LOCAL is supported.
     mi::Sint32 execute_fragmented( DB::Fragmented_job* job, size_t count) override;
 
-    /// Only the scheduling mode LOCAL is supported.
     mi::Sint32 execute_fragmented_async(
         DB::Fragmented_job* job, size_t count, DB::IExecution_listener* listener) override;
 
@@ -243,11 +248,17 @@ public:
 
     bool get_fragmented_jobs_cancelled() override { return m_fragmented_jobs_cancelled; }
 
-    /*NI*/ void invalidate_job_results( DB::Tag tag) override;
+    void invalidate_job_results( DB::Tag tag) override;
 
-    /*NI*/ void advise( DB::Tag tag) override;
+    /// The asynchronous execution of the advised job blocks commit()/abort() until execution
+    /// finished (no cancellation). But the transaction is then in CLOSING state, i.e., no longer
+    /// OPEN.
+    ///
+    /// Must not be used from suspended worker threads (requirement of the thread pool for async
+    /// execution).
+    void advise( DB::Tag tag) override;
 
-    /*NI*/ DB::Element_base* construct_empty_element( SERIAL::Class_id class_id) override;
+    DB::Element_base* construct_empty_element( SERIAL::Class_id class_id) override;
 
     Transaction* get_real_transaction() override { return this; }
 
@@ -298,6 +309,76 @@ public:
         DB::Journal_type journal_type,
         DB::Privacy_level store_level,
         bool store_for_rc);
+
+    /// Implements the four store() overloads for DB jobs.
+    void store_job_internal(
+        DB::Tag tag,
+        SCHED::Job_base* job,
+        const char* name,
+        DB::Privacy_level privacy_level,
+        DB::Journal_type journal_type,
+        DB::Privacy_level store_level,
+        bool store_for_rc);
+
+    /// Implements the four store() overloads for DB jobs.
+    void store_job_internal_locked(
+        DB::Tag tag,
+        SCHED::Job_base* job,
+        const char* name,
+        DB::Privacy_level privacy_level,
+        DB::Journal_type journal_type,
+        DB::Privacy_level store_level,
+        bool store_for_rc,
+        bool temporary);
+
+    /// Same as #access_element() except that not statistics are updated. Used by #get_class_id().
+    DB::Info* access_element_no_stats( DB::Tag tag);
+
+    /// Implements #access_element() (by tag) and #access_element_no_stats().
+    ///
+    /// \param tag                    The tag to look up.
+    /// \param is_exclusive           Indicates whether the shared or exclusive lock was obtained.
+    /// \return                       A pair of an info and a flag. If \p is_exclusive is \c false,
+    ///                               but the method needs the exclusive lock to succeed, then it
+    ///                               indicates that by returning \p {nullptr,true}. In all other
+    ///                               cases the first component is the info for that tag (or
+    ///                               \c nullptr) and the second component is not relevant. RCS:ICE
+    std::pair<DB::Info*,bool> access_element_locked( DB::Tag tag, bool is_exclusive);
+
+    /// Implements #access_element() (by name).
+    ///
+    /// \param name                   The name to look up.
+    /// \param is_exclusive           Indicates whether the shared or exclusive lock was obtained.
+    /// \return                       A pair of an info and a flag. If \p is_exclusive is \c false,
+    ///                               but the method needs the exclusive lock to succeed, then it
+    ///                               indicates that by returning \p {nullptr,true}. In all other
+    ///                               cases the first component is the info for that name (or
+    ///                               \c nullptr) and the second component is not relevant. RCS:ICE
+    std::pair<DB::Info*,bool> access_element_locked( const char* name, bool is_exclusive);
+
+    /// Implements both overloads of access_element_locked().
+    ///
+    /// \param info                   The info that is to be accessed. RCS:ICR
+    /// \param is_exclusive           Indicates whether the shared or exclusive lock was obtained.
+    /// \return                       A pair of an info and a flag. If \p is_exclusive is \c false,
+    ///                               but the method needs the exclusive lock to succeed, then it
+    ///                               indicates that by returning \p {nullptr,true}. In all other
+    ///                               cases the first component is the info that was passed (or
+    ///                               \c nullptr) and the second component is not relevant. RCS:ICE
+    std::pair<DB::Info*,bool> access_element_shared( Info_impl* info, bool is_exclusive);
+
+    /// Implements both overloads of edit_element().
+    ///
+    /// \param info                   The info that is to be edited. RCS:ICR
+    /// \return                       A copy of the info to be edited (or \c nullptr in case of
+    ///                               failures, i.e., jobs, which cannot be edited). RCS:ICE
+    DB::Info* edit_element_shared( Info_impl* info);
+
+    /// Indicates whether the job result is valid for this transaction.
+    bool is_job_result_valid( DB::Info* info);
+
+    /// Splits the job.
+    void split_job( Info_impl* info);
 
     /// Same as can_reference_tag(), but with m_database->get_lock() locked.
     bool can_reference_tag_locked(
@@ -373,6 +454,18 @@ public:
         DB::Tag_set& processing,
         DB::Tag_set& done);
 
+    /// Returns the number of infos pinned by this transaction.
+    size_t get_pinned_infos_size() const;
+
+    /// Unpins all infos pinned by this transaction.
+    void unpin_pinned_infos();
+
+    /// Implements #block_commit_or_abort().
+    bool block_commit_or_abort_locked();
+
+    /// Implements #unblock_commit_or_abort().
+    bool unblock_commit_or_abort_locked();
+
     /// Waits for #m_block_counter to reach zero.
     ///
     /// Returns immediately if #m_block_counter is zero. Otherwise releases the database lock,
@@ -418,6 +511,11 @@ private:
     std::atomic_uint32_t m_next_sequence_number = 0;
     /// Complete journal of updates for this transaction.
     std::vector<Transaction_journal_entry> m_journal;
+
+    /// The lock for #m_pinned_infos.
+    mutable THREAD::Lock m_pinned_infos_lock;
+    /// Tracks infos from #name_to_tag. Needs #m_pinned_infos_lock.
+    std::vector<DB::Info*> m_pinned_infos;
 
     /// The counter to track outstanding commit/abort blocking requests.
     std::atomic_uint32_t m_block_counter = 0;
@@ -500,7 +598,7 @@ public:
     DB::Transaction_id get_lowest_open_transaction_id() const;
 
     /// Dumps the state of the transaction manager to the stream.
-    void dump( std::ostream& s, bool mask_pointer_values);
+    void dump( std::ostream& s, bool verbose, bool mask_pointer_values);
 
 private:
     /// Instance of the database this manager belongs to.
@@ -547,3 +645,4 @@ using Transaction_impl_ptr = boost::intrusive_ptr<Transaction_impl>;
 } // namespace MI
 
 #endif // BASE_DATA_DBLIGHT_DBLIGHT_TRANSACTION_H
+

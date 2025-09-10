@@ -38,7 +38,6 @@ set(PROJECT_SOURCES
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
     TYPE EXECUTABLE
-    NAMESPACE mdl_sdk
     OUTPUT_NAME "df_native"
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
@@ -74,4 +73,5 @@ target_create_vs_user_settings(TARGET ${PROJECT_NAME})
 add_target_install(
     TARGET ${PROJECT_NAME}
     DESTINATION "examples/mdl_sdk/df_native"
+    INCLUDE "content/fonts/*"
     )

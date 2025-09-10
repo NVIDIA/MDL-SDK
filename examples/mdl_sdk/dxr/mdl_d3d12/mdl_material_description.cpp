@@ -1355,11 +1355,12 @@ bool Mdl_material_description::load_material_definition_mdl(
 {
     // split module and material name
     // [::<package>]::<module>::<material>
+    std::string scene_material_name = mi::examples::strings::drop_url_query(m_scene_material.name);
     if (!mi::examples::mdl::parse_cmd_argument_material_name(
-        m_scene_material.name, m_qualified_module_name, m_material_name, false))
+        scene_material_name, m_qualified_module_name, m_material_name, false))
     {
         log_warning(
-            "Material name is not a fully qualified material name: " + m_scene_material.name +
+            "Material name is not a fully qualified material name: " + scene_material_name +
             "\nUsing a fall-back material instead.");
         return false;
     }
@@ -1393,7 +1394,7 @@ bool Mdl_material_description::load_material_definition_mdl(
     if (!definition)
     {
         log_error(
-            "Module was loaded but the material name could not be found: " + m_scene_material.name +
+            "Module was loaded but the material name could not be found: " + scene_material_name +
             "\nUsing a fall-back material instead.");
         m_module_db_names[0] = "";
         return false;
@@ -1403,7 +1404,7 @@ bool Mdl_material_description::load_material_definition_mdl(
     {
         log_error(
             "Module was loaded but the selected function is not a material: " +
-            m_scene_material.name +
+            scene_material_name +
             "\nUsing a fall-back material instead.");
         m_module_db_names[0] = "";
         return false;
@@ -2067,30 +2068,11 @@ bool Mdl_material_description::load_material_definition_loader(
         module_name = "::" + module_name;
     m_qualified_module_name = module_name;
 
-    // load the actual module, sequentially for now
-    sdk.get_transaction().execute<void>([&](mi::neuraylib::ITransaction* t)
-        {
-            auto& mdl_impexp = sdk.get_impexp_api();
-            mdl_impexp.load_module_from_string(
-                t, m_qualified_module_name.c_str(),
-                m_source_code.c_str(),
-                context);
-        });
-    if (!sdk.log_messages(
-        "Loading generated material (from materialX) failed: " + m_scene_material.name,
-        context, SRC))
-            return false;
-
     // expected database name of the module to load
     mi::base::Handle<const mi::IString> module_db_name(
         sdk.get_factory().get_db_module_name(m_qualified_module_name.c_str()));
     m_module_db_names.resize(1);
     m_module_db_names[0] = module_db_name->get_c_str();
-
-    // get the loaded module
-    mi::base::Handle<const mi::neuraylib::IModule> module(
-        sdk.get_transaction().access<const mi::neuraylib::IModule>(
-            module_db_name->get_c_str()));
 
     // dump the mdl for debugging only
     if (!loader->get_options().generated_mdl_path.empty())
@@ -2145,6 +2127,25 @@ bool Mdl_material_description::load_material_definition_loader(
         std::string export_path = output_path.substr(0, output_path.length() - 4) + ".formated.mdl";
         sdk.get_impexp_api().export_module(sdk.get_transaction().get(), module_db_name->get_c_str(), export_path.c_str());
     }
+
+    // load the actual module, sequentially for now
+    sdk.get_transaction().execute<void>([&](mi::neuraylib::ITransaction* t)
+        {
+            auto& mdl_impexp = sdk.get_impexp_api();
+            mdl_impexp.load_module_from_string(
+                t, m_qualified_module_name.c_str(),
+                m_source_code.c_str(),
+                context);
+        });
+    if (!sdk.log_messages(
+        "Loading generated material (from materialX) failed: " + m_scene_material.name,
+        context, SRC))
+            return false;
+
+    // get the loaded module
+    mi::base::Handle<const mi::neuraylib::IModule> module(
+        sdk.get_transaction().access<const mi::neuraylib::IModule>(
+            module_db_name->get_c_str()));
 
     if (module->get_material_count() == 0)
     {

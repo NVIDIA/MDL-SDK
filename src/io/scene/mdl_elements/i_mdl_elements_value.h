@@ -67,8 +67,7 @@ public:
         VK_INVALID_DF,
         VK_TEXTURE,
         VK_LIGHT_PROFILE,
-        VK_BSDF_MEASUREMENT,
-        VK_FORCE_32_BIT = 0xffffffffU
+        VK_BSDF_MEASUREMENT
     };
 
     virtual Kind get_kind() const = 0;

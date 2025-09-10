@@ -49,15 +49,16 @@ set(PROJECT_SOURCES
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
     TYPE EXECUTABLE
-    NAMESPACE mdl_sdk
     OUTPUT_NAME "mdl_browser"
+    DYNAMIC_GCC_RUNTIME
+    SKIP_UNDEFINED_SYMBOL_CHECK
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
 )
 
 # additional definitions
-target_compile_definitions(${PROJECT_NAME} 
-    PRIVATE 
+target_compile_definitions(${PROJECT_NAME}
+    PRIVATE
         "QT_QML_DEBUG"
     )
 
@@ -67,15 +68,15 @@ target_add_qt_plugin_dependency(TARGET ${PROJECT_NAME}
     )
 
 # add dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME} 
+target_add_dependencies(TARGET ${PROJECT_NAME}
     DEPENDS
         mdl::mdl_sdk
         mdl_sdk::shared
         tinyxml2
     )
 
-target_add_dependencies(TARGET ${PROJECT_NAME} DEPENDS qt 
-    COMPONENTS 
+target_add_dependencies(TARGET ${PROJECT_NAME} DEPENDS qt
+    COMPONENTS
         Core Gui Quick Svg Xml Qml QuickControls2 Network Widgets
     )
 
@@ -109,4 +110,19 @@ target_sources(${PROJECT_NAME}
 add_target_install(
     TARGET ${PROJECT_NAME}
     DESTINATION "examples/mdl_sdk/mdl_browser"
+    INCLUDE
+        "MdlQtPlugin/*"
+        "QtGraphicalEffects/*"
+        "QtGraphicalEffects/*/*"
+        "QtQuick/*"
+        "QtQuick/*/*"
+        "QtQuick/*/*/*"
+        "QtQuick/*/*/*/*"
+        "QtQuick/*/*/*/*/*"
+        "QtQuick.2/*"
+        "egldeviceintegrations/*"
+        "imageformats/*"
+        "platforms/*"
+        "xcbglintegrations/*"
+        "*.dll"
     )

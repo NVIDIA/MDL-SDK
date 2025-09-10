@@ -136,7 +136,7 @@ export material carbon_composite (
     ]]
 ) [[ 
     anno::copyright_notice (
-    "Copyright 2024 NVIDIA Corporation. All rights reserved."),
+    "Copyright 2025 NVIDIA Corporation. All rights reserved."),
     anno::author("NVIDIA Corporation"),
     anno::display_name("Carbon fibre composite")
 ]] = let{

@@ -36,7 +36,7 @@
 /// controls whether the object is hit by trace rays; or an array attribute
 /// containing a texture space (one vector per vertex); or a shader or instance
 /// may have attributes like "ambient" that replace mental ray 3's parameters.
- 
+
 #ifndef BASE_DATA_ATTR_ATTR_H
 #define BASE_DATA_ATTR_ATTR_H
 
@@ -262,22 +262,28 @@ class Attribute_set : public SERIAL::Serializable
     void swap(
         Attribute_set& other);
 
-    /// Look up an attached attribute by ID. Return 0 on failure. O(log n)
+    /// Look up an attached attribute by ID. Return 0 on failure.
     /// \param id ID of attribute to look up
     Attribute* lookup(
         Attribute_id id);
-    /// Look up an attached attribute by ID. Return 0 on failure. O(log n)
+    /// Look up an attached attribute by ID. Return 0 on failure.
     /// \param id ID of attribute to look up
     const Attribute* lookup(
         Attribute_id id) const;
-    /// Look up an attached attribute by name. Return 0 on failure. O(n)
+    /// Look up an attached attribute by name. Return 0 on failure.
     /// \param name name of attribute to look up
     const Attribute* lookup(
         const char* name) const;
-    /// Look up an attached attribute by name. Return 0 on failure. O(n)
+    /// Look up an attached attribute by name. Return 0 on failure.
     /// \param name name of attribute to look up
     Attribute* lookup(
         const char* name);
+
+    /// Lookup an attached attribute by ID.
+    /// \param id ID of attribute to look up
+    /// \return a shared pointer to the attached attribute
+    std::shared_ptr<Attribute> lookup_shared_ptr(
+        Attribute_id id) const;
 
     /// Removing this requires changes in several files, but nevertheless this
     /// should soon be removed though
@@ -338,14 +344,6 @@ class Attribute_set : public SERIAL::Serializable
     /// \param other copy from this
     void deep_copy(
         const Attribute_set &other);
-  public:
-    /// lookup an attached attribute by ID - special internal version
-    /// the only reason why it is public is that it is available to
-    /// Attribute_set_impl_helper in api/api/neuray/neuray_attribute_set_impl_helper.cpp
-    /// \param id ID of attribute to look up
-    /// \return a shared pointer to the attached attribute
-    std::shared_ptr<Attribute> lookup_shared_ptr(
-        Attribute_id    id) const;
 };
 
 

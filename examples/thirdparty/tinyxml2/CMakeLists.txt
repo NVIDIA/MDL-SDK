@@ -28,7 +28,7 @@
 
 # name of the target and the resulting library
 set(PROJECT_NAME tinyxml2)
-set(PROJECT_VERSION 6.2.0)
+set(PROJECT_VERSION 11.0.0)
 
 # collect sources
 set(PROJECT_SOURCES
@@ -39,7 +39,6 @@ set(PROJECT_SOURCES
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
-    NAMESPACE ${PROJECT_NAME}
     VERSION ${PROJECT_VERSION}
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE

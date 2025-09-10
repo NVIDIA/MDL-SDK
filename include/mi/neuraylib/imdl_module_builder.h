@@ -33,7 +33,7 @@
 
 #include <mi/base/interface_declare.h>
 #include <mi/neuraylib/itype.h>
-#include <mi/neuraylib/version.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 

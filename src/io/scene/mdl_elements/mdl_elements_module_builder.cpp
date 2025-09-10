@@ -413,16 +413,7 @@ mi::Sint32 Mdl_module_builder::add_function(
             body->get_interface<IExpression_direct_call>());
         ASSERT( M_SCENE, body_direct_call);
         DB::Tag body_tag = body_direct_call->get_definition( m_transaction);
-        SERIAL::Class_id class_id = m_transaction->get_class_id( body_tag);
-        if( class_id != ID_MDL_FUNCTION_DEFINITION) {
-            const char* name = m_transaction->tag_to_name( body_tag);
-            add_error_message( context,
-                STRING::formatted_string( "Invalid reference to DB element \"%s\" in call "
-                    "expression.", name),
-                -14);
-            return -1;
-        }
-
+        ASSERT( M_SCENE, body_tag);
         DB::Access<Mdl_function_definition> body_definition( body_tag, m_transaction);
 
         // get semantic
@@ -2141,15 +2132,6 @@ void Mdl_module_builder::create_module( Execution_context* context)
     // Run sanity checks if module exists already.
     DB::Tag tag = m_transaction->name_to_tag( m_db_module_name.c_str());
     if( tag) {
-        SERIAL::Class_id class_id = m_transaction->get_class_id( tag);
-        if( class_id != ID_MDL_MODULE) {
-            add_error_message(
-                context,
-                STRING::formatted_string(
-                    "The module name \"%s\" is invalid.", m_db_module_name.c_str()),
-                -3);
-            return;
-        }
         DB::Access<Mdl_module> db_module( tag, m_transaction);
         if( !db_module->supports_reload()) {
             add_error_message( context, "Cannot override standard and built-in modules.", -4);
@@ -2409,17 +2391,6 @@ bool Mdl_module_builder::validate_expression(
 
             mi::base::Handle<const IExpression_direct_call> direct_call(
                 expr->get_interface<IExpression_direct_call>());
-            DB::Tag tag = direct_call->get_definition( m_transaction);
-            SERIAL::Class_id class_id = m_transaction->get_class_id( tag);
-            if( class_id != ID_MDL_FUNCTION_DEFINITION) {
-                const char* name = transaction->tag_to_name( tag);
-                add_error_message( context,
-                    STRING::formatted_string( "Invalid reference to DB element \"%s\" in direct "
-                        "call expression.", name),
-                    -14);
-               return false;
-            }
-
             mi::base::Handle<const IExpression_list> args( direct_call->get_arguments());
             return validate_expression_list(
                 transaction,
@@ -2430,11 +2401,6 @@ bool Mdl_module_builder::validate_expression(
                 allowed_temporary_count,
                 context);
          }
-
-         case IExpression::EK_FORCE_32_BIT: {
-            ASSERT( M_SCENE, false);
-            return false;
-        }
     }
 
     ASSERT( M_SCENE, false);
@@ -2485,7 +2451,7 @@ const IExpression* Mdl_module_builder::skip_decl_cast_operator( const IExpressio
             SERIAL::Class_id class_id = m_transaction->get_class_id( tag);
             if( class_id != ID_MDL_FUNCTION_CALL) {
                 expr->retain();
-                 return expr;
+                return expr;
             }
 
             DB::Access<Mdl_function_call> function_call( tag, m_transaction);
@@ -2505,12 +2471,7 @@ const IExpression* Mdl_module_builder::skip_decl_cast_operator( const IExpressio
             mi::base::Handle<const IExpression_direct_call> direct_call(
                 expr->get_interface<IExpression_direct_call>());
             DB::Tag def_tag = direct_call->get_definition( m_transaction);
-            SERIAL::Class_id class_id = m_transaction->get_class_id( def_tag);
-            if( class_id != ID_MDL_FUNCTION_DEFINITION) {
-                expr->retain();
-                 return expr;
-            }
-
+            ASSERT( M_SCENE, def_tag);
             DB::Access<Mdl_function_definition> function_definition( def_tag, m_transaction);
             mi::mdl::IDefinition::Semantics sema = function_definition->get_core_semantic();
             if( sema != mi::mdl::IDefinition::DS_INTRINSIC_DAG_DECL_CAST) {
@@ -2523,9 +2484,6 @@ const IExpression* Mdl_module_builder::skip_decl_cast_operator( const IExpressio
                 args->get_expression( static_cast<mi::Size>( 0)));
             return arg0.extract();
         }
-
-        case IExpression::EK_FORCE_32_BIT:
-            break;
     }
 
     ASSERT( M_SCENE, false);
@@ -2689,10 +2647,10 @@ void Mdl_module_builder::analyze_uniform(
                     expr->get_interface<IExpression_call>());
                 DB::Tag tag = call->get_call();
                 SERIAL::Class_id class_id = transaction->get_class_id( tag);
-                const char* name = transaction->tag_to_name( tag);
 
                 if( class_id != ID_MDL_FUNCTION_CALL) {
-                     add_error_message( context, STRING::formatted_string(
+                    const char* name = transaction->tag_to_name( tag);
+                    add_error_message( context, STRING::formatted_string(
                          "Invalid reference to DB element \"%s\" in call expression.", name), -54);
                     return;
                 }
@@ -2700,6 +2658,7 @@ void Mdl_module_builder::analyze_uniform(
                 DB::Access<Mdl_function_call> function_call( tag, transaction);
                 DB::Tag def_tag = function_call->get_function_definition( transaction);
                 if( !def_tag) {
+                    const char* name = transaction->tag_to_name( tag);
                     add_error_message( context, STRING::formatted_string(
                         "Invalid function call \"%s\".", name), -52);
                     return;
@@ -2716,6 +2675,7 @@ void Mdl_module_builder::analyze_uniform(
                         auto_must_be_uniform = false;
                     } else if( !def->is_uniform()) {
                         // The called function is not uniform.
+                        const char* name = transaction->tag_to_name( tag);
                         add_error_message( context, STRING::formatted_string(
                             "Function call \"%s\" at node \"%s\" needs to be uniform, but is "
                             "not.", name, path.c_str()), -53);
@@ -2749,16 +2709,7 @@ void Mdl_module_builder::analyze_uniform(
                 mi::base::Handle<const IExpression_direct_call> direct_call(
                     expr->get_interface<IExpression_direct_call>());
                 DB::Tag def_tag = direct_call->get_definition( transaction);
-                SERIAL::Class_id class_id = transaction->get_class_id( def_tag);
-                const char* name = transaction->tag_to_name( def_tag);
-
-                if( class_id != ID_MDL_FUNCTION_DEFINITION) {
-                     add_error_message( context, STRING::formatted_string(
-                         "Invalid reference to DB element \"%s\" in direct call expression.", name),
-                         -57);
-                    return;
-                }
-
+                ASSERT( M_SCENE, def_tag);
                 DB::Access<Mdl_function_definition> def( def_tag, transaction);
 
                 // Determine whether auto parameters must be uniform.
@@ -2771,6 +2722,7 @@ void Mdl_module_builder::analyze_uniform(
                         auto_must_be_uniform = false;
                     } else if( !def->is_uniform()) {
                         // The called function is not uniform.
+                        const char* name = transaction->tag_to_name( def_tag);
                         add_error_message( context, STRING::formatted_string(
                             "Direct call to function definition \"%s\" at node \"%s\" needs to "
                             "be uniform, but is not.", name, path.c_str()), -56);
@@ -2799,10 +2751,6 @@ void Mdl_module_builder::analyze_uniform(
 
                 break;
             }
-
-            case IExpression::EK_FORCE_32_BIT:
-                ASSERT( M_SCENE, false);
-                return;
         }
     }
 }

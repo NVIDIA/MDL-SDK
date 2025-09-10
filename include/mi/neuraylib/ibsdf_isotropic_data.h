@@ -32,6 +32,7 @@
 #define MI_NEURAYLIB_IBSDF_ISOTROPIC_DATA_H
 
 #include <mi/base/interface_declare.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -44,13 +45,11 @@ class IBsdf_buffer;
 */
 
 /// The BSDF type.
-enum Bsdf_type {
+enum Bsdf_type : Uint32 {
     BSDF_SCALAR = 0, ///< One scalar per grid value.
-    BSDF_RGB    = 1, ///< Three scalars (RGB) per grid value.
-    BSDF_TYPES_FORCE_32_BIT = 0xffffffffU // Undocumented, for alignment only
+    BSDF_RGB    = 1  ///< Three scalars (RGB) per grid value.
+    MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(BSDF_TYPES_FORCE_32_BIT, 0xffffffffU)
 };
-
-mi_static_assert( sizeof( Bsdf_type) == sizeof( Uint32));
 
 /// Abstract interface for isotropic BSDF data.
 ///

@@ -35,6 +35,6 @@ create_unit_test(
         ../test.cpp
     DEPENDS
         ${PROJECT_NAME}
-        mdl::base-util-string_utils
-        mdl::base-system-main
+        base-util-string_utils
+        base-system-main
     )

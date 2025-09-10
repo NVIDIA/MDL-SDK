@@ -1436,6 +1436,17 @@ IDefinition const *skip_presets(
     return f_decl->get_definition();
 }
 
+// Skip all presets returning the original function declaration.
+IDefinition const *skip_presets(
+    IDeclaration_function const     *f_decl,
+    mi::base::Handle<IModule const> &owner_mod)
+{
+    mi::base::Handle<Module const> owner = owner_mod.get_interface<Module const>();
+    IDefinition const *def = skip_presets(f_decl, owner);
+    owner_mod = owner;
+    return def;
+}
+
 // Skip all presets returning the original function definition.
 IDefinition const *skip_presets(
     IDefinition const              *func_def,
@@ -1455,6 +1466,17 @@ IDefinition const *skip_presets(
 
     IDeclaration_function const *f_decl = cast<IDeclaration_function>(decl);
     return skip_presets(f_decl, owner_mod);
+}
+
+// Skip all presets returning the original function definition.
+IDefinition const *skip_presets(
+    IDefinition const               *func_def,
+    mi::base::Handle<IModule const> &owner_mod)
+{
+    mi::base::Handle<Module const> owner = owner_mod.get_interface<Module const>();
+    IDefinition const *def = skip_presets(func_def, owner);
+    owner_mod = owner;
+    return def;
 }
 
 }  // mdl

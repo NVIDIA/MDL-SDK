@@ -434,6 +434,22 @@ public:
     void has_dependence_loop(Node_vec const &nodes);
 
 private:
+    /// Create all field access functions for a given struct type.
+    ///
+    /// \param module          the current module
+    /// \param curr            if non-NULL, add a dependency edge from this node to all created
+    /// \param s_type          the struct type
+    /// \param is_ported_type  true, if the type is imported in the current module
+    /// \param is_def_arg      true, if dependency edges are created for default arguments
+    ///
+    /// \note Necessary to implement a struct_insert
+    void create_all_field_access_functions(
+        IModule const      *module,
+        Dependence_node    *curr,
+        IType_struct const *s_type,
+        bool               is_imported_type,
+        bool               is_def_arg);
+
     /// Create all necessary nodes for an exported definition.
     ///
     /// \param module   the current module

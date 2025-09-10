@@ -49,6 +49,8 @@ else()
     target_compile_options(${__TARGET_ADD_DEPENDENCY_TARGET}
         PRIVATE
            "$<$<STREQUAL:${MI_PLATFORM_NAME},linux-aarch64>:-flax-vector-conversions>"
+           # Workaround for https://github.com/microsoft/vcpkg/issues/44128
+           "$<$<STREQUAL:${MI_PLATFORM_NAME},nt-x86-64>:/utf-8>"
         )
 
     # link static/shared object

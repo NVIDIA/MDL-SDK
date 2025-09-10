@@ -26,6 +26,24 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #*****************************************************************************
 
+function(get_python_config_variable PYTHON_EXECUTABLE VARIABLE_NAME RESULT_VARIABLE)
+    execute_process(
+        COMMAND "${PYTHON_EXECUTABLE}"
+        "-c" "import sysconfig;print(sysconfig.get_config_var('${VARIABLE_NAME}'))"
+        OUTPUT_VARIABLE _CONFIG_VARIABLE
+        ERROR_VARIABLE _CONFIG_VARIABLE
+    )
+
+    if(NOT _CONFIG_VARIABLE)
+        message(STATUS "_CONFIG_VARIABLE: ${_CONFIG_VARIABLE}")
+        message(FATAL_ERROR "Python config variable ${_CONFIG_VARIABLE} could not be determined.")
+        return()
+    endif()
+
+    string(STRIP ${_CONFIG_VARIABLE} _CONFIG_VARIABLE_STRIPPED)
+    set(${RESULT_VARIABLE} "${_CONFIG_VARIABLE_STRIPPED}" PARENT_SCOPE)
+endfunction()
+
 function(FIND_PYTHON_DEV_EXT)
     if(NOT PYTHON_DIR)
         set(PYTHON_DIR "PYTHON_DIR-NOTFOUND" CACHE PATH "Directory that contains the python dev library and the corresponding headers.")
@@ -65,7 +83,7 @@ function(FIND_PYTHON_DEV_EXT)
         if(NOT PYTHON_DIR)
             get_filename_component(_PYTHON_DIR ${Python3_LIBRARY_DIRS} DIRECTORY)
             set(PYTHON_DIR ${_PYTHON_DIR} CACHE PATH "Directory that contains the python dev library and the corresponding headers." FORCE)
-        endif()    
+        endif()
     else()
         if(LINUX OR MACOSX)
             set(_OS_MESSAGE " install the 'python3-dev' package or")
@@ -73,17 +91,19 @@ function(FIND_PYTHON_DEV_EXT)
         message(FATAL_ERROR "The dependency \"python\" could not be resolved. Please${_OS_MESSAGE} specify 'PYTHON_DIR', or disable 'MDL_ENABLE_PYTHON_BINDINGS'.")
     endif()
 
+    get_python_config_variable(${Python3_EXECUTABLE} "EXT_SUFFIX" _PYTHON_EXT_SUFFIX)
+
     # store paths that are later used in the add_python.cmake
     set(MDL_DEPENDENCY_PYTHON_DEV_INCLUDE ${Python3_INCLUDE_DIRS} CACHE INTERNAL "python headers")
     set(MDL_DEPENDENCY_PYTHON_DEV_LIBS ${Python3_LIBRARY_RELEASE} CACHE INTERNAL "python libs")
     set(MDL_DEPENDENCY_PYTHON_DEV_EXE ${Python3_EXECUTABLE} CACHE INTERNAL "python interpreter")
-    #set(MDL_DEPENDENCY_PYTHON_DEV_SHARED ${Python3_SHARED} CACHE INTERNAL "python shared libs")
+    set(MDL_DEPENDENCY_PYTHON_DEV_EXT_SUFFIX ${_PYTHON_EXT_SUFFIX} CACHE INTERNAL "python EXT_SUFFIX")
     set(MDL_PYTHON_DEV_FOUND ON CACHE INTERNAL "")
 
     if(MDL_LOG_DEPENDENCIES)
         message(STATUS "[INFO] MDL_DEPENDENCY_PYTHON_DEV_INCLUDE:        ${MDL_DEPENDENCY_PYTHON_DEV_INCLUDE}")
         message(STATUS "[INFO] MDL_DEPENDENCY_PYTHON_DEV_LIBS:           ${MDL_DEPENDENCY_PYTHON_DEV_LIBS}")
-        message(STATUS "[INFO] MDL_DEPENDENCY_PYTHON_DEV_SHARED:         ${MDL_DEPENDENCY_PYTHON_DEV_SHARED}")
         message(STATUS "[INFO] MDL_DEPENDENCY_PYTHON_DEV_EXE:            ${MDL_DEPENDENCY_PYTHON_DEV_EXE}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_PYTHON_DEV_EXT_SUFFIX:     ${MDL_DEPENDENCY_PYTHON_DEV_EXT_SUFFIX}")
     endif()
 endfunction()

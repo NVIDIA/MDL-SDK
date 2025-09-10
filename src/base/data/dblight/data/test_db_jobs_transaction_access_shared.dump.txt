@@ -1,0 +1,194 @@
+Count of all scopes: 1
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
+
+Count of all transactions: 1
+Count of open transactions: 1
+ID 0: pin count = 4, state = OPEN, next sequence number = 2, visibility ID = 4294967295
+
+Count of infos by distinct names: 2
+Index 0: name = "bar", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), references = { }
+Index 1: name = "foo", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), references = { }
+
+Count of infos by distinct tags: 2
+Index 0: tag = 1, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), name = "foo", references = { }
+Index 1: tag = 2, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), name = "bar", references = { }
+
+Count of all infos: 2
+Count of infos by class IDs:
+     2 0000000000 (unknown)
+
+Count of all scopes: 1
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
+
+Count of all transactions: 1
+Count of open transactions: 1
+ID 0: pin count = 5, state = OPEN, next sequence number = 2, visibility ID = 4294967295
+
+Count of infos by distinct names: 2
+Index 0: name = "bar", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), references = { }
+Index 1: name = "foo", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 1, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (set), references = { }
+
+Count of infos by distinct tags: 2
+Index 0: tag = 1, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 1, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (set), name = "foo", references = { }
+Index 1: tag = 2, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), name = "bar", references = { }
+
+Count of all infos: 2
+Count of infos by class IDs:
+     1 0000000000 (unknown)
+     1 0x4d79656c "Myel"
+
+Count of all scopes: 1
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
+
+Count of all transactions: 1
+Count of open transactions: 1
+ID 0: pin count = 6, state = OPEN, next sequence number = 2, visibility ID = 4294967295
+
+Count of infos by distinct names: 2
+Index 0: name = "bar", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), references = { }
+Index 1: name = "foo", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 2, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (set), references = { }
+
+Count of infos by distinct tags: 2
+Index 0: tag = 1, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 2, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (set), name = "foo", references = { }
+Index 1: tag = 2, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), name = "bar", references = { }
+
+Count of all infos: 2
+Count of infos by class IDs:
+     1 0000000000 (unknown)
+     1 0x4d79656c "Myel"
+
+Count of all scopes: 1
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
+
+Count of all transactions: 1
+Count of open transactions: 0
+ID 0: pin count = 1, state = COMMITTED, next sequence number = 2, visibility ID = 1
+
+Count of infos by distinct names: 2
+Index 0: name = "bar", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), references = { }
+Index 1: name = "foo", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (set), references = { }
+
+Count of infos by distinct tags: 2
+Index 0: tag = 1, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (set), name = "foo", references = { }
+Index 1: tag = 2, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), name = "bar", references = { }
+
+Count of all infos: 2
+Count of infos by class IDs:
+     1 0000000000 (unknown)
+     1 0x4d79656c "Myel"
+
+Count of all scopes: 1
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
+
+Count of all transactions: 1
+Count of open transactions: 1
+ID 1: pin count = 3, state = OPEN, next sequence number = 0, visibility ID = 4294967295
+
+Count of infos by distinct names: 2
+Index 0: name = "bar", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), references = { }
+Index 1: name = "foo", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 0, pin count = 1, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (set), references = { }
+
+Count of infos by distinct tags: 2
+Index 0: tag = 1, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 0, pin count = 1, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (set), name = "foo", references = { }
+Index 1: tag = 2, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), name = "bar", references = { }
+
+Count of all infos: 2
+Count of infos by class IDs:
+     1 0000000000 (unknown)
+     1 0x4d79656c "Myel"
+
+Count of all scopes: 1
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
+
+Count of all transactions: 1
+Count of open transactions: 1
+ID 1: pin count = 5, state = OPEN, next sequence number = 1, visibility ID = 4294967295
+
+Count of infos by distinct names: 2
+Index 0: name = "bar", count = 2
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), references = { }
+    Index 1: scope ID = 0, transaction ID = 1 (set), version = 0, pin count = 1, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (set), references = { }
+Index 1: name = "foo", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 0, pin count = 1, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (set), references = { }
+
+Count of infos by distinct tags: 2
+Index 0: tag = 1, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 0, pin count = 1, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (set), name = "foo", references = { }
+Index 1: tag = 2, count = 2, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), name = "bar", references = { }
+    Index 1: scope ID = 0, transaction ID = 1 (set), version = 0, pin count = 1, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (set), name = "bar", references = { }
+
+Count of all infos: 3
+Count of infos by class IDs:
+     1 0000000000 (unknown)
+     2 0x4d79656c "Myel"
+
+Count of all scopes: 1
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
+
+Count of all transactions: 1
+Count of open transactions: 1
+ID 1: pin count = 6, state = OPEN, next sequence number = 1, visibility ID = 4294967295
+
+Count of infos by distinct names: 2
+Index 0: name = "bar", count = 2
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), references = { }
+    Index 1: scope ID = 0, transaction ID = 1 (set), version = 0, pin count = 2, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (set), references = { }
+Index 1: name = "foo", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 0, pin count = 1, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (set), references = { }
+
+Count of infos by distinct tags: 2
+Index 0: tag = 1, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 0, pin count = 1, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (set), name = "foo", references = { }
+Index 1: tag = 2, count = 2, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 1, pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (cleared), name = "bar", references = { }
+    Index 1: scope ID = 0, transaction ID = 1 (set), version = 0, pin count = 2, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (set), name = "bar", references = { }
+
+Count of all infos: 3
+Count of infos by class IDs:
+     1 0000000000 (unknown)
+     2 0x4d79656c "Myel"
+
+Count of all scopes: 1
+ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
+
+Count of all transactions: 1
+Count of open transactions: 0
+ID 1: pin count = 1, state = COMMITTED, next sequence number = 1, visibility ID = 2
+
+Count of infos by distinct names: 2
+Index 0: name = "bar", count = 1
+    Index 0: scope ID = 0, transaction ID = 1 (cleared), version = 0, pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (set), references = { }
+Index 1: name = "foo", count = 1
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (set), references = { }
+
+Count of infos by distinct tags: 2
+Index 0: tag = 1, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (set), name = "foo", references = { }
+Index 1: tag = 2, count = 1, pin count = 1, removed = 0
+    Index 0: scope ID = 0, transaction ID = 1 (cleared), version = 0, pin count = 0, tag = 2, privacy level = 0, removal = 0, job = (set), shared = 1, parent = 0, temporary = 0, element = (set), name = "bar", references = { }
+
+Count of all infos: 2
+Count of infos by class IDs:
+     2 0x4d79656c "Myel"
+

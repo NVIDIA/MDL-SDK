@@ -1,0 +1,77 @@
+/******************************************************************************
+ * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+namespace mi {
+namespace mdl {
+
+/*! \page mi_mdl_core_example_distilling_shared The Distiller_helper helper class
+
+<div align="right">
+    [\link mi_mdl_core_example_cuda_shared Previous\endlink]
+    [\link mi_mdl_core_examples Up\endlink]
+    [\link mi_mdl_core_example_calls Next\endlink]
+</div>
+
+This page explains the Material_compiler helper class.
+
+\section example_distilling_shared_new New Topics
+
+  - The Distiller_helper helper class
+
+\section example_distilling_shared_descr Detailed Description
+
+<dl>
+<dt><b>The Distiller_helper helper class</b></dt>
+<dd>
+MDL materials can exhibit arbitrary complexity, accommodating a wide range of use cases. However, in certain contexts, such as real-time environments, it may be preferable to work with a fixed material model for performance and simplicity. To address this need, the \c mi::mdl::IDistiller_plugin_api provides a mechanism to transform any MDL material into predefined target material models. These target material models can be customized and grouped as needed
+in different MDL distilling plugins.
+
+The Distiller_helper class simplifies the use of the \c mi::mdl::Mdl_distiller_plugin and \c mi::mdl::IDistiller_plugin_api interfaces by offering streamlined mechanisms for common distillation tasks. Specifically, it provides:
+    - <b>Plugin Management</b>: Handles the creation and management of the context required to load and unload a distilling plugin. By default, it uses the built-in \c "mdl_distiller.dll" plugin library included with the MDL SDK.
+      However, it can be extended to support others custom distilling plugin libraries.    
+    - <b>Plugin Initialization</b>: Ensures the plugin is initialized correctly by verifying compatibility with the system's plugin version (\c mi::base::Plugin::get_plugin_system_version()) and the plugin API version        
+      (\c mi::mdl::Mdl_distiller_plugin::get_api_version()).
+    - <b>Target Model Validation</b>: Confirms that the desired target material model is supported by querying all available target names using \c mi::mdl::Mdl_distiller_plugin::get_target_name().
+    - <b>Material Distillation</b>: Provides access to the \c mi::mdl::IDistiller_plugin_api interface to perform material distillation. The \c mi::mdl::Mdl_distiller_plugin::distill() function transforms a compiled source material
+      into a compiled version of the desired target model.
+  
+  For an example how to use this helper class to distill an MDL material, please refer to \ref mi_mdl_core_example_code_gen.
+
+</dd>
+</dl>
+
+<div align="right">
+    [\link mi_mdl_core_example_cuda_shared Previous\endlink]
+    [\link mi_mdl_core_examples Up\endlink]
+    [\link mi_mdl_core_example_calls Next\endlink]
+</div>
+
+*/
+
+}
+}

@@ -35,7 +35,7 @@
 #include "thread_pool_worker_thread.h"
 
 #include <mi/base/config.h>
-#include <boost/core/ignore_unused.hpp>
+
 #include <base/lib/log/i_log_assert.h>
 #include <base/lib/log/i_log_logger.h>
 
@@ -144,12 +144,11 @@ bool Worker_thread::process_job()
         return false;
     }
 
-    bool result = m_thread_affinity_enabled ? pin_cpu( m_cpu_id) : unpin_cpu();
+    [[maybe_unused]] bool result = m_thread_affinity_enabled ? pin_cpu( m_cpu_id) : unpin_cpu();
 #ifndef MI_PLATFORM_MACOSX
     // Setting the thread affinity is not supported on MacOS X.
     ASSERT( M_THREAD_POOL, result);
 #endif
-    boost::ignore_unused( result);
 
     ASSERT( M_THREAD_POOL, m_state == THREAD_IDLE);
     set_state( THREAD_RUNNING);

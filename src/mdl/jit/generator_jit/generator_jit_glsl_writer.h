@@ -708,6 +708,14 @@ protected:
         // unsupported yet
     }
 
+    /// Set whether the function is marked as an export.
+    static void set_is_export(
+        glsl::Declaration_function *func,
+        bool is_export)
+    {
+        // unsupported, GLSL has no exports
+    }
+
     /// Dump the current AST.
     void dump_ast();
 

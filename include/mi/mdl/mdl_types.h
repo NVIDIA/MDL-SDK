@@ -67,6 +67,9 @@ public:
         TK_STRUCT,                  ///< A struct type.
         TK_TEXTURE,                 ///< A texture type.
         TK_BSDF_MEASUREMENT,        ///< The bsdf measurement type.
+        TK_PTR,                     ///< The pointer type,  used internally by the compiler.
+        TK_REF,                     ///< The reference type,  used internally by the compiler.
+        TK_VOID,                    ///< The void type,  used internally by the compiler.
         TK_AUTO,                    ///< The incomplete type, used internally by the compiler.
         TK_ERROR = 0xFFFFFFFF       ///< The error type.
     };
@@ -129,6 +132,50 @@ class IType_error : public IType
 public:
     /// The kind of this subclass.
     static Kind const s_kind = TK_ERROR;
+};
+
+/// The MDL void type.
+///
+/// The void type represents a type void. As the MDL language does not have a void type,
+/// it does never occur in any syntax representations.
+/// No valid MDL module contains void types in the syntax tree.
+class IType_void : public IType
+{
+public:
+    /// The kind of this subclass.
+    static Kind const s_kind = TK_VOID;
+};
+
+/// An MDL pointer type.
+///
+/// Note that pointer types are not part of the MDL language.
+class IType_pointer : public IType
+{
+public:
+    /// The kind of this subclass.
+    static Kind const s_kind = TK_PTR;
+
+    /// Get the type this pointer type points to.
+    virtual IType const *get_element_type() const = 0;
+
+    /// Get the address space of the pointer.
+    virtual unsigned get_address_space() const = 0;
+};
+
+/// An MDL reference type.
+///
+/// Note that reference types are not part of the MDL language.
+class IType_ref : public IType
+{
+public:
+    /// The kind of this subclass.
+    static Kind const s_kind = TK_REF;
+
+    /// Get the type this pointer type points to.
+    virtual IType const *get_element_type() const = 0;
+
+    /// Get the address space of the pointer.
+    virtual unsigned get_address_space() const = 0;
 };
 
 /// The incomplete type temporary represents a in the syntax tree that is not yet deduced.
@@ -381,6 +428,9 @@ class IType_color : public IType_compound
 public:
     /// The kind of this subclass.
     static Kind const s_kind = TK_COLOR;
+
+    /// Get the type of the color (RGB or spectral) elements.
+    virtual IType_atomic const *get_element_type() const = 0;
 };
 
 /// A function type.
@@ -791,6 +841,9 @@ public:
     /// Create a new type error instance.
     virtual IType_error const *create_error() = 0;
 
+    // Create a new type void instance.
+    virtual IType_void const *create_void() = 0;
+
     /// Create a new type auto (non-deduced incomplete type) instance.
     virtual IType_auto const *create_auto() = 0;
 
@@ -897,6 +950,26 @@ public:
         IType const                      *return_type,
         Function_parameter const * const parameters,
         size_t                           n_parameters) = 0;
+
+        /// Create a new type pointer instance.
+    ///
+    /// \param element_type  The element type of the pointer.
+    /// \param addr_space    The address space of the pointer.
+    ///
+    /// \return IType_error if element_type was of IType_error, an IType_pointer instance else.
+    virtual IType const *create_pointer(
+        IType const *element_type,
+        unsigned    addr_space) = 0;
+
+    /// Create a new type reference instance.
+    ///
+    /// \param element_type  The element type of the reference.
+    /// \param addr_space    The address space of the reference.
+    ///
+    /// \return IType_error if element_type was of IType_error, an IType_ref instance else.
+    virtual IType const *create_reference(
+        IType const *element_type,
+        unsigned    addr_space) = 0;
 
     /// Lookup a struct category.
     ///

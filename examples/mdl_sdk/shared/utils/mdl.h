@@ -41,21 +41,11 @@
 
 #include <fstream>
 
-#include "io.h"
-#include "os.h"
-#include "strings.h"
-
 #ifdef MI_PLATFORM_WINDOWS
     #include <direct.h>
     #include <mi/base/miwindows.h>
 #else
     #include <dlfcn.h>
-    #include <unistd.h>
-    #include <dirent.h>
-#endif
-
-#ifdef MI_PLATFORM_MACOSX
-    #include <mach-o/dyld.h>   // _NSGetExecutablePath
 #endif
 
 namespace mi { namespace examples { namespace mdl
@@ -67,7 +57,6 @@ namespace mi { namespace examples { namespace mdl
 #else
     extern void* g_dso_handle;          // Pointer to the DSO handle. Cached here for unload().
 #endif
-
 
     /// Loads the MDL SDK and calls the main factory function.
     ///
@@ -120,24 +109,26 @@ namespace mi { namespace examples { namespace mdl
     /// as well as to control the loaded plugins.
     struct Configure_options
     {
-        Configure_options();
-
         /// additional search paths that are added after admin/user and the example search paths
         std::vector<std::string> additional_mdl_paths;
 
         /// set to false to not add the admin space search paths. It's recommend to leave this true.
-        bool add_admin_space_search_paths;
+        bool add_admin_space_search_paths = true;
 
         /// set to false to not add the user space search paths. It's recommend to leave this true.
-        bool add_user_space_search_paths;
+        bool add_user_space_search_paths = true;
 
-        bool add_example_search_path;      ///< set to false to not add the example content mdl path
-        bool skip_loading_plugins;         ///< set to true to disable (optional) plugin loading
+        /// set to false to not add the example content mdl path
+        bool add_example_search_path = true;
 
-        bool single_threaded;              ///< if true, render on one thread only
+        /// set to true to disable (optional) plugin loading
+        bool skip_loading_plugins = false;
+
+        /// if true, render on one thread only
+        bool single_threaded = false;
 
         /// set a custom logger if we want to use a different one than Default_logger
-        mi::base::ILogger* logger;
+        mi::base::ILogger* logger = nullptr;
     };
 
     /// Configures the MDL SDK by installing a default logger, setting the default MDL search path,
@@ -168,7 +159,7 @@ namespace mi { namespace examples { namespace mdl
     /// \param[out] module_name             a fully-qualified absolute MDL module name
     /// \param[out] out_material_name       the materials simple name
     /// \param prepend_colons_if_missing    prepend "::" for non-empty module names, if missing
-    inline bool parse_cmd_argument_material_name(
+    bool parse_cmd_argument_material_name(
         const std::string& argument,
         std::string& out_module_name,
         std::string& out_material_name,
@@ -185,7 +176,7 @@ namespace mi { namespace examples { namespace mdl
     /// \param material_name                the DB name of the material without signature
     /// \return                             the DB name of the material including signature, or the
     ///                                     empty string in case of errors.
-    inline std::string add_missing_material_signature(
+    std::string add_missing_material_signature(
         const mi::neuraylib::IModule* module,
         const std::string& material_name);
 
@@ -205,16 +196,6 @@ namespace mi { namespace examples { namespace mdl
     // Implementations
     // --------------------------------------------------------------------------------------------
 
-    inline Configure_options::Configure_options()
-        : additional_mdl_paths()
-        , add_admin_space_search_paths(true)
-        , add_user_space_search_paths(true)
-        , add_example_search_path(true)
-        , skip_loading_plugins(false)
-        , single_threaded(false)
-        , logger(nullptr)
-    {}
-
     // printf() format specifier for arguments of type LPTSTR (Windows only).
     #ifdef MI_PLATFORM_WINDOWS
         #ifdef UNICODE
@@ -224,6 +205,7 @@ namespace mi { namespace examples { namespace mdl
         #endif // UNICODE
     #endif // MI_PLATFORM_WINDOWS
 
+    // The implementation is inline since it is shared with the Python binding.
     inline mi::neuraylib::INeuray* load_and_get_ineuray( const char* filename )
     {
         if( !filename)
@@ -236,7 +218,14 @@ namespace mi { namespace examples { namespace mdl
         #ifdef MI_PLATFORM_WINDOWS
             HMODULE handle = LoadLibraryA(filename);
             if( !handle) {
-                // fall back to libraries in a relative lib folder, relevant for install targets
+                // fall back to libraries in a relative bin folder, relevant for install targets
+                // (Python binding)
+                std::string fallback = std::string("../../bin/") + filename;
+                handle = LoadLibraryA(fallback.c_str());
+            }
+            if( !handle) {
+                // fall back to libraries in a relative bin folder, relevant for install targets
+                // (examples)
                 std::string fallback = std::string("../../../bin/") + filename;
                 handle = LoadLibraryA(fallback.c_str());
             }
@@ -248,7 +237,7 @@ namespace mi { namespace examples { namespace mdl
                     FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
                     MAKELANGID( LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buffer, 0, 0))
                     message = buffer;
-                fprintf( stderr, "Failed to load %s library (%u): " FMT_LPTSTR,
+                fprintf( stderr, "Failed to load %s library (%lu): " FMT_LPTSTR,
                     filename, error_code, message);
                 if( buffer)
                     LocalFree( buffer);
@@ -263,7 +252,7 @@ namespace mi { namespace examples { namespace mdl
                     FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
                     MAKELANGID( LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buffer, 0, 0))
                     message = buffer;
-                fprintf( stderr, "GetProcAddress error (%u): " FMT_LPTSTR, error_code, message);
+                fprintf( stderr, "GetProcAddress error (%lu): " FMT_LPTSTR, error_code, message);
                 if( buffer)
                     LocalFree( buffer);
                 return 0;
@@ -308,6 +297,7 @@ namespace mi { namespace examples { namespace mdl
 
     // --------------------------------------------------------------------------------------------
 
+    // The implementation is inline since it is shared with the Python binding.
     inline bool unload()
     {
         // Reset the global logger whose destructor might be defined in the library we are going to
@@ -324,7 +314,7 @@ namespace mi { namespace examples { namespace mdl
                 FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
                 MAKELANGID( LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buffer, 0, 0))
                 message = buffer;
-            fprintf( stderr, "Failed to unload library (%u): " FMT_LPTSTR, error_code, message);
+            fprintf( stderr, "Failed to unload library (%lu): " FMT_LPTSTR, error_code, message);
             if( buffer)
                 LocalFree( buffer);
             return false;
@@ -342,6 +332,7 @@ namespace mi { namespace examples { namespace mdl
 
     // --------------------------------------------------------------------------------------------
 
+    // The implementation is inline since it is shared with the Python binding.
     inline mi::Sint32 load_plugin(mi::neuraylib::INeuray* neuray, const char* path)
     {
         mi::base::Handle<mi::neuraylib::IPlugin_configuration> plugin_conf(
@@ -379,211 +370,8 @@ namespace mi { namespace examples { namespace mdl
         return res;
     }
 
-    // --------------------------------------------------------------------------------------------
-
-    class Default_logger : public mi::base::Interface_implement<mi::base::ILogger>
-    {
-    public:
-        void message(
-            mi::base::Message_severity /*level*/,
-            const char* /*module_category*/,
-            const mi::base::Message_details& /*details*/,
-            const char* message) override
-        {
-            fprintf(stderr, "%s\n", message);
-#ifdef MI_PLATFORM_WINDOWS
-            fflush(stderr);
-#endif
-        }
-
-        void message(
-            mi::base::Message_severity level,
-            const char* module_category,
-            const char* message) override
-        {
-            this->message(level, module_category, mi::base::Message_details(), message);
-        }
-
-    };
-
-    // --------------------------------------------------------------------------------------------
-
-    inline bool configure(
-        mi::neuraylib::INeuray* neuray,
-        Configure_options options)
-    {
-        if (!neuray)
-        {
-            fprintf(stderr, "INeuray is invalid. Loading the SDK probably failed before.");
-            return false;
-        }
-
-        mi::base::Handle<mi::neuraylib::ILogging_configuration> logging_config(
-            neuray->get_api_component<mi::neuraylib::ILogging_configuration>());
-        mi::base::Handle<mi::neuraylib::IMdl_configuration> mdl_config(
-            neuray->get_api_component<mi::neuraylib::IMdl_configuration>());
-
-        // set user defined or default logger
-        if (options.logger)
-        {
-            logging_config->set_receiving_logger(options.logger);
-        }
-        else
-        {
-            logging_config->set_receiving_logger(mi::base::make_handle(new Default_logger()).get());
-        }
-        g_logger = logging_config->get_forwarding_logger();
-
-        // collect the search paths to add
-        std::vector<std::string> mdl_paths(options.additional_mdl_paths);
-
-        if (options.add_example_search_path)
-        {
-            const std::string example_search_path1 = mi::examples::mdl::get_examples_root() + "/mdl";
-            if (example_search_path1 == "./mdl")
-            {
-                fprintf(stderr,
-                    "MDL Examples path was not found, "
-                    "consider setting the environment variable MDL_SAMPLES_ROOT.");
-            }
-            mdl_paths.push_back(example_search_path1);
-
-            const std::string example_search_path2 = mi::examples::mdl::get_src_shaders_mdl();
-            if (example_search_path2 != ".")
-                mdl_paths.push_back(example_search_path2);
-        }
-
-        // add the search paths for MDL module and resource resolution outside of MDL modules
-        for (size_t i = 0, n = mdl_paths.size(); i < n; ++i) {
-            if (mdl_config->add_mdl_path(mdl_paths[i].c_str()) != 0 ||
-                    mdl_config->add_resource_path(mdl_paths[i].c_str()) != 0) {
-                fprintf(stderr,
-                    "Warning: Failed to set MDL path \"%s\".\n",
-                    mdl_paths[i].c_str());
-            }
-        }
-
-        // add user and system search paths with lowest priority
-        if (options.add_user_space_search_paths)
-        {
-            mdl_config->add_mdl_user_paths();
-        }
-        if (options.add_admin_space_search_paths)
-        {
-            mdl_config->add_mdl_system_paths();
-        }
-
-        // load plugins if not skipped
-        if (options.skip_loading_plugins)
-            return true;
-
-        if (load_plugin(neuray, "nv_openimageio" MI_BASE_DLL_FILE_EXT) != 0)
-        {
-            fprintf(stderr, "Fatal: Failed to load the nv_openimageio plugin.\n");
-            return false;
-        }
-
-        if (load_plugin(neuray, "dds" MI_BASE_DLL_FILE_EXT) != 0)
-        {
-            fprintf(stderr, "Fatal: Failed to load the dds plugin.\n");
-            return false;
-        }
-
-        return true;
-    }
-
-    // --------------------------------------------------------------------------------------------
-
-    inline bool parse_cmd_argument_material_name(
-        const std::string& argument,
-        std::string& out_module_name,
-        std::string& out_material_name,
-        bool prepend_colons_if_missing)
-    {
-        out_module_name = "";
-        out_material_name = "";
-        std::size_t p_left_paren = argument.rfind('(');
-        if (p_left_paren == std::string::npos)
-            p_left_paren = argument.size();
-        std::size_t p_last = argument.rfind("::", p_left_paren-1);
-
-        bool starts_with_colons = argument.length() > 2 && argument[0] == ':' && argument[1] == ':';
-
-        // check for mdle
-        if (!starts_with_colons)
-        {
-            std::string potential_path = argument;
-            std::string potential_material_name = "main";
-
-            // input already has ::main attached (optional)
-            if (p_last != std::string::npos)
-            {
-                potential_path = argument.substr(0, p_last);
-                potential_material_name = argument.substr(p_last + 2, argument.size() - p_last);
-            }
-
-            // is it an mdle?
-            if (mi::examples::strings::ends_with(potential_path, ".mdle"))
-            {
-                if (potential_material_name != "main")
-                {
-                    fprintf(stderr, "Error: Material and module name cannot be extracted from "
-                        "'%s'.\nThe module was detected as MDLE but the selected material is "
-                        "different from 'main'.\n", argument.c_str());
-                    return false;
-                }
-                out_module_name = potential_path;
-                out_material_name = potential_material_name;
-                return true;
-            }
-        }
-
-        if (p_last == std::string::npos ||
-            p_last == 0 ||
-            p_last == argument.length() - 2 ||
-            (!starts_with_colons && !prepend_colons_if_missing))
-        {
-            fprintf(stderr, "Error: Material and module name cannot be extracted from '%s'.\n"
-                "An absolute fully-qualified material name of form "
-                "'[::<package>]::<module>::<material>' is expected.\n", argument.c_str());
-            return false;
-        }
-
-        if (!starts_with_colons && prepend_colons_if_missing)
-        {
-            fprintf(stderr, "Warning: The provided argument '%s' is not an absolute fully-qualified"
-                " material name, a leading '::' has been added.\n", argument.c_str());
-            out_module_name = "::";
-        }
-
-        out_module_name.append(argument.substr(0, p_last));
-        out_material_name = argument.substr(p_last + 2, argument.size() - p_last);
-        return true;
-    }
-
-    // --------------------------------------------------------------------------------------------
-
-    inline std::string add_missing_material_signature(
-        const mi::neuraylib::IModule* module,
-        const std::string& material_name)
-    {
-        // Return input if it already contains a signature.
-        if (material_name.back() == ')')
-            return material_name;
-
-        mi::base::Handle<const mi::IArray> result(
-            module->get_function_overloads(material_name.c_str()));
-        if (!result || result->get_length() != 1)
-            return std::string();
-
-        mi::base::Handle<const mi::IString> overloads(
-            result->get_element<mi::IString>(static_cast<mi::Size>(0)));
-        return overloads->get_c_str();
-    }
-
-    // --------------------------------------------------------------------------------------------
-
 #ifdef IRAY_SDK
+    // The implementation is inline since it is used by load_and_get_ineuray().
     inline mi::Sint32 authenticate(mi::neuraylib::INeuray* neuray)
     {
         auto fix_line_ending = [](std::string& s)

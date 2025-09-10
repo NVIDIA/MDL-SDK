@@ -53,9 +53,6 @@ public:
     /// The type of vectors of values.
     typedef vector<IValue const *>::Type Value_vector;
 
-    /// The type of maps from temporary values (DAG-IR nodes) to temporary names (strings).
-    typedef ptr_hash_map<DAG_node const, char const *>::Type Definition_temporary_name_map;
-
 
     /// Constructor.
     ///
@@ -153,7 +150,7 @@ public:
     Value_factory const &get_value_factory() const { return m_dag_unit.get_value_factory(); }
 
     /// Clear the value table.
-    void identify_clear() { m_value_table.clear(); m_temp_name_map.clear(); }
+    void identify_clear() { m_value_table.clear(); }
 
     /// Check if the value table is empty.
     bool identify_empty() const { return m_value_table.empty(); }
@@ -320,15 +317,6 @@ public:
 
     /// Check if this node factory owns the given DAG node.
     MDL_CHECK_RESULT bool is_owner(DAG_node const *n) const;
-
-    /// Adds a name to a given DAG node.
-    void add_node_name(DAG_node const *node, char const *name);
-
-    /// Clears all node names.
-    void clear_node_names() { m_temp_name_map.clear(); }
-
-    /// Returns the name map for temporaries.
-    const Definition_temporary_name_map& get_temp_name_map() const { return m_temp_name_map; }
 
     /// Return true iff all arguments are without name.
     bool all_args_without_name(
@@ -634,27 +622,19 @@ private:
     /// The value of state::wavelength_max().
     float m_state_wavelength_max;
 
-    /// The map for temporary names.
-    Definition_temporary_name_map m_temp_name_map;
-
     /// A hash functor for DAG IR nodes.
     struct Hash_dag_node {
-        Hash_dag_node(const Definition_temporary_name_map& temp_name_map)
-        : m_temp_name_map(temp_name_map) { }
         size_t operator()(DAG_node const *node) const;
-        const Definition_temporary_name_map& m_temp_name_map;
     };
 
     /// An Equal functor for DAG IR nodes.
     struct Equal_dag_node {
-        Equal_dag_node(Definition_temporary_name_map const &temp_name_map)
-        : m_temp_name_map(temp_name_map)
-        {
-        }
+        Equal_dag_node(DAG_unit const &unit)
+        : m_unit(unit) {}
 
         bool operator()(DAG_node const *a, DAG_node const *b) const;
 
-        Definition_temporary_name_map const &m_temp_name_map;
+        DAG_unit const &m_unit;
     };
 
     typedef hash_set<

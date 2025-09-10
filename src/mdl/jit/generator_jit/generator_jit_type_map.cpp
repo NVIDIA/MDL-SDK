@@ -508,6 +508,9 @@ llvm::Type *Type_mapper::lookup_type(
     case mdl::IType::TK_BSDF_MEASUREMENT:
         // handled as tags for now
         return m_type_tag;
+    case mdl::IType::TK_PTR:
+    case mdl::IType::TK_REF:
+    case mdl::IType::TK_VOID:
     case mdl::IType::TK_AUTO:
     case mdl::IType::TK_ERROR:
         // should never be needed
@@ -736,6 +739,9 @@ bool Type_mapper::need_reference_return(mi::mdl::IType const *type, int arr_size
     case mi::mdl::IType::TK_BSDF_MEASUREMENT:
         // returned as atomic tags
         return false;
+    case mi::mdl::IType::TK_PTR:
+    case mi::mdl::IType::TK_REF:
+    case mi::mdl::IType::TK_VOID:
     case mi::mdl::IType::TK_AUTO:
     case mi::mdl::IType::TK_ERROR:
         // should not happen
@@ -803,6 +809,15 @@ bool Type_mapper::is_passed_by_reference(mi::mdl::IType const *type, int arr_siz
     case mi::mdl::IType::TK_TEXTURE:
     case mi::mdl::IType::TK_BSDF_MEASUREMENT:
         // pass tags by value
+        return false;
+    case mi::mdl::IType::TK_PTR:
+        MDL_ASSERT(!"pointer type occurred");
+        return false;
+    case mi::mdl::IType::TK_REF:
+        MDL_ASSERT(!"reference type occurred");
+        return false;
+    case mi::mdl::IType::TK_VOID:
+        MDL_ASSERT(!"void type occurred");
         return false;
     case mi::mdl::IType::TK_AUTO:
         MDL_ASSERT(!"auto type occurred");
@@ -1169,6 +1184,9 @@ llvm::DIType *Type_mapper::get_debug_info_type(
             /*SizeInBits=*/m_type_tag->getBitWidth(),
             llvm::dwarf::DW_ATE_unsigned);
 
+    case mi::mdl::IType::TK_PTR:
+    case mi::mdl::IType::TK_REF:
+    case mi::mdl::IType::TK_VOID:
     case mi::mdl::IType::TK_AUTO:
     case mi::mdl::IType::TK_ERROR:
         // should not happen

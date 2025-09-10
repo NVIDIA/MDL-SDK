@@ -43,7 +43,6 @@
 #include <mi/neuraylib/istring.h>
 #include <mi/neuraylib/istructure_decl.h>
 
-#include <boost/core/ignore_unused.hpp>
 #include <base/util/string_utils/i_string_utils.h>
 #include <base/system/main/access_module.h>
 #include <base/lib/log/i_log_logger.h>
@@ -191,9 +190,8 @@ mi::IData* Attribute_set_impl_helper::create_attribute(
         return nullptr;
 
     // Attach the attribute.
-    bool result = attribute_set->attach( attribute);
+    [[maybe_unused]] bool result = attribute_set->attach( attribute);
     ASSERT( M_NEURAY_API, result);
-    boost::ignore_unused( result);
 
     return edit_attribute( attribute_set, db_element, name);
 }
@@ -582,7 +580,7 @@ std::string Attribute_set_impl_helper::get_attribute_type_name(
             attribute_type_name += ' ';
             attribute_type_name += (*enum_collection)[i].second;
             attribute_type_name += " = ";
-            attribute_type_name += (*enum_collection)[i].first;
+            attribute_type_name += std::to_string( (*enum_collection)[i].first);
             attribute_type_name += ';';
         }
         attribute_type_name += " }";
@@ -832,10 +830,9 @@ void Attribute_set_impl_helper::register_decls_locked( const ATTR::Type& type)
                     // create and register declaration for the type name
                     decl = create_structure_decl( type);
                     trace( "Registering stored type name %s.", type_name.c_str());
-                    mi::Sint32 result = s_class_factory->register_structure_decl(
+                    [[maybe_unused]] mi::Sint32 result = s_class_factory->register_structure_decl(
                         type_name.c_str(), decl.get());
                     ASSERT( M_NEURAY_API, result == 0);
-                    boost::ignore_unused( result);
                     return;
                 } else {
                     // ignore unqualified type names (MDL type names are always qualified, user-
@@ -851,11 +848,10 @@ void Attribute_set_impl_helper::register_decls_locked( const ATTR::Type& type)
         const std::string artificial_type_name = get_attribute_type_name( type, false);
         mi::base::Handle<const mi::IStructure_decl> decl( create_structure_decl( type));
         trace( "Registering artificial type name %s.", artificial_type_name.c_str());
-        mi::Sint32 result = s_class_factory->register_structure_decl(
+        [[maybe_unused]] mi::Sint32 result = s_class_factory->register_structure_decl(
             artificial_type_name.c_str(), decl.get());
         // the artificial name might have already been registered
         ASSERT( M_NEURAY_API, result == 0 || result == -1);
-        boost::ignore_unused( result);
 
     // enum types
     } else if( type_code == ATTR::TYPE_ENUM) {
@@ -888,10 +884,9 @@ void Attribute_set_impl_helper::register_decls_locked( const ATTR::Type& type)
                     // create and register declaration for the type name
                     decl = create_enum_decl( type);
                     trace( "Registering stored type name %s.", type_name.c_str());
-                    mi::Sint32 result = s_class_factory->register_enum_decl(
+                    [[maybe_unused]] mi::Sint32 result = s_class_factory->register_enum_decl(
                         type_name.c_str(), decl.get());
                     ASSERT( M_NEURAY_API, result == 0);
-                    boost::ignore_unused( result);
                     return;
                 } else {
                     // ignore unqualified type names (MDL type names are always qualified, user-
@@ -907,11 +902,10 @@ void Attribute_set_impl_helper::register_decls_locked( const ATTR::Type& type)
         const std::string artificial_type_name = get_attribute_type_name( type, false);
         mi::base::Handle<const mi::IEnum_decl> decl( create_enum_decl( type));
         trace( "Registering artificial type name %s.", artificial_type_name.c_str());
-        mi::Sint32 result = s_class_factory->register_enum_decl(
+        [[maybe_unused]] mi::Sint32 result = s_class_factory->register_enum_decl(
             artificial_type_name.c_str(), decl.get());
         // the artificial name might have already been registered
         ASSERT( M_NEURAY_API, result == 0 || result == -1);
-        boost::ignore_unused( result);
 
     // simple attribute types
     } else {

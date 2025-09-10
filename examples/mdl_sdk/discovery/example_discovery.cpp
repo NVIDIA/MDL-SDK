@@ -113,7 +113,7 @@ void log_api_package(const IMdl_info* info, int level)
     if (info == nullptr) {
         cerr << "\nError: Unexpected empty kind!\n";
     }
-    else { 
+    else {
 
         // Retrieve base properties
         cout << "\n" << shift.c_str() << "simple name: " << info->get_simple_name();
@@ -209,7 +209,7 @@ void log_api_package(const IMdl_info* info, int level)
                 shift.c_str(),
                 module_info->get_search_path_index(),
                 module_info->get_search_path(),
-                module_info->get_resolved_path()->get_c_str(),
+                make_handle(module_info->get_resolved_path())->get_c_str(),
                 module_info->in_archive());
             cout << "\n" << shift.c_str() << "number of shadows: "
                 << module_info->get_shadows_count();
@@ -240,7 +240,7 @@ void log_api_package(const IMdl_info* info, int level)
                         shift.c_str(),
                         package_info->get_search_path_index(i),
                         package_info->get_search_path(i),
-                        package_info->get_resolved_path(i)->get_c_str(),
+                        make_handle(package_info->get_resolved_path(i))->get_c_str(),
                         package_info->in_archive(i));
                 }
             }

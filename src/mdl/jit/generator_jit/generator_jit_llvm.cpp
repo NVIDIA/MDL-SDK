@@ -534,7 +534,6 @@ llvm::Value *Expression_result::as_value(Function_context &context) {
     if (m_res_kind == RK_OFFSET) {
         int cur_offs = 0;
         m_content = context.get_code_gen().translate_sl_value(
-            context,
             m_offs_kind == OK_RO_DATA_SEGMENT ? SM_RODATA : SM_PARAMETER,
             m_offset_res_mdl_type,
             cur_offs,
@@ -558,8 +557,14 @@ llvm::Value *Expression_result::as_value(Function_context &context) {
 class Call_ast_expr : public ICall_expr {
 public:
     /// Constructor.
-    /*implicit*/ Call_ast_expr(mi::mdl::IExpression_call const *call)
-        : m_call(call)
+    ///
+    /// \param code_gen  the code generator
+    /// \param call      the AST call
+    Call_ast_expr(
+        LLVM_code_generator             &code_gen,
+        mi::mdl::IExpression_call const *call)
+    : m_code_gen(code_gen)
+    , m_call(call)
     {
     }
 
@@ -588,10 +593,8 @@ public:
 
     /// Get the callee definition if one exists and its owner module.
     ///
-    /// \param      code_gen   the LLVM code generator
     /// \param[out] owner_mod  out parameter for the owner module of the definition
     mi::mdl::IDefinition const *get_callee_definition_and_owner(
-        LLVM_code_generator                     &code_gen,
         mi::base::Handle<mi::mdl::Module const> &owner) const
     {
         mi::mdl::IExpression_reference const *ref =
@@ -600,7 +603,7 @@ public:
             return NULL;
         }
         mi::mdl::IDefinition const *ref_def = ref->get_definition();
-        mi::mdl::Module const      *mod = code_gen.tos_module();
+        mi::mdl::Module const      *mod = m_code_gen.tos_module();
         mi::mdl::IDefinition const *def = mod->get_original_definition(ref_def);
 
         owner = mod->get_owner_module(ref_def);
@@ -612,13 +615,10 @@ public:
     }
 
     /// Get the callee definition of one exists.
-    ///
-    /// \param code_gen             the LLVM code generator
-    mi::mdl::IDefinition const *get_callee_definition(
-        LLVM_code_generator &code_gen) const MDL_FINAL
+    mi::mdl::IDefinition const *get_callee_definition() const MDL_FINAL
     {
         mi::base::Handle<mi::mdl::Module const> owner;
-        return get_callee_definition_and_owner(code_gen, owner);
+        return get_callee_definition_and_owner(owner);
     }
 
     /// Get the number of arguments.
@@ -626,34 +626,27 @@ public:
 
     /// Translate the i'th argument.
     ///
-    /// \param code_gen      the LLVM code generator
-    /// \param ctx           the current function context
     /// \param i             the argument index
     /// \param wants_derivs  if true, the result should have derivatives, if available
     Expression_result translate_argument(
-        LLVM_code_generator &code_gen,
-        Function_context    &ctx,
         size_t              i,
         bool                wants_derivs) const MDL_FINAL
     {
         mi::mdl::IExpression const *arg = m_call->get_argument(int(i))->get_argument_expr();
 
-        return code_gen.translate_expression(ctx, arg, wants_derivs);
+        return m_code_gen.translate_expression(arg, wants_derivs);
     }
 
     /// Get the LLVM context data of the callee.
     ///
-    /// \param code_gen       the LLVM code generator
     /// \param inst           the function instance for this function call
-    /// \param return_derivs  if true, the function returns derivatives
     LLVM_context_data *get_callee_context(
-        LLVM_code_generator     &code_gen,
         Function_instance const &inst) const MDL_FINAL
     {
         mi::base::Handle<mi::mdl::Module const> owner;
-        get_callee_definition_and_owner(code_gen, owner);
+        get_callee_definition_and_owner(owner);
 
-        return code_gen.get_or_create_context_data(owner.get(), inst);
+        return m_code_gen.get_or_create_context_data(owner.get(), inst);
     }
 
     /// Get the result type of the call.
@@ -673,11 +666,13 @@ public:
     /// \param ctx  the current function context
     /// \param i  the argument index
     Storage_modifier get_argument_storage_modifier(
-        Function_context &ctx,
         size_t           i) const MDL_FINAL
     {
-        if (!ctx.get_code_gen().target_supports_storage_spaces())
+        if (!m_code_gen.target_supports_storage_spaces()) {
             return SM_NORMAL;
+        }
+
+        Function_context &ctx = *m_code_gen.m_ctx;
 
         mi::mdl::IExpression const *arg = m_call->get_argument(int(i))->get_argument_expr();
 
@@ -722,9 +717,7 @@ public:
     }
 
     /// If this is a DS_INTRINSIC_DAG_FIELD_ACCESS, the accessed field index, else -1.
-    int get_field_index(
-        LLVM_code_generator &code_gen,
-        mi::mdl::IAllocator *alloc) const MDL_FINAL
+    int get_field_index() const MDL_FINAL
     {
         // does never occur on AST
         return -1;
@@ -733,13 +726,9 @@ public:
     /// Translate this call as a boolean condition.
     /// If this is a ternary operator call, translate the first argument.
     ///
-    /// \param code_gen  the LLVM code generator
-    /// \param ctx       the current function context
     /// \param true_bb   branch target for the true case
     /// \param false_bb  branch target for the false case
     void translate_boolean_branch(
-        LLVM_code_generator &code_gen,
-        Function_context    &ctx,
         llvm::BasicBlock    *true_bb,
         llvm::BasicBlock    *false_bb) const MDL_FINAL
     {
@@ -750,8 +739,7 @@ public:
             cond = m_call;
         }
 
-        code_gen.translate_boolean_branch(
-            ctx,
+        m_code_gen.translate_boolean_branch(
             cond,
             true_bb,
             false_bb);
@@ -777,12 +765,15 @@ public:
     }
 
     /// Returns true, if the call should return derivatives.
-    bool returns_derivatives(LLVM_code_generator &code_gen) const MDL_FINAL
+    bool returns_derivatives() const MDL_FINAL
     {
-        return code_gen.is_deriv_expr(m_call);
+        return m_code_gen.is_deriv_expr(m_call);
     }
 
 private:
+    /// The LLVM code generator.
+    LLVM_code_generator &m_code_gen;
+
     /// The AST expression.
     mi::mdl::IExpression_call const *m_call;
 };
@@ -792,10 +783,15 @@ class Call_dag_expr : public ICall_expr {
 public:
     /// Constructor.
     ///
+    /// \param code_gen  the LLVM code generator
     /// \param call      the DAG call node that is wrapped
     /// \param resolver  a name resolver that will be used for this call node
-    Call_dag_expr(mi::mdl::DAG_call const *call, mi::mdl::ICall_name_resolver const *resolver)
-    : m_call(call)
+    Call_dag_expr(
+        LLVM_code_generator                &code_gen,
+        mi::mdl::DAG_call const            *call,
+        mi::mdl::ICall_name_resolver const *resolver)
+    : m_code_gen(code_gen)
+    , m_call(call)
     , m_resolver(resolver)
     {
     }
@@ -838,8 +834,7 @@ public:
     /// Get the callee definition if one exists.
     ///
     /// \param code_gen  the LLVM code generator
-    mi::mdl::IDefinition const *get_callee_definition(
-        LLVM_code_generator &) const MDL_FINAL
+    mi::mdl::IDefinition const *get_callee_definition() const MDL_FINAL
     {
         mi::base::Handle<mi::mdl::Module const> owner;
         return get_callee_definition_and_owner(owner);
@@ -852,21 +847,17 @@ public:
 
     /// Translate the i'th argument.
     ///
-    /// \param code_gen       the LLVM code generator
-    /// \param ctx            the current function context
     /// \param i              the argument index
     /// \param wants_derivs   if true, the result should have derivatives, if available
     ///                       This is not used on the DAG, as the DAG nodes know, whether they
     ///                       should return derivatives or not.
     Expression_result translate_argument(
-        LLVM_code_generator &code_gen,
-        Function_context    &ctx,
         size_t              i,
         bool                wants_derivs) const MDL_FINAL
     {
         mi::mdl::DAG_node const *arg = m_call->get_argument(int(i));
 
-        return code_gen.translate_node(ctx, arg, m_resolver);
+        return m_code_gen.translate_node(arg, m_resolver);
     }
 
     /// Get the LLVM context data of the callee.
@@ -874,7 +865,6 @@ public:
     /// \param code_gen       the LLVM code generator
     /// \param inst           the function instance for this function call
     LLVM_context_data *get_callee_context(
-        LLVM_code_generator     &code_gen,
         Function_instance const &inst) const MDL_FINAL
     {
         mi::base::Handle<mi::mdl::Module const> owner;
@@ -883,8 +873,8 @@ public:
         }
 
         // enter this module, so we gen create the context data if it does not exists yet
-        LLVM_code_generator::MDL_module_scope scope(code_gen, owner.get());
-        return code_gen.get_or_create_context_data(owner.get(), inst);
+        LLVM_code_generator::MDL_module_scope scope(m_code_gen, owner.get());
+        return m_code_gen.get_or_create_context_data(owner.get(), inst);
     }
 
     /// Get the result type of the call.
@@ -901,14 +891,15 @@ public:
 
     /// Get the storage modifier of the i'th call argument.
     ///
-    /// \param ctx  the current function context
     /// \param i  the argument index
     Storage_modifier get_argument_storage_modifier(
-        Function_context &ctx,
         size_t           i) const MDL_FINAL
     {
-        if (!ctx.get_code_gen().target_supports_storage_spaces())
+        if (!m_code_gen.target_supports_storage_spaces()) {
             return SM_NORMAL;
+        }
+
+        Function_context &ctx = *m_code_gen.m_ctx;
 
         mi::mdl::DAG_node const *arg = m_call->get_argument(int(i));
 
@@ -953,15 +944,13 @@ public:
     }
 
     /// If this is a DS_INTRINSIC_DAG_FIELD_ACCESS, the accessed field, else -1.
-    int get_field_index(
-        LLVM_code_generator &code_gen,
-        mi::mdl::IAllocator *alloc) const MDL_FINAL
+    int get_field_index() const MDL_FINAL
     {
         if (m_call->get_semantic() == mi::mdl::IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS) {
             char const *call_name = m_call->get_name();
 
             mi::mdl::IType const *arg_type = get_argument_type(0)->skip_type_alias();
-            arg_type = code_gen.get_type_mapper().skip_deriv_type(arg_type);
+            arg_type = m_code_gen.get_type_mapper().skip_deriv_type(arg_type);
 
             switch (arg_type->get_kind()) {
             case mi::mdl::IType::TK_STRUCT:
@@ -971,19 +960,20 @@ public:
                     size_t             l          = strlen(type_name);
 
                     // skip derivative prefix
-                    if (call_name[0] == '#')
-                        call_name++;
+                    if (call_name[0] == '#') {
+                        ++call_name;
+                    }
 
                     char const *dot = nullptr;
                     // a valid getter name is <type_name> '.' <field_name>
                     if (strncmp(call_name, type_name, l) == 0 && call_name[l] == '.') {
                         dot = &call_name[l + 1];
 
-                        string f_name(alloc);
+                        string f_name(m_code_gen.get_allocator());
                         if (char const *n = strchr(dot, '(')) {
-                            f_name = string(dot, n - dot, alloc);
+                            f_name = string(dot, n - dot, m_code_gen.get_allocator());
                         } else {
-                            f_name = string(dot, alloc);
+                            f_name = string(dot, m_code_gen.get_allocator());
                         }
 
                         for (size_t i = 0, n = s_type->get_field_count(); i < n; ++i) {
@@ -1002,17 +992,8 @@ public:
                     char const *p = strchr(call_name, '.');
 
                     if (p != NULL) {
-                        string f_name(alloc);
-
-                        ++p;
-                        if (char const* n = strchr(p, '(')) {
-                            f_name = string(p, n - p, alloc);
-                        } else {
-                            f_name = string(p, alloc);
-                        }
-
                         int index = -1;
-                        switch (f_name[0]) {
+                        switch (p[1]) {
                         case 'x': index = 0; break;
                         case 'y': index = 1; break;
                         case 'z': index = 2; break;
@@ -1035,12 +1016,9 @@ public:
     /// If this is a ternary operator call, translate the first argument.
     ///
     /// \param code_gen  the LLVM code generator
-    /// \param ctx       the current function context
     /// \param true_bb   branch target for the true case
     /// \param false_bb  branch target for the false case
     void translate_boolean_branch(
-        LLVM_code_generator &code_gen,
-        Function_context    &ctx,
         llvm::BasicBlock    *true_bb,
         llvm::BasicBlock    *false_bb) const MDL_FINAL
     {
@@ -1051,8 +1029,7 @@ public:
             cond = m_call;
         }
 
-        code_gen.translate_boolean_branch(
-            ctx,
+        m_code_gen.translate_boolean_branch(
             m_resolver,
             cond,
             true_bb,
@@ -1080,9 +1057,9 @@ public:
     }
 
     /// Returns true, if the call should return derivatives.
-    bool returns_derivatives(LLVM_code_generator &code_gen) const MDL_FINAL
+    bool returns_derivatives() const MDL_FINAL
     {
-        return code_gen.get_type_mapper().is_deriv_type(m_call->get_type()->skip_type_alias());
+        return m_code_gen.get_type_mapper().is_deriv_type(m_call->get_type()->skip_type_alias());
     }
 
     /// Replace the call node.
@@ -1091,6 +1068,9 @@ public:
     void replace(DAG_call const *call) { m_call = call; }
 
 private:
+    /// The LLVM code generator.
+    LLVM_code_generator &m_code_gen;
+
     /// The DAG expression.
     mi::mdl::DAG_call const *m_call;
 
@@ -1344,6 +1324,7 @@ LLVM_code_generator::LLVM_code_generator(
 , m_module_cache(module_cache)
 , m_messages(messages)
 , m_module(NULL)
+, m_ctx(NULL)
 , m_exported_func_list(jitted_code->get_allocator())
 , m_user_state_store(to_store(
     options.get_binary_option(MDL_JIT_BINOPTION_LLVM_STATE_MODULE),
@@ -2103,9 +2084,10 @@ llvm::Type *LLVM_code_generator::lookup_type(
 
 // Get an LLVM type for the result of a call expression.
 llvm::Type *LLVM_code_generator::lookup_type_or_deriv_type(
-    Function_context &ctx,
     mi::mdl::ICall_expr const *call_expr)
 {
+    Function_context &ctx = *m_ctx;
+
     mi::mdl::IType const *res_type = call_expr->get_type()->skip_type_alias();
     mi::mdl::IType const *base_type = m_type_mapper.skip_deriv_type(res_type);
 
@@ -2124,9 +2106,10 @@ llvm::Type *LLVM_code_generator::lookup_type_or_deriv_type(
 // Get an LLVM type for the result of a expression.
 // If necessary, a derivative type will be used.
 llvm::Type *LLVM_code_generator::lookup_type_or_deriv_type(
-    Function_context &ctx,
     mi::mdl::IExpression const *expr)
 {
+    Function_context &ctx = *m_ctx;
+
     mi::mdl::IType const *res_type = expr->get_type()->skip_type_alias();
 
     if (m_cur_func_deriv_info != NULL && m_cur_func_deriv_info->is_derivative_expression(expr)) {
@@ -2368,6 +2351,14 @@ llvm::Module *LLVM_code_generator::compile_module(
         mi::mdl::IDefinition const *def = module->get_exported_definition(i);
 
         if (def->get_kind() == mi::mdl::IDefinition::DK_FUNCTION) {
+            mi::mdl::IDeclaration_function const *func_decl =
+                cast<mi::mdl::IDeclaration_function>(def->get_declaration());
+
+            if (func_decl->get_body() == NULL) {
+                // declaration only (in stdlib), ignore
+                continue;
+            }
+
             mi::mdl::IType_function const *f_tp   = cast<mi::mdl::IType_function>(def->get_type());
             mi::mdl::IType const          *ret_tp = f_tp->get_return_type();
 
@@ -2375,9 +2366,6 @@ llvm::Module *LLVM_code_generator::compile_module(
                 // this is a material constructor, ignore them
                 continue;
             }
-
-            mi::mdl::IDeclaration_function const *func_decl =
-                cast<mi::mdl::IDeclaration_function>(def->get_declaration());
 
             if (func_decl != NULL) {
                 // skip presets: this will insert the "real" body
@@ -2496,7 +2484,7 @@ llvm::Function  *LLVM_code_generator::compile_const_lambda(
         }
 
         // translate function body
-        Expression_result res = translate_node(context, lambda.get_body(), resolver);
+        Expression_result res = translate_node(lambda.get_body(), resolver);
         MDL_ASSERT(!get_state_param_usage() && "const function uses state");
 
         context.create_return(res.as_value(context));
@@ -2743,7 +2731,7 @@ llvm::Function *LLVM_code_generator::compile_switch_lambda(
 
             switch_instr->addCase(ctx.get_constant(int(i)), case_bb);
 
-            llvm::Value *val    = translate_node(ctx, root_expr, resolver).as_value(ctx);
+            llvm::Value *val    = translate_node(root_expr, resolver).as_value(ctx);
             llvm::Type  *val_tp = val->getType();
 
             if (val_tp == m_type_mapper.get_float_type()) {
@@ -2912,7 +2900,7 @@ llvm::Function *LLVM_code_generator::compile_lambda(
             m_deriv_infos = lambda.get_derivative_infos();
 
         // translate function body
-        Expression_result res = translate_node(context, lambda.get_body(), resolver);
+        Expression_result res = translate_node(lambda.get_body(), resolver);
         context.create_return(res.as_value(context));
     }
 
@@ -3035,6 +3023,9 @@ void LLVM_code_generator::set_llvm_function_attributes(
 {
     if (mark_noinline) {
         func->addFnAttr(llvm::Attribute::NoInline);
+    }
+    if (is_always_inline_enabled() && !func->hasFnAttribute(llvm::Attribute::NoInline)) {
+        func->addFnAttr(llvm::Attribute::AlwaysInline);
     }
     if (is_fast_math_enabled()) {
         func->addFnAttr("unsafe-fp-math", "true");
@@ -3228,7 +3219,7 @@ LLVM_context_data *LLVM_code_generator::declare_function(
             tp = m_type_mapper.lookup_deriv_type(p_type, arr_size);
 
             // pass by reference if supported by target
-            if (target_supports_pointers()) {
+            if (is_passed_by_reference(p_type, arr_size) || target_supports_pointers()) {
                 arg_types.push_back(Type_mapper::get_ptr(tp));
             } else {
                 arg_types.push_back(tp);
@@ -3256,6 +3247,7 @@ LLVM_context_data *LLVM_code_generator::declare_function(
         func_name.c_str(),
         m_module);
     set_llvm_function_attributes(func, /*mark_noinline=*/is_native);
+    add_generated_attributes(func);
     if (enforce_inlining) {
         func->addFnAttr(llvm::Attribute::AlwaysInline);
     }
@@ -3354,7 +3346,7 @@ LLVM_context_data *LLVM_code_generator::declare_function(
         m_state_usage_analysis.register_mapped_function(func, def->get_semantics());
     } else {
         // put this function on the wait queue
-        m_functions_q.push(Wait_entry(owner, inst));
+        m_functions_q.push(Owner_func_inst_pair(owner, inst));
 
         m_state_usage_analysis.register_function(func);
     }
@@ -3946,14 +3938,14 @@ void LLVM_code_generator::compile_function_instance(
         for (size_t i = 0, n = block->get_statement_count(); i < n; ++i) {
             mi::mdl::IStatement const *stmt = block->get_statement(i);
 
-            translate_statement(context, stmt);
+            translate_statement(stmt);
         }
     } else if (mi::mdl::IStatement_expression const *e_stmt = as<IStatement_expression>(body)) {
         // single expression body
         mi::mdl::IExpression const *expr = e_stmt->get_expression();
 
         bool returns_derivs = context.is_deriv_type(context.get_return_type());
-        Expression_result res = translate_expression(context, expr, returns_derivs);
+        Expression_result res = translate_expression(expr, returns_derivs);
         res.ensure_deriv_result(context, returns_derivs);
         context.create_return(res.as_value(context));
     }
@@ -3991,13 +3983,14 @@ void LLVM_code_generator::pop_module()
 }
 
 // Create extra instructions at function start for debugging.
-void LLVM_code_generator::enter_function(
-    Function_context &ctx,
-    llvm::Function   *entered)
+void LLVM_code_generator::create_enter_function_call(
+    llvm::Function *entered)
 {
     if (m_jit_dbg_mode == JDBG_NONE || m_target_lang != ICode_generator::TL_NATIVE) {
         return;
     }
+
+    Function_context &ctx = *m_ctx;
 
     llvm::StringRef name_ref = entered->getName();
 
@@ -4013,9 +4006,9 @@ void LLVM_code_generator::enter_function(
 
 // Translate a statement to LLVM IR.
 void LLVM_code_generator::translate_statement(
-    Function_context          &ctx,
     mi::mdl::IStatement const *stmt)
 {
+    Function_context &ctx = *m_ctx;
     ctx.set_curr_pos(stmt->access_position());
 
     switch (stmt->get_kind()) {
@@ -4023,47 +4016,48 @@ void LLVM_code_generator::translate_statement(
         // should not occur
         break;
     case mi::mdl::IStatement::SK_COMPOUND:
-        translate_block(ctx, cast<mi::mdl::IStatement_compound>(stmt));
+        translate_block(cast<mi::mdl::IStatement_compound>(stmt));
         return;
     case mi::mdl::IStatement::SK_DECLARATION:
-        translate_decl_stmt(ctx, cast<mi::mdl::IStatement_declaration>(stmt));
+        translate_decl_stmt(cast<mi::mdl::IStatement_declaration>(stmt));
         return;
     case mi::mdl::IStatement::SK_EXPRESSION:
         {
             mi::mdl::IStatement_expression const *expr_stmt =
                 cast<mi::mdl::IStatement_expression>(stmt);
             mi::mdl::IExpression const *expr = expr_stmt->get_expression();
-            if (expr != NULL)
-                translate_expression(ctx, expr, /*wants_derivs=*/ false);
+            if (expr != NULL) {
+                translate_expression(expr, /*wants_derivs=*/ false);
+            }
         }
         return;
     case mi::mdl::IStatement::SK_IF:
-        translate_if(ctx, cast<mi::mdl::IStatement_if>(stmt));
+        translate_if(cast<mi::mdl::IStatement_if>(stmt));
         return;
     case mi::mdl::IStatement::SK_CASE:
         // should not occur at top-level
         MDL_ASSERT(!"case statment not inside a switch");
         break;
     case mi::mdl::IStatement::SK_SWITCH:
-        translate_switch(ctx, cast<mi::mdl::IStatement_switch>(stmt));
+        translate_switch(cast<mi::mdl::IStatement_switch>(stmt));
         return;
     case mi::mdl::IStatement::SK_WHILE:
-        translate_while(ctx, cast<mi::mdl::IStatement_while>(stmt));
+        translate_while(cast<mi::mdl::IStatement_while>(stmt));
         return;
     case mi::mdl::IStatement::SK_DO_WHILE:
-        translate_do_while(ctx, cast<mi::mdl::IStatement_do_while>(stmt));
+        translate_do_while(cast<mi::mdl::IStatement_do_while>(stmt));
         return;
     case mi::mdl::IStatement::SK_FOR:
-        translate_for(ctx, cast<mi::mdl::IStatement_for>(stmt));
+        translate_for(cast<mi::mdl::IStatement_for>(stmt));
         return;
     case mi::mdl::IStatement::SK_BREAK:
-        translate_break(ctx, cast<mi::mdl::IStatement_break>(stmt));
+        translate_break(cast<mi::mdl::IStatement_break>(stmt));
         return;
     case mi::mdl::IStatement::SK_CONTINUE:
-        translate_continue(ctx, cast<mi::mdl::IStatement_continue>(stmt));
+        translate_continue(cast<mi::mdl::IStatement_continue>(stmt));
         return;
     case mi::mdl::IStatement::SK_RETURN:
-        translate_return(ctx, cast<mi::mdl::IStatement_return>(stmt));
+        translate_return(cast<mi::mdl::IStatement_return>(stmt));
         return;
     }
     MDL_ASSERT(!"unsupported statement kind");
@@ -4071,29 +4065,27 @@ void LLVM_code_generator::translate_statement(
 
 // Translate a block statement to LLVM IR.
 void LLVM_code_generator::translate_block(
-    Function_context                   &ctx,
     mi::mdl::IStatement_compound const *block)
 {
+    Function_context &ctx = *m_ctx;
     Function_context::Block_scope block_scope(ctx, block);
 
     for (size_t i = 0, n = block->get_statement_count(); i < n; ++i) {
         mi::mdl::IStatement const *stmt = block->get_statement(i);
-        translate_statement(ctx, stmt);
+        translate_statement(stmt);
     }
 }
 
 // Translate a declaration statement to LLVM IR.
 void LLVM_code_generator::translate_decl_stmt(
-    Function_context                      &ctx,
     mi::mdl::IStatement_declaration const *decl_stmt)
 {
     mi::mdl::IDeclaration const *decl = decl_stmt->get_declaration();
-    translate_declaration(ctx, decl);
+    translate_declaration(decl);
 }
 
 // Translate a declaration to LLVM IR.
 void LLVM_code_generator::translate_declaration(
-    Function_context            &ctx,
     mi::mdl::IDeclaration const *decl)
 {
     switch (decl->get_kind()) {
@@ -4117,7 +4109,7 @@ void LLVM_code_generator::translate_declaration(
         return;
 
     case mi::mdl::IDeclaration::DK_VARIABLE:
-        return translate_var_declaration(ctx, cast<mi::mdl::IDeclaration_variable>(decl));
+        return translate_var_declaration(cast<mi::mdl::IDeclaration_variable>(decl));
 
     case mi::mdl::IDeclaration::DK_FUNCTION:
         // should not occur, nested functions are not allowed in MDL
@@ -4129,9 +4121,10 @@ void LLVM_code_generator::translate_declaration(
 
 // Translate a variable declaration to LLVM IR.
 void LLVM_code_generator::translate_var_declaration(
-    Function_context                      &ctx,
     mi::mdl::IDeclaration_variable const *var_decl)
 {
+    Function_context &ctx = *m_ctx;
+
     for (size_t i = 0, n = var_decl->get_variable_count(); i < n; ++i) {
         mi::mdl::ISimple_name const *var_name  = var_decl->get_variable_name(i);
         mi::mdl::IDefinition const  *var_def   = var_name->get_definition();
@@ -4151,7 +4144,7 @@ void LLVM_code_generator::translate_var_declaration(
                     lookup_type(var_type, ctx.instantiate_type_size(var_type))));
         } else {
             // in all other case there must be an init expression
-            init = translate_expression(ctx, init_expr, is_deriv_var);
+            init = translate_expression(init_expr, is_deriv_var);
         }
         init.ensure_deriv_result(ctx, is_deriv_var);
 
@@ -4205,11 +4198,12 @@ void LLVM_code_generator::translate_var_declaration(
 
 // Create a branch from a boolean expression (with short cut evaluation).
 void LLVM_code_generator::translate_boolean_branch(
-    Function_context           &ctx,
     mi::mdl::IExpression const *cond,
     llvm::BasicBlock           *true_bb,
     llvm::BasicBlock           *false_bb)
 {
+    Function_context &ctx = *m_ctx;
+
     if (mi::mdl::IExpression_binary const *bin_expr = as<mi::mdl::IExpression_binary>(cond)) {
         mi::mdl::IExpression_binary::Operator op = bin_expr->get_operator();
 
@@ -4218,34 +4212,34 @@ void LLVM_code_generator::translate_boolean_branch(
             llvm::BasicBlock *imm_bb = ctx.create_bb("shortcut_imm");
 
             mi::mdl::IExpression const *lhs = bin_expr->get_left_argument();
-            translate_boolean_branch(ctx, lhs, imm_bb, false_bb);
+            translate_boolean_branch(lhs, imm_bb, false_bb);
 
             ctx->SetInsertPoint(imm_bb);
             mi::mdl::IExpression const *rhs = bin_expr->get_right_argument();
-            translate_boolean_branch(ctx, rhs, true_bb, false_bb);
+            translate_boolean_branch(rhs, true_bb, false_bb);
             return;
         } else if (op == mi::mdl::IExpression_binary::OK_LOGICAL_OR) {
             // shortcut OR evaluation
             llvm::BasicBlock *imm_bb = ctx.create_bb("shortcut_imm");
 
             mi::mdl::IExpression const *lhs = bin_expr->get_left_argument();
-            translate_boolean_branch(ctx, lhs, true_bb, imm_bb);
+            translate_boolean_branch(lhs, true_bb, imm_bb);
 
             ctx->SetInsertPoint(imm_bb);
             mi::mdl::IExpression const *rhs = bin_expr->get_right_argument();
-            translate_boolean_branch(ctx, rhs, true_bb, false_bb);
+            translate_boolean_branch(rhs, true_bb, false_bb);
             return;
         }
     } else if (mi::mdl::IExpression_unary const *un_expr = as<mi::mdl::IExpression_unary>(cond)) {
         if (un_expr->get_operator() == mi::mdl::IExpression_unary::OK_LOGICAL_NOT) {
             // logical not: just exchange true and false targets
             mi::mdl::IExpression const *arg = un_expr->get_argument();
-            translate_boolean_branch(ctx, arg, false_bb, true_bb); //-V764
+            translate_boolean_branch(arg, false_bb, true_bb); //-V764
             return;
         }
     }
     // default case
-    llvm::Value *c = translate_expression_value(ctx, cond, /*wants_derivs=*/ false);
+    llvm::Value *c = translate_expression_value(cond, /*wants_derivs=*/ false);
 
     if (c->getType() != m_type_mapper.get_predicate_type()) {
         // map to predicate type
@@ -4257,12 +4251,13 @@ void LLVM_code_generator::translate_boolean_branch(
 
 // Create a branch from a boolean expression (with short cut evaluation).
 void LLVM_code_generator::translate_boolean_branch(
-    Function_context                   &ctx,
     mi::mdl::ICall_name_resolver const *resolver,
     mi::mdl::DAG_node const            *cond,
     llvm::BasicBlock                   *true_bb,
     llvm::BasicBlock                   *false_bb)
 {
+    Function_context &ctx = *m_ctx;
+
     if (mi::mdl::DAG_call const *call = as<mi::mdl::DAG_call>(cond)) {
         mi::mdl::IDefinition::Semantics sema = call->get_semantic();
         if (mi::mdl::semantic_is_operator(sema)) {
@@ -4273,35 +4268,35 @@ void LLVM_code_generator::translate_boolean_branch(
                 llvm::BasicBlock *imm_bb = ctx.create_bb("shortcut_imm");
 
                 mi::mdl::DAG_node const *lhs = call->get_argument(0);
-                translate_boolean_branch(ctx, resolver, lhs, imm_bb, false_bb);
+                translate_boolean_branch(resolver, lhs, imm_bb, false_bb);
 
                 BB_store chain(m_curr_bb, get_next_bb());
                 ctx->SetInsertPoint(imm_bb);
                 mi::mdl::DAG_node const *rhs = call->get_argument(1);
-                translate_boolean_branch(ctx, resolver, rhs, true_bb, false_bb);
+                translate_boolean_branch(resolver, rhs, true_bb, false_bb);
                 return;
             } else if (op == mi::mdl::IExpression::OK_LOGICAL_OR) {
                 // shortcut OR evaluation
                 llvm::BasicBlock *imm_bb = ctx.create_bb("shortcut_imm");
 
                 mi::mdl::DAG_node const *lhs = call->get_argument(0);
-                translate_boolean_branch(ctx, resolver, lhs, true_bb, imm_bb);
+                translate_boolean_branch(resolver, lhs, true_bb, imm_bb);
 
                 BB_store chain(m_curr_bb, get_next_bb());
                 ctx->SetInsertPoint(imm_bb);
                 mi::mdl::DAG_node const *rhs = call->get_argument(1);
-                translate_boolean_branch(ctx, resolver, rhs, true_bb, false_bb);
+                translate_boolean_branch(resolver, rhs, true_bb, false_bb);
                 return;
             } else if (op == mi::mdl::IExpression::OK_LOGICAL_NOT) {
                 // logical not: just exchange true and false targets
                 mi::mdl::DAG_node const *arg = call->get_argument(0);
-                translate_boolean_branch(ctx, resolver, arg, false_bb, true_bb);
+                translate_boolean_branch(resolver, arg, false_bb, true_bb);
                 return;
             }
         }
     }
     // default case
-    llvm::Value *c = translate_node(ctx, cond, resolver).as_value(ctx);
+    llvm::Value *c = translate_node(cond, resolver).as_value(ctx);
 
     if (c->getType() != m_type_mapper.get_predicate_type()) {
         // map to predicate type
@@ -4313,9 +4308,10 @@ void LLVM_code_generator::translate_boolean_branch(
 
 // Translate an if statement to LLVM IR.
 void LLVM_code_generator::translate_if(
-    Function_context              &ctx,
     mi::mdl::IStatement_if const *if_stmt)
 {
+    Function_context &ctx = *m_ctx;
+
     mi::mdl::IExpression const *cond = if_stmt->get_condition();
     mi::mdl::IStatement const  *then_stmt = if_stmt->get_then_statement();
     mi::mdl::IStatement const  *else_stmt = if_stmt->get_else_statement();
@@ -4324,13 +4320,13 @@ void LLVM_code_generator::translate_if(
     llvm::BasicBlock *end_bb   = ctx.create_bb("if_end");
     llvm::BasicBlock *false_bb = else_stmt == NULL ? end_bb : ctx.create_bb("if_on_false");
 
-    translate_boolean_branch(ctx, cond, true_bb, false_bb);
+    translate_boolean_branch(cond, true_bb, false_bb);
 
     // create the then statement
     ctx->SetInsertPoint(true_bb);
     {
         Function_context::Block_scope block_scope(ctx, then_stmt);
-        translate_statement(ctx, then_stmt);
+        translate_statement(then_stmt);
     }
     ctx->CreateBr(end_bb);
 
@@ -4339,7 +4335,7 @@ void LLVM_code_generator::translate_if(
         ctx->SetInsertPoint(false_bb);
         {
             Function_context::Block_scope block_scope(ctx, else_stmt);
-            translate_statement(ctx, else_stmt);
+            translate_statement(else_stmt);
         }
         ctx->CreateBr(end_bb);
     }
@@ -4348,9 +4344,10 @@ void LLVM_code_generator::translate_if(
 
 // Translate a switch statement to LLVM IR.
 void LLVM_code_generator::translate_switch(
-    Function_context                 &ctx,
     mi::mdl::IStatement_switch const *switch_stmt)
 {
+    Function_context &ctx = *m_ctx;
+
     size_t n_cases = switch_stmt->get_case_count();
 
     // find the default case if any
@@ -4375,7 +4372,7 @@ void LLVM_code_generator::translate_switch(
     Function_context::Break_destination scope(ctx, end_bb);
 
     llvm::Value *expr = translate_expression_value(
-        ctx, switch_stmt->get_condition(), /*wants_derivs=*/ false);
+        switch_stmt->get_condition(), /*wants_derivs=*/ false);
 
     llvm::SwitchInst *switch_instr = ctx->CreateSwitch(expr, default_bb, unsigned(n_cases));
 
@@ -4405,7 +4402,7 @@ void LLVM_code_generator::translate_switch(
 
                 switch_instr->addCase(ctx.get_constant(v), case_bb);
             }
-            translate_block(ctx, case_stmt);
+            translate_block(case_stmt);
         }
     }
     // fall-through from last case
@@ -4415,9 +4412,10 @@ void LLVM_code_generator::translate_switch(
 
 // Translate a while statement to LLVM IR.
 void LLVM_code_generator::translate_while(
-    Function_context                &ctx,
     mi::mdl::IStatement_while const *while_stmt)
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::BasicBlock *start_bb = ctx.create_bb("while_condition");
     llvm::BasicBlock *body_bb  = ctx.create_bb("while_body");
     llvm::BasicBlock *end_bb   = ctx.create_bb("after_while");
@@ -4431,7 +4429,7 @@ void LLVM_code_generator::translate_while(
     ctx->SetInsertPoint(start_bb);
 
     mi::mdl::IExpression const *cond = while_stmt->get_condition();
-    translate_boolean_branch(ctx, cond, body_bb, end_bb);
+    translate_boolean_branch(cond, body_bb, end_bb);
 
     // create loop body code
     ctx->SetInsertPoint(body_bb);
@@ -4439,7 +4437,7 @@ void LLVM_code_generator::translate_while(
         Function_context::Block_scope block_scope(ctx, while_stmt);
 
         mi::mdl::IStatement const *body = while_stmt->get_body();
-        translate_statement(ctx, body);
+        translate_statement(body);
     }
     ctx->CreateBr(start_bb);
 
@@ -4449,9 +4447,10 @@ void LLVM_code_generator::translate_while(
 
 // Translate a do-while statement to LLVM IR.
 void LLVM_code_generator::translate_do_while(
-    Function_context                   &ctx,
     mi::mdl::IStatement_do_while const *do_stmt)
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::BasicBlock *cond_bb = ctx.create_bb("do_while_condition");
     llvm::BasicBlock *body_bb = ctx.create_bb("do_while_body");
     llvm::BasicBlock *end_bb  = ctx.create_bb("after_do_while");
@@ -4467,14 +4466,14 @@ void LLVM_code_generator::translate_do_while(
         Function_context::Block_scope block_scope(ctx, do_stmt);
 
         mi::mdl::IStatement const *body = do_stmt->get_body();
-        translate_statement(ctx, body);
+        translate_statement(body);
     }
     ctx->CreateBr(cond_bb);
 
     // create check-abort-condition code
     ctx->SetInsertPoint(cond_bb);
     mi::mdl::IExpression const *cond = do_stmt->get_condition();
-    translate_boolean_branch(ctx, cond, body_bb, end_bb);
+    translate_boolean_branch(cond, body_bb, end_bb);
 
     // after do-while
     ctx->SetInsertPoint(end_bb);
@@ -4482,9 +4481,10 @@ void LLVM_code_generator::translate_do_while(
 
 // Translate a for statement to LLVM IR.
 void LLVM_code_generator::translate_for(
-    Function_context              &ctx,
     mi::mdl::IStatement_for const *for_stmt)
 {
+    Function_context &ctx = *m_ctx;
+
     // the for loop creates a scope (for declarations inside the for init)
     Function_context::Block_scope block_scope(ctx, for_stmt);
 
@@ -4501,14 +4501,14 @@ void LLVM_code_generator::translate_for(
 
     if (mi::mdl::IStatement const *init = for_stmt->get_init()) {
         // create the init statement
-        translate_statement(ctx, init);
+        translate_statement(init);
     }
     ctx->CreateBr(test_bb);
 
     // create test block if needed
     if (cond != NULL) {
         ctx->SetInsertPoint(test_bb);
-        translate_boolean_branch(ctx, cond, body_bb, end_bb);
+        translate_boolean_branch(cond, body_bb, end_bb);
     }
 
     // create body code
@@ -4517,14 +4517,14 @@ void LLVM_code_generator::translate_for(
         mi::mdl::IStatement const *body = for_stmt->get_body();
 
         Function_context::Block_scope body_block_scope(ctx, body);
-        translate_statement(ctx, body);
+        translate_statement(body);
     }
     ctx->CreateBr(upd_bb);
 
     // create update block if needed
     if (upd != NULL) {
         ctx->SetInsertPoint(upd_bb);
-        translate_expression(ctx, upd, /*wants_derivs=*/ false);
+        translate_expression(upd, /*wants_derivs=*/ false);
         ctx->CreateBr(test_bb);
     }
 
@@ -4534,29 +4534,33 @@ void LLVM_code_generator::translate_for(
 
 // Translate a break statement to LLVM IR.
 void LLVM_code_generator::translate_break(
-    Function_context                &ctx,
     mi::mdl::IStatement_break const *break_stmt)
 {
+    Function_context &ctx = *m_ctx;
+
     ctx.create_jmp(ctx.tos_break());
 }
 
 // Translate a continue statement to LLVM IR.
 void LLVM_code_generator::translate_continue(
-    Function_context                   &ctx,
     mi::mdl::IStatement_continue const *cont_stmt)
 {
+    Function_context &ctx = *m_ctx;
+
     ctx.create_jmp(ctx.tos_continue());
 }
 
 // Translate a return statement to LLVM IR.
 void LLVM_code_generator::translate_return(
-    Function_context                 &ctx,
     mi::mdl::IStatement_return const *ret_stmt)
 {
+    Function_context &ctx = *m_ctx;
+
     if (mi::mdl::IExpression const *expr = ret_stmt->get_expression()) {
-        llvm::Type *return_type = ctx.get_return_type();
-        bool returns_derivs = ctx.is_deriv_type(return_type);
-        Expression_result res = translate_expression(ctx, expr, returns_derivs);
+        llvm::Type *return_type   = ctx.get_return_type();
+        bool       returns_derivs = ctx.is_deriv_type(return_type);
+
+        Expression_result res = translate_expression(expr, returns_derivs);
         res.ensure_deriv_result(ctx, returns_derivs);
         ctx.create_return(res.as_value(ctx));
     } else {
@@ -4566,11 +4570,12 @@ void LLVM_code_generator::translate_return(
 
 // Calculate &matrix[index], index is assured to be in bounds
 llvm::Value *LLVM_code_generator::calc_matrix_index_in_bounds(
-    Function_context            &ctx,
     mi::mdl::IType_matrix const *m_type,
     llvm::Value                 *matrix_ptr,
     llvm::Value                 *index)
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::Type      *tp   = lookup_type(m_type);
     llvm::ArrayType *a_tp = llvm::cast<llvm::ArrayType>(tp);
     llvm::Type      *e_tp = a_tp->getArrayElementType();
@@ -4605,10 +4610,11 @@ llvm::Value *LLVM_code_generator::calc_matrix_index_in_bounds(
 // returns a select operation returning index 0 if the index is out of bounds.
 // Otherwise just returns the index.
 llvm::Value *LLVM_code_generator::adapt_index_for_bounds_check(
-    Function_context &ctx,
     llvm::Value      *index,
     llvm::Value      *bound)
 {
+    Function_context &ctx = *m_ctx;
+
     // with instancing, all arrays have at least size 1, so we map out of bounds accesses to index 0
     if (m_bounds_check_exception_disabled && m_enable_instancing) {
         return ctx.create_select_if_in_bounds(
@@ -4619,12 +4625,13 @@ llvm::Value *LLVM_code_generator::adapt_index_for_bounds_check(
 
 // Translate an l-value index expression to LLVM IR.
 llvm::Value *LLVM_code_generator::translate_lval_index_expression(
-    Function_context        &ctx,
     mi::mdl::IType const    *comp_type,
     llvm::Value             *comp_ptr,
     llvm::Value             *index,
     mi::mdl::Position const *index_pos)
 {
+    Function_context &ctx = *m_ctx;
+
     // instantiate type
     int imm_size = ctx.instantiate_type_size(comp_type);
 
@@ -4635,7 +4642,7 @@ llvm::Value *LLVM_code_generator::translate_lval_index_expression(
         if (!a_type->is_immediate_sized() && imm_size < 0) {
             // generate bounds check for deferred sized array
             bound = ctx.get_deferred_size_from_ptr(comp_ptr);
-            index = adapt_index_for_bounds_check(ctx, index, bound);
+            index = adapt_index_for_bounds_check(index, bound);
 
             // array_desc<T> access
             llvm::Value *base = ctx.get_deferred_base_from_ptr(comp_ptr);
@@ -4644,21 +4651,21 @@ llvm::Value *LLVM_code_generator::translate_lval_index_expression(
             // generate bounds check for immediate sized array
             size_t arr_size = imm_size >= 0 ? imm_size : a_type->get_size();
             bound = ctx.get_constant(arr_size);
-            index = adapt_index_for_bounds_check(ctx, index, bound);
+            index = adapt_index_for_bounds_check(index, bound);
 
             elem_ptr = ctx.create_simple_gep_in_bounds(comp_ptr, index);
         }
     } else if (mi::mdl::IType_matrix const *m_type = as<mi::mdl::IType_matrix>(comp_type)) {
         // generate bounds check for matrices
         bound = ctx.get_constant(size_t(m_type->get_columns()));
-        index = adapt_index_for_bounds_check(ctx, index, bound);
+        index = adapt_index_for_bounds_check(index, bound);
 
-        elem_ptr = calc_matrix_index_in_bounds(ctx, m_type, comp_ptr, index);
+        elem_ptr = calc_matrix_index_in_bounds(m_type, comp_ptr, index);
     } else {
         // generate bounds check for vector type
         mi::mdl::IType_vector const *v_type = cast<mi::mdl::IType_vector>(comp_type);
         bound = ctx.get_constant(size_t(v_type->get_size()));
-        index = adapt_index_for_bounds_check(ctx, index, bound);
+        index = adapt_index_for_bounds_check(index, bound);
 
         elem_ptr = ctx.create_simple_gep_in_bounds(comp_ptr, index);
     }
@@ -4679,7 +4686,6 @@ llvm::Value *LLVM_code_generator::translate_lval_index_expression(
 
 // Translate a dual l-value index expression to LLVM IR.
 void LLVM_code_generator::translate_lval_index_expression_dual(
-    Function_context        &ctx,
     mi::mdl::IType const    *comp_type,
     llvm::Value             *comp_val_ptr,
     llvm::Value             *comp_dx_ptr,
@@ -4690,6 +4696,8 @@ void LLVM_code_generator::translate_lval_index_expression_dual(
     llvm::Value             *&adr_dx,
     llvm::Value             *&adr_dy)
 {
+    Function_context &ctx = *m_ctx;
+
     // skip derivative type, we already know, that it is a derivative type
     comp_type = m_type_mapper.skip_deriv_type(comp_type);
 
@@ -4702,7 +4710,7 @@ void LLVM_code_generator::translate_lval_index_expression_dual(
         if (!a_type->is_immediate_sized() && imm_size < 0) {
             // generate bounds check for deferred sized array
             bound = ctx.get_deferred_size_from_ptr(comp_val_ptr);
-            index = adapt_index_for_bounds_check(ctx, index, bound);
+            index = adapt_index_for_bounds_check(index, bound);
 
             // array_desc<T> access
             llvm::Value *base_val = ctx.get_deferred_base_from_ptr(comp_val_ptr);
@@ -4715,7 +4723,7 @@ void LLVM_code_generator::translate_lval_index_expression_dual(
             // generate bounds check for immediate sized array
             size_t arr_size = imm_size >= 0 ? imm_size : a_type->get_size();
             bound = ctx.get_constant(arr_size);
-            index = adapt_index_for_bounds_check(ctx, index, bound);
+            index = adapt_index_for_bounds_check(index, bound);
 
             adr_val = ctx.create_simple_gep_in_bounds(comp_val_ptr, index);
             adr_dx  = ctx.create_simple_gep_in_bounds(comp_dx_ptr, index);
@@ -4724,16 +4732,16 @@ void LLVM_code_generator::translate_lval_index_expression_dual(
     } else if (mi::mdl::IType_matrix const *m_type = as<mi::mdl::IType_matrix>(comp_type)) {
         // generate bounds check for matrices
         bound = ctx.get_constant(size_t(m_type->get_columns()));
-        index = adapt_index_for_bounds_check(ctx, index, bound);
+        index = adapt_index_for_bounds_check(index, bound);
 
-        adr_val = calc_matrix_index_in_bounds(ctx, m_type, comp_val_ptr, index);
-        adr_dx  = calc_matrix_index_in_bounds(ctx, m_type, comp_dx_ptr, index);
-        adr_dy  = calc_matrix_index_in_bounds(ctx, m_type, comp_dy_ptr, index);
+        adr_val = calc_matrix_index_in_bounds(m_type, comp_val_ptr, index);
+        adr_dx  = calc_matrix_index_in_bounds(m_type, comp_dx_ptr, index);
+        adr_dy  = calc_matrix_index_in_bounds(m_type, comp_dy_ptr, index);
     } else {
         // generate bounds check for vector type
         mi::mdl::IType_vector const *v_type = cast<mi::mdl::IType_vector>(comp_type);
         bound = ctx.get_constant(size_t(v_type->get_size()));
-        index = adapt_index_for_bounds_check(ctx, index, bound);
+        index = adapt_index_for_bounds_check(index, bound);
 
         adr_val = ctx.create_simple_gep_in_bounds(comp_val_ptr, index);
         adr_dx  = ctx.create_simple_gep_in_bounds(comp_dx_ptr, index);
@@ -4756,27 +4764,28 @@ void LLVM_code_generator::translate_lval_index_expression_dual(
 
 // Translate an r-value index expression to LLVM IR.
 Expression_result LLVM_code_generator::translate_index_expression(
-    Function_context        &ctx,
     mi::mdl::IType const    *comp_type,
     Expression_result       comp,
     llvm::Value             *index,
     mi::mdl::Position const *index_pos)
 {
+    Function_context &ctx = *m_ctx;
+
     // handle LLVM result with derivatives
     if (m_type_mapper.is_deriv_type(comp.get_value_type())) {
         mi::mdl::IType const *val_type = m_type_mapper.skip_deriv_type(comp_type);
 
         Expression_result val = Expression_result::value(ctx.get_dual_val(comp.as_value(ctx)));
         Expression_result val_elem = translate_index_expression(
-            ctx, val_type, val, index, index_pos);
+            val_type, val, index, index_pos);
 
         Expression_result dx = Expression_result::value(ctx.get_dual_dx(comp.as_value(ctx)));
         Expression_result dx_elem = translate_index_expression(
-            ctx, val_type, dx, index, index_pos);
+            val_type, dx, index, index_pos);
 
         Expression_result dy = Expression_result::value(ctx.get_dual_dy(comp.as_value(ctx)));
         Expression_result dy_elem = translate_index_expression(
-            ctx, val_type, dy, index, index_pos);
+            val_type, dy, index, index_pos);
 
         llvm::Value *res = ctx.get_dual(
             val_elem.as_value(ctx),
@@ -4791,7 +4800,7 @@ Expression_result LLVM_code_generator::translate_index_expression(
         mi::mdl::IType const *val_type = m_type_mapper.skip_deriv_type(comp_type);
 
         Expression_result res = translate_index_expression(
-            ctx, val_type, comp, index, index_pos);
+            val_type, comp, index, index_pos);
         return res;
     }
 
@@ -4806,7 +4815,7 @@ Expression_result LLVM_code_generator::translate_index_expression(
             // generate bounds check for deferred sized array
             llvm::Value *compound = comp.as_value(ctx);
             bound = ctx.get_deferred_size(compound);
-            index = adapt_index_for_bounds_check(ctx, index, bound);
+            index = adapt_index_for_bounds_check(index, bound);
 
             // array_desc<T> access
             llvm::Value *base = ctx.get_deferred_base(compound);
@@ -4815,7 +4824,7 @@ Expression_result LLVM_code_generator::translate_index_expression(
             // generate bounds check for immediate sized array
             size_t arr_size = imm_size >= 0 ? imm_size : a_type->get_size();
             bound = ctx.get_constant(arr_size);
-            index = adapt_index_for_bounds_check(ctx, index, bound);
+            index = adapt_index_for_bounds_check(index, bound);
 
             if (comp.is_offset()) {
                 llvm::ArrayType *at_llvm =
@@ -4840,7 +4849,6 @@ Expression_result LLVM_code_generator::translate_index_expression(
 
                 int cur_offs = 0;
                 return translate_sl_value(
-                    ctx,
                     comp.get_offset_kind() == Expression_result::OK_RO_DATA_SEGMENT
                     ? SM_RODATA : SM_PARAMETER,
                     a_type->get_element_type(),
@@ -4853,14 +4861,14 @@ Expression_result LLVM_code_generator::translate_index_expression(
     } else if (mi::mdl::IType_matrix const *m_type = as<mi::mdl::IType_matrix>(comp_type)) {
         // generate bounds check for matrices
         bound = ctx.get_constant(size_t(m_type->get_columns()));
-        index = adapt_index_for_bounds_check(ctx, index, bound);
+        index = adapt_index_for_bounds_check(index, bound);
 
-        elem_ptr = calc_matrix_index_in_bounds(ctx, m_type, comp.as_ptr(ctx), index);
+        elem_ptr = calc_matrix_index_in_bounds(m_type, comp.as_ptr(ctx), index);
     } else {
         // generate bounds check for vector types
         mi::mdl::IType_vector const *v_type = cast<mi::mdl::IType_vector>(comp_type);
         bound = ctx.get_constant(size_t(v_type->get_size()));
-        index = adapt_index_for_bounds_check(ctx, index, bound);
+        index = adapt_index_for_bounds_check(index, bound);
 
         if (llvm::isa<llvm::VectorType>(comp.get_value_type())) {
             // extracting a vector component
@@ -4891,9 +4899,10 @@ Expression_result LLVM_code_generator::translate_index_expression(
 
 // Translate an l-value expression to LLVM IR.
 llvm::Value *LLVM_code_generator::translate_lval_expression(
-    Function_context           &ctx,
     mi::mdl::IExpression const *expr)
 {
+    Function_context &ctx = *m_ctx;
+
     switch (expr->get_kind()) {
     case mi::mdl::IExpression::EK_REFERENCE:
         {
@@ -4928,14 +4937,14 @@ llvm::Value *LLVM_code_generator::translate_lval_expression(
             switch (bin_exp->get_operator()) {
             case mi::mdl::IExpression_binary::OK_ARRAY_INDEX:
                 {
-                    llvm::Value             *comp_ptr  = translate_lval_expression(ctx, lhs);
+                    llvm::Value             *comp_ptr  = translate_lval_expression(lhs);
                     llvm::Value             *index     =
-                        translate_expression_value(ctx, rhs, /*wants_derivs=*/ false);
+                        translate_expression_value(rhs, /*wants_derivs=*/ false);
                     mi::mdl::Position const *index_pos = &rhs->access_position();
                     mi::mdl::IType const    *comp_type = lhs->get_type()->skip_type_alias();
 
                     return translate_lval_index_expression(
-                        ctx, comp_type, comp_ptr, index, index_pos);
+                        comp_type, comp_ptr, index, index_pos);
                 }
 
             case mi::mdl::IExpression_binary::OK_SELECT:
@@ -4946,7 +4955,7 @@ llvm::Value *LLVM_code_generator::translate_lval_expression(
 
                     MDL_ASSERT(def->get_kind() == mi::mdl::IDefinition::DK_MEMBER);
 
-                    llvm::Value *l   = translate_lval_expression(ctx, lhs);
+                    llvm::Value *l   = translate_lval_expression(lhs);
                     llvm::Value *idx = ctx.get_constant(int(def->get_field_index()));
                     return ctx.create_simple_gep_in_bounds(l, idx);
                 }
@@ -4968,12 +4977,13 @@ llvm::Value *LLVM_code_generator::translate_lval_expression(
 
 // Translate a dual l-value expression to LLVM IR.
 void LLVM_code_generator::translate_lval_expression_dual(
-    Function_context           &ctx,
     mi::mdl::IExpression const *expr,
     llvm::Value                *&adr_val,
     llvm::Value                *&adr_dx,
     llvm::Value                *&adr_dy)
 {
+    Function_context &ctx = *m_ctx;
+
     switch (expr->get_kind()) {
     case mi::mdl::IExpression::EK_REFERENCE:
         {
@@ -5010,18 +5020,18 @@ void LLVM_code_generator::translate_lval_expression_dual(
             mi::mdl::IExpression const        *rhs     = bin_exp->get_right_argument();
 
             llvm::Value *val_ptr, *dx_ptr, *dy_ptr;
-            translate_lval_expression_dual(ctx, lhs, val_ptr, dx_ptr, dy_ptr);
+            translate_lval_expression_dual(lhs, val_ptr, dx_ptr, dy_ptr);
 
             switch (bin_exp->get_operator()) {
             case mi::mdl::IExpression_binary::OK_ARRAY_INDEX:
                 {
                     llvm::Value             *index     =
-                        translate_expression_value(ctx, rhs, /*wants_derivs=*/ false);
+                        translate_expression_value(rhs, /*wants_derivs=*/ false);
                     mi::mdl::Position const *index_pos = &rhs->access_position();
                     mi::mdl::IType const    *comp_type = lhs->get_type()->skip_type_alias();
 
                     translate_lval_index_expression_dual(
-                        ctx, comp_type, val_ptr, dx_ptr, dy_ptr, index, index_pos,
+                        comp_type, val_ptr, dx_ptr, dy_ptr, index, index_pos,
                         adr_val, adr_dx, adr_dy);
                     return;
                 }
@@ -5058,19 +5068,21 @@ void LLVM_code_generator::translate_lval_expression_dual(
 
 // Translate an expression to LLVM IR, returning its value.
 llvm::Value *LLVM_code_generator::translate_expression_value(
-    Function_context           &ctx,
     mi::mdl::IExpression const *expr,
     bool                       wants_derivs)
 {
-    return translate_expression(ctx, expr, wants_derivs).as_value(ctx);
+    Function_context &ctx = *m_ctx;
+
+    return translate_expression(expr, wants_derivs).as_value(ctx);
 }
 
 // Translate an (r-value) expression to LLVM IR.
 Expression_result LLVM_code_generator::translate_expression(
-    Function_context           &ctx,
     mi::mdl::IExpression const *expr,
     bool                       wants_derivs)
 {
+    Function_context &ctx = *m_ctx;
+
     ctx.set_curr_pos(expr->access_position());
 
     Expression_result res = Expression_result::unset();
@@ -5080,7 +5092,7 @@ Expression_result LLVM_code_generator::translate_expression(
         // should not occur
         break;
     case mi::mdl::IExpression::EK_LITERAL:
-        res = translate_literal(ctx, cast<mi::mdl::IExpression_literal>(expr));
+        res = translate_literal(cast<mi::mdl::IExpression_literal>(expr));
         break;
 
     case mi::mdl::IExpression::EK_REFERENCE:
@@ -5186,27 +5198,26 @@ Expression_result LLVM_code_generator::translate_expression(
         break;
 
     case mi::mdl::IExpression::EK_UNARY:
-        res = translate_unary(ctx, cast<mi::mdl::IExpression_unary>(expr), wants_derivs);
+        res = translate_unary(cast<mi::mdl::IExpression_unary>(expr), wants_derivs);
         break;
 
     case mi::mdl::IExpression::EK_BINARY:
-        res = translate_binary(ctx, cast<mi::mdl::IExpression_binary>(expr), wants_derivs);
+        res = translate_binary(cast<mi::mdl::IExpression_binary>(expr), wants_derivs);
         break;
 
     case mi::mdl::IExpression::EK_CONDITIONAL:
-        res = translate_conditional(
-            ctx, cast<mi::mdl::IExpression_conditional>(expr), wants_derivs);
+        res = translate_conditional(cast<mi::mdl::IExpression_conditional>(expr), wants_derivs);
         break;
 
     case mi::mdl::IExpression::EK_CALL:
         {
-            Call_ast_expr call = cast<mi::mdl::IExpression_call>(expr);
-            res = translate_call(ctx, &call);
+            Call_ast_expr call(*this, cast<mi::mdl::IExpression_call>(expr));
+            res = translate_call(&call);
         }
         break;
 
     case mi::mdl::IExpression::EK_LET:
-        res = translate_let(ctx, cast<mi::mdl::IExpression_let>(expr), wants_derivs);
+        res = translate_let(cast<mi::mdl::IExpression_let>(expr), wants_derivs);
         break;
     }
 
@@ -5308,6 +5319,9 @@ bool LLVM_code_generator::can_be_stored_in_ro_segment(IType const *t)
         // and we put only big array/structs in the RO segment
         return false;
 
+    case IType::TK_PTR:
+    case IType::TK_REF:
+    case IType::TK_VOID:
     case IType::TK_AUTO:
     case IType::TK_ERROR:
         return false;
@@ -5380,10 +5394,11 @@ bool LLVM_code_generator::is_stored_in_ro_data_segment(mi::mdl::IValue const *v)
 
 // Creates a global constant for a value in the LLVM IR.
 llvm::Value *LLVM_code_generator::create_global_const(
-    Function_context               &ctx,
     mi::mdl::IValue_compound const *v,
     bool                           &is_ro_segment_ofs)
 {
+    Function_context &ctx = *m_ctx;
+
     is_ro_segment_ofs = false;
 
     mi::mdl::IType const *v_type = v->get_type();
@@ -5416,9 +5431,10 @@ llvm::Value *LLVM_code_generator::create_global_const(
 
 // Translate a value to LLVM IR.
 Expression_result LLVM_code_generator::translate_value(
-    Function_context      &ctx,
     mi::mdl::IValue const *v)
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::Value *res;
     if (mi::mdl::IValue_resource const *r = as<mi::mdl::IValue_resource>(v)) {
         size_t idx = ctx.get_resource_index(r);
@@ -5445,7 +5461,7 @@ Expression_result LLVM_code_generator::translate_value(
             if (it == m_global_const_map.end()) {
                 // first time we see this constant, create it
                 llvm::Value *cv = create_global_const(
-                    ctx, cast<mi::mdl::IValue_compound>(non_deriv_v), is_ofs);
+                    cast<mi::mdl::IValue_compound>(non_deriv_v), is_ofs);
 
                 // cache it
                 m_global_const_map[non_deriv_v] = Value_offset_pair(cv, is_ofs);
@@ -5473,7 +5489,7 @@ Expression_result LLVM_code_generator::translate_value(
                         non_deriv_v_type);
                 }
 
-                llvm::Value *ro_seg = get_ro_data_segment(ctx);
+                llvm::Value *ro_seg = get_ro_data_segment();
                 llvm::Value *cv     = ctx->CreateGEP(ro_seg, res);
 
                 // cast the blob to the right type
@@ -5500,11 +5516,12 @@ Expression_result LLVM_code_generator::translate_value(
 
 // Translate a literal expression to LLVM IR.
 Expression_result LLVM_code_generator::translate_literal(
-    Function_context                   &ctx,
     mi::mdl::IExpression_literal const *lit)
 {
+    Function_context &ctx = *m_ctx;
+
     mi::mdl::IValue const *v = lit->get_value();
-    Expression_result res(translate_value(ctx, v));
+    Expression_result res(translate_value(v));
 
     // need to return a derivative value?
     if (is_deriv_expr(lit)) {
@@ -5515,10 +5532,11 @@ Expression_result LLVM_code_generator::translate_literal(
 
 // Translate an unary expression without side-effect to LLVM IR.
 llvm::Value *LLVM_code_generator::translate_unary(
-    Function_context                     &ctx,
     mi::mdl::IExpression_unary::Operator op,
     llvm::Value                          *arg)
 {
+    Function_context &ctx = *m_ctx;
+
     switch (op) {
     case mi::mdl::IExpression_unary::OK_LOGICAL_NOT:
         // logical not is only allowed on bool (and bool vectors)
@@ -5661,7 +5679,6 @@ llvm::Value *LLVM_code_generator::translate_unary(
 
 // Translate an unary expression to LLVM IR.
 Expression_result LLVM_code_generator::translate_unary(
-    Function_context                 &ctx,
     mi::mdl::IExpression_unary const *un_expr,
     bool                             wants_derivs)
 {
@@ -5673,8 +5690,8 @@ Expression_result LLVM_code_generator::translate_unary(
     case mi::mdl::IExpression_unary::OK_NEGATIVE:
         {
             llvm::Value *arg = translate_expression_value(
-                ctx, un_expr->get_argument(), wants_derivs);
-            return Expression_result::value(translate_unary(ctx, op, arg));
+                un_expr->get_argument(), wants_derivs);
+            return Expression_result::value(translate_unary(op, arg));
         }
         break;
 
@@ -5682,9 +5699,9 @@ Expression_result LLVM_code_generator::translate_unary(
     case mi::mdl::IExpression_unary::OK_PRE_DECREMENT:
     case mi::mdl::IExpression_unary::OK_POST_INCREMENT:
     case mi::mdl::IExpression_unary::OK_POST_DECREMENT:
-        return translate_inplace_change_expression(ctx, un_expr);
+        return translate_inplace_change_expression(un_expr);
     case mi::mdl::IExpression_unary::OK_CAST:
-        return translate_cast_expression(ctx, un_expr, wants_derivs);
+        return translate_cast_expression(un_expr, wants_derivs);
     }
     MDL_ASSERT(!"unsupported unary operator kind");
     return Expression_result::undef(lookup_type(un_expr->get_type()));
@@ -5692,13 +5709,14 @@ Expression_result LLVM_code_generator::translate_unary(
 
 // Helper for pre/post inc/decrement.
 void LLVM_code_generator::do_inner_inc_dec(
-    Function_context                     &ctx,
     mi::mdl::IExpression_unary::Operator op,
     llvm::Type                           *tp,
     llvm::Value                          *old_v,
     llvm::Value                          *&r,
     llvm::Value                          *&v)
 {
+    Function_context &ctx = *m_ctx;
+
     if (tp->isIntOrIntVectorTy()) {
         llvm::Value *one = llvm::ConstantInt::get(tp, uint64_t(1));
         switch (op) {
@@ -5765,11 +5783,12 @@ void LLVM_code_generator::do_inner_inc_dec(
 
 // Translate an inplace change expression.
 Expression_result LLVM_code_generator::translate_inplace_change_expression(
-    Function_context                 &ctx,
     mi::mdl::IExpression_unary const *un_expr)
 {
+    Function_context &ctx = *m_ctx;
+
     mi::mdl::IExpression const *arg = un_expr->get_argument();
-    llvm::Value                *adr = translate_lval_expression(ctx, arg);
+    llvm::Value                *adr = translate_lval_expression(arg);
 
     llvm::Value *old_v = ctx->CreateLoad(adr);
     llvm::Type  *tp    = old_v->getType();
@@ -5790,14 +5809,14 @@ Expression_result LLVM_code_generator::translate_inplace_change_expression(
             llvm::Value *e_old_v = ctx->CreateExtractValue(old_v, idxes);
 
             llvm::Value *e_r, *e_v;
-            do_inner_inc_dec(ctx, op, e_tp, e_old_v, e_r, e_v);
+            do_inner_inc_dec(op, e_tp, e_old_v, e_r, e_v);
 
             r = ctx->CreateInsertValue(r, e_r, idxes);
             v = ctx->CreateInsertValue(v, e_v, idxes);
         }
     } else {
         // scalar or vector type
-        do_inner_inc_dec(ctx, op, tp, old_v, r, v);
+        do_inner_inc_dec(op, tp, old_v, r, v);
     }
 
     ctx->CreateStore(v, adr);
@@ -5806,10 +5825,11 @@ Expression_result LLVM_code_generator::translate_inplace_change_expression(
 
 // Translate an MDL 1.5 cast expression.
 Expression_result LLVM_code_generator::translate_cast_expression(
-    Function_context                 &ctx,
     Expression_result                &arg,
     mi::mdl::IType const             *res_type)
 {
+    Function_context &ctx = *m_ctx;
+
     if (is<mi::mdl::IType_struct>(res_type)) {
         // struct-to-struct cast
         llvm::Type *llvm_type = lookup_type(res_type);
@@ -5823,22 +5843,22 @@ Expression_result LLVM_code_generator::translate_cast_expression(
 
 // Translate an MDL 1.5 cast expression.
 Expression_result LLVM_code_generator::translate_cast_expression(
-    Function_context                 &ctx,
     mi::mdl::IExpression_unary const *un_expr,
     bool                             wants_derivs)
 {
-    Expression_result res = translate_expression(ctx, un_expr->get_argument(), wants_derivs);
+    Expression_result res = translate_expression(un_expr->get_argument(), wants_derivs);
     mi::mdl::IType const *res_type = un_expr->get_type()->skip_type_alias();
 
-    return translate_cast_expression(ctx, res, res_type);
+    return translate_cast_expression(res, res_type);
 }
 
 // Translate a binary expression to LLVM IR.
 Expression_result LLVM_code_generator::translate_binary(
-    Function_context                  &ctx,
     mi::mdl::IExpression_binary const *call,
     bool                              wants_derivs)
 {
+    Function_context &ctx = *m_ctx;
+
     mi::mdl::IExpression const *lhs = call->get_left_argument();
     mi::mdl::IExpression const *rhs = call->get_right_argument();
 
@@ -5853,7 +5873,7 @@ Expression_result LLVM_code_generator::translate_binary(
             int index = def->get_field_index();
 
             llvm::Value *v;
-            Expression_result  compound    = translate_expression(ctx, lhs, wants_derivs);
+            Expression_result  compound    = translate_expression(lhs, wants_derivs);
             llvm::Type        *compound_tp = compound.get_value_type();
             if (llvm::isa<llvm::VectorType>(compound_tp)) {
                 // extracting a vector component
@@ -5877,11 +5897,11 @@ Expression_result LLVM_code_generator::translate_binary(
     case mi::mdl::IExpression_binary::OK_ARRAY_INDEX:
         {
             mi::mdl::IType const    *comp_type = lhs->get_type()->skip_type_alias();
-            Expression_result       comp       = translate_expression(ctx, lhs, wants_derivs);
+            Expression_result       comp       = translate_expression(lhs, wants_derivs);
             llvm::Value             *index     =
-                translate_expression_value(ctx, rhs, /*wants_derivs=*/ false);
+                translate_expression_value(rhs, /*wants_derivs=*/ false);
             mi::mdl::Position const *index_pos = &rhs->access_position();
-            return translate_index_expression(ctx, comp_type, comp, index, index_pos);
+            return translate_index_expression(comp_type, comp, index, index_pos);
         }
         break;
 
@@ -5898,7 +5918,7 @@ Expression_result LLVM_code_generator::translate_binary(
     case mi::mdl::IExpression_binary::OK_BITWISE_OR:
     case mi::mdl::IExpression_binary::OK_LOGICAL_AND:
     case mi::mdl::IExpression_binary::OK_LOGICAL_OR:
-        return Expression_result::value(translate_binary_no_side_effect(ctx, call, wants_derivs));
+        return Expression_result::value(translate_binary_no_side_effect(call, wants_derivs));
 
     case mi::mdl::IExpression_binary::OK_LESS:
     case mi::mdl::IExpression_binary::OK_LESS_OR_EQUAL:
@@ -5912,10 +5932,10 @@ Expression_result LLVM_code_generator::translate_binary(
             mi::mdl::IType const *l_type = lhs->get_type();
             mi::mdl::IType const *r_type = rhs->get_type();
 
-            llvm::Value *lv = translate_expression_value(ctx, lhs, /*wants_derivs=*/ false);
-            llvm::Value *rv = translate_expression_value(ctx, rhs, /*wants_derivs=*/ false);
+            llvm::Value *lv = translate_expression_value(lhs, /*wants_derivs=*/ false);
+            llvm::Value *rv = translate_expression_value(rhs, /*wants_derivs=*/ false);
 
-            return translate_compare(ctx, op, l_type, lv, r_type, rv);
+            return translate_compare(op, l_type, lv, r_type, rv);
         }
 
     case mi::mdl::IExpression_binary::OK_ASSIGN:
@@ -5930,12 +5950,12 @@ Expression_result LLVM_code_generator::translate_binary(
     case mi::mdl::IExpression_binary::OK_BITWISE_AND_ASSIGN:
     case mi::mdl::IExpression_binary::OK_BITWISE_XOR_ASSIGN:
     case mi::mdl::IExpression_binary::OK_BITWISE_OR_ASSIGN:
-        return translate_assign(ctx, call, wants_derivs);
+        return translate_assign(call, wants_derivs);
 
     case mi::mdl::IExpression_binary::OK_SEQUENCE:
         // just execute all expressions
-        (void) translate_expression(ctx, lhs, /*wants_derivs=*/ false);
-        return translate_expression(ctx, rhs, wants_derivs);
+        (void) translate_expression(lhs, /*wants_derivs=*/ false);
+        return translate_expression(rhs, wants_derivs);
     }
     MDL_ASSERT(!"unsupported binary operator kind");
     Expression_result res = Expression_result::undef(lookup_type(call->get_type()));
@@ -5955,10 +5975,11 @@ static bool maybe_zero(llvm::Value *v)
 
 // Translate a side effect free binary expression to LLVM IR.
 llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
-    Function_context                  &ctx,
     mi::mdl::IExpression_binary const *call,
     bool                              wants_derivs)
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::Value *res = NULL;
 
     mi::mdl::IExpression const *lhs = call->get_left_argument();
@@ -5971,7 +5992,7 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
     case mi::mdl::IExpression_binary::OK_MULTIPLY:
     case mi::mdl::IExpression_binary::OK_MULTIPLY_ASSIGN:
         return translate_multiply(
-            ctx, lookup_type_or_deriv_type(ctx, call), lhs, rhs, wants_derivs);
+            lookup_type_or_deriv_type(call), lhs, rhs, wants_derivs);
 
     case mi::mdl::IExpression_binary::OK_LOGICAL_AND:
     case mi::mdl::IExpression_binary::OK_LOGICAL_OR:
@@ -5983,7 +6004,7 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
             llvm::BasicBlock *false_bb = ctx.create_bb("sc_false");
             llvm::BasicBlock *end_bb   = ctx.create_bb("sc_end");
 
-            translate_boolean_branch(ctx, call, true_bb, false_bb);
+            translate_boolean_branch(call, true_bb, false_bb);
 
             ctx->SetInsertPoint(true_bb);
             ctx->CreateStore(ctx.get_constant(true), tmp);
@@ -6010,10 +6031,10 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
         break;
     }
 
-    llvm::Value *l = translate_expression_value(ctx, lhs, wants_derivs);
-    llvm::Value *r = translate_expression_value(ctx, rhs, wants_derivs);
+    llvm::Value *l = translate_expression_value(lhs, wants_derivs);
+    llvm::Value *r = translate_expression_value(rhs, wants_derivs);
 
-    llvm::Type *res_type = lookup_type_or_deriv_type(ctx, call);
+    llvm::Type *res_type = lookup_type_or_deriv_type(call);
     if (m_type_mapper.is_deriv_type(res_type)) {
         llvm::Type *res_val_type = m_type_mapper.get_deriv_base_type(res_type);
         if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(res_val_type)) {
@@ -6036,7 +6057,7 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
                     r_elem = ctx.extract_dual(r, unsigned(i));
                 }
 
-                llvm::Value *tmp = translate_binary_basic(ctx, op, l_elem, r_elem, call_pos);
+                llvm::Value *tmp = translate_binary_basic(op, l_elem, r_elem, call_pos);
                 if (tmp == NULL) {
                     res = NULL;
                     break;
@@ -6048,7 +6069,7 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
             res = ctx.get_dual(res, res_dx, res_dy);
         } else {
             // not array typed (and derivable, thus not integer-based)
-            res = translate_binary_basic(ctx, op, l, r, call_pos);
+            res = translate_binary_basic(op, l, r, call_pos);
         }
     } else if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(res_type)) {
         res_type = a_tp->getArrayElementType();
@@ -6073,7 +6094,7 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
                 r_elem = ctx->CreateExtractValue(r, idxes);
             }
 
-            llvm::Value *tmp = translate_binary_basic(ctx, op, l_elem, r_elem, call_pos);
+            llvm::Value *tmp = translate_binary_basic(op, l_elem, r_elem, call_pos);
             if (tmp == NULL) {
                 res = NULL;
                 break;
@@ -6103,7 +6124,7 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
 
                 llvm::Value *r_elem = ctx->CreateExtractElement(r, idx);
 
-                llvm::Value *tmp = translate_binary_basic(ctx, op, l_elem, r_elem, call_pos);
+                llvm::Value *tmp = translate_binary_basic(op, l_elem, r_elem, call_pos);
                 if (tmp == NULL) {
                     res = NULL;
                     break;
@@ -6111,11 +6132,11 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
                 res = ctx->CreateInsertElement(res, tmp, idx);
             }
         } else {
-            res = translate_binary_basic(ctx, op, l, r, call_pos);
+            res = translate_binary_basic(op, l, r, call_pos);
         }
     } else {
         // not array typed, and not vector typed division
-        res = translate_binary_basic(ctx, op, l, r, call_pos);
+        res = translate_binary_basic(op, l, r, call_pos);
     }
 
     if (res == NULL) {
@@ -6127,9 +6148,10 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
 
 // Translate a side effect free binary expression to LLVM IR.
 llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
-    Function_context          &ctx,
     mi::mdl::ICall_expr const *bin_expr)
 {
+    Function_context &ctx = *m_ctx;
+
     mi::mdl::IDefinition::Semantics sema = bin_expr->get_semantics();
     mi::mdl::IExpression_binary::Operator op =
         mi::mdl::IExpression_binary::Operator(semantic_to_operator(sema));
@@ -6143,30 +6165,30 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
     case mi::mdl::IExpression_binary::OK_ARRAY_INDEX:
         {
             mi::mdl::IType const *comp_type = bin_expr->get_argument_type(0);
-            Expression_result    comp = bin_expr->translate_argument(*this, ctx, 0, derivs);
+            Expression_result    comp = bin_expr->translate_argument(0, derivs);
             llvm::Value          *index =
-                bin_expr->translate_argument_value(*this, ctx, 1, /*wants_derivs=*/ false);
+                bin_expr->translate_argument(1, /*wants_derivs=*/ false).as_value(ctx);
             mi::mdl::Position    *index_pos = NULL;
 
             ctx.set_curr_pos(bin_expr);
 
             Expression_result res = translate_index_expression(
-                ctx, comp_type, comp, index, index_pos);
+                comp_type, comp, index, index_pos);
             return res.as_value(ctx);
         }
 
     case mi::mdl::IExpression_binary::OK_MULTIPLY:
         {
             mi::mdl::IType const *l_type = bin_expr->get_argument_type(0);
-            llvm::Value          *l = bin_expr->translate_argument_value(*this, ctx, 0, derivs);
+            llvm::Value          *l = bin_expr->translate_argument(0, derivs).as_value(ctx);
 
             mi::mdl::IType const *r_type = bin_expr->get_argument_type(1);
-            llvm::Value          *r = bin_expr->translate_argument_value(*this, ctx, 1, derivs);
+            llvm::Value          *r = bin_expr->translate_argument(1, derivs).as_value(ctx);
 
             ctx.set_curr_pos(bin_expr);
 
             return translate_multiply(
-                ctx, lookup_type_or_deriv_type(ctx, bin_expr), l_type, l, r_type, r);
+                lookup_type_or_deriv_type(bin_expr), l_type, l, r_type, r);
         }
 
     case mi::mdl::IExpression_binary::OK_LOGICAL_AND:
@@ -6183,7 +6205,7 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
                 llvm::BasicBlock *false_bb = ctx.create_bb("sc_false");
                 llvm::BasicBlock *end_bb   = ctx.create_bb("sc_end");
 
-                bin_expr->translate_boolean_branch(*this, ctx, true_bb, false_bb);
+                bin_expr->translate_boolean_branch(true_bb, false_bb);
 
                 ctx->SetInsertPoint(true_bb);
                 ctx->CreateStore(ctx.get_constant(true), tmp);
@@ -6214,23 +6236,23 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
     case mi::mdl::IExpression_binary::OK_EQUAL:
     case mi::mdl::IExpression_binary::OK_NOT_EQUAL:
         {
-            llvm::Value *l = bin_expr->translate_argument_value(*this, ctx, 0, derivs);
-            llvm::Value *r = bin_expr->translate_argument_value(*this, ctx, 1, derivs);
+            llvm::Value *l = bin_expr->translate_argument(0, derivs).as_value(ctx);
+            llvm::Value *r = bin_expr->translate_argument(1, derivs).as_value(ctx);
 
             mi::mdl::IType const *l_type = bin_expr->get_argument_type(0);
             mi::mdl::IType const *r_type = bin_expr->get_argument_type(1);
 
             ctx.set_curr_pos(bin_expr);
 
-            return translate_compare(ctx, op, l_type, l, r_type, r).as_value(ctx);
+            return translate_compare(op, l_type, l, r_type, r).as_value(ctx);
         }
 
     default:
         break;
     }
 
-    llvm::Value *l = bin_expr->translate_argument_value(*this, ctx, 0, derivs);
-    llvm::Value *r = bin_expr->translate_argument_value(*this, ctx, 1, derivs);
+    llvm::Value *l = bin_expr->translate_argument(0, derivs).as_value(ctx);
+    llvm::Value *r = bin_expr->translate_argument(1, derivs).as_value(ctx);
     mi::mdl::Position const *bin_expr_pos = bin_expr->get_position();
 
     llvm::Type *res_type = lookup_type(bin_expr->get_type());
@@ -6258,7 +6280,7 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
 
                 ctx.set_curr_pos(bin_expr);
 
-                llvm::Value *tmp = translate_binary_basic(ctx, op, l_elem, r_elem, bin_expr_pos);
+                llvm::Value *tmp = translate_binary_basic(op, l_elem, r_elem, bin_expr_pos);
                 if (tmp == NULL) {
                     res = NULL;
                     break;
@@ -6270,7 +6292,7 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
             res = ctx.get_dual(res, res_dx, res_dy);
         } else {
             // not array typed
-            res = translate_binary_basic(ctx, op, l, r, bin_expr_pos);
+            res = translate_binary_basic(op, l, r, bin_expr_pos);
         }
     } else if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(res_type)) {
         // assume element-wise operation
@@ -6295,7 +6317,7 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
 
             ctx.set_curr_pos(bin_expr);
 
-            llvm::Value *tmp = translate_binary_basic(ctx, op, l_elem, r_elem, bin_expr_pos);
+            llvm::Value *tmp = translate_binary_basic(op, l_elem, r_elem, bin_expr_pos);
             if (tmp == NULL) {
                 res = NULL;
                 break;
@@ -6306,7 +6328,7 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
         // not array typed
         ctx.set_curr_pos(bin_expr);
 
-        res = translate_binary_basic(ctx, op, l, r, bin_expr_pos);
+        res = translate_binary_basic(op, l, r, bin_expr_pos);
     }
 
     if (res == NULL) {
@@ -6319,12 +6341,13 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
 // Translate a side effect free binary simple expressions that require only one
 // instruction to LLVM IR.
 llvm::Value *LLVM_code_generator::translate_binary_basic(
-    Function_context                      &ctx,
     mi::mdl::IExpression_binary::Operator op,
     llvm::Value                           *l,
     llvm::Value                           *r,
     mi::mdl::Position const               *expr_pos)
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::Type  *l_type = l->getType();
     llvm::Type  *r_type = r->getType();
     llvm::Value *rhs   = r;
@@ -6580,13 +6603,14 @@ llvm::Value *LLVM_code_generator::translate_binary_basic(
 
 // Translate a multiplication expression to LLVM IR.
 llvm::Value *LLVM_code_generator::translate_multiply(
-    Function_context           &ctx,
     llvm::Type                 *res_llvm_type,
     mi::mdl::IType const       *l_type,
     llvm::Value                *l,
     mi::mdl::IType const       *r_type,
     llvm::Value                *r)
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::Value *res = NULL;
 
     l_type = m_type_mapper.skip_deriv_type(l_type->skip_type_alias());
@@ -6598,7 +6622,6 @@ llvm::Value *LLVM_code_generator::translate_multiply(
             if (mi::mdl::IType_matrix const *R_type = as<mi::mdl::IType_matrix>(r_type)) {
                 // matrix * matrix
                 res = do_matrix_multiplication_MxM_deriv(
-                    ctx,
                     res_llvm_type,
                     l,
                     r,
@@ -6611,11 +6634,11 @@ llvm::Value *LLVM_code_generator::translate_multiply(
                 int cols = L_type->get_columns();
 
                 res = do_matrix_multiplication_MxV_deriv(
-                    ctx, res_llvm_type, l, r, rows, cols);
+                    res_llvm_type, l, r, rows, cols);
             } else {
                 // matrix * scalar element-wise multiplication
                 res = do_matrix_multiplication_MxS_deriv(
-                    ctx, res_llvm_type, l, r);
+                    res_llvm_type, l, r);
             }
         } else if (mi::mdl::IType_matrix const *R_type = as<mi::mdl::IType_matrix>(r_type)) {
             if (is<mi::mdl::IType_vector>(l_type)) {
@@ -6624,11 +6647,11 @@ llvm::Value *LLVM_code_generator::translate_multiply(
                 int cols = R_type->get_columns();
 
                 res = do_matrix_multiplication_VxM_deriv(
-                    ctx, res_llvm_type, l, r, rows, cols);
+                    res_llvm_type, l, r, rows, cols);
             } else {
                 // matrix * scalar element-wise multiplication
                 res = do_matrix_multiplication_MxS_deriv(
-                    ctx, res_llvm_type, r, l);
+                    res_llvm_type, r, l);
             }
         } else {
             llvm::Type *elem_type = m_type_mapper.get_deriv_base_type(res_llvm_type);
@@ -6643,7 +6666,6 @@ llvm::Value *LLVM_code_generator::translate_multiply(
             if (mi::mdl::IType_matrix const *R_type = as<mi::mdl::IType_matrix>(r_type)) {
                 // vector * matrix
                 res = do_matrix_multiplication_VxM(
-                    ctx,
                     res_llvm_type,
                     l,
                     r,
@@ -6657,7 +6679,6 @@ llvm::Value *LLVM_code_generator::translate_multiply(
             if (mi::mdl::IType_matrix const *R_type = as<mi::mdl::IType_matrix>(r_type)) {
                 // matrix * matrix
                 res = do_matrix_multiplication_MxM(
-                    ctx,
                     res_llvm_type,
                     l,
                     r,
@@ -6667,7 +6688,6 @@ llvm::Value *LLVM_code_generator::translate_multiply(
             } else if (is<mi::mdl::IType_vector>(r_type)) {
                 // matrix * vector
                 res = do_matrix_multiplication_MxV(
-                    ctx,
                     res_llvm_type,
                     l,
                     r,
@@ -6675,12 +6695,12 @@ llvm::Value *LLVM_code_generator::translate_multiply(
                     L_type->get_columns());
             } else {
                 // matrix * scalar element-wise multiplication
-                res = do_matrix_multiplication_MxS(ctx, res_llvm_type, l, r);
+                res = do_matrix_multiplication_MxS(res_llvm_type, l, r);
             }
         } else {
             if (is<mi::mdl::IType_matrix>(r_type)) {
                 // scalar * matrix element-wise multiplication
-                res = do_matrix_multiplication_MxS(ctx, res_llvm_type, r, l);
+                res = do_matrix_multiplication_MxS(res_llvm_type, r, l);
             } else {
                 // scalar * vector or scalar * color or scalar * scalar element-wise multiplication
                 res = ctx.create_mul(res_llvm_type, l, r);
@@ -6697,27 +6717,27 @@ llvm::Value *LLVM_code_generator::translate_multiply(
 
 // Translate a multiplication expression to LLVM IR.
 llvm::Value *LLVM_code_generator::translate_multiply(
-    Function_context           &ctx,
     llvm::Type                 *res_llvm_type,
     mi::mdl::IExpression const *lhs,
     mi::mdl::IExpression const *rhs,
     bool                       wants_derivs)
 {
     mi::mdl::IType const *l_type = lhs->get_type();
-    llvm::Value          *l      = translate_expression_value(ctx, lhs, wants_derivs);
+    llvm::Value          *l      = translate_expression_value(lhs, wants_derivs);
     mi::mdl::IType const *r_type = rhs->get_type();
-    llvm::Value          *r      = translate_expression_value(ctx, rhs, wants_derivs);
+    llvm::Value          *r      = translate_expression_value(rhs, wants_derivs);
 
-    return translate_multiply(ctx, res_llvm_type, l_type, l, r_type, r);
+    return translate_multiply(res_llvm_type, l_type, l, r_type, r);
 }
 
 // Create a matrix by scalar multiplication.
 llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxS(
-    Function_context &ctx,
     llvm::Type       *res_llvm_type,
     llvm::Value      *l,
     llvm::Value      *r)
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::Type *m_tp = res_llvm_type;
 
     if (llvm::VectorType *v_tp = llvm::dyn_cast<llvm::VectorType>(m_tp)) {
@@ -6751,40 +6771,42 @@ llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxS(
 
 // Create a matrix by scalar multiplication with derivation.
 llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxS_deriv(
-    Function_context &ctx,
     llvm::Type *res_llvm_type,
     llvm::Value *l,
     llvm::Value *r)
 {
+    Function_context &ctx = *m_ctx;
+
     // (A + Bx + Cy)(d + ex + fy) = Ad + (Ae + Bd)x + (Af + Cd)y
 
     llvm::Type *elem_type = m_type_mapper.get_deriv_base_type(res_llvm_type);
 
     llvm::Value *val = do_matrix_multiplication_MxS(
-        ctx, elem_type, ctx.get_dual_val(l), ctx.get_dual_val(r));
+        elem_type, ctx.get_dual_val(l), ctx.get_dual_val(r));
 
     llvm::Value *dx_1 = do_matrix_multiplication_MxS(
-        ctx, elem_type, ctx.get_dual_val(l), ctx.get_dual_dx(r));
+        elem_type, ctx.get_dual_val(l), ctx.get_dual_dx(r));
     llvm::Value *dx_2 = do_matrix_multiplication_MxS(
-        ctx, elem_type, ctx.get_dual_dx(l), ctx.get_dual_val(r));
-    llvm::Value *dx = do_matrix_addition(ctx, elem_type, dx_1, dx_2);
+        elem_type, ctx.get_dual_dx(l), ctx.get_dual_val(r));
+    llvm::Value *dx = do_matrix_addition(elem_type, dx_1, dx_2);
 
     llvm::Value *dy_1 = do_matrix_multiplication_MxS(
-        ctx, elem_type, ctx.get_dual_val(l), ctx.get_dual_dy(r));
+        elem_type, ctx.get_dual_val(l), ctx.get_dual_dy(r));
     llvm::Value *dy_2 = do_matrix_multiplication_MxS(
-        ctx, elem_type, ctx.get_dual_dy(l), ctx.get_dual_val(r));
-    llvm::Value *dy = do_matrix_addition(ctx, elem_type, dy_1, dy_2);
+        elem_type, ctx.get_dual_dy(l), ctx.get_dual_val(r));
+    llvm::Value *dy = do_matrix_addition(elem_type, dy_1, dy_2);
 
     return ctx.get_dual(val, dx, dy);
 }
 
 // Create a matrix by matrix addition.
 llvm::Value *LLVM_code_generator::do_matrix_addition(
-    Function_context &ctx,
     llvm::Type *res_llvm_type,
     llvm::Value *l,
     llvm::Value *r)
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::Type *m_tp = res_llvm_type;
 
     if (llvm::VectorType *v_tp = llvm::dyn_cast<llvm::VectorType>(m_tp)) {
@@ -6814,10 +6836,11 @@ llvm::Value *LLVM_code_generator::do_matrix_addition(
 
 // Translate an assign expression to LLVM IR.
 Expression_result LLVM_code_generator::translate_assign(
-    Function_context                  &ctx,
     mi::mdl::IExpression_binary const *call,
     bool                              wants_derivs)
 {
+    Function_context &ctx = *m_ctx;
+
     mi::mdl::IExpression const *lhs = call->get_left_argument();
     mi::mdl::IExpression const *rhs = call->get_right_argument();
 
@@ -6835,7 +6858,7 @@ Expression_result LLVM_code_generator::translate_assign(
     mi::mdl::IExpression_binary::Operator op = call->get_operator();
     switch (op) {
     case mi::mdl::IExpression_binary::OK_ASSIGN:
-        res = translate_expression_value(ctx, rhs, lhs_is_deriv);
+        res = translate_expression_value(rhs, lhs_is_deriv);
         break;
 
     case mi::mdl::IExpression_binary::OK_MULTIPLY_ASSIGN:
@@ -6849,7 +6872,7 @@ Expression_result LLVM_code_generator::translate_assign(
     case mi::mdl::IExpression_binary::OK_BITWISE_AND_ASSIGN:
     case mi::mdl::IExpression_binary::OK_BITWISE_XOR_ASSIGN:
     case mi::mdl::IExpression_binary::OK_BITWISE_OR_ASSIGN:
-        res = translate_binary_no_side_effect(ctx, call, lhs_is_deriv);
+        res = translate_binary_no_side_effect(call, lhs_is_deriv);
         break;
 
     default:
@@ -6863,7 +6886,7 @@ Expression_result LLVM_code_generator::translate_assign(
 
     if (lhs_base_is_deriv) {
         llvm::Value *adr_val, *adr_dx, *adr_dy;
-        translate_lval_expression_dual(ctx, lhs, adr_val, adr_dx, adr_dy);
+        translate_lval_expression_dual(lhs, adr_val, adr_dx, adr_dy);
 
         // if the left hand side was not a derivative value (for example an integer in a
         // derivative struct), first convert it to a dual with dx and dy set to zero
@@ -6884,7 +6907,7 @@ Expression_result LLVM_code_generator::translate_assign(
         ctx->CreateStore(ctx.get_dual_dx(res),  adr_dx);
         ctx->CreateStore(ctx.get_dual_dy(res),  adr_dy);
     } else {
-        llvm::Value *adr = translate_lval_expression(ctx, lhs);
+        llvm::Value *adr = translate_lval_expression(lhs);
 
         // check if the result must be converted into a vector first
         llvm::Type *res_tp = llvm::cast<llvm::PointerType>(adr->getType())->getElementType();
@@ -6903,13 +6926,14 @@ Expression_result LLVM_code_generator::translate_assign(
 
 // Translate a binary compare expression to LLVM IR.
 Expression_result LLVM_code_generator::translate_compare(
-    Function_context                      &ctx,
     mi::mdl::IExpression_binary::Operator op,
     mi::mdl::IType const                  *l_type,
     llvm::Value                           *lv,
     mi::mdl::IType const                  *r_type,
     llvm::Value                           *rv)
 {
+    Function_context &ctx = *m_ctx;
+
     bool conv_l = false;
     bool conv_r = false;
 
@@ -7133,16 +7157,17 @@ Expression_result LLVM_code_generator::translate_compare(
 
 // Translate a conditional expression to LLVM IR.
 Expression_result LLVM_code_generator::translate_conditional(
-    Function_context                       &ctx,
     mi::mdl::IExpression_conditional const *cond_expr,
     bool                                   wants_derivs)
 {
+    Function_context &ctx = *m_ctx;
+
     // C-like ternary operator with lazy evaluation
     llvm::BasicBlock *on_true_bb  = ctx.create_bb("?:_true");
     llvm::BasicBlock *on_false_bb = ctx.create_bb("?:_false");
     llvm::BasicBlock *end_bb      = ctx.create_bb("?:_end");
 
-    translate_boolean_branch(ctx, cond_expr->get_condition(), on_true_bb, on_false_bb);
+    translate_boolean_branch(cond_expr->get_condition(), on_true_bb, on_false_bb);
 
     // as we go back and forth, we have to backup and restore the insert point of the context,
     // as translating expressions may insert new basic blocks, like done here
@@ -7165,11 +7190,11 @@ Expression_result LLVM_code_generator::translate_conditional(
 
     // first only translate the true and false expressions
     ctx->SetInsertPoint(on_true_bb);
-    llvm::Value *true_res = translate_expression_value(ctx, cond_expr->get_true(), wants_derivs);
+    llvm::Value *true_res = translate_expression_value(cond_expr->get_true(), wants_derivs);
     Insert_point true_insert_point(ctx);
 
     ctx->SetInsertPoint(on_false_bb);
-    llvm::Value *false_res = translate_expression_value(ctx, cond_expr->get_false(), wants_derivs);
+    llvm::Value *false_res = translate_expression_value(cond_expr->get_false(), wants_derivs);
     Insert_point false_insert_point(ctx);
 
     // check whether we got any derivatives to return
@@ -7178,7 +7203,7 @@ Expression_result LLVM_code_generator::translate_conditional(
         m_type_mapper.is_deriv_type(false_res->getType());
     if (got_derivs) {
         // yes, store as derivative
-        res_type = lookup_type_or_deriv_type(ctx, cond_expr);
+        res_type = lookup_type_or_deriv_type(cond_expr);
     } else {
         // no, so just return the values without derivatives
         res_type = m_type_mapper.lookup_type(
@@ -7210,18 +7235,19 @@ Expression_result LLVM_code_generator::translate_conditional(
 
 // Translate a DAG intrinsic call expression to LLVM IR.
 Expression_result LLVM_code_generator::translate_dag_intrinsic(
-    Function_context &ctx,
     ICall_expr const *call_expr)
 {
+    Function_context &ctx = *m_ctx;
+
     mi::mdl::IDefinition::Semantics sema = call_expr->get_semantics();
 
-    bool derivs = call_expr->returns_derivatives(*this);
+    bool derivs = call_expr->returns_derivatives();
 
     switch (sema) {
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS:
         {
-            llvm::Value *compound = call_expr->translate_argument_value(*this, ctx, 0, derivs);
-            int         index     = call_expr->get_field_index(*this, get_allocator());
+            llvm::Value *compound = call_expr->translate_argument(0, derivs).as_value(ctx);
+            int         index     = call_expr->get_field_index();
 
             if (index >= 0) {
                 return Expression_result::value(ctx.create_extract_allow_deriv(compound, index));
@@ -7237,7 +7263,7 @@ Expression_result LLVM_code_generator::translate_dag_intrinsic(
             mi::mdl::IValue_int const *v =
                 mi::mdl::cast<mi::mdl::IValue_int>(call_expr->get_const_argument(0));
             set_object_id(v->get_value());
-            return call_expr->translate_argument(*this, ctx, 1, derivs);
+            return call_expr->translate_argument(1, derivs);
         }
         break;
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_SET_TRANSFORMS:
@@ -7247,13 +7273,13 @@ Expression_result LLVM_code_generator::translate_dag_intrinsic(
             mi::mdl::IValue_matrix const *m_o2w =
                 mi::mdl::cast<mi::mdl::IValue_matrix>(call_expr->get_const_argument(1));
             set_transforms(m_w2o, m_o2w);
-            return call_expr->translate_argument(*this, ctx, 2, derivs);
+            return call_expr->translate_argument(2, derivs);
         }
         break;
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_MAKE_DERIV:
         {
             Expression_result res = call_expr->translate_argument(
-                *this, ctx, 0, /*wants_derivs=*/ true);  // for DAG wants_derivs is ignored
+                0, /*wants_derivs=*/ true);  // for DAG wants_derivs is ignored
             res.ensure_deriv_result(ctx, true);  // always ensure we get a derivative
             return res;
         }
@@ -7263,9 +7289,10 @@ Expression_result LLVM_code_generator::translate_dag_intrinsic(
 }
 
 // Create the float4x4 identity matrix.
-llvm::Value *LLVM_code_generator::create_identity_matrix(
-    Function_context &ctx)
+llvm::Value *LLVM_code_generator::create_identity_matrix()
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::Constant *elems[16];
 
     // flat matrix values
@@ -7300,9 +7327,10 @@ llvm::Value *LLVM_code_generator::create_identity_matrix(
 
 // Translate a call expression to LLVM IR.
 Expression_result LLVM_code_generator::translate_call(
-    Function_context &ctx,
     ICall_expr const *call_expr)
 {
+    Function_context &ctx = *m_ctx;
+
     // Note: normally one would expect that ONLY user defined function can be transformed.
     // Unfortunately we need at least select operators, so we move the transformation
     // step to the general call... Beware, this allows various bad things, but in the end
@@ -7324,32 +7352,32 @@ Expression_result LLVM_code_generator::translate_call(
     // check first if it is something we know.
     if (call_expr->is_array_constructor()) {
         // handle array constructors
-        return translate_array_constructor_call(ctx, call_expr);
+        return translate_array_constructor_call(call_expr);
     }
 
     mi::mdl::IDefinition::Semantics sema = call_expr->get_semantics();
 
-    bool return_derivs = call_expr->returns_derivatives(*this);
+    bool return_derivs = call_expr->returns_derivatives();
 
     if (semantic_is_operator(sema)) {
         mi::mdl::IExpression::Operator op = semantic_to_operator(sema);
 
         if (is_unary_operator(op)) {
             mi::mdl::IExpression_unary::Operator uop = mi::mdl::IExpression_unary::Operator(op);
-            Expression_result arg = call_expr->translate_argument(*this, ctx, 0, return_derivs);
+            Expression_result arg = call_expr->translate_argument(0, return_derivs);
             if (uop == mi::mdl::IExpression_unary::OK_CAST) {
-                return translate_cast_expression(ctx, arg, call_expr->get_type());
+                return translate_cast_expression(arg, call_expr->get_type());
             } else {
-                return Expression_result::value(translate_unary(ctx, uop, arg.as_value(ctx)));
+                return Expression_result::value(translate_unary(uop, arg.as_value(ctx)));
             }
         } else if (is_binary_operator(op)) {
-            llvm::Value *res = translate_binary_no_side_effect(ctx, call_expr);
+            llvm::Value *res = translate_binary_no_side_effect(call_expr);
             return Expression_result::value(res);
         } else if (op == IExpression::OK_TERNARY) {
             if (m_eval_dag_ternary_strictly && call_expr->as_dag_call() != NULL) {
                 // ternary operator on the DAG with strict evaluation
                 llvm::Value *cond_res =
-                    call_expr->translate_argument_value(*this, ctx, 0, /*wants_derivs=*/ false);
+                    call_expr->translate_argument(0, /*wants_derivs=*/ false).as_value(ctx);
 
                 if (cond_res->getType() != m_type_mapper.get_predicate_type()) {
                     // map to predicate type
@@ -7357,10 +7385,10 @@ Expression_result LLVM_code_generator::translate_call(
                 }
 
                 llvm::Value *true_res =
-                    call_expr->translate_argument_value(*this, ctx, 1, /*wants_derivs=*/ false);
+                    call_expr->translate_argument(1, /*wants_derivs=*/ false).as_value(ctx);
 
                 llvm::Value *false_res =
-                    call_expr->translate_argument_value(*this, ctx, 2, /*wants_derivs=*/ false);
+                    call_expr->translate_argument(2, /*wants_derivs=*/ false).as_value(ctx);
 
                 return Expression_result::value(ctx->CreateSelect(cond_res, true_res, false_res));
             }
@@ -7374,7 +7402,7 @@ Expression_result LLVM_code_generator::translate_call(
             llvm::Type  *res_type  = lookup_type(call_expr->get_type());
             llvm::Value *res_addr  = ctx.create_local(res_type, "?:_tmp");
 
-            call_expr->translate_boolean_branch(*this, ctx, on_true_bb, on_false_bb);
+            call_expr->translate_boolean_branch(on_true_bb, on_false_bb);
 
             // This is ugly: As long as we translate the "material body", there exists
             // only one basic block. However, for the ?: operator we need control flow, so we must
@@ -7386,7 +7414,7 @@ Expression_result LLVM_code_generator::translate_call(
                 BB_store true_chain(m_curr_bb, get_next_bb());
                 ctx->SetInsertPoint(on_true_bb);
                 llvm::Value *true_res =
-                    call_expr->translate_argument_value(*this, ctx, 1, /*wants_derivs=*/ false);
+                    call_expr->translate_argument(1, /*wants_derivs=*/ false).as_value(ctx);
                 ctx->CreateStore(true_res, res_addr);
                 ctx->CreateBr(end_bb);
             }
@@ -7395,7 +7423,7 @@ Expression_result LLVM_code_generator::translate_call(
                 BB_store false_chain(m_curr_bb, get_next_bb());
                 ctx->SetInsertPoint(on_false_bb);
                 llvm::Value *false_res =
-                    call_expr->translate_argument_value(*this, ctx, 2, /*wants_derivs=*/ false);
+                    call_expr->translate_argument(2, /*wants_derivs=*/ false).as_value(ctx);
                 ctx->CreateStore(false_res, res_addr);
                 ctx->CreateBr(end_bb);
             }
@@ -7407,20 +7435,20 @@ Expression_result LLVM_code_generator::translate_call(
 
     switch (sema) {
     case mi::mdl::IDefinition::DS_UNKNOWN:
-        return translate_call_user_defined_function(ctx, call_expr);
+        return translate_call_user_defined_function(call_expr);
 
     case mi::mdl::IDefinition::DS_COPY_CONSTRUCTOR:
         // ignore all copy constructors
         MDL_ASSERT(call_expr->get_argument_count() == 1);
-        return call_expr->translate_argument(*this, ctx, 0, return_derivs);
+        return call_expr->translate_argument(0, return_derivs);
 
     case mi::mdl::IDefinition::DS_CONV_CONSTRUCTOR:
     case mi::mdl::IDefinition::DS_CONV_OPERATOR:
         // handle conversion constructor and operator equal: both have one argument and convert it
-        return translate_conversion(ctx, call_expr);
+        return translate_conversion(call_expr);
 
     case mi::mdl::IDefinition::DS_ELEM_CONSTRUCTOR:
-        return translate_elemental_constructor(ctx, call_expr);
+        return translate_elemental_constructor(call_expr);
 
     case mi::mdl::IDefinition::DS_COLOR_SPECTRUM_CONSTRUCTOR:
         // translate to rgb color, fall into the default case
@@ -7441,7 +7469,7 @@ Expression_result LLVM_code_generator::translate_call(
         if (call_expr->get_argument_count() == 1) {
             // a no-op in the RGB case
             Expression_result res = call_expr->translate_argument(
-                *this, ctx, 0, return_derivs);  // for DAG return_derivs is ignored
+                0, return_derivs);  // for DAG return_derivs is ignored
             res.ensure_deriv_result(ctx, return_derivs);
             return res;
         } else if (m_warn_spectrum_conversion) {
@@ -7459,10 +7487,10 @@ Expression_result LLVM_code_generator::translate_call(
         break;
 
     case mi::mdl::IDefinition::DS_MATRIX_ELEM_CONSTRUCTOR:
-        return translate_matrix_elemental_constructor(ctx, call_expr);
+        return translate_matrix_elemental_constructor(call_expr);
 
     case mi::mdl::IDefinition::DS_MATRIX_DIAG_CONSTRUCTOR:
-        return translate_matrix_diagonal_constructor(ctx, call_expr);
+        return translate_matrix_diagonal_constructor(call_expr);
 
     case mi::mdl::IDefinition::DS_DEFAULT_STRUCT_CONSTRUCTOR:
         // this constructor is always replaced in the compiler core by an elemental constructor,
@@ -7484,7 +7512,7 @@ Expression_result LLVM_code_generator::translate_call(
                 equal_coordinate_space(arg_0, arg_1, m_internal_space.c_str()))
             {
                 // does not really use the transform state here, so we do not flag it
-                return Expression_result::value(create_identity_matrix(ctx));
+                return Expression_result::value(create_identity_matrix());
             }
         }
         break;
@@ -7500,17 +7528,17 @@ Expression_result LLVM_code_generator::translate_call(
             {
                 // just a no-op, return the second argument
                 // does not really use the transform state here, so we do not flag it
-                return call_expr->translate_argument(*this, ctx, 2, return_derivs);
+                return call_expr->translate_argument(2, return_derivs);
             }
             if (m_world_to_object != NULL && m_object_to_world != NULL) {
                 // we have a world-to_object matrix, implement the functions directly
-                return translate_transform_call(sema, ctx, call_expr);
+                return translate_transform_call(sema, call_expr);
             }
         }
         break;
     case mi::mdl::IDefinition::DS_INTRINSIC_STATE_OBJECT_ID:
         if (call_expr->get_argument_count() == 0) {
-            return translate_object_id_call(ctx);
+            return translate_object_id_call();
         }
         break;
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS:
@@ -7518,13 +7546,13 @@ Expression_result LLVM_code_generator::translate_call(
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_SET_OBJECT_ID:
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_SET_TRANSFORMS:
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_MAKE_DERIV:
-        return translate_dag_intrinsic(ctx, call_expr);
+        return translate_dag_intrinsic(call_expr);
 
     case mi::mdl::IDefinition::DS_INTRINSIC_JIT_LOOKUP:
-        return translate_jit_intrinsic(ctx, call_expr);
+        return translate_jit_intrinsic(call_expr);
 
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA:
-        return translate_dag_call_lambda(ctx, call_expr);
+        return translate_dag_call_lambda(call_expr);
 
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_DECL_CAST:
         error(INTERNAL_JIT_BACKEND_ERROR, "Cannot compile decl_cast nodes");
@@ -7589,7 +7617,7 @@ Expression_result LLVM_code_generator::translate_call(
             }
 
             // TODO: implement calling renderer runtime. For now just return second argument
-            return call_expr->translate_argument(*this, ctx, 1, return_derivs);
+            return call_expr->translate_argument(1, return_derivs);
         }
 
         // try compiler known intrinsic function
@@ -7603,38 +7631,39 @@ Expression_result LLVM_code_generator::translate_call(
 
     case IDefinition::DS_INTRINSIC_TEX_GRID_TO_OBJECT_SPACE:
         // TODO: for now, just return the identity matrix
-        return Expression_result::value(create_identity_matrix(ctx));
+        return Expression_result::value(create_identity_matrix());
 
     default:
         // try compiler known intrinsic function
         break;
     }
 
-    return translate_call_intrinsic_function(ctx, call_expr);
+    return translate_call_intrinsic_function(call_expr);
 }
 
 // Get the argument type instances for a given call.
 Function_instance LLVM_code_generator::get_call_instance(
-    Function_context &ctx,
     ICall_expr const *call)
 {
+    Function_context &ctx = *m_ctx;
+
     Function_instance::Array_instances res(get_allocator());
     Function_instance::Parameter_storage_modifiers param_mods(get_allocator());
 
     if (!m_enable_instancing) {
         // instancing disabled
         return Function_instance(
-            call->get_callee_definition(*this),
+            call->get_callee_definition(),
             res,
             param_mods,
-            call->returns_derivatives(*this),
+            call->returns_derivatives(),
             target_supports_storage_spaces());
     }
 
     typedef ptr_hash_set<IType_array_size const>::Type Marker_set;
     Marker_set mset(0, Marker_set::hasher(), Marker_set::key_equal(), get_allocator());
 
-    IDefinition const *def = call->get_callee_definition(*this);
+    IDefinition const *def = call->get_callee_definition();
     IType_function const *ftype = cast<IType_function>(def->get_type());
 
     // instantiate the return type
@@ -7664,7 +7693,7 @@ Function_instance LLVM_code_generator::get_call_instance(
     // instantiate argument types
     bool all_param_mods_normal = true;  // an empty param_mods means all normal
     for (size_t i = 0, n = call->get_argument_count(); i < n; ++i) {
-        Storage_modifier param_mod = call->get_argument_storage_modifier(ctx, i);
+        Storage_modifier param_mod = call->get_argument_storage_modifier(i);
         if (all_param_mods_normal && param_mod != SM_NORMAL) {
             // initialize all previous parameter storage modifiers as normal
             all_param_mods_normal = false;
@@ -7714,10 +7743,10 @@ Function_instance LLVM_code_generator::get_call_instance(
     }
 
     return Function_instance(
-        call->get_callee_definition(*this),
+        call->get_callee_definition(),
         res,
         param_mods,
-        call->returns_derivatives(*this),
+        call->returns_derivatives(),
         target_supports_storage_spaces());
 }
 
@@ -7742,13 +7771,14 @@ int LLVM_code_generator::instantiate_call_param_type_size(
 
 // Translate a call to an user defined function to LLVM IR.
 Expression_result LLVM_code_generator::translate_call_user_defined_function(
-    Function_context &ctx,
     ICall_expr const *call_expr)
 {
-    Function_instance inst(get_call_instance(ctx, call_expr));
-    LLVM_context_data *p_data = call_expr->get_callee_context(*this, inst);
+    Function_context &ctx = *m_ctx;
 
-    mi::mdl::IDefinition const    *def    = call_expr->get_callee_definition(*this);
+    Function_instance inst(get_call_instance(call_expr));
+    LLVM_context_data *p_data = call_expr->get_callee_context(inst);
+
+    mi::mdl::IDefinition const    *def    = call_expr->get_callee_definition();
     mi::mdl::IType_function const *f_type = cast<mi::mdl::IType_function>(def->get_type());
 
     Func_deriv_info const *func_deriv_info = NULL;
@@ -7811,7 +7841,7 @@ Expression_result LLVM_code_generator::translate_call_user_defined_function(
         bool arg_is_deriv =
             func_deriv_info != NULL && func_deriv_info->args_want_derivatives.test_bit(i + 1);
 
-        Expression_result expr_res = call_expr->translate_argument(*this, ctx, i, arg_is_deriv);
+        Expression_result expr_res = call_expr->translate_argument(i, arg_is_deriv);
 
         IType const   *p_type;
         ISymbol const *dummy;
@@ -7857,7 +7887,8 @@ Expression_result LLVM_code_generator::translate_call_user_defined_function(
             }
         }
 
-        if (m_type_mapper.is_passed_by_reference(arg_type, param_imm_size) ||
+        if (m_type_mapper.is_passed_by_reference(
+                m_type_mapper.skip_deriv_type(arg_type), param_imm_size) ||
             (target_supports_pointers() && m_type_mapper.is_deriv_type(expr_res.get_value_type())))
         {
             // pass by reference
@@ -7883,7 +7914,6 @@ Expression_result LLVM_code_generator::translate_call_user_defined_function(
 
 // Translate a DAG expression lambda call to LLVM IR.
 Expression_result LLVM_code_generator::translate_dag_call_lambda(
-    Function_context &ctx,
     ICall_expr const *call_expr)
 {
     MDL_ASSERT(call_expr->get_semantics() == IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA);
@@ -7893,7 +7923,6 @@ Expression_result LLVM_code_generator::translate_dag_call_lambda(
 
     size_t lambda_index = strtoul(dag_call->get_name(), NULL, 10);
     return translate_precalculated_lambda(
-        ctx,
         lambda_index,
         m_type_mapper.lookup_type(m_llvm_context, dag_call->get_type()));
 }
@@ -7907,18 +7936,17 @@ static float len_v3(Float4_struct const &v)
 // Translate a state::transform_*() call expression to LLVM IR.
 Expression_result LLVM_code_generator::translate_transform_call(
     IDefinition::Semantics sema,
-    Function_context       &ctx,
     ICall_expr const       *call_expr)
 {
+    Function_context &ctx = *m_ctx;
+
     // will potentially use the transforms
     m_state_usage_analysis.add_state_usage(
         ctx.get_function(), IGenerated_code_executable::SU_TRANSFORMS);
 
     llvm::Type  *ret_tp = lookup_type(call_expr->get_type());
-    llvm::Value *from   =
-        call_expr->translate_argument_value(*this, ctx, 0, /*wants_derivs=*/ false);
-    llvm::Value *to     =
-        call_expr->translate_argument_value(*this, ctx, 1, /*wants_derivs=*/ false);
+    llvm::Value *from   = call_expr->translate_argument(0, /*wants_derivs=*/ false).as_value(ctx);
+    llvm::Value *to     = call_expr->translate_argument(1, /*wants_derivs=*/ false).as_value(ctx);
 
     int sp_encoding = coordinate_world;
     if (strcmp(m_internal_space.c_str(), "coordinate_object") == 0) {
@@ -7953,7 +7981,7 @@ Expression_result LLVM_code_generator::translate_transform_call(
         {
             // TODO: derivatives
             llvm::Value *point  =
-                call_expr->translate_argument_value(*this, ctx, 2, /*wants_derivs=*/ false);
+                call_expr->translate_argument(2, /*wants_derivs=*/ false).as_value(ctx);
 
             llvm::Value *cond           = ctx->CreateICmpEQ(from, to);
             llvm::BasicBlock *id_bb     = ctx.create_bb("id");
@@ -8052,7 +8080,7 @@ Expression_result LLVM_code_generator::translate_transform_call(
         {
             // TODO: derivatives
             llvm::Value *vector =
-                call_expr->translate_argument_value(*this, ctx, 2, /*wants_derivs=*/ false);
+                call_expr->translate_argument(2, /*wants_derivs=*/ false).as_value(ctx);
 
             llvm::Value *cond           = ctx->CreateICmpEQ(from, to);
             llvm::BasicBlock *id_bb     = ctx.create_bb("id");
@@ -8140,7 +8168,7 @@ Expression_result LLVM_code_generator::translate_transform_call(
         {
             // TODO: derivatives
             llvm::Value *scale  =
-                call_expr->translate_argument_value(*this, ctx, 2, /*wants_derivs=*/ false);
+                call_expr->translate_argument(2, /*wants_derivs=*/ false).as_value(ctx);
 
             llvm::Value *cond           = ctx->CreateICmpEQ(from, to);
             llvm::BasicBlock *id_bb     = ctx.create_bb("id");
@@ -8183,9 +8211,10 @@ Expression_result LLVM_code_generator::translate_transform_call(
 }
 
 // Translate a state::object_id() call expression to LLVM IR.
-Expression_result LLVM_code_generator::translate_object_id_call(
-    Function_context       &ctx)
+Expression_result LLVM_code_generator::translate_object_id_call()
 {
+    Function_context &ctx = *m_ctx;
+
     // uses the object ID
     m_state_usage_analysis.add_state_usage(
         ctx.get_function(), IGenerated_code_executable::SU_OBJECT_ID);
@@ -8196,9 +8225,10 @@ Expression_result LLVM_code_generator::translate_object_id_call(
 
 // Translate a conversion call to LLVM IR.
 Expression_result LLVM_code_generator::translate_conversion(
-    Function_context          &ctx,
     mi::mdl::ICall_expr const *call_expr)
 {
+    Function_context &ctx = *m_ctx;
+
     MDL_ASSERT(call_expr->get_argument_count() == 1);
 
     mi::mdl::IType const *res_type  = call_expr->get_type()->skip_type_alias();
@@ -8206,13 +8236,13 @@ Expression_result LLVM_code_generator::translate_conversion(
     mi::mdl::IType const *arg_noderiv_type = m_type_mapper.skip_deriv_type(arg_type);
     mi::mdl::IType const *res_noderiv_type = m_type_mapper.skip_deriv_type(res_type);
 
-    bool return_derivs = call_expr->returns_derivatives(*this);
+    bool return_derivs = call_expr->returns_derivatives();
 
     // we only need derivatives for the argument, if the conversion results should be derivable
     // and the argument type supports it
     bool arg_derivs = return_derivs && m_type_mapper.is_floating_point_based_type(arg_noderiv_type);
 
-    llvm::Value *v = call_expr->translate_argument_value(*this, ctx, 0, arg_derivs);
+    llvm::Value *v = call_expr->translate_argument(0, arg_derivs).as_value(ctx);
 
     llvm::Value *res;
 
@@ -8224,24 +8254,24 @@ Expression_result LLVM_code_generator::translate_conversion(
             // dual -> dual: convert the dual component-wise
 
             llvm::Value *val = translate_conversion(
-                ctx, res_noderiv_type, arg_noderiv_type, ctx.get_dual_val(v));
+                res_noderiv_type, arg_noderiv_type, ctx.get_dual_val(v));
             llvm::Value *dx  = translate_conversion(
-                ctx, res_noderiv_type, arg_noderiv_type, ctx.get_dual_dx(v));
+                res_noderiv_type, arg_noderiv_type, ctx.get_dual_dx(v));
             llvm::Value *dy  = translate_conversion(
-                ctx, res_noderiv_type, arg_noderiv_type, ctx.get_dual_dy(v));
+                res_noderiv_type, arg_noderiv_type, ctx.get_dual_dy(v));
 
             res = ctx.get_dual(val, dx, dy);
         } else {
             // non-dual -> dual: convert, then get dual
-            res = translate_conversion(ctx, res_noderiv_type, arg_noderiv_type, v);
+            res = translate_conversion(res_noderiv_type, arg_noderiv_type, v);
             res = ctx.get_dual(res);
         }
     } else if (m_type_mapper.is_deriv_type(v->getType())) {
         // dual -> non-dual: strip dual, then convert
-        res = translate_conversion(ctx, res_noderiv_type, arg_noderiv_type, ctx.get_dual_val(v));
+        res = translate_conversion(res_noderiv_type, arg_noderiv_type, ctx.get_dual_val(v));
     } else {
         // non-dual -> non-dual: just convert
-        res = translate_conversion(ctx, res_noderiv_type, arg_noderiv_type, v);
+        res = translate_conversion(res_noderiv_type, arg_noderiv_type, v);
     }
 
     return Expression_result::value(res);
@@ -8250,11 +8280,12 @@ Expression_result LLVM_code_generator::translate_conversion(
 // Translate a conversion call to LLVM IR.
 // Note: Function may not be called with dual values and types
 llvm::Value *LLVM_code_generator::translate_conversion(
-    Function_context     &ctx,
     mi::mdl::IType const *res_type,
     mi::mdl::IType const *arg_type,
     llvm::Value          *v)
 {
+    Function_context &ctx = *m_ctx;
+
     if (arg_type == res_type) {
         // should not happen in optimized code, but ...
         return v;
@@ -8347,17 +8378,17 @@ llvm::Value *LLVM_code_generator::translate_conversion(
 
     case mi::mdl::IType::TK_COLOR:
         // conversion to color
-        return translate_color_conversion(ctx, arg_type, v);
+        return translate_color_conversion(arg_type, v);
 
     case mi::mdl::IType::TK_VECTOR:
         // conversion to vector type
         return
-            translate_vector_conversion(ctx, cast<mi::mdl::IType_vector>(res_type), arg_type, v);
+            translate_vector_conversion(cast<mi::mdl::IType_vector>(res_type), arg_type, v);
 
     case mi::mdl::IType::TK_MATRIX:
         // conversion to matrix type
         return
-            translate_matrix_conversion(ctx, cast<mi::mdl::IType_matrix>(res_type), arg_type, v);
+            translate_matrix_conversion(cast<mi::mdl::IType_matrix>(res_type), arg_type, v);
 
     default:
         // others
@@ -8374,11 +8405,12 @@ llvm::Value *LLVM_code_generator::translate_conversion(
 
 // Translate a conversion call to a vector type to LLVM IR.
 llvm::Value *LLVM_code_generator::translate_vector_conversion(
-    Function_context            &ctx,
     mi::mdl::IType_vector const *tgt_type,
     mi::mdl::IType const        *src_type,
     llvm::Value                 *v)
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::Type *tgt = lookup_type(tgt_type);
     llvm::Type *src = lookup_type(src_type);
 
@@ -8404,7 +8436,7 @@ llvm::Value *LLVM_code_generator::translate_vector_conversion(
                 unsigned idxes[1] = { i };
                 llvm::Value *elem = ctx->CreateExtractValue(v, idxes);
 
-                elem = translate_conversion(ctx, t_elem, s_elem, elem);
+                elem = translate_conversion(t_elem, s_elem, elem);
                 res = ctx->CreateInsertValue(res, elem, idxes);
             }
         } else {
@@ -8413,7 +8445,7 @@ llvm::Value *LLVM_code_generator::translate_vector_conversion(
                 llvm::Value *idx  = ctx.get_constant(i);
                 llvm::Value *elem = ctx->CreateExtractElement(v, idx);
 
-                elem = translate_conversion(ctx, t_elem, s_elem, elem);
+                elem = translate_conversion(t_elem, s_elem, elem);
                 res = ctx->CreateInsertElement(res, elem, idx);
             }
         }
@@ -8440,11 +8472,12 @@ llvm::Value *LLVM_code_generator::translate_vector_conversion(
 
 // Translate a conversion call to a matrix type to LLVM IR.
 llvm::Value *LLVM_code_generator::translate_matrix_conversion(
-    Function_context            &ctx,
     mi::mdl::IType_matrix const *tgt_type,
     mi::mdl::IType const        *src_type,
     llvm::Value                 *v)
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::Type *tgt = lookup_type(tgt_type);
     llvm::Type *src = lookup_type(src_type);
 
@@ -8473,7 +8506,7 @@ llvm::Value *LLVM_code_generator::translate_matrix_conversion(
                 unsigned idxes[1] = { i };
                 llvm::Value *elem = ctx->CreateExtractValue(v, idxes);
 
-                elem = translate_conversion(ctx, tv_elem, sv_elem, elem);
+                elem = translate_conversion(tv_elem, sv_elem, elem);
                 res = ctx->CreateInsertValue(res, elem, idxes);
             }
         } else {
@@ -8485,7 +8518,7 @@ llvm::Value *LLVM_code_generator::translate_matrix_conversion(
                 unsigned idxes[1] = { i };
                 llvm::Value *elem = ctx->CreateExtractValue(v, idxes);
 
-                elem = translate_conversion(ctx, t_elem, s_elem, elem);
+                elem = translate_conversion(t_elem, s_elem, elem);
                 res = ctx->CreateInsertValue(res, elem, idxes);
             }
         }
@@ -8499,7 +8532,7 @@ llvm::Value *LLVM_code_generator::translate_matrix_conversion(
             llvm::Value *idx  = ctx.get_constant(i);
             llvm::Value *elem = ctx->CreateExtractElement(v, idx);
 
-            elem = translate_conversion(ctx, t_elem, s_elem, elem);
+            elem = translate_conversion(t_elem, s_elem, elem);
             res = ctx->CreateInsertElement(res, elem, idx);
         }
     }
@@ -8508,10 +8541,11 @@ llvm::Value *LLVM_code_generator::translate_matrix_conversion(
 
 // Translate a conversion call to the color type to LLVM IR.
 llvm::Value *LLVM_code_generator::translate_color_conversion(
-    Function_context     &ctx,
     mi::mdl::IType const *src_type,
     llvm::Value          *v)
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::Type *tgt = m_type_mapper.get_color_type();
     llvm::Type *src = lookup_type(src_type);
 
@@ -8542,12 +8576,13 @@ llvm::Value *LLVM_code_generator::translate_color_conversion(
 
 // Translate an elemental constructor call to LLVM IR.
 Expression_result LLVM_code_generator::translate_elemental_constructor(
-    Function_context          &ctx,
     mi::mdl::ICall_expr const *call_expr)
 {
-    llvm::Type *type = lookup_type_or_deriv_type(ctx, call_expr);
+    Function_context &ctx = *m_ctx;
+
+    llvm::Type *type = lookup_type_or_deriv_type(call_expr);
     llvm::Type *non_deriv_type = m_type_mapper.skip_deriv_type(type);
-    bool return_derivs = call_expr->returns_derivatives(*this);
+    bool return_derivs = call_expr->returns_derivatives();
 
     mi::mdl::IType const *res_type = call_expr->get_type()->skip_type_alias();
     mi::mdl::IType const *res_non_deriv_type = m_type_mapper.skip_deriv_type(res_type);
@@ -8575,8 +8610,8 @@ Expression_result LLVM_code_generator::translate_elemental_constructor(
                 llvm::Value *agg_dy = llvm::UndefValue::get(elem_type);
 
                 for (int col = 0; col < n_cols; ++col) {
-                    llvm::Value *vec = call_expr->translate_argument_value(
-                        *this, ctx, col, return_derivs);
+                    llvm::Value *vec = call_expr->translate_argument(
+                        col, return_derivs).as_value(ctx);
                     llvm::Value *vec_val = ctx.get_dual_val(vec);
                     llvm::Value *vec_dx  = ctx.get_dual_dx(vec);
                     llvm::Value *vec_dy  = ctx.get_dual_dy(vec);
@@ -8594,8 +8629,8 @@ Expression_result LLVM_code_generator::translate_elemental_constructor(
                 agg = ctx.get_dual(agg_val, agg_dx, agg_dy);
             } else {
                 for (int col = 0; col < n_cols; ++col) {
-                    llvm::Value *vec = call_expr->translate_argument_value(
-                        *this, ctx, col, return_derivs);
+                    llvm::Value *vec = call_expr->translate_argument(
+                        col, return_derivs).as_value(ctx);
 
                     for (int row = 0; row < n_rows; ++row) {
                         llvm::Value *v = ctx.create_extract(vec, unsigned(row));
@@ -8617,7 +8652,7 @@ Expression_result LLVM_code_generator::translate_elemental_constructor(
         llvm::Value *agg_dy = llvm::UndefValue::get(elem_type);
 
         for (size_t i = 0, n = call_expr->get_argument_count(); i < n; ++i) {
-            llvm::Value *v = call_expr->translate_argument_value(*this, ctx, i, return_derivs);
+            llvm::Value *v = call_expr->translate_argument(i, return_derivs).as_value(ctx);
             agg_val = ctx.create_insert(agg_val, ctx.get_dual_val(v), unsigned(i));
             agg_dx  = ctx.create_insert(agg_dx,  ctx.get_dual_dx(v),  unsigned(i));
             agg_dy  = ctx.create_insert(agg_dy,  ctx.get_dual_dy(v),  unsigned(i));
@@ -8625,7 +8660,7 @@ Expression_result LLVM_code_generator::translate_elemental_constructor(
         agg = ctx.get_dual(agg_val, agg_dx, agg_dy);
     } else {
         for (size_t i = 0, n = call_expr->get_argument_count(); i < n; ++i) {
-            llvm::Value *v = call_expr->translate_argument_value(*this, ctx, i, return_derivs);
+            llvm::Value *v = call_expr->translate_argument(i, return_derivs).as_value(ctx);
             agg = ctx.create_insert(agg, v, unsigned(i));
         }
     }
@@ -8635,11 +8670,12 @@ Expression_result LLVM_code_generator::translate_elemental_constructor(
 
 // Translate a matrix elemental constructor call to LLVM IR.
 Expression_result LLVM_code_generator::translate_matrix_elemental_constructor(
-    Function_context          &ctx,
     mi::mdl::ICall_expr const *call_expr)
 {
-    llvm::Type *res_tp = lookup_type_or_deriv_type(ctx, call_expr);
-    bool return_derivs = call_expr->returns_derivatives(*this);
+    Function_context &ctx = *m_ctx;
+
+    llvm::Type *res_tp = lookup_type_or_deriv_type(call_expr);
+    bool return_derivs = call_expr->returns_derivatives();
 
     llvm::Value *matrix = llvm::ConstantAggregateZero::get(res_tp);
 
@@ -8675,8 +8711,8 @@ Expression_result LLVM_code_generator::translate_matrix_elemental_constructor(
                 size_t i = 0;
                 for (int c = 0; c < n_col; ++c) {
                     for (int r = 0; r < n_row; ++r) {
-                        llvm::Value *v   = call_expr->translate_argument_value(
-                            *this, ctx, i++, return_derivs);
+                        llvm::Value *v   =
+                            call_expr->translate_argument(i++, return_derivs).as_value(ctx);
                         llvm::Value *idx = ctx.get_constant(r);
 
                         vector_val = ctx->CreateInsertElement(vector_val, ctx.get_dual_val(v), idx);
@@ -8695,7 +8731,7 @@ Expression_result LLVM_code_generator::translate_matrix_elemental_constructor(
 
         // matrices are represented as arrays of scalars or as plain vectors
         for (int i = 0; i < n_col * n_row; ++i) {
-            llvm::Value *v = call_expr->translate_argument_value(*this, ctx, i, return_derivs);
+            llvm::Value *v = call_expr->translate_argument(i, return_derivs).as_value(ctx);
 
             matrix_val = ctx.create_insert(matrix_val, ctx.get_dual_val(v), unsigned(i));
             matrix_dx  = ctx.create_insert(matrix_dx,  ctx.get_dual_dx(v),  unsigned(i));
@@ -8715,8 +8751,8 @@ Expression_result LLVM_code_generator::translate_matrix_elemental_constructor(
                 size_t i = 0;
                 for (int c = 0; c < n_col; ++c) {
                     for (int r = 0; r < n_row; ++r) {
-                        llvm::Value *v   = call_expr->translate_argument_value(
-                            *this, ctx, i++, return_derivs);
+                        llvm::Value *v   = call_expr->translate_argument(
+                            i++, return_derivs).as_value(ctx);
                         llvm::Value *idx = ctx.get_constant(r);
 
                         vector = ctx->CreateInsertElement(vector, v, idx);
@@ -8730,7 +8766,7 @@ Expression_result LLVM_code_generator::translate_matrix_elemental_constructor(
 
         // matrices are represented as arrays of scalars or as plain vectors
         for (int i = 0; i < n_col * n_row; ++i) {
-            llvm::Value *v = call_expr->translate_argument_value(*this, ctx, i, return_derivs);
+            llvm::Value *v = call_expr->translate_argument(i, return_derivs).as_value(ctx);
 
             matrix = ctx.create_insert(matrix, v, unsigned(i));
         }
@@ -8740,13 +8776,14 @@ Expression_result LLVM_code_generator::translate_matrix_elemental_constructor(
 
 // Translate a matrix diagonal constructor call to LLVM IR.
 Expression_result LLVM_code_generator::translate_matrix_diagonal_constructor(
-    Function_context          &ctx,
     mi::mdl::ICall_expr const *call_expr)
 {
+    Function_context &ctx = *m_ctx;
+
     MDL_ASSERT(call_expr->get_argument_count() == 1);
 
-    llvm::Type *res_tp = lookup_type_or_deriv_type(ctx, call_expr);
-    bool return_derivs = call_expr->returns_derivatives(*this);
+    llvm::Type *res_tp = lookup_type_or_deriv_type(call_expr);
+    bool return_derivs = call_expr->returns_derivatives();
     llvm::Value *matrix = llvm::ConstantAggregateZero::get(res_tp);
 
     mi::mdl::IType const *res_mdl_type = call_expr->get_type()->skip_type_alias();
@@ -8756,7 +8793,7 @@ Expression_result LLVM_code_generator::translate_matrix_diagonal_constructor(
 
     mi::mdl::IType_vector const *v_type = m_type->get_element_type();
 
-    llvm::Value *v = call_expr->translate_argument_value(*this, ctx, 0, return_derivs);
+    llvm::Value *v = call_expr->translate_argument(0, return_derivs).as_value(ctx);
 
     int n_col = m_type->get_columns();
     int n_row = v_type->get_size();
@@ -8832,11 +8869,12 @@ Expression_result LLVM_code_generator::translate_matrix_diagonal_constructor(
 
 // Translate an array constructor call to LLVM IR.
 Expression_result LLVM_code_generator::translate_array_constructor_call(
-    Function_context &ctx,
     ICall_expr const *call_expr)
 {
+    Function_context &ctx = *m_ctx;
+
     mi::mdl::IType const *res_type = call_expr->get_type()->skip_type_alias();
-    bool return_derivs = call_expr->returns_derivatives(*this);
+    bool return_derivs = call_expr->returns_derivatives();
 
     size_t n = call_expr->get_argument_count();
     if (n == 1) {
@@ -8844,13 +8882,13 @@ Expression_result LLVM_code_generator::translate_array_constructor_call(
         if (is<mi::mdl::IType_array>(arg_type)) {
             // skip array copy constructor
             MDL_ASSERT(arg_type == res_type);
-            return call_expr->translate_argument(*this, ctx, 0, return_derivs);
+            return call_expr->translate_argument(0, return_derivs);
         }
     }
 
     // instantiate array type
     IType_array const *a_type = cast<IType_array>(m_type_mapper.skip_deriv_type(res_type));
-    llvm::Type *type = lookup_type_or_deriv_type(ctx, call_expr);
+    llvm::Type *type = lookup_type_or_deriv_type(call_expr);
 
     if (a_type->is_immediate_sized()) {
         llvm::Value *res = llvm::ConstantAggregateZero::get(type);
@@ -8861,8 +8899,8 @@ Expression_result LLVM_code_generator::translate_array_constructor_call(
             llvm::Value *dx = llvm::UndefValue::get(elem_type);
             llvm::Value *dy = llvm::UndefValue::get(elem_type);
             for (size_t i = 0; i < n; ++i) {
-                llvm::Value *v = call_expr->translate_argument_value(
-                    *this, ctx, i, /*wants_derivs=*/ true);
+                llvm::Value *v = call_expr->translate_argument(
+                    i, /*wants_derivs=*/ true).as_value(ctx);
 
                 val = ctx->CreateInsertValue(val, ctx.get_dual_val(v), { unsigned(i) });
                 dx  = ctx->CreateInsertValue(dx,  ctx.get_dual_dx(v),  { unsigned(i) });
@@ -8871,8 +8909,8 @@ Expression_result LLVM_code_generator::translate_array_constructor_call(
             res = ctx.get_dual(val, dx, dy);
         } else {
             for (size_t i = 0; i < n; ++i) {
-                llvm::Value *v = call_expr->translate_argument_value(
-                    *this, ctx, i, /*wants_derivs=*/ false);
+                llvm::Value *v = call_expr->translate_argument(
+                    i, /*wants_derivs=*/ false).as_value(ctx);
 
                 res = ctx->CreateInsertValue(res, v, { unsigned(i) });
             }
@@ -8913,20 +8951,18 @@ Expression_result LLVM_code_generator::translate_array_constructor_call(
 
 // Translate a let expression to LLVM IR.
 Expression_result LLVM_code_generator::translate_let(
-    Function_context               &ctx,
     mi::mdl::IExpression_let const *let_expr,
     bool                           wants_derivs)
 {
     for (size_t i = 0, n = let_expr->get_declaration_count(); i < n; ++i) {
         mi::mdl::IDeclaration const *decl = let_expr->get_declaration(i);
-        translate_declaration(ctx, decl);
+        translate_declaration(decl);
     }
-    return translate_expression(ctx, let_expr->get_expression(), wants_derivs);
+    return translate_expression(let_expr->get_expression(), wants_derivs);
 }
 
 // Create a matrix by matrix multiplication.
 llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxM(
-    Function_context &ctx,
     llvm::Type       *res_type,
     llvm::Value      *l,
     llvm::Value      *r,
@@ -8934,6 +8970,8 @@ llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxM(
     int              M,
     int              K)
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::Value *res = llvm::UndefValue::get(res_type);
 
     llvm::ArrayType *arr_tp = llvm::cast<llvm::ArrayType>(res_type);
@@ -8984,7 +9022,6 @@ llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxM(
 
 // Create a matrix by matrix multiplication with derivatives.
 llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxM_deriv(
-    Function_context &ctx,
     llvm::Type       *res_type,
     llvm::Value      *l,
     llvm::Value      *r,
@@ -8992,6 +9029,8 @@ llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxM_deriv(
     int              M,
     int              K)
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::Value *l_val = ctx.get_dual_val(l);
     llvm::Value *l_dx  = ctx.get_dual_dx(l);
     llvm::Value *l_dy  = ctx.get_dual_dy(l);
@@ -9097,13 +9136,14 @@ llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxM_deriv(
 
 // Create a vector by matrix multiplication.
 llvm::Value *LLVM_code_generator::do_matrix_multiplication_VxM(
-    Function_context &ctx,
     llvm::Type       *res_type,
     llvm::Value      *l,
     llvm::Value      *r,
     int              M,
     int              K)
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::Value *res = llvm::UndefValue::get(res_type);
 
     llvm::ArrayType *arr_tp = llvm::cast<llvm::ArrayType>(r->getType());
@@ -9144,13 +9184,14 @@ llvm::Value *LLVM_code_generator::do_matrix_multiplication_VxM(
 
 // Create a vector by matrix multiplication with derivatives.
 llvm::Value *LLVM_code_generator::do_matrix_multiplication_VxM_deriv(
-    Function_context &ctx,
     llvm::Type       *res_type,
     llvm::Value      *l,
     llvm::Value      *r,
     int              M,
     int              K)
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::Type  *res_vec_type = m_type_mapper.get_deriv_base_type(res_type);
     llvm::Value *res_val = llvm::UndefValue::get(res_vec_type);
     llvm::Value *res_dx = llvm::UndefValue::get(res_vec_type);
@@ -9209,13 +9250,14 @@ llvm::Value *LLVM_code_generator::do_matrix_multiplication_VxM_deriv(
 
 // Create a matrix by vector multiplication.
 llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxV(
-    Function_context &ctx,
     llvm::Type       *res_type,
     llvm::Value      *l,
     llvm::Value      *r,
     int              N,
     int              M)
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::Value *res = llvm::UndefValue::get(res_type);
 
     llvm::ArrayType *arr_tp = llvm::cast<llvm::ArrayType>(l->getType());
@@ -9257,13 +9299,14 @@ llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxV(
 
 // Create a matrix by vector multiplication with derivatives.
 llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxV_deriv(
-    Function_context &ctx,
     llvm::Type       *res_type,
     llvm::Value      *l,
     llvm::Value      *r,
     int              N,
     int              M)
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::Type  *res_vec_type = m_type_mapper.get_deriv_base_type(res_type);
     llvm::Value *res_val = llvm::UndefValue::get(res_vec_type);
     llvm::Value *res_dx = llvm::UndefValue::get(res_vec_type);
@@ -9324,7 +9367,6 @@ llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxV_deriv(
 
 // Translate a DAG node into LLVM IR.
 Expression_result LLVM_code_generator::translate_node(
-    Function_context                   &ctx,
     mi::mdl::DAG_node const            *node,
     mi::mdl::ICall_name_resolver const *resolver)
 {
@@ -9342,19 +9384,19 @@ Expression_result LLVM_code_generator::translate_node(
             mi::mdl::DAG_constant const *c = cast<mi::mdl::DAG_constant>(node);
             mi::mdl::IValue const *v = c->get_value();
 
-            res = translate_value(ctx, v);
+            res = translate_value(v);
         }
         break;
 
     case mi::mdl::DAG_node::EK_TEMPORARY:
         // there should be no temporaries at this point
-        res = translate_node(ctx, cast<mi::mdl::DAG_temporary>(node)->get_expr(), resolver);
+        res = translate_node(cast<mi::mdl::DAG_temporary>(node)->get_expr(), resolver);
         break;
 
     case mi::mdl::DAG_node::EK_CALL:
         {
             DAG_call const *call_node = cast<DAG_call>(node);
-            Call_dag_expr call(call_node, resolver);
+            Call_dag_expr call(*this, call_node, resolver);
 
             // We must be inside some module when the call is translated, but if it is DAG-call,
             // there is no module.
@@ -9365,7 +9407,7 @@ Expression_result LLVM_code_generator::translate_node(
                 sema == IDefinition::DS_INTRINSIC_DAG_SET_OBJECT_ID)
             {
                 // these two have no module and no owner
-                res = translate_call(ctx, &call);
+                res = translate_call(&call);
             } else {
                 char const *signature = call_node->get_name();
                 if (signature[0] == '#') {
@@ -9376,7 +9418,7 @@ Expression_result LLVM_code_generator::translate_node(
                     impl_cast<mi::mdl::Module>(resolver->get_owner_module(signature)));
                 MDL_module_scope scope(*this, mod.get());
 
-                res = translate_call(ctx, &call);
+                res = translate_call(&call);
             }
         }
         break;
@@ -9384,7 +9426,7 @@ Expression_result LLVM_code_generator::translate_node(
     case mi::mdl::DAG_node::EK_PARAMETER:
         {
             DAG_parameter const *param_node = cast<DAG_parameter>(node);
-            res = translate_parameter(ctx, param_node);
+            res = translate_parameter(param_node);
         }
         break;
     }
@@ -9433,10 +9475,11 @@ llvm::Function *LLVM_code_generator::get_sl_value_read_function(
 // Translate a parameter or RO-data-segment offset into LLVM IR by adding
 // the corresponding base offset of the state.
 llvm::Value *LLVM_code_generator::translate_sl_value_offset(
-    Function_context &ctx,
     int               cur_offs,
     llvm::Value      *add_val)
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::Value *result_offs = ctx.get_constant(cur_offs);
     if (add_val != NULL) {
         result_offs = ctx->CreateAdd(result_offs, add_val);
@@ -9446,13 +9489,14 @@ llvm::Value *LLVM_code_generator::translate_sl_value_offset(
 
 // Translate a part of a DAG parameter or the RO-data-segment for GLSL/HLSL into LLVM IR.
 Expression_result LLVM_code_generator::translate_sl_value_impl(
-    Function_context     &ctx,
     Storage_modifier      storage_space,
     mi::mdl::IType const *param_type,
     int                  &cur_offs,
     llvm::Value          *add_val,
     bool                  force_as_value)
 {
+    Function_context &ctx = *m_ctx;
+
     Expression_result res;
     param_type = param_type->skip_type_alias();
 
@@ -9461,7 +9505,7 @@ Expression_result LLVM_code_generator::translate_sl_value_impl(
     case mi::mdl::IType::TK_BOOL:
         res = Expression_result::value(ctx->CreateCall(
             get_sl_value_read_function(storage_space, kind),
-            translate_sl_value_offset(ctx, cur_offs, add_val)));
+            translate_sl_value_offset(cur_offs, add_val)));
         ++cur_offs;
         break;
 
@@ -9469,7 +9513,7 @@ Expression_result LLVM_code_generator::translate_sl_value_impl(
         cur_offs = (cur_offs + 3) & ~3;
         res = Expression_result::value(ctx->CreateCall(
             get_sl_value_read_function(storage_space, kind),
-            translate_sl_value_offset(ctx, cur_offs, add_val)));
+            translate_sl_value_offset(cur_offs, add_val)));
         cur_offs += 4;
         break;
 
@@ -9479,7 +9523,7 @@ Expression_result LLVM_code_generator::translate_sl_value_impl(
         cur_offs = (cur_offs + 3) & ~3;
         res = Expression_result::value(ctx->CreateCall(
             get_sl_value_read_function(storage_space, kind),
-            translate_sl_value_offset(ctx, cur_offs, add_val)));
+            translate_sl_value_offset(cur_offs, add_val)));
         cur_offs += 4;
         break;
 
@@ -9488,7 +9532,7 @@ Expression_result LLVM_code_generator::translate_sl_value_impl(
         cur_offs = (cur_offs + 7) & ~7;
         res = Expression_result::value(ctx->CreateCall(
             get_sl_value_read_function(storage_space, kind),
-            translate_sl_value_offset(ctx, cur_offs, add_val)));
+            translate_sl_value_offset(cur_offs, add_val)));
         cur_offs += 8;
         break;
 
@@ -9510,7 +9554,7 @@ Expression_result LLVM_code_generator::translate_sl_value_impl(
                 res_value = ctx.create_insert(
                     res_value,
                     translate_sl_value_impl(
-                        ctx, storage_space, et, cur_offs, add_val,
+                        storage_space, et, cur_offs, add_val,
                         /*force_as_value=*/ true).as_value(ctx),
                     unsigned(i));
             }
@@ -9545,7 +9589,7 @@ Expression_result LLVM_code_generator::translate_sl_value_impl(
                     res_value = ctx.create_insert(
                         res_value,
                         translate_sl_value_impl(
-                            ctx, storage_space, et, cur_offs, add_val,
+                            storage_space, et, cur_offs, add_val,
                             /*force_as_value=*/ true).as_value(ctx),
                         unsigned(i));
                 }
@@ -9560,7 +9604,7 @@ Expression_result LLVM_code_generator::translate_sl_value_impl(
                     llvm::Value *gep = ctx.create_simple_gep_in_bounds(res_var, i);
                     ctx->CreateStore(
                         translate_sl_value_impl(
-                            ctx, storage_space, et, cur_offs, add_val,
+                            storage_space, et, cur_offs, add_val,
                             /*force_as_value=*/ true).as_value(ctx),
                         gep);
                 }
@@ -9580,7 +9624,7 @@ Expression_result LLVM_code_generator::translate_sl_value_impl(
         cur_offs = (cur_offs + 3) & ~3;
         res = Expression_result::value(ctx->CreateCall(
             get_sl_value_read_function(storage_space, kind),
-            translate_sl_value_offset(ctx, cur_offs, add_val)));
+            translate_sl_value_offset(cur_offs, add_val)));
         cur_offs += 4;
         break;
 
@@ -9595,13 +9639,14 @@ Expression_result LLVM_code_generator::translate_sl_value_impl(
 
 // Translate a part of a DAG parameter or the RO-data-segment for GLSL/HLSL into LLVM IR.
 Expression_result LLVM_code_generator::translate_sl_value(
-    Function_context     &ctx,
     Storage_modifier      storage_space,
     mi::mdl::IType const *param_type,
     int                  &cur_offs,
     llvm::Value          *add_val,
     bool                  force_as_value)
 {
+    Function_context &ctx = *m_ctx;
+
     // add base offset of argument block or RO-data-segment to add_val
 
     llvm::Value *state = ctx.get_state_parameter();
@@ -9621,14 +9666,15 @@ Expression_result LLVM_code_generator::translate_sl_value(
     }
 
     return translate_sl_value_impl(
-        ctx, storage_space, param_type, cur_offs, add_val, force_as_value);
+        storage_space, param_type, cur_offs, add_val, force_as_value);
 }
 
 // Translate a DAG parameter into LLVM IR
 Expression_result LLVM_code_generator::translate_parameter(
-    Function_context             &ctx,
     mi::mdl::DAG_parameter const *param_node)
 {
+    Function_context &ctx = *m_ctx;
+
     if (target_is_structured_language()) {
         // TODO: Maybe use custom datalayout for GLSL/HLSL
         llvm::DataLayout const   *dl = get_target_layout_data();
@@ -9657,9 +9703,9 @@ void LLVM_code_generator::compile_waiting_functions()
 {
     // compile all referenced functions that are not compiled so far
     while (!m_functions_q.empty()) {
-        Wait_entry const &entry = m_functions_q.front();
-        Function_instance const &func_inst = entry.get_instance();
-        mi::mdl::Module const  *owner      = entry.get_owner();
+        Owner_func_inst_pair const &entry = m_functions_q.front();
+        Function_instance const    &func_inst = entry.get_instance();
+        mi::mdl::Module const      *owner      = entry.get_owner();
 
         LLVM_context_data *p_data = get_context_data(func_inst);
         llvm::Function    *func   = p_data->get_function();
@@ -10458,8 +10504,10 @@ void LLVM_code_generator::set_transforms(
 }
 
 // Get the LLVM value of the current world-to-object matrix.
-llvm::Value *LLVM_code_generator::get_w2o_transform_value(Function_context &ctx)
+llvm::Value *LLVM_code_generator::get_w2o_transform_value()
 {
+    Function_context &ctx = *m_ctx;
+
     if (state_include_uniform_state()) {
         if (m_user_state_module.data != NULL) {
             error(INTERNAL_JIT_BACKEND_ERROR,
@@ -10504,8 +10552,10 @@ llvm::Value *LLVM_code_generator::get_w2o_transform_value(Function_context &ctx)
 }
 
 // Get the LLVM value of the current object-to-world matrix.
-llvm::Value *LLVM_code_generator::get_o2w_transform_value(Function_context &ctx)
+llvm::Value *LLVM_code_generator::get_o2w_transform_value()
 {
+    Function_context &ctx = *m_ctx;
+
     if (state_include_uniform_state()) {
         if (m_user_state_module.data != NULL) {
             error(INTERNAL_JIT_BACKEND_ERROR,
@@ -10661,9 +10711,10 @@ void LLVM_code_generator::init_dummy_attribute_table(Resource_table_kind kind)
 
 // Get a attribute lookup table.
 llvm::Value *LLVM_code_generator::get_attribute_table(
-    Function_context    &ctx,
     Resource_table_kind kind)
 {
+    Function_context &ctx = *m_ctx;
+
     if (m_lut_info[kind].m_get_lut == NULL) {
         init_dummy_attribute_table(kind);
     }
@@ -10673,9 +10724,10 @@ llvm::Value *LLVM_code_generator::get_attribute_table(
 
 // Get a attribute lookup table size.
 llvm::Value *LLVM_code_generator::get_attribute_table_size(
-    Function_context    &ctx,
     Resource_table_kind kind)
 {
+    Function_context &ctx = *m_ctx;
+
     if (m_lut_info[kind].m_get_lut_size == NULL) {
         init_dummy_attribute_table(kind);
     }

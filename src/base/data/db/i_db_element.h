@@ -106,12 +106,14 @@ public:
     ///
     /// If the method returns \c false, a host that receives such a database element will make no
     /// difference between an explicit request or an accidental reception, e.g., because the
-    /// element was multicasted. If the method returns \c true, the database will be more
-    /// conservative w.r.t. memory usage for elements that it received by accident. The element
-    /// will be discarded if the host is not required to keep it for redundancy reasons or if the
-    /// element represents the result of a database job. Next, if the disk cache is operational,
-    /// the element will be offloaded to disk. Finally, in all other cases, the element will be
-    /// kept in memory, as if the element was explicitly requested.
+    /// element was multicasted.
+    ///
+    /// If the method returns \c true, the database will be more conservative w.r.t. memory usage
+    /// for elements that it received by accident. The element will be discarded if the host is not
+    /// required to keep it for redundancy reasons or if the element represents the result of a
+    /// database job. Next, if the disk cache is operational, the element will be offloaded to
+    /// disk. Finally, in all other cases, the element will be kept in memory, as if the element
+    /// was explicitly requested.
     virtual bool get_offload_to_disk() { return false; }
 
     /// Indicates which database elements are likely to be requested together with this element.

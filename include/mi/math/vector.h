@@ -2078,6 +2078,31 @@ inline Vector<T2, DIM2> convert_vector(
     return result;
 }
 
+
+/// Returns the index of the largest vector element.
+template <typename T, Size DIM>
+inline Size max_element(const Vector<T, DIM>& v)
+{
+    Size i = 0;
+    for (Size j=1; j<DIM; ++j)
+        if (v[j] > v[i])
+            i = j;
+    return i;
+}
+
+
+/// Returns the index of the smallest vector element.
+template <typename T, Size DIM>
+inline Size min_element(const Vector<T, DIM>& v)
+{
+    Size i = 0;
+    for (Size j=1; j<DIM; ++j)
+        if (v[j] < v[i])
+            i = j;
+    return i;
+}
+
+
 /*@}*/ // end group mi_math_vector
 
 } // namespace math

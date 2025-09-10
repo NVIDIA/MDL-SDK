@@ -287,88 +287,6 @@ const mi::IString* Mdl_factory_impl::get_db_definition_name( const char* mdl_nam
     return new String_impl( result.c_str());
 }
 
-void Mdl_factory_impl::analyze_uniform(
-    mi::neuraylib::ITransaction* transaction,
-    const char* root_name,
-    bool root_uniform,
-    const mi::neuraylib::IExpression* query_expr,
-    bool& query_result,
-    mi::IString* error_path,
-    mi::neuraylib::IMdl_execution_context* context) const
-{
-    MDL::Execution_context default_context;
-    MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
-
-    query_result = false;
-    if( error_path)
-        error_path->set_c_str( "");
-
-    if( !transaction || !root_name) {
-        add_error_message( context_impl, "Invalid parameters (nullptr).", -1);
-        return;
-    }
-
-    auto* transaction_impl = static_cast<Transaction_impl*>( transaction);
-    DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
-    DB::Tag tag = db_transaction->name_to_tag( root_name);
-    if( !tag) {
-        add_error_message( context_impl, "Invalid root name.", -2);
-        return;
-    }
-
-    mi::base::Handle<MDL::IExpression_direct_call> int_root_expr;
-    SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
-    if( class_id != MDL::ID_MDL_FUNCTION_CALL) {
-        add_error_message( context_impl, "Invalid root type.", -3);
-        return;
-    }
-
-    DB::Access<MDL::Mdl_function_call> fc( tag, db_transaction);
-    mi::base::Handle<const MDL::IExpression_list> arguments_int( fc->get_arguments());
-    DB::Tag def_tag = fc->get_function_definition( db_transaction);
-    DB::Access<MDL::Mdl_function_definition> def( def_tag, db_transaction);
-    int_root_expr = def->create_direct_call( db_transaction, arguments_int.get(), nullptr);
-    if( !int_root_expr) {
-        add_error_message( context_impl, "Failed to create root expression.", -4);
-        return;
-    }
-
-    mi::base::Handle<const MDL::IType> int_root_type( int_root_expr->get_type());
-    int_root_type = MDL::get_type_factory()->create_alias(
-        int_root_type.get(), root_uniform, /*symbol*/ nullptr);
-
-    mi::base::Handle<const MDL::IExpression> int_query_expr(
-        get_internal_expression( query_expr));
-
-    // If query_expr is an argument to fc, we need to take the cloning during create_direct_call()
-    // into account.
-    if( int_query_expr) {
-        for( mi::Size i = 0, n = arguments_int->get_size(); i < n; ++i) {
-            mi::base::Handle<const MDL::IExpression> argument_int(
-                arguments_int->get_expression( i));
-            if( int_query_expr != argument_int.get())
-                continue;
-            mi::base::Handle<const MDL::IExpression_list> cloned_arguments_int(
-                int_root_expr->get_arguments());
-            int_query_expr = cloned_arguments_int->get_expression( i);
-        }
-    }
-
-    std::vector<bool> dummy_result_parameters;
-    std::string int_error_path;
-    MDL::Mdl_module_builder::analyze_uniform(
-        db_transaction,
-        int_root_expr.get(),
-        root_uniform,
-        int_query_expr.get(),
-        dummy_result_parameters,
-        query_result,
-        int_error_path,
-        context_impl);
-    if( error_path)
-        error_path->set_c_str( int_error_path.c_str());
-}
-
 const mi::IString* Mdl_factory_impl::decode_name( const char* name)
 {
     if( !name)
@@ -423,6 +341,88 @@ const mi::IString* Mdl_factory_impl::encode_type_name( const char* name) const
 bool Mdl_factory_impl::is_valid_mdl_identifier( const char* name) const
 {
     return m_mdl->is_valid_mdl_identifier( name);
+}
+
+void Mdl_factory_impl::analyze_uniform(
+    mi::neuraylib::ITransaction* transaction,
+    const char* root_name,
+    bool root_uniform,
+    const mi::neuraylib::IExpression* query_expr,
+    bool& query_result,
+    mi::IString* error_path,
+    mi::neuraylib::IMdl_execution_context* context) const
+{
+    MDL::Execution_context default_context;
+    MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
+
+    query_result = false;
+    if( error_path)
+        error_path->set_c_str( "");
+
+    if( !transaction || !root_name) {
+        add_error_message( context_impl, "Invalid parameters (nullptr).", -1);
+        return;
+    }
+
+    auto* transaction_impl = static_cast<Transaction_impl*>( transaction);
+    DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
+    DB::Tag tag = db_transaction->name_to_tag( root_name);
+    if( !tag) {
+        add_error_message( context_impl, "Invalid root name.", -2);
+        return;
+    }
+
+    mi::base::Handle<MDL::IExpression_direct_call> int_root_expr;
+    SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
+    if( class_id != MDL::ID_MDL_FUNCTION_CALL) {
+        add_error_message( context_impl, "Invalid root type.", -3);
+        return;
+    }
+
+    DB::Access<MDL::Mdl_function_call> fc( tag, db_transaction);
+    mi::base::Handle<const MDL::IExpression_list> arguments_int( fc->get_arguments());
+    DB::Tag def_tag = fc->get_function_definition( db_transaction);
+    DB::Access<MDL::Mdl_function_definition> def( def_tag, db_transaction);
+    int_root_expr = def->create_direct_call( db_transaction, arguments_int.get(), nullptr);
+    if( !int_root_expr) {
+        add_error_message( context_impl, "Failed to create root expression.", -4);
+        return;
+    }
+
+    mi::base::Handle<const MDL::IType> int_root_type( int_root_expr->get_type());
+    mi::base::Handle<MDL::IType_factory> tf( MDL::get_type_factory());
+    int_root_type = tf->create_alias( int_root_type.get(), root_uniform, /*symbol*/ nullptr);
+
+    mi::base::Handle<const MDL::IExpression> int_query_expr(
+        get_internal_expression( query_expr));
+
+    // If query_expr is an argument to fc, we need to take the cloning during create_direct_call()
+    // into account.
+    if( int_query_expr) {
+        for( mi::Size i = 0, n = arguments_int->get_size(); i < n; ++i) {
+            mi::base::Handle<const MDL::IExpression> argument_int(
+                arguments_int->get_expression( i));
+            if( int_query_expr != argument_int.get())
+                continue;
+            mi::base::Handle<const MDL::IExpression_list> cloned_arguments_int(
+                int_root_expr->get_arguments());
+            int_query_expr = cloned_arguments_int->get_expression( i);
+        }
+    }
+
+    std::vector<bool> dummy_result_parameters;
+    std::string int_error_path;
+    MDL::Mdl_module_builder::analyze_uniform(
+        db_transaction,
+        int_root_expr.get(),
+        root_uniform,
+        int_query_expr.get(),
+        dummy_result_parameters,
+        query_result,
+        int_error_path,
+        context_impl);
+    if( error_path)
+        error_path->set_c_str( int_error_path.c_str());
 }
 
 mi::Sint32 Mdl_factory_impl::start()

@@ -34,8 +34,6 @@
 
 #include "idata_structure_impl.h"
 
-#include <boost/core/ignore_unused.hpp>
-
 #include <mi/neuraylib/istring.h>
 
 #include <base/system/main/i_assert.h>
@@ -453,9 +451,9 @@ mi::Sint32 Structure_impl_proxy::set_value( mi::Size index, mi::base::IInterface
 
     mi::base::Handle old_data( get_value<mi::IData>( index));
     MI_ASSERT( old_data);
-    mi::Uint32 result = m_factory->assign_from_to( new_data.get(), old_data.get(), /*options*/ 0);
+    [[maybe_unused]] mi::Uint32 result
+        = m_factory->assign_from_to( new_data.get(), old_data.get(), /*options*/ 0);
     MI_ASSERT( result == 0);
-    boost::ignore_unused( result);
 
     return 0;
 }

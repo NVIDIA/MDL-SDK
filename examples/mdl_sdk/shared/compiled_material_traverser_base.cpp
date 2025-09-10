@@ -111,7 +111,6 @@ void Compiled_material_traverser_base::traverse(const mi::neuraylib::ICompiled_m
             case mi::neuraylib::IExpression::EK_PARAMETER: // nothing special to do
             case mi::neuraylib::IExpression::EK_TEMPORARY: // nothing special to do
             case mi::neuraylib::IExpression::EK_CALL: // will not happen for compiled materials
-            case mi::neuraylib::IExpression::EK_FORCE_32_BIT: // not a valid value
                 break;
         }
     }
@@ -156,9 +155,6 @@ void Compiled_material_traverser_base::traverse(const mi::neuraylib::ICompiled_m
                 }
                 break;
             }
-
-            case mi::neuraylib::IValue::VK_FORCE_32_BIT:  
-                break; // not a valid value
         }
     }
 

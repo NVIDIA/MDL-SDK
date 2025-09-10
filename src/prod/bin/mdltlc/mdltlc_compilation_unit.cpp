@@ -74,6 +74,9 @@ private:
     unsigned m_warning_count;
 
 public:
+    using Errors::Error;
+    using Errors::Warning;
+    
     /// Report a syntax error at given line, column pair.
     ///
     /// \param la      the current look-ahead token

@@ -246,7 +246,7 @@ inline mi::mdl::IMDL* load_mdl_compiler(const char* filename = 0)
 #ifdef MI_PLATFORM_WINDOWS
     void* handle = LoadLibraryA((LPSTR) filename);
     if (!handle) {
-        // fall back to libraries in a relative lib folder, relevant for install targets
+        // fall back to libraries in a relative bin folder, relevant for install targets
         std::string fallback = std::string("../../../bin/") + filename;
         handle = LoadLibraryA(fallback.c_str());
     }
@@ -258,7 +258,7 @@ inline mi::mdl::IMDL* load_mdl_compiler(const char* filename = 0)
             FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
             MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buffer, 0, 0))
             message = buffer;
-        fprintf(stderr, "Failed to load %s library (%u): " FMT_LPTSTR, filename, error_code, message);
+        fprintf(stderr, "Failed to load %s library (%lu): " FMT_LPTSTR, filename, error_code, message);
         if (buffer)
             LocalFree(buffer);
         return nullptr;
@@ -272,7 +272,7 @@ inline mi::mdl::IMDL* load_mdl_compiler(const char* filename = 0)
             FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
             MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buffer, 0, 0))
             message = buffer;
-        fprintf(stderr, "GetProcAddress error (%u): " FMT_LPTSTR, error_code, message);
+        fprintf(stderr, "GetProcAddress error (%lu): " FMT_LPTSTR, error_code, message);
         if (buffer)
             LocalFree(buffer);
         return nullptr;
@@ -307,7 +307,7 @@ inline bool unload()
             FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
             MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buffer, 0, 0))
             message = buffer;
-        fprintf(stderr, "Failed to unload library (%u): " FMT_LPTSTR, error_code, message);
+        fprintf(stderr, "Failed to unload library (%lu): " FMT_LPTSTR, error_code, message);
         if (buffer)
             LocalFree(buffer);
         return false;
@@ -456,17 +456,10 @@ class Module_manager : public mi::mdl::ICall_name_resolver, public mi::mdl::IMod
 public:
     /// Constructor.
     ///
-    /// \param mdl_compiler  the MDL compiler interface
-    Module_manager(mi::mdl::IMDL *mdl_compiler)
-      : m_dag_be(mi::base::make_handle(mdl_compiler->load_code_generator("dag"))
-        .get_interface<mi::mdl::ICode_generator_dag>())
+    /// \param dag_be  the DAG backend
+    Module_manager(mi::mdl::ICode_generator_dag *dag_be)
+      : m_dag_be(mi::base::make_handle_dup(dag_be))
     {
-        mi::mdl::Options &options = m_dag_be->access_options();
-
-        // We need to set these options to ensure that local function calls in
-        // materials work.
-        options.set_option(MDL_CG_DAG_OPTION_NO_LOCAL_FUNC_CALLS, "false");
-        options.set_option(MDL_CG_DAG_OPTION_INCLUDE_LOCAL_ENTITIES, "true");
     }
 
     /// Adds a module and all its imports to the module manager.
@@ -835,6 +828,12 @@ public:
     }
 
     /// Get the DAG containing the material of the material instance.
+    void set_material_instance(mi::base::Handle<mi::mdl::IMaterial_instance> &mat_instance)
+    {
+        m_inst = mat_instance;
+    }
+
+    /// Get the DAG containing the material of the material instance.
     mi::base::Handle<mi::mdl::IGenerated_code_dag const> get_dag() const {
         return m_dag;
     }
@@ -964,7 +963,7 @@ public:
         .get_interface<mi::mdl::ICode_generator_dag>())
     , m_search_path(new MDL_search_path())
     , m_msg_context(mdl_compiler, filename)
-    , m_module_manager(mdl_compiler)
+    , m_module_manager(m_dag_be.get())
     {
         // increment reference counter, as the MDL compiler will take ownership (and not increment it),
         // but we will keep a reference
@@ -1026,6 +1025,18 @@ public:
     Module_manager &get_module_manager()
     {
         return m_module_manager;
+    }
+
+    /// Load some requires modules to make distilling work.
+    void load_distilling_support()
+    {
+        mi::base::Handle<mi::mdl::IModule const> nv_ds_module(
+            m_mdl_compiler->load_module(m_msg_context, "::nvidia::distilling_support", &m_module_manager));
+
+        if (!nv_ds_module || !nv_ds_module->is_valid())
+            check_success(!"Loading distilling support module failed");
+
+        m_module_manager.add_module(nv_ds_module.get());
     }
 
     /// Access the compiler messages.

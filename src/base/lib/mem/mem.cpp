@@ -51,11 +51,7 @@
 #include <crtdbg.h>
 #endif
 
-#if defined(BIT64)
 mi_static_assert(sizeof(void *) == 8u);
-#else
-mi_static_assert(sizeof(void *) == 4u);
-#endif
 
 namespace MI {
 

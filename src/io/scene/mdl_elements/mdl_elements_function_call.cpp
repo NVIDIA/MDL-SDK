@@ -42,8 +42,6 @@
 
 #include <sstream>
 
-#include <boost/core/ignore_unused.hpp>
-
 #include <mi/base/handle.h>
 #include <mi/mdl/mdl_mdl.h>
 #include <mi/mdl/mdl_symbols.h>
@@ -741,9 +739,8 @@ mi::mdl::IGenerated_code_lambda_function* Mdl_function_call::create_jitted_funct
     }
 
     if( !environment_context) {
-        size_t idx = lambda_func->store_root_expr( call);
+        [[maybe_unused]] size_t idx = lambda_func->store_root_expr( call);
         ASSERT( M_SCENE, idx == 0);
-        boost::ignore_unused( idx);
     } else {
         lambda_func->set_body( call);
     }
@@ -783,46 +780,71 @@ public:
 
     ~Caching_transaction()
     {
-        for( auto &entry : m_elements)
+        for( auto &entry : m_elements_by_tag)
             entry.second->unpin();
-    }
-
-    SERIAL::Class_id get_class_id( DB::Tag tag) final
-    {
-        auto it = m_class_ids.find( tag);
-        if( it != m_class_ids.end())
-            return it->second;
-
-        SERIAL::Class_id class_id = m_transaction->get_class_id( tag);
-        m_class_ids[tag] = class_id;
-        return class_id;
-    }
-
-    // Invalid tags are not cached. Unclear if relevant.
-    DB::Tag name_to_tag( const char* name) final
-    {
-        auto it = m_tags.find( name);
-        if( it != m_tags.end())
-            return it->second;
-
-        DB::Tag tag = m_transaction->name_to_tag( name);
-        if( tag)
-            m_tags[name] = tag;
-        return tag;
+        for( auto &entry : m_elements_by_name)
+            entry.second->unpin();
     }
 
     DB::Info* access_element( DB::Tag tag) final
     {
-        auto it = m_elements.find( tag);
-        if( it != m_elements.end()) {
+        auto it = m_elements_by_tag.find( tag);
+        if( it != m_elements_by_tag.end()) {
             it->second->pin();
             return it->second;
         }
 
         DB::Info* element = m_transaction->access_element( tag);
         element->pin();
-        m_elements[tag] = element;
+        m_elements_by_tag[tag] = element;
         return element;
+    }
+
+    // Invalid names are not cached. Unclear if relevant.
+    DB::Info* access_element( const char* name) final
+    {
+        auto it = m_elements_by_name.find( name);
+        if( it != m_elements_by_name.end()) {
+            it->second->pin();
+            return it->second;
+        }
+
+        DB::Info* element = m_transaction->access_element( name);
+        if( !element)
+            return nullptr;
+
+        element->pin();
+        m_elements_by_name[name] = element;
+        return element;
+    }
+
+    SERIAL::Class_id get_class_id( DB::Tag tag) final
+    {
+        DB::Info* info = access_element( tag);
+        if( !info)
+            return SERIAL::class_id_unknown;
+
+        SERIAL::Class_id class_id = info->get_element()->get_class_id();
+        info->unpin();
+        return class_id;
+    }
+
+    // Invalid names are not cached. Unclear if relevant.
+    //
+    // The implementation of access_element() might be more expensive than that of name_to_tag()
+    // alone, but that cost is offset by the most likely following, and now cached, access_element()
+    // call.
+    DB::Tag name_to_tag( const char* name, Name_to_tag_context context) final
+    {
+        ASSERT( M_SCENE, context != STORE_CONTEXT);
+
+        DB::Info* info = access_element( name);
+        if( !info)
+            return {};
+
+        DB::Tag result = info->get_tag();
+        info->unpin();
+        return result;
     }
 
 private:
@@ -839,9 +861,8 @@ private:
         { return lhs < rhs; }
     };
 
-    std::map<DB::Tag, SERIAL::Class_id>         m_class_ids;
-    std::map<std::string, DB::Tag, String_less> m_tags;
-    std::map<DB::Tag, DB::Info*>                m_elements;
+    std::map<std::string, DB::Info*, String_less> m_elements_by_name;
+    std::map<DB::Tag, DB::Info*>                  m_elements_by_tag;
 };
 
 Mdl_compiled_material* Mdl_function_call::create_compiled_material(
@@ -869,8 +890,6 @@ Mdl_compiled_material* Mdl_function_call::create_compiled_material(
         return nullptr;
 
     ASSERT( M_SCENE, m_module_tag);
-    DB::Access<Mdl_module> module( m_module_tag, transaction);
-    const char* module_name = module->get_mdl_name();
 
     auto mdl_meters_per_scene_unit
         = context->get_option<mi::Float32>( MDL_CTX_OPTION_METERS_PER_SCENE_UNIT);
@@ -881,7 +900,7 @@ Mdl_compiled_material* Mdl_function_call::create_compiled_material(
     auto resolve_resources = context->get_option<bool>( MDL_CTX_OPTION_RESOLVE_RESOURCES);
 
     return new Mdl_compiled_material(
-        transaction, instance.get(), module_name,
+        transaction, instance.get(), m_module_tag,
         mdl_meters_per_scene_unit, mdl_wavelength_min, mdl_wavelength_max, resolve_resources);
 }
 

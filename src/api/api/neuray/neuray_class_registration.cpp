@@ -40,8 +40,6 @@
 #include <mi/neuraylib/iextension_api.h>
 #include <mi/neuraylib/istructure_decl.h>
 
-#include <boost/core/ignore_unused.hpp>
-
 #include <base/system/main/access_module.h>
 #include <base/data/serial/serial.h>
 
@@ -124,8 +122,7 @@ void Class_registration::register_classes_part2( Class_factory* factory, DB::Dat
 
 void Class_registration::register_structure_declarations( Class_factory* factory)
 {
-    mi::Sint32 result = 0;
-    boost::ignore_unused( result);
+    [[maybe_unused]] mi::Sint32 result = 0;
 
     mi::base::Handle<mi::IStructure_decl> decl;
 
@@ -184,8 +181,7 @@ void Class_registration::register_structure_declarations( Class_factory* factory
 
 void Class_registration::unregister_structure_declarations( Class_factory* factory)
 {
-    mi::Sint32 result = 0;
-    boost::ignore_unused( result);
+    [[maybe_unused]] mi::Sint32 result = 0;
 
 #define UNREG(s) \
     if( make_handle( factory->get_structure_decl( s))) { \

@@ -29,6 +29,7 @@
 #ifndef MDL_COMPILERCORE_PRINTERS_H
 #define MDL_COMPILERCORE_PRINTERS_H 1
 
+#include <cstdarg>
 #include <type_traits>
 
 #include <mi/base/handle.h>
@@ -145,7 +146,7 @@ public:
         IOutput_stream_colored::Color     foreground_color,
         bool                              foreground_bold = false,
         IOutput_stream_colored::Color     background_color = IOutput_stream_colored::DEFAULT,
-        bool                              background_bold = false)
+        bool                              background_bold = false) MDL_OVERRIDE
     {
         m_color_table[element] = Color_entry(
             foreground_color,
@@ -523,6 +524,14 @@ public:
 
     /// Print an utf8 string with escapes.
     void print_utf8(char const *utf8_string, bool escapes);
+
+    /// Format print.
+    ///
+    /// \param format  standard printf like format string
+    ///
+    /// \note: Beware: this function uses an internal (limited) buffer,
+    ///        do not print prints with it
+    void vprintf(char const *format, va_list ap);
 
     /// Format print.
     ///

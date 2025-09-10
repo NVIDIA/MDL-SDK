@@ -66,7 +66,7 @@ namespace details {
 /// Tags which help categorize log messages.
 ///
 // Tags may be combined.
-enum Message_tag
+enum Message_tag : Uint32
 {
     TAG_NONE                    = 0u,      ///< no tags
     TAG_COMPATIBILITY           = 1u << 0, ///< hardware or library compatibility
@@ -94,8 +94,8 @@ using namespace details;
 /// This type uses named constructors (which can be chained) to allow for clearer construction code.
 struct Message_details
 {
-    enum { HOST_ID_LOCAL = 0 };
-    enum {
+    enum : Uint32 { HOST_ID_LOCAL = 0 };
+    enum : Sint32 {
         DEVICE_ID_CPU = -1,
         DEVICE_ID_UNKNOWN_CUDA = -2,
         DEVICE_ID_ALL_CUDA = -3

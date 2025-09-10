@@ -461,6 +461,16 @@ namespace mi { namespace examples { namespace strings
         return result;
     }
 
+    // removes the query substring of an url if present.
+    inline std::string drop_url_query(const std::string& url)
+    {
+        size_t pos = url.find_first_of('?');
+        if (pos == std::string::npos)
+            return url;
+        else
+            return url.substr(0, pos);
+    }
+
     // --------------------------------------------------------------------------------------------
 
     /// create a formatted string.
@@ -553,9 +563,9 @@ namespace mi { namespace examples { namespace strings
                 return "MDL SDK";
             case mi::neuraylib::IMessage::MSG_IMP_EXP:
                 return "Importer/Exporter";
-            case mi::neuraylib::IMessage::MSG_COMILER_BACKEND:
+            case mi::neuraylib::IMessage::MSG_COMPILER_BACKEND:
                 return "Compiler Backend";
-            case mi::neuraylib::IMessage::MSG_COMILER_CORE:
+            case mi::neuraylib::IMessage::MSG_COMPILER_CORE:
                 return "Compiler Core";
             case mi::neuraylib::IMessage::MSG_COMPILER_ARCHIVE_TOOL:
                 return "Compiler Archive Tool";

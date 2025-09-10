@@ -1427,6 +1427,12 @@ void Printer::print_decl(
                 pop_color();
                 nl();
             }
+
+            if (fdecl->is_export()) {
+                keyword("export");
+                print(' ');
+            }
+
             Type_name const *tn = fdecl->get_ret_type();
             push_color(C_TYPE);
             print(tn);

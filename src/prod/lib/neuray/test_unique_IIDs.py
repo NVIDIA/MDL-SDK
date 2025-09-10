@@ -127,9 +127,9 @@ def remove_comments (buffer):
     error messages are wrong). Also replaces string constants by '...'/"..."
     to simplify searching of "<" and ">".
     """
-    def replacer (match):
+    def replacer (m):
         """Replaces subexpressions matched by RE below."""
-        s = match.group (0)
+        s = m.group (0)
         if s.startswith ('/*'):
             return "" + "\n" * s.count ('\n')
         if s.startswith ('/'):
@@ -175,9 +175,9 @@ def find_next_non_whitespace (buffer, line, col):
      Starts at position (line, col). Returns (-1,-1) if none is found.
      """
     while line < len (buffer):
-        match = re.search (r'\S', buffer[line][col:])
-        if match:
-            return (line, col + match.start())
+        m = re.search (r'\S', buffer[line][col:])
+        if m:
+            return (line, col + m.start())
         line += 1
         col = 0
     return (-1, -1)
@@ -234,8 +234,8 @@ def process_match (buffer, line_start, col_start, offset):
 
     s = join_lines (buffer, line_start, col_start, line_end, col_end+1)
 
-    match = re.search (r'^(' + mixin_names + r')\s*<([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*)(,.*>|>)$', s)
-    if not match:
+    m = re.search (r'^(' + mixin_names + r')\s*<([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*),([^,]*)(,.*>|>)$', s)
+    if not m:
         print("skipping %s:%d: %s (regular expression does not match)" \
             % (filename, line_start, s))
         return
@@ -247,7 +247,7 @@ def process_match (buffer, line_start, col_start, offset):
     iid.set_buffer (s)
     try:
         for i in range (0, 11):
-            iid.set_id (i, match.group (i+2).strip())
+            iid.set_id (i, m.group (i+2).strip())
         iid.compute_hash()
         iids += [ iid ]
     except ValueError:
@@ -261,13 +261,13 @@ def process_buffer (buffer):
     line = 0
     col = 0
     while line < len (buffer):
-        match = re.search (r'(^|\W)(' + mixin_names + r')($|\W)', buffer[line][col:])
-        if not match:
+        m = re.search (r'(^|\W)(' + mixin_names + r')($|\W)', buffer[line][col:])
+        if not m:
             line += 1
             col = 0
         else:
-            col += match.start (2)
-            process_match (buffer, line, col, len (match.group (2)))
+            col += m.start (2)
+            process_match (buffer, line, col, len (m.group (2)))
             col += 1
 
 def process_file():

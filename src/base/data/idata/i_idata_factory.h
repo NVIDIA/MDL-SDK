@@ -46,7 +46,7 @@
 #include <mi/neuraylib/idata.h>
 #include <mi/neuraylib/type_traits.h>
 
-#include <base/lib/robin_hood/robin_hood.h>
+#include <base/lib/unordered_dense/unordered_dense.h>
 #include <base/data/db/i_db_tag.h>
 
 namespace mi {
@@ -533,18 +533,18 @@ private:
     /// Maps type names to factory methods.
     ///
     /// Not locked since it is modified only before startup. No reference counting.
-    robin_hood::unordered_map<std::string, Factory_function> m_factory_functions;
+    ankerl::unordered_dense::map<std::string, Factory_function> m_factory_functions;
 
     /// Maps type names to structure declarations.
     ///
     /// \note Any access needs to be protected by #m_structure_decls_lock.
-    robin_hood::unordered_map<std::string, mi::base::Handle<const mi::IStructure_decl>>
+    ankerl::unordered_dense::map<std::string, mi::base::Handle<const mi::IStructure_decl>>
         m_structure_decls;
 
     /// Maps type names to enum declarations.
     ///
     /// \note Any access needs to be protected by #m_enum_decls_lock.
-    robin_hood::unordered_map<std::string, mi::base::Handle<const mi::IEnum_decl>> m_enum_decls;
+    ankerl::unordered_dense::map<std::string, mi::base::Handle<const mi::IEnum_decl>> m_enum_decls;
 
     /// The lock that protects the map #m_structure_decls.
     mutable mi::base::Lock m_structure_decls_lock;

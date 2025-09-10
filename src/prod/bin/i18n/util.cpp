@@ -123,7 +123,7 @@ string Util::basename(const string& path)
 
 string Util::extension(const std::string& path)
 {
-    return MI::HAL::Ospath::get_ext(path);
+    return MI::DISK::get_extension(path);
 }
 
 string Util::get_program_name(const string & path)
@@ -238,8 +238,8 @@ bool Util::equivalent(const std::string & file1, const std::string & file2)
        p2 = fs::absolute(p2);
        p2 = p2.lexically_normal();
 
-       std::string p1norm = p1.u8string();
-       std::string p2norm = p2.u8string();
+       std::string p1norm = MI::DISK::to_string(p1);
+       std::string p2norm = MI::DISK::to_string(p2);
 #if WIN_NT
         // On Windows, normalize the case before testing
         MI::STRING::to_upper(p1norm);

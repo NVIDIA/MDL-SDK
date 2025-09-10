@@ -955,6 +955,10 @@ class SignatureParser:
 		# poor man's scanner :-)
 		tokens = re.sub(r'[,()]', lambda m: ' ' + m.group(0) + ' ', decl).split()
 
+		# skip declarative modifier if any
+		if tokens[0] == 'declarative':
+			tokens = tokens[1:]
+
 		tokens, ret_type = self.get_type(tokens)
 
 		name = tokens[0]
@@ -4091,9 +4095,9 @@ class SignatureParser:
 				llvm::Type  *res_type = ctx.get_non_deriv_return_type();
 
 				llvm::Value *lut      = m_code_gen.get_attribute_table(
-					ctx, LLVM_code_generator::RTK_TEXTURE);
+					LLVM_code_generator::RTK_TEXTURE);
 				llvm::Value *lut_size = m_code_gen.get_attribute_table_size(
-					ctx, LLVM_code_generator::RTK_TEXTURE);
+					LLVM_code_generator::RTK_TEXTURE);
 				if (lut != NULL) {
 					// have a lookup table
 					llvm::Value *tmp  = ctx.create_local(res_type, "tmp");
@@ -5530,9 +5534,9 @@ class SignatureParser:
 			code = """
 			llvm::Type  *res_type = ctx.get_non_deriv_return_type();
 			llvm::Value *lut      = m_code_gen.get_attribute_table(
-				ctx, LLVM_code_generator::RTK_%(TYPE)s);
+				LLVM_code_generator::RTK_%(TYPE)s);
 			llvm::Value *lut_size =  m_code_gen.get_attribute_table_size(
-				ctx, LLVM_code_generator::RTK_%(TYPE)s);
+				LLVM_code_generator::RTK_%(TYPE)s);
 			if (lut != NULL) {
 				// have a lookup table
 				llvm::Value *tmp  = ctx.create_local(res_type, "tmp");

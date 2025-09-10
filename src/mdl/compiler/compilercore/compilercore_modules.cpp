@@ -178,6 +178,20 @@ Semantic_version::Semantic_version(
 {
 }
 
+/// Ensure that built-in modules have a "file name" for debug info.
+static char const *friedly_file_name(
+    char const *file_name,
+    char const *module_name)
+{
+    if (file_name != NULL && file_name[0] != '\0') {
+        return file_name;
+    }
+
+    // Because neuray expects an empty name for build-in modules, use the module name
+    // then.
+    return module_name;
+}
+
 // Constructor.
 Module::Module(
     IAllocator        *alloc,
@@ -205,13 +219,13 @@ Module::Module(
 , m_is_hashed((flags & MF_IS_HASHED) != 0)
 , m_sema_version(NULL)
 , m_mdl_version(version)
-, m_msg_list(alloc, file_name)
+, m_msg_list(alloc, friedly_file_name(file_name, module_name))
 , m_sym_tab(m_arena)
 , m_name_factory(m_sym_tab, m_arena)
 , m_decl_factory(m_arena)
 , m_expr_factory(m_arena)
 , m_stmt_factory(m_arena)
-, m_type_factory(m_arena, *compiler, m_sym_tab)
+, m_type_factory(m_arena, compiler->get_type_factory(), m_sym_tab)
 , m_value_factory(m_arena, m_type_factory)
 , m_anno_factory(m_arena)
 , m_def_tab(*this)
@@ -2247,6 +2261,9 @@ IValue const *Module::create_default_value(
 
 restart:
     switch (type->get_kind()) {
+    case IType::TK_PTR:
+    case IType::TK_REF:
+    case IType::TK_VOID:
     case IType::TK_AUTO:
     case IType::TK_ERROR:
     case IType::TK_FUNCTION:
@@ -2337,6 +2354,9 @@ restart:
 
     switch (type->get_kind()) {
     case IType::TK_ALIAS:
+    case IType::TK_PTR:
+    case IType::TK_REF:
+    case IType::TK_VOID:
     case IType::TK_AUTO:
     case IType::TK_ERROR:
     case IType::TK_ARRAY:
@@ -2564,6 +2584,9 @@ static bool equivalent_type(
         // if they are not pointer equal, they are different
         return false;
     case IType::TK_BSDF_MEASUREMENT:
+    case IType::TK_PTR:
+    case IType::TK_REF:
+    case IType::TK_VOID:
     case IType::TK_AUTO:
     case IType::TK_ERROR:
         return true;
@@ -3645,6 +3668,9 @@ public:
         case IType::TK_VDF:
         case IType::TK_TEXTURE:
         case IType::TK_BSDF_MEASUREMENT:
+        case IType::TK_PTR:
+        case IType::TK_REF:
+        case IType::TK_VOID:
         case IType::TK_AUTO:
         case IType::TK_COLOR:
         case IType::TK_ERROR:
@@ -4843,6 +4869,9 @@ static IType_name *construct_type_name(
     switch (type->get_kind()) {
     case IType::TK_ALIAS:
     case IType::TK_FUNCTION:
+    case IType::TK_PTR:
+    case IType::TK_REF:
+    case IType::TK_VOID:
     case IType::TK_AUTO:
     case IType::TK_ERROR:
         // should not happen

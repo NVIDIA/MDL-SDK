@@ -40,6 +40,7 @@
 #include <base/system/main/access_module.h>
 #include <base/hal/disk/disk_file_reader_writer_impl.h>
 #include <base/hal/disk/disk_memory_reader_writer_impl.h>
+#include <base/hal/disk/disk_utils.h>
 #include <base/lib/config/config.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/log/i_log_assert.h>
@@ -299,8 +300,8 @@ SERIAL::Serializable* Bsdf_measurement::deserialize( SERIAL::Deserializer* deser
     if( !m_original_filename.empty()) {
 
         if( serializer_sep != fs::path::preferred_separator) {
-            m_original_filename = fs::u8path( m_original_filename).u8string();
-            m_resolved_filename = fs::u8path( m_resolved_filename).u8string();
+            m_original_filename = DISK::to_string( fs::u8path( m_original_filename));
+            m_resolved_filename = DISK::to_string( fs::u8path( m_resolved_filename));
         }
 
         // Re-resolve filename if it is not meaningful for this host. If unsuccessful, clear value
@@ -318,8 +319,10 @@ SERIAL::Serializable* Bsdf_measurement::deserialize( SERIAL::Deserializer* deser
     // Adjust m_resolved_container_filename and m_resolved_container_membername for this host.
     if( !m_resolved_container_filename.empty()) {
 
-        m_resolved_container_filename = fs::u8path( m_resolved_container_filename).u8string();
-        m_resolved_container_membername = fs::u8path( m_resolved_container_membername).u8string();
+        m_resolved_container_filename
+            = DISK::to_string( fs::u8path( m_resolved_container_filename));
+        m_resolved_container_membername
+            = DISK::to_string( fs::u8path( m_resolved_container_membername));
         if( !fs::is_regular_file( fs::u8path( m_resolved_container_filename), ec)) {
             m_resolved_container_filename.clear();
             m_resolved_container_membername.clear();
@@ -678,8 +681,8 @@ mi::Sint32 import_from_file(
     mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data>& reflection,
     mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data>& transmission)
 {
-    std::string extension = STRING::to_lower( fs::u8path( filename).extension().u8string());
-    if( extension != ".mbsdf")
+    std::string extension = STRING::to_lower( DISK::get_extension( filename));
+    if( extension != "mbsdf")
         return -3;
 
     DISK::File_reader_impl reader;

@@ -242,7 +242,6 @@ mi::Sint32 Mdl_configuration_impl::set_material_ior_frequency(
             m_config_module->override( "mdl_material_ior_is_varying=1");
             return 0;
         case mi::neuraylib::IType::MK_NONE:
-        case mi::neuraylib::IType::MK_FORCE_32_BIT:
             break;
     }
 
@@ -289,20 +288,6 @@ void Mdl_configuration_impl::set_entity_resolver( mi::neuraylib::IMdl_entity_res
     mi::base::Handle<mi::mdl::IEntity_resolver> mdl_resolver(
         new Core_entity_resolver_impl( mdl.get(), resolver));
     mdl->set_external_entity_resolver( mdl_resolver.get());
-}
-
-void Mdl_configuration_impl::deprecated_set_logger( mi::base::ILogger* logger)
-{
-    mi::base::Handle<mi::neuraylib::ILogging_configuration> logging_configuration(
-        m_neuray->get_api_component<mi::neuraylib::ILogging_configuration>());
-    logging_configuration->set_receiving_logger( logger);
-}
-
-mi::base::ILogger* Mdl_configuration_impl::deprecated_get_logger()
-{
-    mi::base::Handle<mi::neuraylib::ILogging_configuration> logging_configuration(
-        m_neuray->get_api_component<mi::neuraylib::ILogging_configuration>());
-    return logging_configuration->get_forwarding_logger();
 }
 
 mi::Sint32 Mdl_configuration_impl::start()

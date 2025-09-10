@@ -481,6 +481,7 @@ class Type_factory : public IType_factory
             KEY_STRUCT_KEY,     ///< a struct search key
             KEY_ENUM_TYPE,      ///< an enum type itself
             KEY_ENUM_KEY,       ///< an enum search key
+            KEY_PTR_REF,        ///< a pointer or reference type key
         };
         Kind kind;
 
@@ -530,6 +531,12 @@ class Type_factory : public IType_factory
 
             // for KEY_ENUM_KEY
             Enum_type enum_tp;
+
+            // for KEY_PTR_REF
+            struct {
+                IType::Kind kind;
+                unsigned addr_space;
+            } ptr_ref;
         } u;  // PVS: -V730_NOINIT
 
         /// Create a key for a function type.
@@ -649,6 +656,21 @@ class Type_factory : public IType_factory
             u.enum_tp.sym      = sym;
             u.enum_tp.values   = values;
             u.enum_tp.n_values = n;
+        }
+
+        /// Create a key for a pointer or reference type.
+        ///
+        /// \param kind        the type kind
+        /// \param t           the element type of the pointer/reference
+        /// \param addr_space  the address space
+        Type_cache_key(
+            IType::Kind kind,
+            IType const *t,
+            unsigned    addr_space)
+        : kind(KEY_PTR_REF), type(t)
+        {
+            u.ptr_ref.addr_space = addr_space;
+            u.ptr_ref.kind       = kind;
         }
 
         /// Functor to hash a type cache keys.
@@ -781,6 +803,14 @@ class Type_factory : public IType_factory
                             t ^= (size_t(v[i].get_code()) * 3) ^ (size_t(v[i].get_symbol()) >> 4);
                         }
                         return t;
+                    }
+                case KEY_PTR_REF:
+                    {
+                        size_t t = size_t(key.type) >> 4;
+                        return ((t) >> 3) ^ (t >> 16) ^
+                            size_t(key.kind) ^
+                            size_t(key.u.ptr_ref.addr_space * 3) ^
+                            size_t(key.u.ptr_ref.kind) << 16;
                     }
                 default:
                     return 0;
@@ -928,6 +958,11 @@ class Type_factory : public IType_factory
                     // should be NEVER inside the type hash
                     MDL_ASSERT(!"enum search key in type cache detected");
                     return false;
+                case KEY_PTR_REF:
+                    return
+                        a.type == b.type &&
+                        a.u.ptr_ref.addr_space == b.u.ptr_ref.addr_space &&
+                        a.u.ptr_ref.kind == b.u.ptr_ref.kind;
                 default:
                     return false;
                 }
@@ -949,6 +984,9 @@ public:
 
     /// Create a new type error instance.
     MDL_CHECK_RESULT IType_error const *create_error() MDL_FINAL;
+
+    /// Create a new type void instance.
+    MDL_CHECK_RESULT IType_void const *create_void() MDL_FINAL;
 
     /// Create a new type auto (non-deduced incomplete type) instance.
     MDL_CHECK_RESULT IType_auto const *create_auto() MDL_FINAL;
@@ -1038,6 +1076,26 @@ public:
 
     /// Create a new type color instance.
     MDL_CHECK_RESULT IType_color const *create_color() MDL_FINAL;
+
+    /// Create a new type pointer instance.
+    ///
+    /// \param element_type  The element type of the pointer.
+    /// \param addr_space    The address space of the pointer.
+    ///
+    /// \return IType_error if element_type was of IType_error, an IType_pointer instance else.
+    MDL_CHECK_RESULT IType const *create_pointer(
+        IType const *element_type,
+        unsigned    addr_space) MDL_FINAL;
+
+    /// Create a new type reference instance.
+    ///
+    /// \param element_type  The element type of the reference.
+    /// \param addr_space    The address space of the reference.
+    ///
+    /// \return IType_error if element_type was of IType_error, an IType_ref instance else.
+    MDL_CHECK_RESULT IType const *create_reference(
+        IType const *element_type,
+        unsigned    addr_space) MDL_FINAL;
 
     /// Lookup a struct category.
     ///
@@ -1203,14 +1261,24 @@ public:
     /// Get the allocator.
     IAllocator *get_allocator() { return m_builder.get_arena()->get_allocator(); }
 
-    /// Constructs a new type factory.
+    /// Constructs a new type non-root factory.
     ///
     /// \param arena         the memory arena used to allocate new types
-    /// \param compiler      the compiler
+    /// \param root_factory  the root_factory of the compiler
     /// \param sym_tab       the symbol table for symbols inside types
     explicit Type_factory(
         Memory_arena  &arena,
-        MDL           &compiler,
+        Type_factory  *root_factory,
+        Symbol_table  &sym_tab);
+
+    /// Constructs a new type root factory.
+    ///
+    /// \param arena               the memory arena used to allocate new types
+    /// \param mat_ior_is_varying  true if the material IOR field is varying
+    /// \param sym_tab             the symbol table for symbols inside types
+    explicit Type_factory(
+        Memory_arena  &arena,
+        bool          mat_ior_is_varying,
         Symbol_table  &sym_tab);
 
 private:
@@ -1265,7 +1333,7 @@ private:
     size_t const m_id;
 
     /// The type factory of the compiler itself or NULL.
-    IType_factory * const m_compiler_factory;
+    IType_factory * const m_root_factory;
 
     /// The symbol table used to create new symbols for types.
     Symbol_table * const m_symtab;

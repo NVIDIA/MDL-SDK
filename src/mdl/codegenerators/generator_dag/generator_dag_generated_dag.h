@@ -160,6 +160,9 @@ public:
     /// The type of vectors of strings.
     typedef vector<string>::Type String_vector;
 
+    /// The type of vectors of symbols.
+    typedef vector<ISymbol const *>::Type Symbol_vector;
+
     /// Helper class describing one (material) parameter.
     class Parameter_info {
         friend bool has_dynamic_memory_consumption(Parameter_info const &);
@@ -299,9 +302,9 @@ public:
         void add_return_annotation(DAG_node const *anno) { m_return_annos.push_back(anno); }
 
         /// Add a temporary.
-        size_t add_temporary(DAG_node const *temp, char const *name) {
+        size_t add_temporary(DAG_node const *temp, ISymbol const *symbol) {
             m_temporaries.push_back(temp);
-            m_temporary_names.emplace_back(name, m_temporary_names.get_allocator());
+            m_temporary_names.push_back(symbol);
             return m_temporaries.size() - 1;
         }
 
@@ -365,8 +368,8 @@ public:
         DAG_node const *get_temporary(size_t idx) const { return m_temporaries[idx]; }
 
         /// Get the temporary name at index.
-        char const *get_temporary_name(size_t idx) const {
-            return m_temporary_names[idx].empty() ? NULL : m_temporary_names[idx].c_str();
+        ISymbol const *get_temporary_name(size_t idx) const {
+            return m_temporary_names[idx];
         }
 
         /// Get the material body.
@@ -395,7 +398,7 @@ public:
         Dag_vector            m_annotations;     ///< The annotations of the function.
         Dag_vector            m_return_annos;    ///< The return annotations of the function.
         Dag_vector            m_temporaries;     ///< The function temporaries.
-        String_vector         m_temporary_names; ///< The function temporary names.
+        Symbol_vector         m_temporary_names; ///< The function temporary names.
         DAG_node const        *m_body;           ///< The IR body of the function.
         String_vector         m_refs;            ///< The references of a function.
         DAG_hash              m_hash;            ///< The function hash value.
@@ -2068,7 +2071,7 @@ public:
     /// \param function_index      The index of the function.
     /// \param temporary_index     The index of the temporary variable.
     /// \returns                   The name of the temporary variable.
-    char const *get_function_temporary_name(
+    ISymbol const *get_function_temporary_name(
         size_t function_index,
         size_t temporary_index) const MDL_FINAL;
 
@@ -2168,7 +2171,7 @@ public:
     /// \param material_index   The index of the material.
     /// \param temporary_index  The index of the temporary variable.
     /// \returns                The name of the temporary variable.
-    char const *get_material_temporary_name(
+    ISymbol const *get_material_temporary_name(
         size_t material_index,
         size_t temporary_index) const MDL_FINAL;
 
@@ -2983,27 +2986,27 @@ private:
     ///
     /// \param mat_index    The index of the material.
     /// \param node         The IR node defining the temporary.
-    /// \param name         The name of the temporary.
+    /// \param symbol       The name of the temporary.
     ///
     /// \returns            The index of the temporary.
     ///
     int add_material_temporary(
         int            mat_index,
         DAG_node const *node,
-        char const     *name);
+        ISymbol const  *symbol);
 
     /// Add a function temporary.
     ///
     /// \param func_index   The index of the function.
     /// \param node         The IR node defining the temporary.
-    /// \param name         The name of the temporary.
+    /// \param symbol       The name of the temporary.
     ///
     /// \returns            The index of the temporary.
     ///
     int add_function_temporary(
         int            func_index,
         DAG_node const *node,
-        char const     *name);
+        ISymbol const  *name);
 
     /// Create a default enum.
     ///
@@ -3266,8 +3269,6 @@ private:
 
     /// If true, an error was detected during construction.
     bool m_error_detected;
-
-    typedef vector<Resource_tag_tuple>::Type Resource_tag_map;
 
     /// The resource tag map, mapping accessible resources to tags.
     Resource_tag_map m_resource_tag_map;

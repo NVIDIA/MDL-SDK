@@ -38,7 +38,7 @@
 #include <ai_msg.h>
 #include <mi/mdl_sdk.h>
 
-    #include <example_shared.h>
+#include <example_shared.h>
 
 
 #ifdef MI_PLATFORM_WINDOWS
@@ -81,7 +81,7 @@ inline mi::neuraylib::INeuray* load_and_get_ineuray(const char* filename, void**
             FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
             MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buffer, 0, 0))
             message = buffer;
-        AiMsgError("[mdl] Failed to load library (%u): " FMT_LPTSTR, error_code, message);
+        AiMsgError("[mdl] Failed to load library (%lu): " FMT_LPTSTR, error_code, message);
         if (buffer)
             LocalFree(buffer);
         return 0;
@@ -95,7 +95,7 @@ inline mi::neuraylib::INeuray* load_and_get_ineuray(const char* filename, void**
             FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
             MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buffer, 0, 0))
             message = buffer;
-        AiMsgError("[mdl] GetProcAddress error (%u): " FMT_LPTSTR, error_code, message);
+        AiMsgError("[mdl] GetProcAddress error (%lu): " FMT_LPTSTR, error_code, message);
         if (buffer)
             LocalFree(buffer);
         return 0;
@@ -147,7 +147,7 @@ inline bool unload(void* dso_handle)
             FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
             MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buffer, 0, 0))
             message = buffer;
-        AiMsgError("[mdl] Failed to unload library (%u): " FMT_LPTSTR, error_code, message);
+        AiMsgError("[mdl] Failed to unload library (%lu): " FMT_LPTSTR, error_code, message);
         if (buffer)
             LocalFree(buffer);
         return false;
@@ -211,4 +211,3 @@ inline std::string get_current_binary_directory()
 }
 
 #endif
-

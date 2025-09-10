@@ -34,15 +34,22 @@
 
 #include <OpenImageIO/filesystem.h>
 
+#include <mi/base/handle.h>
 #include <mi/math/function.h>
+#include <mi/neuraylib/idebug_configuration.h>
 #include <mi/neuraylib/iimage_api.h>
 #include <mi/neuraylib/ireader.h>
+#include <mi/neuraylib/istring.h>
 #include <mi/neuraylib/itile.h>
 #include <mi/neuraylib/iwriter.h>
 
 namespace MI {
 
 namespace MI_OIIO {
+
+bool g_ignore_gamma_metadata_on_import = true;
+
+bool g_linear_gamma_for_single_uint16_channel = true;
 
 mi::base::Handle<mi::base::ILogger> g_logger;
 
@@ -91,82 +98,128 @@ bool has_alpha( const OIIO::ImageSpec& spec)
 
 } // namespace
 
-IMAGE::Pixel_type get_pixel_type( const OIIO::ImageSpec& spec)
+std::pair<IMAGE::Pixel_type, mi::Float32> get_pixel_type_and_gamma_internal(
+    const OIIO::ImageSpec& spec)
 {
     if( spec.deep)
-        return IMAGE::PT_UNDEF;
+        return std::make_pair( IMAGE::PT_UNDEF, 0.0f);
     if( !spec.channelformats.empty())
-        return IMAGE::PT_UNDEF;
+        return std::make_pair( IMAGE::PT_UNDEF, 0.0f);
 
     if( spec.nchannels == 1) {
 
         // ignore channel name
         if( spec.format == OIIO::TypeUInt8)
-            return IMAGE::PT_SINT8;
-        else if( spec.format == OIIO::TypeUInt16) // Or PT_SINT32, but PT_FLOAT32 is closer to
-            return IMAGE::PT_FLOAT32;             // what FreeImage was doing.
+            return std::make_pair( IMAGE::PT_SINT8, 2.2f);
+        else if( spec.format == OIIO::TypeUInt16)
+            return std::make_pair( IMAGE::PT_FLOAT32,
+                g_linear_gamma_for_single_uint16_channel ? 1.0f : 2.2f);
         else if( spec.format == OIIO::TypeInt32)
-            return IMAGE::PT_SINT32;
+            return std::make_pair( IMAGE::PT_SINT32, 1.0f);
         else if( spec.format == OIIO::TypeHalf)
-            return IMAGE::PT_FLOAT32;
+            return std::make_pair( IMAGE::PT_FLOAT32, 1.0f);
         else if( spec.format == OIIO::TypeFloat)
-            return IMAGE::PT_FLOAT32;
+            return std::make_pair( IMAGE::PT_FLOAT32, 1.0f);
         else
-            return IMAGE::PT_UNDEF;
+            return std::make_pair( IMAGE::PT_UNDEF, 0.0f);
 
     } else if( (spec.nchannels == 2) && !has_alpha( spec)) {
 
         if( spec.format == OIIO::TypeHalf)
-            return IMAGE::PT_FLOAT32_2;
+            return std::make_pair( IMAGE::PT_FLOAT32_2, 1.0f);
         if( spec.format == OIIO::TypeFloat)
-            return IMAGE::PT_FLOAT32_2;
+            return std::make_pair( IMAGE::PT_FLOAT32_2, 1.0f);
         else
-            return IMAGE::PT_UNDEF;
+            return std::make_pair( IMAGE::PT_UNDEF, 0.0f);
 
     } else if(     (spec.nchannels == 3)
                || ((spec.nchannels >= 5) && !has_alpha( spec))) {
 
         if( !is_rgb( spec) && !has_alpha( spec))
-            return IMAGE::PT_FLOAT32_3;
+            return std::make_pair( IMAGE::PT_FLOAT32_3, 1.0f);
 
         if( spec.format == OIIO::TypeUInt8)
-            return IMAGE::PT_RGB;
+            return std::make_pair( IMAGE::PT_RGB, 2.2f);
         else if( spec.format == OIIO::TypeUInt16)
-            return IMAGE::PT_RGB_16;
+            return std::make_pair( IMAGE::PT_RGB_16, 2.2f);
         else if( spec.format == OIIO::TypeInt16)
-            return IMAGE::PT_RGB_16;
+            return std::make_pair( IMAGE::PT_RGB_16, 2.2f);
         else if( spec.format == OIIO::TypeHalf)
-            return IMAGE::PT_RGB_FP;
+            return std::make_pair( IMAGE::PT_RGB_FP, 1.0f);
         else if( spec.format == OIIO::TypeFloat)
-            return IMAGE::PT_RGB_FP;
+            return std::make_pair( IMAGE::PT_RGB_FP, 1.0f);
         else
-            return IMAGE::PT_UNDEF;
+            return std::make_pair( IMAGE::PT_UNDEF, 0.0f);
 
     } else if(    ((spec.nchannels == 2) && has_alpha( spec))
                ||  (spec.nchannels == 4)
                || ((spec.nchannels >= 5) && has_alpha( spec))) {
 
         if( !is_rgba( spec) && !has_alpha( spec))
-            return IMAGE::PT_FLOAT32_4;
+            return std::make_pair( IMAGE::PT_FLOAT32_4, 1.0f);
 
         if( spec.format == OIIO::TypeUInt8)
-            return IMAGE::PT_RGBA;
+            return std::make_pair( IMAGE::PT_RGBA, 2.2f);
         else if( spec.format == OIIO::TypeUInt16)
-            return IMAGE::PT_RGBA_16;
+            return std::make_pair( IMAGE::PT_RGBA_16, 2.2f);
         else if( spec.format == OIIO::TypeInt16)
-            return IMAGE::PT_RGBA_16;
+            return std::make_pair( IMAGE::PT_RGBA_16, 2.2f);
         else if( spec.format == OIIO::TypeHalf)
-            return IMAGE::PT_COLOR;
+            return std::make_pair( IMAGE::PT_COLOR, 1.0f);
         else if( spec.format == OIIO::TypeFloat)
-            return IMAGE::PT_COLOR;
+            return std::make_pair( IMAGE::PT_COLOR, 1.0f);
         else
-            return IMAGE::PT_UNDEF;
+            return std::make_pair( IMAGE::PT_UNDEF, 0.0f);
 
     } else {
 
-        return IMAGE::PT_UNDEF;
+        return std::make_pair( IMAGE::PT_UNDEF, 0.0f);
+    }
+}
+
+std::pair<IMAGE::Pixel_type, mi::Float32> get_pixel_type_and_gamma( const OIIO::ImageSpec& spec)
+{
+    auto result = get_pixel_type_and_gamma_internal( spec);
+
+    if( !g_ignore_gamma_metadata_on_import) {
+        mi::Float32 gamma = get_gamma_from_metadata( spec);
+        if( gamma != 0.0f)
+            return std::make_pair( result.first, gamma);
     }
 
+    return result;
+}
+
+mi::Float32 get_gamma_from_metadata( const OIIO::ImageSpec& spec)
+{
+    std::string cs = spec.get_string_attribute( "oiio:ColorSpace");
+    std::transform( cs.begin(), cs.end(), cs.begin(),
+        [](unsigned char c){ return std::tolower( c); });
+
+    if( cs.empty())
+        return 0.0f;
+    if( cs == "linear" || cs == "lin_srgb" || cs == "lin_rec709")
+        return 1.0f;
+    if( cs == "srgb")
+        return 2.2;
+    if( cs == "rec709")
+        return 2.4;
+    if( cs.substr( 0, 5) == "gamma") {
+        char* end = nullptr;
+        float f = std::strtof( cs.data()+5, &end);
+        if( end != cs.data() + cs.size()) {
+            std::ostringstream s;
+            s << "Unsupported colorspace: " << cs << std::endl;
+            log( mi::base::MESSAGE_SEVERITY_WARNING, s.str().c_str());
+            return 0.0f;
+        }
+        return f;
+    }
+
+    std::ostringstream s;
+    s << "Unsupported colorspace: " << cs << std::endl;
+    log( mi::base::MESSAGE_SEVERITY_WARNING, s.str().c_str());
+    return 0.0f;
 }
 
 OIIO::TypeDesc::BASETYPE get_base_type( IMAGE::Pixel_type pixel_type)
@@ -710,7 +763,7 @@ std::pair<int,int> get_selector_channel_range(
 
 /// Computes an image spec with only the given channel range.
 ///
-/// \note The compute image spec does \em not match the input image, do \em not pass it to any OIIO
+/// \note The computed image spec does \em not match the input image, do \em not pass it to any OIIO
 ///       functions. It is used as input for get_pixel_type() and to transport the modified channel
 ///       names.
 ///
@@ -759,6 +812,7 @@ bool compute_properties(
     mi::Uint32& resolution_y,
     mi::Uint32& resolution_z,
     IMAGE::Pixel_type& pixel_type,
+    mi::Float32& gamma,
     std::vector<std::string>& channel_names,
     mi::Sint32& channel_start,
     mi::Sint32& channel_end)
@@ -770,11 +824,11 @@ bool compute_properties(
         resolution_x  = spec.width;
         resolution_y  = spec.height;
         resolution_z  = spec.depth;
-        pixel_type    = get_pixel_type( spec);
+        std::tie( pixel_type, gamma) = get_pixel_type_and_gamma( spec);
         channel_names = spec.channelnames;
         channel_start = 0;
         channel_end   = IMAGE::get_components_per_pixel( pixel_type);
-        return pixel_type != IMAGE::PT_UNDEF;
+        return (pixel_type != IMAGE::PT_UNDEF) && (gamma != 0.0f);
     }
 
     std::string selector_prefix = std::string( selector) + ".";
@@ -800,11 +854,11 @@ bool compute_properties(
                 std::string strip_prefix = selector + part_prefix.size();
                 OIIO::ImageSpec modified_spec
                     = extract_channels( spec, channel, channel+1, strip_prefix);
-                pixel_type = get_pixel_type( modified_spec);
+                std::tie( pixel_type, gamma) = get_pixel_type_and_gamma( modified_spec);
                 channel_names = modified_spec.channelnames;
                 channel_start = channel;
                 channel_end   = channel+1;
-                return pixel_type != IMAGE::PT_UNDEF;
+                return (pixel_type != IMAGE::PT_UNDEF) && (gamma != 0.0f);
             }
 
             // Check whether selector matches a layer
@@ -817,11 +871,11 @@ bool compute_properties(
                 std::string strip_prefix = selector_prefix.substr( part_prefix.size());
                 OIIO::ImageSpec modified_spec
                     = extract_channels( spec, range.first, range.second, strip_prefix);
-                pixel_type = get_pixel_type( modified_spec);
+                std::tie( pixel_type, gamma) = get_pixel_type_and_gamma( modified_spec);
                 channel_names = modified_spec.channelnames;
                 channel_start = range.first;
                 channel_end   = range.second;
-                return pixel_type != IMAGE::PT_UNDEF;
+                return (pixel_type != IMAGE::PT_UNDEF) && (gamma != 0.0f);
             }
 
         }
@@ -836,6 +890,7 @@ bool compute_properties(
     resolution_y  = 1;
     resolution_z  = 1;
     pixel_type    = IMAGE::PT_UNDEF;
+    gamma         = 0.0f;
     channel_names.clear();
     channel_start = -1;
     channel_end   = -1;
@@ -854,6 +909,23 @@ std::string get_oiio_colorspace( float gamma)
     char buffer[22];
     snprintf( buffer, sizeof( buffer), "Gamma%.9g", gamma);
     return buffer;
+}
+
+bool option_to_flag(
+    mi::neuraylib::IDebug_configuration* debug_configuration, const char* key, bool& value)
+{
+    mi::base::Handle<const mi::IString> v( debug_configuration->get_option( key));
+    if( !v)
+        return true;
+
+    bool tmp = false; // avoid warning, never used
+    std::stringstream s;
+    s << v->get_c_str();
+    if( s.fail() || !s.eof())
+        return false;
+
+    value = tmp;
+    return true;
 }
 
 } // namespace MI_OIIO

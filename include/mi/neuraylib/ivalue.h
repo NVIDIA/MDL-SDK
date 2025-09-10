@@ -37,6 +37,7 @@
 #include <mi/math/spectrum.h>
 #include <mi/math/vector.h>
 #include <mi/neuraylib/itype.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -57,7 +58,7 @@ class IValue : public
 {
 public:
     /// The possible kinds of values.
-    enum Kind {
+    enum Kind : Uint32 {
         /// A boolean value. See #mi::neuraylib::IValue_bool.
         VK_BOOL,
         /// An integer value. See #mi::neuraylib::IValue_int.
@@ -87,9 +88,8 @@ public:
         /// A light_profile value. See #mi::neuraylib::IValue_light_profile.
         VK_LIGHT_PROFILE,
         /// A bsdf_measurement value. See #mi::neuraylib::IValue_bsdf_measurement.
-        VK_BSDF_MEASUREMENT,
-        //  Undocumented, for alignment only.
-        VK_FORCE_32_BIT = 0xffffffffU
+        VK_BSDF_MEASUREMENT
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(VK_FORCE_32_BIT, 0xffffffffU)
     };
 
     /// Returns the kind of the value.
@@ -110,8 +110,6 @@ public:
         return ptr_T;
     }
 };
-
-mi_static_assert( sizeof( IValue::Kind) == sizeof( Uint32));
 
 /// An atomic value.
 class IValue_atomic : public

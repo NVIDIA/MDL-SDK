@@ -639,6 +639,12 @@ public:
     /// Returns true if this function has the [noinline] attribute attached.
     bool has_attr_noinline() const { return m_attr_no_inline; }
 
+    /// Set whether the function is marked as an export.
+    void set_is_export(bool is_export) { m_is_export = is_export; }
+
+    /// Returns true if this function is marked as an export.
+    bool is_export() const { return m_is_export; }
+
 private:
     /// Constructor.
     ///
@@ -663,6 +669,9 @@ private:
 
     /// True, if this function is marked with "[noinline]".
     bool m_attr_no_inline;
+
+    /// True, if this function is marked as an export.
+    bool m_is_export;
 };
 
 /// A HLSL Field declarator.

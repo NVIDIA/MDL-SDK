@@ -96,10 +96,6 @@ DB::Tag Expression_direct_call::get_definition( DB::Transaction* transaction) co
         return m_definition_ident.first;
 
     DB::Access<Mdl_module> module( m_module_tag, transaction);
-    SERIAL::Class_id class_id = transaction->get_class_id( m_definition_ident.first);
-    if( class_id != ID_MDL_FUNCTION_DEFINITION)
-        return {};
-
     if( module->has_definition(
         /*is_material*/ true, m_definition_db_name, m_definition_ident.second) == 0)
         return m_definition_ident.first;
@@ -362,18 +358,12 @@ const IExpression_list* Annotation::get_arguments() const
 const IAnnotation_definition* Annotation::get_definition( DB::Transaction* transaction) const
 {
     const std::string& db_name = get_db_name_annotation_definition( m_name);
-    DB::Tag definition_proxy_tag = transaction->name_to_tag( db_name.c_str());
-    if( !definition_proxy_tag)
+    DB::Access<Mdl_annotation_definition_proxy> definition_proxy( db_name.c_str(), transaction);
+    if( !definition_proxy)
         return nullptr;
 
-    DB::Access<Mdl_annotation_definition_proxy> definition_proxy(
-        definition_proxy_tag, transaction);
     std::string module_db_name = definition_proxy->get_db_module_name();
-
-    DB::Tag module_tag = transaction->name_to_tag( module_db_name.c_str());
-    ASSERT( M_SCENE, module_tag.is_valid());
-
-    DB::Access<Mdl_module> module( module_tag, transaction);
+    DB::Access<Mdl_module> module( module_db_name.c_str(), transaction);
     return module->get_annotation_definition( m_name.c_str());
 }
 
@@ -705,9 +695,6 @@ IExpression* Expression_factory::clone(
                 expr->get_interface<IExpression_temporary>());
             return create_temporary( type.get(), expr_temporary->get_index());
         }
-        case IExpression::EK_FORCE_32_BIT:
-            ASSERT( M_SCENE, false);
-            return nullptr;
     }
 
     ASSERT( M_SCENE, false);
@@ -1030,8 +1017,6 @@ void Expression_factory::serialize( SERIAL::Serializer* serializer, const IExpre
             SERIAL::write(serializer,  index);
             return;
         }
-        case IExpression::EK_FORCE_32_BIT:
-            ASSERT( M_SCENE, false);
     }
 
     ASSERT( M_SCENE, false);
@@ -1089,9 +1074,6 @@ IExpression* Expression_factory::deserialize( SERIAL::Deserializer* deserializer
             SERIAL::read(deserializer,  &index);
             return create_temporary( type.get(), index);
         }
-        case IExpression::EK_FORCE_32_BIT:
-            ASSERT( M_SCENE, false);
-            return nullptr;
     }
 
     ASSERT( M_SCENE, false);
@@ -1411,9 +1393,6 @@ void Expression_factory::dump_static(
             s << "index " << index;
             return;
         }
-        case IExpression::EK_FORCE_32_BIT:
-            ASSERT( M_SCENE, false);
-            return;
     }
 
     ASSERT( M_SCENE, false);
@@ -1671,9 +1650,6 @@ mi::Sint32 Expression_factory::compare_static(
             if( lhs_index > rhs_index) return +1;
             return 0;
         }
-        case IExpression::EK_FORCE_32_BIT:
-            ASSERT( M_SCENE, false);
-            return 0;
     }
 
     ASSERT( M_SCENE, false);
@@ -1778,30 +1754,34 @@ mi::Size Annotation_definition_list::get_memory_consumption() const
 class Factories
 {
 public:
-    Factories() : m_vf( &m_tf), m_ef( &m_vf) { }
-    Type_factory m_tf;
-    Value_factory m_vf;
-    Expression_factory m_ef;
+    Factories()
+      : m_tf( new Type_factory()),
+        m_vf( new Value_factory( m_tf.get())),
+        m_ef( new Expression_factory( m_vf.get())) { }
+
+    mi::base::Handle<Type_factory> m_tf;
+    mi::base::Handle<Value_factory> m_vf;
+    mi::base::Handle<Expression_factory> m_ef;
 };
 
 Factories g_factories;
 
 IType_factory* get_type_factory()
 {
-   g_factories.m_tf.retain();
-   return &g_factories.m_tf;
+   g_factories.m_tf->retain();
+   return g_factories.m_tf.get();
 }
 
 IValue_factory* get_value_factory()
 {
-   g_factories.m_vf.retain();
-   return &g_factories.m_vf;
+   g_factories.m_vf->retain();
+   return g_factories.m_vf.get();
 }
 
 IExpression_factory* get_expression_factory()
 {
-   g_factories.m_ef.retain();
-   return &g_factories.m_ef;
+   g_factories.m_ef->retain();
+   return g_factories.m_ef.get();
 }
 
 } // namespace MDL

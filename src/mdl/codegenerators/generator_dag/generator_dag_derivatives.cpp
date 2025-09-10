@@ -1043,6 +1043,9 @@ IValue const *Deriv_DAG_builder::create_dual_comp_zero(IType const *type)
     case IType::TK_FUNCTION:
     case IType::TK_TEXTURE:
     case IType::TK_BSDF_MEASUREMENT:
+    case IType::TK_PTR:
+    case IType::TK_REF:
+    case IType::TK_VOID:
     case IType::TK_AUTO:
     case IType::TK_ERROR:
         MDL_ASSERT(!"type not allowed as dual component");

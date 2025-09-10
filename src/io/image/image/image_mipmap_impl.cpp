@@ -46,6 +46,7 @@
 #include <base/lib/log/i_log_logger.h>
 #include <base/hal/disk/disk_file_reader_writer_impl.h>
 #include <base/hal/disk/disk_memory_reader_writer_impl.h>
+#include <base/hal/disk/disk_utils.h>
 
 
 namespace fs = std::filesystem;
@@ -121,9 +122,7 @@ Mipmap_impl::Mipmap_impl(
         return;
     }
 
-    std::string extension = fs::u8path( filename).extension().u8string();
-    if( !extension.empty())
-        extension = extension.substr( 1);
+    std::string extension = DISK::get_extension( filename);
 
     SYSTEM::Access_module<Image_module> image_module( false);
     mi::neuraylib::IImage_plugin* plugin
@@ -211,9 +210,7 @@ Mipmap_impl::Mipmap_impl(
         return;
     }
 
-    std::string extension = fs::u8path( member_filename).extension().u8string();
-    if( !extension.empty() && extension[0] == '.' )
-        extension = extension.substr( 1);
+    std::string extension = DISK::get_extension( member_filename);
 
     SYSTEM::Access_module<Image_module> image_module( false);
     mi::neuraylib::IImage_plugin* plugin

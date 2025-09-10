@@ -42,7 +42,7 @@
 #include <atomic>
 
 #include <base/data/db/i_db_journal_type.h>
-#include <base/lib/robin_hood/robin_hood.h>
+#include <base/lib/unordered_dense/unordered_dense.h>
 
 namespace MI {
 namespace ATTR {
@@ -141,7 +141,7 @@ class Attribute_registry
 
   private:
     std::set<Attribute_spec> m_registry;                ///< the actual collection
-    robin_hood::unordered_map<std::string, Uint> m_name_mapping;        ///< mapping name to id
+    ankerl::unordered_dense::map<std::string, Uint> m_name_mapping;        ///< mapping name to id
     std::atomic<int32_t> m_counter;
 
     /// Find a new unique id for a new registry entry.

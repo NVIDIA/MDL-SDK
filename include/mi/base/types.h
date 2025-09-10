@@ -223,7 +223,7 @@ static const Difference DIFFERENCE_MAX_VALUE =  2147483647;
 ///
 /// The three values, -1, 0, and 1, have several symbolic names that can be used interchangeable
 /// depending on the context. The symbolic names group together as indicated in their order.
-enum Comparison_result
+enum Comparison_result : Sint32
 {
     NEGATIVE         = -1, ///< = -1. Sign of a value is negative.
     ZERO             =  0, ///< =  0. Value is zero.

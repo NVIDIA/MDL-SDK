@@ -28,7 +28,7 @@
 
 // examples/mdl_sdk/axf_to_mdl/axf_to_mdl.cpp
 //
-// Converts a X-Rite AxF(Appearance Exchange Format) physical material representration to 
+// Converts a X-Rite AxF(Appearance Exchange Format) physical material representation to
 // MDL format.
 
 #include <iostream>
@@ -132,7 +132,7 @@ Axf_importer_options importer_options;
                     strcmp(cs, "sRGB,E") == 0 ||
                     strcmp(cs, "AdobeRGB,E") == 0 ||
                     strcmp(cs, "WideGamutRGB,E") == 0 ||
-                    strcmp(cs, "ProPhotoRGB,E") == 0 
+                    strcmp(cs, "ProPhotoRGB,E") == 0
                    )
                 {
                     importer_options.axf_color_space = std::string(cs);
@@ -240,18 +240,16 @@ Axf_importer_options importer_options;
         mi::base::Handle<mi::neuraylib::IScope> scope( database->get_global_scope());
         mi::base::Handle<mi::neuraylib::ITransaction> transaction( scope->create_transaction());
 
-        // Create AxF importer state
-        Axf_impexp_state* imp_exp_state = new Axf_impexp_state("");
-        assert(imp_exp_state);
+        // Create AxF importer state.
+        Axf_impexp_state imp_exp_state;
 
-        // our internal state is holding the parsed options
-        Axf_impexp_state* internal_state = static_cast<Axf_impexp_state*>(imp_exp_state);
-        internal_state->parse_importer_options(importer_options);
+        // State holds the parsed options
+        imp_exp_state.parse_importer_options(importer_options);
 
         // now do the import
         {
             Axf_reader axf_reader(neuray.get(), transaction.get());
-            axf_reader.read(axf_filename.c_str(), internal_state);
+            axf_reader.read(axf_filename.c_str(), &imp_exp_state);
         }
 
         transaction->commit();

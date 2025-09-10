@@ -57,6 +57,7 @@
 #include <mi/neuraylib/inumber.h>
 #include <mi/neuraylib/iscope.h>
 #include <mi/neuraylib/istring.h>
+#include <mi/neuraylib/itexture.h>
 #include <mi/neuraylib/itransaction.h>
 
 
@@ -540,7 +541,7 @@ void load_primary_modules( mi::neuraylib::ITransaction* transaction, mi::neurayl
 {
     install_external_resolver( neuray, /*enable_user_data_check*/ true);
 
-    // test_mdl.mdl, relative to search path, top-level, global scope
+    // test_mdl$.mdl, relative to search path, top-level, global scope
     import_mdl_module( transaction, neuray, "::" TEST_MDL, 0);
     MI_CHECK_EQUAL( 0, transaction->get_privacy_level( "mdl::" TEST_MDL));
 
@@ -705,7 +706,7 @@ void load_secondary_modules(
         MI_CHECK_EQUAL( 0, transaction->get_privacy_level( "mdl::base"));
     }
     {
-        // test_mdl.mdl, relative to search path, sub-subdirectory, own scope
+        // test_mdl$.mdl, relative to search path, sub-subdirectory, own scope
         mi::base::Handle<mi::neuraylib::IScope> local_scope( database->create_scope( nullptr, 1));
         mi::base::Handle<mi::neuraylib::ITransaction> transaction(
             local_scope->create_transaction());
@@ -723,7 +724,7 @@ void load_secondary_modules(
         transaction->commit();
     }
     {
-        // test_mdl.mdl, relative to search path, subdirectory, own scope
+        // test_mdl$.mdl, relative to search path, subdirectory, own scope
         mi::base::Handle<mi::neuraylib::IScope> local_scope( database->create_scope( nullptr, 1));
         mi::base::Handle<mi::neuraylib::ITransaction> transaction(
             local_scope->create_transaction());
@@ -740,7 +741,7 @@ void load_secondary_modules(
         transaction->commit();
     }
     {
-        // test_mdl.mdl, absolute URI, global scope (fails)
+        // test_mdl$.mdl, absolute URI, global scope (fails)
         std::string path = MI::TEST::mi_src_path( "prod/lib/neuray") + "/" TEST_MDL ".mdl";
         import_mdl_module( transaction, neuray, path.c_str(), -1);
     }
@@ -825,12 +826,108 @@ struct Exreimp_data
     // The suffix "_export_string" is added for for string-based exports.
     std::string export_mdl_name;
 
+    // Expected error codes.
     mi::Sint32 error_number_file = 0;
     mi::Sint32 error_number_string = 0;
+
+    // Export options.
     bool modify_mdl_paths = false;
     bool bundle_resources = false;
     bool export_resources_with_module_prefix = false;
+
+    // Vector of (MDL file path, filename suggestion) pairs.
+    //
+    // Note that the test data here uses MDL file paths as first element for simplicity, whereas the
+    // context option needs the DB element names as keys (usually there is no MDL file path nor
+    // filename available when this option is used). This translation is done by
+    // create_map_for_filename_hints().
+    std::vector<std::pair<std::string, std::string>> filename_hints {};
+
+    // Expected resource strings in the exported module (simple substring search plus quotes, only
+    // checked for successful exports).
+    std::vector<std::string> resource_strings {};
+
+    // Unexpected resource strings in the exported module (simple substring search plus quotes, only
+    // checked for successful exports).
+    std::vector<std::string> unexpected_resource_strings {};
 };
+
+// Check that all substrings occur in \p haystack (including additional double quotes).
+void check_quoted_substrings_string(
+    const std::string& haystack,
+    const std::vector<std::string>& sub_strings,
+    const std::vector<std::string>& unexpected_sub_strings)
+{
+    for( const auto& rs: sub_strings) {
+        std::string t = "\"" + rs + "\"";
+        MI_CHECK_MSG( haystack.find( t) != std::string::npos, std::string( "expected: ") + t);
+    }
+    for( const auto& rs: unexpected_sub_strings) {
+        std::string t = "\"" + rs + "\"";
+        MI_CHECK_MSG( haystack.find( t) == std::string::npos, std::string( "unexpected: ") + t);
+    }
+}
+
+// Check that all substrings occur in \p filename (including additional double quotes).
+void check_quoted_substrings_file(
+    const std::string& filename,
+    const std::vector<std::string>& sub_strings,
+    const std::vector<std::string>& unexpected_sub_strings)
+{
+    std::ifstream file( filename);
+    std::string content( (std::istreambuf_iterator<char>( file)), std::istreambuf_iterator<char>());
+    check_quoted_substrings_string( content, sub_strings, unexpected_sub_strings);
+}
+
+// Searches the given MDL file path in the resource table of a module and returns the name of the
+// corresponding DB element (for textures the IImage, not the ITexture).
+const char* get_resource_db_name(
+    mi::neuraylib::ITransaction* transaction,
+    const mi::neuraylib::IModule* module,
+    const std::string& mdl_file_path)
+{
+    mi::Size n = module->get_resources_count();
+    for( mi::Size i = 0; i < n; ++i) {
+        mi::base::Handle resource( module->get_resource( i));
+        const char* res_mdl_file_path = resource->get_file_path();
+        if( mdl_file_path != res_mdl_file_path)
+            continue;
+        const char* res_db_name = resource->get_value();
+        mi::base::Handle res_db_element(
+            transaction->access<mi::neuraylib::IScene_element>( res_db_name));
+        if( res_db_element->get_element_type() != mi::neuraylib::ELEMENT_TYPE_TEXTURE)
+            return res_db_name;
+        mi::base::Handle tex_db_element( res_db_element->get_interface<mi::neuraylib::ITexture>());
+        return tex_db_element->get_image();
+    }
+
+    return nullptr;
+}
+
+// Converts the (MDL file path, filename suggestion) pairs from the input vector into (DB element
+// name, filename suggestion) pairs in the output map (for textures the IImage, not the ITexture).
+mi::IMap* create_map_for_filename_hints(
+    mi::neuraylib::ITransaction* transaction,
+    const char* module_db_name,
+    const std::vector<std::pair<std::string, std::string>>& input)
+{
+    if( input.empty())
+        return nullptr;
+
+    mi::base::Handle module( transaction->access<mi::neuraylib::IModule>( module_db_name));
+    auto* output = transaction->create<mi::IMap>( "Map<String>");
+
+    for( const auto& pair: input) {
+        const char* key = get_resource_db_name( transaction, module.get(), pair.first);
+        MI_CHECK( key);
+        mi::base::Handle value( transaction->create<mi::IString>());
+        value->set_c_str( pair.second.c_str());
+        output->insert( key, value.get());
+    }
+
+    MI_CHECK_EQUAL( input.size(), output->get_length());
+    return output;
+}
 
 
 // Exports a module as file/string and imports it again.
@@ -862,6 +959,12 @@ void do_check_mdl_export_reimport(
     context->set_option( "bundle_resources", d.bundle_resources);
     context->set_option(
         "export_resources_with_module_prefix", d.export_resources_with_module_prefix);
+    if( !d.filename_hints.empty()) {
+        mi::base::Handle<mi::IMap> filename_hints( create_map_for_filename_hints(
+            transaction, d.module_db_name.c_str(), d.filename_hints));
+        mi::Sint32 result = context->set_option( "filename_hints", filename_hints.get());
+        MI_CHECK_EQUAL( result, 0);
+    }
 
     std::vector<std::string> mdl_paths;
 
@@ -878,8 +981,11 @@ void do_check_mdl_export_reimport(
     // file-based export
     mi::Sint32 result = mdl_impexp_api->export_module(
         transaction, d.module_db_name.c_str(), full_file_name.c_str(), context.get());
-    if( d.error_number_file == 0)
+    if( d.error_number_file == 0) {
         MI_CHECK_CTX( context);
+        check_quoted_substrings_file(
+            full_file_name, d.resource_strings, d.unexpected_resource_strings);
+    }
     MI_CHECK_EQUAL( -d.error_number_file, result);
 
     // re-import from file
@@ -920,8 +1026,11 @@ void do_check_mdl_export_reimport(
         transaction->create<mi::IString>( "String"));
     result = mdl_impexp_api->export_module_to_string(
         transaction, d.module_db_name.c_str(), exported_module.get(), context.get());
-    if( d.error_number_string == 0)
+    if( d.error_number_string == 0) {
         MI_CHECK_CTX( context);
+        check_quoted_substrings_string(
+            exported_module->get_c_str(), d.resource_strings, d.unexpected_resource_strings);
+    }
     MI_CHECK_EQUAL( -d.error_number_string, result);
 
     // re-import from string

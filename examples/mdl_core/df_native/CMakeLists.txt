@@ -42,11 +42,9 @@ set(PROJECT_SOURCES
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
     TYPE EXECUTABLE
-    NAMESPACE mdl_core
     OUTPUT_NAME "df_native"
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
-    STATIC_MSVC_RUNTIME
 )
 
 # add dependencies
@@ -56,7 +54,7 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         mdl_core::shared
         opengl
         glfw
-        imgui_static
+        imgui
         openimageio
     )
 

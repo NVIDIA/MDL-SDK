@@ -44,7 +44,7 @@ namespace mi { namespace neuraylib { class ITransaction; } }
 
 namespace MI {
 
-namespace DB { class Transaction; class Element_base; }
+namespace DB { class Element_base; class Info; class Transaction; }
 
 namespace NEURAY {
 
@@ -66,7 +66,7 @@ enum Db_element_state
 /// This interface indicates DB elements and distinguishes them from ordinary classes.
 ///
 /// Used at runtime to find out if an interface can actually be stored in the DB. For example,
-/// IOptions can be stored, while INumber cannot be stored.
+/// ITexture can be stored, while INumber cannot be stored.
 class IDb_element : public
     mi::base::Interface_declare<0xf50a60fe,0x6ff3,0x4133,0x81,0x4f,0x7c,0xcf,0xaf,0xb8,0xcc,0x51>
 {
@@ -76,14 +76,14 @@ public:
     /// The caller is responsible for not to handing out mutable pointers to \c *this.
     ///
     /// \param transaction   The transaction.
-    /// \param tag           The tag of the DB element to connect.
-    virtual void set_state_access( Transaction_impl* transaction, DB::Tag tag) = 0;
+    /// \param info          The info of the DB element to connect.
+    virtual void set_state_access( Transaction_impl* transaction, DB::Info* info) = 0;
 
     /// Connects the API class with an DB element in the DB (mutable/edit).
     ///
     /// \param transaction   The transaction.
-    /// \param tag           The tag of the DB element to connect.
-    virtual void set_state_edit( Transaction_impl* transaction, DB::Tag tag) = 0;
+    /// \param info          The info of the DB element to connect.
+    virtual void set_state_edit( Transaction_impl* transaction, DB::Info* info) = 0;
 
     /// Connects the API class with an DB element in memory.
     ///

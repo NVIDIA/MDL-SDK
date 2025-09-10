@@ -32,7 +32,6 @@
 #define MI_NEURAYLIB_IIMAGE_H
 
 #include <mi/neuraylib/iscene_element.h>
-#include <mi/neuraylib/version.h>
 
 namespace mi {
 
@@ -239,11 +238,6 @@ public:
     virtual bool set_from_canvas(
         ICanvas* canvas, const char* selector = nullptr, bool shared = false) = 0;
 
-#ifdef MI_NEURAYLIB_DEPRECATED_14_0
-    inline bool set_from_canvas( ICanvas* canvas, bool shared)
-    { return set_from_canvas( canvas, 0, shared); }
-#endif
-
     /// Sets the frames/uv-tiles of this image to the passed canvases (without sharing).
     ///
     /// \param uvtiles    A static or dynamic array of structures of type \c Uvtile. Such a
@@ -293,11 +287,6 @@ public:
     ///                   \c false otherwise.
     virtual bool set_from_canvas(
         IArray* uvtiles, const char* selector = nullptr, bool shared = false) = 0;
-
-#ifdef MI_NEURAYLIB_DEPRECATED_14_0
-    inline bool set_from_canvas( IArray* uvtiles, bool shared)
-    { return set_from_canvas( uvtiles, 0, shared); }
-#endif
 
     //@}
     /// \name Methods related to frames of animated textures

@@ -34,11 +34,11 @@
 #include <mi/base/interface_declare.h>
 #include <mi/base/enums.h>
 #include <mi/base/handle.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
 namespace neuraylib {
-
 
 /** \addtogroup mi_neuray_mdl_misc
 @{
@@ -54,12 +54,18 @@ public:
     ///
     /// A message can be uniquely identified by the message code and kind, except for
     /// importer/exporter messages, integration messages, and uncategorized messages.
-    enum Kind {
+    enum Kind : Uint32 {
 
         /// MDL Core compiler message.
-        MSG_COMILER_CORE,
+        MSG_COMPILER_CORE,
+#ifdef MI_NEURAYLIB_DEPRECATED_16_0
+       MSG_COMILER_CORE = MSG_COMPILER_CORE,
+#endif
         /// MDL Core compiler backend message.
-        MSG_COMILER_BACKEND,
+        MSG_COMPILER_BACKEND,
+#ifdef MI_NEURAYLIB_DEPRECATED_16_0
+        MSG_COMILER_BACKEND = MSG_COMPILER_BACKEND,
+#endif
         /// MDL Core DAG generator message.
         MSG_COMPILER_DAG,
         /// MDL Core archive tool message.
@@ -69,9 +75,8 @@ public:
         /// MDL integration message.
         MSG_INTEGRATION,
         /// Uncategorized message.
-        MSG_UNCATEGORIZED,
-        //  Undocumented, for alignment only.
-        MSG_FORCE_32_BIT = 0xffffffffU
+        MSG_UNCATEGORIZED
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(MSG_FORCE_32_BIT, 0xffffffffU)
     };
 
     /// Returns the kind of message.
@@ -122,10 +127,33 @@ public:
 ///
 /// Options for MDL export
 /// - \c bool "bundle_resources": If \c true, referenced resources are exported into the same
-///   directory as the module, even if they can be found via the module search path. Default:
-///   \c false.
-/// - \c bool "export_resources_with_module_prefix": If \c true, the name of the exported resources
-///   start with the module name as prefix. Default: \c true.
+///   directory as the module, even if they can be found via the module search
+///   path. Default: \c false.
+/// - \c bool "export_resources_with_module_prefix": If \c true, the name of the exported
+///   resources start with the module name as prefix. Default: \c true.
+/// - \c std::string "handle_filename_conflicts": Controls what to do in case of filename
+///   conflicts for resources during export. Possible values:
+///   - \c "generate_unique": Always generates a unique filename that does not conflict with an
+///     existing resource file (adding a counter suffix if necessary).
+///   - \c "fail_if_existing": The export fails if an existing resource file would be
+///     overwritten by the export operation.
+///   - \c "overwrite_existing": The export operation silently overwrites existing resource
+///     files. Note that using this setting might destroy other modules. Setting the option
+///     "export_resources_with_module_prefix" (see above) to \c true reduces that risk (but does
+///     not eliminate it).
+///   Default: \c "generate_unique".
+/// - #mi::IMap* "filename_hints": A user-supplied map with typename \c "Map<String>". The
+///   option allows to suggest filenames for resource files being created during export, in
+///   particular if there are no other hints available. This happens e.g. when using the module
+///   builder with in-memory textures obtained from distilling. \n
+///   The keys of the map entries identify the resources by the name of the corresponding DB
+///   elements (for textures, the instance of #mi::neuraylib::IImage, not
+///   #mi::neuraylib::ITexture). The values are the suggested filenames including extension, but
+///   without any directory components (and not empty). For animated and/or uvtile textures, the
+///   string needs to contain the required markers. \n
+///   Note that the provided filenames are just hints, other context options also affect the
+///   final filenames, and there is no guarantee that the hints of this option are actually
+///   used. Do not base application logic on such an assumption. Default: \c nullptr.
 ///
 /// Options for material compilation
 /// - \c bool "fold_meters_per_scene_unit": If \c true, occurrences of the functions

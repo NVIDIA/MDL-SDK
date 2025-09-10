@@ -43,6 +43,9 @@
 
 #include <vector_types.h>
 
+// Disable all FORCE_32_BIT enum values.
+#define MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(X,Y)
+
 namespace mi {
 
 namespace neuraylib {
@@ -72,6 +75,7 @@ using tct_uint = unsigned;
 #else
 
 #include <mi/neuraylib/typedefs.h>
+#include <mi/neuraylib/version.h>
 
 namespace mi {
 
@@ -322,7 +326,7 @@ using Shading_state_material_with_derivs = Shading_state_material_impl<true>;
 /// The texture wrap modes as defined by \c tex::wrap_mode in the MDL specification.
 /// It determines the texture lookup behavior if a lookup coordinate
 /// is exceeding the normalized half-open texture space range of [0, 1).
-enum Tex_wrap_mode
+enum Tex_wrap_mode : tct_uint
 {
     /// \c tex::wrap_clamp: clamps the lookup coordinate to the range
     TEX_WRAP_CLAMP           = 0,
@@ -341,7 +345,7 @@ enum Tex_wrap_mode
 };
 
 /// MBSDFs can consist of two parts, which can be selected using this enumeration.
-enum Mbsdf_part
+enum Mbsdf_part : tct_uint
 {
     /// the bidirectional reflection distribution function (BRDF)
     MBSDF_DATA_REFLECTION = 0,
@@ -754,7 +758,7 @@ struct Resource_data
 };
 
 /// The type of events created by BSDF importance sampling.
-enum Bsdf_event_type
+enum Bsdf_event_type : tct_uint
 {
     BSDF_EVENT_ABSORB       = 0,
 
@@ -769,9 +773,8 @@ enum Bsdf_event_type
     BSDF_EVENT_GLOSSY_REFLECTION     = BSDF_EVENT_GLOSSY   | BSDF_EVENT_REFLECTION,
     BSDF_EVENT_GLOSSY_TRANSMISSION   = BSDF_EVENT_GLOSSY   | BSDF_EVENT_TRANSMISSION,
     BSDF_EVENT_SPECULAR_REFLECTION   = BSDF_EVENT_SPECULAR | BSDF_EVENT_REFLECTION,
-    BSDF_EVENT_SPECULAR_TRANSMISSION = BSDF_EVENT_SPECULAR | BSDF_EVENT_TRANSMISSION,
-
-    BSDF_EVENT_FORCE_32_BIT = 0xffffffffU
+    BSDF_EVENT_SPECULAR_TRANSMISSION = BSDF_EVENT_SPECULAR | BSDF_EVENT_TRANSMISSION
+    MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(BSDF_EVENT_FORCE_32_BIT, 0xffffffffU)
 };
 
 /// The calling code can mark the \c x component of an IOR field in *_data with
@@ -780,16 +783,15 @@ enum Bsdf_event_type
 #define MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR (-1.0f)
 
 /// Flags controlling the calculation of DF results.
-enum Df_flags
+enum Df_flags : tct_uint
 {
     DF_FLAGS_NONE = 0,               ///< allows nothing -> black
 
     DF_FLAGS_ALLOW_REFLECT = 1,
     DF_FLAGS_ALLOW_TRANSMIT = 2,
     DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT = DF_FLAGS_ALLOW_REFLECT | DF_FLAGS_ALLOW_TRANSMIT,
-    DF_FLAGS_ALLOWED_SCATTER_MODE_MASK = DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT,
-
-    DF_FLAGS_FORCE_32_BIT = 0xffffffffU
+    DF_FLAGS_ALLOWED_SCATTER_MODE_MASK = DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT
+    MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(DF_FLAGS_FORCE_32_BIT, 0xffffffffU)
 };
 
 /// Input and output structure for BSDF sampling data.
@@ -811,7 +813,7 @@ struct alignas(16) Bsdf_sample_data
 };
 
 /// Type of Bsdf_evaluate_data variants, depending on the backend and its configuration.
-enum Df_handle_slot_mode
+enum Df_handle_slot_mode : tct_int
 {
     DF_HSM_POINTER = -2,    ///< Uses renderer defined buffers; not supported by all backends
     DF_HSM_NONE    = -1,    ///< No slots, handles are ignored completely
@@ -1192,12 +1194,11 @@ using Bsdf_auxiliary_function_with_derivs = void(
     char const                                *arg_block_data);
 
 /// The type of events created by EDF importance sampling.
-enum Edf_event_type
+enum Edf_event_type : tct_uint
 {
     EDF_EVENT_NONE = 0,
-    EDF_EVENT_EMISSION = 1,
-
-    EDF_EVENT_FORCE_32_BIT = 0xffffffffU
+    EDF_EVENT_EMISSION = 1
+    MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(EDF_EVENT_FORCE_32_BIT, 0xffffffffU)
 };
 
 

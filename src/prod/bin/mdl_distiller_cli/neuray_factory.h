@@ -59,42 +59,40 @@ public:
         RESULT_LOAD_FAILURE,
         /// The shared library does not contain the expected \c mi_factory symbol.
         RESULT_SYMBOL_LOOKUP_FAILURE,
-        /// The requested INeuray interface has a different IID than the ones 
+        /// The requested INeuray interface has a different IID than the ones
         /// that can be served by the \c mi_factory function.
         RESULT_VERSION_MISMATCH,
-        /// The requested INeuray interface cannot be served by the \c mi_factory 
+        /// The requested INeuray interface cannot be served by the \c mi_factory
         /// function and neither can the IVersion interface for better diagnostics.
-        RESULT_INCOMPATIBLE_LIBRARY,
-        //  Undocumented, for alignment only
-        RESULT_FORCE_32_BIT   = 0xffffffffU
+        RESULT_INCOMPATIBLE_LIBRARY
     };
 
-    /// The constructor loads the shared library, locates and calls the 
-    /// #mi_factory() function. It store an instance of the main 
-    /// #mi::neuraylib::INeuray interface for later access. 
+    /// The constructor loads the shared library, locates and calls the
+    /// #mi_factory() function. It store an instance of the main
+    /// #mi::neuraylib::INeuray interface for later access.
     ///
     /// \param filename    The file name of the DSO. If \c NULL, the built-in
     ///                    default name of the SDK library is used.
     /// \param logger      Interface to report any errors during construction as well
-    ///                    as during destruction. The logger interface needs to have 
-    ///                    a suitable lifetime. If \c NULL, no error diagnostic will 
-    ///                    be reported. The result code can be used for a diagnostic 
+    ///                    as during destruction. The logger interface needs to have
+    ///                    a suitable lifetime. If \c NULL, no error diagnostic will
+    ///                    be reported. The result code can be used for a diagnostic
     ///                    after the construction.
     Neuray_factory( mi::base::ILogger* logger     = 0,
                     const char*        filename   = 0);
-                    
+
 
     /// Returns the result code of loading the shared library. If the return value
     /// is one of #RESULT_LOAD_FAILURE or #RESULT_SYMBOL_LOOKUP_FAILURE on a Windows
     /// operating system, a call to \c GetLastError can provide more detail.
     Result get_result_code() const { return m_result_code; }
- 
-    /// Returns the pointer to an instance of the main #mi::neuraylib::INeuray 
+
+    /// Returns the pointer to an instance of the main #mi::neuraylib::INeuray
     /// interface if loading the shared library was successful, or \c NULL otherwise.
     /// Does not retain the interface.
-    mi::neuraylib::INeuray* get() const { 
+    mi::neuraylib::INeuray* get() const {
         return m_neuray.get();
-    } 
+    }
 
     /// Releases the #mi::neuraylib::INeuray interface and unloads the shared library.
     ~Neuray_factory();
@@ -146,7 +144,7 @@ inline Neuray_factory::Neuray_factory( mi::base::ILogger* logger, const char* fi
                                MAKELANGID( LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buffer, 0, 0))
                 message = buffer;
             logger->printf( mi::base::MESSAGE_SEVERITY_FATAL, "MAIN",
-                            "Failed to load library (%u): " FMT_LPTSTR, 
+                            "Failed to load library (%lu): " FMT_LPTSTR,
                             error_code, message);
             if( buffer)
                 LocalFree( buffer);
@@ -165,7 +163,7 @@ inline Neuray_factory::Neuray_factory( mi::base::ILogger* logger, const char* fi
                 MAKELANGID( LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buffer, 0, 0))
                 message = buffer;
             logger->printf( mi::base::MESSAGE_SEVERITY_FATAL, "MAIN",
-                            "GetProcAddress error (%u): " FMT_LPTSTR, error_code, message);
+                            "GetProcAddress error (%lu): " FMT_LPTSTR, error_code, message);
             if( buffer)
                 LocalFree( buffer);
         }
@@ -200,16 +198,16 @@ inline Neuray_factory::Neuray_factory( mi::base::ILogger* logger, const char* fi
         if ( ! version) {
             m_result_code = RESULT_INCOMPATIBLE_LIBRARY;
             if ( logger)
-                logger->message( mi::base::MESSAGE_SEVERITY_FATAL, "MAIN", 
+                logger->message( mi::base::MESSAGE_SEVERITY_FATAL, "MAIN",
                                  "Incompatible SDK shared library. Could not retrieve INeuray "
                                  "nor IVersion interface.");
         } else {
             m_result_code = RESULT_VERSION_MISMATCH;
             if ( logger)
-                logger->printf( mi::base::MESSAGE_SEVERITY_FATAL, "MAIN", 
+                logger->printf( mi::base::MESSAGE_SEVERITY_FATAL, "MAIN",
                                 "SDK shared library version mismatch: Header version "
                                 "%s does not match library version %s.",
-                                MI_NEURAYLIB_PRODUCT_VERSION_STRING, 
+                                MI_NEURAYLIB_PRODUCT_VERSION_STRING,
                                 version->get_product_version());
         }
     }
@@ -230,8 +228,8 @@ inline Neuray_factory::~Neuray_factory()
             FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
             MAKELANGID( LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buffer, 0, 0))
             message = buffer;
-        m_logger->printf( mi::base::MESSAGE_SEVERITY_FATAL, "MAIN", 
-                          "Failed to unload library (%u): " FMT_LPTSTR, error_code, message);
+        m_logger->printf( mi::base::MESSAGE_SEVERITY_FATAL, "MAIN",
+                          "Failed to unload library (%lu): " FMT_LPTSTR, error_code, message);
         if( buffer)
             LocalFree( buffer);
     }

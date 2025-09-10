@@ -37,7 +37,7 @@ set(PROJECT_SOURCES
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
-    TYPE SHARED
+    TYPE MODULE
     SOURCES ${PROJECT_SOURCES}
     EMBED_RC "mdl_core.rc"
     OUTPUT_NAME "mdl_core"
@@ -67,17 +67,17 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         boost
         ${LINKER_WHOLE_ARCHIVE}
         ${LINKER_START_GROUP}
-        mdl::include-mi
-        mdl::mdl-compiler-compilercore
-        mdl::mdl-compiler-compiler_glsl
-        mdl::mdl-compiler-compiler_hlsl
-        mdl::mdl-codegenerators-generator_dag
-        mdl::mdl-codegenerators-generator_code
-        mdl::mdl-runtime
-        mdl::mdl-jit-generator_jit
-        mdl::base-lib-libzip
-        mdl::base-lib-zlib
-        mdl::base-system-version
+        include-mi
+        mdl-compiler-compilercore
+        mdl-compiler-compiler_glsl
+        mdl-compiler-compiler_hlsl
+        mdl-codegenerators-generator_dag
+        mdl-codegenerators-generator_code
+        mdl-runtime
+        mdl-jit-generator_jit
+        base-lib-libzip
+        base-lib-zlib
+        base-system-version
         ${LINKER_END_GROUP}
         llvm
         ${LINKER_NO_WHOLE_ARCHIVE}

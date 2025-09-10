@@ -49,9 +49,9 @@ def remove_comments (buffer):
     error messages are wrong). Also replaces string constants by '...'/"..."
     to simplify searching of "," and ")" in parameter lists.
     """
-    def replacer (match):
+    def replacer (m):
         """Replaces subexpressions matched by RE below."""
-        s = match.group (0)
+        s = m.group (0)
         if s.startswith ('/*'):
             return "" + "\n" * s.count ('\n')
         if s.startswith ('/'):
@@ -76,9 +76,9 @@ def find_next_non_whitespace (buffer, line, col):
      Starts at position (line, col). Returns (-1,-1) if none is found.
      """
     while line < len (buffer):
-        match = re.search (r'\S', buffer[line][col:])
-        if match:
-            return (line, col + match.start())
+        m = re.search (r'\S', buffer[line][col:])
+        if m:
+            return (line, col + m.start())
         line += 1
         col = 0
     return (-1, -1)
@@ -226,9 +226,9 @@ def process_virtual_method (buffer, line, col):
 
     The 'virtual' keyword starts at (line,col).
     """
-    match = re.search (r'^(.*)MI_NEURAYLIB_DEPRECATED_METHOD_[1-9]*._.\(([^(]*)\)(.*)$', buffer[line])
-    if match:
-        buffer[line] = match.group (1) + match.group (2) + match.group (3)
+    m = re.search (r'^(.*)MI_NEURAYLIB_DEPRECATED_METHOD_[1-9]*._.\(([^(]*)\)(.*)$', buffer[line])
+    if m:
+        buffer[line] = m.group (1) + m.group (2) + m.group (3)
     (line_open, col_open) = find_character (buffer, '(', line, col+1)
     assert line_open != -1
     assert col_open != -1
@@ -246,12 +246,12 @@ def process_buffer (buffer):
     line = 0
     col = 0
     while line < len (buffer):
-        match = re.search (r'(^|\W)(virtual)($|\W)', buffer[line][col:])
-        if not match:
+        m = re.search (r'(^|\W)(virtual)($|\W)', buffer[line][col:])
+        if not m:
             line += 1
             col = 0
         else:
-            col += match.start (2)
+            col += m.start (2)
             process_virtual_method (buffer, line, col)
             col += 1
 

@@ -35,6 +35,7 @@
 #include <mi/neuraylib/ifunction_call.h>
 #include <mi/neuraylib/iscene_element.h>
 #include <mi/neuraylib/imdl_factory.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -60,13 +61,11 @@ public:
     /// Various options for the creation of compiled materials.
     ///
     /// \see #create_compiled_material()
-    enum Compilation_options {
+    enum Compilation_options : Uint32 {
         DEFAULT_OPTIONS   = 0, ///< Default compilation options (e.g., instance compilation).
-        CLASS_COMPILATION = 1, ///< Selects class compilation instead of instance compilation.
-        COMPILATION_OPTIONS_FORCE_32_BIT = 0xffffffffU // Undocumented, for alignment only
+        CLASS_COMPILATION = 1  ///< Selects class compilation instead of instance compilation.
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(COMPILATION_OPTIONS_FORCE_32_BIT, 0xffffffffU)
     };
-
-    mi_static_assert( sizeof( Compilation_options) == sizeof( mi::Uint32));
 
     /// Creates a compiled material.
     ///

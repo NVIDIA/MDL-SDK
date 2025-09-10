@@ -209,7 +209,7 @@ public:
     bool is_instantiated() const { return !m_array_instances.empty(); }
 
     /// Equal functor.
-    template<bool ignore_array_instance=false>
+    template<bool ignore_array_instance = false>
     class Equal {
     public:
         bool operator()(Function_instance const &a, Function_instance const &b) const {
@@ -249,8 +249,9 @@ public:
                     return false;
 
                 for (size_t i = 0; i < mods_n; ++i) {
-                    if (a_mods[i] != b_mods[i])
+                    if (a_mods[i] != b_mods[i]) {
                         return false;
+                    }
                 }
             }
 
@@ -259,7 +260,7 @@ public:
     };
 
     /// Hash function.
-    template<bool ignore_array_instance=false>
+    template<bool ignore_array_instance = false>
     class Hash {
     public:
         size_t operator()(Function_instance const &a) const {
@@ -282,8 +283,9 @@ public:
                 }
             }
 
-            if (a.m_return_derivs)
+            if (a.m_return_derivs) {
                 res = (res * 33) + 196613;
+            }
 
             return res;
         }

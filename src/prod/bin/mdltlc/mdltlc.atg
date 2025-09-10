@@ -173,7 +173,7 @@ rules =
     RULES
     (. Symbol *sym = nullptr; .)
     identifier<sym>
-    (. Ruleset::Strategy strat; .)
+    (. Ruleset::Strategy strat = Ruleset::STRAT_BOTTOMUP; /* avoid uninitialized warning below in case of syntax error */ .)
     strategy<strat>
     (. Ruleset *ruleset = m_rule_factory->create_ruleset(CURR_LOC, sym, strat); .)
     '{'
@@ -550,7 +550,7 @@ unary_expr<Expr *&expr>
     .)
     |
       (.
-        Expr_unary::Operator op;
+        Expr_unary::Operator op = Expr_unary::OK_POSITIVE; // avoid uninitialized warning below in case of syntax error
       .)
       unary_operator<op> unary_expr<expr_sub>
       (.

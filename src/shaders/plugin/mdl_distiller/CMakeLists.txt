@@ -70,7 +70,7 @@ source_group("generator" FILES ${_GENERATOR_FILES})
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
-    TYPE SHARED
+    TYPE MODULE
     SOURCES ${PROJECT_SOURCES}
     EMBED_RC "mdl_distiller.rc"
     OUTPUT_NAME "mdl_distiller"
@@ -117,7 +117,7 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         boost
         ${LINKER_WHOLE_ARCHIVE}
         ${LINKER_START_GROUP}
-        mdl::base-system-version
+        base-system-version
         ${LINKER_END_GROUP}
         ${LINKER_NO_WHOLE_ARCHIVE}
     )

@@ -30,6 +30,9 @@
 #include "mdl_arnold_utils.h"
 #include "mdl_arnold.h"
 
+#include <example_shared.cpp>
+#include <utils/mdl.cpp>
+
 #include <iostream>
 #include <set>
 #include <string>
@@ -89,8 +92,8 @@ namespace
         {
         case mi::neuraylib::IMessage::MSG_INTEGRATION:           return "MDL SDK";
         case mi::neuraylib::IMessage::MSG_IMP_EXP:               return "Importer/Exporter";
-        case mi::neuraylib::IMessage::MSG_COMILER_BACKEND:       return "Compiler Backend";
-        case mi::neuraylib::IMessage::MSG_COMILER_CORE:          return "Compiler Core";
+        case mi::neuraylib::IMessage::MSG_COMPILER_BACKEND:      return "Compiler Backend";
+        case mi::neuraylib::IMessage::MSG_COMPILER_CORE:         return "Compiler Core";
         case mi::neuraylib::IMessage::MSG_COMPILER_ARCHIVE_TOOL: return "Compiler Archiver";
         case mi::neuraylib::IMessage::MSG_COMPILER_DAG:          return "Compiler DAG";
         default:                                                 return "";
@@ -449,20 +452,3 @@ bool Mdl_sdk_interface::log_messages(const mi::neuraylib::IMdl_execution_context
 
     return context->get_error_messages_count() == 0;
 }
-
-// the helper classes currently require the following global variables which
-// have to be in one link unit. So either linking the example shared library
-// or adding this .cpp file to the build is required.
-
-namespace mi { namespace examples { namespace mdl {
-
-mi::base::Handle<mi::base::ILogger> g_logger;
-
-// required for loading and unloading the SDK
-#ifdef MI_PLATFORM_WINDOWS
-    HMODULE g_dso_handle = 0;
-#else
-    void* g_dso_handle = 0;
-#endif
-
-}}}

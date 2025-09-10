@@ -586,6 +586,14 @@ protected:
         func->set_attr_noinline(true);
     }
 
+    /// Set whether the function is marked as an export.
+    static void set_is_export(
+        hlsl::Declaration_function *func,
+        bool is_export)
+    {
+        func->set_is_export(is_export);
+    }
+
     /// Dump the current AST.
     void dump_ast();
 

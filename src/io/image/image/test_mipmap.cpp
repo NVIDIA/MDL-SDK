@@ -65,10 +65,10 @@ MI_TEST_AUTO_FUNCTION( test_mipmap )
     std::string root_path = TEST::mi_src_path( "io/image/image/tests/");
 
     mi::base::Handle<IMAGE::IMipmap> mipmap( image_module->create_mipmap(
-        IMAGE::File_based(), root_path + "test_mipmap.png", /*selector*/ nullptr));
+        IMAGE::File_based(), root_path + "test_simple.png", /*selector*/ nullptr));
     MI_CHECK( mipmap);
 
-    MI_CHECK_EQUAL( 7, mipmap->get_nlevels());
+    MI_CHECK_EQUAL( 9, mipmap->get_nlevels());
 
     for( mi::Uint32 level = 0; level < mipmap->get_nlevels(); ++level) {
 
@@ -80,7 +80,7 @@ MI_TEST_AUTO_FUNCTION( test_mipmap )
 
         // Export  miplevel
         std::ostringstream output_path;
-        output_path << "export_of_test_mipmap_level_" << level << ".png";
+        output_path << "mipmap_level_" << level << ".png";
         bool result = image_module->export_canvas( canvas.get(), output_path.str().c_str());
         MI_CHECK( result);
 
@@ -93,7 +93,7 @@ MI_TEST_AUTO_FUNCTION( test_mipmap )
 
         // Compare miplevel
         std::ostringstream reference_path;
-        reference_path << root_path << "reference/export_of_test_mipmap_level_" << level << ".png";
+        reference_path << root_path << "reference/mipmap_level_" << level << ".png";
         MI_CHECK_IMG_DIFF( output_path.str(), reference_path.str());
     }
 }

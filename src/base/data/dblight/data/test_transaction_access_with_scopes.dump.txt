@@ -19,4 +19,7 @@ Index 0: tag = 1, count = 3, pin count = 1, removed = 0
     Index 1: scope ID = 1, transaction ID = 0 (cleared), version = 1, pin count = 0, tag = 1, privacy level = 255, removal = 0, name = "foo", references = { }
     Index 2: scope ID = 2, transaction ID = 0 (cleared), version = 2, pin count = 0, tag = 1, privacy level = 255, removal = 0, name = "foo", references = { }
 
+Count of all infos: 3
+Count of infos by class IDs:
+     3 0x4d79656c "Myel"
 

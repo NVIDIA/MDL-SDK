@@ -74,7 +74,11 @@ public:
 
     Info* access_element( Tag tag) { return m_transaction->access_element( tag); }
 
+    Info* access_element( const char* name) { return m_transaction->access_element( name); }
+
     Info* edit_element( Tag tag) { return m_transaction->edit_element( tag); }
+
+    Info* edit_element( const char* name) { return m_transaction->edit_element( name); }
 
     void finish_edit( Info* info, Journal_type journal_type)
     {
@@ -179,7 +183,15 @@ public:
 
     const char* tag_to_name( Tag tag) { return m_transaction->tag_to_name( tag); }
 
-    Tag name_to_tag( const char* name) { return m_transaction->name_to_tag( name); }
+    Tag name_to_tag( const char* name, Name_to_tag_context context)
+    {
+        return m_transaction->name_to_tag( name, context);
+    }
+
+    Tag name_to_tag_unsafe( const char* name)
+    {
+        return m_transaction->name_to_tag_unsafe( name);
+    }
 
     bool get_tag_is_job( Tag tag) { return m_transaction->get_tag_is_job( tag); }
 

@@ -33,6 +33,7 @@
 
 #include <mi/base/enums.h>
 #include <mi/base/interface_declare.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -45,7 +46,7 @@ namespace neuraylib {
 */
 
 /// Components of the log message prefix.
-enum Log_prefix {
+enum Log_prefix : Uint32 {
     LOG_PREFIX_TIME         = 0x0001, ///< human-readable timestamp
     LOG_PREFIX_TIME_SECONDS = 0x0002, ///< timestamp in seconds with milliseconds resolution
     LOG_PREFIX_HOST_THREAD  = 0x0004, ///< ID of the host and thread that generate the log message
@@ -54,11 +55,9 @@ enum Log_prefix {
     LOG_PREFIX_CATEGORY     = 0x0020, ///< category of the log message
     LOG_PREFIX_SEVERITY     = 0x0040, ///< severity of the log message
     LOG_PREFIX_CUDA_DEVICE  = 0x0080, ///< CUDA device (if relevant)
-    LOG_PREFIX_TAGS         = 0x0100, ///< message detail tags
-    LOG_PREFIX_FORCE_32_BIT = 0xffffffffU
+    LOG_PREFIX_TAGS         = 0x0100  ///< message detail tags
+    MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(LOG_PREFIX_FORCE_32_BIT, 0xffffffffU)
 };
-
-mi_static_assert( sizeof( Log_prefix) == sizeof( Uint32));
 
 /// This interface is used for configuring the logging for the \neurayLibraryName.
 ///

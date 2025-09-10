@@ -67,7 +67,6 @@ class UnittestBase(UnittestFrameworkBase):
         for i in range(context.get_messages_count()):
             message: pymdlsdk.IMessage = context.get_message(i)
             kind: pymdlsdk.IMessage.Kind = message.get_kind()
-            self.assertNotEqual(kind, pymdlsdk.IMessage.Kind.MSG_FORCE_32_BIT)
             level: str = ""
             if message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_FATAL:  # pragma: no cover
                 level = "fatal:"

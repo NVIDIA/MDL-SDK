@@ -32,6 +32,7 @@
 #define MI_NEURAYLIB_ITYPE_H
 
 #include <mi/base/interface_declare.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -73,10 +74,10 @@ class IStruct_category : public
 {
 public:
     /// Identifiers of struct categories.
-    enum Predefined_id {
-        CID_USER              = -1,         ///< A user-defined struct category.
-        CID_MATERIAL_CATEGORY =  0,         ///< The \c "::material_category" struct category.
-        CID_FORCE_32_BIT      =  0x7fffffff //   Undocumented, for alignment only.
+    enum Predefined_id : Sint32 {
+        CID_USER              = -1,   ///< A user-defined struct category.
+        CID_MATERIAL_CATEGORY =  0    ///< The \c "::material_category" struct category.
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(CID_FORCE_32_BIT, 0x7fffffff)
     };
 
     /// Returns the qualified name of this struct category.
@@ -91,8 +92,6 @@ public:
     ///                      are no annotations for the struct category type.
     virtual const IAnnotation_block* get_annotations() const = 0;
 };
-
-mi_static_assert( sizeof( IStruct_category::Predefined_id) == sizeof( Sint32));
 
 /// An ordered collection of struct categories identified by name or index.
 ///
@@ -178,7 +177,7 @@ class IType : public
 {
 public:
     /// The possible kinds of types.
-    enum Kind {
+    enum Kind : Uint32 {
         /// An alias for another type, aka typedef. See #mi::neuraylib::IType_alias.
         TK_ALIAS,
         /// The \c boolean type. See #mi::neuraylib::IType_bool.
@@ -216,17 +215,16 @@ public:
         /// The \c edf type. See #mi::neuraylib::IType_edf.
         TK_EDF,
         /// The \c vdf type. See #mi::neuraylib::IType_vdf.
-        TK_VDF,
-        //  Undocumented, for alignment only.
-        TK_FORCE_32_BIT = 0xffffffffU
+        TK_VDF
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(TK_FORCE_32_BIT, 0xffffffffU)
     };
 
     /// The possible kinds of type modifiers.
-    enum Modifier {
-        MK_NONE        = 0,  ///< No type modifier (mutable, auto-typed).
-        MK_UNIFORM     = 2,  ///< A uniform type.
-        MK_VARYING     = 4,  ///< A varying type.
-        MK_FORCE_32_BIT      //   Undocumented, for alignment only.
+    enum Modifier : Uint32 {
+        MK_NONE    = 0,  ///< No type modifier (mutable, auto-typed).
+        MK_UNIFORM = 2,  ///< A uniform type.
+        MK_VARYING = 4   ///< A varying type.
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(MK_FORCE_32_BIT, 0xffffffffU)
     };
 
     /// Returns the kind of type.
@@ -251,9 +249,6 @@ public:
     /// Indicates whether this type is declarative or not.
     virtual bool is_declarative() const = 0;
 };
-
-mi_static_assert( sizeof( IType::Kind) == sizeof( Uint32));
-mi_static_assert( sizeof( IType::Modifier) == sizeof( Uint32));
 
 /// The type of kind alias.
 ///
@@ -311,11 +306,11 @@ class IType_enum : public
 {
 public:
     /// IDs to distinguish predefined enum types.
-    enum Predefined_id {
-        EID_USER           = -1,             ///< A user-defined enum type.
-        EID_TEX_GAMMA_MODE =  0,             ///< The \c "::tex::gamma_mode" enum type.
-        EID_INTENSITY_MODE =  1,             ///< The \c "::intensity_mode" enum type.
-        EID_FORCE_32_BIT   =  0x7fffffff     //   Undocumented, for alignment only.
+    enum Predefined_id : Sint32 {
+        EID_USER           = -1,   ///< A user-defined enum type.
+        EID_TEX_GAMMA_MODE =  0,   ///< The \c "::tex::gamma_mode" enum type.
+        EID_INTENSITY_MODE =  1    ///< The \c "::intensity_mode" enum type.
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(EID_FORCE_32_BIT, 0x7fffffff)
     };
 
     /// The kind of this subclass.
@@ -371,8 +366,6 @@ public:
     ///                      bounds, or there are no annotations for that value.
     virtual const IAnnotation_block* get_value_annotations( Size index) const = 0;
 };
-
-mi_static_assert( sizeof( IType_enum::Predefined_id) == sizeof( Sint32));
 
 /// The type of kind float.
 class IType_float : public
@@ -503,14 +496,14 @@ class IType_struct : public
 {
 public:
     /// IDs to distinguish predefined struct types.
-    enum Predefined_id {
-        SID_USER               = -1,             ///< A user-defined struct type.
-        SID_MATERIAL_EMISSION  =  0,             ///< The \c "::material_emission" struct type.
-        SID_MATERIAL_SURFACE   =  1,             ///< The \c "::material_surface" struct type.
-        SID_MATERIAL_VOLUME    =  2,             ///< The \c "::material_volume" struct type.
-        SID_MATERIAL_GEOMETRY  =  3,             ///< The \c "::material_geometry" struct type.
-        SID_MATERIAL           =  4,             ///< The \c "::material" struct type.
-        SID_FORCE_32_BIT       =  0x7fffffff     //   Undocumented, for alignment only.
+    enum Predefined_id : Sint32 {
+        SID_USER               = -1,   ///< A user-defined struct type.
+        SID_MATERIAL_EMISSION  =  0,   ///< The \c "::material_emission" struct type.
+        SID_MATERIAL_SURFACE   =  1,   ///< The \c "::material_surface" struct type.
+        SID_MATERIAL_VOLUME    =  2,   ///< The \c "::material_volume" struct type.
+        SID_MATERIAL_GEOMETRY  =  3,   ///< The \c "::material_geometry" struct type.
+        SID_MATERIAL           =  4    ///< The \c "::material" struct type.
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(SID_FORCE_32_BIT, 0x7fffffff)
     };
 
     /// The kind of this subclass.
@@ -557,8 +550,6 @@ public:
     virtual const IStruct_category* get_struct_category() const = 0;
 };
 
-mi_static_assert( sizeof( IType_struct::Predefined_id) == sizeof( Sint32));
-
 /// The reference types.
 class IType_reference : public
     mi::base::Interface_declare<0x3e12cdec,0xdaba,0x460c,0x9e,0x8a,0x21,0x4c,0x43,0x9a,0x1a,0x90,
@@ -583,21 +574,18 @@ public:
     static const Kind s_kind = TK_TEXTURE;
 
     /// The possible texture shapes.
-    enum Shape {
-        TS_2D           = 0,            ///< Two-dimensional texture.
-        TS_3D           = 1,            ///< Three-dimensional texture.
-        TS_CUBE         = 2,            ///< Cube map texture.
-        TS_PTEX         = 3,            ///< PTEX texture.
-        TS_BSDF_DATA    = 4,            ///< Three-dimensional texture representing
-                                        ///  a BSDF data table.
-        TS_FORCE_32_BIT = 0xffffffffU   //   Undocumented, for alignment only.
+    enum Shape : Uint32 {
+        TS_2D           = 0, ///< Two-dimensional texture.
+        TS_3D           = 1, ///< Three-dimensional texture.
+        TS_CUBE         = 2, ///< Cube map texture.
+        TS_PTEX         = 3, ///< PTEX texture.
+        TS_BSDF_DATA    = 4  ///< Three-dimensional texture representing a BSDF data table.
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(TS_FORCE_32_BIT, 0xffffffffU)
     };
 
     /// Returns the texture type.
     virtual Shape get_shape() const = 0;
 };
-
-mi_static_assert( sizeof( IType_texture::Shape) == sizeof( Uint32));
 
 /// The type of kind light_profile.
 class IType_light_profile : public

@@ -36,8 +36,6 @@
 
 #include <cstring>
 
-#include <boost/core/ignore_unused.hpp>
-
 #include <base/data/attr/i_attr_types.h>
 #include <base/system/main/i_assert.h>
 #include <base/util/string_utils/i_string_lexicographic_cast.h>
@@ -550,9 +548,9 @@ mi::Sint32 Array_impl_proxy::set_element(
 
     mi::base::Handle old_data( get_element<mi::IData>( index));
     MI_ASSERT( old_data);
-    mi::Uint32 result = m_factory->assign_from_to( new_data.get(), old_data.get(), /*options*/ 0);
+    [[maybe_unused]] mi::Uint32 result
+       = m_factory->assign_from_to( new_data.get(), old_data.get(), /*options*/ 0);
     MI_ASSERT( result == 0);
-    boost::ignore_unused( result);
 
     return 0;
 }
@@ -760,9 +758,9 @@ mi::Sint32 Dynamic_array_impl_proxy::set_element(
 
     mi::base::Handle old_data( get_element<mi::IData>( index));
     MI_ASSERT( old_data);
-    mi::Uint32 result = m_factory->assign_from_to( new_data.get(), old_data.get(), /*options*/ 0);
+    [[maybe_unused]] mi::Uint32 result
+        = m_factory->assign_from_to( new_data.get(), old_data.get(), /*options*/ 0);
     MI_ASSERT( result == 0);
-    boost::ignore_unused( result);
 
     return 0;
 }

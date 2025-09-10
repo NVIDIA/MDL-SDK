@@ -104,6 +104,8 @@ SLWriterPass<BasePass>::SLWriterPass(
 , m_num_texture_spaces(num_texture_spaces)
 , m_num_texture_results(num_texture_results)
 , m_df_handle_slot_mode(df_handle_slot_mode)
+, m_export_requested_functions(
+    options.get_bool_option(MDL_JIT_OPTION_EXPORT_REQUESTED_FUNCTIONS))
 , m_cur_data_layout(nullptr)
 {
     register_api_types(options, df_handle_slot_mode);
@@ -495,6 +497,10 @@ void SLWriterPass<BasePass>::translate_function(
     if (llvm_func->hasFnAttribute(llvm::Attribute::NoInline)) {
         Base::add_noinline_attribute(decl_func);
     }
+    if (m_export_requested_functions &&
+            llvm_func->getLinkage() == llvm::GlobalValue::ExternalLinkage) {
+        Base::set_is_export(decl_func, true);
+    }
 
     func_def->set_declaration(decl_func);
     func_name->set_definition(func_def);
@@ -822,12 +828,21 @@ namespace {
         return false;
     }
 
-    bool flows_into_terminator(llvm::Value *value, llvm::BasicBlock *bb, size_t limit = 10)
+    bool flows_into_non_ret_terminator(
+        llvm::Value *value, llvm::BasicBlock *bb, size_t limit = 10)
     {
         if (limit == 0) {
-            // Safely return true if nested too deply.
+            // Conservatively return true if nested too deeply.
             return true;
         }
+
+        // Skip insert value/element chains
+        while ((llvm::isa<llvm::InsertValueInst>(value) ||
+                llvm::isa<llvm::InsertElementInst>(value)) &&
+                value->hasOneUse()) {
+            value = *value->user_begin();
+        }
+
         for (llvm::Value *user : value->users()) {
             if (llvm::isa<llvm::Instruction>(user)) {
                 llvm::Instruction *inst = llvm::cast<llvm::Instruction>(user);
@@ -838,11 +853,13 @@ namespace {
                     // Therefore, we can safely ignore this use.
                     return false;
                 }
-                if (inst->isTerminator()) {
+
+                // Found a terminator which is not a return?
+                if (inst->isTerminator() && !llvm::isa<llvm::ReturnInst>(inst)) {
                     return true;
                 }
             }
-            if (flows_into_terminator(user, bb, limit - 1)) {
+            if (flows_into_non_ret_terminator(user, bb, limit - 1)) {
                 return true;
             }
         }
@@ -1122,7 +1139,7 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
                         }
                     }
                 }
-                if (has_phi_operands && flows_into_terminator(&value, bb)) {
+                if (has_phi_operands && flows_into_non_ret_terminator(&value, bb)) {
                     gen_statement = true;
                 }
             }
@@ -1265,6 +1282,34 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
 
                     // insert variable declaration here
                     stmts.push_back(Base::m_stmt_factory.create_declaration(decl_var));
+                } else if (is<Expr_compound>(res) && !Base::compound_allowed(false)) {
+                    // assign array element-wise to the variable
+                    if (Type_array *array_type = as<Type_array>(res->get_type())) {
+                        Expr_compound *expr_comp = as<Expr_compound>(res);
+                        if (array_type->get_size() != expr_comp->get_element_count()) {
+                            MDL_ASSERT(!"Array type size does not fit to expression compound size");
+                            Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
+                            stmts.push_back(create_assign_stmt(
+                                var_def, Base::m_expr_factory.create_invalid(Base::zero_loc)));
+                        } else {
+                            for (int i = 0, n = int(array_type->get_size()); i < n; ++i) {
+                                Expr *index_expr = Base::m_expr_factory.create_literal(
+                                    Base::zero_loc,
+                                    Base::m_value_factory.get_int32(i));
+                                Expr *elem_access = Base::create_binary(
+                                    Expr_binary::OK_ARRAY_SUBSCRIPT,
+                                    Base::create_reference(var_def),
+                                    index_expr);
+                                stmts.push_back(create_assign_stmt(
+                                    elem_access, expr_comp->get_element(i)));
+                            }
+                        }
+                    } else {
+                        MDL_ASSERT(!"Unexpected compound expression");
+                        Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
+                        stmts.push_back(create_assign_stmt(
+                            var_def, Base::m_expr_factory.create_invalid(Base::zero_loc)));
+                    }
                 } else {
                     stmts.push_back(create_assign_stmt(var_def, res));
                 }
@@ -2662,8 +2707,8 @@ typename SLWriterPass<BasePass>::Value *SLWriterPass<BasePass>::translate_consta
     if (llvm::ConstantVector *cv = llvm::dyn_cast<llvm::ConstantVector>(c)) {
         return translate_constant_vector(cv);
     }
-    if (llvm::isa<llvm::UndefValue>(c)) {
-        Type *type = Base::convert_type(c->getType());
+    if (llvm::UndefValue *undef = llvm::dyn_cast<llvm::UndefValue>(c)) {
+        Type *type = Base::convert_type(undef->getType());
 
 #if 0
         // use special undef values for debugging
@@ -2675,6 +2720,16 @@ typename SLWriterPass<BasePass>::Value *SLWriterPass<BasePass>::translate_consta
             return Base::m_value_factory.get_int32(0xcccccccc);
         } else if (is<Type_uint>(type)) {
             return Base::m_value_factory.get_uint32(0xcccccccc);
+        } else if (is<Type_vector>(type)) {
+            size_t num_elems = size_t(undef->getNumElements());
+            Small_VLA<Value_scalar *, 8> values(Base::m_alloc, num_elems);
+
+            for (size_t i = 0; i < num_elems; ++i) {
+                llvm::Constant *elem = undef->getElementValue(i);
+                values[i] = cast<Value_scalar>(translate_constant(elem));
+            }
+
+            return Base::m_value_factory.get_vector(cast<Type_vector>(type), values);
         }
 #endif
 

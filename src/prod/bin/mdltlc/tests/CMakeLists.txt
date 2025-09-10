@@ -35,5 +35,5 @@ create_unit_test(
     SOURCES
         ../test_basics.cpp
     DEPENDS
-        mdl::prod-bin-mdltlclib
+        prod-bin-mdltlclib
     )

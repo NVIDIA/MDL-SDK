@@ -103,6 +103,9 @@ public:
     /// Returns the referenced tag.
     Tag get_tag() const { return m_tag; }
 
+    /// Returns the DB name of the referenced element (or \c nullptr without element/name).
+    const char* get_name() const { return m_info ? m_info->get_name() : nullptr; }
+
     /// Returns the corresponding transaction. Can be \c nullptr after construction. RCS:NEU
     Transaction* get_transaction() const { return m_transaction; }
 
@@ -142,6 +145,21 @@ public:
     Element_base* set_access(
         Tag tag, Transaction* transaction, SERIAL::Class_id id);
 
+    /// Sets an access to a given name, possibly within a new transaction.
+    ///
+    /// Note that this method does not allow to restore the state after construction. A
+    /// \c nullptr value for \p name is valid, but a \c nullptr value for \p transaction
+    /// keeps the current transaction. Use the copy constructor or assignment operator to reset the
+    /// state. (Access has a reset() method, but not Edit.)
+    ///
+    /// \param name          The new name.
+    /// \param transaction   The new transaction. Pass \c nullptr to keep the current transaction.
+    ///                      RCS:NEU
+    /// \param id            The expected class ID of the new name. Used for assertions.
+    /// \return              The referenced database element. RCS:NEU
+    Element_base* set_access(
+        const char* name, Transaction* transaction, SERIAL::Class_id id);
+
     /// Sets an edit to a given tag, possibly within a new transaction.
     ///
     /// \param tag           The new tag.
@@ -152,6 +170,17 @@ public:
     /// \return              The referenced database element. RCS:NEU
     Element_base* set_edit(
         Tag tag, Transaction* transaction, SERIAL::Class_id id, Journal_type journal_type);
+
+    /// Sets an edit to a given name, possibly within a new transaction.
+    ///
+    /// \param name          The new name.
+    /// \param transaction   The new transaction. Pass \c nullptr to keep the current transaction.
+    ///                      RCS:NEU
+    /// \param id            The expected class ID of the new name. Used for assertions.
+    /// \param journal_type  The initial journal flags of this edit.
+    /// \return              The referenced database element. RCS:NEU
+    Element_base* set_edit(
+        const char* name, Transaction* transaction, SERIAL::Class_id id, Journal_type journal_type);
 
     /// Sets the journal flags of an edit.
     ///
@@ -240,6 +269,16 @@ public:
         MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
     }
 
+    /// Constructs an access to a given name.
+    ///
+    /// \param name          The name.
+    /// \param transaction   The transaction. RCS:NEU
+    Access( const char* name, Transaction* transaction)
+    {
+        set_access( name, transaction, T::id);
+        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
+    }
+
     /// Copy constructor.
     Access( const Access_base& other)
       : Access_base( other)
@@ -271,6 +310,22 @@ public:
     void set( Tag tag = Tag(), Transaction* transaction = nullptr)
     {
         set_access( tag, transaction, T::id);
+        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
+    }
+
+    /// Sets an access to a given nam, possibly within a new transaction.
+    ///
+    /// Note that this method does not allow to restore the state after construction. A
+    /// \c nullptr value for \p name is valid, but a \c nullptr value for \p transaction
+    /// keeps the current transaction. Use #reset() for that.
+    ///
+    /// \param name          The new name to access.
+    /// \param transaction   The new transaction. Pass \c nullptr to keep the current transaction.
+    ///                      RCS:NEU
+    /// \param id            The expected class ID of the new name. Used for assertions.
+    void set( const char* name, Transaction* transaction = nullptr)
+    {
+        set_access( name, transaction, T::id);
         MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
     }
 
@@ -346,6 +401,17 @@ public:
         MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
     }
 
+    /// Constructs an edit to a given name.
+    ///
+    /// \param name          The new name.
+    /// \param transaction   The new transaction. RCS:NEU
+    /// \param journal_type  The initial journal flags of this edit.
+    Edit( const char* name, Transaction* transaction, Journal_type journal_type = JOURNAL_ALL)
+    {
+        this->set_edit( name, transaction, T::id, journal_type);
+        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
+    }
+
     /// Constructs an edit from an access.
     ///
     /// This can be used to avoid creating an expensive edit upfront: start with an access and
@@ -377,6 +443,27 @@ public:
     {
         MI_ASSERT( this->is_edit());
         this->set_edit( tag, transaction, T::id, journal_type);
+        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
+    }
+
+    /// Sets an edit to a given name, possibly within a new transaction.
+    ///
+    /// Note that this method does not allow to restore the state after construction. A
+    /// \c nullptr value for \p name is valid, but a \c nullptr value for \p transaction
+    /// keeps the current transaction. Use the copy constructor or assignment operator to reset the
+    /// state.
+    ///
+    /// \param name          The new name to edit.
+    /// \param transaction   The new transaction. Pass \c nullptr to keep the current transaction.
+    ///                      RCS:NEU
+    /// \param journal_type  The initial journal flags of this edit.
+    void set(
+        const char* name,
+        Transaction* transaction = nullptr,
+        Journal_type journal_type = JOURNAL_ALL)
+    {
+        MI_ASSERT( this->is_edit());
+        this->set_edit( name, transaction, T::id, journal_type);
         MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
     }
 

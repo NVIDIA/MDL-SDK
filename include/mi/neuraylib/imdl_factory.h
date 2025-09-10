@@ -33,11 +33,6 @@
 
 #include <mi/base/interface_declare.h>
 #include <mi/neuraylib/iexpression.h>
-#include <mi/neuraylib/version.h>
-
-#ifdef MI_NEURAYLIB_DEPRECATED_14_0
-#include <mi/neuraylib/imdl_execution_context.h>
-#endif
 
 namespace mi {
 
@@ -99,7 +94,7 @@ public:
     ///
     /// Useful to change options temporarily.
     virtual IMdl_execution_context* clone( const IMdl_execution_context* context) = 0;
-    
+
     //@}
     /// \name Creation of resource values
     //@{
@@ -149,27 +144,6 @@ public:
         bool shared,
         IMdl_execution_context* context) = 0;
 
-#ifdef MI_NEURAYLIB_DEPRECATED_14_0
-    inline IValue_texture* create_texture(
-        ITransaction* transaction,
-        const char* file_path,
-        IType_texture::Shape shape,
-        Float32 gamma,
-        const char* selector,
-        bool shared,
-        Sint32* errors = 0)
-    {
-        mi::base::Handle<IMdl_execution_context> context( create_execution_context());
-        IValue_texture* result = create_texture(
-            transaction, file_path, shape, gamma, selector, shared, context.get());
-        if( errors) {
-            mi::base::Handle<const IMessage> msg( context->get_error_message( 0));
-            *errors = msg ? msg->get_code() : 0;
-        }
-        return result;
-    }
-#endif // MI_NEURAYLIB_DEPRECATED_14_0
-
     /// Creates a value referencing a light profile identified by an MDL file path.
     ///
     /// \param transaction   The transaction to be used.
@@ -204,24 +178,6 @@ public:
         bool shared,
         IMdl_execution_context* context) = 0;
 
-#ifdef MI_NEURAYLIB_DEPRECATED_14_0
-    inline IValue_light_profile* create_light_profile(
-        ITransaction* transaction,
-        const char* file_path,
-        bool shared,
-        Sint32* errors = 0)
-    {
-        mi::base::Handle<IMdl_execution_context> context( create_execution_context());
-        IValue_light_profile* result = create_light_profile(
-            transaction, file_path, shared, context.get());
-        if( errors) {
-            mi::base::Handle<const IMessage> msg( context->get_error_message( 0));
-            *errors = msg ? msg->get_code() : 0;
-        }
-        return result;
-    }
-#endif // MI_NEURAYLIB_DEPRECATED_14_0
-
     /// Creates a value referencing a BSDF measurement identified by an MDL file path.
     ///
     /// \param transaction   The transaction to be used.
@@ -255,24 +211,6 @@ public:
         const char* file_path,
         bool shared,
         IMdl_execution_context* context) = 0;
-
-#ifdef MI_NEURAYLIB_DEPRECATED_14_0
-    inline IValue_bsdf_measurement* create_bsdf_measurement(
-        ITransaction* transaction,
-        const char* file_path,
-        bool shared,
-        Sint32* errors = 0)
-    {
-        mi::base::Handle<IMdl_execution_context> context( create_execution_context());
-        IValue_bsdf_measurement* result = create_bsdf_measurement(
-            transaction, file_path, shared, context.get());
-        if( errors) {
-            mi::base::Handle<const IMessage> msg( context->get_error_message( 0));
-            *errors = msg ? msg->get_code() : 0;
-        }
-        return result;
-    }
-#endif // MI_NEURAYLIB_DEPRECATED_14_0
 
     //@}
     /// \name Creation of factories and builders
@@ -353,60 +291,6 @@ public:
     ///                      \p mdl_name was detected as invalid.
     virtual const IString* get_db_definition_name( const char* mdl_name) = 0;
 
-    //@}
-    /// \name Miscellaneous methods
-    //@{
-
-    /// Analyzes whether an expression graph violates the uniform constraints.
-    ///
-    /// \note This method can be used to check already created graphs, but it can also be used to
-    ///       check whether a hypothetical connection would observe the uniform constraints: First,
-    ///       invoke the method with the root of the existing graph, \p root_uniform set to \c
-    ///       false (at least for materials), and \p query_expr set to the graph node to be
-    ///       replaced. If the call returns with \p query_result set to \c false (and no errors in
-    ///       the context), then any (valid) subgraph can be connected. Otherwise, invoke the
-    ///       method again with the root of the to-be-connected subgraph, \p root_uniform set to \c
-    ///       true, and \p query_expr set to \c nullptr. If there are no errors, then the subgraph
-    ///       can be connected.
-    ///
-    /// \note Make sure that \p query_expr (if not \c nullptr) can be reached from \p root_name,
-    ///       otherwise \p query_result is always \c false. In particular, arguments passed during
-    ///       call creation (or later for argument changes) are cloned, and the expression that is
-    ///       part of the graph is different from the one that was used to construct the graph
-    ///       (equal, but not identical).
-    ///
-    /// \param transaction             The transaction to be used.
-    /// \param root_name               DB name of the root node of the graph (material instance or
-    ///                                function call).
-    /// \param root_uniform            Indicates whether the root node should be uniform.
-    /// \param query_expr              A node of the call graph for which the uniform property is
-    ///                                to be queried. This expression is \em only used to identify
-    ///                                the corresponding node in the graph, i.e., it even makes
-    ///                                sense to pass constant expressions (which by themselves are
-    ///                                always uniform) to determine whether a to-be-connected call
-    ///                                expression has to be uniform. Can be \c nullptr.
-    /// \param[out] query_result       Indicates whether \p query_expr needs to be uniform (or
-    ///                                \c false if \p query_expr is \c nullptr, or in case of
-    ///                                errors).
-    /// \param[out] error_path         A path to a node of the graph that violates the uniform
-    ///                                constraints, or the empty string if there is no such node
-    ///                                (or in case of errors). Such violations are also reported
-    ///                                via \p context. Can be \c nullptr.
-    /// \param context                 The execution context can be used to pass options and to
-    ///                                retrieve error and/or warning messages. Can be \c nullptr.
-    virtual void analyze_uniform(
-        ITransaction* transaction,
-        const char* root_name,
-        bool root_uniform,
-        const IExpression* query_expr,
-        bool& query_result,
-        IString* error_path,
-        IMdl_execution_context* context) const = 0;
-
-    //@}
-    /// \name Name conversions
-    //@{
-
     /// Decodes a DB or MDL name.
     ///
     /// \param name   The encoded DB or MDL name to be decoded.
@@ -475,6 +359,52 @@ public:
 
     /// Indicates whether the given string is a valid MDL identifier.
     virtual bool is_valid_mdl_identifier( const char* name) const = 0;
+
+    /// Analyzes whether an expression graph violates the uniform constraints.
+    ///
+    /// \note This method can be used to check already created graphs, but it can also be used to
+    ///       check whether a hypothetical connection would observe the uniform constraints: First,
+    ///       invoke the method with the root of the existing graph, \p root_uniform set to \c
+    ///       false (at least for materials), and \p query_expr set to the graph node to be
+    ///       replaced. If the call returns with \p query_result set to \c false (and no errors in
+    ///       the context), then any (valid) subgraph can be connected. Otherwise, invoke the
+    ///       method again with the root of the to-be-connected subgraph, \p root_uniform set to \c
+    ///       true, and \p query_expr set to \c nullptr. If there are no errors, then the subgraph
+    ///       can be connected.
+    ///
+    /// \note Make sure that \p query_expr (if not \c nullptr) can be reached from \p root_name,
+    ///       otherwise \p query_result is always \c false. In particular, arguments passed during
+    ///       call creation (or later for argument changes) are cloned, and the expression that is
+    ///       part of the graph is different from the one that was used to construct the graph
+    ///       (equal, but not identical).
+    ///
+    /// \param transaction             The transaction to be used.
+    /// \param root_name               DB name of the root node of the graph (material instance or
+    ///                                function call).
+    /// \param root_uniform            Indicates whether the root node should be uniform.
+    /// \param query_expr              A node of the call graph for which the uniform property is
+    ///                                to be queried. This expression is \em only used to identify
+    ///                                the corresponding node in the graph, i.e., it even makes
+    ///                                sense to pass constant expressions (which by themselves are
+    ///                                always uniform) to determine whether a to-be-connected call
+    ///                                expression has to be uniform. Can be \c nullptr.
+    /// \param[out] query_result       Indicates whether \p query_expr needs to be uniform (or
+    ///                                \c false if \p query_expr is \c nullptr, or in case of
+    ///                                errors).
+    /// \param[out] error_path         A path to a node of the graph that violates the uniform
+    ///                                constraints, or the empty string if there is no such node
+    ///                                (or in case of errors). Such violations are also reported
+    ///                                via \p context. Can be \c nullptr.
+    /// \param context                 The execution context can be used to pass options and to
+    ///                                retrieve error and/or warning messages. Can be \c nullptr.
+    virtual void analyze_uniform(
+        ITransaction* transaction,
+        const char* root_name,
+        bool root_uniform,
+        const IExpression* query_expr,
+        bool& query_result,
+        IString* error_path,
+        IMdl_execution_context* context) const = 0;
 
     //@}
 };

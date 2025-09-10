@@ -5798,7 +5798,7 @@ export volume_coefficients lookup_volume_coefficients(
         [[ anno::description("Scaling applied to the density value") ]],
     uniform bool density_relative_to_size = false
         [[ anno::description("If true, volume density changes with instance scale") ]]
-    )
+)
 [[
     anno::noinline(),
     anno::description("Returns the volume coefficients from an inhomogeneous volume density texture.")
@@ -5849,7 +5849,9 @@ export color volume_blackbody_emission(
     uniform float scale = 1.0f
         [[ anno::description("Scale final emission") ]],
     uniform color tint = color(1,1,1)
-        [[ anno::description("Arbitrary color modification") ]]
+        [[ anno::description("Arbitrary color modification") ]],
+    uniform float4x4 transform = float4x4(1.0f)
+        [[ anno::description("Transform applied when looking up the density value from the texture") ]]
 )
 [[
     anno::description("Blackbody emission intensity for a field of heated particles."),
@@ -5857,8 +5859,10 @@ export color volume_blackbody_emission(
 ]]
 {
     float3 position = state::transform_point(state::coordinate_internal, state::coordinate_object, state::position());
+    float4 uvw4 = transform * float4(position.x, position.y, position.z, 1.0f);
+    float3 uvw = float3(uvw4.x, uvw4.y, uvw4.z);
 
-    float temp_sample = tex::lookup_float(temperature, position, tex::wrap_clip);
+    float temp_sample = tex::lookup_float(temperature, uvw, tex::wrap_clip);
     // Clamp to 500K, because the rational fit has a pole / is negaitve below.
     // The luminance at this temperature is 0 anyways.
     float t = math::max(500.0, temp_sample * temperature_mult + temperature_offset);
@@ -5868,7 +5872,7 @@ export color volume_blackbody_emission(
     float intensity = math::exp(intensity_log) * scale / 1000.0f; // Fit is for um^-1 but need nm^-1 -> /1000
 
     if(tex::texture_isvalid(density))
-        intensity *= tex::lookup_float(density, position, tex::wrap_clip);
+        intensity *= tex::lookup_float(density, uvw, tex::wrap_clip);
 
     intensity = math::max(0.0, intensity);
     return math::blackbody(t) * intensity * tint;

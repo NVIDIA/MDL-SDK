@@ -65,8 +65,6 @@ int convert_severity( mi::base::Message_severity severity)
         case mi::base::MESSAGE_SEVERITY_INFO:         return NR_INFO;
         case mi::base::MESSAGE_SEVERITY_VERBOSE:      return NR_VERBOSE;
         case mi::base::MESSAGE_SEVERITY_DEBUG:        return ILogger::S_ALL;
-        case mi::base::MESSAGE_SEVERITY_FORCE_32_BIT:
-            return -1;
     }
 
     return -1;

@@ -35,6 +35,7 @@
 
 #include <string>
 #include <map>
+#include <filesystem>
 #include <functional>
 
 #include <boost/core/noncopyable.hpp>
@@ -46,7 +47,13 @@
 #include <base/system/main/access_module.h>
 #include <base/data/db/i_db_tag.h>
 
-namespace mi { namespace neuraylib { class IExport_result_ext; class IBuffer; } }
+namespace mi {
+
+class IMap;
+
+namespace neuraylib { class IBuffer; class IExport_result_ext; }
+
+}
 
 namespace MI {
 
@@ -78,6 +85,16 @@ public:
     using Buffer_callback = std::function<
         std::string( mi::neuraylib::IBuffer* buffer, const char* suggested_file_name)>;
 
+    /// Creates a resource callback for the MDL Core compiler.
+    ///
+    /// \param transaction             The DB transaction to use.
+    /// \param module                  The MDL core module to export.
+    /// \param module_name             The DB module name of the module.
+    /// \param module_filename         An optional old filename of the module. Will be used to
+    ///                                derive the new filename, and possibly to copy the file
+    ///                                instead of re-exporting the resource.
+    /// \param context                 Execution context used to pass options.
+    /// \param result                  Export result which stores potential errors.
     Resource_callback(
         DB::Transaction* transaction,
         const mi::mdl::IModule* module,
@@ -86,12 +103,29 @@ public:
         Execution_context* context,
         mi::neuraylib::IExport_result_ext* result);
 
+    /// Destructor.
     ~Resource_callback();
 
+    /// Method of the abstract interface #mi::mdl::IMDL_exporter_resource_callback.
+    ///
+    /// Calls overload below with \c nullptr for \p buffer_callback.
     const char* get_resource_name(
         const mi::mdl::IValue_resource* resource,
         bool supports_strict_relative_path) override;
 
+    /// Returns the "name" of an MDL resource value.
+    ///
+    /// This name is the string that is used in the MDL module source code as argument of the
+    /// resource constructor. As a byproduct of this call, the resource is actually exported.
+    ///
+    /// \param resource                       The resource value.
+    /// \param support_strict_relative_path   Indicates whether strict relative paths are
+    ///                                       supported.
+    /// \param buffer_callback                If present, the buffer callback is used for the actual
+    ///                                       export operation. Otherwise, the filesystem is used
+    ///                                       for the export operation.
+    /// \return                               The name of the resource value, or \c nullptr in case
+    ///                                       of failure.
     const char* get_resource_name(
         const mi::mdl::IValue_resource* resource,
         bool supports_strict_relative_path,
@@ -137,16 +171,21 @@ private:
 
     /// Exports the image.
     ///
+    /// The \p image_tag is optional and only used to support the context option "filename_hints".
+    ///
     /// If \p buffer_callback is valid, it is used for export. Otherwise, copies the original
     /// file(s) (if known and accessible), or exports the canvases.
     ///
     /// Returns the MDL file path (or the empty string in case of error).
     std::string export_texture_image(
         const DBIMAGE::Image* image,
+        DB::Tag image_tag,
         Buffer_callback* buffer_callback);
 
 
     /// Exports the light profile.
+    ///
+    /// The \p tag is optional and only used to support the context option "filename_hints".
     ///
     /// If \p buffer_callback is valid, it is used for export. Otherwise, copies the original file
     /// (if known and accessible), or exports the light profile.
@@ -154,9 +193,12 @@ private:
     /// Returns the MDL file path (or the empty string in case of error).
     std::string export_light_profile(
         const LIGHTPROFILE::Lightprofile* profile,
+        DB::Tag tag,
         Buffer_callback* buffer_callback);
 
     /// Exports the BSDF measurement.
+    ///
+    /// The \p tag is optional and only used to support the context option "filename_hints".
     ///
     /// If \p buffer_callback is valid, it is used for export. Otherwise, copies the original file
     /// (if known and accessible), or exports the light profile.
@@ -164,22 +206,55 @@ private:
     /// Returns the MDL file path (or the empty string in case of error).
     std::string export_bsdf_measurement(
         const BSDFM::Bsdf_measurement* measurement,
+        DB::Tag tag,
         Buffer_callback* buffer_callback);
 
     //@}
     /// \name Utilities
     //@{
 
+    /// Returns the "old" basename to be considered as first suggestion when generating a new
+    /// resource filename.
+    ///
+    /// The value from the context option "filename_hints" (identified by the DB name of \p tag)
+    /// has the highest priority, followed by the old filename, and finally the old MDL file path.
+    ///
+    /// The optional flag \p from_context_option indicates whether the return value was derived
+    /// from the "filename_hints" context option.
+    std::string get_old_basename(
+        DB::Tag tag,
+        const std::string& old_filename,
+        const std::string& mdl_file_path,
+        bool* from_context_option = nullptr);
+
+    /// A pair of frame number and u/v coordinates.
+    struct Frame_uv {
+        mi::Size m_frame_number;
+        mi::Sint32 m_u;
+        mi::Sint32 m_v;
+    };
+
+    /// A vector of all pairs of frame numbers and u/v coordinates.
+    using Frame_uvs = std::vector<Frame_uv>;
+
+    /// Indicates whether the file \p s with markers causes a collision with existing files for
+    /// any of the frame numbers and/or u/v coordinates.
+    ///
+    /// This method is the counterpart to std::filesystem::exists() for animated/uvtile textures.
+    static bool collision( const std::string& s, const Frame_uvs& frame_uvs);
+
     /// Generates a filename for resources with the new extension and/or based on old filename.
     ///
     /// Does not support images with uvtiles or non-trivial frames.
     ///
-    /// If \p old_filename is not \c nullptr and the filename derived from it does not already
-    /// exist, return it. Otherwise, generate a generic filename with the new or original extension
-    /// that does not already exist.
+    /// In OVERWRITE_EXISTING mode the first filename considered is returned. In FAIL_IF_EXISTING
+    /// mode the first filename considered is returned, unless it exists, in which case we return
+    /// the empty string. In GENERATE_UNIQUE mode we generate and consider filenames until one not
+    /// yet existing is found.
     ///
-    /// Returns m_path_prefix + "_" + stem(old_filename) + "." + extension or
-    /// m_path_prefix + _resource_" + counter + extension .
+    /// If \p old_filename is not \c nullptr, consider a filename using #m_path_prefix and
+    /// \p old_filename. If not successful, add a counter until successful (using "resource" if
+    /// \p old_filename is \c nullptr),
     std::string get_new_resource_filename(
         const char* new_extension, const char* old_filename, bool use_new_extension);
 
@@ -188,16 +263,22 @@ private:
     /// Invokes #get_new_resource_filename() if \p add_sequence_marker and \p add_uvtile_marker
     /// are \c false.
     ///
-    /// Otherwise, if \p old_filename is not \c nullptr, returns a filename with markers derived
-    /// from it (no existence check). Otherwise, generate a generic filename with the new or
-    /// original extension and markers (no existence check).
+    /// In OVERWRITE_EXISTING mode the first filename considered is returned. In FAIL_IF_EXISTING
+    /// mode the first filename considered is returned, unless it exists, in which case we return
+    /// the empty string. In GENERATE_UNIQUE mode we generate and consider filenames until one not
+    /// yet causing collisions is found (see #collision()).
+    ///
+    /// If \p old_filename is not \c nullptr, consider a filename with markers, using
+    /// #m_path_prefix. If not successful, add a counter until successful (using "resource" and
+    /// suitable marker strings if \p old_filename is \c nullptr),
     std::string get_new_resource_filename_marker(
         const char* new_extension,
         const char* old_filename,
         bool use_new_extension,
         bool add_sequence_marker,
         bool add_uvtile_marker,
-        mi::Size frame_digits);
+        mi::Size frame_digits,
+        const Frame_uvs& frame_uvs);
 
     /// Generates a relative file path from a filename.
     ///
@@ -239,7 +320,7 @@ private:
         const char* resource_type,
         DB::Tag resource);
 
-    /// Adds an error message for unfulfillable export operations in string-based exports.
+    /// Adds an error message for unsatisfiable export operations in string-based exports.
     void add_error_string_based(
         mi::Uint32 error_number,
         const char* file_container_or_memory_based,
@@ -269,6 +350,9 @@ private:
     /// New URI of the MDL module to be exported (or empty for string-based exports).
     std::string m_module_uri;
 
+    /// \name Context options
+    //@{
+
     /// Flag that indicates whether resources are bundled with the exported MDL module.
     bool m_bundle_resources;
 
@@ -279,6 +363,22 @@ private:
     /// m_bundle_resources is set).
     bool m_keep_original_file_paths;
 
+    /// Possible values for context option "handle_filename_conflicts".
+    enum Filename_conflicts { GENERATE_UNIQUE, OVERWRITE_EXISTING, FAIL_IF_EXISTING };
+
+    /// Represents the context option "handle_filename_conflicts".
+    Filename_conflicts m_handle_filename_conflicts = GENERATE_UNIQUE;
+
+    /// Options for std::filesystem::copy_file().
+    ///
+    /// Equals overwrite_existing in OVERWRITE_EXISTING mode, otherwise none.
+    std::filesystem::copy_options m_copy_options = std::filesystem::copy_options::none;
+
+    /// Map that holds filename suggestions for exported resources.
+    mi::base::Handle<const mi::IMap> m_filename_hints;
+
+    //@}
+
     /// Error messages are added to this export result.
     mi::base::Handle<mi::neuraylib::IExport_result_ext> m_result;
 
@@ -286,13 +386,13 @@ private:
     std::string m_module_filename;
 
     /// New filename of the MDL module to be exported (or \c nullptr for string-based exports).
-    const char* m_module_filename_c_str;
+    const char* m_module_filename_c_str = nullptr;
 
     /// Path prefix for resource names.
     std::string m_path_prefix;
 
-    /// Counter for resource names.
-    mi::Uint32 m_counter;
+    /// Counter for resource names (if no old filename is available).
+    mi::Uint32 m_counter = 0;
 
     /// Caches all translations to avoid multiple exports of the same resource.
     std::map<DB::Tag, std::string> m_file_paths;

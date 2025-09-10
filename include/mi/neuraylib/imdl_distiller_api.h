@@ -32,6 +32,7 @@
 #define MI_NEURAYLIB_IMDL_DISTILLER_H
 
 #include <mi/base/interface_declare.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -51,19 +52,16 @@ class ICompiled_material;
 /// Identifies the resource(s) to be used by a baker.
 ///
 /// \see #mi::neuraylib::IMdl_distiller_api::create_baker()
-enum Baker_resource {
+enum Baker_resource : Uint32 {
 
     /// Use only the CPU for texture baking.
     BAKE_ON_CPU,
     /// Use only the GPU for texture baking.
     BAKE_ON_GPU,
     /// Prefer using the GPU for texture baking, use the CPU as fallback.
-    BAKE_ON_GPU_WITH_CPU_FALLBACK,
-    //  Undocumented, for alignment only.
-    BAKER_RESOURCE_FORCE_32_BIT = 0xffffffffU
+    BAKE_ON_GPU_WITH_CPU_FALLBACK
+    MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(BAKER_RESOURCE_FORCE_32_BIT, 0xffffffffU)
 };
-
-mi_static_assert( sizeof( Baker_resource) == sizeof( Uint32));
 
 /// Provides access to various functionality related to MDL distilling.
 class IMdl_distiller_api : public
@@ -308,6 +306,14 @@ public:
     /// \see \ref mi_neuray_baker_types
     virtual const char* get_pixel_type() const = 0;
 
+    /// Returns the required type name for constants.
+    ///
+    /// This type name can be used with #mi::neuraylib::IFactory::create() or
+    /// #mi::neuraylib::ITransaction::create() to create the instance of #mi::IData.
+    ///
+    /// \see \ref mi_neuray_baker_types
+    virtual const char* get_type_name() const = 0;
+
     /// Indicates whether the expression to be baked is uniform or varying.
     ///
     /// Typically, varying expressions are baked into textures (see #bake_texture()), and uniform
@@ -466,15 +472,6 @@ public:
     ///                  - -4: The type of \p constant does not match the pixel type corresponding
     ///                         to the expression to be baked.
     virtual Sint32 bake_constant( IData* constant, Uint32 samples = 1) const = 0;
-
-    /// Returns the required type name for constants.
-    ///
-    /// This type name can be used with #mi::neuraylib::IFactory::create() or
-    /// #mi::neuraylib::ITransaction::create() to create the instance of #mi::IData.
-    ///
-    /// \see \ref mi_neuray_baker_types
-    virtual const char* get_type_name() const = 0;
-
 };
 
 /**@}*/ // end group mi_neuray_mdl_misc

@@ -33,6 +33,7 @@
 #include <mi/mdl/mdl_generated_dag.h>
 #include "mdl/compiler/compilercore/compilercore_allocator.h"
 #include "mdl/compiler/compilercore/compilercore_cstring_hash.h"
+#include "mdl/codegenerators/generator_code/generator_code_tools.h"
 
 namespace mi {
 namespace mdl {
@@ -55,47 +56,9 @@ class Symbol_table;
 class Type_factory;
 class Value_factory;
 
-/// Helper struct to map (local) AST file IDs to (global) DAG file IDs.
-struct File_id_table {
-    size_t module_id;   ///< the ID of the module that "produces" this table
-    size_t len;         ///< number of entries in this table
-    size_t map[1];      ///< the table itself
-
-public:
-    /// Constructor.
-    File_id_table(
-        size_t module_id,
-        size_t len)
-        : module_id(module_id)
-        , len(len)
-    {
-        memset(map, 0, sizeof(map[0]) * len);
-    }
-
-    /// Get DAG id for an AST id.
-    size_t get_dag_id(size_t ast_id) const {
-        if (ast_id < len) {
-            return map[ast_id];
-        }
-        MDL_ASSERT(!"cannot map unknown file ID");
-        return 0;
-    }
-
-    /// Set a DAG_id for an AST_id.
-    void set_dag_id(size_t ast_id, size_t dag_id)
-    {
-        if (ast_id < len) {
-            map[ast_id] = dag_id;
-            return;
-        } else {
-            MDL_ASSERT(!"cannot map unknown file ID");
-        }
-    }
-};
-
 /// Builder from AST-nodes to DAG nodes.
 class DAG_builder {
-    friend class Module_scope;
+    friend class Module_scope<DAG_builder>;
 
 public:
     /// The type of vectors of reference expressions.
@@ -305,6 +268,15 @@ public:
     DAG_node const *expr_to_dag(
         IExpression const *expr);
 
+    /// Convert an MDL expression to a DAG IR node and decl_cast it to dst_type if necessary.
+    ///
+    /// \param expr         The MDL expression to convert.
+    /// \returns            The DAG IR node representing the MDL expression.
+    ///
+    DAG_node const *expr_to_dag(
+        IType const       *dst_type,
+        IExpression const *expr);
+
     /// Convert an MDL annotation to a DAG IR node.
     ///
     /// \param exp          The MDL annotation to convert.
@@ -402,12 +374,12 @@ public:
     ///
     /// \param  the module to push
     ///
-    /// \Note: Should not be called directly, use \c Module_scope
+    /// \Note: Should not be called directly, use \c Module_scope<>
     void push_module(Module const *mod);
 
     /// Pop a module from the module stack.
     ///
-    /// \Note: Should not be called directly, use \c Module_scope
+    /// \Note: Should not be called directly, use \c Module_scope<>
     void pop_module();
 
     /// Returns true if errors were detected (and clear the flag).
@@ -708,25 +680,7 @@ private:
     bool m_error_detected;
 };
 
-/// RAII helper class to handle the module stack.
-class Module_scope {
-public:
-    /// Constructor.
-    ///
-    /// \param builder  the DAG_builder
-    /// \param mod  the module to push
-    Module_scope(DAG_builder &builder, Module const *mod)
-    : m_builder(builder)
-    {
-        builder.push_module(mod);
-    }
-
-    /// Destructor.
-    ~Module_scope() { m_builder.pop_module(); }
-
-private:
-    DAG_builder &m_builder;
-};
+typedef Module_scope<DAG_builder> MDL_module_scope;
 
 /// RAII Helper class to handle the "forbid local function call" flag.
 class Forbid_local_functions_scope {

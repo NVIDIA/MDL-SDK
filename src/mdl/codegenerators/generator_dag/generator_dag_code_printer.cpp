@@ -174,15 +174,15 @@ void DAG_code_printer::print_exp(
         {
             DAG_temporary const *temporary = cast<DAG_temporary>(node);
             size_t index = temporary->get_index();
-            char const *name;
+            ISymbol const *symbol;
             if (def_index & 1) {
-                name = dag->get_function_temporary_name(def_index >> 1, index);
+                symbol = dag->get_function_temporary_name(def_index >> 1, index);
             } else {
-                name = dag->get_material_temporary_name(def_index >> 1, index);
+                symbol = dag->get_material_temporary_name(def_index >> 1, index);
             }
             push_color(IPrinter::C_ENTITY);
-            if (name != NULL) {
-                m_printer->print(name);
+            if (symbol != NULL) {
+                m_printer->print(symbol);
             } else {
                 m_printer->printf("t_%" FMT_SIZE_T, index);
             }
@@ -480,6 +480,39 @@ void DAG_code_printer::print_mdl_type(
     case IType::TK_COLOR:            keyword("color"); break;
     case IType::TK_LIGHT_PROFILE:    keyword("light_profile"); break;
     case IType::TK_BSDF_MEASUREMENT: keyword("bsdf_measurement"); break;
+    case IType::TK_PTR:
+       {
+            IType_pointer const *p_type = cast<IType_pointer>(type);
+            type = p_type->get_element_type();
+            print_mdl_type(type);
+            print(" ");
+            if (p_type->get_address_space() != 0) {
+                print('<');
+                push_color(ISyntax_coloring::C_LITERAL);
+                print(p_type->get_address_space());
+                pop_color();
+                print('>');
+            }
+            keyword("*");
+            return;
+        }
+    case IType::TK_REF:
+        {
+            IType_ref const *r_type = cast<IType_ref>(type);
+            type = r_type->get_element_type();
+            print_mdl_type(type);
+            print(" ");
+            if (r_type->get_address_space() != 0) {
+                print('<');
+                push_color(ISyntax_coloring::C_LITERAL);
+                print(r_type->get_address_space());
+                pop_color();
+                print('>');
+            }
+            keyword("&");
+            return;
+        }
+    case IType::TK_VOID:             keyword("void"); break;
     case IType::TK_AUTO:             keyword("auto"); break;
     case IType::TK_ENUM:
         {
@@ -991,9 +1024,9 @@ void DAG_code_printer::print_functions(IGenerated_code_dag const *code_dag) cons
 
                     indent(depth);
                     DAG_node const *temporary = code_dag->get_function_temporary(i, k);
-                    char const     *name      = code_dag->get_function_temporary_name(i, k);
-                    if (name != NULL) {
-                        m_printer->printf("%s = ", name);
+                    ISymbol const  *symbol    = code_dag->get_function_temporary_name(i, k);
+                    if (symbol != NULL) {
+                        m_printer->printf("%s = ", symbol->get_name());
                     } else {
                        m_printer->printf("t_%d = ", k);
                     }
@@ -1124,9 +1157,9 @@ void DAG_code_printer::print_materials(IGenerated_code_dag const *code_dag) cons
 
                 indent(depth);
                 DAG_node const *temporary = code_dag->get_material_temporary(mat_idx, k);
-                char const     *name      = code_dag->get_material_temporary_name(mat_idx, k);
-                if (name != NULL) {
-                    m_printer->printf("%s = ", name);
+                ISymbol const  *symbol    = code_dag->get_material_temporary_name(mat_idx, k);
+                if (symbol != NULL) {
+                    m_printer->printf("%s = ", symbol->get_name());
                 } else {
                    m_printer->printf("t_%d = ", k);
                 }

@@ -37,6 +37,7 @@
 #include <mi/mdl/mdl_types.h>
 
 #include <mdl/compiler/compilercore/compilercore_memory_arena.h>
+#include <mdl/codegenerators/generator_code/generator_code_tools.h>
 
 #include "generator_jit_type_map.h"
 
@@ -108,50 +109,13 @@ public:
     };
 
     /// RAII-like break destination scope handler.
-    class Break_destination {
-    public:
-        /// Constructor.
-        ///
-        /// \param ctx   the function context
-        /// \param dest  the basic block that would be the destination of a break statement
-        Break_destination(Function_context &ctx, llvm::BasicBlock *dest)
-        : m_ctx(ctx)
-        {
-            ctx.push_break(dest);
-        }
-
-        /// Destructor.
-        ~Break_destination() {
-            m_ctx.pop_break();
-        }
-
-    private:
-        /// The function context.
-        Function_context &m_ctx;
-    };
+    typedef Break_scope<Function_context, llvm::BasicBlock *> Break_destination;
 
     /// RAII-like continue destination scope handler.
-    class Continue_destination {
-    public:
-        /// Constructor.
-        ///
-        /// \param ctx   the function context
-        /// \param dest  the basic block that would be the destination of a continue statement
-        Continue_destination(Function_context &ctx, llvm::BasicBlock *dest)
-        : m_ctx(ctx)
-        {
-            ctx.push_continue(dest);
-        }
+    typedef Continue_scope<Function_context, llvm::BasicBlock *> Continue_destination;
 
-        /// Destructor.
-        ~Continue_destination() {
-            m_ctx.pop_continue();
-        }
-
-    private:
-        /// The function context.
-        Function_context &m_ctx;
-    };
+    friend class Break_scope<Function_context, llvm::BasicBlock *>;
+    friend class Continue_scope<Function_context, llvm::BasicBlock *>;
 
 public:
     /// Constructor, creates a context for a function including its first scope.
@@ -1047,6 +1011,9 @@ private:
 
     /// Helper: Accessible function parameters when translating an expression.
     Definition_vector m_accesible_parameters;
+
+    /// Previous function context in the code generator.
+    Function_context *m_prev_ctx;
 };
 
 }  // mdl

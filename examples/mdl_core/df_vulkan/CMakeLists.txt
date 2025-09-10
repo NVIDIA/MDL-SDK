@@ -50,11 +50,9 @@ set(PROJECT_SOURCES
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
     TYPE EXECUTABLE
-    NAMESPACE mdl_core
     OUTPUT_NAME "df_vulkan"
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
-    STATIC_MSVC_RUNTIME
 )
 
 # add dependencies
@@ -64,7 +62,7 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         mdl_core::shared
         vulkan
         glfw
-        imgui_static
+        imgui
         openimageio
     )
 
@@ -83,4 +81,5 @@ target_create_vs_user_settings(TARGET ${PROJECT_NAME})
 add_target_install(
     TARGET ${PROJECT_NAME}
     DESTINATION "examples/mdl_core/df_vulkan"
+    INCLUDE ${PROJECT_RESOURCES}
     )

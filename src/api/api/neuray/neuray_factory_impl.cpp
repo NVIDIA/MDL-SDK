@@ -64,7 +64,6 @@
 
 #include <sstream>
 
-#include <boost/core/ignore_unused.hpp>
 #include <base/util/string_utils/i_string_lexicographic_cast.h>
 #include <base/data/idata/i_idata_factory.h>
 

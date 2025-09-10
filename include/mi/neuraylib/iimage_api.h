@@ -32,7 +32,7 @@
 #define MI_NEURAYLIB_IIMAGE_API_H
 
 #include <mi/base/interface_declare.h>
-#include <mi/neuraylib/version.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -189,12 +189,6 @@ public:
     ///                         If no mipmap could be created, \c nullptr is returned.
     virtual IArray* create_mipmap(
         const ICanvas* canvas, Float32 gamma_override = 0.0f) const = 0;
-
-#ifdef MI_NEURAYLIB_DEPRECATED_14_0
-    inline IArray* create_mipmaps(
-        const ICanvas* canvas, Float32 gamma_override = 0.0f) const
-    { return create_mipmap( canvas, gamma_override); }
-#endif // MI_NEURAYLIB_DEPRECATED_14_0
 
     /// Creates a copy of the passed tile.
     virtual ITile* clone_tile( const ITile* tile) const = 0;

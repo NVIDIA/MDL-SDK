@@ -40,7 +40,6 @@ set(PROJECT_SOURCES
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
     TYPE EXECUTABLE
-    NAMESPACE mdl_sdk
     OUTPUT_NAME "traversal"
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE

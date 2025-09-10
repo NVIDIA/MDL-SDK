@@ -38,7 +38,6 @@
 
 #include <mi/neuraylib/version.h>
 
-#include <boost/core/ignore_unused.hpp>
 #include <base/system/main/access_module.h>
 #include <base/system/version/i_version.h>
 #include <base/lib/log/i_log_logger.h>
@@ -139,10 +138,8 @@ Neuray_impl::Neuray_impl()
 Neuray_impl::~Neuray_impl()
 {
     if( m_status != PRE_STARTING && m_status != SHUTDOWN) {
-        mi::Sint32 result = 0;
-        result = shutdown( true);
+        [[maybe_unused]] mi::Sint32 result = shutdown( true);
         ASSERT( M_NEURAY_API, result == 0);
-        boost::ignore_unused( result);
     }
 
     // Unregister API components that are always available,
@@ -167,8 +164,7 @@ Neuray_impl::~Neuray_impl()
 #define CHECK_RESULT ASSERT( M_NEURAY_API, ref_count == 0 || m_status == FAILURE);
 
     // Be careful with the ordering
-    mi::Uint32 ref_count = 0;
-    boost::ignore_unused( ref_count);
+    [[maybe_unused]] mi::Uint32 ref_count = 0;
     ref_count = m_plugin_configuration_impl->release();     CHECK_RESULT;
     ref_count = m_plugin_api_impl->release();               CHECK_RESULT;
     ref_count = m_mdl_archive_api_impl->release();          CHECK_RESULT;

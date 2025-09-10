@@ -57,8 +57,7 @@ class IStruct_category : public
 public:
     enum Predefined_id {
         CID_USER              = -1,
-        CID_MATERIAL_CATEGORY =  0,
-        CID_FORCE_32_BIT      =  0x7fffffff
+        CID_MATERIAL_CATEGORY =  0
     };
 
     virtual const char* get_symbol() const = 0;
@@ -152,15 +151,13 @@ public:
         TK_BSDF,
         TK_HAIR_BSDF,
         TK_EDF,
-        TK_VDF,
-        TK_FORCE_32_BIT = 0xffffffffU
+        TK_VDF
     };
 
     enum Modifier {
-        MK_NONE          = 0,
-        MK_UNIFORM       = 2,
-        MK_VARYING       = 4,
-        MK_FORCE_32_BIT = 0xffffffffU
+        MK_NONE    = 0,
+        MK_UNIFORM = 2,
+        MK_VARYING = 4
     };
 
     virtual Kind get_kind() const = 0;
@@ -233,8 +230,7 @@ public:
     enum Predefined_id {
         EID_USER           = -1,
         EID_TEX_GAMMA_MODE =  0,
-        EID_INTENSITY_MODE =  1,
-        EID_FORCE_32_BIT   =  0x7fffffff,
+        EID_INTENSITY_MODE =  1
     };
 
     static const Kind s_kind = TK_ENUM;
@@ -388,8 +384,7 @@ public:
         SID_MATERIAL_SURFACE   =  1,
         SID_MATERIAL_VOLUME    =  2,
         SID_MATERIAL_GEOMETRY  =  3,
-        SID_MATERIAL           =  4,
-        SID_FORCE_32_BIT       =  0x7fffffff,
+        SID_MATERIAL           =  4
     };
 
     static const Kind s_kind = TK_STRUCT;
@@ -442,12 +437,11 @@ public:
     static const Kind s_kind = TK_TEXTURE;
 
     enum Shape {
-        TS_2D           = 0,
-        TS_3D           = 1,
-        TS_CUBE         = 2,
-        TS_PTEX         = 3,
-        TS_BSDF_DATA    = 4,
-        TS_FORCE_32_BIT = 0xffffffffU
+        TS_2D        = 0,
+        TS_3D        = 1,
+        TS_CUBE      = 2,
+        TS_PTEX      = 3,
+        TS_BSDF_DATA = 4
     };
 
     virtual Shape get_shape() const = 0;

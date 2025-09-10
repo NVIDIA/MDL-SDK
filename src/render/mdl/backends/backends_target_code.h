@@ -198,14 +198,6 @@ public:
     /// Returns the number of texture resources used by the target code.
     Size get_texture_count() const override;
 
-    /// Returns the number of texture resources coming from the body of expressions
-    /// (not solely from material arguments). These will be necessary regardless of the chosen
-    /// material arguments and start at index \c 0 (including the invalid texture).
-    ///
-    /// \return           The body texture count or \c ~0ull, if the value is invalid due to
-    ///                   more than one call to a link unit add function.
-    Size deprecated_get_body_texture_count() const override;
-
     /// Returns the name of a texture resource used by the target code.
     ///
     /// \param index      The index of the texture resource.
@@ -367,14 +359,6 @@ public:
     /// Returns the number of light profile resources used by the target code.
     Size get_light_profile_count() const override;
 
-    /// Returns the number of light profile resources coming from the body of expressions
-    /// (not solely from material arguments). These will be necessary regardless of the chosen
-    /// material arguments and start at index \c 0 (including the invalid light profile).
-    ///
-    /// \return           The body light profile count or \c ~0ull, if the value is invalid due to
-    ///                   more than one call to a link unit add function.
-    Size deprecated_get_body_light_profile_count() const override;
-
     /// Returns the name of a light profile resource used by the target code.
     const char* get_light_profile(Size index) const override;
 
@@ -403,14 +387,6 @@ public:
 
     /// Returns the number of BSDF measurement resources used by the target code.
     Size get_bsdf_measurement_count() const override;
-
-    /// Returns the number of BSDF measurement resources coming from the body of expressions
-    /// (not solely from material arguments). These will be necessary regardless of the chosen
-    /// material arguments and start at index \c 0 (including the invalid BSDF measurement).
-    ///
-    /// \return           The body BSDF measurement count or \c ~0ull, if the value is invalid due
-    ///                   to more than one call to a link unit add function.
-    Size deprecated_get_body_bsdf_measurement_count() const override;
 
     /// Returns the name of a BSDF measurement resource used by the target code.
     const char* get_bsdf_measurement(Size index) const override;

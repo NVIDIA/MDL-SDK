@@ -40,7 +40,7 @@
 #include <vector>
 
 #include <base/lib/log/i_log_assert.h>
-#include <base/lib/robin_hood/robin_hood.h>
+#include <base/lib/unordered_dense/unordered_dense.h>
 
 // see documentation of mi::base::Interface_merger
 #include <mi/base/config.h>
@@ -383,22 +383,22 @@ private:
 
 
     using Weak_struct_category_symbol_map
-        = robin_hood::unordered_map<std::string, const IStruct_category*>;
+        = ankerl::unordered_dense::map<std::string, const IStruct_category*>;
 
     using Weak_struct_category_id_map
-        = robin_hood::unordered_map<IStruct_category::Predefined_id, const IStruct_category*>;
+        = ankerl::unordered_dense::map<IStruct_category::Predefined_id, const IStruct_category*>;
 
     using Weak_enum_symbol_map
-        = robin_hood::unordered_map<std::string, const IType_enum*>;
+        = ankerl::unordered_dense::map<std::string, const IType_enum*>;
 
     using Weak_enum_id_map
-        = robin_hood::unordered_map<IType_enum::Predefined_id, const IType_enum*>;
+        = ankerl::unordered_dense::map<IType_enum::Predefined_id, const IType_enum*>;
 
     using Weak_struct_symbol_map
-        = robin_hood::unordered_map<std::string, const IType_struct*>;
+        = ankerl::unordered_dense::map<std::string, const IType_struct*>;
 
     using Weak_struct_id_map
-        = robin_hood::unordered_map<IType_struct::Predefined_id, const IType_struct*>;
+        = ankerl::unordered_dense::map<IType_struct::Predefined_id, const IType_struct*>;
 
 
     /// Mutex for the four weak map members below.

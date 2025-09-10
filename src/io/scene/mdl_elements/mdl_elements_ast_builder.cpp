@@ -176,12 +176,18 @@ mi::mdl::IType_name* type_to_type_name(
     type = type->skip_type_alias();
     switch (type->get_kind()) {
     case mi::mdl::IType::TK_ALIAS:
+    case mi::mdl::IType::TK_PTR:
+    case mi::mdl::IType::TK_REF:
     case mi::mdl::IType::TK_AUTO:
     case mi::mdl::IType::TK_ERROR:
     case mi::mdl::IType::TK_FUNCTION:
         ASSERT(M_SCENE, !"unexpected MDL type kind");
         return nullptr;
 
+    case mi::mdl::IType::TK_VOID:
+        ASSERT(M_SCENE, !"unexpected void type");
+        s = "void";
+        break;
     case mi::mdl::IType::TK_BOOL:
         s = "bool";
         break;
@@ -343,7 +349,6 @@ mi::mdl::IType_name *Mdl_ast_builder::create_type_name(
 
     switch (type->get_kind()) {
     case IType::TK_ALIAS:
-    case IType::TK_FORCE_32_BIT:
         // should not happen
         ASSERT( M_SCENE, !"unexpected type kind");
         return nullptr;
@@ -1185,7 +1190,6 @@ const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const IExpression* 
             mi::Size n_params = 0;
 
             SERIAL::Class_id class_id = m_trans->get_class_id( tag);
-
             if( class_id != ID_MDL_FUNCTION_CALL) {
                 ASSERT( M_SCENE, !"invalid type of DB element referenced by indirect call");
                 return m_ef.create_invalid();
@@ -1232,13 +1236,6 @@ const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const IExpression* 
             std::string def;
             bool named_args = false;
             mi::Size n_params = 0;
-
-            SERIAL::Class_id class_id = m_trans->get_class_id( tag);
-
-            if( class_id != ID_MDL_FUNCTION_DEFINITION) {
-                ASSERT( M_SCENE, !"invalid type of DB element referenced by direct call");
-                return m_ef.create_invalid();
-            }
 
             DB::Access<Mdl_function_definition> fdef( tag, m_trans);
             def = fdef->get_mdl_name_without_parameter_types();
@@ -1296,10 +1293,6 @@ const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const IExpression* 
 
             return to_reference( m_temporaries[index]);
         }
-
-        case IExpression::EK_FORCE_32_BIT:
-            // not a real type
-            break;
     }
 
     ASSERT( M_SCENE, !"unexpected expression kind");
@@ -1699,9 +1692,6 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_value( const IValue* valu
             }
             return call;
         }
-    case IValue::VK_FORCE_32_BIT:
-        // not a real type
-        break;
     }
     ASSERT( M_SCENE, !"unexpected value kind");
     return m_ef.create_invalid();
@@ -1761,9 +1751,6 @@ mi::mdl::IType const *Mdl_ast_builder::transform_type( const IType* type)
                 return m_tf.create_texture(mi::mdl::IType_texture::TS_PTEX);
             case IType_texture::TS_BSDF_DATA:
                 return m_tf.create_texture(mi::mdl::IType_texture::TS_BSDF_DATA);
-            case IType_texture::TS_FORCE_32_BIT:
-                // not a real shape
-                break;
             }
         }
         break;
@@ -1779,9 +1766,6 @@ mi::mdl::IType const *Mdl_ast_builder::transform_type( const IType* type)
         return m_tf.create_edf();
     case IType::TK_VDF:
         return m_tf.create_vdf();
-    case IType::TK_FORCE_32_BIT:
-        // not a real type
-        break;
     }
     ASSERT( M_SCENE, !"unsupported type kind");
     return m_tf.create_error();
@@ -1886,8 +1870,6 @@ mi::mdl::IType_enum const *Mdl_ast_builder::convert_enum_type(
         return m_tf.get_predefined_enum(mi::mdl::IType_enum::EID_TEX_GAMMA_MODE);
     case IType_enum::EID_INTENSITY_MODE:
         return m_tf.get_predefined_enum(mi::mdl::IType_enum::EID_INTENSITY_MODE);
-    case IType_enum::EID_FORCE_32_BIT:
-        break;
     }
     ASSERT( M_SCENE, !"unexpected enum type ID");
     return nullptr;

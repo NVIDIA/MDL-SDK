@@ -82,6 +82,7 @@ Image_file_reader_impl::Image_file_reader_impl(
         m_resolution_y,
         m_resolution_z,
         m_pixel_type,
+        m_gamma,
         m_channel_names,
         m_channel_start,
         m_channel_end);
@@ -133,7 +134,7 @@ bool Image_file_reader_impl::get_is_cubemap() const
 
 mi::Float32 Image_file_reader_impl::get_gamma() const
 {
-    return IMAGE::get_default_gamma( m_pixel_type);
+    return m_gamma;
 }
 
 mi::neuraylib::ITile* Image_file_reader_impl::read( mi::Uint32 z, mi::Uint32 level) const

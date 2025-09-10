@@ -123,7 +123,7 @@ public:
     , m_param_cp(param_cb)
     , m_arena(m_compiler->get_allocator())
     , m_sym_tab(m_arena)
-    , m_type_fact(m_arena, *m_compiler, m_sym_tab)
+    , m_type_fact(m_arena, m_compiler->get_type_factory(), m_sym_tab)
     , m_value_fact(m_arena, m_type_fact)
     , m_max_size(8*1024*1024)
     , m_max_cycles(1024)
@@ -486,8 +486,6 @@ public:
             // should not happen, but if does cannot be evaluated
             set_error(EC_TEMPORARY);
             return m_value_fact.create_bad();
-        case MDL::IExpression::EK_FORCE_32_BIT:
-            break;
         }
         ASSERT(M_MDLC, !"unsupported expression kind");
         set_error(EC_UNSUPPORTED);
@@ -773,8 +771,6 @@ public:
                 set_error(EC_UNSUPPORTED);
                 return m_value_fact.create_bad();
             }
-        case MDL::IValue::VK_FORCE_32_BIT:
-            break;
         }
         ASSERT(M_MDLC, !"unsupported value kind");
         set_error(EC_UNSUPPORTED);

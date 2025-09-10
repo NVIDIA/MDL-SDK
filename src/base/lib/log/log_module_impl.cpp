@@ -312,7 +312,7 @@ void Log_module_impl::message(
     const char* mod, Category cat, Severity sev, const mi::base::Message_details& det,
     const char* fmt, va_list args)
 {
-    if (!(m_sev_limit & sev) || !(m_sev_by_cat[cat] & sev))
+    if( !(m_sev_limit & sev) || !(m_sev_by_cat[cat] & sev))
         return;
 
     mi::base::Lock::Block block( &m_lock);
@@ -553,8 +553,11 @@ void Log_module_impl::insert_message_internal(
 
 void Log_module_impl::emit_delayed_log_messages_internal()
 {
-    for( mi::Size i = 0; i < m_delayed_messages.size(); ++i) {
-        const Message& m = m_delayed_messages[i];
+    for( const Message& m: m_delayed_messages) {
+        // Re-apply the severity filter since delayed messages might have been generated before the
+        // user had a chance to configure the filter levels.
+        if( !(m_sev_limit & m.m_sev) || !(m_sev_by_cat[m.m_cat] & m.m_sev))
+            continue;
         text_message(
             m.m_mod.c_str(), m.m_cat, m.m_sev, m.m_details, m.m_msg.c_str());
     }

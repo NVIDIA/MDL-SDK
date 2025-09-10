@@ -46,7 +46,6 @@ endif()
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
     TYPE EXECUTABLE
-    NAMESPACE mdl_sdk
     OUTPUT_NAME "execution_cuda"
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
@@ -81,4 +80,5 @@ target_add_cuda_ptx_rule(TARGET ${PROJECT_NAME}
 add_target_install(
     TARGET ${PROJECT_NAME}
     DESTINATION "examples/mdl_sdk/execution_cuda"
+    INCLUDE "*.ptx"
     )

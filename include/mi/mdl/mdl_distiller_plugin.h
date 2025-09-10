@@ -48,7 +48,7 @@ namespace mi {
 namespace mdl {
 
 /// Type of MDL distiller plugins
-#define MI_DIST_MDL_DISTILLER_PLUGIN_TYPE "mdl_distiller v5"
+#define MI_DIST_MDL_DISTILLER_PLUGIN_TYPE "mdl_distiller v6"
 
 /// Abstract interface for MDL distiller plugins.
 class Mdl_distiller_plugin : public mi::base::Plugin {

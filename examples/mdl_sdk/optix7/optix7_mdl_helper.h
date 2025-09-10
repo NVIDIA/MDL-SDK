@@ -452,9 +452,9 @@ inline const char* message_kind_to_string(mi::neuraylib::IMessage::Kind message_
         return "MDL SDK";
     case mi::neuraylib::IMessage::MSG_IMP_EXP:
         return "Importer/Exporter";
-    case mi::neuraylib::IMessage::MSG_COMILER_BACKEND:
+    case mi::neuraylib::IMessage::MSG_COMPILER_BACKEND:
         return "Compiler Backend";
-    case mi::neuraylib::IMessage::MSG_COMILER_CORE:
+    case mi::neuraylib::IMessage::MSG_COMPILER_CORE:
         return "Compiler Core";
     case mi::neuraylib::IMessage::MSG_COMPILER_ARCHIVE_TOOL:
         return "Compiler Archive Tool";

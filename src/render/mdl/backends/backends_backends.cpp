@@ -1929,7 +1929,6 @@ mi::Sint32 Target_value_layout::set_value(
         }
 
         case mi::neuraylib::IValue::VK_INVALID_DF:
-        case mi::neuraylib::IValue::VK_FORCE_32_BIT:
         {
             ASSERT(M_BACKENDS, !"unexpected value type");
             return -5;
@@ -2036,7 +2035,6 @@ mi::Sint32 Target_value_layout::set_value(
         }
 
         case mi::neuraylib::IValue::VK_INVALID_DF:
-        case mi::neuraylib::IValue::VK_FORCE_32_BIT:
         {
             ASSERT(M_BACKENDS, !"unexpected value type");
             return -5;
@@ -3653,7 +3651,6 @@ mi::Sint32 Mdl_llvm_backend::set_option(
             jit_options.set_option(MDL_JIT_OPTION_GLSL_UNIFORM_SSBO_SET, value);
             return 0;
         }
-
         if (strcmp(name, "glsl_use_resource_data") == 0) {
             if (strcmp(value, "on") == 0) {
                 value = "true";
@@ -3663,6 +3660,14 @@ mi::Sint32 Mdl_llvm_backend::set_option(
                 return -2;
             }
             jit_options.set_option(MDL_JIT_OPTION_SL_USE_RESOURCE_DATA, value);
+            return 0;
+        }
+        if (strcmp(name, "material_state_struct_name") == 0) {
+            jit_options.set_option(MDL_JIT_OPTION_SL_CORE_STATE_API_NAME, value);
+            return 0;
+        }
+        if (strcmp(name, "environment_state_struct_name") == 0) {
+            jit_options.set_option(MDL_JIT_OPTION_SL_ENV_STATE_API_NAME, value);
             return 0;
         }
         break;
@@ -3701,9 +3706,25 @@ mi::Sint32 Mdl_llvm_backend::set_option(
             jit_options.set_option(MDL_JIT_OPTION_REMAP_FUNCTIONS, value);
             return 0;
         }
-        break;
-
-    case mi::neuraylib::IMdl_backend_api::MB_FORCE_32_BIT:
+        if (strcmp(name, "export_requested_functions") == 0) {
+            if (strcmp(value, "on") == 0) {
+                value = "true";
+            } else if (strcmp(value, "off") == 0) {
+                value = "false";
+            } else {
+                return -2;
+            }
+            jit_options.set_option(MDL_JIT_OPTION_EXPORT_REQUESTED_FUNCTIONS, value);
+            return 0;
+        }
+        if (strcmp(name, "material_state_struct_name") == 0) {
+            jit_options.set_option(MDL_JIT_OPTION_SL_CORE_STATE_API_NAME, value);
+            return 0;
+        }
+        if (strcmp(name, "environment_state_struct_name") == 0) {
+            jit_options.set_option(MDL_JIT_OPTION_SL_ENV_STATE_API_NAME, value);
+            return 0;
+        }
         break;
     }
     return -1;

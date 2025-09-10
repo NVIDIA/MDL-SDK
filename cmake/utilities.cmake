@@ -41,10 +41,15 @@ set(LINKER_NO_AS_NEEDED     "$<$<CXX_COMPILER_ID:GNU>:-Wl,--no-as-needed>")
 #   target_build_setup(TARGET <NAME>)
 #
 function(TARGET_BUILD_SETUP)
-    set(options DYNAMIC_MSVC_RUNTIME WINDOWS_UNICODE)
+    set(options DYNAMIC_GCC_RUNTIME DYNAMIC_MSVC_RUNTIME STATIC_MSVC_RUNTIME WINDOWS_UNICODE)
     set(oneValueArgs TARGET)
     set(multiValueArgs)
     cmake_parse_arguments(TARGET_BUILD_SETUP "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
+
+    # sanity check
+    if(TARGET_BUILD_SETUP_DYNAMIC_MSVC_RUNTIME AND TARGET_BUILD_SETUP_STATIC_MSVC_RUNTIME)
+        message(FATAL_ERROR "The options DYNAMIC_MSVC_RUNTIME and STATIC_MSVC_RUNTIME are mutually exclusive.")
+    endif()
 
     # GENERAL
     #---------------------------------------------------------------------------------------
@@ -55,10 +60,8 @@ function(TARGET_BUILD_SETUP)
 
     target_compile_definitions(${TARGET_BUILD_SETUP_TARGET}
         PRIVATE
-            "$<$<CONFIG:DEBUG>:DEBUG>"
-            "$<$<CONFIG:DEBUG>:_DEBUG>"
-            "BIT64=1"
-            "X86=1"
+            "$<$<CONFIG:Debug>:DEBUG>"
+            "$<$<CONFIG:Debug>:_DEBUG>"
             ${MDL_ADDITIONAL_COMPILER_DEFINES}   # additional user defines
         )
 
@@ -112,17 +115,26 @@ function(TARGET_BUILD_SETUP)
 
         # set static or dynamic runtime
         # cmake 3.15 has an option for that. MSVC_RUNTIME_LIBRARY
+        #
+        # Merge explicit options TARGET_BUILD_SETUP_*_MSVC_RUNTIME and default MDL_MSVC_DYNAMIC_RUNTIME
+        # option into _DYNAMIC.
         if(TARGET_BUILD_SETUP_DYNAMIC_MSVC_RUNTIME)
-            # examples can use the dynamic runtime
+            set(_DYNAMIC ON)
+        elseif(TARGET_BUILD_SETUP_STATIC_MSVC_RUNTIME)
+            set(_DYNAMIC OFF)
+        else()
+            set(_DYNAMIC ${MDL_MSVC_DYNAMIC_RUNTIME})
+        endif()
+        # Handle _DYNAMIC.
+        if(_DYNAMIC)
             target_compile_options(${TARGET_BUILD_SETUP_TARGET} PRIVATE "/MD$<$<CONFIG:Debug>:d>")
             if(MDL_LOG_FILE_DEPENDENCIES)
-                MESSAGE(STATUS "- msvc runtime:   dynamic (/MD or /MDd)")
+                MESSAGE(STATUS "- MSVC runtime:   dynamic (/MD or /MDd)")
             endif()
         else()
-            # a libraries 'in' the sdk use the static runtime
             target_compile_options(${TARGET_BUILD_SETUP_TARGET} PRIVATE "/MT$<$<CONFIG:Debug>:d>")
             if(MDL_LOG_FILE_DEPENDENCIES)
-                MESSAGE(STATUS "- msvc runtime:   static (/MT or /MTd)")
+                MESSAGE(STATUS "- MSVC runtime:   static (/MT or /MTd)")
             endif()
         endif()
 
@@ -138,32 +150,51 @@ function(TARGET_BUILD_SETUP)
                 "$<$<STREQUAL:${MI_PLATFORM_NAME},linux-aarch64>:AARCH64>"
                 "$<$<STREQUAL:${MI_PLATFORM_NAME},linux-x86-64>:HAS_SSE>"
                 "LINUX"
+                "_FORTIFY_SOURCE=3"
             )
 
         target_compile_options(${TARGET_BUILD_SETUP_TARGET}
             PRIVATE
-                "-fPIC"   # position independent code since we will build a shared object
+                # position independent code since we will build a shared object
+                "-fPIC"
+                # but disable semantic interposition in release builds for better performance
+                "$<$<CONFIG:Release>:-fno-semantic-interposition>"
+                "-fstack-protector-strong"
+                "-fvisibility=hidden"
                 "-fno-strict-aliasing"
                 "$<$<STREQUAL:${MI_PLATFORM_NAME},linux-x86-64>:-march=nocona>"
                 "-Wall"
+                "-Werror=format-security"
+                "-Wformat"
                 "-Wvla"
+                "$<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-enum-enum-conversion>"
                 "$<$<COMPILE_LANGUAGE:CXX>:-Wno-init-list-lifetime>"
                 "$<$<COMPILE_LANGUAGE:CXX>:-Wno-placement-new>"
+                "-Wno-deprecated-declarations"
+                "-Wno-narrowing"
                 "-Wno-parentheses"
                 "-Wno-sign-compare"
-                "-Wno-narrowing"
+                "-Wno-unknown-pragmas"
                 "-Wno-unused-but-set-variable"
                 "-Wno-unused-local-typedefs"
-                "-Wno-deprecated-declarations"
-                "-Wno-unknown-pragmas"
-                "$<$<COMPILE_LANGUAGE:CXX>:-Wno-deprecated-enum-enum-conversion>"
             )
 
-        target_link_libraries(${TARGET_BUILD_SETUP_TARGET}
-            PRIVATE
-                "-static-libstdc++"
-                "-static-libgcc"
-            )
+        # Do not add flags for static libraries since they are propagated to reverse dependencies
+        # (despite the PRIVATE flag).
+        if(NOT (_TARGET_TYPE STREQUAL "STATIC_LIBRARY"))
+            if(NOT TARGET_BUILD_SETUP_DYNAMIC_GCC_RUNTIME)
+                target_link_libraries(${TARGET_BUILD_SETUP_TARGET}
+                    PRIVATE
+                        "-static-libstdc++"
+                        "-static-libgcc"
+                    )
+            endif()
+        endif()
+
+        set_target_properties(${TARGET_BUILD_SETUP_TARGET} PROPERTIES
+            LINK_FLAGS "-Wl,-z,relro,-z,now")
+        set_target_properties(${TARGET_BUILD_SETUP_TARGET} PROPERTIES
+            LINK_FLAGS_RELEASE "-Wl,--strip-all")
 
     endif()
 
@@ -183,7 +214,7 @@ function(TARGET_BUILD_SETUP)
                 "-fPIC"
                 "-m64"
                 "-stdlib=libc++"
-                "$<$<CONFIG:DEBUG>:-gdwarf-2>"
+                "$<$<CONFIG:Debug>:-gdwarf-2>"
                 "-fvisibility-inlines-hidden"
                 "-fdiagnostics-fixit-info"
                 "-fdiagnostics-parseable-fixits"
@@ -199,6 +230,9 @@ function(TARGET_BUILD_SETUP)
                 "-Wno-unusable-partial-specialization"
             )
 
+        set_target_properties(${TARGET_BUILD_SETUP_TARGET} PROPERTIES
+            LINK_FLAGS_RELEASE "-Wl,-x")
+
     endif()
 endfunction()
 
@@ -210,8 +244,6 @@ function(SETUP_IDE_FOLDERS)
     set(oneValueArgs)
     set(multiValueArgs FILES)
     cmake_parse_arguments(SETUP_IDE_FOLDERS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
-    # provides the following variables:
-    # - SETUP_IDE_FOLDERS_FILES
 
     # keep the folder structure in visual studio
     foreach(_SOURCE ${SETUP_IDE_FOLDERS_FILES})
@@ -260,10 +292,6 @@ function(SETUP_IDE)
     set(oneValueArgs TARGET VS_PROJECT_NAME)
     set(multiValueArgs SOURCES)
     cmake_parse_arguments(SETUP_IDE "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
-    # provides the following variables:
-    # - SETUP_IDE_TARGET
-    # - SETUP_IDE_SOURCES
-    # - SETUP_IDE_VS_PROJECT_NAME
 
     # not required without visual studio or xcode
     if(NOT MSVC AND NOT MSVC_IDE)
@@ -422,13 +450,6 @@ function(__TARGET_ADD_DEPENDENCY)
     set(oneValueArgs TARGET DEPENDS)
     set(multiValueArgs COMPONENTS)
     cmake_parse_arguments(__TARGET_ADD_DEPENDENCY "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
-    # provides the following variables:
-    # - __TARGET_ADD_DEPENDENCY_TARGET
-    # - __TARGET_ADD_DEPENDENCY_DEPENDS
-    # - __TARGET_ADD_DEPENDENCY_COMPONENTS
-    # - __TARGET_ADD_DEPENDENCY_NO_RUNTIME_COPY
-    # - __TARGET_ADD_DEPENDENCY_NO_LINKING
-    # - __TARGET_ADD_DEPENDENCY_NO_INCLUDE
 
     # handle some special symbols
     if(__TARGET_ADD_DEPENDENCY_DEPENDS STREQUAL LINKER_START_GROUP OR
@@ -538,8 +559,8 @@ endfunction()
 #
 # * target_add_dependencies(TARGET foo
 #       DEPENDENCIES
-#           mdl::base-system
-#           mdl::base-hal-disk
+#           base-system
+#           base-hal-disk
 #       )
 #
 #
@@ -556,14 +577,6 @@ function(TARGET_ADD_DEPENDENCIES)
     set(oneValueArgs TARGET)
     set(multiValueArgs DEPENDS COMPONENTS)
     cmake_parse_arguments(TARGET_ADD_DEPENDENCIES "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
-    # provides the following variables:
-    # - TARGET_ADD_DEPENDENCIES_TARGET
-    # - TARGET_ADD_DEPENDENCIES_DEPENDS
-    # - TARGET_ADD_DEPENDENCIES_COMPONENTS
-    # - TARGET_ADD_DEPENDENCIES_NO_RUNTIME_COPY
-    # - TARGET_ADD_DEPENDENCIES_NO_RUNTIME
-    # - TARGET_ADD_DEPENDENCIES_NO_LINKING
-    # - TARGET_ADD_DEPENDENCIES_NO_INCLUDE
 
     # make sure components are not used for multiple dependencies
     list(LENGTH TARGET_ADD_DEPENDENCIES_DEPENDS _NUM_DEP)
@@ -638,9 +651,6 @@ function(TARGET_ADD_TOOL_DEPENDENCY)
     set(oneValueArgs TARGET TOOL)
     set(multiValueArgs)
     cmake_parse_arguments(TARGET_ADD_TOOL_DEPENDENCY "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
-    # provides the following variables:
-    # - TARGET_ADD_TOOL_DEPENDENCY_TARGET
-    # - TARGET_ADD_TOOL_DEPENDENCY_TOOL
 
     # log dependency
     if(MDL_LOG_DEPENDENCIES)
@@ -668,10 +678,8 @@ endfunction()
 # the reduce the redundant code in the base library projects, we can bundle several repeated tasks
 #
 function(CREATE_FROM_BASE_PRESET)
-    # the options DYNAMIC_MSVC_RUNTIME and STATIC_MSVC_RUNTIME override the
-    # general option MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES
-    set(options WIN32 WINDOWS_UNICODE EXAMPLE DYNAMIC_MSVC_RUNTIME STATIC_MSVC_RUNTIME SKIP_UNDEFINED_SYMBOL_CHECK)
-    set(oneValueArgs TARGET VERSION TYPE NAMESPACE EXPORT_NAME OUTPUT_NAME VS_PROJECT_NAME EMBED_RC)
+    set(options WIN32 WINDOWS_UNICODE EXAMPLE DYNAMIC_GCC_RUNTIME DYNAMIC_MSVC_RUNTIME STATIC_MSVC_RUNTIME SKIP_UNDEFINED_SYMBOL_CHECK)
+    set(oneValueArgs TARGET VERSION TYPE EXPORT_NAME OUTPUT_NAME VS_PROJECT_NAME EMBED_RC)
     set(multiValueArgs SOURCES ADDITIONAL_INCLUDE_DIRS EXPORTED_SYMBOLS)
     cmake_parse_arguments(CREATE_FROM_BASE_PRESET "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
 
@@ -680,20 +688,20 @@ function(CREATE_FROM_BASE_PRESET)
         message(FATAL_ERROR "The options DYNAMIC_MSVC_RUNTIME and STATIC_MSVC_RUNTIME are mutually exclusive.")
     endif()
 
-    # the option EXAMPLE bundles a few things
-    if(CREATE_FROM_BASE_PRESET_EXAMPLE)
-        set(CREATE_FROM_BASE_PRESET_WINDOWS_UNICODE ON)           # enable unicode
-        if(MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES AND NOT CREATE_FROM_BASE_PRESET_STATIC_MSVC_RUNTIME)
-            set(CREATE_FROM_BASE_PRESET_DYNAMIC_MSVC_RUNTIME ON)  # runtime linking
-        endif()
+    if(CREATE_FROM_BASE_PRESET_WINDOWS_UNICODE OR CREATE_FROM_BASE_PRESET_EXAMPLE)
+        list(APPEND BUILD_SETUP_OPTIONS WINDOWS_UNICODE) # enable unicode
+    endif()
+
+    if(CREATE_FROM_BASE_PRESET_DYNAMIC_GCC_RUNTIME)
+        list(APPEND BUILD_SETUP_OPTIONS DYNAMIC_GCC_RUNTIME) # runtime linking
     endif()
 
     if(CREATE_FROM_BASE_PRESET_DYNAMIC_MSVC_RUNTIME)
         list(APPEND BUILD_SETUP_OPTIONS DYNAMIC_MSVC_RUNTIME) # runtime linking
     endif()
 
-    if(CREATE_FROM_BASE_PRESET_WINDOWS_UNICODE)
-        list(APPEND BUILD_SETUP_OPTIONS WINDOWS_UNICODE) # unicode
+    if(CREATE_FROM_BASE_PRESET_STATIC_MSVC_RUNTIME)
+        list(APPEND BUILD_SETUP_OPTIONS STATIC_MSVC_RUNTIME) # runtime linking
     endif()
 
     # create the project
@@ -713,11 +721,6 @@ function(CREATE_FROM_BASE_PRESET)
         set(CREATE_FROM_BASE_PRESET_EXPORT_NAME ${CREATE_FROM_BASE_PRESET_OUTPUT_NAME})
     endif()
 
-    # default namespace is mdl
-    if(NOT CREATE_FROM_BASE_PRESET_NAMESPACE)
-        set(CREATE_FROM_BASE_PRESET_NAMESPACE mdl)
-    endif()
-
     # add empty pch
     if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/pch.h)
         file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/pch.h "")
@@ -730,9 +733,10 @@ function(CREATE_FROM_BASE_PRESET)
     endif()
 
     # create target and alias
-    if(CREATE_FROM_BASE_PRESET_TYPE STREQUAL "STATIC" OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED")
+    if(    CREATE_FROM_BASE_PRESET_TYPE STREQUAL "STATIC"
+        OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED"
+        OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "MODULE")
         add_library(${CREATE_FROM_BASE_PRESET_TARGET} ${CREATE_FROM_BASE_PRESET_TYPE} ${CREATE_FROM_BASE_PRESET_SOURCES})
-        add_library(${CREATE_FROM_BASE_PRESET_NAMESPACE}::${CREATE_FROM_BASE_PRESET_TARGET} ALIAS ${CREATE_FROM_BASE_PRESET_TARGET})
     elseif(CREATE_FROM_BASE_PRESET_TYPE STREQUAL "EXECUTABLE" OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "WIN_EXECUTABLE")
         add_executable(${CREATE_FROM_BASE_PRESET_TARGET} ${EXEC_TYPE} ${CREATE_FROM_BASE_PRESET_SOURCES})
         #set_target_properties(${CREATE_FROM_BASE_PRESET_TARGET} PROPERTIES WIN32_EXECUTABLE ON)
@@ -783,7 +787,10 @@ function(CREATE_FROM_BASE_PRESET)
         )
 
     # add system dependencies
-    if(CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED" OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "EXECUTABLE" OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "WIN_EXECUTABLE")
+    if(    CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED"
+        OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "MODULE"
+        OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "EXECUTABLE"
+        OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "WIN_EXECUTABLE")
         target_add_dependencies(TARGET ${CREATE_FROM_BASE_PRESET_TARGET}
             DEPENDS
                 system
@@ -791,7 +798,10 @@ function(CREATE_FROM_BASE_PRESET)
     endif()
 
     # embed .rc files
-    if(CREATE_FROM_BASE_PRESET_EMBED_RC AND WINDOWS AND CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED")
+    if(CREATE_FROM_BASE_PRESET_EMBED_RC AND WINDOWS AND (   CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED"
+                                                         OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "MODULE"
+                                                         OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "EXECUTABLE"
+                                                         OR CREATE_FROM_BASE_PRESET_TYPE STREQUAL "WIN_EXECUTABLE"))
         if(MDL_LOG_FILE_DEPENDENCIES)
             message(STATUS "- embedding:      ${CREATE_FROM_BASE_PRESET_EMBED_RC}")
         endif()
@@ -806,7 +816,7 @@ function(CREATE_FROM_BASE_PRESET)
         # TODO: _NAME => short name?
         set_source_files_properties(${CREATE_FROM_BASE_PRESET_EMBED_RC}
             PROPERTIES COMPILE_DEFINITIONS
-                "MI_ARCH_LITTLE_ENDIAN;TARGET_FILENAME=\"$<TARGET_FILE_NAME:${CREATE_FROM_BASE_PRESET_TARGET}>\""
+                "MI_ARCH_LITTLE_ENDIAN;TARGET_FILENAME=\"$<TARGET_FILE_NAME:${CREATE_FROM_BASE_PRESET_TARGET}>\";TARGET_DESC=\"$<TARGET_FILE_NAME:${CREATE_FROM_BASE_PRESET_TARGET}>\""
             )
     endif()
 
@@ -855,8 +865,8 @@ endfunction()
 #
 # target_add_cuda_ptx_rule(TARGET foo
 #     DEPENDS
-#       mdl::mdl_sdk
-#       mdl_sdk_examples::mdl_sdk_shared
+#       mdl_sdk
+#       mdl_sdk_shared
 #     CUDA_SOURCES
 #       "example.cu"
 #     FAST_MATH
@@ -867,10 +877,6 @@ function(TARGET_ADD_CUDA_PTX_RULE)
     set(oneValueArgs TARGET ARCH)
     set(multiValueArgs CUDA_SOURCES DEPENDS)
     cmake_parse_arguments(TARGET_ADD_CUDA_PTX_RULE "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
-    # provides the following variables:
-    # - TARGET_ADD_CUDA_PTX_RULE_TARGET
-    # - TARGET_ADD_CUDA_PTX_RULE_CUDA_SOURCES
-    # - TARGET_ADD_CUDA_PTX_RULE_DEPENDS
 
     # options
     if(NOT TARGET_ADD_CUDA_PTX_RULE_CUDA_ARCH)
@@ -1083,12 +1089,6 @@ function(TARGET_ADD_VS_DEBUGGER_ENV_PATH)
     set(oneValueArgs TARGET)
     set(multiValueArgs PATHS PATHS_DEBUG PATHS_RELEASE PATHS_RELWITHDEBINFO)
     cmake_parse_arguments(TARGET_ADD_VS_DEBUGGER_ENV_PATH "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
-    # provides the following variables:
-    # - TARGET_ADD_VS_DEBUGGER_ENV_PATH_TARGET
-    # - TARGET_ADD_VS_DEBUGGER_ENV_PATH_PATHS
-    # - TARGET_ADD_VS_DEBUGGER_ENV_PATH_PATHS_DEBUG
-    # - TARGET_ADD_VS_DEBUGGER_ENV_PATH_PATHS_RELEASE
-    # - TARGET_ADD_VS_DEBUGGER_ENV_PATH_PATHS_RELWITHDEBINFO
 
     if(NOT WINDOWS)
         return()
@@ -1144,9 +1144,6 @@ function(TARGET_ADD_VS_DEBUGGER_ENV_VAR)
     set(oneValueArgs TARGET)
     set(multiValueArgs VARS)
     cmake_parse_arguments(TARGET_ADD_VS_DEBUGGER_ENV_VAR "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
-    # provides the following variables:
-    # - TARGET_ADD_VS_DEBUGGER_ENV_VAR_TARGET
-    # - TARGET_ADD_VS_DEBUGGER_ENV_VAR_VARS
 
     if(NOT WINDOWS)
         return()
@@ -1179,8 +1176,6 @@ function(TARGET_CREATE_VS_USER_SETTINGS)
     set(oneValueArgs TARGET)
     set(multiValueArgs)
     cmake_parse_arguments(TARGET_CREATE_VS_USER_SETTINGS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
-    # provides the following variables:
-    # - TARGET_CREATE_VS_USER_SETTINGS_TARGET
 
     if(NOT WINDOWS)
         return()
@@ -1244,10 +1239,6 @@ function(TARGET_ADD_RPATH)
     set(oneValueArgs TARGET)
     set(multiValueArgs BUILD_RPATHS INSTALL_RPATHS)
     cmake_parse_arguments(TARGET_ADD_RPATH "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
-    # provides the following variables:
-    # - TARGET_ADD_RPATH_TARGET
-    # - TARGET_ADD_RPATH_BUILD_RPATHS
-    # - TARGET_ADD_RPATH_INSTALL_RPATHS
 
     # no RPATHs on windows
     if(WINDOWS)
@@ -1318,36 +1309,46 @@ endfunction()
 function(ADD_TARGET_INSTALL)
     set(options)
     set(oneValueArgs TARGET DESTINATION)
-    set(multiValueArgs)
+    set(multiValueArgs INCLUDE)
     cmake_parse_arguments(ADD_TARGET_INSTALL "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
-    # provides the following variables:
-    # - ADD_TARGET_INSTALL_TARGET
-    # - ADD_TARGET_INSTALL_DESTINATION
 
     # The if-case is meant for examples, which are not added to the list of exported targets. The
     # else-case if meant for libraries and tools, which are added to the list of exported targets.
     # TODO: Do not misuse the DESTINATION as distinction for that.
     if(ADD_TARGET_INSTALL_DESTINATION)
+        foreach(_INCLUDE ${ADD_TARGET_INSTALL_INCLUDE})
+            list(APPEND _TMP PATTERN "${_INCLUDE}")
+        endforeach()
         install(
             DIRECTORY $<TARGET_FILE_DIR:${ADD_TARGET_INSTALL_TARGET}>/
             DESTINATION ${ADD_TARGET_INSTALL_DESTINATION}
             USE_SOURCE_PERMISSIONS
             FILES_MATCHING
-            PATTERN "*"
-            PATTERN "*.d" EXCLUDE
-            PATTERN "linkerscript.txt" EXCLUDE
+            PATTERN ${_TMP}
         )
-        # Install the target file itself (again) via a separate call using TARGETS in order to
-        # support RPATH changes. Excluding it above would be cleaner, but the patterns do not
-        # support generator expressions.
+        # Install the target file itself via a separate call using TARGETS in order to support
+        # RPATH changes.
         install(
             TARGETS ${ADD_TARGET_INSTALL_TARGET}
             DESTINATION ${ADD_TARGET_INSTALL_DESTINATION}
         )
     else()
+        # Module libraries require an explicit destination since there is no default. Use the same
+        # destination as for shared libraries.
+        get_target_property(_TYPE ${ADD_TARGET_INSTALL_TARGET} TYPE)
+        if(${_TYPE} STREQUAL MODULE_LIBRARY)
+            if(WINDOWS)
+                set(_DESTINATION DESTINATION "${CMAKE_INSTALL_BINDIR}")
+            else()
+                set(_DESTINATION DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+            endif()
+        else()
+            set(_DESTINATION "")
+        endif()
         install(
             TARGETS ${ADD_TARGET_INSTALL_TARGET}
-            EXPORT  mdl-targets
+            EXPORT mdl-targets
+            ${_DESTINATION}
         )
     endif()
 endfunction()
@@ -1360,11 +1361,6 @@ function(CREATE_FROM_PYTHON_PRESET)
     set(oneValueArgs TARGET MAIN)
     set(multiValueArgs SOURCES)
     cmake_parse_arguments(CREATE_FROM_PYTHON_PRESET "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
-    # provides the following variables:
-    # - CREATE_FROM_PYTHON_PRESET_TARGET
-    # - CREATE_FROM_PYTHON_PRESET_MAIN
-    # - CREATE_FROM_PYTHON_PRESET_SOURCES
-    # - CREATE_FROM_PYTHON_PRESET_CREATE_COVERAGE_REPORT
 
     # add dummy-source to create a dummy-lib
     set(DUMMY_CPP ${CMAKE_CURRENT_BINARY_DIR}/generated/empty.cpp)
@@ -1382,9 +1378,10 @@ function(CREATE_FROM_PYTHON_PRESET)
 
     # add dependencies
     target_add_dependencies(TARGET ${CREATE_FROM_PYTHON_PRESET_TARGET}
-    DEPENDS
-        mdl::mdl_python
-        mdl::mdl_sdk
+        NO_LINKING
+        DEPENDS
+            mdl_python
+            mdl_sdk
     )
 
     # create working directories for each configuration
@@ -1438,7 +1435,7 @@ function(CREATE_FROM_PYTHON_PRESET)
             VS_DEBUGGER_COMMAND_ARGUMENTS   "${CMAKE_CURRENT_SOURCE_DIR}/${CREATE_FROM_PYTHON_PRESET_MAIN}"
         )
 
-    get_property(BINDING_MODULE_PATH TARGET "mdl::mdl_python" PROPERTY BINARY_DIR)
+    get_property(BINDING_MODULE_PATH TARGET "mdl_python" PROPERTY BINARY_DIR)
     target_add_vs_debugger_env_var(TARGET ${CREATE_FROM_PYTHON_PRESET_TARGET}
         VARS
             "PYTHONPATH=${BINDING_MODULE_PATH}/$(Configuration)%3B%PYTHONPATH%"
@@ -1456,10 +1453,6 @@ function(CREATE_FROM_DOC_PRESET)
     set(oneValueArgs TARGET COMMENT PROJECT_LABEL)
     set(multiValueArgs )
     cmake_parse_arguments(CREATE_FROM_DOC_PRESET "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
-    # provides the following variables:
-    # - CREATE_FROM_DOC_PRESET_TARGET
-    # - CREATE_FROM_DOC_PRESET_COMMENT
-    # - CREATE_FROM_DOC_PRESET_PROJECT_LABEL
 
     # Set up arguments for doxygen_configure_doxyfile.py.
     if(MDL_DEPENDENCY_DOT_FOUND)

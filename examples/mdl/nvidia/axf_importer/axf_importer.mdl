@@ -38,7 +38,7 @@ import ::math::*;
 // the version of this module loosely follows the corresponding
 // version of the AxF SDK the axf importer uses / supports
 module [[
-        anno::version(1, 9, 0),
+        anno::version(1, 9, 2),
         anno::display_name("Materials used by the AxF importer")
 ]];
 

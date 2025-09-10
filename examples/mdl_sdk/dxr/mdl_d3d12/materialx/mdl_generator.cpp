@@ -185,6 +185,8 @@ private:
 Mdl_generator::Mdl_generator()
     : m_mtlx_search_paths()
     , m_mtlx_relative_library_paths()
+    , m_mdl_version("1.10")
+    , m_materialxtest_mode(false)
 {
 }
 
@@ -211,6 +213,13 @@ void Mdl_generator::set_mdl_version(const std::string& mdl_version)
 {
     // parsing later behind a version ifdef
     m_mdl_version = mdl_version;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+void Mdl_generator::set_materialxtest_mode(bool enabled)
+{
+    m_materialxtest_mode = enabled;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -304,9 +313,19 @@ bool Mdl_generator::generate(Mdl_sdk& mdl_sdk, Mdl_generator_result& inout_resul
     cms->loadLibrary(mtlx_std_lib);
     generator_context.getShaderGenerator().setColorManagementSystem(cms);
     generator_context.getOptions().targetColorSpaceOverride = "lin_rec709";
-    // The MDL and Mtlx spec define the origin (0,0) of the uv spaces at the bottom left.
-    // No flipping requiered.
-    generator_context.getOptions().fileTextureVerticalFlip = false; 
+
+
+    // Flipping the texture lookups for the test renderer only.
+    // This is because OSL testrender does not allow to change the UV layout of their sphere (yet) and the MaterialX test suite
+    // adopts the OSL behavior in order to produce comparable results. This means that raw texture coordinates, or procedurals
+    // that use the texture coordinates, do not match what might be expected when reading the MaterialX spec:
+    //    "[...] the image is mapped onto the geometry based on geometry UV coordinates, with the lower-left corner of an image 
+    //     mapping to the (0,0) UV coordinate [...]"
+    // This means for MDL: in, and only here in the MaterialXTest suite, we flip the UV coordinates of mesh using the `--uv_flip` option
+    // of the renderer, and to correct the image orientation, we apply `fileTextureVerticalFlip`.
+    // In regular MDL integrations this is not needed because MDL and MaterialX define the texture space equally with the origin
+    // at the bottom left.
+    generator_context.getOptions().fileTextureVerticalFlip = m_materialxtest_mode;
 
     // Initialize unit management.
     mx::UnitSystemPtr unitSystem = mx::UnitSystem::create(
@@ -352,8 +371,12 @@ bool Mdl_generator::generate(Mdl_sdk& mdl_sdk, Mdl_generator_result& inout_resul
         genMdlOptions->targetVersion = mx::GenMdlOptions::MdlVersion::MDL_1_6;
     else if (m_mdl_version == "1.7")
         genMdlOptions->targetVersion = mx::GenMdlOptions::MdlVersion::MDL_1_7;
+    else if (m_mdl_version == "1.8")
+        genMdlOptions->targetVersion = mx::GenMdlOptions::MdlVersion::MDL_1_8;
+    else if (m_mdl_version == "1.9")
+        genMdlOptions->targetVersion = mx::GenMdlOptions::MdlVersion::MDL_1_9;
     else
-        genMdlOptions->targetVersion = mx::GenMdlOptions::MdlVersion::MDL_LATEST; // 1_8
+        genMdlOptions->targetVersion = mx::GenMdlOptions::MdlVersion::MDL_LATEST;
 
     generator_context.pushUserData(mx::GenMdlOptions::GEN_CONTEXT_USER_DATA_KEY, genMdlOptions);
 #endif

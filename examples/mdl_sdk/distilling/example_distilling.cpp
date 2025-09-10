@@ -172,7 +172,7 @@ mi::neuraylib::ICompiled_material* compile_material_instance(
     return compiled_material;
 }
 
-// Distills the given compiled material to the requested target model, 
+// Distills the given compiled material to the requested target model,
 // and returns it
 const mi::neuraylib::ICompiled_material* create_distilled_material(
     mi::neuraylib::IMdl_distiller_api* distiller_api,
@@ -188,7 +188,7 @@ const mi::neuraylib::ICompiled_material* create_distilled_material(
     return distilled_material.get();
 }
 
-// remap normal 
+// remap normal
 void remap_normal(mi::base::IInterface* icanvas)
 {
     mi::base::Handle<mi::neuraylib::ICanvas> canvas(
@@ -254,7 +254,7 @@ void setup_target_material(
     if(target_model == "diffuse")
     {
         // The target model is supposed to be a diffuse reflection bsdf
-        check_success(semantic == 
+        check_success(semantic ==
             mi::neuraylib::IFunction_definition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF);
 
         // Setup diffuse material parameters
@@ -308,7 +308,7 @@ void setup_target_material(
             out_material["attenuation_distance"].bake_path = "volume.scattering_coefficient.s.v.distance";
             out_material["volume_ior"].bake_path = "ior";
         }
-        
+
         // Check for a clearcoat layer, first. If present, it is the outermost layer
         if(semantic == mi::neuraylib::IFunction_definition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER)
         {
@@ -325,7 +325,7 @@ void setup_target_material(
             path_prefix += "base.";
         }
 
-        // Check for a weighted layer. Sole purpose of this layer is the transportation of  
+        // Check for a weighted layer. Sole purpose of this layer is the transportation of
         // the under-clearcoat-normal. It contains an empty base and a layer with the
         // actual material body
         if(semantic == mi::neuraylib::IFunction_definition::DS_INTRINSIC_DF_WEIGHTED_LAYER)
@@ -401,15 +401,15 @@ void setup_target_material(
             if(out_material["metallic"].bake_path.empty())
                 out_material["metallic"].value = create_value(transaction, "Float32", 1.0f);
             if(out_material["roughness"].bake_path.empty())
-                out_material["roughness"].bake_path = path_prefix + "roughness_u"; 
+                out_material["roughness"].bake_path = path_prefix + "roughness_u";
             if(out_material["base_color"].bake_path.empty())
-                out_material["base_color"].bake_path = path_prefix + "tint"; 
+                out_material["base_color"].bake_path = path_prefix + "tint";
         }
         else if(semantic ==
             mi::neuraylib::IFunction_definition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF)
         {
             if(out_material["base_color"].bake_path.empty())
-                out_material["base_color"].bake_path = path_prefix + "tint"; 
+                out_material["base_color"].bake_path = path_prefix + "tint";
         }
 
         // Check for cutout-opacity
@@ -421,7 +421,7 @@ void setup_target_material(
     else if (target_model == "specular_glossy")
     {
         // Setup parameters for the specular - glossy material model
-        out_material["base_color"] = Material_parameter("Rgb_fp"); 
+        out_material["base_color"] = Material_parameter("Rgb_fp");
         out_material["f0"] = Material_parameter("Rgb_fp");
         out_material["f0_color"] = Material_parameter("Rgb_fp");
         out_material["f0_refl"] = Material_parameter("Float32");
@@ -430,7 +430,7 @@ void setup_target_material(
         out_material["opacity"]  = Material_parameter("Float32");
         out_material["normal_map"] = Material_parameter("Float32<3>", remap_normal);
 
-        // Specular-glossy distillation can result in a diffuse bsdf, a glossy bsdf 
+        // Specular-glossy distillation can result in a diffuse bsdf, a glossy bsdf
         // or a curve-weighted combination of both. Explicitly check the cases
         // and save the corresponding bake paths.
         switch(semantic)
@@ -444,7 +444,7 @@ void setup_target_material(
             out_material["f0_color"].bake_path = "surface.scattering.tint";
             out_material["f0_refl"].value = create_value(transaction, "Float32", 1.0f);
             out_material["f0_weight"].value = create_value(transaction, "Float32", 1.0f);
-            out_material["glossiness"].bake_path = 
+            out_material["glossiness"].bake_path =
                 "surface.scattering.roughness_u"; // needs inversion
             break;
         case mi::neuraylib::IFunction_definition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER:
@@ -454,7 +454,7 @@ void setup_target_material(
             out_material["f0_refl"].bake_path = "surface.scattering.normal_reflectivity";
             out_material["f0_weight"].bake_path = "surface.scattering.weight";
 
-            out_material["glossiness"].bake_path = 
+            out_material["glossiness"].bake_path =
                 "surface.scattering.layer.roughness_u"; // needs inversion
 
             break;
@@ -584,8 +584,6 @@ mi::Size build_canvases(
         }
         case mi::neuraylib::IExpression::EK_CALL:
             break;
-        case mi::neuraylib::IExpression::EK_FORCE_32_BIT:
-            break;
     }
 
     assert( false);
@@ -708,7 +706,7 @@ void bake_target_material_inputs(
                     for (it2 = it->second.begin(); it2 != it->second.end(); it2++)
                     {
                         Material_parameter::UVTile uv(it2->first);
-                        
+
                         // Create a canvas
                         mi::base::Handle<mi::neuraylib::ICanvas> canvas(
                             image_api->create_canvas(param.value_type.c_str(), baking_resolution, baking_resolution));
@@ -820,14 +818,14 @@ void calculate_f0(mi::neuraylib::ITransaction* trans, Material& material)
     mi::Float32* f0_weight = nullptr;
     mi::Float32* f0_refl = nullptr;
 
-    init_value(material["f0"].texture.get(), nullptr, 
+    init_value(material["f0"].texture.get(), nullptr,
         f0, /* dummy */ f0_color_value);
 
-    init_value(material["f0_color"].texture.get(), material["f0_color"].value.get(), 
+    init_value(material["f0_color"].texture.get(), material["f0_color"].value.get(),
         f0_color, f0_color_value);
-    init_value(material["f0_weight"].texture.get(), material["f0_weight"].value.get(), 
+    init_value(material["f0_weight"].texture.get(), material["f0_weight"].value.get(),
         f0_weight, f0_weight_value);
-    init_value(material["f0_refl"].texture.get(), material["f0_refl"].value.get(), 
+    init_value(material["f0_refl"].texture.get(), material["f0_refl"].value.get(),
         f0_refl, f0_refl_value);
 
     const mi::Uint32 n =rx * ry;
@@ -915,7 +913,7 @@ void process_target_material(
         std::cout << "Parameter: '" << param_name << "': ";
         if(param.bake_path.empty())
         {
-            std::cout << " no matching bake path found in target material." 
+            std::cout << " no matching bake path found in target material."
                 << std::endl;
 
             if(param.value)
@@ -923,7 +921,7 @@ void process_target_material(
             if(param.texture)
                 std::cout << "--> calculated ";
         }
-        else 
+        else
             std::cout << "path '"<< param.bake_path << "' baked to ";
 
         if (!param.canvases.empty())
@@ -993,7 +991,7 @@ void process_target_material(
                     param.value->get_interface<mi::IColor>());
                 mi::Color c;
                 color->get_value(c);
-                std::cout << "color (" 
+                std::cout << "color ("
                     << c.r << ", " << c.g << ", " << c.b << ")."<< std::endl << std::endl;
             }
             else if(param.value_type == "Float32")
@@ -1010,11 +1008,11 @@ void process_target_material(
                     param.value->get_interface<mi::IFloat32_3>());
                 mi::Float32_3 v;
                 value->get_value(v);
-                std::cout << "vector (" 
+                std::cout << "vector ("
                     << v.x << ", " << v.y << ", " << v.z << ")."<< std::endl << std::endl;
             }
         }
-        std::cout 
+        std::cout
             << "--------------------------------------------------------------------------------"
             << std::endl;
     }
@@ -1217,7 +1215,7 @@ int MAIN_UTF8(int argc, char* argv[])
             }
             else if (strcmp(opt, "--no_constant_detection") == 0) {
                 constant_detection = false;
-            }            
+            }
             else if (strcmp(opt, "--no_parallel") == 0) {
                 parallel = false;
             }
@@ -1312,8 +1310,8 @@ int MAIN_UTF8(int argc, char* argv[])
                 compile_material_instance(
                     mdl_factory.get(),
                     transaction.get(),
-                    instance.get(), 
-                    context.get(), 
+                    instance.get(),
+                    context.get(),
                     false));
 
             // Acquire distilling API used for material distilling and baking

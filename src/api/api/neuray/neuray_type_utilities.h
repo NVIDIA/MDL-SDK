@@ -33,7 +33,7 @@
 #ifndef API_API_NEURAY_NEURAY_TYPE_UTILITIES_H
 #define API_API_NEURAY_NEURAY_TYPE_UTILITIES_H
 
-#include <base/lib/robin_hood/robin_hood.h>
+#include <base/lib/unordered_dense/unordered_dense.h>
 #include <string>
 
 #include <mi/base/lock.h>
@@ -281,11 +281,11 @@ private:
     };
 
     /// The type of s_map_name_code.
-    using Map_name_code = robin_hood::unordered_map<std::string, ATTR::Type_code>;
+    using Map_name_code = ankerl::unordered_dense::map<std::string, ATTR::Type_code>;
 
     /// The type of s_map_name_code.
     using Map_code_name
-        = robin_hood::unordered_map<ATTR::Type_code, std::string, hash<ATTR::Type_code>>;
+        = ankerl::unordered_dense::map<ATTR::Type_code, std::string, hash<ATTR::Type_code>>;
 
     /// The map for the mapping from type name to type code.
     static Map_name_code s_map_name_code;

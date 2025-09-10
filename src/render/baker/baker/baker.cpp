@@ -34,8 +34,6 @@
 #include <vector>
 #include <algorithm>
 
-#include <boost/core/ignore_unused.hpp>
-
 #include <mi/base/interface_implement.h>
 #include <mi/mdl/mdl_mdl.h>
 #include <mi/neuraylib/icanvas.h>
@@ -520,7 +518,6 @@ static size_t store_value(unsigned char *data, mi::base::Handle<MI::MDL::IValue 
     case MI::MDL::IValue::VK_TEXTURE:
     case MI::MDL::IValue::VK_LIGHT_PROFILE:
     case MI::MDL::IValue::VK_BSDF_MEASUREMENT:
-    case MI::MDL::IValue::VK_FORCE_32_BIT:
         {
             ASSERT(M_BAKER, !"unexpected argument type");
             return 0;
@@ -731,9 +728,6 @@ const IBaker_code* Baker_module_impl::create_baker_code_internal(
     case mi::neuraylib::BAKE_ON_GPU_WITH_CPU_FALLBACK:
         use_gpu = use_cpu = true;
         break;
-    case mi::neuraylib::BAKER_RESOURCE_FORCE_32_BIT:
-        // useless case to keep gcc happy
-        break;
     }
 
 
@@ -755,15 +749,10 @@ const IBaker_code* Baker_module_impl::create_baker_code_internal(
             code_cache.get(),
             /*string_ids=*/true);
 
-        char sm_version[3];
-        sm_version[0] = '0' + sm / 10;
-        sm_version[1] = '0' + sm % 10;
-        sm_version[2] = '\0';
-        be_ptx.set_option( "sm_version", sm_version);
+        be_ptx.set_option( "sm_version", std::to_string(sm).c_str());
 
-        mi::Sint32 result = be_ptx.set_option( "num_texture_spaces", std::to_string(BAKER_TEXTURE_SPACES).c_str());
+        [[maybe_unused]] mi::Sint32 result = be_ptx.set_option( "num_texture_spaces", std::to_string(BAKER_TEXTURE_SPACES).c_str());
         ASSERT( M_BAKER, result == 0);
-        boost::ignore_unused( result);
 
         if (compiled_material)
             gpu_code = mi::base::make_handle(
@@ -793,7 +782,7 @@ const IBaker_code* Baker_module_impl::create_baker_code_internal(
             code_cache.get(),
             /*string_ids=*/true);
 
-        mi::Sint32 result = be_native.set_option( "num_texture_spaces", std::to_string(BAKER_TEXTURE_SPACES).c_str());
+        [[maybe_unused]] mi::Sint32 result = be_native.set_option( "num_texture_spaces", std::to_string(BAKER_TEXTURE_SPACES).c_str());
         ASSERT( M_BAKER, result == 0);
         if (use_custom_cpu_tex_runtime) {
             result = be_native.set_option("use_builtin_resource_handler", "off");
@@ -804,7 +793,6 @@ const IBaker_code* Baker_module_impl::create_baker_code_internal(
 
         result = context.set_option("fold_meters_per_scene_unit", true);
         ASSERT(M_BAKER, result == 0);
-        boost::ignore_unused(result);
 
         if (compiled_material)
             cpu_code = mi::base::make_handle(

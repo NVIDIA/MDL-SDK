@@ -35,7 +35,7 @@ add_subdirectory(${MDL_SRC_FOLDER}/render/mdl/backends)
 add_subdirectory(${MDL_SRC_FOLDER}/render/mdl/runtime)
 
 set(LINKER_DEPENDENCIES_RENDER
-    mdl::render-baker-baker
-    mdl::render-mdl-backends
-    mdl::render-mdl-runtime
+    render-baker-baker
+    render-mdl-backends
+    render-mdl-runtime
     CACHE INTERNAL "" FORCE)

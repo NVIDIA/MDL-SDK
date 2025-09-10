@@ -36,9 +36,10 @@
 #include "thread_pool_jobs.h"
 
 #include <cfloat>
+#include <chrono>
+#include <thread>
 #include <utility>
-#include <boost/core/ignore_unused.hpp>
-#include <base/hal/time/i_time.h>
+
 #include <base/lib/log/i_log_assert.h>
 #include <base/lib/log/i_log_logger.h>
 
@@ -88,7 +89,7 @@ Thread_pool::~Thread_pool()
     // Wait until job queue is empty.
     while( !m_job_queue.empty()) {
         block.release();
-        TIME::sleep( 0.01);
+        std::this_thread::sleep_for( std::chrono::duration<float>( 0.01f));
         block.set( &m_lock);
     }
 
@@ -339,9 +340,9 @@ IJob* Thread_pool::get_next_job( Worker_thread* thread)
     if( it_map == it_map_end) {
         ASSERT( M_THREAD_POOL, !job);
         thread->set_state( THREAD_SLEEPING);
-        std::pair<Sleeping_threads::iterator,bool> result = m_sleeping_threads.insert( thread);
+        [[maybe_unused]] std::pair<Sleeping_threads::iterator,bool> result
+            = m_sleeping_threads.insert( thread);
         ASSERT( M_THREAD_POOL, result.second);
-        boost::ignore_unused( result);
         return nullptr;
     }
 
@@ -419,6 +420,8 @@ void Thread_pool::job_execution_finished( Worker_thread* thread, IJob* job)
 
 void Thread_pool::dump_load() const
 {
+    mi::base::Lock::Block block( &m_lock);
+
     LOG::mod_log->info( M_THREAD_POOL, LOG::Mod_log::C_MISC,
         "Current CPU load: %.1f/%.1f, GPU load: %.1f/%.1f",
         m_current_cpu_load, m_cpu_load_limit, m_current_gpu_load, m_gpu_load_limit);
@@ -615,9 +618,8 @@ void Thread_pool::wake_up_worker_thread()
     thread->wake_up();
 
     // remove thread from the set of sleeping threads
-    size_t result = m_sleeping_threads.erase( thread);
+    [[maybe_unused]] size_t result = m_sleeping_threads.erase( thread);
     ASSERT( M_THREAD_POOL, result == 1);
-    boost::ignore_unused( result);
 }
 
 bool Thread_pool::job_fits_load_limits( mi::Float32 cpu_load, mi::Float32 gpu_load) const

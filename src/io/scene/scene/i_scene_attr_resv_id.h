@@ -57,6 +57,7 @@ enum Attr_resv_id {
     BACKPLATE_MESH,             ///< is the object a 3D-environment/backplate mesh
     NOT_PICKABLE,               ///< "invisible" to pick rays
     SELECTED,                   ///< include in rendering of selection subsets
+    CRACKFREE_DISPLACEMENT,     ///< enables crackfree displacement
     N_FLAGS,                    ///< number of reserved flags, <= 31
     N_MAXFLAGS          = 32,   ///< can't have more than 32 reserved flags
 
@@ -89,6 +90,8 @@ enum Attr_resv_id {
     GHOSTLIGHT_FACTOR,          ///< Scalar     factor to lower light visibility in glossy reflections
     APPROX_TRIANGLE_LIMIT,      ///< Uint       triangle limit for tessellation
     APPROX_VERTEX_OFFSET,       ///< Scalar     factor by which vertices are offset according to the shading normal
+    CRACKFREE_DISPLACEMENT_POINT_TOLERANCE,
+                                ///< Scalar     tolerance when finding similar/duplicate points
                                 //------------------ object, no inheritance ---
     OBJ_NORMAL,                 ///< Vector3    vertex normal
     OBJ_MOTION,                 ///< Vector3[]  vertex motion path

@@ -35,6 +35,7 @@
 #include <vector>
 
 #include "example_shared_backends.h"
+#include "example_shared_distilling.h"
 
 using TD = Target_function_description;  // only for readability
 
@@ -76,6 +77,7 @@ public:
     bool m_dump_metadata = false;
     bool m_adapt_normal = false;
     bool m_adapt_microfacet_roughness = false;
+    bool m_export_requested_functions = false;
     bool m_experimental = false;
     bool m_run_material_analysis = false;
 
@@ -85,6 +87,9 @@ public:
     /// The expressions to generate code for
     std::vector<TD> m_descs;
     std::vector<std::unique_ptr<std::string> > m_desc_strs;  // Collection for storing the strings
+
+    /// The target in case distilling is done before code generation
+    std::string m_distilling_target = "";
 };
 
 // Dump generated meta data tables.
@@ -95,7 +100,8 @@ void dump_metadata(Target_code *code, std::ostream& out)
     for (unsigned i = 0, n = string_table.get_number_of_strings(); i < n; ++i)
     {
         const char* c = string_table.get_string(i);
-        out << "   " << i << ": \"" << c << "\"\n";
+        if(c != nullptr)
+            out << "   " << i << ": \"" << c << "\"\n";
     }
     out << "*/\n\n";
 
@@ -297,6 +303,9 @@ void code_generation(mi::mdl::IMDL* mdl_compiler, Options& options)
             additional_backend_options.emplace(
                 MDL_JIT_OPTION_GLSL_MAX_CONST_DATA, options.m_max_const_data);
         }
+        if (options.m_export_requested_functions)
+            additional_backend_options.emplace(
+                MDL_JIT_OPTION_EXPORT_REQUESTED_FUNCTIONS, "true");
 
         // Initialize the material compiler
         Material_backend_compiler mc(
@@ -309,13 +318,13 @@ void code_generation(mi::mdl::IMDL* mdl_compiler, Options& options)
                 "default" : options.m_lambda_return_mode,
             additional_backend_options);
 
-        bool success = true;
-
         // Add user defined paths
         for (std::size_t i = 0; i < options.m_mdl_paths.size(); ++i)
             mc.add_module_path(options.m_mdl_paths[i].c_str());
 
-        Target_function_description desc;
+        // Load distilling support modules if requested
+        if (!options.m_distilling_target.empty())
+            mc.load_distilling_support();
 
         // Select some default expressions to generate code for
         // The functions to select depend on the renderer
@@ -360,63 +369,93 @@ void code_generation(mi::mdl::IMDL* mdl_compiler, Options& options)
                 flags |= mi::mdl::IMaterial_instance::NO_TERNARY_ON_DF;
         }
 
-        // Add MDL material distribution functions and expressions to the link unit
-        success = mc.add_material(
-            options.m_qualified_material_name,
-            &options.m_descs[0],
-            options.m_descs.size(),
-            options.m_use_class_compilation,
-            flags);
+        // Load the given module and create a material instance
+        mi::base::Handle<mi::mdl::IMaterial_instance> mat_instance(
+            mc.create_and_init_material_instance(options.m_qualified_material_name.c_str(),
+            options.m_use_class_compilation, flags));
 
-        if (!success)
+        // Apply distilling?
+        if (!options.m_distilling_target.empty())
         {
-            // Print any compiler messages, if available
-            mc.print_messages();
-        }
-        else
-        {
-            // Generate code for selected backend in the link unit
-            std::vector<std::unique_ptr<Target_code> > target_code;
-            target_code.push_back(std::unique_ptr<Target_code>(mc.generate_target_code()));
+            Distiller_helper dist;
+            mi::mdl::Distiller_options distiller_options;
 
-            // Dump generated code to file or stdout
-            if (!options.m_output_file.empty())
+            const mi::mdl::IMaterial_instance* dist_mat_instance =
+                dist.distill(
+                    mdl_compiler,
+                    mc.get_module_manager(),
+                    nullptr,
+                    mat_instance.get(),
+                    options.m_distilling_target.c_str(),
+                    &distiller_options,
+                    nullptr);
+
+            if (dist_mat_instance)
             {
-                std::ofstream file_stream;
-                file_stream.open(options.m_output_file.c_str());
-                if (file_stream)
-                {
-                    file_stream << target_code[0]->get_src_code();
-                    if (options.m_dump_metadata)
-                        dump_metadata(target_code[0].get(), file_stream);
-                    file_stream.close();
-                }
+                mat_instance = const_cast<mi::mdl::IMaterial_instance*>(dist_mat_instance);
             }
             else
             {
-                std::cout << "\n\n\n";
-                std::cout << target_code[0]->get_src_code() << "\n\n\n";
-                if (options.m_dump_metadata)
-                    dump_metadata(target_code[0].get(), std::cout);
-                std::cout << "\n\n\n";
+                std::cout << "Distilling target \"" << options.m_distilling_target << "\" not found.\n";
+                std::cout << "Code generation aborted.\n";
+                return;
             }
-
-            // The target code can also be serialized for later reuse.
-            // This can make sense to reduce startup time for larger scenes that have been loaded
-            // before. A key for this kind of cache is the hash of a compiled material:
-            const mi::mdl::DAG_hash* dag_hash = mc.get_material_instances()[0].get_material_instance()->get_hash();
-            const unsigned char* hash = dag_hash->data();
-
-            // Converting to 128-bit UUID representation
-            mi::base::Uuid uuid;
-            uuid.m_id1 = (hash[0] << 24) | (hash[1] << 16) | (hash[2] << 8) | hash[3];
-            uuid.m_id2 = (hash[4] << 24) | (hash[5] << 16) | (hash[6] << 8) | hash[7];
-            uuid.m_id3 = (hash[8] << 24) | (hash[9] << 16) | (hash[10] << 8) | hash[11];
-            uuid.m_id4 = (hash[12] << 24) | (hash[13] << 16) | (hash[14] << 8) | hash[15];
-
-            std::cout << "Compiled material hash: \n" << std::hex << uuid.m_id1 << " " << uuid.m_id2
-                << " " << uuid.m_id3 << " " << uuid.m_id4 << std::dec << "\n";
         }
+
+        // Add MDL material distribution functions and expressions to the link unit
+        if (!mc.add_material(
+            mat_instance,
+            &options.m_descs[0],
+            options.m_descs.size(),
+            options.m_use_class_compilation,
+            flags))
+        {
+            // If failed, print any compiler messages, when available
+            mc.print_messages();
+            return;
+        }
+
+        // Generate code for selected backend in the link unit
+        std::vector<std::unique_ptr<Target_code> > target_code;
+        target_code.push_back(std::unique_ptr<Target_code>(mc.generate_target_code()));
+
+        // Dump generated code to file or stdout
+        if (!options.m_output_file.empty())
+        {
+            std::ofstream file_stream;
+            file_stream.open(options.m_output_file.c_str());
+            if (file_stream)
+            {
+                file_stream << target_code[0]->get_src_code();
+                if (options.m_dump_metadata)
+                    dump_metadata(target_code[0].get(), file_stream);
+                file_stream.close();
+            }
+        }
+        else
+        {
+            std::cout << "\n\n\n";
+            std::cout << target_code[0]->get_src_code() << "\n\n\n";
+            if (options.m_dump_metadata)
+                dump_metadata(target_code[0].get(), std::cout);
+            std::cout << "\n\n\n";
+        }
+
+        // The target code can also be serialized for later reuse.
+        // This can make sense to reduce startup time for larger scenes that have been loaded
+        // before. A key for this kind of cache is the hash of a compiled material:
+        const mi::mdl::DAG_hash* dag_hash = mc.get_material_instances()[0].get_material_instance()->get_hash();
+        const unsigned char* hash = dag_hash->data();
+
+        // Converting to 128-bit UUID representation
+        mi::base::Uuid uuid;
+        uuid.m_id1 = (hash[0] << 24) | (hash[1] << 16) | (hash[2] << 8) | hash[3];
+        uuid.m_id2 = (hash[4] << 24) | (hash[5] << 16) | (hash[6] << 8) | hash[7];
+        uuid.m_id3 = (hash[8] << 24) | (hash[9] << 16) | (hash[10] << 8) | hash[11];
+        uuid.m_id4 = (hash[12] << 24) | (hash[13] << 16) | (hash[14] << 8) | hash[15];
+
+        std::cout << "Compiled material hash: \n" << std::hex << uuid.m_id1 << " " << uuid.m_id2
+            << " " << uuid.m_id3 << " " << uuid.m_id4 << std::dec << "\n";
     }
 }
 
@@ -434,7 +473,7 @@ int MAIN_UTF8(int argc, char* argv[])
     if (options.m_help)
     {
         options.print_usage(std::cout);
-        exit(EXIT_SUCCESS);
+        return EXIT_SUCCESS;
     }
 
     // Access the MDL core compiler
@@ -493,9 +532,11 @@ options:
   --adapt_normal                Enable renderer callback to adapt the normal.
   --adapt_microfacet_roughness  Enable renderer callback to adapt the roughness for
                                 microfacet BSDFs.
+  --export_req_funcs            Export requested functions (HLSL only).
   --experimental                Enable experimental compiler features (for internal testing).
-  --warn-spectrum-conv          Warn if a spectrum constructor is converted into RGB.)
-  --analyze                     Run backend analysis)";
+  --warn-spectrum-conv          Warn if a spectrum constructor is converted into RGB.
+  --analyze                     Run backend analysis.
+  --distill <target>            Distill the material before running the code generation.)";
 
     s << std::endl;
 }
@@ -504,9 +545,6 @@ options:
 bool Options::parse(int argc, char* argv[])
 {
     m_mdl_paths.push_back(get_samples_mdl_root());
-    const auto& path = get_src_shaders_mdl();
-    if (path != ".")
-        m_mdl_paths.push_back(path);
 
     for (int i = 1; i < argc; ++i)
     {
@@ -560,6 +598,8 @@ bool Options::parse(int argc, char* argv[])
                 m_adapt_normal = true;
             else if (arg == "--adapt_microfacet_roughness")
                 m_adapt_microfacet_roughness = true;
+            else if (arg == "--export_req_funcs")
+                m_export_requested_functions = true;
             else if (arg == "--analyze")
                 m_run_material_analysis = true;
             else if (arg == "--experimental")
@@ -622,7 +662,23 @@ bool Options::parse(int argc, char* argv[])
                 m_num_texture_results = std::max(atoi(argv[++i]), 0);
             }
             else if (arg == "-M" || arg == "--dump_meta_data")
+            {
                 m_dump_metadata = true;
+            }
+            else if (arg == "--distill")
+            {
+                if (i == argc - 1)
+                {
+                    std::cerr << "error: Argument for --distill missing." << std::endl;
+                    return false;
+                }
+                m_distilling_target = argv[++i];
+
+                // Add MDL search path required for distilling
+                const auto& path = get_src_shaders_mdl();
+                if (path != ".")
+                    m_mdl_paths.push_back(path);
+            }
             else
             {
                 std::cerr << "error: Unknown option \"" << arg << "\"." << std::endl;

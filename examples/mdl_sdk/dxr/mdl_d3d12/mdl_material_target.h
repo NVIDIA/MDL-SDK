@@ -50,15 +50,17 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
     enum class Material_code_feature
     {
-        HAS_INIT            = 1 << 0,
-        SURFACE_SCATTERING  = 1 << 1,
-        SURFACE_EMISSION    = 1 << 2,
-        BACKFACE_SCATTERING = 1 << 3,
-        BACKFACE_EMISSION   = 1 << 4,
-        VOLUME_ABSORPTION   = 1 << 5,
-        CUTOUT_OPACITY      = 1 << 6,
-        CAN_BE_THIN_WALLED  = 1 << 7,
-        HAS_AOVS            = 1 << 8
+        HAS_INIT                    = 1 << 0,
+        SURFACE_SCATTERING          = 1 << 1,
+        SURFACE_EMISSION            = 1 << 2,
+        BACKFACE_SCATTERING         = 1 << 3,
+        BACKFACE_EMISSION           = 1 << 4,
+        VOLUME_ABSORPTION           = 1 << 5,
+        VOLUME_SCATTERING           = 1 << 6,
+        VOLUME_SCATTERING_DIR_BIAS  = 1 << 7,
+        CUTOUT_OPACITY              = 1 << 8,
+        CAN_BE_THIN_WALLED          = 1 << 9,
+        HAS_AOVS                    = 1 << 10
     };
 
     // --------------------------------------------------------------------------------------------

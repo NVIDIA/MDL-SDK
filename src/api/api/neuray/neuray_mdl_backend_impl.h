@@ -152,13 +152,6 @@ public:
 
     // API methods
 
-    /// Add an MDL environment function call as a function to this link unit.
-    /// (see #mi::neuraylib::ILink_unit::add_environment for details)
-    mi::Sint32 deprecated_add_environment(
-        mi::neuraylib::IFunction_call const     *call,
-        char const                              *fname,
-        mi::neuraylib::IMdl_execution_context   *context) final;
-
     /// Add an expression that is part of an MDL material instance as a function to this
     /// (see #mi::neuraylib::ILink_unit::add_material_expression for details)
     mi::Sint32 add_material_expression(

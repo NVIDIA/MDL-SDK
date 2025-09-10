@@ -32,6 +32,7 @@
 #define MI_NEURAYLIB_ISCENE_ELEMENT_H
 
 #include <mi/neuraylib/iattribute_set.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -50,7 +51,7 @@ namespace neuraylib {
 /// Distinguishes scene elements.
 ///
 /// \see #mi::neuraylib::IScene_element::get_element_type()
-enum Element_type
+enum Element_type : Uint32
 {
 #ifndef MI_SKIP_WITH_MDL_SDK_DOXYGEN
     ELEMENT_TYPE_INSTANCE                        =  0, ///< #mi::neuraylib::IInstance
@@ -85,12 +86,10 @@ enum Element_type
     ELEMENT_TYPE_ON_DEMAND_MESH                  = 38, ///< #mi::neuraylib::IOn_demand_mesh
     ELEMENT_TYPE_PROJECTOR                       = 39, ///< #mi::neuraylib::IProjector
     ELEMENT_TYPE_SECTION_OBJECT                  = 40, ///< #mi::neuraylib::ISection_object
-    ELEMENT_TYPE_PROXY                           = 41, ///< #mi::neuraylib::IProxy
+    ELEMENT_TYPE_PROXY                           = 41  ///< #mi::neuraylib::IProxy
 #endif // MI_SKIP_WITH_MDL_SDK_DOXYGEN
-    ELEMENT_TYPE_FORCE_32_BIT                    = 0xffffffffU
+    MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(ELEMENT_TYPE_FORCE_32_BIT, 0xffffffffU)
 };
-
-mi_static_assert( sizeof( Element_type)== sizeof( Uint32));
 
 /// Common %base interface for all scene elements.
 class IScene_element :

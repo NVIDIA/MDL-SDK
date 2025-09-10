@@ -53,7 +53,6 @@ set(PROJECT_SOURCES
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
     TYPE EXECUTABLE
-    NAMESPACE mdl_sdk
     OUTPUT_NAME "distilling_glsl"
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
@@ -70,9 +69,9 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
 
 # copy additional resources
 target_copy_to_output_dir(TARGET ${PROJECT_NAME}
-    RELATIVE    
+    RELATIVE
         "${CMAKE_CURRENT_SOURCE_DIR}"
-    FILES    
+    FILES
         ${PROJECT_RESOURCES}
     )
 
@@ -86,4 +85,5 @@ target_create_vs_user_settings(TARGET ${PROJECT_NAME})
 add_target_install(
     TARGET ${PROJECT_NAME}
     DESTINATION "examples/mdl_sdk/distilling_glsl"
+    INCLUDE ${PROJECT_RESOURCES}
     )

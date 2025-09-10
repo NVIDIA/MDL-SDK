@@ -219,8 +219,6 @@ inline mi::mdl::IStruct_category::Predefined_id int_struct_category_id_to_core_s
             return mi::mdl::IStruct_category::CID_USER;
         case IStruct_category::CID_MATERIAL_CATEGORY:
             return mi::mdl::IStruct_category::CID_MATERIAL_CATEGORY;
-        case IStruct_category::CID_FORCE_32_BIT:
-            ASSERT( M_SCENE, false); return mi::mdl::IStruct_category::CID_USER;
     }
 
     ASSERT( M_SCENE, false);
@@ -275,8 +273,6 @@ inline mi::mdl::IType_enum::Predefined_id int_enum_id_to_core_enum_id(
         case IType_enum::EID_USER:           return mi::mdl::IType_enum::EID_USER;
         case IType_enum::EID_TEX_GAMMA_MODE: return mi::mdl::IType_enum::EID_TEX_GAMMA_MODE;
         case IType_enum::EID_INTENSITY_MODE: return mi::mdl::IType_enum::EID_INTENSITY_MODE;
-        case IType_enum::EID_FORCE_32_BIT:
-            ASSERT( M_SCENE, false); return mi::mdl::IType_enum::EID_USER;
     }
 
     ASSERT( M_SCENE, false);
@@ -323,8 +319,6 @@ inline mi::mdl::IType_struct::Predefined_id int_struct_id_to_core_struct_id(
             return mi::mdl::IType_struct::SID_MATERIAL_GEOMETRY;
         case IType_struct::SID_MATERIAL:
             return mi::mdl::IType_struct::SID_MATERIAL;
-        case IType_struct::SID_FORCE_32_BIT:
-            ASSERT( M_SCENE, false); return mi::mdl::IType_struct::SID_USER;
     }
 
     ASSERT( M_SCENE, false);
@@ -355,8 +349,6 @@ inline mi::mdl::IType_texture::Shape int_shape_to_core_shape( IType_texture::Sha
         case IType_texture::TS_CUBE:         return mi::mdl::IType_texture::TS_CUBE;
         case IType_texture::TS_PTEX:         return mi::mdl::IType_texture::TS_PTEX;
         case IType_texture::TS_BSDF_DATA:    return mi::mdl::IType_texture::TS_BSDF_DATA;
-        case IType_texture::TS_FORCE_32_BIT:
-            ASSERT( M_SCENE, false); return mi::mdl::IType_texture::TS_2D;
     }
 
     ASSERT( M_SCENE, false);
@@ -819,10 +811,6 @@ private:
     unsigned char m_hash[16];
     std::vector<char> m_data;
 };
-
-// We require a mutex per transaction. However, that is difficult to implement and we use a global
-// lock instead.
-extern std::mutex g_transaction_mutex;
 
 } // namespace DETAIL
 

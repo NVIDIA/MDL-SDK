@@ -112,7 +112,7 @@ const mi::Uint32 DDSF_CUBEMAP_NEGATIVEZ = 0x00008000l;
 const mi::Uint32 DDSF_CUBEMAP_ALL_FACES = 0x0000FC00l;
 const mi::Uint32 DDSF_VOLUME            = 0x00200000l;
 
-enum Dxgi_format {
+enum Dxgi_format : mi::Uint32 {
     DXGI_FORMAT_UNKNOWN                                 =   0,
     DXGI_FORMAT_R32G32B32A32_TYPELESS                   =   1,
     DXGI_FORMAT_R32G32B32A32_FLOAT                      =   2,
@@ -234,9 +234,6 @@ enum Dxgi_format {
     DXGI_FORMAT_V408                                    = 118,
     DXGI_FORMAT_SAMPLER_FEEDBACK_MIN_MIP_OPAQUE         = 119,
     DXGI_FORMAT_SAMPLER_FEEDBACK_MIP_REGION_USED_OPAQUE = 120,
-    // Unclear whether the value is correct. Should not occur in practice. Do no use for
-    // comparisons.
-    DXGI_FORMAT_FORCE_UINT                              = 0xffffffffU
 };
 
 enum Texture_type

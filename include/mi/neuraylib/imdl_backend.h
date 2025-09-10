@@ -36,7 +36,7 @@
 #include <mi/neuraylib/ivalue.h>
 #include <mi/neuraylib/target_code_types.h>
 #include <mi/neuraylib/typedefs.h>
-#include <mi/neuraylib/version.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -182,11 +182,18 @@ public:
     ///   * \c "direct_call": generate direct function calls
     ///   * \c "optix_cp": generate calls through OptiX bindless callable programs
     ///
+    /// The following options are supported by the HLSL and GLSL backends only:
+    ///  - \c "material_state_struct_name": Specifies the name of struct type representing the
+    ///    shading state for materials. Default: \c "Shading_state_material" for HLSL and
+    ///    \c "State" for GLSL.
+    ///  - \c "environment_state_struct_name": Specifies the name of struct type representing the
+    ///    shading state for environments. Default: \c "Shading_state_environment" for HLSL and
+    ///    \c "State_env" for GLSL.
+    ///
     /// The following options are supported by the HLSL backend only:
     /// - \c "hlsl_use_resource_data": If enabled, an extra user defined resource data struct is
     ///   passed to all resource callbacks. This option is currently not supported.
-    ///   Possible values:
-    ///   \c "on", \c "off". Default: \c "off".
+    ///   Possible values: \c "on", \c "off". Default: \c "off".
     /// - \c "hlsl_remap_functions": Specifies a comma separated remap list of MDL functions. The
     ///                              entries must be specified as &lt;old_name&gt;=&lt;new_name&gt;.
     ///                              Both names have to be in mangled form.
@@ -199,9 +206,10 @@ public:
     ///   \endcode
     ///   which can adapt the roughness of microfacet BSDFs. For sheen_bsdf, the same roughness will
     ///   be provided in both dimensions and only the \c x component of the result will be used.
-    ///   Possible values:
-    ///   \c "on", \c "off". Default: \c "off".
-    ///
+    ///   Possible values: \c "on", \c "off". Default: \c "off".
+    /// - \c "export_requested_functions": If enabled, the functions explicitly requested for code
+    ///   generation will be marked as exports in the generated code.
+    ///   Possible values: \c "on", \c "off". Default: \c "off".
     ///
     /// The following options are supported by the GLSL backend only:
     /// - \c "glsl_version": Specifies the GLSL target version. Possible values for "core" and
@@ -798,65 +806,64 @@ class ITarget_code : public
 {
 public:
     /// The potential state usage properties.
-    enum State_usage_property {
-        SU_POSITION              = 0x0001u,        ///< uses state::position()
-        SU_NORMAL                = 0x0002u,        ///< uses state::normal()
-        SU_GEOMETRY_NORMAL       = 0x0004u,        ///< uses state::geometry_normal()
-        SU_MOTION                = 0x0008u,        ///< uses state::motion()
-        SU_TEXTURE_COORDINATE    = 0x0010u,        ///< uses state::texture_coordinate()
-        SU_TEXTURE_TANGENTS      = 0x0020u,        ///< uses state::texture_tangent_*()
-        SU_TANGENT_SPACE         = 0x0040u,        ///< uses state::tangent_space()
-        SU_GEOMETRY_TANGENTS     = 0x0080u,        ///< uses state::geometry_tangent_*()
-        SU_DIRECTION             = 0x0100u,        ///< uses state::direction()
-        SU_ANIMATION_TIME        = 0x0200u,        ///< uses state::animation_time()
-        SU_ROUNDED_CORNER_NORMAL = 0x0400u,        ///< uses state::rounded_corner_normal()
+    enum State_usage_property : Uint32 {
+        SU_POSITION              = 0x0001u,   ///< uses state::position()
+        SU_NORMAL                = 0x0002u,   ///< uses state::normal()
+        SU_GEOMETRY_NORMAL       = 0x0004u,   ///< uses state::geometry_normal()
+        SU_MOTION                = 0x0008u,   ///< uses state::motion()
+        SU_TEXTURE_COORDINATE    = 0x0010u,   ///< uses state::texture_coordinate()
+        SU_TEXTURE_TANGENTS      = 0x0020u,   ///< uses state::texture_tangent_*()
+        SU_TANGENT_SPACE         = 0x0040u,   ///< uses state::tangent_space()
+        SU_GEOMETRY_TANGENTS     = 0x0080u,   ///< uses state::geometry_tangent_*()
+        SU_DIRECTION             = 0x0100u,   ///< uses state::direction()
+        SU_ANIMATION_TIME        = 0x0200u,   ///< uses state::animation_time()
+        SU_ROUNDED_CORNER_NORMAL = 0x0400u,   ///< uses state::rounded_corner_normal()
 
-        SU_ALL_VARYING_MASK      = 0x07FFu,        ///< set of varying states
+        SU_ALL_VARYING_MASK      = 0x07FFu,   ///< set of varying states
 
-        SU_TRANSFORMS            = 0x0800u,        ///< uses uniform state::transform*()
-        SU_OBJECT_ID             = 0x1000u,        ///< uses uniform state::object_id()
+        SU_TRANSFORMS            = 0x0800u,   ///< uses uniform state::transform*()
+        SU_OBJECT_ID             = 0x1000u,   ///< uses uniform state::object_id()
 
-        SU_ALL_UNIFORM_MASK      = 0x1800u,        ///< set of uniform states
+        SU_ALL_UNIFORM_MASK      = 0x1800u    ///< set of uniform states
 
-        SU_FORCE_32_BIT = 0xFFFFFFFFu //   Undocumented, for alignment only
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(SU_FORCE_32_BIT, 0xFFFFFFFFu)
     }; // can be or'ed
 
     using State_usage = Uint32;
 
-    enum Texture_shape {
+    enum Texture_shape : Uint32 {
         Texture_shape_invalid      = 0, ///< Invalid texture.
         Texture_shape_2d           = 1, ///< Two-dimensional texture.
         Texture_shape_3d           = 2, ///< Three-dimensional texture.
         Texture_shape_cube         = 3, ///< Cube map texture.
         Texture_shape_ptex         = 4, ///< PTEX texture.
-        Texture_shape_bsdf_data    = 5, ///< Three-dimensional texture representing a BSDF data
+        Texture_shape_bsdf_data    = 5  ///< Three-dimensional texture representing a BSDF data
                                         ///  table.
-        Texture_shape_FORCE_32_BIT = 0xFFFFFFFFu //   Undocumented, for alignment only
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(Texture_shape_FORCE_32_BIT, 0xFFFFFFFFu)
     };
 
     /// Language to use for the callable function prototype.
-    enum Prototype_language {
+    enum Prototype_language : Uint32 {
         SL_CUDA,
         SL_PTX,
         SL_HLSL,
         SL_GLSL,
-        SL_NUM_LANGUAGES,
-        SL_FORCE_32_BIT = 0xFFFFFFFFu //   Undocumented, for alignment only
+        SL_NUM_LANGUAGES
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(SL_FORCE_32_BIT, 0xFFFFFFFFu)
     };
 
     /// Possible kinds of distribution functions.
-    enum Distribution_kind
-    {
+    enum Distribution_kind : Uint32 {
         DK_NONE,
         DK_BSDF,
         DK_HAIR_BSDF,
         DK_EDF,
-        DK_INVALID,
-        DK_FORCE_32_BIT = 0xFFFFFFFFu //   Undocumented, for alignment only
+        DK_INVALID
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(DK_FORCE_32_BIT, 0xFFFFFFFFu)
     };
 
     /// Possible kinds of callable functions.
-    enum Function_kind {
+    enum Function_kind : Uint32 {
         FK_INVALID,
         FK_LAMBDA,
         FK_SWITCH_LAMBDA,
@@ -866,17 +873,17 @@ public:
         FK_DF_SAMPLE,
         FK_DF_EVALUATE,
         FK_DF_PDF,
-        FK_DF_AUXILIARY,
-        FK_FORCE_32_BIT = 0xFFFFFFFFu //   Undocumented, for alignment only
+        FK_DF_AUXILIARY
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(FK_FORCE_32_BIT, 0xFFFFFFFFu)
     };
 
     /// Possible texture gamma modes.
-    enum Gamma_mode {
+    enum Gamma_mode : Uint32 {
         GM_GAMMA_DEFAULT,
         GM_GAMMA_LINEAR,
         GM_GAMMA_SRGB,
-        GM_GAMMA_UNKNOWN,
-        GM_FORCE_32_BIT = 0xFFFFFFFFu //   Undocumented, for alignment only
+        GM_GAMMA_UNKNOWN
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(GM_FORCE_32_BIT, 0xFFFFFFFFu)
     };
 
     /// Returns the kind of backend this information belongs to.
@@ -1587,12 +1594,6 @@ public:
         Shading_state_material& state,
         Texture_handler_base* tex_handler,
         const ITarget_argument_block *cap_args) const = 0;
-
-    virtual Size MI_NEURAYLIB_DEPRECATED_METHOD_14_0(get_body_texture_count)() const = 0;
-
-    virtual Size MI_NEURAYLIB_DEPRECATED_METHOD_14_0(get_body_light_profile_count)() const = 0;
-
-    virtual Size MI_NEURAYLIB_DEPRECATED_METHOD_14_0(get_body_bsdf_measurement_count)() const = 0;
 };
 
 /// Represents a link-unit of an MDL backend.
@@ -1713,11 +1714,11 @@ public:
         IMdl_execution_context*         context) = 0;
 
      /// Execution context for functions.
-    enum Function_execution_context {
+    enum Function_execution_context : Uint32 {
         FEC_ENVIRONMENT  = 0,   ///< This function will be executed inside the environment.
         FEC_CORE         = 1,   ///< This function will be executed in the renderer core.
-        FEC_DISPLACEMENT = 2,   ///< This function will be executed inside displacement.
-        FEC_FORCE_32_BIT = 0xFFFFFFFFu //   Undocumented, for alignment only
+        FEC_DISPLACEMENT = 2    ///< This function will be executed inside displacement.
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(FEC_FORCE_32_BIT, 0xFFFFFFFFu)
     };
 
     /// Add an MDL function call as a function to this link unit.
@@ -1769,11 +1770,6 @@ public:
         Function_execution_context fexc,
         const char                 *fname,
         IMdl_execution_context     *context) = 0;
-
-    virtual Sint32 MI_NEURAYLIB_DEPRECATED_METHOD_14_0(add_environment)(
-        const IFunction_call    *call,
-        const char              *fname,
-        IMdl_execution_context  *context = nullptr) = 0;
 };
 
 /// Description of target function
@@ -1854,14 +1850,6 @@ struct Target_function_description
     ///  - -1000:  The requested DF is not supported, yet.
     Sint32 return_code;
 };
-
-mi_static_assert( sizeof( ITarget_code::State_usage_property) == sizeof( mi::Uint32));
-mi_static_assert( sizeof( ITarget_code::Texture_shape) == sizeof( mi::Uint32));
-mi_static_assert( sizeof( ITarget_code::Prototype_language) == sizeof( mi::Uint32));
-mi_static_assert( sizeof( ITarget_code::Distribution_kind) == sizeof( mi::Uint32));
-mi_static_assert( sizeof( ITarget_code::Function_kind) == sizeof( mi::Uint32));
-mi_static_assert( sizeof( ITarget_code::Gamma_mode) == sizeof( mi::Uint32));
-mi_static_assert( sizeof( ILink_unit::Function_execution_context) == sizeof( mi::Uint32));
 
 } // namespace neuraylib
 

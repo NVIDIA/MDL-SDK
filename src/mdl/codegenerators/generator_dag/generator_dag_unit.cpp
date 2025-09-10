@@ -113,12 +113,37 @@ bool DAG_unit::copy_fname_table(DAG_unit const &other)
     return false;
 }
 
-// Serialize the unit.
-void DAG_unit::serialize(DAG_serializer &dag_serializer) const
+// Get the name for a DAG node if there is any.
+ISymbol const *DAG_unit::get_node_name(DAG_node const *n) const
+{
+    auto it = m_node_name_map.find(n);
+    if (it != m_node_name_map.end()) {
+        return it->second;
+    }
+    return nullptr;
+}
+
+// Serialize the factories of the unit. Must be called before the DAG nodes are serialized.
+void DAG_unit::serialize_factories(DAG_serializer &dag_serializer) const
 {
     m_sym_tab.serialize(dag_serializer);
     m_type_factory.serialize(dag_serializer);
     m_value_factory.serialize(dag_serializer);
+}
+
+// Serialize the rest of the unit.
+void DAG_unit::serialize_attributes(DAG_serializer &dag_serializer) const
+{
+    // serialize the node names
+    size_t n_names = m_node_name_map.size();
+    dag_serializer.write_size_t(n_names);
+    for (auto const &it : m_node_name_map) {
+        Tag_t t = dag_serializer.get_ir_node_tag(it.first);
+        dag_serializer.write_encoded_tag(t);
+
+        Tag_t s = dag_serializer.get_symbol_tag(it.second);
+        dag_serializer.write_encoded_tag(s);
+    }
 
     size_t n_files = m_dbg_fnames.size();
     dag_serializer.write_size_t(n_files);
@@ -128,12 +153,29 @@ void DAG_unit::serialize(DAG_serializer &dag_serializer) const
     }
 }
 
-// Deserialize the unit.
-void DAG_unit::deserialize(DAG_deserializer &dag_deserializer)
+// Deserialize the factories of the unit. Must be called before the DAG nodes are deserialized.
+void DAG_unit::deserialize_factories(DAG_deserializer &dag_deserializer)
 {
     m_sym_tab.deserialize(dag_deserializer);
     m_type_factory.deserialize(dag_deserializer);
     m_value_factory.deserialize(dag_deserializer);
+}
+
+// Deserialize the rest of the unit.
+void DAG_unit::deserialize_attributes(DAG_deserializer &dag_deserializer)
+{
+    // deserialize the node names
+    size_t n_names = dag_deserializer.read_size_t();
+    m_node_name_map.clear();
+    for (size_t i = 0; i < n_names; ++i) {
+        Tag_t t = dag_deserializer.read_encoded_tag();
+        DAG_node const *node = dag_deserializer.get_ir_node(t);
+
+        Tag_t s = dag_deserializer.read_encoded_tag();
+        ISymbol const *sym = dag_deserializer.get_symbol(s);
+
+        m_node_name_map[node] = sym;
+    }
 
     size_t n_files = dag_deserializer.read_size_t();
     m_dbg_fnames.reserve(n_files);

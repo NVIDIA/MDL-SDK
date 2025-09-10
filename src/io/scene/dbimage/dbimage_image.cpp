@@ -37,13 +37,12 @@
 #include <filesystem>
 #include <utility>
 
-#include <boost/core/ignore_unused.hpp>
-
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/path/i_path.h>
 #include <base/data/serial/i_serializer.h>
 #include <base/data/db/i_db_access.h>
 #include <base/data/db/i_db_transaction.h>
+#include <base/hal/disk/disk_utils.h>
 #include <base/util/string_utils/i_string_utils.h>
 #include <io/image/image/i_image.h>
 #include <io/image/image/i_image_mipmap.h>
@@ -920,14 +919,18 @@ SERIAL::Serializable* Image::deserialize( SERIAL::Deserializer* deserializer)
     // Adjust filenames for this host
     if( convert_path) {
 
-        m_original_filename = fs::u8path( m_original_filename).u8string();
-        m_resolved_container_filename = fs::u8path( m_resolved_container_filename).u8string();
+        m_original_filename
+            = DISK::to_string( fs::u8path( m_original_filename));
+        m_resolved_container_filename
+            = DISK::to_string( fs::u8path( m_resolved_container_filename));
 
         for( auto& frame_filenames: m_frames_filenames)
             for( auto& uvfn: frame_filenames) {
 
-                uvfn.m_resolved_filename = fs::u8path( uvfn.m_resolved_filename).u8string();
-                uvfn.m_container_membername = fs::u8path( uvfn.m_container_membername).u8string();
+                uvfn.m_resolved_filename
+                    = DISK::to_string( fs::u8path( uvfn.m_resolved_filename));
+                uvfn.m_container_membername
+                    = DISK::to_string( fs::u8path( uvfn.m_container_membername));
                 uvfn.m_resolved_container_membername = m_resolved_container_filename.empty()
                     ? "" : m_resolved_container_filename + ':' + uvfn.m_container_membername;
         }
@@ -1305,7 +1308,7 @@ Image_set* Image::resolve_filename( const std::string& filename, const char* sel
 
     // Get regular expression for filename.
     fs::path filename_path = fs::u8path( filename);
-    std::string basename = filename_path.filename().u8string();
+    std::string basename = DISK::to_string( filename_path.filename());
     size_t mode_index = 0;
     size_t frames_index = 0;
     Uvtile_mode mode = MODE_OFF;
@@ -1330,7 +1333,7 @@ Image_set* Image::resolve_filename( const std::string& filename, const char* sel
             // have to be at the top-level of the search paths. Member name is not checked.
             // No support for uvtiles nor animated textures.
             std::string archive_path = filename.substr( 0, p + 4);
-            std::string archive_name = fs::u8path( archive_path).filename().u8string();
+            std::string archive_name = DISK::to_string( fs::u8path( archive_path).filename());
             std::string resolved_archive_filename
                 = path_module->search( PATH::MDL, archive_name);
             std::string member_name = filename.substr( p + 5);
@@ -1383,7 +1386,7 @@ Image_set* Image::resolve_filename( const std::string& filename, const char* sel
 
             for( const auto& entry: fs::directory_iterator( directory)) {
 
-                std::string dir_filename = entry.path().filename().u8string();
+                std::string dir_filename = DISK::to_string( entry.path().filename());
                 std::wstring dir_wfilename( STRING::utf8_to_wchar( dir_filename.c_str()));
                 std::wsmatch matches;
                 if( !std::regex_match( dir_wfilename, matches, regex))
@@ -1409,7 +1412,8 @@ Image_set* Image::resolve_filename( const std::string& filename, const char* sel
                     ASSERT( M_SCENE, match.c_str() + match.size() == endptr);
                 }
 
-                result.push_back( Uv_frame_filename{ frame_number, u, v, entry.path().u8string()});
+                result.push_back(
+                    Uv_frame_filename{ frame_number, u, v, DISK::to_string( entry.path())});
             }
 
             if( !result.empty())
@@ -1547,11 +1551,10 @@ Image_impl::Image_impl(
         // check that every uvtile in \p frame.m_uvtiles has a corresponding mapping in
         // \p frame.m_uv_to_id
         for( mi::Size j = 0; j < m; ++j) {
-            mi::Sint32 u  = frame.m_uvtiles[j].m_u;
-            mi::Sint32 v  = frame.m_uvtiles[j].m_v;
-            mi::Uint32 id = frame.m_uv_to_id.get( u, v);
+            mi::Sint32 u = frame.m_uvtiles[j].m_u;
+            mi::Sint32 v = frame.m_uvtiles[j].m_v;
+            [[maybe_unused]] mi::Uint32 id = frame.m_uv_to_id.get( u, v);
             ASSERT( M_SCENE, j == static_cast<mi::Size>( id));
-            boost::ignore_unused( id);
         }
 
         // check that every uvtile in \p frame.m_uv_to_id has a corresponding uvtile in

@@ -49,6 +49,7 @@ create_from_base_preset(
     TARGET ${PROJECT_NAME}
     TYPE EXECUTABLE
     OUTPUT_NAME "mdlc"
+    EMBED_RC "../../../base/system/main/mdl_core_sdk.rc"
     SOURCES ${PROJECT_SOURCES}
 )
 
@@ -58,15 +59,15 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         boost
         llvm
         ${LINKER_START_GROUP}
-        mdl::mdl-compiler-compilercore
-        mdl::mdl-compiler-compiler_hlsl
-        mdl::mdl-codegenerators-generator_dag
-        mdl::mdl-codegenerators-generator_code
-        mdl::mdl-runtime
-        mdl::mdl-no_jit-generator_stub
-        mdl::base-lib-libzip
-        mdl::base-lib-zlib
-        mdl::base-system-version
+        mdl-compiler-compilercore
+        mdl-compiler-compiler_hlsl
+        mdl-codegenerators-generator_dag
+        mdl-codegenerators-generator_code
+        mdl-runtime
+        mdl-no_jit-generator_stub
+        base-lib-libzip
+        base-lib-zlib
+        base-system-version
         ${LINKER_END_GROUP}
     )
 

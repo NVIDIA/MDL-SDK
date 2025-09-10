@@ -36,6 +36,9 @@ set(_GENERATED_SOURCES
     ${_GENERATED_DIR}/swig.d
     )
 
+# mark files as generated to disable the check for existence during configure
+set_source_files_properties(${_GENERATED_SOURCES} PROPERTIES GENERATED TRUE)
+
 # scripts/files used to generate the sources above
 set(_GENERATOR_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/instantiate_templates_inline.py
@@ -45,29 +48,24 @@ set(_GENERATOR_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/swig_library/mi_neuraylib_enums.i
     )
 
-# -------------------------------------------------------------------------------------------------
-# Main Target
-# -------------------------------------------------------------------------------------------------
+# add the generator files to the solution
+set_source_files_properties(${_GENERATOR_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
+source_group("generator" FILES ${_GENERATOR_FILES})
 
-# collect sources
+# additional sources to be compiled
 set(PROJECT_SOURCES
     "mdl_python.cpp"
     "mdl_python.h"
     )
 
-# mark files as generated to disable the check for existence during configure
-set_source_files_properties(${_GENERATED_SOURCES} PROPERTIES GENERATED TRUE)
-
-# add the generator files to the solution
-set_source_files_properties(${_GENERATOR_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
-source_group("generator" FILES ${_GENERATOR_FILES})
-
+# -------------------------------------------------------------------------------------------------
+# Main Target
+# -------------------------------------------------------------------------------------------------
 
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
-    TYPE SHARED
-    DYNAMIC_MSVC_RUNTIME
+    TYPE MODULE
     SOURCES
         ${PROJECT_SOURCES}
         ${_GENERATED_SOURCES}
@@ -78,11 +76,7 @@ create_from_base_preset(
 # customize name
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "")
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "_pymdlsdk")
-if(WINDOWS)
-    set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".pyd")
-else()
-    set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".so")
-endif()
+set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ${MDL_DEPENDENCY_PYTHON_DEV_EXT_SUFFIX})
 
 # target alias for the custom name
 add_library(mdl_python ALIAS ${PROJECT_NAME})
@@ -92,22 +86,17 @@ add_library(mdl::mdl_python ALIAS ${PROJECT_NAME})
 target_add_dependencies(TARGET ${PROJECT_NAME}
     DEPENDS
         mdl::mdl_sdk
-        mdl_sdk::shared
         python_dev
     )
 
-# disable some warnings in generated code
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_compile_options(${PROJECT_NAME}
-        PUBLIC
-            -Wno-delete-non-virtual-dtor
+# add include directory for utils/mdl.h explicitly to avoid the dependency in standalone scenarios
+target_include_directories(
+    ${PROJECT_NAME}
+    PRIVATE ${MDL_EXAMPLES_FOLDER}/mdl_sdk/shared
     )
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
-    target_compile_options(${PROJECT_NAME}
-        PUBLIC
-            -Wno-delete-abstract-non-virtual-dtor
-    )
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+
+# add /bigobj for MSVC
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(${PROJECT_NAME}
         PRIVATE
             /bigobj
@@ -121,6 +110,35 @@ target_add_content(TARGET ${PROJECT_NAME}
         "pymdl.py"
     )
 source_group("" FILES "pymdl.py")
+
+target_add_rpath(TARGET ${PROJECT_NAME}
+    INSTALL_RPATHS
+        ".."
+    )
+
+# create installation rules
+add_target_install(
+    TARGET ${PROJECT_NAME}
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/python"
+    INCLUDE pymdl.py
+    INCLUDE pymdlsdk.py
+    INCLUDE _pymdlsdk${MDL_DEPENDENCY_PYTHON_DEV_EXT_SUFFIX}
+    )
+
+install(
+    FILES
+        mdl_python.cpp
+        mdl_python.h
+        ${_GENERATED_DIR}/mdl_python_swig.cpp
+        README.md
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/python/src"
+    )
+
+install(
+    FILES
+        ${MDL_EXAMPLES_FOLDER}/mdl_sdk/shared/utils/mdl.h
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/python/src/utils"
+    )
 
 # -------------------------------------------------------------------------------------------------
 # Code Generation Step

@@ -39,7 +39,7 @@
 #include <mi/base/interface_implement.h>
 #include <mi/mdl/mdl_encapsulator.h>
 #include <base/system/main/access_module.h>
-#include <base/lib/robin_hood/robin_hood.h>
+#include <base/lib/unordered_dense/unordered_dense.h>
 #include <io/scene/mdl_elements/i_mdl_elements_resource_callback.h>
 
 namespace mi {
@@ -107,13 +107,13 @@ private:
     MDL::Execution_context* m_context;
 
     // Map from resolved name (result of Base::get_resource_name) to the resource name in the MDLE.
-    robin_hood::unordered_map<std::string, std::string> m_resource_names_resolved2mdle;
+    ankerl::unordered_dense::map<std::string, std::string> m_resource_names_resolved2mdle;
 
     // All resource files that will be added to the MDLE.
     std::vector<Resource_desc> m_resources;
 
     // Keep track of resource names in the MDLE, avoid collision by using 'generate_mdle_name(...)'.
-    robin_hood::unordered_set<std::string> m_reserved_mdle_names;
+    ankerl::unordered_dense::set<std::string> m_reserved_mdle_names;
 };
 
 class Mdle_api_impl final

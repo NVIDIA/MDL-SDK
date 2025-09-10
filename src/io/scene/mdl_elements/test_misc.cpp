@@ -38,12 +38,16 @@
 #include <base/system/test/i_test_auto_driver.h>
 #include <base/system/test/i_test_auto_case.h>
 
+#include <chrono>
+#include <filesystem>
+#include <thread>
 #include <tuple>
 
 #include "i_mdl_elements_compiled_material.h"
 #include "i_mdl_elements_function_call.h"
 #include "i_mdl_elements_function_definition.h"
 #include "i_mdl_elements_module.h"
+#include "i_mdl_elements_resource_callback.h"
 #include "i_mdl_elements_utilities.h"
 #include "mdl_elements_detail.h"
 #include "mdl_elements_utilities.h"
@@ -51,10 +55,12 @@
 
 #include <mi/base/handle.h>
 #include <mi/neuraylib/istring.h>
+#include <mi/neuraylib/iexport_result.h>
 #include <mi/mdl/mdl_mdl.h>
 #include <mi/mdl/mdl_modules.h>
 
-#include <base/hal/time/i_time.h>
+#include <base/hal/disk/disk_file_reader_writer_impl.h>
+#include <base/hal/disk/disk_utils.h>
 #include <base/hal/thread/i_thread_thread.h>
 #include <base/hal/thread/i_thread_condition.h>
 #include <base/lib/config/config.h>
@@ -73,6 +79,8 @@
 #include <io/scene/lightprofile/i_lightprofile.h>
 #include <io/scene/texture/i_texture.h>
 #include <prod/lib/neuray/test_shared.h> // for plugin_path_openimageio
+
+namespace fs = std::filesystem;
 
 using namespace MI;
 
@@ -1844,7 +1852,7 @@ void test_unresolved_resources_factory(
         MI_CHECK_CTX( context);
         MI_CHECK( b2);
 
-        // without owner module
+        // invalid owner module
         mi::base::Handle<MDL::IValue_bsdf_measurement> b3( MDL::create_bsdf_measurement(
             transaction,
             "garbage::/test.mbsdf",
@@ -2027,7 +2035,7 @@ public:
             MI_CHECK_EQUAL( true, result2);
             transaction->commit();
 
-            TIME::sleep( 0.02);
+            std::this_thread::sleep_for( std::chrono::duration<float>( 0.02f));
 
             // make sure no thread has an open transaction while the last thread triggers the
             // garbage collection
@@ -2325,6 +2333,226 @@ void test_resource_maps( DB::Scope* global_scope, bool resolve_resources)
     transaction->commit();
 }
 
+void check_tint_r(
+    DB::Transaction* transaction,
+    MDL::Execution_context& context,
+    const char* fd_name,
+    mi::Float32 expected)
+{
+    DB::Tag module_tag = transaction->name_to_tag( "mdl::mdl_elements::test_resource_folding");
+    DB::Access<MDL::Mdl_module> module( module_tag, transaction);
+
+    DB::Tag fd_tag = transaction->name_to_tag( fd_name);
+    DB::Access<MDL::Mdl_function_definition> fd( fd_tag, transaction);
+
+    std::unique_ptr<MDL::Mdl_function_call> fc(
+        fd->create_function_call( transaction, /*arguments*/ nullptr));
+
+    std::unique_ptr<MDL::Mdl_compiled_material> cm( fc->create_compiled_material(
+        transaction, /*class_compilation*/ false, /*target_type*/ nullptr, &context));
+
+    mi::base::Handle<const MDL::IExpression> expr(
+        cm->lookup_sub_expression( transaction, "surface.scattering.tint"));
+    mi::base::Handle<const MDL::IExpression_constant> constant(
+        expr->get_interface<MDL::IExpression_constant>());
+    mi::base::Handle<const MDL::IValue_color> color( constant->get_value<MDL::IValue_color>());
+    mi::base::Handle<const MDL::IValue_float> float_( color->get_value( 0));
+    mi::Float32 got = float_->get_value();
+    MI_CHECK_EQUAL( got, expected);
+}
+
+void test_resource_folding( DB::Scope* global_scope, bool resolve_resources)
+{
+    // Separate scope to allow running the test twice with different values for resolve_resources.
+
+    DB::Scope* child_scope = global_scope->create_child( 1);
+    DB::Transaction* transaction = child_scope->start_transaction();
+
+    MDL::Execution_context context;
+    context.set_option( MDL_CTX_OPTION_RESOLVE_RESOURCES, resolve_resources);
+
+    mi::base::Handle<MDL::IType_factory> tf( MDL::get_type_factory());
+    mi::base::Handle<MDL::IValue_factory> vf( MDL::get_value_factory());
+    mi::base::Handle<MDL::IExpression_factory> ef( MDL::get_expression_factory());
+
+    mi::Sint32 result = MDL::Mdl_module::create_module(
+        transaction, "::mdl_elements::test_resource_folding", &context);
+    MI_CHECK_EQUAL( 0, result);
+
+    check_tint_r( transaction, context,
+        "mdl::mdl_elements::test_resource_folding::test_isvalid_on_valid(texture_2d)", 1.0f);
+    check_tint_r( transaction, context,
+        "mdl::mdl_elements::test_resource_folding::test_isvalid_on_invalid(texture_2d)", 4.0f);
+
+    transaction->commit();
+}
+
+/// A very simple implementation of #mi::neuraylib::IExport_result_ext which keeps only track
+/// of the first errror number added via #message_push_back().
+class Export_result_ext_impl
+  : public mi::base::Interface_implement<mi::neuraylib::IExport_result_ext>,
+    public boost::noncopyable
+{
+public:
+
+    // public API methods of IExport_result
+
+    mi::Uint32 get_error_number() const { return m_message_number; }
+
+    // Stubs with assertions.
+    const char* get_error_message() const { ASSERT( M_SCENE, false); return nullptr; }
+    mi::Size get_messages_length() const { ASSERT( M_SCENE, false); return 0; };
+    mi::Uint32 get_message_number( mi::Size index) const { ASSERT( M_SCENE, false); return 0; }
+    const char* get_message( mi::Size index) const { ASSERT( M_SCENE, false); return nullptr; }
+    mi::base::Message_severity get_message_severity( mi::Size index) const
+    { ASSERT( M_SCENE, false); return mi::base::MESSAGE_SEVERITY_ERROR; }
+
+    // public API methods of IExport_result_ext
+
+    mi::Sint32 message_push_back(
+        mi::Uint32 number, mi::base::Message_severity severity, const char* message)
+    {
+        if( m_message_number == 0)
+            m_message_number = number;
+        return 0;
+    }
+
+    // Stubs with assertions.
+    mi::Sint32 set_message(
+        mi::Uint32 number, mi::base::Message_severity severity, const char* message)
+    { ASSERT( M_SCENE, false); return -1; }
+
+    mi::Sint32 set_message(
+        mi::Size index,
+        mi::Uint32 number,
+        mi::base::Message_severity severity,
+        const char* message)
+    { ASSERT( M_SCENE, false); return -1; }
+
+    void clear_messages()  { ASSERT( M_SCENE, false); }
+
+    mi::Sint32 append_messages( const IExport_result* export_result)
+    { ASSERT( M_SCENE, false); return -1; }
+
+private:
+    /// Holds first added message number.
+    mi::Uint32 m_message_number = 0;
+};
+
+struct Export_test_options
+{
+    std::string handle_filename_conflicts;
+    bool success;
+    size_t factor;
+};
+
+Export_test_options export_tests[] = {
+    { "fail_if_existing",   true,  1 }, // directory is initially empty, success
+    { "fail_if_existing",   false, 1 }, // directory is no longer empty, failure
+    { "overwrite_existing", true,  1 }, // overwrite existing files, success
+    { "generate_unique",    true,  2 }  // generate unique files, success, additional files
+};
+
+void do_resource_export(
+    DB::Transaction* transaction,
+    const mi::mdl::IModule* core_module,
+    const char* db_module_name,
+    const fs::path& export_directory,
+    const char* export_filename,
+    size_t resource_count,
+    MDL::Execution_context* context,
+    const Export_test_options& options)
+{
+    std::cerr << "Exporting \"" << db_module_name
+              << "\" with option value \"" << options.handle_filename_conflicts
+              << "\"" << std::endl;
+
+    context->set_option(
+        MDL_CTX_OPTION_HANDLE_FILENAME_CONFLICTS, options.handle_filename_conflicts);
+
+    // Create writer and output stream.
+    DISK::File_writer_impl writer;
+    bool success = writer.open( export_filename);
+    MI_CHECK( success);
+    mi::base::Handle<MDL::IOutput_stream> output_stream( MDL::get_output_stream( &writer));
+
+    // Create resource callback.
+    Export_result_ext_impl export_result;
+    MDL::Resource_callback resource_callback(
+        transaction,
+        core_module,
+        db_module_name,
+        export_filename,
+        context,
+        &export_result);
+
+    // Create MDL exporter.
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
+    mi::base::Handle<mi::mdl::IMDL> mdl( mdlc_module->get_mdl());
+    mi::base::Handle<mi::mdl::IMDL_exporter> mdl_exporter( mdl->create_exporter());
+
+    // Export the module and check success/failure.
+    mdl_exporter->export_module( output_stream.get(), core_module, &resource_callback);
+    bool stream_success = !output_stream->has_error();
+    bool export_result_success = export_result.get_error_number() == 0;
+    MI_CHECK_EQUAL( stream_success && export_result_success, options.success);
+
+    // Check that the directory contains the expected number of files.
+    size_t file_count = 0;
+    for( const auto& entry: std::filesystem::directory_iterator( export_directory)) {
+        ++file_count;
+        (void) entry;
+    }
+    size_t expected_file_count = 1 + options.factor * resource_count;
+    MI_CHECK_EQUAL( file_count, expected_file_count);
+}
+
+void test_resource_export( DB::Scope* global_scope, const char* base_name, size_t resource_count)
+{
+    DB::Scope* child_scope = global_scope->create_child( 1);
+    DB::Transaction* transaction = child_scope->start_transaction();
+
+    {
+        MDL::Execution_context context;
+        context.set_option( "bundle_resources", true);
+        context.set_option( "export_resources_with_module_prefix", true);
+
+        std::string mdl_module_name = std::string( "::mdl_elements::") + base_name;
+        std::string db_module_name  = std::string( "mdl") + mdl_module_name;
+
+        // Load module identified by "base_name".
+        mi::Sint32 result = MDL::Mdl_module::create_module(
+            transaction, mdl_module_name.c_str(), &context);
+        MI_CHECK_EQUAL( 0, result);
+
+        // Prepare export directory.
+        fs::path export_directory = fs::u8path( "output_test_misc") / base_name;
+        fs::remove_all( export_directory);
+        fs::create_directories( export_directory);
+
+        // Access module to export.
+        DB::Tag tag = transaction->name_to_tag( db_module_name.c_str());
+        DB::Access<MDL::Mdl_module> module( tag, transaction);
+        mi::base::Handle<const mi::mdl::IModule> core_module( module->get_core_module());
+
+        fs::path export_filename = export_directory / (std::string( base_name) + ".mdl");
+
+        for( const auto& options: export_tests) {
+            do_resource_export(
+                transaction,
+                core_module.get(),
+                db_module_name.c_str(),
+                export_directory,
+                DISK::to_string( export_filename).c_str(),
+                resource_count,
+                &context,
+                options);
+        }
+    }
+
+    transaction->commit();
+}
+
 void test_multithreading( DB::Database* database, DB::Scope* global_scope)
 {
     DB::Scope* scope = global_scope->create_child( 1);
@@ -2365,12 +2593,24 @@ MI_TEST_AUTO_FUNCTION( test )
     DB::Database* database = db_access.get_database();
     DB::Scope* scope = database->get_global_scope();
 
+    // Main tests in the global scope
+
     test_main( scope);
+
+    // Tests with special context options in separate child scopes.
 
     test_unresolved_resources( scope);
 
     test_resource_maps( scope, /*resolve_resources*/ true);
     test_resource_maps( scope, /*resolve_resources*/ false);
+
+    test_resource_folding( scope, /*resolve_resources*/ true);
+    test_resource_folding( scope, /*resolve_resources*/ false);
+
+    test_resource_export( scope, "test_resource_export_texture", 1);
+    test_resource_export( scope, "test_resource_export_texture_uvtile", 3);
+    test_resource_export( scope, "test_resource_export_lightprofile", 1);
+    test_resource_export( scope, "test_resource_export_bsdf_measurement", 1);
 
     test_multithreading( database, scope);
 }

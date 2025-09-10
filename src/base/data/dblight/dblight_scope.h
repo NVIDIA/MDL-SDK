@@ -51,14 +51,11 @@ class Scope_manager;
 
 namespace bi = boost::intrusive;
 
-/// A journal entry comprises a tag, version, creator transaction ID, and the journal type.
+/// A scope journal entry comprises a tag, its version (from the sequence number of the creator
+/// transaction), creator transaction ID, and the journal type.
 class Scope_journal_entry
 {
 public:
-    /// Constructor.
-    Scope_journal_entry() = default;
-
-    /// Default constructor.
     Scope_journal_entry(
         DB::Tag tag,
         mi::Uint32 version,
@@ -69,10 +66,10 @@ public:
         m_transaction_id( transaction_id),
         m_journal_type( journal_type) { }
 
-    DB::Tag m_tag;
-    mi::Uint32 m_version = 0;
-    DB::Transaction_id m_transaction_id;
-    DB::Journal_type m_journal_type = DB::JOURNAL_NONE;
+    const DB::Tag m_tag;
+    const mi::Uint32 m_version = 0;
+    const DB::Transaction_id m_transaction_id;
+    const DB::Journal_type m_journal_type = DB::JOURNAL_NONE;
 };
 
 /// A scope of the database.
@@ -111,6 +108,8 @@ public:
     DB::Scope* get_parent() const override { return m_parent; }
 
     DB::Privacy_level get_level() const override { return m_level; }
+
+    DB::Database* get_database() const override;
 
     /// The \p is_temporary parameter is meaningless in this implementation.
     DB::Scope* create_child(
@@ -294,7 +293,7 @@ public:
     void remove_scope_internal( Scope_impl* scope);
 
     /// Dumps the state of the scope manager to the stream.
-    void dump( std::ostream& s, bool mask_pointer_values);
+    void dump( std::ostream& s, bool verbose, bool mask_pointer_values);
 
 private:
     /// Instance of the database this manager belongs to.

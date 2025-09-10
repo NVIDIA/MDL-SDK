@@ -39,11 +39,11 @@ add_subdirectory(${MDL_SRC_FOLDER}/io/scene/scene)
 add_subdirectory(${MDL_SRC_FOLDER}/io/scene/texture)
 
 set(LINKER_DEPENDENCIES_IO
-    mdl::io-image-image
-    mdl::io-scene-bsdf_measurement
-    mdl::io-scene-dbimage
-    mdl::io-scene-lightprofile
-    mdl::io-scene-mdl_elements
-    mdl::io-scene-scene
-    mdl::io-scene-texture
+    io-image-image
+    io-scene-bsdf_measurement
+    io-scene-dbimage
+    io-scene-lightprofile
+    io-scene-mdl_elements
+    io-scene-scene
+    io-scene-texture
     CACHE INTERNAL "" FORCE)

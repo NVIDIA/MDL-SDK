@@ -37,7 +37,6 @@
 #include <mi/neuraylib/ifactory.h>
 #include <mi/neuraylib/istring.h>
 
-#include <boost/core/ignore_unused.hpp>
 #include <base/system/main/i_assert.h>
 
 #include "i_idata_factory.h"

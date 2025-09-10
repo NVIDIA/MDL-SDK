@@ -27,62 +27,36 @@
  ******************************************************************************/
 
 /// \file
-/// \brief stopwatch test/examples.
+/// \brief Stopwatch test
 
 #include "pch.h"
 
-#include "i_time.h"
+#include "time_stopwatch.h"
 
 #include <base/system/test/i_test_auto_case.h>
-#ifdef MI_TEST_VERBOSE
-#include <iostream>
-#endif
+
 using namespace MI::TIME;
 
-//----------------------------------------------------------------------
-// we spend some time here.
-static void spend_time()
+void spend_time()
 {
-    // use volatile here to avoid optimizing out the loop.
-    volatile MI::Sint32 count = 0;
-    for(int i = 0; i < 500; ++i){
-        for(int j = 0; j < 1000; ++j){
-            for(int k = 0; k < 1000; ++k){
-                count = 2 * (count - 1) - count + 3; // anything do
-            }
-        }
-    }
-#ifdef MI_TEST_VERBOSE
-    std::cout << "spend time: count " << count << std::endl;
-#endif
+    // Use volatile here to avoid optimizing out the loop.
+    volatile mi::Sint32 count = 0;
+    for( int i = 0; i < 500'000'000; ++i)
+        count = 2 * (count - 1) - count + 3;
 }
 
-//----------------------------------------------------------------------
-/// test for stopwatch
 MI_TEST_AUTO_FUNCTION( test_stopwatch )
 {
-    // how to get the local time.
     Stopwatch sw0;
     sw0.start();
     spend_time();
     sw0.stop();
-#ifdef MI_TEST_VERBOSE
-    std::cout << "Elapsed time = " << sw0.elapsed() << std::endl;
-#endif
-    // spend_time should spend some time.
-    MI_CHECK(sw0.elapsed() > 0.0);
+    MI_CHECK( sw0.elapsed() > 0.0);
 
     Stopwatch sw1;
     {
-        // scoped start/stop.
         Stopwatch::Scoped_run timer(sw1);
         spend_time();
     }
-#ifdef MI_TEST_VERBOSE
-    std::cout << "Elapsed time = " << sw1.elapsed() << std::endl;
-#endif
-    // spend_time should spend some time.
-    MI_CHECK(sw1.elapsed() > 0.0);
+    MI_CHECK( sw1.elapsed() > 0.0);
 }
-
-//----------------------------------------------------------------------

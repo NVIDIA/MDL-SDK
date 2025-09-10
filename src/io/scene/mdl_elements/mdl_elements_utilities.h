@@ -38,6 +38,8 @@
 #include <string>
 #include <vector>
 
+#include <boost/core/noncopyable.hpp>
+
 #include <mi/base/interface_implement.h>
 #include <mi/mdl/mdl_definitions.h>
 #include <mi/mdl/mdl_mdl.h>
@@ -46,7 +48,7 @@
 #include <mi/neuraylib/imdl_loading_wait_handle.h>
 
 #include <base/data/db/i_db_tag.h>
-#include <base/lib/robin_hood/robin_hood.h>
+#include <base/lib/unordered_dense/unordered_dense.h>
 #include <mdl/compiler/compilercore/compilercore_visitor.h>
 
 #include "i_mdl_elements_expression.h"
@@ -500,7 +502,7 @@ private:
     mutable std::set<Mdl_tag_ident>* m_user_modules_seen;
 
     /// Cache used by core_type_to_int_type().
-    mutable robin_hood::unordered_map<const mi::mdl::IType*, const MDL::IType*> m_cached_types;
+    mutable ankerl::unordered_dense::map<const mi::mdl::IType*, const MDL::IType*> m_cached_types;
 };
 
 /// A simplified variant of Mdl_dag_converter.
@@ -712,7 +714,7 @@ class Call_stack_guard
 {
 public:
     /// Adds \p frame to the end of the call stack.
-    Call_stack_guard( robin_hood::unordered_set<DB::Tag>& call_trace, DB::Tag frame)
+    Call_stack_guard( ankerl::unordered_dense::set<DB::Tag>& call_trace, DB::Tag frame)
       : m_call_trace( call_trace),
         m_frame( frame),
         m_has_cycle( !m_call_trace.insert( m_frame).second) { }
@@ -724,7 +726,7 @@ public:
     bool last_frame_creates_cycle() const { return m_has_cycle; }
 
 private:
-    robin_hood::unordered_set<DB::Tag>& m_call_trace;
+    ankerl::unordered_dense::set<DB::Tag>& m_call_trace;
     DB::Tag m_frame;
     bool m_has_cycle;
 };
@@ -970,6 +972,23 @@ mi::Uint64 generate_unique_id();
 /// Returns in instance of mi::IString holding the string \p s (or the empty string if \p s is
 /// \c nullptr).
 mi::IString* create_istring( const char* s);
+
+/// RAII helper for locks based on the transaction ID.
+///
+/// The current implementation ignores the transaction ID and basically implements a global lock.
+/// More sophisticated dynamic schemes require quite some overhead, in particular in case of lock
+/// contention. If the global lock is no longer sufficient, a small fixed-sized array of locks
+/// and a fixed mapping of the transaction ID to array index might be a good tradeoff.
+class Transaction_lock : public boost::noncopyable
+{
+public:
+    Transaction_lock( DB::Transaction* transaction);
+    ~Transaction_lock();
+    void lock();
+    void unlock();
+private:
+    static std::mutex s_mutex;
+};
 
 } // namespace MDL
 

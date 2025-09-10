@@ -181,11 +181,19 @@ option(LLVM_ENABLE_ASSERTIONS "Enable assertions" OFF)
 #set(LLVM_DISABLE_ASSERTIONS_LOGIC ON)
 
 if(WINDOWS)
-    # use static runtime
-    set(LLVM_USE_CRT_DEBUG MTd)
-    set(LLVM_USE_CRT_RELEASE MT)
-    set(LLVM_USE_CRT_MINSIZEREL MT)
-    set(LLVM_USE_CRT_RELWITHDEBINFO MT)
+    if(MDL_MSVC_DYNAMIC_RUNTIME)
+        # use dynamic runtime
+        set(LLVM_USE_CRT_DEBUG MDd)
+        set(LLVM_USE_CRT_RELEASE MD)
+        set(LLVM_USE_CRT_MINSIZEREL MD)
+        set(LLVM_USE_CRT_RELWITHDEBINFO MD)
+    else()
+        # use static runtime
+        set(LLVM_USE_CRT_DEBUG MTd)
+        set(LLVM_USE_CRT_RELEASE MT)
+        set(LLVM_USE_CRT_MINSIZEREL MT)
+        set(LLVM_USE_CRT_RELWITHDEBINFO MT)
+    endif()
 
 elseif(MACOSX)
     # For MacOS build we must set the lowest supported OS version by the default triple.
@@ -221,7 +229,7 @@ function(LLVM_TARGET_SETUP)
     #---------------------------------------------------------------------------------------
     target_compile_definitions(${LLVM_TARGET_SETUP_TARGET}
         PRIVATE
-            "$<$<CONFIG:DEBUG>:_DEBUG>"
+            "$<$<CONFIG:Debug>:_DEBUG>"
             "MI_BUILDING_LLVM"
             "__USE_XOPEN2K8"
             "_REENTRANT"
@@ -253,6 +261,8 @@ function(LLVM_TARGET_SETUP)
         target_compile_options(${LLVM_TARGET_SETUP_TARGET}
             PRIVATE
                 "-fPIC"
+                "$<$<CONFIG:Release>:-fno-semantic-interposition>"
+                "-fvisibility=hidden"
                 "-w"
                 "-Wno-misleading-indentation"
             )

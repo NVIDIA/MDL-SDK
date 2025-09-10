@@ -30,6 +30,7 @@
 #define MDL_COMPILER_GLSL_VALUES_H 1
 
 #include <cstddef>
+#include <cstdint>
 
 #include <mi/mdl/mdl_iowned.h>
 #include "compiler_glsl_cc_conf.h"

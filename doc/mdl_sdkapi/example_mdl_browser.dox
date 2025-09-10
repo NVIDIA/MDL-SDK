@@ -31,7 +31,7 @@
 <div align="right">
     [\link mi_neuray_example_discovery Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
-    [\link mi_neuray_example_mdle Next\endlink]
+    [\link mi_neuray_example_dependency_inspector Next\endlink]
 </div>
 
 This example demonstrates how a material selection dialogue that emphasizes the package and module
@@ -223,7 +223,7 @@ we show only the file containing the <tt>main()</tt> function.
 <div align="right">
     [\link mi_neuray_example_discovery Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
-    [\link mi_neuray_example_mdle Next\endlink]
+    [\link mi_neuray_example_dependency_inspector Next\endlink]
 </div>
 
 */

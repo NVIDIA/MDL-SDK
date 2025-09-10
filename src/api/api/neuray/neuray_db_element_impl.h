@@ -40,9 +40,8 @@
 #include <mi/base/interface_merger.h>
 
 #include <boost/core/noncopyable.hpp>
-#include <base/lib/log/i_log_module.h>
-#include <base/data/db/i_db_access.h>
 #include <base/data/db/i_db_transaction.h>
+#include <base/lib/log/i_log_module.h>
 
 // see documentation of mi::base::Interface_merger
 #include <mi/base/config.h>
@@ -79,9 +78,9 @@ public:
 
     // methods of IDb_element
 
-    void set_state_access( Transaction_impl* transaction, DB::Tag tag);
+    void set_state_access( Transaction_impl* transaction, DB::Info* info);
 
-    void set_state_edit( Transaction_impl* transaction, DB::Tag tag);
+    void set_state_edit( Transaction_impl* transaction, DB::Info* info);
 
     void set_state_pointer( Transaction_impl* transaction, DB::Element_base* element);
 
@@ -103,7 +102,7 @@ public:
 
     bool can_reference_tag( DB::Tag tag) const;
 
-    /// The tracker needs access to m_access_base and m_parent_element which are not available
+    /// The tracker needs access to m_info and m_journal_type which are not available
     /// from the outside.
     friend class Db_element_tracker;
 
@@ -145,7 +144,7 @@ private:
     Db_element_state m_state;
 
     /// Handle to the DB class if m_state == STATE_ACCESS or == STATE_EDIT, invalid otherwise
-    DB::Access_base  m_access_base;
+    DB::Info* m_info;
 
     /// Handle to the DB class if m_state != STATE_INVALID
     ///
@@ -158,6 +157,9 @@ private:
 
     /// The transaction of this element
     Transaction_impl* m_transaction;
+
+    /// The accumulated journal flags (only relevant if m_state == STATE_EDIT).
+    DB::Journal_type m_journal_flags;
 };
 
 /// This mixin connects API classes with the corresponding DB class.
@@ -170,8 +172,8 @@ private:
 /// implemented in this mixin. The #get_db_element() methods provide access to the DB class
 /// itself.
 ///
-/// \tparam I   interface from public/mi/neuraylib, e.g., mi::neuraylib::IOptions
-/// \tparam D   DB class from io/scene, e.g., OPTIONS::Options
+/// \tparam I   interface from public/mi/neuraylib, e.g., mi::neuraylib::ITexture
+/// \tparam D   DB class from io/scene, e.g., TEXTURE::Texture
 template <typename I, typename D>
 class Db_element_impl
   : public mi::base::Interface_merger<mi::base::Interface_implement<I>, Db_element_impl_base >

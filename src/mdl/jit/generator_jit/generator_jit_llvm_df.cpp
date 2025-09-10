@@ -1315,7 +1315,7 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
             Function_context context(alloc, *this, inst, func, flags);
 
             // translate function body
-            Expression_result res = translate_node(context, lambda.get_body(), resolver);
+            Expression_result res = translate_node(lambda.get_body(), resolver);
             context.create_return(res.as_value(context));
         }
 
@@ -1401,7 +1401,7 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
 
         // translate the init function
         translate_distribution_function_init(
-            context, texture_result_exprs, lambda_result_exprs_init);
+            texture_result_exprs, lambda_result_exprs_init);
 
         context.create_void_return();
     }
@@ -1473,11 +1473,11 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
                 size_t expr_index = lambda_result_exprs_others[j];
                 size_t result_index = m_lambda_result_indices[expr_index];
 
-                generate_expr_lambda_call(context, expr_index, lambda_results, result_index);
+                generate_expr_lambda_call(expr_index, lambda_results, result_index);
             }
 
             // translate function body
-            Expression_result res = translate_node(context, lambda.get_body(), resolver);
+            Expression_result res = translate_node(lambda.get_body(), resolver);
             context.create_return(res.as_value(context));
 
             continue;
@@ -1554,7 +1554,7 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
 
             // translate the distribution function
             translate_distribution_function(
-                context, lambda.get_body(), lambda_result_exprs_others, mat_data_global);
+                lambda.get_body(), lambda_result_exprs_others, mat_data_global);
             context.create_void_return();
         }
     }
@@ -1857,9 +1857,10 @@ bool LLVM_code_generator::is_libbsdf_array_parameter(IDefinition::Semantics sema
 // intrinsic, converting the arguments as necessary.
 bool LLVM_code_generator::translate_libbsdf_runtime_call(
     llvm::CallInst             *call,
-    llvm::BasicBlock::iterator &ii,
-    Function_context           &ctx)
+    llvm::BasicBlock::iterator &ii)
 {
+    Function_context &ctx = *m_ctx;
+
     unsigned num_params_eaten = 0;
 
     llvm::Function *called_func = call->getCalledFunction();
@@ -2227,7 +2228,7 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
         llvm_args.push_back(arg);
     }
 
-    add_promoted_arguments(ctx, promote, llvm_args);
+    add_promoted_arguments(promote, llvm_args);
 
     llvm::Value *res = ctx->CreateCall(func, llvm_args);
 
@@ -2443,6 +2444,12 @@ bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
         // make all functions from libbsdf internal to allow global dead code elimination
         func->setLinkage(llvm::GlobalValue::InternalLinkage);
 
+        // set always inline if necessary (this also handles non-instantiated functions
+        // like Fresnel_function_coated::eval())
+        if (is_always_inline_enabled() && !func->hasFnAttribute(llvm::Attribute::NoInline)) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
+
         m_state_usage_analysis.register_function(func);
 
         // translate all runtime calls
@@ -2459,7 +2466,7 @@ bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
             for (llvm::Function::iterator BI = func->begin(), BE = func->end(); BI != BE; ++BI) {
                 for (llvm::BasicBlock::iterator II = BI->begin(); II != BI->end(); ++II) {
                     if (llvm::CallInst *call = llvm::dyn_cast<llvm::CallInst>(II)) {
-                        if (!translate_libbsdf_runtime_call(call, II, ctx)) {
+                        if (!translate_libbsdf_runtime_call(call, II)) {
                             return false;
                         }
                     }
@@ -2801,11 +2808,12 @@ bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
 
 // Generate a call to an expression lambda function.
 Expression_result LLVM_code_generator::generate_expr_lambda_call(
-    Function_context                &ctx,
     mi::mdl::ILambda_function const *expr_lambda,
     llvm::Value                     *opt_results_buffer,
     size_t                          opt_result_index)
 {
+    Function_context &ctx = *m_ctx;
+
     Lambda_function const *expr_lambda_impl = impl_cast<Lambda_function>(expr_lambda);
 
     // expression and special lambdas always return by reference via first parameter,
@@ -2828,8 +2836,10 @@ Expression_result LLVM_code_generator::generate_expr_lambda_call(
         res_pointer = NULL;
     } else if (opt_dest_ptr != NULL &&
             (dest_type = opt_dest_ptr->getType()->getPointerElementType()) == lambda_res_type) {
+        // lambda function can write directly into the results buffer
         res_pointer = opt_dest_ptr;
     } else {
+        // we need a temporary buffer and convert the result later
         res_pointer = ctx.create_local(lambda_res_type, "res_buf");
     }
 
@@ -2853,50 +2863,60 @@ Expression_result LLVM_code_generator::generate_expr_lambda_call(
 
     m_state_usage_analysis.add_call(ctx.get_function(), func);
     llvm::CallInst *call = ctx->CreateCall(func, lambda_args);
-    if (res_pointer == NULL) {
-        if (opt_results_buffer != NULL) {
-            if (target_is_structured_language()) {
-                store_to_float4_array(
-                    ctx,
-                    call,
-                    opt_results_buffer,
-                    m_texture_result_offsets[opt_result_index]);
-            } else {
-                ctx.convert_and_store(call, opt_dest_ptr);
-                return Expression_result::ptr(opt_dest_ptr);
-            }
+
+    // requested to store result in results buffer?
+    if (opt_results_buffer != NULL) {
+        // result already written into results buffer?
+        if (opt_dest_ptr != NULL && dest_type == lambda_res_type) {
+            return Expression_result::ptr(opt_dest_ptr);
         }
+
+        llvm::Value *res;
+        if (res_pointer == NULL) {
+            res = call;
+        } else {
+            res = ctx->CreateLoad(res_pointer);
+        }
+
+        // write result into the result buffer and convert if necessary
+        if (target_is_structured_language()) {
+            store_to_float4_array(
+                res,
+                opt_results_buffer,
+                m_texture_result_offsets[opt_result_index]);
+            return Expression_result::value(res);
+        } else {
+            ctx.convert_and_store(res, opt_dest_ptr);
+            return Expression_result::ptr(opt_dest_ptr);
+        }
+    }
+
+    if (res_pointer == NULL) {
         return Expression_result::value(call);
+    } else {
+        return Expression_result::ptr(res_pointer);
     }
-
-    if (opt_dest_ptr != NULL && dest_type != lambda_res_type) {
-        llvm::Value *res = ctx->CreateLoad(res_pointer);
-        ctx.convert_and_store(res, opt_dest_ptr);
-        return Expression_result::ptr(opt_dest_ptr);
-    }
-
-    return Expression_result::ptr(res_pointer);
 }
 
 // Generate a call to an expression lambda function.
 Expression_result LLVM_code_generator::generate_expr_lambda_call(
-    Function_context &ctx,
     size_t           lambda_index,
     llvm::Value      *opt_results_buffer,
     size_t           opt_result_index)
 {
     mi::base::Handle<mi::mdl::ILambda_function> expr_lambda(
         m_dist_func->get_expr_lambda(lambda_index));
-    return generate_expr_lambda_call(ctx, expr_lambda.get(), opt_results_buffer, opt_result_index);
+    return generate_expr_lambda_call(expr_lambda.get(), opt_results_buffer, opt_result_index);
 }
 
 // Store a value inside a float4 array at the given byte offset, updating the offset.
 void LLVM_code_generator::store_to_float4_array_impl(
-    Function_context &ctx,
     llvm::Value      *val,
     llvm::Value      *dest,
     unsigned         &dest_offs)
 {
+    Function_context &ctx = *m_ctx;
+
     llvm::Type *val_type = val->getType();
 
     if (llvm::IntegerType *it = llvm::dyn_cast<llvm::IntegerType>(val_type)) {
@@ -2968,7 +2988,7 @@ void LLVM_code_generator::store_to_float4_array_impl(
 
         for (uint64_t i = 0; i < n; ++i) {
             llvm::Value *elem = ctx.create_extract(val, unsigned(i));
-            store_to_float4_array_impl(ctx, elem, dest, dest_offs);
+            store_to_float4_array_impl(elem, dest, dest_offs);
         }
 
         // compound values might have an higher alignment then the sum of its components
@@ -2982,22 +3002,22 @@ void LLVM_code_generator::store_to_float4_array_impl(
 
 // Store a value inside a float4 array at the given byte offset.
 void LLVM_code_generator::store_to_float4_array(
-    Function_context &ctx,
     llvm::Value *val,
     llvm::Value *dest,
     unsigned dest_offs)
 {
     // call wrapped function with a copy of the offset, so only the copy is changed
-    store_to_float4_array_impl(ctx, val, dest, dest_offs);
+    store_to_float4_array_impl(val, dest, dest_offs);
 }
 
 // Load a value inside a float4 array at the given byte offset, updating the offset.
 llvm::Value *LLVM_code_generator::load_from_float4_array_impl(
-    Function_context &ctx,
     llvm::Type       *val_type,
     llvm::Value      *src,
     unsigned         &src_offs)
 {
+    Function_context &ctx = *m_ctx;
+
     if (llvm::IntegerType *it = llvm::dyn_cast<llvm::IntegerType>(val_type)) {
         if (it->getBitWidth() > 8) {
             src_offs = (src_offs + 3) & ~3;
@@ -3063,7 +3083,7 @@ llvm::Value *LLVM_code_generator::load_from_float4_array_impl(
         llvm::Value *res = llvm::UndefValue::get(val_type);
         for (uint64_t i = 0; i < n; ++i) {
             llvm::Value *elem = load_from_float4_array_impl(
-                ctx, llvm::GetElementPtrInst::getTypeAtIndex(val_type, unsigned(i)), src, src_offs);
+                llvm::GetElementPtrInst::getTypeAtIndex(val_type, unsigned(i)), src, src_offs);
             res = ctx.create_insert(res, elem, unsigned(i));
         }
 
@@ -3079,21 +3099,21 @@ llvm::Value *LLVM_code_generator::load_from_float4_array_impl(
 
 // Load a value inside a float4 array at the given byte offset.
 llvm::Value *LLVM_code_generator::load_from_float4_array(
-    Function_context &ctx,
     llvm::Type       *val_type,
     llvm::Value      *src,
     unsigned         src_offs)
 {
     // call wrapped function with a copy of the offset, so only the copy is changed
-    return load_from_float4_array_impl(ctx, val_type, src, src_offs);
+    return load_from_float4_array_impl(val_type, src, src_offs);
 }
 
 // Translate a precalculated lambda function to LLVM IR.
 Expression_result LLVM_code_generator::translate_precalculated_lambda(
-    Function_context &ctx,
     size_t           lambda_index,
     llvm::Type       *expected_type)
 {
+    Function_context &ctx = *m_ctx;
+
     mi::base::Handle<mi::mdl::ILambda_function> expr_lambda(
         m_dist_func->get_expr_lambda(lambda_index));
 
@@ -3101,20 +3121,19 @@ Expression_result LLVM_code_generator::translate_precalculated_lambda(
 
     if (DAG_constant const *c = as<DAG_constant>(expr_lambda->get_body())) {
         // translate constants directly
-        res = translate_value(ctx, c->get_value());
+        res = translate_value(c->get_value());
     } else if (m_texture_result_indices[lambda_index] != -1) {
         // is the result available in the texture results from the MDL SDK state
         if (target_is_structured_language()) {
             res = Expression_result::value(load_from_float4_array(
-                ctx,
                 m_texture_results_struct_type->getElementType(
                     m_texture_result_indices[lambda_index]),
-                get_texture_results(ctx),
+                get_texture_results(),
                 m_texture_result_offsets[m_texture_result_indices[lambda_index]]));
         } else {
             res = Expression_result::ptr(ctx->CreateConstGEP2_32(
                 nullptr,
-                get_texture_results(ctx),
+                get_texture_results(),
                 0,
                 unsigned(m_texture_result_indices[lambda_index])));
         }
@@ -3129,7 +3148,7 @@ Expression_result LLVM_code_generator::translate_precalculated_lambda(
             unsigned(m_lambda_result_indices[lambda_index])));
     } else {
         // calculate on demand, should be cheap if we get here
-        res = generate_expr_lambda_call(ctx, lambda_index);
+        res = generate_expr_lambda_call(lambda_index);
     }
 
     // type doesn't matter or fits already?
@@ -3151,13 +3170,14 @@ size_t LLVM_code_generator::get_lambda_index_from_call(DAG_call const *call)
 
 // Translate a DAG call argument which may be a precalculated lambda function to LLVM IR.
 Expression_result LLVM_code_generator::translate_call_arg(
-    Function_context &ctx,
     DAG_node const   *arg,
     llvm::Type       *expected_type)
 {
+    Function_context &ctx = *m_ctx;
+
     // translate constants directly
     if (DAG_constant const *c = as<DAG_constant>(arg)) {
-        Expression_result res = translate_value(ctx, c->get_value());
+        Expression_result res = translate_value(c->get_value());
         if (res.get_value_type() == expected_type) {
             return res;
         }
@@ -3170,7 +3190,7 @@ Expression_result LLVM_code_generator::translate_call_arg(
     DAG_call const *arg_call = mi::mdl::cast<DAG_call>(arg);
     size_t lambda_index = get_lambda_index_from_call(arg_call);
 
-    return translate_precalculated_lambda(ctx, lambda_index, expected_type);
+    return translate_precalculated_lambda(lambda_index, expected_type);
 }
 
 // Get the BSDF parameter ID metadata for an instruction.
@@ -3211,16 +3231,18 @@ int LLVM_code_generator::get_metadata_df_param_id(
     return int(param_idx_val->getValue().getZExtValue());
 }
 
+// Rewrite the address of a memcpy from a color_bsdf_component to the given weight array.
 bool LLVM_code_generator::rewrite_weight_memcpy_addr(
-    Function_context &ctx,
-    llvm::Value *weight_array,
-    llvm::BitCastInst *addr_bitcast,
-    llvm::Value *index,
+    llvm::Value                                *weight_array,
+    llvm::BitCastInst                          *addr_bitcast,
+    llvm::Value                                *index,
     llvm::SmallVector<llvm::Instruction *, 16> &delete_list)
 {
     // check for
     //   <C> = bitcast %struct.color_xDF_component* <X> to i8*
     //   call void @llvm.memcpy.p0i8.p0i8.i64(i8* <Y>, i8* <C>, i64 12, i32 4, i1 false)
+
+    Function_context &ctx = *m_ctx;
 
     // ensure, that all usages of this cast are memcpys of a weight
     for (auto cast_user : addr_bitcast->users()) {
@@ -3266,13 +3288,14 @@ bool LLVM_code_generator::rewrite_weight_memcpy_addr(
 // BSDF function, which can either be a switch function depending on the array index
 // or the same function for all indices.
 void LLVM_code_generator::rewrite_df_component_usages(
-    Function_context                           &ctx,
     llvm::AllocaInst                           *inst,
     llvm::Value                                *weight_array,
     llvm::Value                                *df_flags_array,
     Df_component_info                          &comp_info,
     llvm::SmallVector<llvm::Instruction *, 16> &delete_list)
 {
+    Function_context &ctx = *m_ctx;
+
     // These rewrites are performed:
     //  - bsdf_component[i].weight -> weights[i]
     //  - bsdf_component[i].component.sample() -> df_func(...) or df_func(..., i)
@@ -3289,7 +3312,7 @@ void LLVM_code_generator::rewrite_df_component_usages(
             }
 
             llvm::Value *null_val = llvm::ConstantInt::getNullValue(m_type_mapper.get_int_type());
-            rewrite_weight_memcpy_addr(ctx, weight_array, cast, null_val, delete_list);
+            rewrite_weight_memcpy_addr(weight_array, cast, null_val, delete_list);
             continue;
         }
 
@@ -3306,7 +3329,7 @@ void LLVM_code_generator::rewrite_df_component_usages(
                     MDL_ASSERT(!"Unsupported gep usage of color_xDF_component parameter");
                     continue;
                 }
-                rewrite_weight_memcpy_addr(ctx, weight_array, cast, component_idx_val, delete_list);
+                rewrite_weight_memcpy_addr(weight_array, cast, component_idx_val, delete_list);
             }
             delete_list.push_back(gep);
             continue;
@@ -3562,7 +3585,6 @@ void LLVM_code_generator::handle_df_array_parameter(
 
             // rewrite all usages of the components variable
             rewrite_df_component_usages(
-                ctx,
                 inst,
                 weight_array_global,
                 df_flags_array_global,
@@ -3604,7 +3626,7 @@ void LLVM_code_generator::handle_df_array_parameter(
             // read precalculated lambda result
             size_t lambda_index = get_lambda_index_from_call(arg_call);
             Expression_result array_res = translate_precalculated_lambda(
-                ctx, lambda_index, color_array_type);
+                lambda_index, color_array_type);
             color_array = array_res.as_ptr(ctx);
         } else {
             // only single elements of the array a lambda functions
@@ -3615,7 +3637,7 @@ void LLVM_code_generator::handle_df_array_parameter(
             for (int i = 0; i < elem_count; ++i) {
                 DAG_node const *color_node = arg_call->get_argument(i);
                 Expression_result color_res = translate_call_arg(
-                    ctx, color_node, m_float3_struct_type);
+                    color_node, m_float3_struct_type);
 
                 // store result in colors array
                 llvm::Value *idxs[] = {
@@ -3678,7 +3700,7 @@ void LLVM_code_generator::handle_df_array_parameter(
                 mi::mdl::IValue_struct const *value =
                     mi::mdl::cast<IValue_struct>(constant->get_value());
                 mi::mdl::IValue const *weight_val = value->get_field("weight");
-                weight_res = translate_value(ctx, weight_val);
+                weight_res = translate_value(weight_val);
 
                 if (weight_res.get_value_type() != weight_type) {
                     weight_res = Expression_result::value(
@@ -3698,7 +3720,7 @@ void LLVM_code_generator::handle_df_array_parameter(
                 MDL_ASSERT(elem_node->get_kind() == DAG_node::EK_CALL);
                 DAG_call const *elem_call = mi::mdl::cast<DAG_call>(elem_node);
                 DAG_node const *weight_node = elem_call->get_argument("weight");
-                weight_res = translate_call_arg(ctx, weight_node, weight_type);
+                weight_res = translate_call_arg(weight_node, weight_type);
 
                 // instantiate BSDF for component parameter of the constructor
                 DAG_node const *component_node = elem_call->get_argument("component");
@@ -3721,7 +3743,6 @@ void LLVM_code_generator::handle_df_array_parameter(
 
         // rewrite all usages of the components variable
         rewrite_df_component_usages(
-            ctx,
             inst,
             weight_array,
             df_flags_array,
@@ -3916,7 +3937,7 @@ llvm::Function *LLVM_code_generator::instantiate_ternary_df(
 
         // Find lambda expression for condition and generate code
         DAG_node const *cond = dag_call->get_argument(0);
-        Expression_result res = translate_call_arg(ctx, cond, m_type_mapper.get_bool_type());
+        Expression_result res = translate_call_arg(cond, m_type_mapper.get_bool_type());
 
         // check for factor pattern
         DAG_node const *true_bsdf   = dag_call->get_argument(1);
@@ -4615,14 +4636,14 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                     }
                 }
 
-                Expression_result res = translate_call_arg(ctx, arg, elem_type);
+                Expression_result res = translate_call_arg(arg, elem_type);
 
                 // in "ternary operator with thin_film" optimization mode and current parameter
                 // is the coating_thickness?
                 if (opt_ctx.m_ternary_cond != NULL && param_idx == n_args) {
                     // set thickness to 0, if condition says thin_film should be skipped
                     Expression_result cond_res = translate_call_arg(
-                        ctx, opt_ctx.m_ternary_cond, m_type_mapper.get_bool_type());
+                        opt_ctx.m_ternary_cond, m_type_mapper.get_bool_type());
                     llvm::Value *cond_res_val = cond_res.as_value(ctx);
                     if (cond_res_val->getType() != m_type_mapper.get_predicate_type()) {
                         // map to predicate type
@@ -4924,7 +4945,7 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                     expected_type = call->getArgOperand(0)->getType()->getPointerElementType();
                 }
 
-                Expression_result res = translate_precalculated_lambda(ctx, index, expected_type);
+                Expression_result res = translate_precalculated_lambda(index, expected_type);
                 if (call->getType() != expected_type) {
                     ctx->CreateStore(res.as_value(ctx), call->getArgOperand(0));
                 } else {
@@ -4953,11 +4974,12 @@ llvm::Function *LLVM_code_generator::instantiate_df(
 
 // Translate a DAG node pointing to a DF to LLVM IR.
 void LLVM_code_generator::translate_distribution_function(
-    Function_context                     &ctx,
     DAG_node const                       *df_node,
     llvm::SmallVector<unsigned, 8> const &lambda_result_exprs,
     llvm::GlobalVariable                 *mat_data_global)
 {
+    Function_context &ctx = *m_ctx;
+
     MDL_ASSERT(
         is<IType_df>(df_node->get_type()->skip_type_alias())
         && (
@@ -4989,7 +5011,7 @@ void LLVM_code_generator::translate_distribution_function(
         size_t expr_index   = lambda_result_exprs[i];
         size_t result_index = m_lambda_result_indices[expr_index];
 
-        generate_expr_lambda_call(ctx, expr_index, lambda_results, result_index);
+        generate_expr_lambda_call(expr_index, lambda_results, result_index);
     }
 
     // get the current normal
@@ -4998,7 +5020,7 @@ void LLVM_code_generator::translate_distribution_function(
         IDefinition const *def = m_compiler->find_stdlib_signature("::state", "normal()");
         llvm::Function *func = get_intrinsic_function(def, /*return_derivs=*/ false);
         llvm::Value *args[] = { ctx.get_state_parameter() };
-        llvm::Value *normal = call_rt_func(ctx, func, args);
+        llvm::Value *normal = call_rt_func(func, args);
 
         // convert to type used in libbsdf
         normal_buf = ctx.create_local(m_float3_struct_type, "normal_buf");
@@ -5357,7 +5379,7 @@ void LLVM_code_generator::translate_distribution_function(
 
                 // if (cond_normalize)
                 //     result_normalized = normalize(result_normalized)
-                llvm::Value *result_normalized = call_rt_func(ctx, norm_func, {result_normal});
+                llvm::Value *result_normalized = call_rt_func(norm_func, {result_normal});
                 ctx.convert_and_store(result_normalized, result_normal_ptr);
                 ctx->CreateBr(if_non_zero_block_end);
 
@@ -5465,7 +5487,7 @@ void LLVM_code_generator::translate_distribution_function(
 
             // if (cond_normalize)
             //     result_normalized = normalize(result_normalized)
-            llvm::Value *result_normalized = call_rt_func(ctx, norm_func, { result_normal });
+            llvm::Value *result_normalized = call_rt_func(norm_func, { result_normal });
             ctx.convert_and_store(result_normalized, result_normal_ptr);
             ctx->CreateBr(if_non_zero_block_end);
 
@@ -5510,10 +5532,11 @@ void LLVM_code_generator::translate_distribution_function(
 
 // Translate the init function of a distribution function to LLVM IR.
 void LLVM_code_generator::translate_distribution_function_init(
-    Function_context &ctx,
     llvm::SmallVector<unsigned, 8> const &texture_result_exprs,
     llvm::SmallVector<unsigned, 8> const &lambda_result_exprs)
 {
+    Function_context &ctx = *m_ctx;
+
     // allocate the lambda results struct and make it available in the context
     llvm::Value *lambda_results = NULL;
     if (target_supports_lambda_results_parameter()) {
@@ -5525,7 +5548,7 @@ void LLVM_code_generator::translate_distribution_function_init(
     // call state::get_texture_results()
     llvm::Value *texture_results = NULL;
     if (texture_result_exprs.size() != 0) {
-        texture_results = get_texture_results(ctx);
+        texture_results = get_texture_results();
     }
 
     // calculate the normal from geometry.normal
@@ -5544,7 +5567,7 @@ void LLVM_code_generator::translate_distribution_function_init(
                 continue;
             }
 
-            generate_expr_lambda_call(ctx, expr_index, texture_results, i);
+            generate_expr_lambda_call(expr_index, texture_results, i);
         }
 
         // calculate all non-constant expression lambdas required to calculate geometry.normal
@@ -5557,11 +5580,10 @@ void LLVM_code_generator::translate_distribution_function_init(
             }
 
             size_t result_index = m_lambda_result_indices[expr_index];
-            generate_expr_lambda_call(ctx, expr_index, lambda_results, result_index);
+            generate_expr_lambda_call(expr_index, lambda_results, result_index);
         }
 
         normal = translate_precalculated_lambda(
-            ctx,
             geometry_normal_index,
             m_type_mapper.get_float3_type()).as_value(ctx);
 
@@ -5574,7 +5596,7 @@ void LLVM_code_generator::translate_distribution_function_init(
                 args.push_back(ctx.get_resource_data_parameter());
             }
             args.push_back(normal);
-            normal = call_rt_func(ctx, adapt_normal, args);
+            normal = call_rt_func(adapt_normal, args);
         }
 
         // call state::set_normal(normal)
@@ -5583,7 +5605,7 @@ void LLVM_code_generator::translate_distribution_function_init(
             ctx.get_state_parameter(),
             normal
         };
-        call_rt_func_void(ctx, set_func, set_normal_args);
+        call_rt_func_void(set_func, set_normal_args);
     }
 
     // calculate remaining texture results depending on evaluated geometry.normal
@@ -5595,7 +5617,7 @@ void LLVM_code_generator::translate_distribution_function_init(
             continue;
         }
 
-        generate_expr_lambda_call(ctx, expr_index, texture_results, i);
+        generate_expr_lambda_call(expr_index, texture_results, i);
     }
 }
 

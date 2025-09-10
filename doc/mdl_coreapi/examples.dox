@@ -46,6 +46,10 @@ instructions on how to build \MDLCoreProductName and the examples.
 
 - \subpage mi_mdl_core_example_cuda_shared <br>
   A helper class for compiling MDL materials into different target backend codes.
+  
+- \subpage mi_mdl_core_example_distilling_shared <br>
+A helper class for distilling MDL materials.
+
 
 \section mi_mdl_core_examples_getting_started Getting Started
 
@@ -54,6 +58,9 @@ instructions on how to build \MDLCoreProductName and the examples.
 
 - \subpage mi_mdl_core_example_code_gen <br>
   Loads a MDL material and processes it up to code generation and beyond.
+
+- \subpage mi_mdl_core_example_dependency_inspector <br>
+  Example for listing all file dependencies of an MDL Module.
 
 - \subpage mi_mdl_core_example_df_native <br>
   Example for integrating MDL into a renderer by using the Native backend (CPU).

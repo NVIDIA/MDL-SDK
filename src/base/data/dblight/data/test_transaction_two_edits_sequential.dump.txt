@@ -13,6 +13,9 @@ Count of infos by distinct tags: 1
 Index 0: tag = 1, count = 1, pin count = 1, removed = 0
     Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
 
+Count of all infos: 1
+Count of infos by class IDs:
+     1 0x4d79656c "Myel"
 
 Count of all scopes: 1
 ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
@@ -31,6 +34,9 @@ Index 0: tag = 1, count = 2, pin count = 1, removed = 0
     Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
     Index 1: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 1, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
 
+Count of all infos: 2
+Count of infos by class IDs:
+     2 0x4d79656c "Myel"
 
 Count of all scopes: 1
 ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
@@ -49,6 +55,9 @@ Index 0: tag = 1, count = 2, pin count = 1, removed = 0
     Index 0: scope ID = 0, transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
     Index 1: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
 
+Count of all infos: 2
+Count of infos by class IDs:
+     2 0x4d79656c "Myel"
 
 Count of all scopes: 1
 ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
@@ -69,6 +78,9 @@ Index 0: tag = 1, count = 3, pin count = 1, removed = 0
     Index 1: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
     Index 2: scope ID = 0, transaction ID = 0 (set), version = 2, pin count = 1, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
 
+Count of all infos: 3
+Count of infos by class IDs:
+     3 0x4d79656c "Myel"
 
 Count of all scopes: 1
 ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
@@ -89,6 +101,9 @@ Index 0: tag = 1, count = 3, pin count = 1, removed = 0
     Index 1: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
     Index 2: scope ID = 0, transaction ID = 0 (set), version = 2, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
 
+Count of all infos: 3
+Count of infos by class IDs:
+     3 0x4d79656c "Myel"
 
 Count of all scopes: 1
 ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
@@ -109,6 +124,9 @@ Index 0: tag = 1, count = 3, pin count = 1, removed = 0
     Index 1: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
     Index 2: scope ID = 0, transaction ID = 0 (set), version = 2, pin count = 1, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
 
+Count of all infos: 3
+Count of infos by class IDs:
+     3 0x4d79656c "Myel"
 
 Count of all scopes: 1
 ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
@@ -129,6 +147,9 @@ Index 0: tag = 1, count = 3, pin count = 1, removed = 0
     Index 1: scope ID = 0, transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
     Index 2: scope ID = 0, transaction ID = 0 (set), version = 2, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
 
+Count of all infos: 3
+Count of infos by class IDs:
+     3 0x4d79656c "Myel"
 
 Count of all scopes: 1
 ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
@@ -145,4 +166,7 @@ Count of infos by distinct tags: 1
 Index 0: tag = 1, count = 1, pin count = 1, removed = 0
     Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 2, pin count = 0, tag = 1, privacy level = 0, removal = 0, name = "foo", references = { }
 
+Count of all infos: 1
+Count of infos by class IDs:
+     1 0x4d79656c "Myel"
 

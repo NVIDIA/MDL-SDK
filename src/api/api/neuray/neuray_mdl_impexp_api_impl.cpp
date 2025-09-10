@@ -34,7 +34,6 @@
 
 #include "neuray_mdl_impexp_api_impl.h"
 
-#include "neuray_impexp_utilities.h"
 #include "neuray_lightprofile_impl.h"
 #include "neuray_mdl_execution_context_impl.h"
 #include "neuray_module_impl.h"
@@ -107,7 +106,7 @@ mi::Sint32 Mdl_impexp_api_impl::load_module_from_string(
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
     mi::base::Handle<mi::neuraylib::IReader> reader(
-        Impexp_utilities::create_reader( module_source, strlen( module_source)));
+        DISK::create_reader( module_source, strlen( module_source)));
 
     MDL::Execution_context default_context;
     MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
@@ -305,12 +304,12 @@ mi::neuraylib::IReader* Mdl_impexp_api_impl::create_reader(
 
 mi::neuraylib::IReader* Mdl_impexp_api_impl::create_reader( const char* filename) const
 {
-    return filename ? Impexp_utilities::create_reader( filename) : nullptr;
+    return DISK::create_reader( filename);
 }
 
 mi::neuraylib::IWriter* Mdl_impexp_api_impl::create_writer( const char* filename) const
 {
-    return filename ? Impexp_utilities::create_writer( filename) : nullptr;
+    return DISK::create_writer( filename);
 }
 
 namespace {
@@ -447,11 +446,8 @@ mi::Sint32 Mdl_impexp_api_impl::export_module_common(
     mi::base::Handle<mi::mdl::IMDL_exporter> mdl_exporter( mdl->create_exporter());
 
     // create the resource callback
-    auto* transaction_impl
-        = static_cast<Transaction_impl*>( transaction);
+    auto* transaction_impl = static_cast<Transaction_impl*>( transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
-    std::string uri
-        = filename ? Impexp_utilities::convert_filename_to_uri( filename) : "";
     mi::base::Handle<mi::neuraylib::IExport_result_ext> export_result_ext(
         transaction->create<mi::neuraylib::IExport_result_ext>( "Export_result_ext"));
     MDL::Resource_callback resource_callback(

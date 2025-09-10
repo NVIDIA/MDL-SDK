@@ -43,11 +43,27 @@
 #include <cstdio>
 #include <string>
 
-namespace mi { namespace neuraylib { class IStream_position; } }
+namespace mi { namespace neuraylib { class IReader; class IStream_position; class IWriter; } }
 
 namespace MI {
 
 namespace DISK {
+
+/// Creates a random-access reader for the given file path.
+///
+/// \param path   The path to be handled by the reader.
+/// \return       A reader for \p path, or \c nullptr in case of errors, e.g., the file path is
+///               invalid, or the file path is valid, but the file denoted by the file path could
+///               could not be opened for reading
+mi::neuraylib::IReader* create_reader( const char* path);
+
+/// Creates random-access writer for the given file path.
+///
+/// \param path    The path to be handled by the writer.
+/// \return        A writer for \p path, or \c nullptr in case of errors, e.g., the file path is
+///                invalid, or the file path is valid, but the file denoted by the file path could
+///                not be opened for writing
+mi::neuraylib::IWriter* create_writer( const char* path);
 
 /// Base class of File_reader_impl and File_writer_impl.
 template <typename T>

@@ -45,7 +45,7 @@ class ICall_name_resolver;
 /// A plugin is only accepted if it is compiled against the same API version
 /// than the SDK. This version needs to be incremented whenever something in
 /// this API changes.
-#define MI_MDL_DISTILLER_PLUGIN_API_VERSION 6
+#define MI_MDL_DISTILLER_PLUGIN_API_VERSION 7
 
 ///
 /// The rule engine handles the transformation of a compiled material by a rule set.

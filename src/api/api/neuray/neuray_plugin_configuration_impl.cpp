@@ -34,14 +34,16 @@
 
 #include "pch.h"
 
-#include "neuray_plugin_configuration_impl.h"
-#include <api/api/mdl/mdl_neuray_impl.h>
 #include "neuray_plugin_api_impl.h"
+#include "neuray_plugin_configuration_impl.h"
+
+#include <api/api/mdl/mdl_neuray_impl.h>
 
 
 #include <filesystem>
 #include <vector>
 
+#include <base/hal/disk/disk_utils.h>
 #include <base/lib/plug/i_plug.h>
 
 
@@ -106,7 +108,7 @@ mi::Sint32 Plugin_configuration_impl::load_plugins_from_directory( const char* p
         mi::Sint32 result = 0;
 
         for( const auto& filename: filenames) {
-            std::string extension = filename.extension().u8string();
+            std::string extension = DISK::to_string( filename.extension());
 #if defined(MI_PLATFORM_WINDOWS)
             if( extension != ".dll")
                 continue;
@@ -120,7 +122,7 @@ mi::Sint32 Plugin_configuration_impl::load_plugins_from_directory( const char* p
 #error Unsupported platform
 #endif
 
-            if( load_plugin_library( filename.u8string().c_str()) != 0)
+            if( load_plugin_library( DISK::to_string( filename).c_str()) != 0)
                 result = -1;
         }
 

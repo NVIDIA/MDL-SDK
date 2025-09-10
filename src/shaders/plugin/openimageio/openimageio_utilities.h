@@ -37,6 +37,7 @@
 
 namespace mi {
 namespace neuraylib {
+class IDebug_configuration;
 class IImage_api;
 class IReader;
 class ITile;
@@ -47,6 +48,20 @@ class IWriter;
 namespace MI {
 
 namespace MI_OIIO {
+
+/// Value of the debug option \c ignore_gamma_metadata_on_import.
+///
+/// \c true:  metadata about the gamma value is ignored
+/// \c false: metadata about the gamma value is taked into account
+extern bool g_ignore_gamma_metadata_on_import;
+
+/// Value of the debug option \c linear_gamma_for_single_uint16_channel.
+///
+/// \c true:  one channel of OIIO::TypeUInt16 has gamma 1.0
+/// \c false: one channel of OIIO::TypeUInt16 has gamma 2.2
+///
+/// Note that gamma metadata has higher priority.
+extern bool g_linear_gamma_for_single_uint16_channel;
 
 /// The logger used by #log() below. Do not use it directly, because it might be invalid if the
 /// plugin API is not available. Use #log() instead.
@@ -67,8 +82,21 @@ OIIO::ImageSpec get_image_spec(
     mi::Uint32 resolution_y,
     mi::Uint32 resolution_z);
 
-/// Returns our pixel type that should be used for the give image spec.
-IMAGE::Pixel_type get_pixel_type( const OIIO::ImageSpec& spec);
+/// Returns our pixel type and the gamma value that should be used for the give image spec.
+///
+/// The result is solely based on the channel characteristics and ignores metadata about color
+/// spaces.
+std::pair<IMAGE::Pixel_type, mi::Float32> get_pixel_type_and_gamma_internal(
+    const OIIO::ImageSpec& spec);
+
+/// Returns our pixel type and the gamma value that should be used for the give image spec.
+std::pair<IMAGE::Pixel_type, mi::Float32> get_pixel_type_and_gamma( const OIIO::ImageSpec& spec);
+
+/// Returns the gamma value derived from the oiio::Colorspace metadata.
+///
+/// Supports "linear", "sRGB", "rec709", and "GammaX.Y" (case does not matter). Returns 0.0 in case
+/// of errors.
+mi::Float32 get_gamma_from_metadata( const OIIO::ImageSpec& spec);
 
 /// Premultiplies color channels by alpha channel (as expected by OIIO for export by default).
 const mi::neuraylib::ITile* associate_alpha(
@@ -119,6 +147,7 @@ void expand_ya_to_rgba(
 /// \param[out] resolution_y    The resolution of the subimage in y-direction.
 /// \param[out] resolution_z    The resolution of the subimage in z-direction.
 /// \param[out] pixel_type      The pixel type of the subimage.
+/// \param[out] gamma           The gamma value of the subimage.
 /// \param[out] channel_names   The channel names (for layers: after stripping the selector prefix).
 /// \param[out] channel_start   The first channel index to import.
 /// \param[out] channel_end     The last channel index+1 to import.
@@ -131,6 +160,7 @@ bool compute_properties(
     mi::Uint32& resolution_y,
     mi::Uint32& resolution_z,
     IMAGE::Pixel_type& pixel_type,
+    mi::Float32& gamma,
     std::vector<std::string>& channel_names,
     mi::Sint32& channel_start,
     mi::Sint32& channel_end);
@@ -140,6 +170,15 @@ bool compute_properties(
 /// Returns "linear" for 1.0, "sRGB" for 2.2, "GammaX.Y" for other positive values X.Y, and the
 /// empty string on errors (zero or negative values).
 std::string get_oiio_colorspace( float gamma);
+
+/// Converts the value of the debug option \p key into a boolean value.
+///
+/// Does not change the value of \p value if there is no option for \p key set, or if the conversion
+/// via operator>> fails.
+///
+/// Returns \c true in case of success (including \p key not existing), \c false otherwise.
+bool option_to_flag(
+    mi::neuraylib::IDebug_configuration* debug_configuration, const char* key, bool& value);
 
 } // namespace MI_OIIO
 

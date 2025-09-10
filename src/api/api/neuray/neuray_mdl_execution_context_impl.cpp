@@ -48,10 +48,10 @@ namespace {
 mi::neuraylib::IMessage::Kind convert_kind( MDL::Message::Kind kind)
 {
     switch( kind) {
-        case MDL::Message::MSG_COMILER_CORE:
-            return mi::neuraylib::IMessage::MSG_COMILER_CORE;
-        case MDL::Message::MSG_COMILER_BACKEND:
-            return mi::neuraylib::IMessage::MSG_COMILER_BACKEND;
+        case MDL::Message::MSG_COMPILER_CORE:
+            return mi::neuraylib::IMessage::MSG_COMPILER_CORE;
+        case MDL::Message::MSG_COMPILER_BACKEND:
+            return mi::neuraylib::IMessage::MSG_COMPILER_BACKEND;
         case MDL::Message::MSG_COMPILER_ARCHIVE_TOOL:
             return mi::neuraylib::IMessage::MSG_COMPILER_ARCHIVE_TOOL;
         case MDL::Message::MSG_INTEGRATION:
@@ -67,10 +67,10 @@ mi::neuraylib::IMessage::Kind convert_kind( MDL::Message::Kind kind)
 MDL::Message::Kind convert_kind( mi::neuraylib::IMessage::Kind kind)
 {
     switch( kind) {
-        case mi::neuraylib::IMessage::MSG_COMILER_CORE:
-            return MDL::Message::MSG_COMILER_CORE;
-        case mi::neuraylib::IMessage::MSG_COMILER_BACKEND:
-            return MDL::Message::MSG_COMILER_BACKEND;
+        case mi::neuraylib::IMessage::MSG_COMPILER_CORE:
+            return MDL::Message::MSG_COMPILER_CORE;
+        case mi::neuraylib::IMessage::MSG_COMPILER_BACKEND:
+            return MDL::Message::MSG_COMPILER_BACKEND;
         case mi::neuraylib::IMessage::MSG_COMPILER_ARCHIVE_TOOL:
             return MDL::Message::MSG_COMPILER_ARCHIVE_TOOL;
         case mi::neuraylib::IMessage::MSG_INTEGRATION:

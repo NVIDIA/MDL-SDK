@@ -52,7 +52,7 @@ create_from_base_preset(
 target_add_dependencies(TARGET ${PROJECT_NAME}
     DEPENDS
         boost
-        mdl::base-system-version
-        mdl::base-data-serial
-        mdl::base-system-version
+        base-system-version
+        base-data-serial
+        base-system-version
     )

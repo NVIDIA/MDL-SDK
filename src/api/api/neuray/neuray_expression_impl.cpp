@@ -762,9 +762,6 @@ mi::neuraylib::IExpression* Expression_factory::create(
                 expr->get_interface<MDL::IExpression_temporary>());
             return new Expression_temporary( this, e.get(), owner);
         }
-        case MDL::IExpression::EK_FORCE_32_BIT:
-            ASSERT( M_SCENE, false);
-            return nullptr;
     };
 
     ASSERT( M_SCENE, false);

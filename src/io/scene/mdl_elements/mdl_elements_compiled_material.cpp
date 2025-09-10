@@ -33,7 +33,6 @@
 #include <sstream>
 
 #include <boost/algorithm/string.hpp>
-#include <boost/tokenizer.hpp>
 
 #include "i_mdl_elements_utilities.h"
 #include "i_mdl_elements_function_call.h"
@@ -69,7 +68,7 @@ Mdl_compiled_material::Mdl_compiled_material()
 Mdl_compiled_material::Mdl_compiled_material(
     DB::Transaction* transaction,
     const mi::mdl::IMaterial_instance* core_material_instance,
-    const char* module_name,
+    DB::Tag module_tag,
     mi::Float32 mdl_meters_per_scene_unit,
     mi::Float32 mdl_wavelength_min,
     mi::Float32 mdl_wavelength_max,
@@ -119,8 +118,7 @@ Mdl_compiled_material::Mdl_compiled_material(
     }
 
     // Collect module identifier from originating module.
-    if( module_name) {
-        DB::Tag module_tag = transaction->name_to_tag( get_db_name( module_name).c_str());
+    if( module_tag) {
         DB::Access<Mdl_module> module( module_tag, transaction);
         m_module_idents.insert( {module_tag, module->get_ident()});
     }

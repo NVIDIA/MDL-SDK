@@ -50,12 +50,10 @@ mi::neuraylib::IStruct_category::Predefined_id int_struct_category_id_to_ext_str
             return mi::neuraylib::IStruct_category::CID_USER;
         case MDL::IStruct_category::CID_MATERIAL_CATEGORY:
             return mi::neuraylib::IStruct_category::CID_MATERIAL_CATEGORY;
-        case MDL::IStruct_category::IStruct_category::CID_FORCE_32_BIT:
-            return mi::neuraylib::IStruct_category::CID_FORCE_32_BIT;
     }
 
     ASSERT( M_SCENE, false);
-    return mi::neuraylib::IStruct_category::CID_FORCE_32_BIT;
+    return mi::neuraylib::IStruct_category::CID_USER;
 }
 
 MDL::IStruct_category::Predefined_id ext_struct_category_id_to_int_struct_category_id(
@@ -66,8 +64,6 @@ MDL::IStruct_category::Predefined_id ext_struct_category_id_to_int_struct_catego
             return MDL::IStruct_category::CID_USER;
         case mi::neuraylib::IStruct_category::CID_MATERIAL_CATEGORY:
             return MDL::IStruct_category::CID_MATERIAL_CATEGORY;
-        case mi::neuraylib::IStruct_category::CID_FORCE_32_BIT:
-            return MDL::IStruct_category::CID_FORCE_32_BIT;
     }
 
     ASSERT( M_SCENE, false);
@@ -108,8 +104,6 @@ mi::neuraylib::IType_enum::Predefined_id int_enum_id_to_ext_enum_id(
             return mi::neuraylib::IType_enum::EID_TEX_GAMMA_MODE;
         case MDL::IType_enum::EID_INTENSITY_MODE:
             return mi::neuraylib::IType_enum::EID_INTENSITY_MODE;
-        case MDL::IType_enum::EID_FORCE_32_BIT:
-            return mi::neuraylib::IType_enum::EID_FORCE_32_BIT;
     }
 
     ASSERT( M_SCENE, false);
@@ -126,8 +120,6 @@ MDL::IType_enum::Predefined_id ext_enum_id_to_int_enum_id(
             return MDL::IType_enum::EID_TEX_GAMMA_MODE;
         case mi::neuraylib::IType_enum::EID_INTENSITY_MODE:
             return MDL::IType_enum::EID_INTENSITY_MODE;
-        case mi::neuraylib::IType_enum::EID_FORCE_32_BIT:
-            return MDL::IType_enum::EID_FORCE_32_BIT;
     }
 
     ASSERT( M_SCENE, false);
@@ -150,8 +142,6 @@ mi::neuraylib::IType_struct::Predefined_id int_struct_id_to_ext_struct_id(
             return mi::neuraylib::IType_struct::SID_MATERIAL_GEOMETRY;
         case MDL::IType_struct::SID_MATERIAL:
             return mi::neuraylib::IType_struct::SID_MATERIAL;
-        case MDL::IType_struct::SID_FORCE_32_BIT:
-            return mi::neuraylib::IType_struct::SID_FORCE_32_BIT;
     }
 
     ASSERT( M_SCENE, false);
@@ -174,8 +164,6 @@ MDL::IType_struct::Predefined_id ext_struct_id_to_int_struct_id(
             return MDL::IType_struct::SID_MATERIAL_GEOMETRY;
         case mi::neuraylib::IType_struct::SID_MATERIAL:
             return MDL::IType_struct::SID_MATERIAL;
-        case mi::neuraylib::IType_struct::SID_FORCE_32_BIT:
-            return MDL::IType_struct::SID_FORCE_32_BIT;
     }
 
     ASSERT( M_SCENE, false);
@@ -195,8 +183,6 @@ mi::neuraylib::IType_texture::Shape int_shape_to_ext_shape( MDL::IType_texture::
             return mi::neuraylib::IType_texture::TS_PTEX;
         case MDL::IType_texture::TS_BSDF_DATA:
             return mi::neuraylib::IType_texture::TS_BSDF_DATA;
-        case MDL::IType_texture::TS_FORCE_32_BIT:
-            return mi::neuraylib::IType_texture::TS_FORCE_32_BIT;
     }
 
     ASSERT( M_SCENE, false);
@@ -216,8 +202,6 @@ MDL::IType_texture::Shape ext_shape_to_int_shape( mi::neuraylib::IType_texture::
             return MDL::IType_texture::TS_PTEX;
         case mi::neuraylib::IType_texture::TS_BSDF_DATA:
             return MDL::IType_texture::TS_BSDF_DATA;
-        case mi::neuraylib::IType_texture::TS_FORCE_32_BIT:
-            return MDL::IType_texture::TS_FORCE_32_BIT;
     }
 
     ASSERT( M_SCENE, false);
@@ -951,9 +935,6 @@ const mi::neuraylib::IType* Type_factory::create(
             mi::base::Handle<const MDL::IType_vdf> t( type->get_interface<MDL::IType_vdf>());
             return new Type_vdf( this, t.get(), owner);
         }
-        case MDL::IType::TK_FORCE_32_BIT:
-            ASSERT( M_SCENE, false);
-            return nullptr;
     };
 
    ASSERT( M_SCENE, false);

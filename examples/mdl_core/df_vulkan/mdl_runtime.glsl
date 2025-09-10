@@ -93,12 +93,9 @@ readonly restrict buffer RODataSegmentBuffer
 #define BSDF_EVENT_SPECULAR_REFLECTION   (BSDF_EVENT_SPECULAR | BSDF_EVENT_REFLECTION)
 #define BSDF_EVENT_SPECULAR_TRANSMISSION (BSDF_EVENT_SPECULAR | BSDF_EVENT_TRANSMISSION)
 
-#define BSDF_EVENT_FORCE_32_BIT 0xffffffffU
-
 #define Edf_event_type         int
 #define EDF_EVENT_NONE         0
 #define EDF_EVENT_EMISSION     1
-#define EDF_EVENT_FORCE_32_BIT 0xffffffffU
 
 #define BSDF_USE_MATERIAL_IOR (-1.0)
 
@@ -111,7 +108,6 @@ readonly restrict buffer RODataSegmentBuffer
 #define DF_FLAGS_ALLOW_TRANSMIT              2
 #define DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT  (DF_FLAGS_ALLOW_REFLECT | DF_FLAGS_ALLOW_TRANSMIT)
 #define DF_FLAGS_ALLOWED_SCATTER_MODE_MASK   (DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT)
-#define DF_FLAGS_FORCE_32_BIT                0xffffffffU
 
 
 struct State_core

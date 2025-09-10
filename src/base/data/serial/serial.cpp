@@ -321,14 +321,6 @@ void Deserializer_impl::read_size_t(size_t* value)
 {
     Uint64 value64;
     read(&value64);
-#ifndef BIT64
-    if (value64 > std::numeric_limits<size_t>::max())
-    {
-        LOG::mod_log->fatal(M_SERIAL, LOG::Mod_log::C_MISC, 1,
-            "Received memory block size which cannot be handled"
-            " by a 32 bit machine. Remove 32 bit machines from the cluster and try again.");
-    }
-#endif
     *value = (size_t)value64;
 }
 

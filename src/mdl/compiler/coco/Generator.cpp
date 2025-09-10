@@ -140,14 +140,18 @@ void Generator::CopyFramePart(char const *stop, bool generateOutput) {
 		endOfStopString = coco_string_length(stop)-1;
 	}
 
-	fscanf(fram, "%c", &ch); //	fram.ReadByte();
-	while (!feof(fram)) { // ch != EOF
+	int result = fscanf(fram, "%c", &ch); //	fram.ReadByte();
+	while (result != EOF) {
 		if (stop != NULL && ch == startCh) {
 			int i = 0;
 			do {
 				if (i == endOfStopString) return; // stop[0..i] found
-				fscanf(fram, "%c", &ch); i++;
+				result = fscanf(fram, "%c", &ch); i++;
+				if (result == EOF)
+				    break;
 			} while (ch == stop[i]);
+			if (result == EOF)
+			    break;
 			// stop[0..i-1] found; continue with last read character
 			if (generateOutput) {
 				char *subStop = coco_string_create(stop, 0, i);
@@ -156,7 +160,7 @@ void Generator::CopyFramePart(char const *stop, bool generateOutput) {
 			}
 		} else {
 			if (generateOutput) { fprintf(gen, "%c", ch); }
-			fscanf(fram, "%c", &ch);
+			result = fscanf(fram, "%c", &ch);
 		}
 	}
 	if (stop != NULL) {

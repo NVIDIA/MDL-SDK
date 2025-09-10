@@ -62,36 +62,36 @@ add_subdirectory(${MDL_SRC_FOLDER}/base/system/stlext)
 add_subdirectory(${MDL_SRC_FOLDER}/base/system/test)
 
 set(LINKER_DEPENDENCIES_BASE
-    mdl::base-data-attr
-    mdl::base-data-db
-    mdl::base-data-dblight
-    mdl::base-data-idata
-    mdl::base-data-serial
-    mdl::base-data-thread_pool
-    mdl::base-hal-disk
-    mdl::base-hal-hal
-    mdl::base-hal-host
-    mdl::base-hal-link
-    mdl::base-hal-thread
-    mdl::base-hal-time
-    mdl::base-lib-config
-    mdl::base-lib-cont
-    mdl::base-lib-libzip
-    mdl::base-lib-log
-    mdl::base-lib-mem
-    mdl::base-lib-path
-    mdl::base-lib-plug
-    mdl::base-lib-tinyxml2
-    mdl::base-lib-zlib
-    mdl::base-util-string_utils
-    mdl::base-util-registry
-    mdl::base-system-main
-    mdl::base-system-stlext
-    mdl::base-system-version
+    base-data-attr
+    base-data-db
+    base-data-dblight
+    base-data-idata
+    base-data-serial
+    base-data-thread_pool
+    base-hal-disk
+    base-hal-hal
+    base-hal-host
+    base-hal-link
+    base-hal-thread
+    base-hal-time
+    base-lib-config
+    base-lib-cont
+    base-lib-libzip
+    base-lib-log
+    base-lib-mem
+    base-lib-path
+    base-lib-plug
+    base-lib-tinyxml2
+    base-lib-zlib
+    base-util-string_utils
+    base-util-registry
+    base-system-main
+    base-system-stlext
+    base-system-version
     CACHE INTERNAL "" FORCE)
 
 set(_LINKER_DEPENDENCIES_BASE_WITHOUT_BASE_DATA ${LINKER_DEPENDENCIES_BASE})
-list(FILTER _LINKER_DEPENDENCIES_BASE_WITHOUT_BASE_DATA EXCLUDE REGEX mdl::base-data-)
+list(FILTER _LINKER_DEPENDENCIES_BASE_WITHOUT_BASE_DATA EXCLUDE REGEX base-data-)
 
 set(LINKER_DEPENDENCIES_BASE_WITHOUT_BASE_DATA
     ${_LINKER_DEPENDENCIES_BASE_WITHOUT_BASE_DATA}

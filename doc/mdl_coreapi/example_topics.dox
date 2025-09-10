@@ -43,6 +43,9 @@ The \ref mi_mdl_core_examples explain topics that are listed here as an index.
   - \ref mi_mdl_core_example_cuda_shared "Adding material subexpressions to the link unit"
   - \ref mi_mdl_core_example_cuda_shared "Adding distribution functions to the link unit"
   - \ref mi_mdl_core_example_cuda_shared "Generating the CUDA PTX code"
+  
+  - \ref mi_mdl_core_example_distilling_shared "The Distiller_helper helper class"
+  
 
 \section mi_mdl_core_example_topics_general General
 
@@ -54,6 +57,9 @@ The \ref mi_mdl_core_examples explain topics that are listed here as an index.
   
   - \ref mi_mdl_core_example_code_gen "Different compilation modes and options"
   - \ref mi_mdl_core_example_code_gen "Target code generation for a material with multiple functions"
+  - \ref mi_mdl_core_example_code_gen "Material distilling"
+
+  - \ref mi_mdl_core_example_dependency_inspector "Type of dependencies of an MDL module"
   
   - \ref mi_mdl_core_example_df_native "Generating target code for BSDF functions (CPU)"
   - \ref mi_mdl_core_example_df_native "Using generated BSDF functions (CPU)"

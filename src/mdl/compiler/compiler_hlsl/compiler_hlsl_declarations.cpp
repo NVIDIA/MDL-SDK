@@ -286,6 +286,7 @@ Declaration_function::Declaration_function(
 , m_params()
 , m_body(NULL)
 , m_attr_no_inline(false)
+, m_is_export(false)
 {
 }
 

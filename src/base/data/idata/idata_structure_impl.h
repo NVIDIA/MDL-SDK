@@ -51,7 +51,7 @@
 #include <mi/base/interface_implement.h>
 #include <mi/base/interface_merger.h>
 
-#include <base/lib/robin_hood/robin_hood.h>
+#include <base/lib/unordered_dense/unordered_dense.h>
 
 #include "idata_interfaces.h"
 
@@ -206,7 +206,7 @@ private:
     std::vector<mi::base::Handle<mi::base::IInterface>> m_member;
 
     /// Maps keys to indices.
-    robin_hood::unordered_map<std::string, mi::Size> m_key_to_index;
+    ankerl::unordered_dense::map<std::string, mi::Size> m_key_to_index;
 
     /// Maps indices to keys.
     std::vector<std::string> m_index_to_key;
@@ -322,7 +322,7 @@ private:
     mi::Size m_length = 0;
 
     /// Maps keys to indices.
-    robin_hood::unordered_map<std::string, mi::Size> m_key_to_index;
+    ankerl::unordered_dense::map<std::string, mi::Size> m_key_to_index;
 
     /// Maps indices to keys.
     std::vector<std::string> m_index_to_key;

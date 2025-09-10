@@ -33,6 +33,7 @@
 #include "search_path.h"
 
 #include <base/lib/tinyxml2/tinyxml2.h>
+#include <base/hal/disk/disk_utils.h>
 
 #include <filesystem>
 #include <stack>
@@ -663,8 +664,8 @@ bool Create_xliff_command::build_filename(const IMdl_module_info * module, strin
     fs::path module_path(fs::u8path(ispath->get_c_str()));
     fs::path directory = module_path.parent_path();
     std::string s = string(module->get_simple_name()) + "_" + m_locale + ".xlf";
-    fs::path xlf = directory / s;
-    filename = xlf.u8string();
+    fs::path xlf = directory / fs::u8path(s);
+    filename = MI::DISK::to_string(xlf);
     return true;
 }
 

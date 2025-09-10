@@ -26,21 +26,45 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 
-#include "example_shared.h"
 #include "mdl_python.h"
+
+#include "utils/mdl.h"
+
+// Avoid pulling in mdl.cpp which has more dependencies.
+namespace mi { namespace examples { namespace mdl {
+
+#ifdef MI_PLATFORM_WINDOWS
+// Pointer to the DSO handle. Cached here for unload().
+HMODULE g_dso_handle;
+#else
+// Pointer to the DSO handle. Cached here for unload().
+void* g_dso_handle;
+#endif
+
+mi::base::Handle<mi::base::ILogger> g_logger;
+
+} } } // mi::examples::mdl
 
 mi::neuraylib::INeuray* g_neuray;
 
+/// Indicates whether \p t is a suffix of \p s.
+bool ends_with(const std::string& s, const std::string& t)
+{
+    if (t.size() > s.size())
+        return false;
+    return std::equal(t.rbegin(), t.rend(), s.rbegin());
+}
+
 mi::neuraylib::INeuray* load_and_get_ineuray(const char* filename)
 {
-    if (!filename || strlen(filename) == 0) {
+    if (!filename || filename[0] == '\0') {
         mi::neuraylib::INeuray* result = mi::examples::mdl::load_and_get_ineuray();
         g_neuray = result;
         return result;
     }
 
     std::string lib = filename;
-    if (!mi::examples::strings::ends_with(lib, MI_BASE_DLL_FILE_EXT))
+    if (!ends_with(lib, MI_BASE_DLL_FILE_EXT))
         lib += MI_BASE_DLL_FILE_EXT;
 
     mi::neuraylib::INeuray* result = mi::examples::mdl::load_and_get_ineuray(lib.c_str());
@@ -54,7 +78,7 @@ bool load_plugin(mi::neuraylib::INeuray* neuray, const char* filename)
         return false;
 
     std::string lib = filename;
-    if (!mi::examples::strings::ends_with(lib, MI_BASE_DLL_FILE_EXT))
+    if (!ends_with(lib, MI_BASE_DLL_FILE_EXT))
         lib += MI_BASE_DLL_FILE_EXT;
 
     return mi::examples::mdl::load_plugin(neuray, lib.c_str()) == 0;

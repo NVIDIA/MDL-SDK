@@ -1335,7 +1335,7 @@ ConstantInt *IfContext::get_constant(int i)
     return ConstantInt::get(m_func.get_type_mapper().get_int_type(), i);
 }
 
-/// Replaces oldBlock with newBlock in all PHI nodes in blockToFix.
+/// Replace oldBlock with newBlock in all PHI nodes in blockToFix.
 static void fixPHIsInBlock(
     BasicBlock *blockToFix,
     BasicBlock *oldBlock,
@@ -1345,6 +1345,27 @@ static void fixPHIsInBlock(
         int blockIdx = phi.getBasicBlockIndex(oldBlock);
         MDL_ASSERT(blockIdx > -1 && "PHI node not set to fused block!");
         phi.setIncomingBlock(blockIdx, newBlock);
+    }
+}
+
+/// Replace trivial phis (all values the same) by their incoming value.
+static void optimizeTrivialPHI(PHINode *phi)
+{
+    unsigned n = phi->getNumOperands();
+    if (n == 0) {
+        return;
+    }
+
+    Value *same_value = phi->getIncomingValue(0);
+    for (unsigned i = 1; i < n; ++i) {
+        if (phi->getIncomingValue(i) != same_value) {
+            same_value = nullptr;
+            break;
+        }
+    }
+    if (same_value != nullptr) {
+        phi->replaceAllUsesWith(same_value);
+        phi->eraseFromParent();
     }
 }
 
@@ -1484,11 +1505,8 @@ bool IfContext::handleProperRegions(
                     phi->removeIncomingValue(index, /*DeletePHIIfEmpty=*/ true);
                 }
 
-                // replace trivial phis by their incoming value
-                if (phi->getNumOperands() == 1) {
-                    phi->replaceAllUsesWith(phi->getIncomingValue(0));
-                    phi->eraseFromParent();
-                }
+                optimizeTrivialPHI(newPhi);
+                optimizeTrivialPHI(phi);
             }
 
             ++curIndex;
@@ -2305,9 +2323,11 @@ void UnswitchPass::fixPhis(
 {
     for (PHINode &phi : bb->phis()) {
         int idx = phi.getBasicBlockIndex(old_pred);
-        while (idx != -1) {
+        if (idx != -1) {
+            // Change the first PHI incoming block from old_pred to new_pred,
+            // other (possible) entries will be adjusted when further switch cases are
+            // processed.
             phi.setIncomingBlock(unsigned(idx), new_pred);
-            idx = phi.getBasicBlockIndex(old_pred);
         }
     }
 }

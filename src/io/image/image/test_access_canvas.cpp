@@ -74,9 +74,9 @@ MI_TEST_AUTO_FUNCTION( test_access_canvas )
     mi::base::Handle<const mi::neuraylib::ICanvas> c;
 
     mi::base::Handle<mi::neuraylib::ICanvas> canvas( image_module->create_canvas(
-        IMAGE::File_based(), root_path + "test_mipmap.png", /*selector*/ nullptr));
+        IMAGE::File_based(), root_path + "test_simple.png", /*selector*/ nullptr));
     MI_CHECK( canvas);
-    MI_CHECK_EQUAL_CSTR( canvas->get_type(), "Rgb");
+    MI_CHECK_EQUAL_CSTR( canvas->get_type(), "Rgb_16");
 
     mi::Uint32 width  = canvas->get_resolution_x();
     mi::Uint32 height = canvas->get_resolution_y();
@@ -118,7 +118,7 @@ MI_TEST_AUTO_FUNCTION( test_access_canvas )
     bool result = image_module->export_canvas( canvas2.get(), "access_canvas2.png");
     MI_CHECK( result);
 
-    std::string reference_path = root_path + "reference/access_canvas.png";
+    std::string reference_path = root_path + "reference/access_canvas2.png";
     MI_CHECK_IMG_DIFF( "access_canvas2.png", reference_path.c_str());
 
     // Use a canvas where the tiles have exactly the same sizes as the buffers. Hence, a single

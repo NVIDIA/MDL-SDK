@@ -2,13 +2,14 @@
 :root {
     --ser: 'Linux Libertine', serif;
     --serif: 1.1rem 'Linux Libertine',serif;
-
+	
     --sans: 'Noto Sans',sans-serif;
     --sans-serif: 1rem 'Noto Sans',sans-serif;
-
+	
     --mono: 'Roboto Mono',monospace;
     --monospace: .95rem 'Roboto Mono',monospace;
 }
+
 
 
 * { padding: 0; margin: 0; border: 0; }

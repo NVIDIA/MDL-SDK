@@ -32,6 +32,7 @@
 #include <mi/mdl/mdl_iowned.h>
 #include <mi/base/iallocator.h>
 
+#include <atomic>
 #include <vector>
 
 #include "compilercore_cc_conf.h"
@@ -210,6 +211,22 @@ class Type_error : public Type_base<IType_error>
 public:
     /// Constructor.
     explicit Type_error()
+    : Base()
+    {
+    }
+};
+
+/// The MDL void type.
+///
+/// The void type represents a type void. As the MDL language does not have a void type,
+/// it does never occur in any syntax representations.
+/// No valid MDL module contains void types in the syntax tree.
+class Type_void : public Type_base<IType_void>
+{
+    typedef Type_base<IType_void> Base;
+public:
+    /// Constructor.
+    explicit Type_void()
     : Base()
     {
     }
@@ -701,6 +718,9 @@ public:
     /// Get the number of compound elements.
     int get_compound_size() const MDL_FINAL { return 3; }
 
+    /// Get the type of the color (RGB or spectral) elements.
+    IType_atomic const *get_element_type() const MDL_FINAL { return &the_float_type; }
+
     /// Constructor.
     explicit Type_color()
     : Base()
@@ -790,6 +810,110 @@ private:
 
     /// Number of function parameters.
     size_t m_n_parameters;
+};
+
+/// Implementation of the pointer type.
+class Type_pointer : public Type_base<IType_pointer>
+{
+    typedef Type_base<IType_pointer> Base;
+    friend class Arena_builder;
+public:
+
+    /// Get the declarativeness of the base type.
+    bool is_declarative() const MDL_FINAL {
+        return m_element_type->is_declarative();
+    }
+
+    /// Get the type of the array elements.
+    IType const *get_element_type() const MDL_FINAL { return m_element_type; }
+
+    /// Get the address space of the pointer.
+    unsigned get_address_space() const MDL_FINAL { return m_addr_space; }
+
+    // ---------------------- non-interface ----------------------
+
+    /// Get the owner id.
+    size_t get_owner_id() const { return m_owner_id; }
+
+private:
+    /// Constructor for a pointer.
+    ///
+    /// \param owner_id      the id of the type factory owning this type
+    /// \param element_type  the element type of this pointer type
+    /// \param addr_space    the address space of this pointer type
+    explicit Type_pointer(
+        size_t      owner_id,
+        IType const *element_type,
+        unsigned    addr_space)
+    : Base()
+    , m_owner_id(owner_id)
+    , m_element_type(element_type)
+    , m_addr_space(addr_space)
+    {
+        MDL_ASSERT(Type_factory::is_owned(m_owner_id, element_type));
+    }
+
+private:
+    /// An id representing the owner of this type (for debugging).
+    size_t const m_owner_id;
+
+    /// The element type of this pointer type.
+    IType const *m_element_type;
+
+    /// The address space of this pointer type.
+    unsigned const m_addr_space;
+};
+
+/// Implementation of the reference type.
+class Type_ref : public Type_base<IType_ref>
+{
+    typedef Type_base<IType_ref> Base;
+    friend class Arena_builder;
+public:
+
+    /// Get the declarativeness of the base type.
+    bool is_declarative() const MDL_FINAL {
+        return m_element_type->is_declarative();
+    }
+
+    /// Get the type of the array elements.
+    IType const *get_element_type() const MDL_FINAL { return m_element_type; }
+
+    /// Get the address space of the pointer.
+    unsigned get_address_space() const MDL_FINAL { return m_addr_space; }
+
+    // ---------------------- non-interface ----------------------
+
+    /// Get the owner id.
+    size_t get_owner_id() const { return m_owner_id; }
+
+private:
+    /// Constructor for a reference.
+    ///
+    /// \param owner_id      the id of the type factory owning this type
+    /// \param element_type  the element type of this reference type
+    /// \param addr_space    the address space of this reference type
+    explicit Type_ref(
+        size_t      owner_id,
+        IType const *element_type,
+        unsigned    addr_space)
+    : Base()
+    , m_owner_id(owner_id)
+    , m_element_type(element_type)
+    , m_addr_space(addr_space)
+    {
+        MDL_ASSERT(Type_factory::is_owned(m_owner_id, element_type));
+    }
+
+private:
+    /// An id representing the owner of this type (for debugging).
+    size_t const m_owner_id;
+
+    /// The element type of this pointer type.
+    IType const *m_element_type;
+
+    /// The address space of this pointer type.
+    unsigned const m_addr_space;
 };
 
 /// Implementation of the struct category type.
@@ -1013,31 +1137,44 @@ namespace {
 #include "compilercore_builtin_types.h"
 }  // anonymous
 
-static size_t g_id = 0;
+static std::atomic<size_t> g_id = 0;
 
 Type_factory::Type_factory(
     Memory_arena  &arena,
-    MDL           &compiler,
+    Type_factory  *root_factory,
     Symbol_table  &symtab)
 : Base()
 , m_builder(arena)
 , m_id(++g_id)
-, m_compiler_factory(compiler.type_factory_is_valid() ? compiler.get_type_factory() : NULL)
+, m_root_factory(root_factory)
 , m_symtab(&symtab)
 , m_type_cache(0, Type_cache::hasher(), Type_cache::key_equal(), &arena)
 , m_array_size_cache(0, Array_size_cache::hasher(), Array_size_cache::key_equal(), &arena)
 , m_imported_types_cache(0, Type_import_map::hasher(), Type_import_map::key_equal(), &arena)
 , m_imported_category_cache(0, Category_import_map::hasher(), Category_import_map::key_equal(), &arena)
 {
-    if (!compiler.type_factory_is_valid()) {
-        // we are creating the compiler owned TF, insert the predefined types here
-        enter_predefined_types(*this, !compiler.mat_ior_is_varying());
-    } else {
-        // module owned TF, no predefined types
-        memset(m_predefined_structs,    0, sizeof(m_predefined_structs));
-        memset(m_predefined_enums,      0, sizeof(m_predefined_enums));
-        memset(m_predefined_categories, 0, sizeof(m_predefined_categories));
-    }
+    // module owned TF, no predefined types
+    memset(m_predefined_structs,    0, sizeof(m_predefined_structs));
+    memset(m_predefined_enums,      0, sizeof(m_predefined_enums));
+    memset(m_predefined_categories, 0, sizeof(m_predefined_categories));
+}
+
+Type_factory::Type_factory(
+    Memory_arena  &arena,
+    bool          mat_ior_is_varying,
+    Symbol_table  &symtab)
+: Base()
+, m_builder(arena)
+, m_id(++g_id)
+, m_root_factory(NULL)
+, m_symtab(&symtab)
+, m_type_cache(0, Type_cache::hasher(), Type_cache::key_equal(), &arena)
+, m_array_size_cache(0, Array_size_cache::hasher(), Array_size_cache::key_equal(), &arena)
+, m_imported_types_cache(0, Type_import_map::hasher(), Type_import_map::key_equal(), &arena)
+, m_imported_category_cache(0, Category_import_map::hasher(), Category_import_map::key_equal(), &arena)
+{
+    // we are creating the compiler owned TF, insert the predefined types here
+    enter_predefined_types(*this, !mat_ior_is_varying);
 }
 
 /// Get the predefined struct id for a given predefined symbol.
@@ -1140,7 +1277,8 @@ IType const *Type_factory::create_alias(
     IType::Modifiers modifiers)
 {
     // only allowed on the module factories
-    if (m_compiler_factory == NULL && name != NULL) {
+    if (m_root_factory == NULL && name != NULL) {
+        MDL_ASSERT(!"Root factory cannot create named alias type");
         return NULL;
     }
 
@@ -1194,6 +1332,12 @@ IType_error const *Type_factory::create_error()
     return &the_error_type;
 }
 
+// Create a new type void instance.
+IType_void const *Type_factory::create_void()
+{
+    return &the_void_type;
+}
+
 // Create a new type auto (non-deduced incomplete type) instance.
 IType_auto const *Type_factory::create_auto()
 {
@@ -1219,7 +1363,8 @@ IType_enum const *Type_factory::create_enum(
     size_t                  n_values)
 {
     // only allowed on the module factories
-    if (m_compiler_factory == NULL) {
+    if (m_root_factory == NULL) {
+        MDL_ASSERT(!"Root factory cannot create enum type");
         return NULL;
     }
 
@@ -1251,7 +1396,7 @@ IType_enum const *Type_factory::create_enum(
 IType_enum const *Type_factory::lookup_enum(char const *name) const
 {
     // only allowed on the module factories
-    if (m_compiler_factory == NULL) {
+    if (m_root_factory == NULL) {
         return NULL;
     }
 
@@ -1458,7 +1603,7 @@ IType_matrix const *Type_factory::create_matrix(
 IType const *Type_factory::find_array(IType const *element_type, int size) const
 {
     // only allowed on the module factories
-    if (m_compiler_factory == NULL) {
+    if (m_root_factory == NULL) {
         return NULL;
     }
 
@@ -1475,7 +1620,7 @@ IType const *Type_factory::find_array(IType const *element_type, int size) const
 IType const *Type_factory::find_any_deferred_array(IType const *element_type) const
 {
     // only allowed on the module factories
-    if (m_compiler_factory == NULL) {
+    if (m_root_factory == NULL) {
         return NULL;
     }
 
@@ -1506,7 +1651,8 @@ IType const *Type_factory::create_array(
     size_t      size)
 {
     // only allowed on the module factories
-    if (m_compiler_factory == NULL) {
+    if (m_root_factory == NULL) {
+        MDL_ASSERT(!"Root factory cannot create array type");
         return NULL;
     }
 
@@ -1550,12 +1696,69 @@ IType_color const *Type_factory::create_color()
     return &the_color_type;
 }
 
+// Create a new type pointer instance.
+IType const *Type_factory::create_pointer(
+    IType const *element_type,
+    unsigned    addr_space)
+{
+    // only allowed on the module factories
+    if (m_root_factory == NULL) {
+        MDL_ASSERT(!"Root factory cannot create pointer type");
+        return NULL;
+    }
+
+    if (is<IType_error>(element_type)) {
+        // cannot create an array of error type
+        return element_type;
+    }
+
+    Type_cache_key key(IType::TK_PTR, element_type, addr_space);
+
+    Type_cache::const_iterator it = m_type_cache.find(key);
+    if (it == m_type_cache.end()) {
+        IType const *ptr_type = m_builder.create<Type_pointer>(
+            m_id, element_type, addr_space);
+
+        it = m_type_cache.insert(Type_cache::value_type(key, ptr_type)).first;
+    }
+    return it->second;
+}
+
+// Create a new type reference instance.
+IType const *Type_factory::create_reference(
+    IType const *element_type,
+    unsigned    addr_space)
+{
+    // only allowed on the module factories
+    if (m_root_factory == NULL) {
+        MDL_ASSERT(!"Root factory cannot create reference type");
+        return NULL;
+    }
+
+    if (is<IType_error>(element_type)) {
+        // cannot create an array of error type
+        return element_type;
+    }
+
+    Type_cache_key key(IType::TK_REF, element_type, addr_space);
+
+    Type_cache::const_iterator it = m_type_cache.find(key);
+    if (it == m_type_cache.end()) {
+        IType const *ptr_type = m_builder.create<Type_ref>(
+            m_id, element_type, addr_space);
+
+        it = m_type_cache.insert(Type_cache::value_type(key, ptr_type)).first;
+    }
+    return it->second;
+}
+
 // Create a new struct category.
 IStruct_category const *Type_factory::create_struct_category(
     ISymbol const *category_name)
 {
     // only allowed on the module factories
-    if (m_compiler_factory == NULL) {
+    if (m_root_factory == NULL) {
+        MDL_ASSERT(!"Root factory cannot create struct category");
         return NULL;
     }
 
@@ -1574,7 +1777,7 @@ IStruct_category const *Type_factory::create_struct_category(
 IStruct_category const *Type_factory::lookup_struct_category(char const *name)
 {
     // only allowed on the module factories
-    if (m_compiler_factory == NULL) {
+    if (m_root_factory == NULL) {
         return NULL;
     }
 
@@ -1594,7 +1797,8 @@ IType_function const *Type_factory::create_function(
     size_t                           n_parameters)
 {
     // only allowed on the module factories
-    if (m_compiler_factory == NULL) {
+    if (m_root_factory == NULL) {
+        MDL_ASSERT(!"Root factory cannot create function type");
         return NULL;
     }
 
@@ -1619,7 +1823,8 @@ IType_struct const *Type_factory::create_struct(
     size_t                    n_fields)
 {
     // only allowed on the module factories
-    if (m_compiler_factory == NULL) {
+    if (m_root_factory == NULL) {
+        MDL_ASSERT(!"Root factory cannot create struct type");
         return NULL;
     }
 
@@ -1654,7 +1859,7 @@ IType_struct const *Type_factory::create_struct(
 IType_struct const *Type_factory::lookup_struct(char const *name) const
 {
     // only allowed on the module factories
-    if (m_compiler_factory == NULL) {
+    if (m_root_factory == NULL) {
         return NULL;
     }
 
@@ -1896,6 +2101,9 @@ IType const *Type_factory::import(IType const *type)
         return create_bsdf_measurement();
     case IType::TK_AUTO:
         return create_auto();
+    case IType::TK_PTR:
+    case IType::TK_REF:
+    case IType::TK_VOID:
     case IType::TK_ERROR:
         return create_error();
     }
@@ -1910,7 +2118,7 @@ IType const *Type_factory::create_array(
     ISymbol const *sym)
 {
     // only allowed on the module factories
-    if (m_compiler_factory == NULL) {
+    if (m_root_factory == NULL) {
         return NULL;
     }
 
@@ -1957,10 +2165,10 @@ IType const *Type_factory::create_array(
 
 IStruct_category const *Type_factory::get_predefined_struct_category(IStruct_category::Predefined_id part)
 {
-    if (m_compiler_factory != NULL) {
+    if (m_root_factory != NULL) {
         // this cast IS ugly, but we know that the top level type factory
         // is of type Type_factory (and not a proxy), so it's ok
-        return static_cast<Type_factory *>(m_compiler_factory)->get_predefined_struct_category(part);
+        return static_cast<Type_factory *>(m_root_factory)->get_predefined_struct_category(part);
     }
     if (0 <= part && part <= IStruct_category::CID_LAST) {
         // get those from the compiler factory
@@ -1972,10 +2180,10 @@ IStruct_category const *Type_factory::get_predefined_struct_category(IStruct_cat
 // Return a predefined struct.
 IType_struct const *Type_factory::get_predefined_struct(IType_struct::Predefined_id part)
 {
-    if (m_compiler_factory != NULL) {
+    if (m_root_factory != NULL) {
         // this cast IS ugly, but we know that the top level type factory
         // is of type Type_factory (and not a proxy), so it's ok
-        return static_cast<Type_factory *>(m_compiler_factory)->get_predefined_struct(part);
+        return static_cast<Type_factory *>(m_root_factory)->get_predefined_struct(part);
     }
     if (0 <= part && part <= IType_struct::SID_LAST) {
         // get those from the compiler factory
@@ -1987,10 +2195,10 @@ IType_struct const *Type_factory::get_predefined_struct(IType_struct::Predefined
 // Return a predefined enum.
 IType_enum const *Type_factory::get_predefined_enum(IType_enum::Predefined_id part)
 {
-    if (m_compiler_factory != NULL) {
+    if (m_root_factory != NULL) {
         // this cast IS ugly, but we know that the top level type factory
         // is of type Type_factory (and not a proxy), so it's ok
-        return static_cast<Type_factory *>(m_compiler_factory)->get_predefined_enum(part);
+        return static_cast<Type_factory *>(m_root_factory)->get_predefined_enum(part);
     }
     if (0 <= part && part <= IType_enum::EID_LAST) {
         // get those from the compiler factory
@@ -2149,6 +2357,44 @@ IType const *Type_factory::get_equal(IType const *type) const
         return safe->create_bsdf_measurement();
     case IType::TK_AUTO:
         return safe->create_auto();
+    case IType::TK_PTR:
+        {
+            IType_pointer const *p_type = cast<IType_pointer>(type);
+            IType const         *e_type = p_type->get_element_type();
+
+            e_type = get_equal(e_type);
+            if (e_type == NULL) {
+                return NULL;
+            }
+
+            Type_cache_key key(p_type->get_kind(), e_type, p_type->get_address_space());
+
+            Type_cache::const_iterator it = m_type_cache.find(key);
+            if (it != m_type_cache.end()) {
+                return it->second;
+            }
+            return NULL;
+        }
+    case IType::TK_REF:
+    {
+        IType_ref const *r_type = cast<IType_ref>(type);
+        IType const     *e_type = r_type->get_element_type();
+
+        e_type = get_equal(e_type);
+        if (e_type == NULL) {
+            return NULL;
+        }
+
+        Type_cache_key key(r_type->get_kind(), e_type, r_type->get_address_space());
+
+        Type_cache::const_iterator it = m_type_cache.find(key);
+        if (it != m_type_cache.end()) {
+            return it->second;
+        }
+        return NULL;
+    }
+    case IType::TK_VOID:
+        return safe->create_void();
     case IType::TK_ERROR:
         return safe->create_error();
     }
@@ -2183,7 +2429,7 @@ IType const *Type_factory::create_array(
     IType_array_size const *iarray_size)
 {
     // only allowed on the module factories
-    if (m_compiler_factory == NULL) {
+    if (m_root_factory == NULL) {
         return NULL;
     }
 
@@ -2544,8 +2790,8 @@ bool Type_factory::is_owner(IType const *type) const
         return true;
     }
 
-    if (m_compiler_factory != NULL) {
-        if (impl_cast<Type_factory>(m_compiler_factory)->is_owner(type)) {
+    if (m_root_factory != NULL) {
+        if (impl_cast<Type_factory>(m_root_factory)->is_owner(type)) {
             return true;
         }
     } else {

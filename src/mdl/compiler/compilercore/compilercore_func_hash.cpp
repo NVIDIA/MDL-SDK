@@ -692,6 +692,7 @@ void Function_hasher::hash(IType const *tp)
     case IType::TK_VDF:
     case IType::TK_COLOR:
     case IType::TK_BSDF_MEASUREMENT:
+    case IType::TK_VOID:
     case IType::TK_AUTO:
         // for all these, it is enough to hash the kind
         hash(kind);
@@ -795,6 +796,24 @@ void Function_hasher::hash(IType const *tp)
 
             hash(kind);
             hash(t_tp->get_shape());
+        }
+        return;
+
+    case IType::TK_PTR:
+        {
+            IType_pointer const *p_tp = cast<IType_pointer>(tp);
+            hash(kind);
+            hash(p_tp->get_address_space());
+            hash(p_tp->get_element_type());
+        }
+        return;
+
+    case IType::TK_REF:
+        {
+            IType_ref const *r_tp = cast<IType_ref>(tp);
+            hash(kind);
+            hash(r_tp->get_address_space());
+            hash(r_tp->get_element_type());
         }
         return;
 

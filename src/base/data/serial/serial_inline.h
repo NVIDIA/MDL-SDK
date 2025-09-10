@@ -473,27 +473,11 @@ inline void write_range(S& serializer, const T (&arr)[N])
     write_range(serializer,arr+0,arr+N);
 }
 
-template <typename T, typename S, typename>
-inline void write(S* serializer, const std::vector<T>& array)
-{
-    write(serializer,(mi::Uint64)array.size());
-    write_range(*serializer, array.begin(), array.end());
-}
-
 template <typename T,typename A, typename S, typename>
 inline void write(S* serializer, const std::vector<T,A>& array)
 {
     write(serializer,(mi::Uint64)array.size());
     write_range(*serializer, array.begin(), array.end());
-}
-
-template <typename T, typename S, typename>
-inline void write(S* serializer, const std::vector<T*>& array)
-{
-    const mi::Uint64 size(array.size());
-    write(serializer,size);
-    for (mi::Uint64 i=0; i != size; ++i)
-        write(serializer,array[i]);
 }
 
 template <typename T,typename A, typename S, typename>
@@ -503,15 +487,6 @@ inline void write(S* serializer, const std::vector<T*,A>& array)
     write(serializer,size);
     for (mi::Uint64 i=0; i != size; ++i)
         write(serializer,array[i]);
-}
-
-template <typename T, typename D, typename>
-inline void read(D* deserializer, std::vector<T>* array)
-{
-    mi::Uint64 size;
-    deserializer->read(&size);
-    array->resize(size);
-    read_range(*deserializer, array->begin(), array->end());
 }
 
 // needed because read_range is not compatible with bool vector iterators
@@ -536,16 +511,6 @@ inline void read(D* deserializer, std::vector<T,A>* array)
     deserializer->read(&size);
     array->resize(size);
     read_range(*deserializer, array->begin(), array->end());
-}
-
-template <typename T, typename D, typename>
-inline void read(D* deserializer, std::vector<T*>* array)
-{
-    mi::Uint64 size;
-    deserializer->read(&size);
-    array->resize(size);
-    for (size_t i=0; i != size; ++i)
-        (*array)[i] = reinterpret_cast<T*>( deserializer->deserialize() );
 }
 
 template <typename T,typename A, typename D, typename>

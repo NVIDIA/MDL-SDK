@@ -199,16 +199,12 @@ enum Bsdf_event_type {
     BSDF_EVENT_GLOSSY_TRANSMISSION   = BSDF_EVENT_GLOSSY   | BSDF_EVENT_TRANSMISSION,
     BSDF_EVENT_SPECULAR_REFLECTION   = BSDF_EVENT_SPECULAR | BSDF_EVENT_REFLECTION,
     BSDF_EVENT_SPECULAR_TRANSMISSION = BSDF_EVENT_SPECULAR | BSDF_EVENT_TRANSMISSION,
-
-    BSDF_EVENT_FORCE_32_BIT = 0xffffffffU
 };
 
 /// The type of events created by EDF importance sampling.
 enum Edf_event_type {
     EDF_EVENT_NONE          = 0,
-    EDF_EVENT_EMISSION      = 1,
-
-    EDF_EVENT_FORCE_32_BIT  = 0xffffffffU
+    EDF_EVENT_EMISSION      = 1
 };
 
 /// MBSDFs can consist of two parts, which can be selected using this enumeration.
@@ -247,13 +243,10 @@ enum Mbsdf_part
 #define BSDF_EVENT_SPECULAR_REFLECTION   (BSDF_EVENT_SPECULAR | BSDF_EVENT_REFLECTION)
 #define BSDF_EVENT_SPECULAR_TRANSMISSION (BSDF_EVENT_SPECULAR | BSDF_EVENT_TRANSMISSION)
 
-#define BSDF_EVENT_FORCE_32_BIT 0xffffffffU
-
 #define Edf_event_type          int
 #define EDF_EVENT_NONE          0
 
 #define EDF_EVENT_EMISSION      1
-#define EDF_EVENT_FORCE_32_BIT  0xffffffffU
 
 /// MBSDFs can consist of two parts, which can be selected using this enumeration.
 #define Mbsdf_part               int
@@ -276,7 +269,6 @@ enum Mbsdf_part
 #define DF_FLAGS_ALLOW_TRANSMIT              2
 #define DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT  (DF_FLAGS_ALLOW_REFLECT | DF_FLAGS_ALLOW_TRANSMIT)
 #define DF_FLAGS_ALLOWED_SCATTER_MODE_MASK   (DF_FLAGS_ALLOW_REFLECT_AND_TRANSMIT)
-#define DF_FLAGS_FORCE_32_BIT                0xffffffffU
 
 
 /// Input and output structure for BSDF sampling data.
@@ -357,7 +349,7 @@ struct Bsdf_auxiliary_data {
         float3 roughness;                          ///< output: glossy rougness_u,
                                                    ///< glossy roughness_v, bsdf_weight
     #else
-        float3 roughness[MDL_DF_HANDLE_SLOT_MODE]; ///< output: glossy rougness_u, 
+        float3 roughness[MDL_DF_HANDLE_SLOT_MODE]; ///< output: glossy rougness_u,
                                                    ///< glossy roughness_v, bsdf_weight
     #endif
 

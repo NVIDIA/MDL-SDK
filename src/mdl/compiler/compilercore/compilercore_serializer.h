@@ -894,6 +894,11 @@ public:
     /// Write all initializer expressions unreferenced so far.
     void write_unreferenced_init_expressions();
 
+    /// Serialize a ISymbol vector.
+    ///
+    /// \param vec  the vector to serialize
+    void serialize(vector<ISymbol const *>::Type const &vec);
+
     /// Constructor.
     ///
     /// \param alloc           the allocator
@@ -1358,11 +1363,19 @@ public:
     ///
     /// \param alloc         the allocator
     /// \param deserializer  the deserializer used to write the low level data.
-    /// \param compiler      the compiler
+    /// \param compiler      the compiler for registering builtin modules
     MDL_binary_deserializer(
         IAllocator    *alloc,
         IDeserializer *deserializer,
-        MDL           *compiler);
+        MDL           &compiler);
+
+    /// Constructor.
+    ///
+    /// \param alloc         the allocator
+    /// \param deserializer  the deserializer used to write the low level data.
+    MDL_binary_deserializer(
+        IAllocator    *alloc,
+        IDeserializer *deserializer);
 
 private:
     /// interface deserializer for modules.
@@ -1527,6 +1540,11 @@ public:
     ///
     /// \param vf  the value factory used to restore the value
     IValue const *read_value(Value_factory &vf);
+
+    /// Deserialize a ISymbol vector.
+    ///
+    /// \param vec  the vector to deserialize to
+    void deserialize(vector<ISymbol const *>::Type &vec);
 
     /// Constructor.
     ///

@@ -48,14 +48,11 @@
 #include "neuray_type_impl.h"
 #include "neuray_value_impl.h"
 
-#include <io/scene/mdl_elements/i_mdl_elements_function_call.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
 
 
 #include <iomanip>
 #include <sstream>
-
-#include <boost/core/ignore_unused.hpp>
 
 #include <base/data/db/i_db_transaction.h>
 #include <base/data/idata/i_idata_factory.h>
@@ -359,7 +356,59 @@ mi::base::IInterface* Class_factory::create_class_instance(
     if( !tag)
         return nullptr;
 
-    SERIAL::Class_id class_id = get_class_id( transaction, tag);
+    DB::Info* info;
+    if( is_edit)
+        info = transaction->get_db_transaction()->edit_element( tag);
+    else
+        info = transaction->get_db_transaction()->access_element( tag);
+    if( !info)
+        return nullptr;
+
+    auto result = create_class_instance_shared( transaction, info, is_edit);
+    info->unpin();
+    return result;
+}
+
+mi::base::IInterface* Class_factory::create_class_instance(
+    Transaction_impl* transaction,
+    const char* name,
+    bool is_edit) const
+{
+    ASSERT( M_NEURAY_API, transaction);
+    if( !name)
+        return nullptr;
+
+    DB::Info* info;
+    if( is_edit)
+        info = transaction->get_db_transaction()->edit_element( name);
+    else
+        info = transaction->get_db_transaction()->access_element( name);
+    if( !info)
+        return nullptr;
+
+    auto result = create_class_instance_shared( transaction, info, is_edit);
+    info->unpin();
+    return result;
+}
+
+mi::base::IInterface* Class_factory::create_class_instance_shared(
+    Transaction_impl* transaction,
+    DB::Info* info,
+    bool is_edit) const
+{
+    ASSERT( M_NEURAY_API, transaction);
+    ASSERT( M_NEURAY_API, info);
+
+    // get DB element pointer
+    const DB::Element_base* element = info->get_element();
+    ASSERT( M_NEURAY_API, element);
+    if( !element)
+        return nullptr;
+
+    // get class ID
+    SERIAL::Class_id class_id = element->get_class_id();
+    if( is_edit && (class_id == MDL::ID_MDL_FUNCTION_DEFINITION))
+        return nullptr;
 
     // create API class instance
     mi::base::Handle<mi::base::IInterface> interface(
@@ -371,9 +420,9 @@ mi::base::IInterface* Class_factory::create_class_instance(
     auto* idb_element = interface->get_interface<IDb_element>();
     ASSERT( M_NEURAY_API, idb_element);
     if( is_edit)
-        idb_element->set_state_edit( transaction, tag);
+        idb_element->set_state_edit( transaction, info);
     else
-        idb_element->set_state_access( transaction, tag);
+        idb_element->set_state_access( transaction, info);
 
     return idb_element;
 }

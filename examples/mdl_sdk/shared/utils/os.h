@@ -33,12 +33,9 @@
 #ifndef EXAMPLE_SHARED_UTILS_OS_H
 #define EXAMPLE_SHARED_UTILS_OS_H
 
-#include <fstream>
-#include <algorithm>
-#include <sstream>
+#include <string>
 
 #include <mi/base/config.h>
-#include "strings.h"
 
 #ifdef MI_PLATFORM_WINDOWS
     #include <windows.h>
@@ -46,9 +43,7 @@
     #include <direct.h>
     #include <Shlobj.h>
 #else
-    #include <dlfcn.h>
-    #include <unistd.h>
-    #include <dirent.h>
+    #include <cstdlib>
 #endif
 
 namespace mi { namespace examples { namespace os

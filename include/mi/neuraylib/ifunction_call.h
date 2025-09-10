@@ -36,6 +36,7 @@
 #include <mi/neuraylib/iexpression.h>
 #include <mi/neuraylib/imdl_factory.h>
 #include <mi/neuraylib/iscene_element.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -49,14 +50,12 @@ class IMdl_execution_context;
 /// Options for repairing function calls.
 ///
 /// \see #mi::neuraylib::IFunction_call::repair().
-enum Mdl_repair_options{
+enum Mdl_repair_options : Uint32 {
     MDL_REPAIR_DEFAULT           = 0,           ///< Default mode, do not alter any inputs.
     MDL_REMOVE_INVALID_ARGUMENTS = 1, ///< Remove an invalid call attached to an argument.
-    MDL_REPAIR_INVALID_ARGUMENTS = 2, ///< Attempt to repair invalid calls attached to an argument.
-    MDL_REPAIR_OPTIONS_FORCE_32_BIT = 0xffffffffU // Undocumented, for alignment only
+    MDL_REPAIR_INVALID_ARGUMENTS = 2  ///< Attempt to repair invalid calls attached to an argument.
+    MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(MDL_REPAIR_OPTIONS_FORCE_32_BIT, 0xffffffffU)
 };
-
-mi_static_assert( sizeof( Mdl_repair_options) == sizeof( Uint32));
 
 /// This interface represents a function call.
 ///

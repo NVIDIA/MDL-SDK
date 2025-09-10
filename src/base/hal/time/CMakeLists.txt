@@ -34,7 +34,6 @@ set(PROJECT_HEADERS
     "i_time.h"
     "time_inline.h"
     "time_stopwatch.h"
-    "time_stopwatch_inline.h"
     )
 
 set(PROJECT_SOURCES

@@ -35,6 +35,7 @@
 
 #include <base/util/string_utils/i_string_utils.h>
 #include <base/hal/hal/i_hal_ospath.h>
+#include <base/hal/disk/disk_utils.h>
 
 #include <filesystem>
 #include <iostream>
@@ -1274,7 +1275,7 @@ int List_cmd::execute()
             try {
                 for(const auto& entry: fs::directory_iterator(fs_directory))
                 {
-                    Archive testArchive(entry.path().u8string());
+                    Archive testArchive(MI::DISK::to_string(entry.path()));
                     if (testArchive.is_valid())
                     {
                         m_result.m_archives.push_back(testArchive);

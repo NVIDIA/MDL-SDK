@@ -412,7 +412,9 @@ static void create_environment(
     mi::mdl::IMDL *mdl_compiler)
 {
     // Load environment texture
-    Texture_data env(envmap_name, mdl_compiler->create_entity_resolver(nullptr));
+    mi::base::Handle<mi::mdl::IEntity_resolver> entity_resolver(
+        mdl_compiler->create_entity_resolver(nullptr));
+    Texture_data env(envmap_name, entity_resolver.get());
     check_success(env.is_valid());
 
     const mi::Uint32 rx = env.get_width();

@@ -122,11 +122,11 @@ create_from_base_preset(
 target_add_dependencies(TARGET ${PROJECT_LIB_NAME}
     DEPENDS
         ${LINKER_START_GROUP}
-        mdl::mdl-compiler-compilercore
-        mdl::mdl-codegenerators-generator_dag
-        mdl::mdl-codegenerators-generator_code
-        mdl::mdl-runtime
-        mdl::mdl-no_jit-generator_stub
+        mdl-compiler-compilercore
+        mdl-codegenerators-generator_dag
+        mdl-codegenerators-generator_code
+        mdl-runtime
+        mdl-no_jit-generator_stub
         ${LINKER_DEPENDENCIES_BASE_WITHOUT_BASE_DATA}
         ${LINKER_END_GROUP}
     )
@@ -136,14 +136,15 @@ create_from_base_preset(
     TARGET ${PROJECT_BIN_NAME}
     TYPE EXECUTABLE
     OUTPUT_NAME "mdltlc"
+    EMBED_RC "../../../base/system/main/mdl_core_sdk.rc"
     SOURCES ${PROJECT_BIN_SOURCES}
 )
 
 # add  dependencies to mdltlc binary
 target_add_dependencies(TARGET ${PROJECT_BIN_NAME}
     DEPENDS
-        mdl::base-system-version
-        mdl::prod-bin-mdltlclib
+        base-system-version
+        prod-bin-mdltlclib
     )
 
 # extend to project names

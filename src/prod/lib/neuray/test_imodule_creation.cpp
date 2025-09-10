@@ -993,10 +993,6 @@ mi::neuraylib::IExpression* Test_cloner::clone( const mi::neuraylib::IExpression
             mi::base::Handle<const mi::neuraylib::IType> type( expr->get_type());
             return m_ef->create_temporary( type.get(), temporary->get_index());
         }
-        case mi::neuraylib::IExpression::EK_FORCE_32_BIT: {
-            MI_CHECK( false);
-            return nullptr;
-        }
     }
 
     MI_CHECK( false);
@@ -3096,11 +3092,84 @@ void check_mdl_export_reimport(
 {
     Exreimp_data modules[] = {
         { "mdl::variants", "::variants", 0, 0 },
-        { "mdl::resources", "::resources", 0, 0, false, false, false },
-        { "mdl::resources", "::resources2", 0, 6011, true, false, false },
-        { "mdl::resources", "::resources3", 0, 6006, false, true, false },
-        { "mdl::resources", "::resources4", 0, 0, false, false, true },
-        { "mdl::resources", "::resources5", 0, 6006, false, true, true },
+
+        // Export a module with resources created with the module builder with various (context)
+        // options. The tests for the "handle_filename_conflicts" context option are in
+        // io/scene/mdl_elements/test_misc.cpp.
+
+        // Default options.
+        { "mdl::resources", "::resources", 0, 0, false, false, false,
+            { },
+            { "/mdl_elements/resources/test.png",
+              "/mdl_elements/resources/test.ies",
+              "/mdl_elements/resources/test.mbsdf",
+              "/test_archives/test_in_archive.png" } },
+
+        // modify_mdl_paths
+        { "mdl::resources", "::resources2", 0, 6011, true, false, false,
+            { },
+            { "./test.png",
+              "./test.ies",
+              "./test.mbsdf",
+              "./test_in_archive.png" },
+            { "./test_0.png" } },
+
+        // modify_mdl_paths and filename_hints
+        { "mdl::resources", "::resources3", 0, 6011, true, false, false,
+            { { "/mdl_elements/resources/test.png",   "new_name.exr"   },
+              { "/mdl_elements/resources/test.ies",   "new_name.ies"   },
+              { "/mdl_elements/resources/test.mbsdf", "new_name.mbsdf" },
+              { "/test_archives/test_in_archive.png", "new_name2.exr"  } },
+            { "./new_name.exr",
+              "./new_name.ies",
+              "./new_name.mbsdf",
+              "./new_name2.exr" },
+            { "./new_name_0.exr" } },
+
+        // bundle_resources (generated names depend on ::resources2 test)
+        { "mdl::resources", "::resources4", 0, 6006, false, true, false,
+            { },
+            { "./test_0.png",
+              "./test_0.ies",
+              "./test_0.mbsdf",
+              "./test_in_archive_0.png" },
+            { "./test_1.png",
+              "./test_2.png" } },
+
+        // bundle_resources and filename_hints (generated names depend on ::resources3 test)
+        { "mdl::resources", "::resources5", 0, 6006, false, true, false,
+            { { "/mdl_elements/resources/test.png",   "new_name.exr"   },
+              { "/mdl_elements/resources/test.ies",   "new_name.ies"   },
+              { "/mdl_elements/resources/test.mbsdf", "new_name.mbsdf" },
+              { "/test_archives/test_in_archive.png", "new_name2.exr"  } },
+            { "./new_name_0.exr",
+              "./new_name_0.ies",
+              "./new_name_0.mbsdf",
+              "./new_name2_0.exr" },
+            { "./new_name_1.exr",
+              "./new_name_2.exr" } },
+
+        // bundle_resources and export_resources_with_module_prefix
+        { "mdl::resources", "::resources6", 0, 6006, false, true, true,
+            { },
+            { "./resources6_export_test.png",
+              "./resources6_export_test.ies",
+              "./resources6_export_test.mbsdf",
+              "./resources6_export_test_in_archive.png" },
+            { "./resources6_export_test_0.png" } },
+
+        // bundle_resources, export_resources_with_module_prefix and filename_hints
+        { "mdl::resources", "::resources7", 0, 6006, false, true, true,
+            { { "/mdl_elements/resources/test.png",   "new_name.exr"   },
+              { "/mdl_elements/resources/test.ies",   "new_name.ies"   },
+              { "/mdl_elements/resources/test.mbsdf", "new_name.mbsdf" },
+              { "/test_archives/test_in_archive.png", "new_name2.exr"  } },
+            { "./resources7_export_new_name.exr",
+              "./resources7_export_new_name.ies",
+              "./resources7_export_new_name.mbsdf",
+              "./resources7_export_new_name2.exr" },
+            { "./resources7_export_new_name_0.exr" } },
+
         { "mdl::new_materials", "::new_materials", 0, 0 },
         { "mdl::123_check_unicode_new_materials", "::123_check_unicode_new_materials", 0, 0 },
         { "mdl::123_check_unicode_new_variants", "::123_check_unicode_new_variants", 0, 0 },

@@ -32,7 +32,7 @@
 #define MI_NEURAYLIB_IEXPRESSION_H
 
 #include <mi/neuraylib/ivalue.h>
-#include <mi/neuraylib/version.h>
+#include <mi/neuraylib/version.h> // for MI_NEURAYLIB_DEPRECATED_ENUM_VALUE
 
 namespace mi {
 
@@ -49,7 +49,7 @@ class IExpression_list;
 */
 
 /// The MDL version.
-enum Mdl_version {
+enum Mdl_version : Uint32 {
     MDL_VERSION_1_0,                       ///< MDL version 1.0
     MDL_VERSION_1_1,                       ///< MDL version 1.1
     MDL_VERSION_1_2,                       ///< MDL version 1.2
@@ -63,8 +63,8 @@ enum Mdl_version {
     MDL_VERSION_1_10,                      ///< MDL version 1.10
     MDL_VERSION_EXP,                       ///< MDL experimental features.
     MDL_VERSION_LATEST = MDL_VERSION_1_10, ///< Latest MDL version
-    MDL_VERSION_INVALID = 0xffffffffU,     ///< Invalid MDL version
-    MDL_VERSION_FORCE_32_BIT = 0xffffffffU // Undocumented, for alignment only
+    MDL_VERSION_INVALID = 0xffffffffU      ///< Invalid MDL version
+    MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(MDL_VERSION_FORCE_32_BIT, 0xffffffffU)
 };
 
 /// The interface to MDL expressions.
@@ -75,7 +75,7 @@ class IExpression : public
 {
 public:
     /// The possible kinds of expressions.
-    enum Kind {
+    enum Kind : Uint32 {
         /// A constant expression. See #mi::neuraylib::IExpression_constant.
         EK_CONSTANT,
         /// An indirect call expression. See #mi::neuraylib::IExpression_call.
@@ -85,9 +85,8 @@ public:
         /// A direct call expression. See #mi::neuraylib::IExpression_direct_call.
         EK_DIRECT_CALL,
         /// A temporary reference expression. See #mi::neuraylib::IExpression_temporary.
-        EK_TEMPORARY,
-        //  Undocumented, for alignment only.
-        EK_FORCE_32_BIT = 0xffffffffU
+        EK_TEMPORARY
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(EK_FORCE_32_BIT, 0xffffffffU)
     };
 
     /// Returns the kind of this expression.
@@ -108,8 +107,6 @@ public:
         return ptr_T;
     }
 };
-
-mi_static_assert( sizeof( IExpression::Kind) == sizeof( Uint32));
 
 /// A constant expression.
 ///
@@ -444,7 +441,7 @@ public:
     ///
     /// \note Do not rely on the numeric values of the enumerators since they may change without
     ///       further notice.
-    enum Semantics
+    enum Semantics : Uint32
     {
         AS_UNKNOWN = 0,                          ///< Unknown semantics.
 
@@ -484,8 +481,8 @@ public:
         AS_NODE_OUTPUT_PORT_DEFAULT_ANNOTATION,  ///< This is the node_output_port_default()
                                                  ///  annotation.
 
-        AS_ANNOTATION_LAST = AS_NODE_OUTPUT_PORT_DEFAULT_ANNOTATION,
-        AS_FORCE_32_BIT = 0xffffffffU            //   Undocumented, for alignment only.
+        AS_ANNOTATION_LAST = AS_NODE_OUTPUT_PORT_DEFAULT_ANNOTATION
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(AS_FORCE_32_BIT, 0xffffffffU)
     };
 
     /// Returns the DB name of the module containing this annotation definition.
@@ -568,8 +565,6 @@ public:
     ///                     is not a constant expression.
     virtual const IAnnotation* create_annotation( const IExpression_list* arguments) const = 0;
 };
-
-mi_static_assert( sizeof( IAnnotation_definition::Semantics) == sizeof( Uint32));
 
 /// An annotation is similar to a direct call expression, but without return type. Its definition
 /// can be obtained by calling #mi::neuraylib::IAnnotation::get_definition().
@@ -823,7 +818,7 @@ public:
     /// Various options for the comparison of expressions or expression lists.
     ///
     /// \see The \p flags parameter of #compare()
-    enum Comparison_options {
+    enum Comparison_options : Uint32 {
         /// Default comparison options.
         DEFAULT_OPTIONS      = 0,
         /// This option indicates that call expressions should be compared for equality, not for
@@ -837,9 +832,8 @@ public:
         /// expression are compared. Defaults and argument might sometimes differ in explicit type
         /// modifiers, therefore this option is useful if you want to decide whether an argument is
         /// \em semantically equal to the corresponding default parameter.
-        SKIP_TYPE_ALIASES               = 2,
-        // Undocumented, for alignment only
-        COMPARISON_OPTIONS_FORCE_32_BIT = 0xffffffffU
+        SKIP_TYPE_ALIASES               = 2
+        MI_NEURAYLIB_DEPRECATED_ENUM_VALUE(COMPARISON_OPTIONS_FORCE_32_BIT, 0xffffffffU)
     };
 
     /// Compares two instances of #mi::neuraylib::IExpression.
@@ -1064,8 +1058,6 @@ public:
 
     //@}
 };
-
-mi_static_assert( sizeof( IExpression_factory::Comparison_options) == sizeof( mi::Uint32));
 
 /**@}*/ // end group mi_neuray_mdl_types
 

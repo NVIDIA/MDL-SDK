@@ -1,5 +1,29 @@
 /******************************************************************************
- * Copyright 2024 NVIDIA Corporation. All rights reserved.
+ * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
 // These functions should map to the latest version and issue a warning.
@@ -245,20 +269,11 @@
 }
 
 
-// inherited deprecated functions
+// deprecated functions (just hidden, no replacement)
 // ----------------------------------------------------------------------------
-// just remove them, they are not in the public interfaces
 
 %ignore mi::neuraylib::IImage_api::deprecated_create_buffer_from_canvas;
-%ignore mi::neuraylib::IMdl_configuration::deprecated_set_logger;
-%ignore mi::neuraylib::IMdl_configuration::deprecated_get_logger;
 %ignore mi::neuraylib::IMdl_impexp_api::deprecated_export_canvas;
-%ignore mi::neuraylib::IMdl_impexp_api::deprecated_uvtile_string_to_marker;
-%ignore mi::neuraylib::IMdl_impexp_api::deprecated_frame_string_to_marker;
-%ignore mi::neuraylib::IModule::deprecated_get_resource_type;
-%ignore mi::neuraylib::IModule::deprecated_get_resource_mdl_file_path;
-%ignore mi::neuraylib::IModule::deprecated_get_resource_name;
-
 
 // other changes
 // ----------------------------------------------------------------------------

@@ -36,10 +36,12 @@
 #include <mi/mdl/mdl_generated_dag.h>
 #include <mi/mdl/mdl_target_types.h>
 #include <mi/mdl/mdl_types.h>
+#include <mdl/compiler/compilercore/compilercore_cc_conf.h>
 #include <mdl/compiler/compilercore/compilercore_bitset.h>
 #include <mdl/compiler/compilercore/compilercore_cstring_hash.h>
 #include <mdl/compiler/compilercore/compilercore_function_instance.h>
 #include <mdl/compiler/compilercore/compilercore_memory_arena.h>
+#include <mdl/codegenerators/generator_code/generator_code_tools.h>
 
 #include "generator_jit_context.h"
 #include "generator_jit_generated_code.h"
@@ -792,7 +794,7 @@ private:
     mi::mdl::IType const *m_offset_res_mdl_type;
 };
 
-/// A Helper class to unify access to call AST expressions and call DAG expressions.
+/// A Helper interface to unify access to call AST expressions and call DAG expressions.
 class ICall_expr {
 public:
     /// Check if the called function is an array constructor.
@@ -802,47 +804,23 @@ public:
     virtual mi::mdl::IDefinition::Semantics get_semantics() const = 0;
 
     /// Get the callee definition if one exists.
-    ///
-    /// \param code_gen  the LLVM code generator
-    virtual mi::mdl::IDefinition const *get_callee_definition(
-        LLVM_code_generator &code_gen) const = 0;
+    virtual mi::mdl::IDefinition const *get_callee_definition() const = 0;
 
     /// Get the number of arguments.
     virtual size_t get_argument_count() const = 0;
 
     /// Translate the i'th argument.
     ///
-    /// \param code_gen       the LLVM code generator
-    /// \param ctx            the current function context
     /// \param i              the argument index
     /// \param wants_derivs   if true, the result should have derivatives, if available
     virtual Expression_result translate_argument(
-        LLVM_code_generator &code_gen,
-        Function_context    &ctx,
         size_t              i,
         bool                wants_derivs) const = 0;
 
-    /// Translate the i'th argument.
-    ///
-    /// \param code_gen       the LLVM code generator
-    /// \param ctx            the current function context
-    /// \param i              the argument index
-    /// \param wants_derivs   if true, the result should have derivatives, if available
-    llvm::Value *translate_argument_value(
-        LLVM_code_generator &code_gen,
-        Function_context    &ctx,
-        size_t              i,
-        bool                wants_derivs) const
-    {
-        return translate_argument(code_gen, ctx, i, wants_derivs).as_value(ctx);
-    }
-
     /// Get the LLVM context data of the callee.
     ///
-    /// \param code_gen       the LLVM code generator
     /// \param inst           the function instance for this function call
     virtual LLVM_context_data *get_callee_context(
-        LLVM_code_generator     &code_gen,
         Function_instance const &inst) const = 0;
 
     /// Get the result type of the call.
@@ -855,10 +833,8 @@ public:
 
     /// Get the storage modifier of the i'th call argument.
     ///
-    /// \param ctx  the current function context
     /// \param i    the argument index
     virtual Storage_modifier get_argument_storage_modifier(
-        Function_context &ctx,
         size_t           i) const = 0;
 
     /// Get the source position of the i'th call argument.
@@ -874,20 +850,14 @@ public:
     virtual mi::mdl::IValue const *get_const_argument(size_t i) const = 0;
 
     /// If this is a DS_INTRINSIC_DAG_FIELD_ACCESS, the accessed field index, else -1.
-    virtual int get_field_index(
-        LLVM_code_generator &code_gen,
-        mi::mdl::IAllocator *alloc) const = 0;
+    virtual int get_field_index() const = 0;
 
     /// Translate this call as a boolean condition.
     /// If this is a ternary operator call, translate the first argument.
     ///
-    /// \param code_gen  the LLVM code generator
-    /// \param ctx       the current function context
     /// \param true_bb   branch target for the true case
     /// \param false_bb  branch target for the false case
     virtual void translate_boolean_branch(
-        LLVM_code_generator &code_gen,
-        Function_context    &ctx,
         llvm::BasicBlock    *true_bb,
         llvm::BasicBlock    *false_bb) const = 0;
 
@@ -906,7 +876,7 @@ public:
     /// Returns true, if the call should return derivatives.
     ///
     /// \param code_gen  the LLVM code generator
-    virtual bool returns_derivatives(LLVM_code_generator &code_gen) const = 0;
+    virtual bool returns_derivatives() const = 0;
 };
 
 /// Helper struct for a texture attribute entry.
@@ -1245,6 +1215,8 @@ private:
 ///
 class LLVM_code_generator
 {
+    typedef LLVM_code_generator Self;
+
     friend class Allocator_builder;
     friend class MDL_runtime_creator;
     friend class Code_generator_jit;
@@ -1253,6 +1225,11 @@ class LLVM_code_generator
     friend class Df_component_info;
     friend class Derivative_infos;
     friend class State_usage_analysis;
+    friend class Module_scope<Self>;
+    friend class Call_ast_expr;
+    friend class Call_dag_expr;
+    friend class Function_context;
+
 public:
     static char const MESSAGE_CLASS = 'J';
 
@@ -1322,23 +1299,7 @@ public:
                                 ///< is not supported as return type, it falls back to RETMODE_SRET
     };
 
-    /// RAII helper class.
-    class MDL_module_scope {
-    public:
-        /// Constructor.
-        MDL_module_scope(LLVM_code_generator &generator, mi::mdl::Module const *mod)
-        : m_generator(generator)
-        {
-            generator.push_module(mod);
-        }
-
-        /// Destructor.
-        ~MDL_module_scope() { m_generator.pop_module(); }
-
-    private:
-        /// The generator containing the stack.
-        LLVM_code_generator &m_generator;
-    };
+    typedef Module_scope<Self> MDL_module_scope;
 
     /// Helper value type for the global value map.
     struct Value_offset_pair {
@@ -1676,55 +1637,45 @@ public:
 
     /// Translate an expression to LLVM IR, returning its value.
     ///
-    /// \param ctx            the function context
     /// \param expr           the expression to translate
     /// \param wants_derivs   if true, the result should have derivatives, if available
     llvm::Value *translate_expression_value(
-        Function_context           &ctx,
         mi::mdl::IExpression const *expr,
         bool                       wants_derivs);
 
     /// Translate an (r-value) expression to LLVM IR.
     ///
-    /// \param ctx            the function context
     /// \param expr           the expression to translate
     /// \param wants_derivs   if true, the result should have derivatives, if available
     Expression_result translate_expression(
-        Function_context           &ctx,
         mi::mdl::IExpression const *expr,
         bool                       wants_derivs);
 
     /// Translate a DAG node into LLVM IR.
     ///
-    /// \param ctx       the current function context
     /// \param node      the DAG node to translate
     /// \param resolver  the entity name resolver
     Expression_result translate_node(
-        Function_context                   &ctx,
         mi::mdl::DAG_node const            *node,
         mi::mdl::ICall_name_resolver const *resolver);
 
     /// Create a branch from a boolean expression (with short cut evaluation).
     ///
-    /// \param ctx        the function context
     /// \param cond       the boolean conditional expression
     /// \param true_bb    the branch target in the true case
     /// \param false_bb   the branch target in the false case
     void translate_boolean_branch(
-        Function_context           &ctx,
         mi::mdl::IExpression const *cond,
         llvm::BasicBlock           *true_bb,
         llvm::BasicBlock           *false_bb);
 
     /// Create a branch from a boolean expression (with short cut evaluation).
     ///
-    /// \param ctx        the function context
     /// \param cond       the boolean conditional expression
     /// \param resolver   the entity name resolver
     /// \param true_bb    the branch target in the true case
     /// \param false_bb   the branch target in the false case
     void translate_boolean_branch(
-        Function_context                   &ctx,
         mi::mdl::ICall_name_resolver const *resolver,
         mi::mdl::DAG_node const            *cond,
         llvm::BasicBlock                   *true_bb,
@@ -1732,10 +1683,8 @@ public:
 
     /// Translate a DAG parameter into LLVM IR
     ///
-    /// \param ctx         the current function context
     /// \param param_node  the DAG parameter node to translate
     Expression_result translate_parameter(
-        Function_context             &ctx,
         mi::mdl::DAG_parameter const *param_node);
 
     /// Get the read function for a value of the given kind in the given storage space.
@@ -1749,24 +1698,20 @@ public:
     /// Translate a parameter or RO-data-segment offset into LLVM IR by adding
     /// the corresponding base offset of the state.
     ///
-    /// \param ctx             the current function context
     /// \param cur_offs        the current offset
     /// \param add_val         additional value added to the offset, if non-NULL
     llvm::Value *translate_sl_value_offset(
-        Function_context &ctx,
         int               cur_offs,
         llvm::Value      *add_val);
 
     /// Translate a part of a DAG parameter or the RO-data-segment for GLSL/HLSL into LLVM IR.
     ///
-    /// \param ctx             the current function context
     /// \param storage_space   the storage space where the value is stored (may not be normal)
     /// \param param_type      the type of the part to translate
     /// \param cur_offs        the current offset, will be updated
     /// \param add_val         additional value added to the offset, if non-NULL
     /// \param force_as_value  if true, the returned result will always be a value
     Expression_result translate_sl_value_impl(
-        Function_context             &ctx,
         Storage_modifier              storage_space,
         mi::mdl::IType const         *param_type,
         int                          &cur_offs,
@@ -1775,14 +1720,12 @@ public:
 
     /// Translate a part of a DAG parameter or the RO-data-segment for GLSL/HLSL into LLVM IR.
     ///
-    /// \param ctx             the current function context
     /// \param storage_space   the storage space where the value is stored (may not be normal)
     /// \param param_type      the type of the part to translate
     /// \param cur_offs        the current offset, will be updated
     /// \param add_val         additional value added to the offset, if non-NULL
     /// \param force_as_value  if true, the returned result will always be a value
     Expression_result translate_sl_value(
-        Function_context             &ctx,
         Storage_modifier              storage_space,
         mi::mdl::IType const         *param_type,
         int                          &cur_offs,
@@ -1934,10 +1877,11 @@ public:
     /// \param args     arguments of the function call to create
     template<unsigned N>
     void add_promoted_arguments(
-        Function_context                    &ctx,
         unsigned                            promote,
         llvm::SmallVector<llvm::Value *, N> &args)
     {
+        Function_context &ctx = *this->m_ctx;
+
         if (promote & PR_ADD_ZERO_INT2) {
             // add a int2(0)
             args.push_back(ctx.get_constant(m_type_mapper.get_int2_type(), 0));
@@ -2010,29 +1954,24 @@ public:
     /// \param kind  the resource table kind to prepare
     void init_dummy_attribute_table(Resource_table_kind kind);
 
-
     /// Initialize the string attribute table, adding the unknown string and declaring
     /// the access functions.
     void init_string_attribute_table();
 
     /// Get a attribute lookup table.
     ///
-    /// \param ctx   the context data of the current function
     /// \param kind  the requested resource table kind
     ///
     /// \return the table
     llvm::Value *get_attribute_table(
-        Function_context    &ctx,
         Resource_table_kind kind);
 
     /// Get a attribute lookup table size.
     ///
-    /// \param ctx   the context data of the current function
     /// \param kind  the requested resource table kind
     ///
     /// \return the table size
     llvm::Value *get_attribute_table_size(
-        Function_context    &ctx,
         Resource_table_kind kind);
 
     /// Set the uniform state for evaluating uniform state functions.
@@ -2083,29 +2022,19 @@ public:
     }
 
     /// Get the texture results pointer from the state.
-    ///
-    /// \param ctx   the context data of the current function
-    llvm::Value *get_texture_results(Function_context &ctx);
+    llvm::Value *get_texture_results();
 
     /// Get the read-only data segment pointer from the state.
-    ///
-    /// \param ctx   the context data of the current function
-    llvm::Value *get_ro_data_segment(Function_context &ctx);
+    llvm::Value *get_ro_data_segment();
 
     /// Get the current object_id value from the uniform state.
-    ///
-    /// \param ctx   the context data of the current function
-    llvm::Value *get_current_object_id(Function_context &ctx);
+    llvm::Value *get_current_object_id();
 
     /// Get the LLVM value of the current world-to-object matrix.
-    ///
-    /// \param ctx   the context data of the current function
-    llvm::Value *get_w2o_transform_value(Function_context &ctx);
+    llvm::Value *get_w2o_transform_value();
 
     /// Get the LLVM value of the current object-to-world matrix.
-    ///
-    /// \param ctx   the context data of the current function
-    llvm::Value *get_o2w_transform_value(Function_context &ctx);
+    llvm::Value *get_o2w_transform_value();
 
     /// Disable array instancing support.
     ///
@@ -2123,19 +2052,15 @@ public:
     /// Get an LLVM type for the result of a call expression.
     /// If necessary, a derivative type will be used.
     ///
-    /// \param ctx        the context data of current function
     /// \param call_expr  the call expression
     llvm::Type *lookup_type_or_deriv_type(
-        Function_context &ctx,
         mi::mdl::ICall_expr const *call_expr);
 
     /// Get an LLVM type for the result of a expression.
     /// If necessary, a derivative type will be used.
     ///
-    /// \param ctx        the context data of current function
     /// \param expr       the expression
     llvm::Type *lookup_type_or_deriv_type(
-        Function_context &ctx,
         mi::mdl::IExpression const *expr);
 
     /// Returns true if for the given expression derivatives should be calculated.
@@ -2337,126 +2262,118 @@ private:
     /// Pop a module from the stack.
     void pop_module();
 
+    /// Enter the give function context as the current one.
+    ///
+    /// \param ctx  the new current context
+    ///
+    /// \return the previous context
+    MDL_CHECK_RESULT Function_context *enter_function_context(
+        Function_context &ctx)
+    {
+        Function_context *old = m_ctx;
+        m_ctx = &ctx;
+        return old;
+    }
+
+    /// Leave the current function context.
+    ///
+    /// \param old  the old function context to be restored
+    void leave_function_context(
+        Function_context *old)
+    {
+        m_ctx = old;
+    }
+
     /// Create extra instructions at function start for debugging.
     ///
-    /// \param ctx   the function context
     /// \param func  the LLVM function that is entered
-    void enter_function(
-        Function_context &ctx,
-        llvm::Function  *func);
+    void create_enter_function_call(
+        llvm::Function *func);
 
     /// Translate a statement to LLVM IR.
     ///
-    /// \param ctx   the function context
     /// \param stmt  the statement to translate
     void translate_statement(
-        Function_context          &ctx,
         mi::mdl::IStatement const *stmt);
 
     /// Translate a block statement to LLVM IR.
     ///
-    /// \param ctx    the function context
     /// \param block  the block statement to translate
     void translate_block(
-        Function_context                   &ctx,
         mi::mdl::IStatement_compound const *block);
 
     /// Translate a declaration statement to LLVM IR.
     ///
-    /// \param ctx        the function context
     /// \param decl_stmt  the declaration statement to translate
     void translate_decl_stmt(
-        Function_context                      &ctx,
         mi::mdl::IStatement_declaration const *decl_stmt);
 
     /// Translate a declaration to LLVM IR.
     ///
-    /// \param ctx        the function context
     /// \param decl_stmt  the declaration statement to translate
     void translate_declaration(
-        Function_context            &ctx,
         mi::mdl::IDeclaration const *decl);
 
     /// Translate a variable declaration to LLVM IR.
     ///
-    /// \param ctx        the function context
-    /// \param var_decl   the declaration to translate
+    /// \param var_decl  the declaration to translate
     void translate_var_declaration(
-        Function_context                      &ctx,
         mi::mdl::IDeclaration_variable const *var_decl);
 
     /// Translate an if statement to LLVM IR.
     ///
-    /// \param ctx        the function context
     /// \param if_stmt    the if statement to translate
     void translate_if(
-        Function_context              &ctx,
         mi::mdl::IStatement_if const *if_stmt);
 
     /// Translate a switch statement to LLVM IR.
     ///
-    /// \param ctx          the function context
     /// \param switch_stmt  the switch statement to translate
     void translate_switch(
-        Function_context                 &ctx,
         mi::mdl::IStatement_switch const *switch_stmt);
 
     /// Translate a while statement to LLVM IR.
     ///
-    /// \param ctx          the function context
-    /// \param while_stmt   the while statement to translate
+    /// \param while_stmt  the while statement to translate
     void translate_while(
-        Function_context                &ctx,
         mi::mdl::IStatement_while const *while_stmt);
 
     /// Translate a do-while statement to LLVM IR.
     ///
-    /// \param ctx          the function context
-    /// \param do_stmt      the do-while statement to translate
+    /// \param do_stmt  the do-while statement to translate
     void translate_do_while(
-        Function_context                   &ctx,
         mi::mdl::IStatement_do_while const *do_stmt);
 
     /// Translate a for statement to LLVM IR.
     ///
-    /// \param ctx          the function context
-    /// \param for_stmt     the for statement to translate
+    /// \param for_stmt  the for statement to translate
     void translate_for(
-        Function_context              &ctx,
         mi::mdl::IStatement_for const *for_stmt);
 
     /// Translate a break statement to LLVM IR.
     ///
-    /// \param ctx          the function context
-    /// \param break_stmt   the break statement to translate
+    /// \param break_stmt  the break statement to translate
     void translate_break(
-        Function_context                &ctx,
         mi::mdl::IStatement_break const *break_stmt);
 
     /// Translate a continue statement to LLVM IR.
     ///
-    /// \param ctx          the function context
-    /// \param cont_stmt    the continue statement to translate
+    /// \param cont_stmt  the continue statement to translate
     void translate_continue(
-        Function_context                   &ctx,
         mi::mdl::IStatement_continue const *cont_stmt);
 
     /// Translate a return statement to LLVM IR.
     ///
-    /// \param ctx          the function context
     /// \param ret_stmt     the return statement to translate
     void translate_return(
-        Function_context                 &ctx,
         mi::mdl::IStatement_return const *ret_stmt);
 
     /// Calculate &matrix[index], index is assured to be in bounds.
     ///
-    /// \param ctx         the function context
     /// \param m_type      the type of the matrix object that is indexed
     /// \param matrix_ptr  the pointer to the matrix object
     /// \param index       the index value (in MDL an signed integer)
     llvm::Value *calc_matrix_index_in_bounds(
-        Function_context            &ctx,
         mi::mdl::IType_matrix const *m_type,
         llvm::Value                 *matrix_ptr,
         llvm::Value                 *index);
@@ -2468,19 +2385,16 @@ private:
     /// \param index  the index
     /// \param bound  the upper bound to check the index against
     llvm::Value *adapt_index_for_bounds_check(
-        Function_context  &ctx,
-        llvm::Value       *index,
-        llvm::Value       *bound);
+        llvm::Value *index,
+        llvm::Value *bound);
 
     /// Translate an l-value index expression to LLVM IR.
     ///
-    /// \param ctx        the function context
     /// \param comp_type  the type of the compound object that is indexed
     /// \param comp_ptr   the pointer to the compound object
     /// \param index      the index value (in MDL an signed integer)
     /// \param index_pos  the source position of the index expression for bound checks
     llvm::Value *translate_lval_index_expression(
-        Function_context        &ctx,
         mi::mdl::IType const    *comp_type,
         llvm::Value             *comp_ptr,
         llvm::Value             *index,
@@ -2499,7 +2413,6 @@ private:
     /// \param[out] adr_dx   a reference for the resulting address of the dx component
     /// \param[out] adr_dy   a reference for the resulting address of the dy component
     void translate_lval_index_expression_dual(
-        Function_context        &ctx,
         mi::mdl::IType const    *comp_type,
         llvm::Value             *comp_val_ptr,
         llvm::Value             *comp_dx_ptr,
@@ -2512,13 +2425,11 @@ private:
 
     /// Translate an r-value index expression to LLVM IR.
     ///
-    /// \param ctx        the function context
     /// \param comp_type  the type of the compound object that is indexed
     /// \param compound   the compound object
     /// \param index      the index value (in MDL an signed integer)
     /// \param index_pos  the source position of the index expression for bound checks
     Expression_result translate_index_expression(
-        Function_context        &ctx,
         mi::mdl::IType const    *comp_type,
         Expression_result       compound,
         llvm::Value             *index,
@@ -2526,21 +2437,17 @@ private:
 
     /// Translate an l-value expression to LLVM IR.
     ///
-    /// \param ctx    the function context
     /// \param expr   the expression to translate
     llvm::Value *translate_lval_expression(
-        Function_context           &ctx,
         mi::mdl::IExpression const *expr);
 
     /// Translate a dual l-value expression to LLVM IR.
     ///
-    /// \param      ctx      the function context
-    /// \param      expr     the expression to translate
+    /// \param[in]  expr     the expression to translate
     /// \param[out] adr_val  a reference for the resulting address of the value component
     /// \param[out] adr_dx   a reference for the resulting address of the dx component
     /// \param[out] adr_dy   a reference for the resulting address of the dy component
     void translate_lval_expression_dual(
-        Function_context           &ctx,
         mi::mdl::IExpression const *expr,
         llvm::Value                *&adr_val,
         llvm::Value                *&adr_dx,
@@ -2558,59 +2465,48 @@ private:
 
     /// Creates a global constant for a value in the LLVM IR.
     ///
-    /// \param      ctx                the function context
     /// \param[in]  v                  the value to translate
     /// \param[out] is_ro_segment_ofs  if true, the constant is accessed through an offset in the
     ///                                RO segment
     ///
     /// \return the global value (the address)
     llvm::Value *create_global_const(
-        Function_context               &ctx,
         mi::mdl::IValue_compound const *v,
         bool                           &is_ro_segment_ofs);
 
     /// Translate a value to LLVM IR.
     ///
-    /// \param ctx    the function context
     /// \param v      the value to translate
     Expression_result translate_value(
-        Function_context      &ctx,
         mi::mdl::IValue const *v);
 
     /// Translate a literal expression to LLVM IR.
     ///
-    /// \param ctx    the function context
     /// \param lit    the literal expression to translate
     Expression_result translate_literal(
-        Function_context                   &ctx,
         mi::mdl::IExpression_literal const *lit);
 
-    // Translate an unary expression without side-effect to LLVM IR.
+    /// Translate an unary expression without side-effect to LLVM IR.
     llvm::Value *translate_unary(
-        Function_context                     &ctx,
         mi::mdl::IExpression_unary::Operator op,
         llvm::Value                          *arg);
 
     /// Translate an unary expression to LLVM IR.
     ///
-    /// \param ctx            the function context
     /// \param un_expr        the unary expression to translate
     /// \param wants_derivs   if true, the result should have derivatives, if available
     Expression_result translate_unary(
-        Function_context                 &ctx,
         mi::mdl::IExpression_unary const *un_expr,
         bool                             wants_derivs);
 
     /// Helper for pre/post inc/decrement.
     ///
-    /// \param ctx       the function context
     /// \param op        the operator to be executed
     /// \param tp        the result type of the operation
     /// \param old_v     the initial value
     /// \param r         out: the result value
     /// \param v         out: the new value
     void do_inner_inc_dec(
-        Function_context                     &ctx,
         mi::mdl::IExpression_unary::Operator op,
         llvm::Type                           *tp,
         llvm::Value                          *old_v,
@@ -2619,70 +2515,56 @@ private:
 
     /// Translate an inplace change expression.
     ///
-    /// \param ctx       the function context
     /// \param un_expr   the expression to translate
     Expression_result translate_inplace_change_expression(
-        Function_context                 &ctx,
         mi::mdl::IExpression_unary const *un_expr);
 
     /// Translate an MDL 1.5 cast expression.
     ///
-    /// \param ctx            the function context
     /// \param arg            the argument of the cast expression
     /// \param res_type       the result type of the cast expression
     Expression_result translate_cast_expression(
-        Function_context                 &ctx,
         Expression_result                &arg,
         mi::mdl::IType const             *res_type);
 
     /// Translate an MDL 1.5 cast expression.
     ///
-    /// \param ctx            the function context
     /// \param un_expr        the expression to translate
     /// \param wants_derivs   if true, the result should have derivatives, if available
     Expression_result translate_cast_expression(
-        Function_context                 &ctx,
         mi::mdl::IExpression_unary const *un_expr,
         bool                             wants_derivs);
 
     /// Translate a binary expression to LLVM IR.
     ///
-    /// \param ctx           the function context
     /// \param bin_expr      the binary expression to translate
     /// \param wants_derivs  if true, the result should have derivatives, if available
     Expression_result translate_binary(
-        Function_context                  &ctx,
         mi::mdl::IExpression_binary const *bin_expr,
         bool                              wants_derivs);
 
     /// Translate a side effect free binary expression to LLVM IR.
     ///
-    /// \param ctx           the function context
     /// \param bin_expr      the binary expression to translate
     /// \param wants_derivs  if true, the result should have derivatives, if available
     llvm::Value *translate_binary_no_side_effect(
-        Function_context                  &ctx,
         mi::mdl::IExpression_binary const *bin_expr,
         bool                              wants_derivs);
 
     /// Translate a side effect free binary expression to LLVM IR.
     ///
-    /// \param ctx       the function context
     /// \param bin_expr  the binary expression to translate
     llvm::Value *translate_binary_no_side_effect(
-        Function_context          &ctx,
         mi::mdl::ICall_expr const *bin_expr);
 
     /// Translate a side effect free binary simple expressions that require only one
     /// instruction to LLVM IR.
     ///
-    /// \param ctx       the function context
     /// \param op        the operator
     /// \param l         the left hand side expression
     /// \param r         the right hand side expression
     /// \param expr_pos  the source position of the expression
     llvm::Value *translate_binary_basic(
-        Function_context                      &ctx,
         mi::mdl::IExpression_binary::Operator op,
         llvm::Value                           *l,
         llvm::Value                           *r,
@@ -2690,14 +2572,12 @@ private:
 
     /// Translate a multiplication expression to LLVM IR.
     ///
-    /// \param ctx            the function context
     /// \param res_llvm_type  the LLVM result type of the expression
     /// \param l_type         the MDL type of the left hand side expression
     /// \param lhs            the left hand side expression
     /// \param rhs            the MDL type of the right hand side expression
     /// \param rhs            the right hand side expression
     llvm::Value *translate_multiply(
-        Function_context           &ctx,
         llvm::Type                 *res_llvm_type,
         mi::mdl::IType const       *l_type,
         llvm::Value                *l,
@@ -2706,13 +2586,11 @@ private:
 
     /// Translate a multiplication expression to LLVM IR.
     ///
-    /// \param ctx            the function context
     /// \param res_llvm_type  the LLVM result type of the expression
     /// \param lhs            the left hand side expression
     /// \param rhs            the right hand side expression
     /// \param wants_derivs   if true, the result should have derivatives, if available
     llvm::Value *translate_multiply(
-        Function_context           &ctx,
         llvm::Type                 *res_llvm_type,
         mi::mdl::IExpression const *lhs,
         mi::mdl::IExpression const *rhs,
@@ -2720,24 +2598,20 @@ private:
 
     /// Translate an assign expression to LLVM IR.
     ///
-    /// \param ctx            the function context
     /// \param bin_expr       the assign expression to translate
     /// \param wants_derivs   if true, the result should have derivatives, if available
     Expression_result translate_assign(
-        Function_context                  &ctx,
         mi::mdl::IExpression_binary const *bin_expr,
         bool                              wants_derivs);
 
     /// Translate a binary compare expression to LLVM IR.
     ///
-    /// \param ctx       the function context
     /// \param op        the operator kind to translate
     /// \param l_type    the MDL type of the left argument
     /// \param lv        the left argument value
     /// \param r_type    the MDL type of the right argument
     /// \param rv        the right argument value
     Expression_result translate_compare(
-        Function_context                      &ctx,
         mi::mdl::IExpression_binary::Operator op,
         mi::mdl::IType const                  *l_type,
         llvm::Value                           *lv,
@@ -2746,26 +2620,19 @@ private:
 
     /// Translate a conditional expression to LLVM IR.
     ///
-    /// \param ctx           the function context
     /// \param cond_expr     the conditional expression to translate
     /// \param wants_derivs  if true, the result should have derivatives, if available
     Expression_result translate_conditional(
-        Function_context                       &ctx,
         mi::mdl::IExpression_conditional const *cond_expr,
         bool                                   wants_derivs);
 
     /// Create the float4x4 identity matrix.
-    ///
-    /// \param ctx        the function context
-    llvm::Value *create_identity_matrix(
-        Function_context &ctx);
+    llvm::Value *create_identity_matrix();
 
     /// Translate a call expression to LLVM IR.
     ///
-    /// \param ctx        the function context
     /// \param call_expr  the call expression to translate
     Expression_result translate_call(
-        Function_context &ctx,
         ICall_expr const *call_expr);
 
     /// Returns the BSDF function name suffix for the current distribution function state.
@@ -2793,60 +2660,51 @@ private:
 
     /// Generate a call to an expression lambda function.
     ///
-    /// \param ctx                 the function context
     /// \param expr_lambda         the precalculated lambda function
     /// \param opt_results_buffer  an optional results buffer. The result will be converted
     ///                            before writing it there, if necessary
     /// \param opt_result_index    the index of the result in the results buffer
     /// \returns the result pointer
     Expression_result generate_expr_lambda_call(
-        Function_context       &ctx,
         ILambda_function const *expr_lambda,
         llvm::Value            *opt_results_ptr = NULL,
         size_t                 opt_result_index = ~0);
 
     /// Generate a call to an expression lambda function.
     ///
-    /// \param ctx                 the function context
     /// \param lambda_index        the index of the precalculated lambda function
     /// \param opt_results_buffer  an optional results buffer. The result will be converted
     ///                            before writing it there, if necessary
     /// \param opt_result_index    the index of the result in the results buffer
     /// \returns the result pointer
     Expression_result generate_expr_lambda_call(
-        Function_context &ctx,
         size_t           lambda_index,
         llvm::Value      *opt_results_ptr = NULL,
         size_t           opt_result_index = ~0);
 
     /// Store a value inside a float4 array at the given byte offset, updating the offset.
     ///
-    /// \param ctx        the function context
     /// \param val        the value to store
     /// \param dest       the float4 array
     /// \param dest_offs  the byte offset inside the float4 array, will be updated to point
     ///                   after the written value
     void store_to_float4_array_impl(
-        Function_context &ctx,
         llvm::Value      *val,
         llvm::Value      *dest,
         unsigned         &dest_offs);
 
     /// Store a value inside a float4 array at the given byte offset.
     ///
-    /// \param ctx        the function context
     /// \param val        the value to store
     /// \param dest       the float4 array
     /// \param dest_offs  the byte offset inside the float4 array
     void store_to_float4_array(
-        Function_context &ctx,
         llvm::Value      *val,
         llvm::Value      *dest,
         unsigned         dest_offs);
 
     /// Load a value inside a float4 array at the given byte offset, updating the offset.
     ///
-    /// \param ctx       the function context
     /// \param val_type  the type of the value to load
     /// \param src       the float4 array
     /// \param src_offs  the byte offset inside the float4 array, will be updated to point
@@ -2854,32 +2712,27 @@ private:
     ///
     /// \returns the loaded value
     llvm::Value *load_from_float4_array_impl(
-        Function_context &ctx,
         llvm::Type       *val_type,
         llvm::Value      *src,
         unsigned         &src_offs);
 
     /// Load a value inside a float4 array at the given byte offset.
     ///
-    /// \param ctx       the function context
     /// \param val_type  the type of the value to load
     /// \param src       the float4 array
     /// \param src_offs  the byte offset inside the float4 array
     ///
     /// \returns the loaded value
     llvm::Value *load_from_float4_array(
-        Function_context &ctx,
         llvm::Type       *val_type,
         llvm::Value      *src,
         unsigned         src_offs);
 
     /// Translate a precalculated lambda function to LLVM IR.
     ///
-    /// \param ctx             the function context
     /// \param lambda_index    the index of the precalculated lambda function
     /// \param expected_type   the result will be converted to this type if necessary
     Expression_result translate_precalculated_lambda(
-        Function_context &ctx,
         size_t           lambda_index,
         llvm::Type       *expected_type);
 
@@ -2892,11 +2745,9 @@ public:
 private:
     /// Translate a DAG call argument which may be a precalculated lambda function to LLVM IR.
     ///
-    /// \param ctx             the function context
     /// \param arg             the DAG call argument to translate
     /// \param expected_type   the result will be converted to this type if necessary
     Expression_result translate_call_arg(
-        Function_context &ctx,
         DAG_node const   *arg,
         llvm::Type       *expected_type);
 
@@ -2907,13 +2758,12 @@ private:
     ///
     /// \returns the ID or a negative value (-1) if instruction does not have this metadata
     int get_metadata_df_param_id(
-        llvm::Instruction   *inst, 
+        llvm::Instruction   *inst,
         IType::Kind         kind);
 
     /// Rewrite all usages of a DF component variable using the given weight array and the
     /// BSDF component information.
     ///
-    /// \param ctx             the function context
     /// \param inst            the alloca instruction representing the array parameter
     /// \param weight_array    the array containing the component weights, can be local or global
     /// \param df_flags_array  the array containing the component df_flags, can be local or global,
@@ -2921,7 +2771,6 @@ private:
     /// \param comp_info       the bsdf component information to use for the replacements
     /// \param delete_list     list of instructions to be deleted when function is fully processed
     void rewrite_df_component_usages(
-        Function_context                           &ctx,
         llvm::AllocaInst                           *inst,
         llvm::Value                                *weight_array,
         llvm::Value                                *df_flags_array,
@@ -2930,7 +2779,6 @@ private:
 
     /// Rewrite the address of a memcpy from a color_bsdf_component to the given weight array.
     ///
-    /// \param ctx             the function context
     /// \param weight_array    the array containing the component weights, can be local or global
     /// \param addr_bitcast    the address supposedly used by memcpy calls
     /// \param index           the index into a color_bsdf_component array
@@ -2938,7 +2786,6 @@ private:
     ///
     /// \returns true if the rewrite was successful
     bool rewrite_weight_memcpy_addr(
-        Function_context &ctx,
         llvm::Value *weight_array,
         llvm::BitCastInst *addr_bitcast,
         llvm::Value *index,
@@ -3057,57 +2904,45 @@ private:
 
     /// Translate the distribution function DAG node to LLVM IR.
     ///
-    /// \param ctx                  the function context
     /// \param df_node              the distribution function DAG node to translate
     /// \param lambda_result_exprs  the list of expression lambda indices for the lambda results
     /// \param mat_data_global      if non-null, the global variable containing the material data
     ///                             for the interpreter for the current distribution function
     void translate_distribution_function(
-        Function_context                     &ctx,
         DAG_node const                       *df_node,
         llvm::SmallVector<unsigned, 8> const &lambda_result_exprs,
         llvm::GlobalVariable                 *mat_data_global);
 
     /// Translate the init function of the current distribution function to LLVM IR.
     ///
-    /// \param ctx                   the function context
     /// \param texture_result_exprs  the list of expression lambda indices for the texture results
     /// \param lambda_result_exprs   the list of expression lambda indices for the lambda results
     void translate_distribution_function_init(
-        Function_context                     &ctx,
         llvm::SmallVector<unsigned, 8> const &texture_result_exprs,
         llvm::SmallVector<unsigned, 8> const &lambda_result_exprs);
 
     /// Translate a DAG intrinsic call expression to LLVM IR.
     ///
-    /// \param ctx        the function context
     /// \param call_expr  the call expression to translate
     Expression_result translate_dag_intrinsic(
-        Function_context &ctx,
         ICall_expr const *call_expr);
 
     /// Translate a JIT intrinsic call expression to LLVM IR.
     ///
-    /// \param ctx        the function context
     /// \param call_expr  the call expression to translate
     Expression_result translate_jit_intrinsic(
-        Function_context &ctx,
         ICall_expr const *call_expr);
 
     /// Translate a DAG expression lambda call to LLVM IR.
     ///
-    /// \param ctx        the function context
     /// \param call_expr  the call expression to translate
     Expression_result translate_dag_call_lambda(
-        Function_context &ctx,
         ICall_expr const *call_expr);
 
     /// Get the argument type instances for a given call.
     ///
-    /// \param ctx        the function context
     /// \param call       the call.
     Function_instance get_call_instance(
-        Function_context &ctx,
         ICall_expr const *call);
 
     /// Instantiate a type size using array type instances.
@@ -3120,27 +2955,20 @@ private:
 
     /// Translate a call to an user defined function to LLVM IR.
     ///
-    /// \param ctx        the function context
     /// \param call_expr  the call expression to translate
     Expression_result translate_call_user_defined_function(
-        Function_context &ctx,
         ICall_expr const *call_expr);
 
     /// Translate a state::transform_*() call expression to LLVM IR.
     ///
     /// \param sema       the semantic of the called function
-    /// \param ctx        the function context
     /// \param call_expr  the call expression to translate
     Expression_result translate_transform_call(
         IDefinition::Semantics sema,
-        Function_context       &ctx,
         ICall_expr const       *call_expr);
 
     /// Translate a state::object_id() call expression to LLVM IR.
-    ///
-    /// \param ctx        the function context
-    Expression_result translate_object_id_call(
-        Function_context       &ctx);
+    Expression_result translate_object_id_call();
 
     /// Check if the given argument is an index and return its bound.
     ///
@@ -3152,10 +2980,8 @@ private:
 
     /// Translate a call to a compiler known function to LLVM IR.
     ///
-    /// \param ctx        the function context
     /// \param call_expr  the call expression to translate
     Expression_result translate_call_intrinsic_function(
-        Function_context          &ctx,
         mi::mdl::ICall_expr const *call_expr);
 
     /// Get the intrinsic LLVM function for a MDL function.
@@ -3173,123 +2999,98 @@ private:
 
     /// Call a void runtime function.
     ///
-    /// \param ctx     the function context
     /// \param callee  the LLVM function to call
     /// \param args    the call arguments
     void call_rt_func_void(
-        Function_context              &ctx,
         llvm::Function                *callee,
         llvm::ArrayRef<llvm::Value *> args);
 
     /// Call a runtime function.
     ///
-    /// \param ctx     the function context
     /// \param callee  the LLVM function to call
     /// \param args    the call arguments
     ///
     /// \return the return value of the function
     llvm::Value *call_rt_func(
-        Function_context              &ctx,
         llvm::Function                *callee,
         llvm::ArrayRef<llvm::Value *> args);
 
     /// Translate a conversion call to LLVM IR.
     ///
-    /// \param ctx        the function context
     /// \param call_expr  the call expression to translate
     Expression_result translate_conversion(
-        Function_context &ctx,
         ICall_expr const *call_expr);
 
     /// Translate a conversion call to LLVM IR.
     ///
-    /// \param ctx        the function context
     /// \param call_expr  the call expression to translate
     llvm::Value *translate_conversion(
-        Function_context     &ctx,
         mi::mdl::IType const *tgt,
         mi::mdl::IType const *src,
         llvm::Value          *v);
 
     /// Translate a conversion call to a vector type to LLVM IR.
     ///
-    /// \param ctx        the function context
     /// \param tgt        the target type
     /// \param src        the source type
     /// \param v          the LLVM value to convert
     llvm::Value *translate_vector_conversion(
-        Function_context            &ctx,
         mi::mdl::IType_vector const *tgt,
         mi::mdl::IType const        *src,
         llvm::Value                 *v);
 
     /// Translate a conversion call to a matrix type to LLVM IR.
     ///
-    /// \param ctx        the function context
     /// \param tgt        the target type
     /// \param src        the source type
     /// \param v          the LLVM value to convert
     llvm::Value *translate_matrix_conversion(
-        Function_context            &ctx,
         mi::mdl::IType_matrix const *tgt,
         mi::mdl::IType const        *src,
         llvm::Value                 *v);
 
     /// Translate a conversion call to the color type to LLVM IR.
     ///
-    /// \param ctx        the function context
     /// \param src        the source type
     /// \param v          the LLVM value to convert
     llvm::Value *translate_color_conversion(
-        Function_context            &ctx,
         mi::mdl::IType const        *src,
         llvm::Value                 *v);
 
     /// Translate an elemental constructor call to LLVM IR.
     ///
-    /// \param ctx        the function context
     /// \param call_expr  the call expression to translate
     Expression_result translate_elemental_constructor(
-        Function_context          &ctx,
         mi::mdl::ICall_expr const *call_expr);
 
     /// Translate a matrix elemental constructor call to LLVM IR.
     ///
-    /// \param ctx        the function context
     /// \param call_expr  the call expression to translate
     Expression_result translate_matrix_elemental_constructor(
-        Function_context          &ctx,
         mi::mdl::ICall_expr const *call_expr);
 
     /// Translate a matrix diagonal constructor call to LLVM IR.
     ///
-    /// \param ctx        the function context
     /// \param call_expr  the call expression to translate
     Expression_result translate_matrix_diagonal_constructor(
-        Function_context          &ctx,
         mi::mdl::ICall_expr const *call_expr);
 
     /// Translate an array constructor call to LLVM IR.
     ///
-    /// \param ctx        the function context
     /// \param call_expr  the call expression to translate
     Expression_result translate_array_constructor_call(
-        Function_context &ctx,
         ICall_expr const *call_expr);
 
     /// Translate a let expression to LLVM IR.
     ///
-    /// \param ctx            the function context
     /// \param let_expr       the let expression to translate
     /// \param wants_derivs   if true, the result should have derivatives, if available
     Expression_result translate_let(
-        Function_context               &ctx,
         mi::mdl::IExpression_let const *let_expr,
         bool                           wants_derivs);
 
     /// Create a matrix by matrix multiplication.
     ///
-    /// \param ctx       the function context
     /// \param res_type  the LLVM result type of the multiplication
     /// \param l         the left NxM matrix
     /// \param r         the right MxK matrix
@@ -3297,7 +3098,6 @@ private:
     /// \param M         number of columns of the left and number of rows of the right matrix
     /// \param K         number of columns of the right matrix
     llvm::Value *do_matrix_multiplication_MxM(
-        Function_context &ctx,
         llvm::Type       *res_type,
         llvm::Value      *l,
         llvm::Value      *r,
@@ -3307,7 +3107,6 @@ private:
 
     /// Create a matrix by matrix multiplication with derivatives.
     ///
-    /// \param ctx       the function context
     /// \param res_type  the LLVM result type of the multiplication
     /// \param l         the left NxM matrix
     /// \param r         the right MxK matrix
@@ -3315,7 +3114,6 @@ private:
     /// \param M         number of columns of the left and number of rows of the right matrix
     /// \param K         number of columns of the right matrix
     llvm::Value *do_matrix_multiplication_MxM_deriv(
-        Function_context &ctx,
         llvm::Type       *res_type,
         llvm::Value      *l,
         llvm::Value      *r,
@@ -3325,14 +3123,12 @@ private:
 
     /// Create a vector by matrix multiplication.
     ///
-    /// \param ctx       the function context
     /// \param res_type  the LLVM result type of the multiplication
     /// \param l         the left vector
     /// \param r         the right MxK matrix
     /// \param M         size of the left vector and number of rows of the right matrix
     /// \param K         number of columns of the right matrix
     llvm::Value *do_matrix_multiplication_VxM(
-        Function_context &ctx,
         llvm::Type       *res_type,
         llvm::Value      *l,
         llvm::Value      *r,
@@ -3341,14 +3137,12 @@ private:
 
     /// Create a vector by matrix multiplication with derivatives.
     ///
-    /// \param ctx       the function context
     /// \param res_type  the LLVM result type of the multiplication
     /// \param l         the left derivable vector
     /// \param r         the right MxK derivable matrix
     /// \param M         size of the left vector and number of rows of the right matrix
     /// \param K         number of columns of the right matrix
     llvm::Value *do_matrix_multiplication_VxM_deriv(
-        Function_context &ctx,
         llvm::Type       *res_type,
         llvm::Value      *l,
         llvm::Value      *r,
@@ -3357,14 +3151,12 @@ private:
 
     /// Create a matrix by vector multiplication.
     ///
-    /// \param ctx       the function context
     /// \param res_type  the LLVM result type of the multiplication
     /// \param l         the left NxM matrix
     /// \param r         the right vector
     /// \param N         number of rows of the left matrix
     /// \param M         number of columns of the left matrix and size of the right vector
     llvm::Value *do_matrix_multiplication_MxV(
-        Function_context &ctx,
         llvm::Type       *res_type,
         llvm::Value      *l,
         llvm::Value      *r,
@@ -3373,14 +3165,12 @@ private:
 
     /// Create a matrix by vector multiplication with derivatives.
     ///
-    /// \param ctx       the function context
     /// \param res_type  the LLVM result type of the multiplication
     /// \param l         the left NxM derivable matrix
     /// \param r         the right derivable vector
     /// \param N         number of rows of the left matrix
     /// \param M         number of columns of the left matrix and size of the right vector
     llvm::Value *do_matrix_multiplication_MxV_deriv(
-        Function_context &ctx,
         llvm::Type       *res_type,
         llvm::Value      *l,
         llvm::Value      *r,
@@ -3389,37 +3179,31 @@ private:
 
     /// Create a matrix by scalar multiplication.
     ///
-    /// \param ctx       the function context
     /// \param res_type  the LLVM result type of the multiplication
     /// \param l         the left matrix
     /// \param r         the right scalar
     llvm::Value *do_matrix_multiplication_MxS(
-        Function_context &ctx,
         llvm::Type       *res_llvm_type,
         llvm::Value      *l,
         llvm::Value      *r);
 
     /// Create a matrix by scalar multiplication with derivatives.
     ///
-    /// \param ctx       the function context
     /// \param res_type  the LLVM result type of the multiplication
     /// \param l         the left matrix
     /// \param r         the right scalar
     llvm::Value *do_matrix_multiplication_MxS_deriv(
-        Function_context &ctx,
         llvm::Type       *res_llvm_type,
         llvm::Value      *l,
         llvm::Value      *r);
 
     /// Create a matrix by matrix addition.
     ///
-    /// \param ctx       the function context
     /// \param res_type  the LLVM result type of the multiplication
     /// \param l         the left matrix
     /// \param r         the right matrix
     llvm::Value *do_matrix_addition(
-        Function_context &ctx,
-        llvm::Type *res_llvm_type,
+        llvm::Type  *res_llvm_type,
         llvm::Value *l,
         llvm::Value *r);
 
@@ -3782,13 +3566,11 @@ private:
     ///
     /// \param call      the call instruction to translate
     /// \param ii        the instruction iterator, which will be updated if the call is translated
-    /// \param ctx       the context for the translation
     ///
     /// \returns false if there was any error
     bool translate_libbsdf_runtime_call(
         llvm::CallInst             *call,
-        llvm::BasicBlock::iterator &ii,
-        Function_context           &ctx);
+        llvm::BasicBlock::iterator &ii);
 
     /// Transitively walk over the uses of the given argument and mark any calls as DF calls,
     /// storing the provided parameter index as "libbsdf.bsdf_param" or "libbsdf.edf_param" 
@@ -3962,6 +3744,9 @@ private:
     /// The current module.
     llvm::Module *m_module;
 
+    /// The current function context.
+    Function_context *m_ctx;
+
     /// List of functions exported by the module.
     Exported_function_list m_exported_func_list;
 
@@ -4098,31 +3883,6 @@ private:
 
     /// The MDL module stack.
     mi::mdl::vector<mi::mdl::Module const *>::Type m_module_stack;
-
-    /// Value class to handle waiting functions.
-    class Wait_entry {
-    public:
-        /// Constructor.
-        Wait_entry(mi::mdl::Module const *owner, Function_instance const &inst)
-        : m_owner(owner)
-        , m_inst(inst)
-        {
-        }
-
-        /// Get the owner module.
-        mi::mdl::Module const *get_owner() const { return m_owner; }
-
-        /// The function instance.
-        Function_instance const &get_instance() const { return m_inst; }
-
-    private:
-        /// The owner module.
-        mi::mdl::Module const  *m_owner;
-        /// The function instance.
-        Function_instance      m_inst;
-    };
-
-    typedef mi::mdl::queue<Wait_entry>::Type Function_wait_queue;
 
     /// The wait queue for functions.
     Function_wait_queue m_functions_q;

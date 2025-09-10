@@ -42,6 +42,7 @@
 #include <mi/neuraylib/itile.h>
 
 #include <base/hal/disk/disk_file_reader_writer_impl.h>
+#include <base/hal/disk/disk_utils.h>
 #include <base/lib/config/config.h>
 #include <base/lib/mem/mem.h>
 #include <base/lib/log/i_log_module.h>
@@ -133,7 +134,7 @@ private:
 };
 
 
-// Checks whether \p image represents $MI_DATA/io/image/image/test_mipmap.png.
+// Checks whether \p image represents $MI_DATA/io/image/image/test_simple.png.
 //
 // Checks number of miplevels and compares miplevel 2.
 void check_mipmap( DB::Transaction* transaction, const DBIMAGE::Image* image)
@@ -141,7 +142,7 @@ void check_mipmap( DB::Transaction* transaction, const DBIMAGE::Image* image)
     MI_CHECK_EQUAL( image->get_selector(), std::string());
 
     mi::base::Handle<const IMAGE::IMipmap> mipmap( image->get_mipmap( transaction, 0, 0));
-    MI_CHECK_EQUAL( 7, mipmap->get_nlevels());
+    MI_CHECK_EQUAL( 9, mipmap->get_nlevels());
 
     mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( 2));
     bool result = g_image_module->export_canvas( canvas.get(), "mipmap_level_2.png");
@@ -149,7 +150,7 @@ void check_mipmap( DB::Transaction* transaction, const DBIMAGE::Image* image)
 
     std::string root_path = TEST::mi_src_path( "io/image/image/tests/");
     MI_CHECK_IMG_DIFF(
-        "mipmap_level_2.png", (root_path + "reference/export_of_test_mipmap_level_2.png").c_str());
+        "mipmap_level_2.png", (root_path + "reference/mipmap_level_2.png").c_str());
 }
 
 // Checks the uvtiles of frame \p frame_id against \p expected_tiles (indexed by filename).
@@ -171,7 +172,7 @@ void check_uvtile(
         mi::Sint32 u, v;
         MI_CHECK_EQUAL( image->get_uvtile_uv( frame_id, i, u, v), 0);
 
-        std::string fn = fs::u8path( image->get_filename( frame_id, i)).filename().u8string();
+        std::string fn = DISK::to_string( fs::u8path( image->get_filename( frame_id, i)).filename());
         const std::pair<mi::Sint32, mi::Sint32>& uvs = expected_tiles.at( fn);
         MI_CHECK_EQUAL( u, uvs.first);
         MI_CHECK_EQUAL( v, uvs.second);
@@ -273,7 +274,7 @@ DB::Tag get_impl_tag( DB::Transaction* transaction, DB::Tag proxy_tag)
 void check_simple_creation( DB::Transaction* transaction)
 {
     DB::Tag tag;
-    std::string file_path = TEST::mi_src_path( "io/image/image/tests/test_mipmap.png");
+    std::string file_path = TEST::mi_src_path( "io/image/image/tests/test_simple.png");
     mi::base::Uuid unknown_hash{0,0,0,0};
     mi::Sint32 result;
 

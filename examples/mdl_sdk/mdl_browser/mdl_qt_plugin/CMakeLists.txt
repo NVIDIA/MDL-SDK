@@ -168,9 +168,10 @@ set_source_files_properties(
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
-    TYPE SHARED
-    NAMESPACE mdl_sdk
+    TYPE MODULE
     OUTPUT_NAME "mdl_qt_plugin"
+    DYNAMIC_GCC_RUNTIME
+    SKIP_UNDEFINED_SYMBOL_CHECK
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
     )

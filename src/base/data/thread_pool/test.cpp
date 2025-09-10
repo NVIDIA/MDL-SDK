@@ -32,6 +32,8 @@
 #define MI_TEST_IMPLEMENT_TEST_MAIN_INSTEAD_OF_MAIN
 
 #include <atomic>
+#include <chrono>
+#include <thread>
 
 #include <base/system/test/i_test_auto_driver.h>
 #include <base/system/test/i_test_auto_case.h>
@@ -39,7 +41,6 @@
 #include <mi/base/interface_implement.h>
 #include <base/system/main/access_module.h>
 #include <base/hal/thread/i_thread_condition.h>
-#include <base/hal/time/i_time.h>
 #include <base/lib/mem/mem.h>
 #include <base/lib/log/i_log_module.h>
 
@@ -81,7 +82,7 @@ public:
         m_thread_pool->dump_load();
         m_thread_pool->dump_thread_state_counters();
 
-        TIME::sleep( m_delay);
+        std::this_thread::sleep_for( std::chrono::duration<mi::Float32>( m_delay));
 
         LOG::mod_log->info( M_THREAD_POOL, LOG::Mod_log::C_MISC,
             "    Finished test job %llu (CPU load %.1f, GPU load %.1f)",
@@ -179,7 +180,7 @@ public:
         m_thread_pool->dump_load();
         m_thread_pool->dump_thread_state_counters();
 
-        TIME::sleep( m_delay/2);
+        std::this_thread::sleep_for( std::chrono::duration<mi::Float32>( m_delay/2));
         if( m_level+1 < m_max_levels) {
 
 #ifndef ENABLE_ASSERT
@@ -202,7 +203,7 @@ public:
 #endif // ENABLE_ASSERT
 
         }
-        TIME::sleep( m_delay/2);
+        std::this_thread::sleep_for( std::chrono::duration<mi::Float32>( m_delay/2));
 
         m_thread_pool->dump_load();
         m_thread_pool->dump_thread_state_counters();
@@ -259,7 +260,7 @@ public:
         m_thread_pool->dump_load();
         m_thread_pool->dump_thread_state_counters();
 
-        TIME::sleep( m_delay/2);
+        std::this_thread::sleep_for( std::chrono::duration<mi::Float32>( m_delay/2));
         if( m_level+1 < m_max_levels) {
 
             mi::base::Condition m_condition0;
@@ -285,7 +286,7 @@ public:
             m_condition1.wait();
             m_thread_pool->resume_current_job();
         }
-        TIME::sleep( m_delay/2);
+        std::this_thread::sleep_for( std::chrono::duration<mi::Float32>( m_delay/2));
 
         m_thread_pool->dump_load();
         m_thread_pool->dump_thread_state_counters();
@@ -352,7 +353,7 @@ public:
                 index, m_cpu_load, m_gpu_load);
             m_thread_pool->dump_load();
             m_thread_pool->dump_thread_state_counters();
-            TIME::sleep( m_delay);
+            std::this_thread::sleep_for( std::chrono::duration<mi::Float32>( m_delay));
             LOG::mod_log->info( M_THREAD_POOL, LOG::Mod_log::C_MISC,
                 "    Finished fragment %d (CPU load %.1f, GPU load %.1f)",
                 index, m_cpu_load, m_gpu_load);
@@ -408,7 +409,7 @@ public:
             index, m_cpu_load, m_gpu_load);
         m_thread_pool->dump_load();
         m_thread_pool->dump_thread_state_counters();
-        TIME::sleep( m_delay);
+        std::this_thread::sleep_for( std::chrono::duration<mi::Float32>( m_delay));
         LOG::mod_log->info( M_THREAD_POOL, LOG::Mod_log::C_MISC,
             "    Finished fragment %" FMT_SIZE_T " (CPU load %.1f, GPU load %.1f)",
             index, m_cpu_load, m_gpu_load);
@@ -458,11 +459,11 @@ class Priority_job
         m_thread_pool->dump_thread_state_counters();
 
         ASSERT( M_THREAD_POOL, m_priority == s_expected_priority || m_priority == 127);
-        TIME::sleep( m_delay/2);
+        std::this_thread::sleep_for( std::chrono::duration<mi::Float32>( m_delay/2));
         ASSERT( M_THREAD_POOL, m_priority == s_expected_priority || m_priority == 127);
         m_thread_pool->yield();
         ASSERT( M_THREAD_POOL, m_priority == s_expected_priority || m_priority == 127);
-        TIME::sleep( m_delay/2);
+        std::this_thread::sleep_for( std::chrono::duration<mi::Float32>( m_delay/2));
         ASSERT( M_THREAD_POOL, m_priority == s_expected_priority || m_priority == 127);
 
         LOG::mod_log->info( M_THREAD_POOL, LOG::Mod_log::C_MISC,
@@ -525,7 +526,7 @@ public:
         m_thread_pool->dump_thread_state_counters();
 
         if( !m_parent) {
-            TIME::sleep( m_delay);
+            std::this_thread::sleep_for( std::chrono::duration<mi::Float32>( m_delay));
             s_completed_yield_child_job = true;
         } else {
             mi::base::Handle<Yield_job> job;

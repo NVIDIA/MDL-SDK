@@ -185,7 +185,7 @@ Vulkan_texture create_material_texture(
 
     // This example supports only 2D and 3D textures (no PTEX or cube)
     mi::mdl::IType_texture::Shape texture_shape = texture_data->get_shape();
-    
+
     if (texture_shape == mi::mdl::IType_texture::TS_2D)
     {
         image_create_info.imageType = VK_IMAGE_TYPE_2D;
@@ -504,10 +504,10 @@ private:
     uint32_t m_display_buffer_index = 0; // Which buffer to display
     bool m_show_gui = true;
     bool m_first_stats_update = true;
-    double m_last_stats_update;
+    double m_last_stats_update = 0.0;
     float m_render_time = 0.0f;
     bool m_vsync_enabled = true;
-    
+
     // Camera movement
     Camera_state m_camera_state;
     Float32_2 m_mouse_start;
@@ -519,7 +519,7 @@ void Df_vulkan_app::init_resources()
     glslang::InitializeProcess();
 
     m_linear_sampler = create_linear_sampler(m_device);
-    
+
     // Create the render resources for the material
     //
     // Create the storage buffer for the material's read-only data
@@ -879,7 +879,7 @@ void Df_vulkan_app::key_callback(int key, int action, int mods)
         if (key >= GLFW_KEY_1 && key <= GLFW_KEY_6)
             m_display_buffer_index = key - GLFW_KEY_1;
     }
-    
+
     ImGui_ImplGlfw_KeyCallback(m_window, key, glfwGetKeyScancode(key), action, mods);
 }
 
@@ -1043,7 +1043,7 @@ void Df_vulkan_app::do_settings_and_stats_gui()
             const char* display_name = parameter_name;
             float range_min = -std::numeric_limits<float>::max();
             float range_max = std::numeric_limits<float>::max();
-            
+
             size_t dag_param_index = m_material_instance->get_dag_parameter_index(parameter_name);
             if (dag_param_index != ~0)
             {
@@ -1495,8 +1495,10 @@ void Df_vulkan_app::create_render_params_buffers()
 
 void Df_vulkan_app::create_environment_map()
 {
+    mi::base::Handle<mi::mdl::IEntity_resolver> entity_resolver(
+        m_mdl_compiler->create_entity_resolver(nullptr));
     Texture_data env_map_data(
-        m_options.hdr_file.c_str(), m_mdl_compiler->create_entity_resolver(nullptr));
+        m_options.hdr_file.c_str(), entity_resolver.get());
     if (!env_map_data.is_valid())
     {
         std::cerr << "Error: Requested environment map texture data is invalid\n";
@@ -1804,7 +1806,7 @@ void Df_vulkan_app::create_descriptor_pool_and_sets()
         }
 
         // Material textures
-        // 
+        //
         // We rely on the partially bound bit when creating the descriptor set layout,
         // so we can leave holes in the descriptor sets (or leave them empty).
         // For each MDL texture index only one of the GLSL texture arrays is populated.

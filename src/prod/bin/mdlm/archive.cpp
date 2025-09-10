@@ -36,6 +36,7 @@
 #include <filesystem>
 
 #include <boost/algorithm/string/replace.hpp>
+#include <base/hal/disk/disk_utils.h>
 #include <base/hal/hal/i_hal_ospath.h>
 #include <base/lib/path/i_path.h>
 
@@ -414,9 +415,9 @@ bool validate_archive(
     {
         for(const auto& entry: fs::directory_iterator(fs_path))
         {
-            std::string fn = entry.path().filename().u8string();
             if(fs::is_regular_file(entry.path()))
             {
+                std::string fn = MI::DISK::to_string(entry.path().filename());
                 if (Util::extension(fn) == Archive::extension)
                 {
                     // BEWARE archive should be without .mdr extension

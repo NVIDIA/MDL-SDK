@@ -1,0 +1,20 @@
+mdl 1.10;
+
+import ::df::*;
+import ::tex::*;
+
+// Material with texture_isvalid() on a valid material.
+export material test_isvalid_on_valid(uniform texture_2d tex0 = texture_2d("resources/test.png"))
+= let {
+    color c = tex::texture_isvalid(tex0) ? color(1,2,3) : color(4,5,6);
+} in material(
+    surface: material_surface(scattering: df::diffuse_reflection_bsdf(tint: c))
+);
+
+// Material with texture_isvalid() on an invalid material.
+export material test_isvalid_on_invalid(uniform texture_2d tex0 = texture_2d())
+= let {
+    color c = tex::texture_isvalid(tex0) ?  color(1,2,3) : color(4,5,6);
+} in material(
+    surface: material_surface(scattering: df::diffuse_reflection_bsdf(tint: c))
+);

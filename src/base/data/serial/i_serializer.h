@@ -540,22 +540,14 @@ template <typename T, size_t N, typename S, typename = enable_if_serializer_t<S>
 inline void write_range(S& serializer, const T (&arr)[N]);
 
 /// Serialize a vector.
-template <typename T, typename S, typename = enable_if_serializer_t<S>>
-void write(S* serializer, const std::vector<T>& array);
 template <typename T,typename A, typename S, typename = enable_if_serializer_t<S>>
 void write(S* serializer, const std::vector<T,A>& array);
-template <typename T, typename S, typename = enable_if_serializer_t<S>>
-void write(S* serializer, const std::vector<T*>& array);
 template <typename T,typename A, typename S, typename = enable_if_serializer_t<S>>
 void write(S* serializer, const std::vector<T*,A>& array);
 
 /// Deserialize a vector.
-template <typename T, typename D, typename = enable_if_deserializer_t<D>>
-void read(D* deserializer, std::vector<T>* array);
 template <typename T,typename A, typename D, typename = enable_if_deserializer_t<D>>
 void read(D* deserializer, std::vector<T,A>* array);
-template <typename T, typename D, typename = enable_if_deserializer_t<D>>
-void read(D* deserializer, std::vector<T*>* array);
 template <typename T,typename A, typename D, typename = enable_if_deserializer_t<D>>
 void read(D* deserializer, std::vector<T*,A>* array);
 

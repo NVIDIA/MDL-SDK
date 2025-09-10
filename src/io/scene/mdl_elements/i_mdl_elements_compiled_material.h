@@ -76,7 +76,9 @@ public:
     ///
     /// \param transaction                 The DB transaction to use.
     /// \param core_material_instance      The core material instance.
-    /// \param module_name                 The MDL module name. Optional, used by is_valid().
+    /// \param module_tag                  Tag of the MDL module containing the underlying function
+    ///                                    definition. Optional (not available for distilled
+    ///                                    materials).
     /// \param mdl_meters_per_scene_unit   Conversion ratio between meters and scene units.
     /// \param mdl_wavelength_min          The smallest supported wavelength.
     /// \param mdl_wavelength_max          The largest supported wavelength.
@@ -85,7 +87,7 @@ public:
     Mdl_compiled_material(
         DB::Transaction* transaction,
         const mi::mdl::IMaterial_instance* core_material_instance,
-        const char* module_name,
+        DB::Tag module_tag,
         mi::Float32 mdl_meters_per_scene_unit,
         mi::Float32 mdl_wavelength_min,
         mi::Float32 mdl_wavelength_max,

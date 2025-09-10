@@ -32,6 +32,9 @@
 #ifndef BASE_HAL_DISK_UTILS_H
 #define BASE_HAL_DISK_UTILS_H
 
+#include <filesystem>
+#include <string>
+
 namespace MI {
 
 namespace DISK {
@@ -42,6 +45,21 @@ namespace DISK {
 /// \param for_writing   \c true for write access, \c false for read access.
 /// \return              \c true in case of success, \c false otherwise.
 bool access( const char* path, bool for_writing = false);
+
+/// Converts a std::filesystem::path into an UTF8 encoded std::string with native separators.
+///
+/// On Windows, calls path::u8string() to trigger the correct UTF8 conversion code (on C++20 and
+/// later this requires unfortunately a detour of a temporary std::u8string).
+///
+/// On other platforms, there is no difference in the encoding between path::string() and
+/// path::u8string() (only in the return type in C++20 and later), and we simply call
+/// path::string() to avoid the temporary.
+std::string to_string( const std::filesystem::path& path);
+
+/// Returns the extension (without dot), or the empty string in case of failure.
+///
+/// Shortcut to avoid conversion to std::filesystem::path and back just to get the extension.
+std::string get_extension( const std::string& filename);
 
 } // namespace DISC
 

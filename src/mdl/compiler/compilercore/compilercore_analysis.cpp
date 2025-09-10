@@ -3541,6 +3541,13 @@ restart:
     case IType::TK_STRUCT:
         // check those
         break;
+    case IType::TK_PTR:
+    case IType::TK_REF:
+        MDL_ASSERT(!"pointer/reference type occured unexpected");
+        return false;
+    case IType::TK_VOID:
+        MDL_ASSERT(!"void type occured unexpected");
+        return false;
     case IType::TK_AUTO:
         MDL_ASSERT(!"auto type occured unexpected");
         return false;
@@ -3548,6 +3555,7 @@ restart:
         // to suppress further errors say true here
         return true;
     }
+
     for (Definition const *c_def = m_module.get_first_constructor(type);
          c_def != NULL;
          c_def = m_module.get_next_constructor(c_def))
@@ -5116,6 +5124,15 @@ restart:
         // forbidden
         return false;
 
+    case IType::TK_PTR:
+    case IType::TK_REF:
+        MDL_ASSERT(!"pointer/reference type occured unexpected");
+        return false;
+
+    case IType::TK_VOID:
+        MDL_ASSERT(!"void type occured unexpected");
+        return false;
+
     case IType::TK_AUTO:
         MDL_ASSERT(!"auto type occured unexpected");
         return true;
@@ -5164,6 +5181,15 @@ restart:
             return type;
         }
         return NULL;
+
+    case IType::TK_PTR:
+    case IType::TK_REF:
+        MDL_ASSERT(!"pointer/reference type occured unexpected");
+        return type;
+
+    case IType::TK_VOID:
+        MDL_ASSERT(!"void type occured unexpected");
+        return type;
 
     case IType::TK_AUTO:
         MDL_ASSERT(!"auto type occured unexpected");
@@ -5247,9 +5273,14 @@ restart:
     case IType::TK_HAIR_BSDF:
     case IType::TK_EDF:
     case IType::TK_VDF:
+    case IType::TK_PTR:          // pointers are forbidden (and impossible by syntax)
+    case IType::TK_REF:          // references are forbidden (and impossible by syntax)
     case IType::TK_FUNCTION:     // functions are forbidden (and impossible by syntax)
     case IType::TK_ERROR:        // error already reported, fine here
         return false;
+
+    case IType::TK_VOID:         // void is currently impossible by syntax
+        return true;
 
     case IType::TK_AUTO:
         // we might see an auto type when used on the return type, ignore it so far
@@ -5375,6 +5406,15 @@ bool Analysis::is_allowed_array_type(
             // arrays of bsdf measurements are allowed in MDL 1.7+
             return mdl_version >= IMDL::MDL_VERSION_1_7;
 
+        case IType::TK_PTR:
+        case IType::TK_REF:
+            MDL_ASSERT(!"pointer/reference type occured unexpected");
+            return false;
+
+        case IType::TK_VOID:
+            MDL_ASSERT(!"void type occured unexpected");
+            return false;
+
         case IType::TK_AUTO:
             MDL_ASSERT(!"auto type occured unexpected");
             return true;
@@ -5462,6 +5502,15 @@ static IType const *has_forbidden_parameter_type(
         case IType::TK_BSDF_MEASUREMENT:
         case IType::TK_LIGHT_PROFILE:
             return allow_resource ? NULL : type;
+
+        case IType::TK_PTR:
+        case IType::TK_REF:
+            MDL_ASSERT(!"pointer/reference type occured unexpected");
+            return type;
+
+        case IType::TK_VOID:
+            MDL_ASSERT(!"void type occured unexpected");
+            return type;
 
         case IType::TK_AUTO:
             // Placeholder types are not allowed on parameters.
@@ -5575,6 +5624,15 @@ IType const *NT_analysis::has_forbidden_material_parameter_type(
         case IType::TK_TEXTURE:
         case IType::TK_BSDF_MEASUREMENT:
             return NULL;
+
+        case IType::TK_PTR:
+        case IType::TK_REF:
+            MDL_ASSERT(!"pointer/reference type occured unexpected");
+            return type;
+
+        case IType::TK_VOID:
+            MDL_ASSERT(!"void type occured unexpected");
+            return type;
 
         case IType::TK_AUTO:
             MDL_ASSERT(!"auto type occured unexpected");
@@ -6282,7 +6340,7 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
     char declarative_fkt_state = DS_MUST_BE_NON_DECLARATIVE;
 
     if (body == NULL) {
-        // for prototypes, the declarative MUSt be set explicitly
+        // for prototypes, the declarative MUST be set explicitly
         declarative_fkt_state = fkt_decl->is_declarative() ?
             DS_IS_DECLARATIVE : DS_MUST_BE_NON_DECLARATIVE;
     } else {
@@ -6412,12 +6470,13 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
             }
         }
 
-        // allow declarative return types for MDL 1.9+
-        bool allow_declarative = m_mdl_version >= IMDL::MDL_VERSION_1_9;
-
         bool is_auto_ret_type = ret_name->is_auto_type();
         if (!is_auto_ret_type && !check_function_return_type(
-            allow_declarative, ret_type, ret_name->access_position(), f_sym, m_is_stdlib))
+            /*allow_declarative=*/m_declarative_fkt_state != DS_MUST_BE_NON_DECLARATIVE,
+            ret_type,
+            ret_name->access_position(),
+            f_sym,
+            m_is_stdlib))
         {
             ret_type = m_tc.error_type;
 
@@ -12634,6 +12693,11 @@ bool NT_analysis::pre_visit(
     {
          Definition_table::Scope_enter scope(*m_def_tab, type_def);
 
+         // we know that this scope will be a type scope, so at least give it the name
+         // here to improve error messages for fields that might arise
+         Scope *type_scope = m_def_tab->get_curr_scope();
+         type_scope->set_scope_type(NULL, type_def->get_sym());
+
         for (int i = 0; i < n_fields; ++i) {
             IType_name const *t_name = struct_decl->get_field_type_name(i);
             visit(t_name);
@@ -12670,15 +12734,15 @@ bool NT_analysis::pre_visit(
                 has_error = true;
             }
 
-            // do not promote types in the standard library, this will give unexpected results
-            if (!m_is_stdlib) {
-                if (m_mdl_version  >= IMDL::MDL_VERSION_1_9 &&
-                    (f_type->is_declarative() || is<IType_df>(f_type->skip_type_alias()))) {
-                    // "A structure type with a field of a declarative structure or declarative
-                    // array type is automatically a declarative structure type."
-                    is_declarative = true;
-                }
+            if (m_mdl_version >= IMDL::MDL_VERSION_1_9 &&
+                (f_type->is_declarative() || is<IType_df>(f_type->skip_type_alias()))) {
+                // "A structure type with a field of a declarative structure or declarative
+                // array type is automatically a declarative structure type."
+                is_declarative = true;
+            }
 
+            // do not bail out in the standard library
+            if (!m_is_stdlib) {
                 if (!is_allowed_field_type(is_declarative, f_type, m_mdl_version)) {
                     error(
                         FORBIDDEN_FIELD_TYPE,
@@ -13688,6 +13752,26 @@ bool NT_analysis::pre_visit(IStatement_for *for_stmt)
     return false;
 }
 
+// Check if the given type is declarative and used in the right context.
+void NT_analysis::check_declarative_type_usage(
+    IType const    *type,
+    Position const &pos)
+{
+    // check for declarative types
+    if (type->is_declarative()) {
+        if (m_declarative_fkt_state == DS_MAYBE_DECLARATIVE) {
+            // declarative type used
+            m_declarative_fkt_state = DS_IS_DECLARATIVE;
+        } else if (m_declarative_fkt_state == DS_MUST_BE_NON_DECLARATIVE) {
+            error(
+                DECLARATIVE_TYPE_USED_IN_NON_DECL_CONTEXT,
+                pos,
+                Error_params(*this)
+                .add(type));
+        }
+    }
+}
+
 IExpression const *NT_analysis::handle_return_expression(
     IExpression const *expr)
 {
@@ -13707,6 +13791,8 @@ IExpression const *NT_analysis::handle_return_expression(
     if (is<IType_error>(ret_type)) {
         return ret_expr;
     }
+
+    check_declarative_type_usage(expr_type, expr->access_position());
 
     if (curr_func->is_auto_return()) {
         IType const *deduced_type = curr_func->get_deduced_ret_type();
@@ -13809,6 +13895,7 @@ IExpression *NT_analysis::post_visit(IExpression_invalid *inv_expr)
     return inv_expr;
 }
 
+// end of literal expression
 IExpression *NT_analysis::post_visit(IExpression_literal *lit)
 {
     // No need to set the type for literal ...
@@ -13818,19 +13905,7 @@ IExpression *NT_analysis::post_visit(IExpression_literal *lit)
         handle_resource_url(r_val, lit, r_val->get_type());
     }
 
-    // check for declarative types
-    if (lit->get_type()->is_declarative()) {
-        if (m_declarative_fkt_state == DS_MAYBE_DECLARATIVE) {
-            // declarative type used
-            m_declarative_fkt_state = DS_IS_DECLARATIVE;
-        } else if (m_declarative_fkt_state == DS_MUST_BE_NON_DECLARATIVE) {
-            error(
-                DECLARATIVE_TYPE_USED_IN_NON_DECL_CONTEXT,
-                lit->access_position(),
-                Error_params(*this)
-                .add(lit->get_type()));
-        }
-    }
+    check_declarative_type_usage(lit->get_type(), lit->access_position());
 
     return lit;
 }
@@ -14002,6 +14077,10 @@ IExpression *NT_analysis::post_visit(IExpression_binary *bin_expr)
                 // suppress error message
                 res_type = m_tc.error_type;
                 break;
+
+            case IType::TK_PTR:
+            case IType::TK_REF:
+            case IType::TK_VOID:
             default:
                 error(
                     INDEX_OF_NON_ARRAY,
@@ -14041,14 +14120,6 @@ IExpression *NT_analysis::post_visit(IExpression_binary *bin_expr)
                                 rhs->access_position(),
                                 Error_params(*this).add(index).add(">=").add(arr_size));
                         }
-                    }
-                }
-                if (lhs_type->is_declarative()) {
-                    if (!(index_type->get_type_modifiers() & IType::MK_UNIFORM)) {
-                        error(
-                            DECLARATIVE_INDEX_NOT_UNIFORM,
-                            rhs->access_position(),
-                            Error_params(*this));
                     }
                 }
             } else if (!is<IType_error>(index_type)) {
@@ -14171,19 +14242,7 @@ IExpression *NT_analysis::post_visit(IExpression_binary *bin_expr)
         break;
     }
 
-    // check for declarative types
-    if (res_type->is_declarative()) {
-        if (m_declarative_fkt_state == DS_MAYBE_DECLARATIVE) {
-            // declarative type used
-            m_declarative_fkt_state = DS_IS_DECLARATIVE;
-        } else if (m_declarative_fkt_state == DS_MUST_BE_NON_DECLARATIVE) {
-            error(
-                DECLARATIVE_TYPE_USED_IN_NON_DECL_CONTEXT,
-                bin_expr->access_position(),
-                Error_params(*this)
-                    .add(res_type));
-        }
-    }
+    check_declarative_type_usage(res_type, bin_expr->access_position());
 
     bin_expr->set_type(check_performance_restriction(res_type, bin_expr->access_position()));
 
@@ -14473,6 +14532,8 @@ IExpression *NT_analysis::post_visit(IExpression_call *call_expr)
                     res_type = m_tc.create_array(res_type, n_args);
                 }
             }
+
+            check_declarative_type_usage(res_type, call_expr->access_position());
 
             call_expr->set_type(
                 check_performance_restriction(res_type, call_expr->access_position()));
@@ -17333,7 +17394,9 @@ public:
 
             IQualified_name *qname = m_name_fact.create_qualified_name(POS(pos));
 
-            if (scope != m_def_tab.get_predef_scope()) {
+            if (imp_def->get_kind() != Definition:: DK_MEMBER &&
+                scope != m_def_tab.get_predef_scope())
+            {
                 Scope const *global = m_def_tab.get_global_scope();
 
                 for (Scope const *s = scope; s != global; s = s->get_parent()) {
@@ -17367,7 +17430,7 @@ private:
     /// The analysis.
     NT_analysis &m_ana;
 
-    // The module.
+    /// The module.
     Module &m_mod;
 
     /// The definition table of the module.

@@ -35,7 +35,6 @@
 #include "i_mdl_elements_resource_callback.h"
 
 #include <cassert>
-#include <filesystem>
 #include <sstream>
 
 #include <mi/mdl/mdl_modules.h>
@@ -43,10 +42,12 @@
 #include <mi/neuraylib/ibuffer.h>
 #include <mi/neuraylib/icanvas.h>
 #include <mi/neuraylib/iexport_result.h>
+#include <mi/neuraylib/imap.h>
 #include <mi/neuraylib/istring.h>
 
 #include <base/data/db/i_db_access.h>
 #include <base/data/db/i_db_transaction.h>
+#include <base/hal/disk/disk_utils.h>
 #include <base/hal/hal/i_hal_ospath.h>
 #include <io/image/image/i_image.h>
 #include <io/image/image/i_image_mipmap.h>
@@ -79,21 +80,39 @@ Resource_callback::Resource_callback(
         context->get_option<bool>( MDL_CTX_OPTION_EXPORT_RESOURCES_WITH_MODULE_PREFIX)),
     m_keep_original_file_paths(
         context->get_option<bool>( MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS)),
+    m_filename_hints(
+        context->get_interface_option<const mi::IMap>( MDL_CTX_OPTION_FILENAME_HINTS)),
     m_result( result, mi::base::DUP_INTERFACE),
-    m_module_filename_c_str( nullptr),
-    m_counter( 0),
     m_image_module( false)
 {
     m_transaction->pin();
 
+    // Map context option "handle_filename_conflicts" to m_handle_filename_conflicts enum.
+    std::string handle_filename_conflicts
+        = context->get_option<std::string>( MDL_CTX_OPTION_HANDLE_FILENAME_CONFLICTS);
+    if( handle_filename_conflicts == "generate_unique")
+        m_handle_filename_conflicts = GENERATE_UNIQUE;
+    else if( handle_filename_conflicts == "overwrite_existing")
+        m_handle_filename_conflicts = OVERWRITE_EXISTING;
+    else if( handle_filename_conflicts == "fail_if_existing")
+        m_handle_filename_conflicts = FAIL_IF_EXISTING;
+    else {
+        ASSERT( M_SCENE, false);
+    }
+
+    // And set m_copy_options based on it.
+    m_copy_options = (m_handle_filename_conflicts == OVERWRITE_EXISTING)
+        ? fs::copy_options::overwrite_existing : fs::copy_options::none;
+
+    // Compute m_module_filename, m_module_filename_c_str, and m_path_prefix.
     if( module_filename) {
         std::error_code ec;
         fs::path path( fs::u8path( module_filename));
         path = fs::absolute( path, ec);
-        m_module_filename = path.u8string();
+        m_module_filename = DISK::to_string( path);
         m_module_filename_c_str = m_module_filename.c_str();
         mi::Size length = m_module_filename.length();
-        ASSERT( M_NEURAY_API, length >= 4 && m_module_filename.substr( length-4) == ".mdl");
+        ASSERT( M_SCENE, length >= 4 && m_module_filename.substr( length-4) == ".mdl");
         m_path_prefix = m_add_module_prefix
             ? m_module_filename.substr( 0, length-4) + '_'
             : get_directory( m_module_filename) + HAL::Ospath::sep();
@@ -129,15 +148,22 @@ mi::Float32 convert_rtt_kind_to_gamma( mi::mdl::Resource_tag_tuple::Kind kind)
         case mi::mdl::Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
         case mi::mdl::Resource_tag_tuple::RK_MICROFLAKE_SHEEN_GENERAL:
         case mi::mdl::Resource_tag_tuple::RK_MICROFLAKE_SHEEN_MULTISCATTER:
-            ASSERT( M_NEURAY_API, false);
+            ASSERT( M_SCENE, false);
             return 0.0f;
     }
 
-    ASSERT( M_NEURAY_API, false);
+    ASSERT( M_SCENE, false);
     return 0.0f;
 }
 
 } // namespace
+
+const char* Resource_callback::get_resource_name(
+    const mi::mdl::IValue_resource* resource,
+    bool supports_strict_relative_path)
+{
+    return get_resource_name( resource, supports_strict_relative_path, nullptr);
+}
 
 const char* Resource_callback::get_resource_name(
     const mi::mdl::IValue_resource* resource,
@@ -161,12 +187,6 @@ const char* Resource_callback::get_resource_name(
         // this module
         DB::Tag module_tag = m_transaction->name_to_tag( m_module_name.c_str());
         if( module_tag) {
-
-            SERIAL::Class_id class_id = m_transaction->get_class_id( module_tag);
-            if( class_id != ID_MDL_MODULE) {
-                add_error_resource_type( 6010, "module", module_tag);
-                return nullptr;
-            }
 
             mi::Float32 res_gamma = 0.0f;
             std::string res_selector;
@@ -213,7 +233,7 @@ const char* Resource_callback::get_resource_name(
             result = handle_bsdf_measurement( tag, supports_strict_relative_path, buffer_callback);
             break;
         default:
-            ASSERT( M_NEURAY_API, false);
+            ASSERT( M_SCENE, false);
     }
 
     if( result.empty())
@@ -221,13 +241,6 @@ const char* Resource_callback::get_resource_name(
 
     m_file_paths[tag] = result;
     return m_file_paths[tag].c_str();
-}
-
-const char* Resource_callback::get_resource_name(
-    const mi::mdl::IValue_resource* resource,
-    bool supports_strict_relative_path)
-{
-    return get_resource_name( resource, supports_strict_relative_path, nullptr);
 }
 
 std::string Resource_callback::handle_texture(
@@ -244,13 +257,39 @@ std::string Resource_callback::handle_texture(
     DB::Access<TEXTURE::Texture> texture( texture_tag, m_transaction);
     DB::Tag image_tag( texture->get_image());
     DB::Tag volume_tag( texture->get_volume_data());
-    ASSERT( M_NEURAY_API, !image_tag || !volume_tag);
+    ASSERT( M_SCENE, !image_tag || !volume_tag);
 
-    if( image_tag)
-        return handle_texture_image( image_tag, supports_strict_relative_path, buffer_callback);
-    else if( volume_tag)
-        return handle_texture_volume( volume_tag, supports_strict_relative_path, buffer_callback);
-    else
+    if( image_tag) {
+
+        // Repeat caching on the image level in addition to the texture level. Otherwise, different
+        // textures pointing to the same image might result in duplicated re-exportes files.
+        if( !m_file_paths[image_tag].empty())
+            return m_file_paths[image_tag].c_str();
+
+        std::string result = handle_texture_image(
+            image_tag, supports_strict_relative_path, buffer_callback);
+        if( result.empty())
+            return {};
+
+        m_file_paths[image_tag] = result;
+        return m_file_paths[image_tag].c_str();
+
+    } else if( volume_tag) {
+
+        // Repeat caching on the volume level in addition to the texture level. Otherwise, different
+        // textures pointing to the same volume might result in duplicated re-exportes files.
+        if( !m_file_paths[volume_tag].empty())
+            return m_file_paths[volume_tag].c_str();
+
+        std::string result = handle_texture_volume(
+            volume_tag, supports_strict_relative_path, buffer_callback);
+        if( result.empty())
+            return {};
+
+        m_file_paths[volume_tag] = result;
+        return m_file_paths[volume_tag].c_str();
+
+    } else
         return {};
 }
 
@@ -270,29 +309,28 @@ std::string Resource_callback::handle_texture_image(
     // File-based images
     if( image->is_file_based()) {
 
-        // We need a suffix (at least in case of animated textures and/or uvtiles since
-        // reconstructing the marker string is not reliable.
-        const std::string& mdl_file_path = image->get_mdl_file_path();
-        const std::string& original_filename = image->get_original_filename();
-        const std::string suffix
-            = !mdl_file_path.empty() ? mdl_file_path : original_filename;
-        ASSERT( M_NEURAY_API, !suffix.empty());
-
-        const std::string& filename_0_0 = image->get_filename( /*frame_id*/ 0, /*uvtile_id*/ 0);
-
         // Use original file if bundling is not requested and the file can be found via the
         // search paths. We check only the first frame/tile here.
         if( !m_bundle_resources) {
+
+            const std::string& filename_0_0 = image->get_filename( /*frame_id*/ 0, /*uvtile_id*/ 0);
+            ASSERT( M_SCENE, m_module_name.substr( 0, 5) == "mdl::");
             const std::string& file_path = DETAIL::unresolve_resource_filename(
                 filename_0_0.c_str(), m_module_filename_c_str, &m_module_name[3], m_context);
+
             if( !file_path.empty()) {
-                // We need a suffix (at least in case of animated textures and/or uvtiles) since
-                // reconstructing the marker string is not reliable.
+
+                if( !image->is_animated() && !image->is_uvtile())
+                    return file_path;
+
+                // Reconstructing the required markers from file_path or the individual filenames
+                // is quite difficult. Instead, combine the directory part of file_path with the
+                // filename part of the original MDL file path or filename.
                 const std::string& mdl_file_path = image->get_mdl_file_path();
                 const std::string& original_filename = image->get_original_filename();
                 const std::string suffix
                     = !mdl_file_path.empty() ? mdl_file_path : original_filename;
-                ASSERT( M_NEURAY_API, !suffix.empty());
+                ASSERT( M_SCENE, !suffix.empty());
                 return construct_mdl_file_path( file_path, suffix);
             }
         }
@@ -305,7 +343,8 @@ std::string Resource_callback::handle_texture_image(
         }
 
         // Otherwise export the image.
-        std::string new_filename  = export_texture_image( image.get_ptr(), buffer_callback);
+        std::string new_filename
+            = export_texture_image( image.get_ptr(), image_tag, buffer_callback);
         if( new_filename.empty()) {
             add_error_export_failed( 6013, "file-based", "image", image_tag);
             return {};
@@ -316,27 +355,35 @@ std::string Resource_callback::handle_texture_image(
     // Container-based images
     } else if( image->is_container_based()) {
 
-        const std::string& container_filename = image->get_container_filename();
-        const std::string& container_membername_0_0
-            = image->get_container_membername( /*frame_id*/ 0, /*uvtile_id*/ 0);
 
         // Use original file if bundling is not requested and the file can be found via the search
         // paths.
         if( !m_bundle_resources) {
+
+            const std::string& container_filename = image->get_container_filename();
+            const std::string& container_membername_0_0
+                = image->get_container_membername( /*frame_id*/ 0, /*uvtile_id*/ 0);
+            ASSERT( M_SCENE, m_module_name.substr( 0, 5) == "mdl::");
             const std::string& file_path = DETAIL::unresolve_resource_filename(
                 container_filename.c_str(),
                 container_membername_0_0.c_str(),
                 m_module_filename_c_str,
                 &m_module_name[3],
                 m_context);
+
             if( !file_path.empty()) {
-                // We need a suffix (at least in case of animated textures and/or uvtiles) since
-                // reconstructing the marker string is not reliable.
+
+                if( !image->is_animated() && !image->is_uvtile())
+                    return file_path;
+
+                // Reconstructing the required markers from file_path or the individual filenames
+                // is quite difficult. Instead, combine the directory part of file_path with the
+                // filename part of the original MDL file path or filename.
                 const std::string& mdl_file_path = image->get_mdl_file_path();
                 const std::string& original_filename = image->get_original_filename();
                 const std::string suffix
                     = !mdl_file_path.empty() ? mdl_file_path : original_filename;
-                ASSERT( M_NEURAY_API, !suffix.empty());
+                ASSERT( M_SCENE, !suffix.empty());
                 return construct_mdl_file_path( file_path, suffix);
             }
         }
@@ -349,7 +396,8 @@ std::string Resource_callback::handle_texture_image(
         }
 
         // Export canvas(es) with a generated filename and return that filename.
-        std::string new_filename = export_texture_image( image.get_ptr(), buffer_callback);
+        std::string new_filename
+            = export_texture_image( image.get_ptr(), image_tag, buffer_callback);
         if( new_filename.empty()) {
             add_error_string_based( 6016, "container-based", "image", image_tag);
             return {};
@@ -368,7 +416,8 @@ std::string Resource_callback::handle_texture_image(
         }
 
         // Export canvas(es) with a generated filename and return that filename.
-        std::string new_filename = export_texture_image( image.get_ptr(), buffer_callback);
+        std::string new_filename
+            = export_texture_image( image.get_ptr(), image_tag, buffer_callback);
         if( new_filename.empty()) {
             add_error_string_based( 6014, "memory-based", "image", image_tag);
             return {};
@@ -383,7 +432,7 @@ std::string Resource_callback::handle_texture_volume(
     bool supports_strict_relative_path,
     Buffer_callback* buffer_callback)
 {
-    ASSERT( M_NEURAY_API, false);
+    ASSERT( M_SCENE, false);
     return {};
 }
 
@@ -403,11 +452,11 @@ std::string Resource_callback::handle_light_profile(
     // File-based light profiles
     if( lp->is_file_based()) {
 
-        const std::string& filename = lp->get_filename();
-
         // Use original file if bundling is not requested and the file can be found via the search
         // paths.
         if( !m_bundle_resources) {
+            const std::string& filename = lp->get_filename();
+            ASSERT( M_SCENE, m_module_name.substr( 0, 5) == "mdl::");
             const std::string& file_path = DETAIL::unresolve_resource_filename(
                 filename.c_str(), m_module_filename_c_str, &m_module_name[3], m_context);
             if( !file_path.empty())
@@ -422,7 +471,7 @@ std::string Resource_callback::handle_light_profile(
         }
 
         // Otherwise export the light profile.
-        std::string new_filename  = export_light_profile( lp.get_ptr(), buffer_callback);
+        std::string new_filename  = export_light_profile( lp.get_ptr(), tag, buffer_callback);
         if( new_filename.empty()) {
             add_error_export_failed( 6013, "file-based", "light profile", tag);
             return {};
@@ -433,12 +482,12 @@ std::string Resource_callback::handle_light_profile(
     // Container-based light profiles
     } else if( lp->is_container_based()) {
 
-        const std::string& container_filename = lp->get_container_filename();
-        const std::string& container_membername = lp->get_container_membername();
-
         // Use original file if bundling is not requested and the file can be found via the search
         // paths.
         if( !m_bundle_resources) {
+            const std::string& container_filename = lp->get_container_filename();
+            const std::string& container_membername = lp->get_container_membername();
+            ASSERT( M_SCENE, m_module_name.substr( 0, 5) == "mdl::");
             const std::string& file_path = DETAIL::unresolve_resource_filename(
                 container_filename.c_str(),
                 container_membername.c_str(),
@@ -457,7 +506,7 @@ std::string Resource_callback::handle_light_profile(
         }
 
         // Otherwise export the light profile.
-        const std::string new_filename = export_light_profile( lp.get_ptr(), buffer_callback);
+        const std::string new_filename = export_light_profile( lp.get_ptr(), tag, buffer_callback);
         if( new_filename.empty()) {
             add_error_export_failed( 6016, "container-based", "light profile", tag);
             return {};
@@ -476,7 +525,7 @@ std::string Resource_callback::handle_light_profile(
         }
 
         // Otherwise export the light profile.
-        const std::string new_filename = export_light_profile( lp.get_ptr(), buffer_callback);
+        const std::string new_filename = export_light_profile( lp.get_ptr(), tag, buffer_callback);
         if( new_filename.empty()) {
             add_error_export_failed( 6014, "memory-based", "light profile", tag);
             return {};
@@ -502,11 +551,11 @@ std::string Resource_callback::handle_bsdf_measurement(
     // File-based BSDF measurements
     if( bsdfm->is_file_based()) {
 
-        const std::string& filename = bsdfm->get_filename();
-
         // Use original file if bundling is not requested and the file can be found via the search
         // paths.
         if( !m_bundle_resources) {
+            const std::string& filename = bsdfm->get_filename();
+            ASSERT( M_SCENE, m_module_name.substr( 0, 5) == "mdl::");
             const std::string& file_path = DETAIL::unresolve_resource_filename(
                 filename.c_str(), m_module_filename_c_str, &m_module_name[3], m_context);
             if( !file_path.empty())
@@ -521,9 +570,10 @@ std::string Resource_callback::handle_bsdf_measurement(
         }
 
         // Otherwise export the BSDF measurement.
-        const std::string new_filename = export_bsdf_measurement( bsdfm.get_ptr(), buffer_callback);
+        const std::string new_filename
+            = export_bsdf_measurement( bsdfm.get_ptr(), tag, buffer_callback);
         if( new_filename.empty()) {
-            add_error_export_failed( 6013, "container-based", "BSDF measurement", tag);
+            add_error_export_failed( 6013, "file-based", "BSDF measurement", tag);
             return {};
         }
 
@@ -532,12 +582,12 @@ std::string Resource_callback::handle_bsdf_measurement(
     // Container-based BSDF measurements
     } else if( bsdfm->is_container_based()) {
 
-        const std::string& container_filename = bsdfm->get_container_filename();
-        const std::string& container_membername = bsdfm->get_container_membername();
-
         // Use original file if bundling is not requested and the file can be found via the search
         // paths.
         if( !m_bundle_resources) {
+            const std::string& container_filename = bsdfm->get_container_filename();
+            const std::string& container_membername = bsdfm->get_container_membername();
+            ASSERT( M_SCENE, m_module_name.substr( 0, 5) == "mdl::");
             const std::string& file_path = DETAIL::unresolve_resource_filename(
                 container_filename.c_str(),
                 container_membername.c_str(),
@@ -556,7 +606,8 @@ std::string Resource_callback::handle_bsdf_measurement(
         }
 
         // Otherwise export the BSDF measurement.
-        const std::string new_filename = export_bsdf_measurement( bsdfm.get_ptr(), buffer_callback);
+        const std::string new_filename
+            = export_bsdf_measurement( bsdfm.get_ptr(), tag, buffer_callback);
         if( new_filename.empty()) {
             add_error_export_failed( 6016, "container-based", "BSDF measurement", tag);
             return {};
@@ -575,7 +626,8 @@ std::string Resource_callback::handle_bsdf_measurement(
         }
 
         // Otherwise export the BSDF measurement.
-        const std::string new_filename = export_bsdf_measurement( bsdfm.get_ptr(), buffer_callback);
+        const std::string new_filename
+            = export_bsdf_measurement( bsdfm.get_ptr(), tag, buffer_callback);
         if( new_filename.empty()) {
             add_error_export_failed( 6014, "memory-based", "BSDF measurement", tag);
             return {};
@@ -587,6 +639,7 @@ std::string Resource_callback::handle_bsdf_measurement(
 
 std::string Resource_callback::export_texture_image(
     const DBIMAGE::Image* image,
+    DB::Tag image_tag,
     Buffer_callback* buffer_callback)
 {
     // Use pixel type of first frame/uvtile to derive the extension.
@@ -601,10 +654,23 @@ std::string Resource_callback::export_texture_image(
     bool add_sequence_marker = image->is_animated();
     bool add_uvtile_marker   = image->is_uvtile();
 
+    // Compute number of digits required for frame numbers.
     mi::Size frame_digits = 1;
     mi::Size n = image->get_length();
     mi::Size f = n > 0 ? image->get_frame_number( n-1) : 0;
     while( f > 9) { ++frame_digits; f /= 10; }
+
+    // Compute all tuples of frame numbers and u/v coordinates.
+   Frame_uvs frame_uvs;
+    for( mi::Size i = 0; i < n; ++i) {
+        mi::Size m = image->get_frame_length( i);
+        mi::Size frame_number = image->get_frame_number( i);
+        for( mi::Size j = 0; j < m; ++j) {
+            mi::Sint32 u, v;
+            image->get_uvtile_uv( i, j, u, v);
+            frame_uvs.push_back( {frame_number, u, v});
+        }
+    }
 
     // Figure out whether we can copy all frames/uvtiles. If yes, then we can keep the extension.
     // Otherwise we need to re-export all frames/uvtiles to match the chosen extension.
@@ -619,16 +685,32 @@ std::string Resource_callback::export_texture_image(
     }
 
     // Both filenames might include frame/uvtile markers.
-    std::string old_filename = image->get_mdl_file_path();
-    if( old_filename.empty())
-        old_filename = image->get_original_filename();
+    std::string old_filename = image->get_original_filename();
+    bool from_context_option = false;
+    std::string old_basename = get_old_basename(
+        image_tag, old_filename, image->get_mdl_file_path(), &from_context_option);
+
+    // Do not override the extension if we intend to copy files or an explicit extension was given
+    // in the context option.
+    bool use_new_extension = copy_all || from_context_option ? false : true;
+
+    // If the context option was used, do not copy file since the context option might have selected
+    // a different extension. (Could be improved by comparing the extensions.)
+    if( from_context_option)
+        copy_all = false;
+
     std::string new_filename = get_new_resource_filename_marker(
         new_extension,
-        old_filename.empty() ? nullptr : old_filename.c_str(),
-        !copy_all,
+        old_basename.empty() ? nullptr : old_basename.c_str(),
+        use_new_extension,
         add_sequence_marker,
         add_uvtile_marker,
-        frame_digits);
+        frame_digits,
+        frame_uvs);
+    if( new_filename.empty()) {
+        ASSERT( M_SCENE, m_handle_filename_conflicts == FAIL_IF_EXISTING);
+        return {};
+    }
 
     bool success = true;
 
@@ -647,7 +729,7 @@ std::string Resource_callback::export_texture_image(
                 = (add_sequence_marker || add_uvtile_marker)
                 ? frame_uvtile_marker_to_string( new_filename, frame_number, u, v)
                 : new_filename;
-            ASSERT( M_NEURAY_API, !new_filename_fuv.empty());
+            ASSERT( M_SCENE, !new_filename_fuv.empty());
 
             if( buffer_callback) {
                 // export via buffer callback
@@ -666,12 +748,12 @@ std::string Resource_callback::export_texture_image(
                     success = false;
                 }
             } else if( copy_all) {
-                // copy the file (might exist in case of frame/uvtile markers).
+                // copy the file
                 std::error_code ec;
                 success &= fs::copy_file(
                     fs::u8path( old_filename_fuv),
                     fs::u8path( new_filename_fuv),
-                    fs::copy_options::overwrite_existing,
+                    m_copy_options,
                     ec);
             } else {
                 // export to file
@@ -690,14 +772,21 @@ std::string Resource_callback::export_texture_image(
 
 std::string Resource_callback::export_light_profile(
     const LIGHTPROFILE::Lightprofile* profile,
+    DB::Tag tag,
     Buffer_callback* buffer_callback)
 {
     std::string old_filename = profile->get_filename();
-    if( old_filename.empty())
-        old_filename = profile->get_original_filename();
-    // Value of use_new_extension does not matter since there is only one valid extension.
+    std::string old_basename
+        = get_old_basename( tag, old_filename, profile->get_mdl_file_path());
+
+    // Value of use_new_extension does not really matter since there is only one valid extension.
+    // Use "true" to an assertion inside the callee if old_basename is empty.
     std::string new_filename = get_new_resource_filename(
-        ".ies", old_filename.empty() ? nullptr : old_filename.c_str(), /*use_new_extension*/ true);
+        ".ies", old_basename.empty() ? nullptr : old_basename.c_str(), /*use_new_extension*/ true);
+    if( new_filename.empty()) {
+        ASSERT( M_SCENE, m_handle_filename_conflicts == FAIL_IF_EXISTING);
+        return {};
+    }
 
     bool success = false;
 
@@ -714,7 +803,7 @@ std::string Resource_callback::export_light_profile(
         std::error_code ec;
         if( fs::is_regular_file( old_path, ec)) {
             // copy the file
-            success = fs::copy_file( old_path, fs::u8path( new_filename), ec);
+            success = fs::copy_file( old_path, fs::u8path( new_filename), m_copy_options, ec);
         } else {
             // export to file
             success = LIGHTPROFILE::export_to_file( m_transaction, profile, new_filename);
@@ -726,16 +815,23 @@ std::string Resource_callback::export_light_profile(
 
 std::string Resource_callback::export_bsdf_measurement(
     const BSDFM::Bsdf_measurement* measurement,
+    DB::Tag tag,
     Buffer_callback* buffer_callback)
 {
     std::string old_filename = measurement->get_filename();
-    if( old_filename.empty())
-        old_filename = measurement->get_original_filename();
-    // Value of use_new_extension does not matter since there is only one valid extension.
+    std::string old_basename
+        = get_old_basename( tag, old_filename, measurement->get_mdl_file_path());
+
+    // Value of use_new_extension does not really matter since there is only one valid extension.
+    // Use "true" to an assertion inside the callee if old_basename is empty.
     std::string new_filename = get_new_resource_filename(
         ".mbsdf",
-        old_filename.empty() ? nullptr : old_filename.c_str(),
+        old_basename.empty() ? nullptr : old_basename.c_str(),
         /*use_new_extension*/ true);
+    if( new_filename.empty()) {
+        ASSERT( M_SCENE, m_handle_filename_conflicts == FAIL_IF_EXISTING);
+        return {};
+    }
 
     mi::base::Handle<const mi::neuraylib::IBsdf_isotropic_data> refl(
         measurement->get_reflection<mi::neuraylib::IBsdf_isotropic_data>( m_transaction));
@@ -757,7 +853,7 @@ std::string Resource_callback::export_bsdf_measurement(
         std::error_code ec;
         if( fs::is_regular_file( old_path, ec)) {
             // copy the file
-            success = fs::copy_file( old_path, fs::u8path( new_filename), ec);
+            success = fs::copy_file( old_path, fs::u8path( new_filename), m_copy_options, ec);
         } else {
             // export to file
             success = BSDFM::export_to_file( refl.get(), trans.get(), new_filename);
@@ -767,34 +863,114 @@ std::string Resource_callback::export_bsdf_measurement(
     return success ? new_filename : std::string();
 }
 
+std::string Resource_callback::get_old_basename(
+    DB::Tag tag,
+    const std::string& old_filename,
+    const std::string& mdl_file_path,
+    bool* from_context_option)
+{
+    ASSERT( M_SCENE, tag);
+
+    if( from_context_option)
+        *from_context_option = false;
+
+    // The context option "filename_hints" has highest priority.
+    if( m_filename_hints) {
+        const char* name = m_transaction->tag_to_name( tag);
+        if( name) {
+            mi::base::Handle suggestion( m_filename_hints->get_value<mi::IString>( name));
+            if( suggestion) {
+                if( from_context_option)
+                    *from_context_option = true;
+                return suggestion->get_c_str();
+            }
+        }
+    }
+
+    // The old filename has second highest priority.
+    if( !old_filename.empty())
+        return strip_directories( old_filename);
+
+    // The MDL file path has lowest priority. Should not really matter whether higher or lower than
+    // the old filename: if they are both present, then they should result in the same basename
+    // after stripping directories.
+    if( !mdl_file_path.empty())
+        return strip_directories( mdl_file_path);
+
+    return {};
+}
+
+bool Resource_callback::collision( const std::string& s, const Frame_uvs& frame_uvs)
+{
+    std::error_code ec;
+    for( const auto& fuv: frame_uvs) {
+        std::string t = frame_uvtile_marker_to_string( s, fuv.m_frame_number, fuv.m_u, fuv.m_v);
+        if( fs::exists( fs::u8path( t), ec))
+            return true;
+    }
+
+    return false;
+}
+
 std::string Resource_callback::get_new_resource_filename(
     const char* new_extension, const char* old_filename, bool use_new_extension)
 {
-    ASSERT( M_NEURAY_API, !m_path_prefix.empty());
-    ASSERT( M_NEURAY_API, old_filename || use_new_extension);
-
-    std::string s, old_extension;
+    ASSERT( M_SCENE, !m_path_prefix.empty());
+    ASSERT( M_SCENE, !new_extension || new_extension[0] == '.');
+    ASSERT( M_SCENE, old_filename || use_new_extension);
+    ASSERT( M_SCENE, !use_new_extension || new_extension);
+    ASSERT( M_SCENE, !old_filename
+        || (strip_directories( old_filename) == std::string( old_filename)));
 
     std::error_code ec;
-    std::string old_root;
+
+    // Consider a filename derived from old_filename, no counter.
+    std::string old_root, old_extension;
     if( old_filename) {
-        HAL::Ospath::splitext( strip_directories( old_filename), old_root, old_extension);
-        s = m_path_prefix;
+
+        HAL::Ospath::splitext( old_filename, old_root, old_extension);
+        std::string s = m_path_prefix;
         s += old_root;
         s += use_new_extension ? std::string( new_extension) : old_extension;
-        if( !fs::exists( fs::u8path( s), ec))
+
+        bool exists = fs::exists( fs::u8path( s), ec);
+        if( exists && (m_handle_filename_conflicts == FAIL_IF_EXISTING))
+            return {};
+        if( exists && (m_handle_filename_conflicts == OVERWRITE_EXISTING))
             return s;
+        if( !exists)
+            return s;
+
+        ASSERT( M_SCENE, exists && (m_handle_filename_conflicts == GENERATE_UNIQUE));
     }
 
-    do {
-        std::ostringstream ss;
-        ss << m_path_prefix;
-        ss << (old_filename ? old_root.c_str() : "resource") << "_" << m_counter++;
-        ss << (use_new_extension ? std::string( new_extension) : old_extension);
-        s = ss.str();
-    }  while( fs::exists( fs::u8path( s), ec));
+    // Consider a filename with counter, either derived from old_filename or the generic "resource"
+    // filename.
+    mi::Uint32 local_counter = 0;
+    while( true) {
 
-    return s;
+        std::string s = m_path_prefix;
+        s += old_filename ? old_root.c_str() : "resource";
+        s += "_";
+        if( old_filename)
+            s += std::to_string( local_counter++);
+        else
+            s += std::to_string( m_counter++);
+        s += use_new_extension ? std::string( new_extension) : old_extension;
+
+        bool exists = fs::exists( fs::u8path( s), ec);
+        if( exists && (m_handle_filename_conflicts == FAIL_IF_EXISTING))
+            return {};
+        if( exists && (m_handle_filename_conflicts == OVERWRITE_EXISTING))
+            return s;
+        if( !exists)
+            return s;
+
+        ASSERT( M_SCENE, exists && (m_handle_filename_conflicts == GENERATE_UNIQUE));
+    }
+
+    ASSERT( M_SCENE, false);
+    return {};
 }
 
 std::string Resource_callback::get_new_resource_filename_marker(
@@ -803,56 +979,90 @@ std::string Resource_callback::get_new_resource_filename_marker(
     bool use_new_extension,
     bool add_sequence_marker,
     bool add_uvtile_marker,
-    mi::Size frame_digits)
+    mi::Size frame_digits,
+    const Frame_uvs& frame_uvs)
 {
     if( !add_sequence_marker && !add_uvtile_marker)
         return get_new_resource_filename( new_extension, old_filename, use_new_extension);
 
-    ASSERT( M_NEURAY_API, !m_path_prefix.empty());
-    ASSERT( M_NEURAY_API, old_filename || use_new_extension);
+    ASSERT( M_SCENE, !m_path_prefix.empty());
+    ASSERT( M_SCENE, !new_extension || new_extension[0] == '.');
+    ASSERT( M_SCENE, old_filename || use_new_extension);
+    ASSERT( M_SCENE, !use_new_extension || new_extension);
+    ASSERT( M_SCENE, !old_filename
+        || (strip_directories( old_filename) == std::string( old_filename)));
 
-    std::string s, old_extension;
+    // Consider a filename (with markers) derived from old_filename, no counter.
+    std::string old_root, old_extension;
 
-    std::string old_root;
     if( old_filename) {
-        HAL::Ospath::splitext( strip_directories( old_filename), old_root, old_extension);
-        s = m_path_prefix;
+
+        HAL::Ospath::splitext( old_filename, old_root, old_extension);
+        std::string s = m_path_prefix;
         s += old_root;
         s += use_new_extension ? std::string( new_extension) : old_extension;
-        return s;
+
+        bool exists = collision( s, frame_uvs);
+        if( exists && (m_handle_filename_conflicts == FAIL_IF_EXISTING))
+            return {};
+        if( exists && (m_handle_filename_conflicts == OVERWRITE_EXISTING))
+            return s;
+        if( !exists)
+            return s;
+
+        ASSERT( M_SCENE, exists && (m_handle_filename_conflicts == GENERATE_UNIQUE));
     }
 
-    std::ostringstream ss;
-    ss << m_path_prefix;
-    ss << (old_filename ? old_root.c_str() : "resource") << "_" << m_counter++;
-    s = ss.str();
-
-    if( add_sequence_marker) {
-        ASSERT( M_NEURAY_API, frame_digits > 0);
-        s += "_frame_<";
+    // Compute sequence marker string (if required).
+    std::string sequence_marker;
+    if( !old_filename && add_sequence_marker) {
+        ASSERT( M_SCENE, frame_digits > 0);
+        sequence_marker = "_frame_<";
         for( mi::Size i = 0; i < frame_digits; ++i)
-            s += '#';
-        s += '>';
+            sequence_marker += '#';
+        sequence_marker += '>';
     }
 
-    if( add_uvtile_marker) {
-       s += "_uvtile_";
-       if( !old_filename)
-           s += "<UVTILE0>";
-       else if( strstr( old_filename, "<UVTILE0>"))
-           s += "<UVTILE0>";
-       else if( strstr( old_filename, "<UVTILE1>"))
-           s += "<UVTILE1>";
-       else if( strstr( old_filename, "<UDIM>"))
-           s += "<UDIM>";
-       else {
-           ASSERT( M_NEURAY_API, false);
-           s += "<UVTILE0>";
-       }
+    // Compute uvtile marker string (if required).
+    std::string uvtile_marker;
+    if( !old_filename && add_uvtile_marker) {
+        uvtile_marker = "_uvtile_<UVTILE0>";
     }
 
-    s += use_new_extension ? std::string( new_extension) : old_extension;
-    return s;
+    // Consider a filename (with markers) with counter, either derived from old_filename or the
+    // generic "resource"filename.
+    mi::Uint32 local_counter = 0;
+    while( true) {
+
+        std::string s = m_path_prefix;
+        s += old_filename ? old_root.c_str() : "resource";
+        s += "_";
+        if( old_filename) {
+            // Sequence and/or uvtile markers are already included in old_filename/old_root,
+            // local counter is added at the end as true suffix.
+            s += std::to_string( local_counter++);
+        } else {
+            // Counter is added as a suffix to "resource", before the sequence and/or uvtile
+            // markers, which have to be added explicitly.
+            s += std::to_string( m_counter++);
+            s += sequence_marker;
+            s += uvtile_marker;
+        }
+        s += use_new_extension ? std::string( new_extension) : old_extension;
+
+        bool exists = collision( s, frame_uvs);
+        if( exists && (m_handle_filename_conflicts == FAIL_IF_EXISTING))
+            return {};
+        if( exists && (m_handle_filename_conflicts == OVERWRITE_EXISTING))
+            return s;
+        if( !exists)
+            return s;
+
+        ASSERT( M_SCENE, exists && (m_handle_filename_conflicts == GENERATE_UNIQUE));
+    }
+
+    ASSERT( M_SCENE, false);
+    return {};
 }
 
 std::string Resource_callback::make_relative(
@@ -862,7 +1072,7 @@ std::string Resource_callback::make_relative(
     if( supports_strict_relative_path && (filename[0] == '.') && (filename[1] == '/'))
         return filename;
 
-    ASSERT( M_NEURAY_API, filename.substr( 0, m_path_prefix.size()) == m_path_prefix);
+    ASSERT( M_SCENE, filename.substr( 0, m_path_prefix.size()) == m_path_prefix);
 
     std::string tmp = strip_directories( filename);
     return supports_strict_relative_path ? std::string( "./") + tmp : tmp;
@@ -906,7 +1116,7 @@ const char* Resource_callback::get_extension( const char* pixel_type)
     if( s == "Sint8" || s == "Sint32")
         return ".tif";
 
-    ASSERT( M_NEURAY_API, false);
+    ASSERT( M_SCENE, false);
     return ".tif";
 }
 

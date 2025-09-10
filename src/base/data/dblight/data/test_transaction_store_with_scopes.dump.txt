@@ -7,6 +7,8 @@ Count of all transactions: 0
 Count of open transactions: 0
 Count of infos by distinct names: 0
 Count of infos by distinct tags: 0
+Count of all infos: 0
+Count of infos by class IDs:
 
 Count of all scopes: 3
 ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
@@ -57,6 +59,9 @@ Index 7: tag = 8, count = 1, pin count = 1, removed = 0
 Index 8: tag = 9, count = 1, pin count = 1, removed = 0
     Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 8, pin count = 0, tag = 9, privacy level = 0, removal = 0, name = "foo9", references = { }
 
+Count of all infos: 9
+Count of infos by class IDs:
+     9 0x4d79656c "Myel"
 
 Count of all scopes: 3
 ID 0: name = (null), pin count = 2, level = 0, parent ID = (null), removed = 0
@@ -105,6 +110,9 @@ Index 7: tag = 8, count = 1, pin count = 1, removed = 0
 Index 8: tag = 9, count = 1, pin count = 1, removed = 0
     Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 8, pin count = 0, tag = 9, privacy level = 0, removal = 0, name = "foo9", references = { }
 
+Count of all infos: 9
+Count of infos by class IDs:
+     9 0x4d79656c "Myel"
 
 Count of all scopes: 1
 ID 0: name = (null), pin count = 1, level = 0, parent ID = (null), removed = 0
@@ -123,4 +131,7 @@ Index 0: tag = 5, count = 1, pin count = 1, removed = 0
 Index 1: tag = 9, count = 1, pin count = 1, removed = 0
     Index 0: scope ID = 0, transaction ID = 0 (cleared), version = 8, pin count = 0, tag = 9, privacy level = 0, removal = 0, name = "foo9", references = { }
 
+Count of all infos: 2
+Count of infos by class IDs:
+     2 0x4d79656c "Myel"
 

@@ -1,5 +1,29 @@
 /******************************************************************************
- * Copyright 2024 NVIDIA Corporation. All rights reserved.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
 /* File : example.i */
@@ -50,7 +74,31 @@
 
 %{
 /******************************************************************************
- * Copyright 2024 NVIDIA Corporation. All rights reserved.
+ * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
 #ifdef IRAY_SDK
@@ -131,7 +179,7 @@ extern bool unload();
     import gc
     import sys
     import ctypes
-    from typing import Callable, TypeVar
+    import typing
     if sys.version_info >= (3, 10):
         from typing import ParamSpec  # pragma: no cover
     else:
@@ -144,10 +192,10 @@ extern bool unload();
         _numpyAvailable: bool = False
 
     P = ParamSpec("P")
-    T = TypeVar("T")
-    def _copy_docs_from(wrapped: Callable[P, T], replacements: dict[str, str] = {}):  # pragma: no cover
+    T = typing.TypeVar("T")
+    def _copy_docs_from(wrapped: typing.Callable[P, T], replacements: dict[str, str] = {}):  # pragma: no cover
         """Helper to copy documentation to a different function."""
-        def decorator(func: Callable) -> Callable[P, T]:
+        def decorator(func: typing.Callable) -> typing.Callable[P, T]:
             docString: str = wrapped.__doc__
             for repl, by in replacements.items():
                 docString = docString.replace(repl, by)
@@ -449,7 +497,7 @@ namespace mi
 %define EXTEND_FUNCTION_AS(IINTERFACE_TYPE, FUNCTION_NAME)
     %extend SmartPtr<IINTERFACE_TYPE> {
         %pythoncode{
-            def FUNCTION_NAME ## _as(self, type, *args):
+            def FUNCTION_NAME ## _as(self, type, *args) -> typing.Any:
                 r"""
                 Calls FUNCTION_NAME and acquires an interface of ``type`` for the return value.
                 """
@@ -509,7 +557,7 @@ namespace mi
                     return self._get_value_by_index(index_or_name)
                 raise IndexError('Collections can only be addressed by name (str) or index (int).')
 
-            def get_value_as(self, type, index_or_name):
+            def get_value_as(self, type, index_or_name) -> typing.Any:
                 iinterface = self.get_value(index_or_name)
                 if iinterface.is_valid_interface():
                     return iinterface.get_interface(type)
@@ -1594,7 +1642,7 @@ EXTEND_FUNCTION_AS(mi::neuraylib::ITransaction, edit)
             """
             return self._create_internal(type_name)
 
-        def _create_as(self, type, type_name: str):
+        def _create_as(self, type, type_name: str) -> typing.Any:
             r"""
             Creates an object of type_name and returns as interface of `type.
 

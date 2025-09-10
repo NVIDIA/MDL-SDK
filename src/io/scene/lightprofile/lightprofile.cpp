@@ -34,6 +34,7 @@
 #include <base/system/main/access_module.h>
 #include <base/hal/disk/disk_file_reader_writer_impl.h>
 #include <base/hal/disk/disk_memory_reader_writer_impl.h>
+#include <base/hal/disk/disk_utils.h>
 #include <base/lib/log/i_log_assert.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/mem/i_mem_consumption.h>
@@ -125,9 +126,8 @@ mi::Sint32 Lightprofile::reset_file(
     mi::neuraylib::Lightprofile_degree degree,
     mi::Uint32 flags)
 {
-    std::string extension = STRING::to_lower(
-        fs::u8path( original_filename).extension().u8string());
-    if( extension != ".ies")
+    std::string extension = STRING::to_lower( DISK::get_extension( original_filename));
+    if( extension != "ies")
         return -3;
 
     SYSTEM::Access_module<PATH::Path_module> m_path_module( false);
@@ -404,8 +404,8 @@ SERIAL::Serializable* Lightprofile::deserialize( SERIAL::Deserializer* deseriali
     if( !m_original_filename.empty()) {
 
        if( serializer_sep != fs::path::preferred_separator) {
-            m_original_filename = fs::u8path( m_original_filename).u8string();
-            m_resolved_filename = fs::u8path( m_resolved_filename).u8string();
+            m_original_filename = DISK::to_string( fs::u8path( m_original_filename));
+            m_resolved_filename = DISK::to_string( fs::u8path( m_resolved_filename));
         }
 
         // Re-resolve filename if it is not meaningful for this host. If unsuccessful, clear value
@@ -422,8 +422,10 @@ SERIAL::Serializable* Lightprofile::deserialize( SERIAL::Deserializer* deseriali
     // Adjust m_resolved_container_filename and m_resolved_container_membername for this host.
     if( !m_resolved_container_filename.empty()) {
 
-        m_resolved_container_filename   = fs::u8path( m_resolved_container_filename).u8string();
-        m_resolved_container_membername = fs::u8path( m_resolved_container_membername).u8string();
+        m_resolved_container_filename
+            = DISK::to_string( fs::u8path( m_resolved_container_filename));
+        m_resolved_container_membername
+            = DISK::to_string( fs::u8path( m_resolved_container_membername));
         if( !fs::is_regular_file( fs::u8path( m_resolved_container_filename), ec)) {
             m_resolved_container_filename.clear();
             m_resolved_container_membername.clear();

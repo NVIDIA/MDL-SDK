@@ -1787,14 +1787,21 @@ static void print_error_param(
                 // print type_name::member_name
                 Scope const *scope = f_def->get_def_scope();
 
+                // beware: if an error occurred during the construction of a type, neither
+                // the scope type nor the name might be set, handle that gracefully
                 if (scope->get_owner_definition()->has_flag(Definition::DEF_IS_IMPORTED)) {
                     // use full name for imported types
-                    printer->print(scope->get_scope_type());
+                    if (IType const *scope_type = scope->get_scope_type()) {
+                        printer->print(scope_type);
+                        printer->print("::");
+                    }
                 } else {
                     // use the scope name (== type name without scope)
-                    printer->print(scope->get_scope_name());
+                    if (ISymbol const *scope_name = scope->get_scope_name()) {
+                        printer->print(scope_name);
+                        printer->print("::");
+                    }
                 }
-                printer->print("::");
                 printer->print(f_def->get_symbol());
                 break;
             } else if (kind != IDefinition::DK_FUNCTION &&

@@ -79,7 +79,7 @@ std::string replace_all(
 }
 
 
-// Return the OS independent separator. On Windows the separator is '\',
+// Return the OS-dependent separator. On Windows the separator is '\',
 // while on the other operating system is is '/'.
 std::string Ospath::sep()
 {
